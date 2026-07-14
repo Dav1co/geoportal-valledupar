@@ -70,6 +70,29 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
         layers: [
           { id: "base", type: "raster", source: "base" },
           {
+            // Relleno sutil de los terrenos (capa base de contexto).
+            id: "terrenos-fill",
+            type: "fill",
+            source: "predios",
+            "source-layer": "terrenos",
+            paint: {
+              "fill-color": "#8fa3b0",
+              "fill-opacity": 0.12,
+            },
+          },
+          {
+            // Borde de los terrenos.
+            id: "terrenos-linea",
+            type: "line",
+            source: "predios",
+            "source-layer": "terrenos",
+            paint: {
+              "line-color": "#7d8f9b",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.5, 18, 1.2],
+              "line-opacity": 0.7,
+            },
+          },
+          {
             id: "predios-normal",
             type: "circle",
             source: "predios",
@@ -125,7 +148,7 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
 
     // Clic: captura TODOS los predios en el punto (edificios apilados).
     map.on("click", (e) => {
-      const margen = 5; // pixeles de tolerancia alrededor del clic
+      const margen = 5;
       const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
         [e.point.x - margen, e.point.y - margen],
         [e.point.x + margen, e.point.y + margen],
@@ -134,7 +157,6 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
         layers: ["predios-normal", "predios-clandestino"],
       });
 
-      // Quitar duplicados (una feature puede repetirse entre teselas vecinas).
       const vistos = new Set<number>();
       const lista: PredioApilado[] = [];
       for (const f of feats) {
@@ -153,7 +175,6 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
         onSel.current(lista[0].id);
         return;
       }
-      // Varios predios en el mismo lugar: ordenar por contrato y avisar.
       lista.sort((a, b) => {
         const na = Number(a.cod_usuario), nb = Number(b.cod_usuario);
         if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
