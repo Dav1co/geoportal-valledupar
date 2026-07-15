@@ -185,3 +185,31 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* ---------- filtros (segmentado + check) ---------- */
+.filtro-grupo { padding: 4px 0 10px; }
+.filtro-rotulo {
+  display: block; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+}
+.filtro-segmentado {
+  display: flex; border: 1px solid var(--line); border-radius: var(--radio);
+  overflow: hidden;
+}
+.filtro-segmentado .seg {
+  flex: 1; padding: 7px 8px; font-size: 12px; font-family: var(--sans);
+  background: var(--surface-2); color: var(--text);
+  border: none; border-right: 1px solid var(--line);
+  cursor: pointer; transition: background 0.12s, color 0.12s;
+}
+.filtro-segmentado .seg:last-child { border-right: none; }
+.filtro-segmentado .seg:hover { background: var(--azul-suave); }
+.filtro-segmentado .seg-activo,
+.filtro-segmentado .seg-activo:hover {
+  background: var(--azul); color: var(--accent-ink); font-weight: 700;
+}
+.filtro-check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text); cursor: pointer; padding-top: 2px;
+}
+.filtro-check input { accent-color: var(--azul); width: 15px; height: 15px; }

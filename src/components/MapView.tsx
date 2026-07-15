@@ -13,20 +13,30 @@ export type PredioApilado = {
   direccion?: string | null;
 };
 
+export type FiltroContrato = "todos" | "con" | "sin";
+
 type Props = {
   accessToken: string;
+  filtro: FiltroContrato;
+  mostrarTerrenos: boolean;
   onSeleccionar: (id: number) => void;
   onSeleccionarVarios: (lista: PredioApilado[]) => void;
 };
 
-export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Props) {
+export function MapView({
+  accessToken,
+  filtro,
+  mostrarTerrenos,
+  onSeleccionar,
+  onSeleccionarVarios,
+}: Props) {
   const contenedor = useRef<HTMLDivElement>(null);
   const mapa = useRef<maplibregl.Map | null>(null);
+  const listo = useRef(false);
   const tokenRef = useRef(accessToken);
   const onSel = useRef(onSeleccionar);
   const onVarios = useRef(onSeleccionarVarios);
 
-  // Mantener token y callbacks frescos sin recrear el mapa.
   useEffect(() => { tokenRef.current = accessToken; }, [accessToken]);
   useEffect(() => { onSel.current = onSeleccionar; }, [onSeleccionar]);
   useEffect(() => { onVarios.current = onSeleccionarVarios; }, [onSeleccionarVarios]);
@@ -39,19 +49,14 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
       center: CENTRO,
       zoom: 13,
       attributionControl: { compact: true },
-      // Inyecta el token solo en las peticiones de nuestras teselas.
       transformRequest: (url) => {
         if (url.includes("/geoportal-tiles/")) {
-          return {
-            url,
-            headers: { Authorization: `Bearer ${tokenRef.current}` },
-          };
+          return { url, headers: { Authorization: `Bearer ${tokenRef.current}` } };
         }
         return { url };
       },
       style: {
         version: 8,
-        // Fuente de letras para poder dibujar texto (labels) en el mapa.
         glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
         sources: {
           base: {
@@ -70,18 +75,13 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
         layers: [
           { id: "base", type: "raster", source: "base" },
           {
-            // Relleno sutil de los terrenos (capa base de contexto).
             id: "terrenos-fill",
             type: "fill",
             source: "predios",
             "source-layer": "terrenos",
-            paint: {
-              "fill-color": "#8fa3b0",
-              "fill-opacity": 0.12,
-            },
+            paint: { "fill-color": "#8fa3b0", "fill-opacity": 0.12 },
           },
           {
-            // Borde de los terrenos.
             id: "terrenos-linea",
             type: "line",
             source: "predios",
@@ -119,7 +119,6 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
             },
           },
           {
-            // Número de contrato bajo cada punto (solo registrados, zoom 16+).
             id: "predios-labels",
             type: "symbol",
             source: "predios",
@@ -146,16 +145,23 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
 
     map.addControl(new maplibregl.NavigationControl(), "top-right");
 
-    // Clic: captura TODOS los predios en el punto (edificios apilados).
+    map.on("load", () => {
+      listo.current = true;
+      aplicarFiltro(map, filtro);
+      aplicarTerrenos(map, mostrarTerrenos);
+    });
+
     map.on("click", (e) => {
       const margen = 5;
       const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
         [e.point.x - margen, e.point.y - margen],
         [e.point.x + margen, e.point.y + margen],
       ];
-      const feats = map.queryRenderedFeatures(bbox, {
-        layers: ["predios-normal", "predios-clandestino"],
-      });
+      const capas = ["predios-normal", "predios-clandestino"].filter(
+        (id) => map.getLayoutProperty(id, "visibility") !== "none",
+      );
+      if (capas.length === 0) return;
+      const feats = map.queryRenderedFeatures(bbox, { layers: capas });
 
       const vistos = new Set<number>();
       const lista: PredioApilado[] = [];
@@ -171,10 +177,7 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
       }
 
       if (lista.length === 0) return;
-      if (lista.length === 1) {
-        onSel.current(lista[0].id);
-        return;
-      }
+      if (lista.length === 1) { onSel.current(lista[0].id); return; }
       lista.sort((a, b) => {
         const na = Number(a.cod_usuario), nb = Number(b.cod_usuario);
         if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
@@ -189,14 +192,37 @@ export function MapView({ accessToken, onSeleccionar, onSeleccionarVarios }: Pro
     }
 
     mapa.current = map;
-    return () => { map.remove(); mapa.current = null; };
+    return () => { map.remove(); mapa.current = null; listo.current = false; };
   }, []);
 
-  // API imperativa mínima para centrar desde el buscador.
+  useEffect(() => {
+    const map = mapa.current;
+    if (map && listo.current) aplicarFiltro(map, filtro);
+  }, [filtro]);
+
+  useEffect(() => {
+    const map = mapa.current;
+    if (map && listo.current) aplicarTerrenos(map, mostrarTerrenos);
+  }, [mostrarTerrenos]);
+
   useEffect(() => {
     (window as unknown as { __geoFly?: (x: number, y: number) => void }).__geoFly =
       (x, y) => mapa.current?.flyTo({ center: [x, y], zoom: 19 });
   }, []);
 
   return <div ref={contenedor} className="mapa" />;
+}
+
+function aplicarFiltro(map: maplibregl.Map, filtro: FiltroContrato) {
+  const verNormal = filtro === "todos" || filtro === "con";
+  const verSin = filtro === "todos" || filtro === "sin";
+  map.setLayoutProperty("predios-normal", "visibility", verNormal ? "visible" : "none");
+  map.setLayoutProperty("predios-labels", "visibility", verNormal ? "visible" : "none");
+  map.setLayoutProperty("predios-clandestino", "visibility", verSin ? "visible" : "none");
+}
+
+function aplicarTerrenos(map: maplibregl.Map, mostrar: boolean) {
+  const v = mostrar ? "visible" : "none";
+  map.setLayoutProperty("terrenos-fill", "visibility", v);
+  map.setLayoutProperty("terrenos-linea", "visibility", v);
 }

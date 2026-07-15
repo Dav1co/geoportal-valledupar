@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "./auth/useSession";
 import { Login } from "./auth/Login";
-import { MapView, type PredioApilado } from "./components/MapView";
+import { MapView, type PredioApilado, type FiltroContrato } from "./components/MapView";
 import { Buscador } from "./components/Buscador";
 import { PredioPanel } from "./components/PredioPanel";
 import { Watermark } from "./components/Watermark";
@@ -15,6 +15,8 @@ export default function App() {
   const [apilados, setApilados] = useState<PredioApilado[] | null>(null);
   const [esAdmin, setEsAdmin] = useState(false);
   const [vista, setVista] = useState<"mapa" | "admin">("mapa");
+  const [filtro, setFiltro] = useState<FiltroContrato>("todos");
+  const [mostrarTerrenos, setMostrarTerrenos] = useState(true);
 
   useEffect(() => {
     if (!session) {
@@ -43,7 +45,6 @@ export default function App() {
   function abrirApilados(lista: PredioApilado[]) {
     setPredioId(null);
     setApilados(lista);
-    // Completar direcciones en segundo plano (consulta rápida por ids).
     api
       .resumen(lista.map((p) => p.id))
       .then(({ predios }) => {
@@ -90,6 +91,45 @@ export default function App() {
           <aside className="lateral">
             <Buscador onSeleccionar={irAPredio} />
 
+            <div className="panel">
+              <div className="panel-head">
+                <span className="panel-title">Filtros</span>
+              </div>
+
+              <div className="filtro-grupo">
+                <span className="filtro-rotulo">Contrato</span>
+                <div className="filtro-segmentado">
+                  <button
+                    className={`seg ${filtro === "todos" ? "seg-activo" : ""}`}
+                    onClick={() => setFiltro("todos")}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    className={`seg ${filtro === "con" ? "seg-activo" : ""}`}
+                    onClick={() => setFiltro("con")}
+                  >
+                    Con contrato
+                  </button>
+                  <button
+                    className={`seg ${filtro === "sin" ? "seg-activo" : ""}`}
+                    onClick={() => setFiltro("sin")}
+                  >
+                    Sin contrato
+                  </button>
+                </div>
+              </div>
+
+              <label className="filtro-check">
+                <input
+                  type="checkbox"
+                  checked={mostrarTerrenos}
+                  onChange={(e) => setMostrarTerrenos(e.target.checked)}
+                />
+                Mostrar terrenos
+              </label>
+            </div>
+
             {apilados && (
               <div className="panel">
                 <div className="panel-head">
@@ -121,14 +161,16 @@ export default function App() {
 
             <PredioPanel id={predioId} onCerrar={() => setPredioId(null)} />
             <div className="leyenda">
-              <span><i className="punto punto-normal" /> Predio registrado</span>
-              <span><i className="punto punto-rojo" /> Clandestino / nuevo</span>
+              <span><i className="punto punto-normal" /> Con contrato asignado</span>
+              <span><i className="punto punto-rojo" /> Sin contrato asignado (por verificar)</span>
             </div>
           </aside>
 
           <main className="visor">
             <MapView
               accessToken={session.access_token}
+              filtro={filtro}
+              mostrarTerrenos={mostrarTerrenos}
               onSeleccionar={(id) => {
                 setApilados(null);
                 setPredioId(id);
