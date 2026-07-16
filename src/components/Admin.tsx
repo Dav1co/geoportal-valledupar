@@ -120,7 +120,7 @@ export function Admin({ onVolver }: Props) {
           onChange={(e) => setNombre(e.target.value)}
         />
         <input
-          className="field mono"
+          className="field"
           placeholder="Clave inicial (mín. 8 caracteres)"
           type="text"
           value={clave}
@@ -148,12 +148,12 @@ export function Admin({ onVolver }: Props) {
               className="resultado"
               style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", cursor: "default" }}
             >
-              <span className="mono" style={{ flex: "1 1 220px" }}>
-                {u.email}
+              <span style={{ flex: "1 1 220px" }}>
+                <span className="mono">{u.email}</span>
                 {u.nombre ? ` · ${u.nombre}` : ""}
               </span>
-              <span className="mono" style={{ fontWeight: 700 }}>
-                {u.rol === "admin" ? "ADMIN" : "consulta"}
+              <span className="rol-tag">
+                {u.rol === "admin" ? "Administrador" : "Consulta"}
               </span>
               <span style={{ display: "flex", gap: 6 }}>
                 <button

@@ -19,6 +19,24 @@ export type Conteo = { disponible: boolean; con: number; sin: number };
 export type BaseMapa = "calles" | "satelital";
 export type TerrenoInfo = { codigo: string | null; matricula: string | null };
 
+// Filtro comercial: expresión MapLibre ya construida (o null = sin filtro).
+// Modo activo: define qué filtros mandan sobre el mapa.
+export type ModoMapa = "explorar" | "focalizacion" | "comercial" | "zona";
+export type ConteoComercial = { disponible: boolean; total: number };
+export type StatsComercial = {
+  disponible: boolean;
+  total: number;
+  conDeuda: number;
+  sinMedidor: number;
+  consumoAlto: number;
+  medicion: Record<string, number>;
+  facturacion: Record<string, number>;
+  consumo: Record<string, number>;
+  mora: Record<string, number>;
+  ciclo: Record<string, number>;
+  barrio: Record<string, number>;
+};
+
 type Props = {
   accessToken: string;
   inicial?: { lng: number; lat: number; zoom: number } | null;
@@ -27,9 +45,13 @@ type Props = {
   mostrarTerrenos: boolean;
   base: BaseMapa;
   modoTerrenos: boolean;
+  modoActivo: ModoMapa;
+  filtroComercial: unknown[] | null;
   onSeleccionar: (id: number) => void;
   onSeleccionarVarios: (lista: PredioApilado[]) => void;
   onConteo: (c: Conteo) => void;
+  onConteoComercial: (c: ConteoComercial) => void;
+  onStatsComercial: (s: StatsComercial) => void;
   onTerreno: (info: TerrenoInfo | null) => void;
 };
 
@@ -41,9 +63,13 @@ export function MapView({
   mostrarTerrenos,
   base,
   modoTerrenos,
+  modoActivo,
+  filtroComercial,
   onSeleccionar,
   onSeleccionarVarios,
   onConteo,
+  onConteoComercial,
+  onStatsComercial,
   onTerreno,
 }: Props) {
   const contenedor = useRef<HTMLDivElement>(null);
@@ -53,6 +79,9 @@ export function MapView({
   const onSel = useRef(onSeleccionar);
   const onVarios = useRef(onSeleccionarVarios);
   const onCont = useRef(onConteo);
+  const onContCom = useRef(onConteoComercial);
+  const onStatsCom = useRef(onStatsComercial);
+  const modoRef2 = useRef(modoActivo);
   const onTerr = useRef(onTerreno);
   const modoRef = useRef(modoTerrenos);
 
@@ -60,6 +89,9 @@ export function MapView({
   useEffect(() => { onSel.current = onSeleccionar; }, [onSeleccionar]);
   useEffect(() => { onVarios.current = onSeleccionarVarios; }, [onSeleccionarVarios]);
   useEffect(() => { onCont.current = onConteo; }, [onConteo]);
+  useEffect(() => { onContCom.current = onConteoComercial; }, [onConteoComercial]);
+  useEffect(() => { onStatsCom.current = onStatsComercial; }, [onStatsComercial]);
+  useEffect(() => { modoRef2.current = modoActivo; }, [modoActivo]);
   useEffect(() => { onTerr.current = onTerreno; }, [onTerreno]);
   useEffect(() => { modoRef.current = modoTerrenos; }, [modoTerrenos]);
 
@@ -218,6 +250,7 @@ export function MapView({
     map.on("load", () => {
       listo.current = true;
       aplicarFiltro(map, filtro);
+      aplicarPorModo(map, modoActivo, filtroComercial);
       aplicarEstado(map, estado);
       aplicarTerrenos(map, mostrarTerrenos);
       aplicarBase(map, base);
@@ -227,6 +260,8 @@ export function MapView({
 
     map.on("moveend", () => recontar(map));
     map.on("idle", () => recontar(map));
+    map.on("moveend", () => recontarComercial(map));
+    map.on("idle", () => recontarComercial(map));
 
     map.on("click", (e) => {
       // MODO TERRENOS: seleccionar el polígono clicado, mostrar su código.
@@ -298,6 +333,17 @@ export function MapView({
 
   useEffect(() => {
     const map = mapa.current;
+    if (map && listo.current) {
+      aplicarPorModo(map, modoActivo, filtroComercial);
+      // Al salir de comercial, reafirmar el filtro de contrato del modo destino
+      // (así la visibilidad de los sin-contrato queda coherente).
+      if (modoActivo !== "comercial") aplicarFiltro(map, filtro);
+      recontarComercial(map);
+    }
+  }, [modoActivo, filtroComercial]);
+
+  useEffect(() => {
+    const map = mapa.current;
     if (map && listo.current) aplicarEstado(map, estado);
   }, [estado]);
 
@@ -355,6 +401,63 @@ export function MapView({
     onCont.current({ disponible: true, con: con.size, sin: sin.size });
   }
 
+  // Cuenta los predios que cumplen el filtro comercial en pantalla,
+  // y agrupa por cada categoría para el panel de indicadores.
+  function recontarComercial(map: maplibregl.Map) {
+    if (modoRef2.current !== "comercial") return;
+    const vacio = {
+      disponible: false, total: 0, conDeuda: 0, sinMedidor: 0, consumoAlto: 0,
+      medicion: {}, facturacion: {}, consumo: {}, mora: {}, ciclo: {}, barrio: {},
+    };
+    if (map.getZoom() < 15) {
+      onContCom.current({ disponible: false, total: 0 });
+      onStatsCom.current(vacio);
+      return;
+    }
+    let feats: maplibregl.MapGeoJSONFeature[] = [];
+    try {
+      feats = map.queryRenderedFeatures({ layers: ["predios-normal"] });
+    } catch {
+      onContCom.current({ disponible: false, total: 0 });
+      onStatsCom.current(vacio);
+      return;
+    }
+    const vistos = new Set<number>();
+    const medicion: Record<string, number> = {};
+    const facturacion: Record<string, number> = {};
+    const consumo: Record<string, number> = {};
+    const mora: Record<string, number> = {};
+    const ciclo: Record<string, number> = {};
+    const barrio: Record<string, number> = {};
+    let conDeuda = 0, sinMedidor = 0, consumoAlto = 0;
+    const inc = (o: Record<string, number>, k: unknown) => {
+      if (k === undefined || k === null || k === "") return;
+      const s = String(k);
+      o[s] = (o[s] ?? 0) + 1;
+    };
+    for (const f of feats) {
+      const id = Number(f.properties?.id);
+      if (!Number.isInteger(id) || vistos.has(id)) continue;
+      vistos.add(id);
+      const p = f.properties ?? {};
+      inc(medicion, p.estado_medidor);
+      inc(facturacion, p.determinacion_consumo);
+      inc(consumo, p.clase_consumo);
+      inc(mora, p.tramo_mora);
+      inc(ciclo, p.ciclo);
+      inc(barrio, p.barrio);
+      if (p.tiene_deuda === true || p.tiene_deuda === "true") conDeuda++;
+      if (String(p.estado_medidor) === "3") sinMedidor++;
+      if (p.clase_consumo === "elevado" || p.clase_consumo === "grandes") consumoAlto++;
+    }
+    const total = vistos.size;
+    onContCom.current({ disponible: true, total });
+    onStatsCom.current({
+      disponible: true, total, conDeuda, sinMedidor, consumoAlto,
+      medicion, facturacion, consumo, mora, ciclo, barrio,
+    });
+  }
+
   return <div ref={contenedor} className="mapa" />;
 }
 
@@ -405,3 +508,35 @@ function aplicarModo(map: maplibregl.Map, modo: boolean) {
     map.setFilter("terreno-sel-linea", ["==", ["get", "codigo"], "__NINGUNO__"]);
   }
 }
+
+// Filtros base de cada capa (según si es clandestino o no).
+const BASE_NORMAL = ["!=", ["get", "clandestino"], true];
+const BASE_CLAND = ["==", ["get", "clandestino"], true];
+
+// Aplica el estado del mapa según el MODO activo.
+// - comercial: filtro comercial combinado sobre predios con contrato; oculta clandestinos.
+// - otros modos: restaura el filtro base normal.
+function aplicarPorModo(
+  map: maplibregl.Map,
+  modo: string,
+  filtroComercial: unknown[] | null,
+) {
+  if (modo === "comercial") {
+    // Los sin-contrato no tienen datos comerciales: se ocultan.
+    map.setLayoutProperty("predios-clandestino", "visibility", "none");
+    map.setLayoutProperty("predios-normal", "visibility", "visible");
+    map.setLayoutProperty("predios-labels", "visibility", "none");
+    // Combinar filtro base con el comercial (lógica Y).
+    if (filtroComercial && filtroComercial.length > 0) {
+      map.setFilter("predios-normal", ["all", BASE_NORMAL, ...filtroComercial] as never);
+    } else {
+      map.setFilter("predios-normal", BASE_NORMAL as never);
+    }
+  } else {
+    // Restaurar filtro base y visibilidad (los sin-contrato vuelven a verse).
+    map.setFilter("predios-normal", BASE_NORMAL as never);
+    map.setFilter("predios-clandestino", BASE_CLAND as never);
+    map.setLayoutProperty("predios-clandestino", "visibility", "visible");
+  }
+}
+

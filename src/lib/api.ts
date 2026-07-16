@@ -71,6 +71,8 @@ export const api = {
     call<{ predios: ResumenApilado[] }>("geoportal-predio", {
       ids: ids.join(","),
     }),
+  barrios: () =>
+    call<{ barrios: string[] }>("geoportal-barrios", {}),
   admin: {
     perfil: () =>
       call<{ es_admin: boolean }>("geoportal-admin", { accion: "perfil" }),

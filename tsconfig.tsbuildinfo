@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/auth/login.tsx","./src/auth/usesession.ts","./src/components/admin.tsx","./src/components/buscador.tsx","./src/components/mapview.tsx","./src/components/panelindicadores.tsx","./src/components/prediopanel.tsx","./src/components/watermark.tsx","./src/lib/api.ts","./src/lib/supabase.ts","./vite-env.d.ts"],"version":"5.9.3"}
