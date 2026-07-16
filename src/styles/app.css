@@ -544,3 +544,50 @@ body {
   background: var(--azul-suave);
   border-radius: var(--radio);
 }
+
+/* ==================== Encabezado de cargue diario en la ficha ==================== */
+.ficha-cargue { margin-bottom: 6px; }
+.ficha-contrato {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 4px 10px;
+  border-bottom: 2px solid var(--azul);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.ficha-contrato-et {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ficha-contrato-num {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--azul);
+}
+.ficha-estado {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--azul-suave);
+  color: var(--azul);
+}
+.ficha-fila dd.destacar {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--rojo);
+  font-weight: 700;
+}
+.ficha-cargue-pie {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  margin: 6px 4px 0;
+  font-style: italic;
+}
+.ficha-sincargue { margin-bottom: 10px; }
