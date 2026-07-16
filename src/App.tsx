@@ -12,6 +12,8 @@ import {
   type ModoMapa,
   type ConteoComercial,
   type StatsComercial,
+  type PuntoRutaMap,
+  type FiltroCatastroRuta,
 } from "./components/MapView";
 import { PanelIndicadores } from "./components/PanelIndicadores";
 import { Buscador } from "./components/Buscador";
@@ -19,11 +21,17 @@ import { PredioPanel } from "./components/PredioPanel";
 import { Watermark } from "./components/Watermark";
 import { Admin } from "./components/Admin";
 import { supabase } from "./lib/supabase";
-import { api } from "./lib/api";
+import { api, type RutaItem, type DetalleRuta } from "./lib/api";
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
 
-type Modo = "explorar" | "focalizacion" | "comercial" | "zona";
+type Modo = "explorar" | "focalizacion" | "comercial" | "rutas";
+
+// Solo estos correos ven el modo Rutas de lectura.
+const CORREOS_RUTAS = new Set([
+  "ingdaviddiazr@gmail.com",
+  "ddiazrodriguez@emdupar.gov.co",
+]);
 
 // --- Opciones de los filtros comerciales (código en BD -> etiqueta visible) ---
 type OpcionFiltro = { valor: string; etiqueta: string };
@@ -64,7 +72,7 @@ const DESC_MODO: Record<Modo, string> = {
   explorar: "Busca predios, cambia el mapa base y activa capas.",
   focalizacion: "Aísla predios sin contrato y resalta estados del predio.",
   comercial: "Filtra por cartera, consumo y medición (datos de Acuo).",
-  zona: "Dibuja un área y obtén sus estadísticas.",
+  rutas: "Revisa el recorrido de una ruta de lectura y sus anomalías.",
 };
 
 // Lee el estado de la vista desde el hash de la URL
@@ -125,6 +133,11 @@ export default function App() {
     medicion: {}, facturacion: {}, consumo: {}, mora: {}, ciclo: {}, barrio: {},
   });
   const [panelAbierto, setPanelAbierto] = useState(false);
+  const [listaRutas, setListaRutas] = useState<RutaItem[]>([]);
+  const [rutaSel, setRutaSel] = useState("");
+  const [detalleRuta, setDetalleRuta] = useState<DetalleRuta | null>(null);
+  const [cargandoRuta, setCargandoRuta] = useState(false);
+  const [filtroCatRuta, setFiltroCatRuta] = useState<FiltroCatastroRuta>("ninguno");
 
   useEffect(() => {
     if (!session) {
@@ -146,12 +159,38 @@ export default function App() {
     }
   }, [modo, listaBarrios.length]);
 
+  // Salvaguarda: si un usuario no autorizado cae en modo rutas, devolverlo a explorar.
+  useEffect(() => {
+    const correo = (session?.user.email ?? "").toLowerCase();
+    if (modo === "rutas" && !CORREOS_RUTAS.has(correo)) setModo("explorar");
+  }, [modo, session]);
+
+  // Cargar la lista de rutas la primera vez que se entra al modo Rutas.
+  useEffect(() => {
+    if (modo === "rutas" && listaRutas.length === 0) {
+      api.rutasLista()
+        .then((r) => setListaRutas(r.rutas ?? []))
+        .catch(() => setListaRutas([]));
+    }
+  }, [modo, listaRutas.length]);
+
+  // Cuando se elige una ruta, cargar su detalle (recorrido + métricas).
+  useEffect(() => {
+    if (!rutaSel) { setDetalleRuta(null); return; }
+    setCargandoRuta(true);
+    api.ruta(rutaSel)
+      .then((r) => setDetalleRuta(r.ruta))
+      .catch(() => setDetalleRuta(null))
+      .finally(() => setCargandoRuta(false));
+  }, [rutaSel]);
+
   if (cargando) {
     return <div className="pantalla-carga">Cargando…</div>;
   }
   if (!session) return <Login />;
 
   const email = session.user.email ?? "";
+  const puedeVerRutas = CORREOS_RUTAS.has(email.toLowerCase());
 
   function irAPredio(id: number, x: number, y: number) {
     setApilados(null);
@@ -246,6 +285,8 @@ export default function App() {
   }
 
   const filtroComercial = modo === "comercial" ? construirFiltroComercial() : null;
+  const puntosRuta: PuntoRutaMap[] | null =
+    modo === "rutas" && detalleRuta ? detalleRuta.puntos : null;
   const hayFiltrosCom = fMedicion !== "todos" || fFacturacion !== "todos" || fConsumo !== "todos" || fCartera !== "todos" || fCiclo !== "todos" || fBarrio !== "";
 
   function limpiarComercial() {
@@ -315,7 +356,9 @@ export default function App() {
                 <option value="explorar">Explorar</option>
                 <option value="focalizacion">Focalización</option>
                 <option value="comercial">Comercial</option>
-                <option value="zona">Análisis de zona</option>
+                {puedeVerRutas && (
+                  <option value="rutas">Rutas de lectura</option>
+                )}
               </select>
               <div className="modo-desc">{DESC_MODO[modo]}</div>
             </div>
@@ -560,15 +603,75 @@ export default function App() {
               </>
             )}
 
-            {/* MODO ZONA (placeholder) */}
-            {modo === "zona" && (
-              <div className="modo-placeholder">
-                <span className="modo-placeholder-ico">✎</span>
-                <p>
-                  Próximamente: dibuja un polígono sobre el mapa para obtener las
-                  estadísticas de esa zona (sin contrato, cartera y consumo).
-                </p>
-              </div>
+            {/* MODO RUTAS */}
+            {modo === "rutas" && (
+              <>
+                <div className="seccion">
+                  <span className="filtro-rotulo">Puntos de catastro de fondo</span>
+                  <div className="filtro-segmentado">
+                    <button
+                      className={`seg ${filtroCatRuta === "ninguno" ? "seg-activo" : ""}`}
+                      onClick={() => setFiltroCatRuta("ninguno")}
+                    >
+                      Sin puntos
+                    </button>
+                    <button
+                      className={`seg ${filtroCatRuta === "con" ? "seg-activo" : ""}`}
+                      onClick={() => setFiltroCatRuta("con")}
+                    >
+                      Con contrato
+                    </button>
+                    <button
+                      className={`seg ${filtroCatRuta === "sin" ? "seg-activo" : ""}`}
+                      onClick={() => setFiltroCatRuta("sin")}
+                    >
+                      Sin contrato
+                    </button>
+                  </div>
+                </div>
+                <div className="seccion">
+                  <span className="filtro-rotulo">Ruta de lectura</span>
+                  <select
+                    className="filtro-select"
+                    value={rutaSel}
+                    onChange={(e) => setRutaSel(e.target.value)}
+                  >
+                    <option value="">Elige una ruta…</option>
+                    {listaRutas.map((r) => (
+                      <option key={r.ruta} value={r.ruta}>
+                        Ruta {r.ruta} · ciclo {r.ciclo} · {r.predios} predios
+                      </option>
+                    ))}
+                  </select>
+                  {cargandoRuta && <p className="contador">Cargando recorrido…</p>}
+                </div>
+
+                {detalleRuta && !cargandoRuta && (
+                  <div className="seccion">
+                    <span className="filtro-rotulo">Calidad del recorrido</span>
+                    <div className="ruta-metricas">
+                      <MetricaFila etiqueta="Predios" valor={fmt(detalleRuta.metricas.predios)} />
+                      <MetricaFila etiqueta="Distancia total" valor={`${fmt(detalleRuta.metricas.distancia_total)} m`} />
+                      <MetricaFila etiqueta="Paso mediana" valor={`${detalleRuta.metricas.paso_mediana} m`} />
+                      <MetricaFila etiqueta="Paso promedio" valor={`${detalleRuta.metricas.paso_prom} m`} />
+                      <MetricaFila etiqueta="Paso p90" valor={`${detalleRuta.metricas.paso_p90} m`} />
+                      <MetricaFila etiqueta="Paso p95" valor={`${detalleRuta.metricas.paso_p95} m`} />
+                      <MetricaFila etiqueta="Paso máximo" valor={`${fmt(detalleRuta.metricas.paso_max)} m`} destacar />
+                    </div>
+                    <span className="filtro-rotulo" style={{ marginTop: 10 }}>Anomalías del recorrido</span>
+                    <div className="ruta-metricas">
+                      <MetricaFila etiqueta="Pasos largos (>100 m)" valor={fmt(detalleRuta.metricas.largos)} />
+                      <MetricaFila etiqueta="Muy largos (>500 m)" valor={fmt(detalleRuta.metricas.muy_largos)} />
+                      <MetricaFila etiqueta="Extremos (>1 km)" valor={fmt(detalleRuta.metricas.extremos)} destacar />
+                    </div>
+                    <p className="ruta-leyenda">
+                      En el mapa: la línea azul es el recorrido y los tramos rojos son
+                      pasos mayores a 100 m (el lector saltó lejos). El punto
+                      verde es el inicio del recorrido y el amarillo, el final.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Apilados (común a todos los modos) */}
@@ -623,6 +726,8 @@ export default function App() {
               modoTerrenos={modoTerrenos}
               modoActivo={modo as ModoMapa}
               filtroComercial={filtroComercial}
+              puntosRuta={puntosRuta}
+              filtroCatastroRuta={filtroCatRuta}
               onSeleccionar={(id) => {
                 setApilados(null);
                 setPredioId(id);
@@ -644,6 +749,17 @@ export default function App() {
           </main>
         </div>
       )}
+    </div>
+  );
+}
+
+function MetricaFila({ etiqueta, valor, destacar }: {
+  etiqueta: string; valor: string; destacar?: boolean;
+}) {
+  return (
+    <div className="ruta-metrica-fila">
+      <span className="ruta-metrica-et">{etiqueta}</span>
+      <span className={`ruta-metrica-val ${destacar ? "destacar" : ""}`}>{valor}</span>
     </div>
   );
 }

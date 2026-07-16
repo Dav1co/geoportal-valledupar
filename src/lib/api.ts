@@ -60,6 +60,24 @@ export type UsuarioAdmin = {
   creado_en: string;
 };
 
+export type RutaItem = { ruta: string; ciclo: string; predios: number };
+
+export type PuntoRuta = {
+  orden: number; id: number; contrato: string;
+  x: number; y: number; m: number;
+};
+export type MetricasRuta = {
+  predios: number; distancia_total: number;
+  paso_min: number; paso_prom: number; paso_mediana: number;
+  paso_p90: number; paso_p95: number; paso_max: number;
+  largos: number; muy_largos: number; extremos: number;
+};
+export type DetalleRuta = {
+  ruta: string;
+  puntos: PuntoRuta[];
+  metricas: MetricasRuta;
+};
+
 export const api = {
   buscar: (q: string) =>
     call<{ resultados: PredioResumen[] }>("geoportal-buscar", { q }),
@@ -73,6 +91,10 @@ export const api = {
     }),
   barrios: () =>
     call<{ barrios: string[] }>("geoportal-barrios", {}),
+  rutasLista: () =>
+    call<{ rutas: RutaItem[] }>("geoportal-rutas-lista", {}),
+  ruta: (ruta: string) =>
+    call<{ ruta: DetalleRuta }>("geoportal-ruta", { ruta }),
   admin: {
     perfil: () =>
       call<{ es_admin: boolean }>("geoportal-admin", { accion: "perfil" }),

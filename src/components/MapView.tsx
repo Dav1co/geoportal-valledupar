@@ -21,8 +21,10 @@ export type TerrenoInfo = { codigo: string | null; matricula: string | null };
 
 // Filtro comercial: expresión MapLibre ya construida (o null = sin filtro).
 // Modo activo: define qué filtros mandan sobre el mapa.
-export type ModoMapa = "explorar" | "focalizacion" | "comercial" | "zona";
+export type ModoMapa = "explorar" | "focalizacion" | "comercial" | "rutas";
 export type ConteoComercial = { disponible: boolean; total: number };
+export type PuntoRutaMap = { orden: number; x: number; y: number; m: number; contrato: string };
+export type FiltroCatastroRuta = "con" | "sin" | "ninguno";
 export type StatsComercial = {
   disponible: boolean;
   total: number;
@@ -47,6 +49,8 @@ type Props = {
   modoTerrenos: boolean;
   modoActivo: ModoMapa;
   filtroComercial: unknown[] | null;
+  puntosRuta: PuntoRutaMap[] | null;
+  filtroCatastroRuta: FiltroCatastroRuta;
   onSeleccionar: (id: number) => void;
   onSeleccionarVarios: (lista: PredioApilado[]) => void;
   onConteo: (c: Conteo) => void;
@@ -65,6 +69,8 @@ export function MapView({
   modoTerrenos,
   modoActivo,
   filtroComercial,
+  puntosRuta,
+  filtroCatastroRuta,
   onSeleccionar,
   onSeleccionarVarios,
   onConteo,
@@ -82,6 +88,8 @@ export function MapView({
   const onContCom = useRef(onConteoComercial);
   const onStatsCom = useRef(onStatsComercial);
   const modoRef2 = useRef(modoActivo);
+  const puntosRutaRef = useRef(puntosRuta);
+  const filtroCatRutaRef = useRef(filtroCatastroRuta);
   const onTerr = useRef(onTerreno);
   const modoRef = useRef(modoTerrenos);
 
@@ -92,6 +100,18 @@ export function MapView({
   useEffect(() => { onContCom.current = onConteoComercial; }, [onConteoComercial]);
   useEffect(() => { onStatsCom.current = onStatsComercial; }, [onStatsComercial]);
   useEffect(() => { modoRef2.current = modoActivo; }, [modoActivo]);
+  useEffect(() => {
+    puntosRutaRef.current = puntosRuta;
+    const map = mapa.current;
+    if (map && listo.current) pintarRuta(map, puntosRuta);
+  }, [puntosRuta]);
+  useEffect(() => {
+    filtroCatRutaRef.current = filtroCatastroRuta;
+    const map = mapa.current;
+    if (map && listo.current && modoRef2.current === "rutas") {
+      aplicarPorModo(map, "rutas", null, filtroCatRutaRef.current);
+    }
+  }, [filtroCatastroRuta]);
   useEffect(() => { onTerr.current = onTerreno; }, [onTerreno]);
   useEffect(() => { modoRef.current = modoTerrenos; }, [modoTerrenos]);
 
@@ -262,12 +282,69 @@ export function MapView({
     map.on("load", () => {
       listo.current = true;
       aplicarFiltro(map, filtro);
-      aplicarPorModo(map, modoActivo, filtroComercial);
+      aplicarPorModo(map, modoActivo, filtroComercial, filtroCatRutaRef.current);
       aplicarEstado(map, estado);
       aplicarTerrenos(map, mostrarTerrenos);
       aplicarBase(map, base);
       aplicarModo(map, modoTerrenos);
       recontar(map);
+
+      // Fuentes y capas del modo Rutas (vacías hasta que se elija una ruta).
+      map.addSource("ruta-linea", { type: "geojson", data: geojsonVacio() as never });
+      map.addSource("ruta-puntos", { type: "geojson", data: geojsonVacio() as never });
+      // Línea del recorrido: azul los tramos normales, rojo grueso los > 100 m.
+      map.addLayer({
+        id: "ruta-linea-normal", type: "line", source: "ruta-linea",
+        filter: ["<=", ["get", "m"], 100],
+        paint: { "line-color": "#1e5aa8", "line-width": 2, "line-opacity": 0.85 },
+      });
+      map.addLayer({
+        id: "ruta-linea-larga", type: "line", source: "ruta-linea",
+        filter: [">", ["get", "m"], 100],
+        paint: { "line-color": "#e5484d", "line-width": 3.5, "line-opacity": 0.9 },
+      });
+      // Puntos de la ruta: verde el inicio, amarillo el fin, azul el resto.
+      map.addLayer({
+        id: "ruta-puntos-capa", type: "circle", source: "ruta-puntos",
+        paint: {
+          "circle-radius": [
+            "match", ["get", "hito"],
+            "inicio", 7, "fin", 7,
+            4,
+          ],
+          "circle-color": [
+            "match", ["get", "hito"],
+            "inicio", "#2e7d32",
+            "fin", "#f5b301",
+            "#1e5aa8",
+          ],
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": [
+            "match", ["get", "hito"],
+            "inicio", 2, "fin", 2,
+            1,
+          ],
+        },
+      });
+      // Números de orden del recorrido (1, 2, 3...). Colisión activada:
+      // alejado se ven algunos, al acercarte aparecen todos.
+      map.addLayer({
+        id: "ruta-puntos-orden", type: "symbol", source: "ruta-puntos",
+        layout: {
+          "text-field": ["to-string", ["get", "orden"]],
+          "text-font": ["Open Sans Semibold"],
+          "text-size": 10,
+          "text-offset": [0, -0.9],
+          "text-allow-overlap": false,
+        },
+        paint: {
+          "text-color": "#12263a",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.5,
+        },
+      });
+      // Aplicar la ruta si ya venía una
+      pintarRuta(map, puntosRutaRef.current);
     });
 
     map.on("moveend", () => recontar(map));
@@ -346,8 +423,7 @@ export function MapView({
   useEffect(() => {
     const map = mapa.current;
     if (map && listo.current) {
-      aplicarPorModo(map, modoActivo, filtroComercial);
-      // Al salir de comercial, reafirmar el filtro de contrato del modo destino
+      aplicarPorModo(map, modoActivo, filtroComercial, filtroCatRutaRef.current);
       // (así la visibilidad de los sin-contrato queda coherente).
       if (modoActivo !== "comercial") aplicarFiltro(map, filtro);
       recontarComercial(map);
@@ -532,6 +608,7 @@ function aplicarPorModo(
   map: maplibregl.Map,
   modo: string,
   filtroComercial: unknown[] | null,
+  filtroCatRuta: FiltroCatastroRuta = "ninguno",
 ) {
   if (modo === "comercial") {
     // Los sin-contrato no tienen datos comerciales: se ocultan.
@@ -544,11 +621,87 @@ function aplicarPorModo(
     } else {
       map.setFilter("predios-normal", BASE_NORMAL as never);
     }
+  } else if (modo === "rutas") {
+    // En modo Rutas, los puntos del catastro se controlan con el filtro:
+    // "con" = solo con contrato, "sin" = solo sin contrato, "ninguno" = ocultar todos.
+    // El recorrido de la ruta (línea + puntos) siempre se ve.
+    const fcr = filtroCatRuta;
+    map.setLayoutProperty("predios-labels", "visibility", "none");
+    map.setLayoutProperty("predios-normal", "visibility", fcr === "con" ? "visible" : "none");
+    map.setLayoutProperty("predios-clandestino", "visibility", fcr === "sin" ? "visible" : "none");
+    map.setFilter("predios-normal", BASE_NORMAL as never);
+    map.setFilter("predios-clandestino", BASE_CLAND as never);
+    // Atenuar los puntos de catastro que sí se muestran, para que no compitan con la ruta.
+    map.setPaintProperty("predios-normal", "circle-opacity", 0.3);
+    map.setPaintProperty("predios-clandestino", "circle-opacity", 0.3);
   } else {
     // Restaurar filtro base y visibilidad (los sin-contrato vuelven a verse).
     map.setFilter("predios-normal", BASE_NORMAL as never);
     map.setFilter("predios-clandestino", BASE_CLAND as never);
+    map.setLayoutProperty("predios-normal", "visibility", "visible");
     map.setLayoutProperty("predios-clandestino", "visibility", "visible");
+    // Restaurar opacidad normal (por si venía del modo rutas).
+    map.setPaintProperty("predios-normal", "circle-opacity", 1);
+    map.setPaintProperty("predios-clandestino", "circle-opacity", 1);
   }
 }
 
+
+// GeoJSON vacío inicial para las fuentes de ruta.
+function geojsonVacio() {
+  return { type: "FeatureCollection", features: [] };
+}
+
+// Pinta (o limpia) el recorrido de una ruta en el mapa.
+// Construye segmentos de línea (cada uno con su distancia 'm') y puntos.
+function pintarRuta(
+  map: maplibregl.Map,
+  puntos: { orden: number; x: number; y: number; m: number; contrato: string }[] | null,
+) {
+  const srcLinea = map.getSource("ruta-linea") as maplibregl.GeoJSONSource | undefined;
+  const srcPuntos = map.getSource("ruta-puntos") as maplibregl.GeoJSONSource | undefined;
+  if (!srcLinea || !srcPuntos) return;
+
+  if (!puntos || puntos.length === 0) {
+    srcLinea.setData(geojsonVacio() as never);
+    srcPuntos.setData(geojsonVacio() as never);
+    return;
+  }
+
+  // Ordenar por 'orden' por si acaso
+  const orden = [...puntos].sort((a, b) => a.orden - b.orden);
+
+  // Segmentos: cada par consecutivo es una línea con la distancia del segundo punto.
+  const segmentos: unknown[] = [];
+  for (let i = 1; i < orden.length; i++) {
+    const a = orden[i - 1];
+    const b = orden[i];
+    segmentos.push({
+      type: "Feature",
+      properties: { m: b.m },
+      geometry: { type: "LineString", coordinates: [[a.x, a.y], [b.x, b.y]] },
+    });
+  }
+  srcLinea.setData({ type: "FeatureCollection", features: segmentos } as never);
+
+  const pts: unknown[] = orden.map((p, i) => ({
+    type: "Feature",
+    properties: {
+      orden: p.orden,
+      contrato: p.contrato,
+      m: p.m,
+      hito: i === 0 ? "inicio" : i === orden.length - 1 ? "fin" : "normal",
+    },
+    geometry: { type: "Point", coordinates: [p.x, p.y] },
+  }));
+  srcPuntos.setData({ type: "FeatureCollection", features: pts } as never);
+
+  // Encuadrar el mapa a la ruta
+  const xs = orden.map((p) => p.x);
+  const ys = orden.map((p) => p.y);
+  const bounds: [[number, number], [number, number]] = [
+    [Math.min(...xs), Math.min(...ys)],
+    [Math.max(...xs), Math.max(...ys)],
+  ];
+  map.fitBounds(bounds, { padding: 60, maxZoom: 17, duration: 600 });
+}
