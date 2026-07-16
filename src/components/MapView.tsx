@@ -247,6 +247,18 @@ export function MapView({
 
     map.addControl(new maplibregl.NavigationControl(), "top-right");
 
+    // Botón "Mi ubicación": toggle con seguimiento. Útil en terreno desde el celular.
+    // Primer toque: ubica y sigue tu movimiento. Segundo toque: suelta.
+    map.addControl(
+      new maplibregl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: true,
+        showUserLocation: true,
+        showAccuracyCircle: true,
+      }),
+      "bottom-right",
+    );
+
     map.on("load", () => {
       listo.current = true;
       aplicarFiltro(map, filtro);
