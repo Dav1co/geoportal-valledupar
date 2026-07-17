@@ -46,6 +46,15 @@ export type PredioResumen = {
   gps_y: number;
 };
 
+export type MedidorResumen = {
+  id: number;
+  cod_usuario: string | null;
+  serial_medidor: string | null;
+  direccion: string | null;
+  gps_x: number;
+  gps_y: number;
+};
+
 export type ResumenApilado = {
   id: number;
   cod_usuario: string | null;
@@ -81,6 +90,8 @@ export type DetalleRuta = {
 export const api = {
   buscar: (q: string) =>
     call<{ resultados: PredioResumen[] }>("geoportal-buscar", { q }),
+  buscarMedidor: (q: string) =>
+    call<{ resultados: MedidorResumen[] }>("geoportal-buscar-medidor", { q }),
   detalle: (id: number) =>
     call<{ predio: Record<string, unknown> }>("geoportal-predio", {
       id: String(id),

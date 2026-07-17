@@ -1,21 +1,38 @@
 import { useState } from "react";
-import { api, type PredioResumen } from "../lib/api";
+import { api, type PredioResumen, type MedidorResumen } from "../lib/api";
 
-type Props = { onSeleccionar: (id: number, x: number, y: number) => void };
+type Item = PredioResumen | MedidorResumen;
 
-export function Buscador({ onSeleccionar }: Props) {
+type Props = {
+  onSeleccionar: (id: number, x: number, y: number) => void;
+  // Modo de búsqueda: por contrato (default) o por serial de medidor.
+  modo?: "contrato" | "medidor";
+};
+
+export function Buscador({ onSeleccionar, modo = "contrato" }: Props) {
   const [q, setQ] = useState("");
-  const [resultados, setResultados] = useState<PredioResumen[]>([]);
+  const [resultados, setResultados] = useState<Item[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const esMedidor = modo === "medidor";
+  const minChars = esMedidor ? 5 : 2;
+  const placeholder = esMedidor
+    ? "Serial del medidor (mín. 5)"
+    : "Contrato o código de usuario";
+
   async function buscar() {
     const texto = q.trim();
-    if (texto.length < 2) return;
+    if (texto.length < minChars) {
+      setError(`Escribe al menos ${minChars} caracteres.`);
+      return;
+    }
     setBuscando(true);
     setError(null);
     try {
-      const { resultados } = await api.buscar(texto);
+      const { resultados } = esMedidor
+        ? await api.buscarMedidor(texto)
+        : await api.buscar(texto);
       setResultados(resultados);
       if (resultados.length === 0) setError("Sin coincidencias.");
     } catch (e) {
@@ -30,7 +47,7 @@ export function Buscador({ onSeleccionar }: Props) {
       <div className="buscador-input">
         <input
           className="field mono"
-          placeholder="Contrato o código de usuario"
+          placeholder={placeholder}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && buscar()}
@@ -49,8 +66,16 @@ export function Buscador({ onSeleccionar }: Props) {
               className="resultado"
               onClick={() => onSeleccionar(r.id, r.gps_x, r.gps_y)}
             >
-              <span className="mono resultado-contrato">{r.cod_usuario ?? "—"}</span>
-              <span className="mono resultado-cod">{r.direccion ?? "—"}</span>
+              <span className="mono resultado-contrato">
+                {esMedidor
+                  ? (r as MedidorResumen).serial_medidor ?? "—"
+                  : r.cod_usuario ?? "—"}
+              </span>
+              <span className="mono resultado-cod">
+                {esMedidor
+                  ? `${r.cod_usuario ?? "—"} · ${r.direccion ?? "—"}`
+                  : r.direccion ?? "—"}
+              </span>
             </button>
           </li>
         ))}
