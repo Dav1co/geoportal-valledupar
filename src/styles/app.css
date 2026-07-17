@@ -177,10 +177,7 @@ body {
 .pantalla-carga { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); }
 
 /* ---------- responsive ---------- */
-@media (max-width: 760px) {
-  .cuerpo { flex-direction: column; }
-  .lateral { width: 100%; max-height: 44%; border-right: 0; border-bottom: 1px solid var(--line); }
-}
+/* media query movil movida al final del archivo */
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
@@ -591,3 +588,78 @@ body {
   font-style: italic;
 }
 .ficha-sincargue { margin-bottom: 10px; }
+
+/* ============================================================
+   VERSIÓN MÓVIL (pantallas angostas) — mapa a pantalla completa,
+   panel deslizable con botón. El escritorio no se afecta.
+   ============================================================ */
+@media (max-width: 760px) {
+  /* El cuerpo deja de apilar: el mapa ocupa todo, el panel se superpone. */
+  .cuerpo { flex-direction: column; position: relative; }
+
+  /* El mapa (visor) ocupa toda el área disponible. */
+  .visor { flex: 1; width: 100%; }
+
+  /* El panel lateral se convierte en un cajón que se desliza desde la izquierda. */
+  .lateral {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 88%; max-width: 360px; max-height: none;
+    z-index: 1200;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.18);
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+  }
+  /* Cuando está abierto, se desliza a la vista. */
+  .lateral.abierto { transform: translateX(0); }
+
+  /* Botón flotante para abrir el panel (solo móvil). */
+  .btn-panel-movil {
+    position: absolute;
+    top: 12px; left: 12px;
+    z-index: 1100;
+    display: flex; align-items: center; gap: 7px;
+    background: var(--azul); color: var(--accent-ink);
+    border: none; border-radius: var(--radio);
+    padding: 10px 14px; font-size: 14px; font-weight: 700;
+    font-family: var(--sans);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    cursor: pointer;
+  }
+  .btn-panel-movil svg { width: 18px; height: 18px; }
+
+  /* Botón de cerrar dentro del panel (solo móvil). */
+  .btn-cerrar-panel {
+    display: flex; align-items: center; justify-content: center;
+    position: sticky; top: 0;
+    margin: -16px -16px 8px -16px;
+    padding: 12px 16px;
+    background: var(--azul); color: var(--accent-ink);
+    border: none; font-size: 15px; font-weight: 700;
+    font-family: var(--sans); cursor: pointer;
+    width: calc(100% + 32px);
+  }
+
+  /* Fondo oscuro detrás del panel abierto (para cerrar tocando afuera). */
+  .panel-overlay {
+    position: absolute; inset: 0; z-index: 1150;
+    background: rgba(0,0,0,0.35);
+  }
+
+  /* Barra superior más compacta en móvil. */
+  .barra { padding: 10px 14px; }
+  .barra-usuario { gap: 10px; }
+  .barra-correo {
+    max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font-size: 12px;
+  }
+}
+
+/* En escritorio, los controles móviles no existen. */
+.btn-panel-movil, .btn-cerrar-panel, .panel-overlay { display: none; }
+@media (max-width: 760px) {
+  .btn-panel-movil { display: flex; }
+  .btn-cerrar-panel { display: flex; }
+}

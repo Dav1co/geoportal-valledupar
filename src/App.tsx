@@ -106,6 +106,7 @@ const URL0 = leerURL();
 export default function App() {
   const { session, cargando } = useSession();
   const [predioId, setPredioId] = useState<number | null>(null);
+  const [panelMovilAbierto, setPanelMovilAbierto] = useState(false);
   const [apilados, setApilados] = useState<PredioApilado[] | null>(null);
   const [esAdmin, setEsAdmin] = useState(false);
   const [vista, setVista] = useState<"mapa" | "admin">("mapa");
@@ -331,7 +332,7 @@ export default function App() {
               {vista === "admin" ? "Volver al mapa" : "Administración"}
             </button>
           )}
-          <span className="mono">{email}</span>
+          <span className="mono barra-correo">{email}</span>
           <button className="btn-link" onClick={() => supabase.auth.signOut()}>
             Salir
           </button>
@@ -344,7 +345,27 @@ export default function App() {
         </div>
       ) : (
         <div className="cuerpo">
-          <aside className="lateral">
+          <button
+            className="btn-panel-movil"
+            onClick={() => setPanelMovilAbierto(true)}
+            aria-label="Abrir controles"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+            Controles
+          </button>
+          {panelMovilAbierto && (
+            <div className="panel-overlay" onClick={() => setPanelMovilAbierto(false)} />
+          )}
+          <aside className={`lateral ${panelMovilAbierto ? "abierto" : ""}`}>
+            <button
+              className="btn-cerrar-panel"
+              onClick={() => setPanelMovilAbierto(false)}
+            >
+              ✕ Cerrar
+            </button>
             {/* Selector de modo */}
             <div className="modo-wrap">
               <span className="modo-lbl">Modo de trabajo</span>
@@ -729,6 +750,7 @@ export default function App() {
               puntosRuta={puntosRuta}
               filtroCatastroRuta={filtroCatRuta}
               onSeleccionar={(id) => {
+                if (window.innerWidth <= 760) setPanelMovilAbierto(true);
                 setApilados(null);
                 setPredioId(id);
               }}
