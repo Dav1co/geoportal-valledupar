@@ -14,6 +14,7 @@ import {
   type StatsComercial,
   type PuntoRutaMap,
   type FiltroCatastroRuta,
+  type HeatMetrica,
 } from "./components/MapView";
 import { PanelIndicadores } from "./components/PanelIndicadores";
 import { Buscador } from "./components/Buscador";
@@ -107,6 +108,7 @@ export default function App() {
   const { session, cargando } = useSession();
   const [predioId, setPredioId] = useState<number | null>(null);
   const [panelMovilAbierto, setPanelMovilAbierto] = useState(false);
+  const [heatMetrica, setHeatMetrica] = useState<HeatMetrica | null>(null);
   const [apilados, setApilados] = useState<PredioApilado[] | null>(null);
   const [esAdmin, setEsAdmin] = useState(false);
   const [vista, setVista] = useState<"mapa" | "admin">("mapa");
@@ -372,7 +374,11 @@ export default function App() {
               <select
                 className="modo-sel"
                 value={modo}
-                onChange={(e) => setModo(e.target.value as Modo)}
+                onChange={(e) => {
+                  const nuevoModo = e.target.value as Modo;
+                  setModo(nuevoModo);
+                  if (nuevoModo !== "comercial") setHeatMetrica(null);
+                }}
               >
                 <option value="explorar">Explorar</option>
                 <option value="focalizacion">Focalización</option>
@@ -626,6 +632,32 @@ export default function App() {
                     </button>
                   )}
                 </div>
+                <div className="seccion">
+                  <span className="filtro-rotulo">Mapa de calor</span>
+                  <label className="filtro-check">
+                    <input
+                      type="checkbox"
+                      checked={heatMetrica !== null}
+                      onChange={(e) =>
+                        setHeatMetrica(e.target.checked ? "deuda" : null)
+                      }
+                    />
+                    Activar mapa de calor
+                  </label>
+                  {heatMetrica !== null && (
+                    <select
+                      className="modo-sel"
+                      style={{ marginTop: 8 }}
+                      value={heatMetrica}
+                      onChange={(e) => setHeatMetrica(e.target.value as HeatMetrica)}
+                    >
+                      <option value="deuda">Deuda total (pesos)</option>
+                      <option value="facturas">Facturas pendientes (meses)</option>
+                      <option value="consumo_bajo">Consumo bajo</option>
+                      <option value="sin_medidor">Sin medidor</option>
+                    </select>
+                  )}
+                </div>
               </>
             )}
 
@@ -752,6 +784,7 @@ export default function App() {
               modoTerrenos={modoTerrenos}
               modoActivo={modo as ModoMapa}
               filtroComercial={filtroComercial}
+              heatMetrica={modo === "comercial" ? heatMetrica : null}
               puntosRuta={puntosRuta}
               filtroCatastroRuta={filtroCatRuta}
               onSeleccionar={(id) => {

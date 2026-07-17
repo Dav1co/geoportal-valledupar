@@ -39,6 +39,12 @@ export type StatsComercial = {
   barrio: Record<string, number>;
 };
 
+export type HeatMetrica =
+  | "deuda"
+  | "facturas"
+  | "consumo_bajo"
+  | "sin_medidor";
+
 type Props = {
   accessToken: string;
   inicial?: { lng: number; lat: number; zoom: number } | null;
@@ -49,6 +55,7 @@ type Props = {
   modoTerrenos: boolean;
   modoActivo: ModoMapa;
   filtroComercial: unknown[] | null;
+  heatMetrica: HeatMetrica | null;
   puntosRuta: PuntoRutaMap[] | null;
   filtroCatastroRuta: FiltroCatastroRuta;
   onSeleccionar: (id: number) => void;
@@ -69,6 +76,7 @@ export function MapView({
   modoTerrenos,
   modoActivo,
   filtroComercial,
+  heatMetrica,
   puntosRuta,
   filtroCatastroRuta,
   onSeleccionar,
@@ -81,6 +89,7 @@ export function MapView({
   const contenedor = useRef<HTMLDivElement>(null);
   const mapa = useRef<maplibregl.Map | null>(null);
   const listo = useRef(false);
+  const heatRef = useRef<string | null>(heatMetrica);
   const tokenRef = useRef(accessToken);
   const onSel = useRef(onSeleccionar);
   const onVarios = useRef(onSeleccionarVarios);
@@ -213,6 +222,28 @@ export function MapView({
             },
           },
           {
+            id: "heatmap-comercial",
+            type: "heatmap",
+            source: "predios",
+            "source-layer": "predios",
+            layout: { visibility: "none" },
+            paint: {
+              "heatmap-weight": 0,
+              "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 12, 1, 18, 3],
+              "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 12, 15, 18, 40],
+              "heatmap-opacity": 0.75,
+              "heatmap-color": [
+                "interpolate", ["linear"], ["heatmap-density"],
+                0, "rgba(0,0,255,0)",
+                0.2, "rgba(0,150,255,0.5)",
+                0.4, "rgba(0,255,150,0.7)",
+                0.6, "rgba(255,255,0,0.8)",
+                0.8, "rgba(255,150,0,0.9)",
+                1, "rgba(255,0,0,1)"
+              ],
+            },
+          },
+          {
             id: "predios-clandestino",
             type: "circle",
             source: "predios",
@@ -282,7 +313,7 @@ export function MapView({
     map.on("load", () => {
       listo.current = true;
       aplicarFiltro(map, filtro);
-      aplicarPorModo(map, modoActivo, filtroComercial, filtroCatRutaRef.current);
+      aplicarPorModo(map, modoActivo, filtroComercial, filtroCatRutaRef.current, heatRef.current);
       aplicarEstado(map, estado);
       aplicarTerrenos(map, mostrarTerrenos);
       aplicarBase(map, base);
@@ -423,12 +454,20 @@ export function MapView({
   useEffect(() => {
     const map = mapa.current;
     if (map && listo.current) {
-      aplicarPorModo(map, modoActivo, filtroComercial, filtroCatRutaRef.current);
+      aplicarPorModo(map, modoActivo, filtroComercial, filtroCatRutaRef.current, heatRef.current);
       // (así la visibilidad de los sin-contrato queda coherente).
       if (modoActivo !== "comercial") aplicarFiltro(map, filtro);
       recontarComercial(map);
     }
   }, [modoActivo, filtroComercial]);
+
+  useEffect(() => {
+    heatRef.current = heatMetrica;
+    const map = mapa.current;
+    if (map && listo.current) {
+      aplicarPorModo(map, modoActivo, filtroComercial, filtroCatRutaRef.current, heatMetrica);
+    }
+  }, [heatMetrica]);
 
   useEffect(() => {
     const map = mapa.current;
@@ -604,24 +643,63 @@ const BASE_CLAND = ["==", ["get", "clandestino"], true];
 // Aplica el estado del mapa según el MODO activo.
 // - comercial: filtro comercial combinado sobre predios con contrato; oculta clandestinos.
 // - otros modos: restaura el filtro base normal.
+function pesoHeat(metrica: string): unknown {
+  if (metrica === "deuda") {
+    return ["interpolate", ["linear"], ["to-number", ["get", "deuda_total"], 0], 0, 0, 2000000, 1];
+  }
+  if (metrica === "facturas") {
+    return ["interpolate", ["linear"], ["to-number", ["get", "facturas_pendientes"], 0], 0, 0, 60, 1];
+  }
+  if (metrica === "consumo_bajo") {
+    return ["case",
+      ["any", ["==", ["get", "clase_consumo"], "cero"], ["==", ["get", "clase_consumo"], "muy_bajo"]],
+      1, 0];
+  }
+  return ["case", ["==", ["get", "estado_medidor"], "3"], 1, 0];
+}
+
+function aplicarHeat(
+  map: maplibregl.Map,
+  metrica: string | null,
+  filtroComercial: unknown[] | null,
+) {
+  if (!map.getLayer("heatmap-comercial")) return;
+  if (!metrica) {
+    map.setLayoutProperty("heatmap-comercial", "visibility", "none");
+    return;
+  }
+  const filtroBase: unknown[] = ["!=", ["get", "clandestino"], true];
+  const filtro = filtroComercial && filtroComercial.length > 0
+    ? ["all", filtroBase, ...filtroComercial]
+    : filtroBase;
+  map.setFilter("heatmap-comercial", filtro as never);
+  map.setPaintProperty("heatmap-comercial", "heatmap-weight", pesoHeat(metrica) as never);
+  map.setLayoutProperty("heatmap-comercial", "visibility", "visible");
+}
+
 function aplicarPorModo(
   map: maplibregl.Map,
   modo: string,
   filtroComercial: unknown[] | null,
   filtroCatRuta: FiltroCatastroRuta = "ninguno",
+  heatMetrica: string | null = null,
 ) {
   if (modo === "comercial") {
     // Los sin-contrato no tienen datos comerciales: se ocultan.
     map.setLayoutProperty("predios-clandestino", "visibility", "none");
-    map.setLayoutProperty("predios-normal", "visibility", "visible");
     map.setLayoutProperty("predios-labels", "visibility", "none");
+    // Si el mapa de calor está activo, ocultamos los puntos (se ve solo el calor).
+    map.setLayoutProperty("predios-normal", "visibility", heatMetrica ? "none" : "visible");
+    aplicarHeat(map, heatMetrica, filtroComercial);
     // Combinar filtro base con el comercial (lógica Y).
     if (filtroComercial && filtroComercial.length > 0) {
       map.setFilter("predios-normal", ["all", BASE_NORMAL, ...filtroComercial] as never);
     } else {
       map.setFilter("predios-normal", BASE_NORMAL as never);
     }
+    // (heat solo aplica en comercial)
   } else if (modo === "rutas") {
+    aplicarHeat(map, null, null);
     // En modo Rutas, los puntos del catastro se controlan con el filtro:
     // "con" = solo con contrato, "sin" = solo sin contrato, "ninguno" = ocultar todos.
     // El recorrido de la ruta (línea + puntos) siempre se ve.
@@ -635,6 +713,7 @@ function aplicarPorModo(
     map.setPaintProperty("predios-normal", "circle-opacity", 0.3);
     map.setPaintProperty("predios-clandestino", "circle-opacity", 0.3);
   } else {
+    aplicarHeat(map, null, null);
     // Restaurar filtro base y visibilidad (los sin-contrato vuelven a verse).
     map.setFilter("predios-normal", BASE_NORMAL as never);
     map.setFilter("predios-clandestino", BASE_CLAND as never);
