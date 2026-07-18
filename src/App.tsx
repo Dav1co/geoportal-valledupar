@@ -129,6 +129,7 @@ export default function App() {
   const [conteoCom, setConteoCom] = useState<ConteoComercial>({ disponible: false, total: 0 });
   const [fCiclo, setFCiclo] = useState("todos");
   const [fBarrio, setFBarrio] = useState("");          // barrio seleccionado (exacto)
+  const [fConsumoMax, setFConsumoMax] = useState("");
   const [barrioTexto, setBarrioTexto] = useState("");  // lo que se escribe
   const [listaBarrios, setListaBarrios] = useState<string[]>([]);
   const [statsCom, setStatsCom] = useState<StatsComercial>({
@@ -283,6 +284,11 @@ export default function App() {
     if (fBarrio !== "") {
       conds.push(["==", ["get", "barrio"], fBarrio]);
     }
+    if (fConsumoMax.trim() !== "" && !isNaN(Number(fConsumoMax))) {
+      const umbral = Number(fConsumoMax);
+      conds.push([">", ["to-number", ["get", "consumo_actual"], -1], -1]);
+      conds.push(["<=", ["to-number", ["get", "consumo_actual"], 1e9], umbral]);
+    }
 
     return conds.length > 0 ? conds : null;
   }
@@ -290,9 +296,10 @@ export default function App() {
   const filtroComercial = modo === "comercial" ? construirFiltroComercial() : null;
   const puntosRuta: PuntoRutaMap[] | null =
     modo === "rutas" && detalleRuta ? detalleRuta.puntos : null;
-  const hayFiltrosCom = fMedicion !== "todos" || fFacturacion !== "todos" || fConsumo !== "todos" || fCartera !== "todos" || fCiclo !== "todos" || fBarrio !== "";
+  const hayFiltrosCom = fMedicion !== "todos" || fFacturacion !== "todos" || fConsumo !== "todos" || fCartera !== "todos" || fCiclo !== "todos" || fBarrio !== "" || fConsumoMax.trim() !== "";
 
   function limpiarComercial() {
+    setFConsumoMax("");
     setFMedicion("todos");
     setFFacturacion("todos");
     setFConsumo("todos");
@@ -623,6 +630,17 @@ export default function App() {
                       )}
                     </div>
                   )}
+                </div>
+                <div className="seccion">
+                  <span className="filtro-rotulo">Consumo máximo (m³)</span>
+                  <input
+                    className="filtro-campo"
+                    type="number"
+                    min="0"
+                    placeholder="Ej. 3 — muestra predios con consumo ≤ 3"
+                    value={fConsumoMax}
+                    onChange={(e) => setFConsumoMax(e.target.value)}
+                  />
                 </div>
                 <div className="seccion">
                   <p className="contador">{textoConteoComercial()}</p>
