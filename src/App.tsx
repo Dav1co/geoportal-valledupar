@@ -341,7 +341,7 @@ export default function App() {
               {vista === "admin" ? "Volver al mapa" : "Administración"}
             </button>
           )}
-          <span className="mono barra-correo">{email}</span>
+          <span className="mono barra-correo">{email.split("@")[0]}</span>
           <button className="btn-link" onClick={() => supabase.auth.signOut()}>
             Salir
           </button>
