@@ -21,9 +21,6 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [entrando, setEntrando] = useState(false);
 
-  const correoFinal = normalizarCorreo(email);
-  const mostrarPreview = email.trim() !== "" && !email.includes("@");
-
   async function ingresar() {
     setError(null);
     const correo = normalizarCorreo(email);
@@ -80,9 +77,6 @@ export function Login() {
           }
           autoComplete="username"
         />
-        {mostrarPreview && (
-          <p className="hint mono">Ingresarás como {correoFinal}</p>
-        )}
 
         <label className="field-label" htmlFor="clave" style={{ marginTop: 12 }}>
           Contraseña
