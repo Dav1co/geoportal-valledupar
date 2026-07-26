@@ -663,3 +663,21 @@ body {
   .btn-panel-movil { display: flex; }
   .btn-cerrar-panel { display: flex; }
 }
+
+/* Última lectura en la ficha del predio */
+.ficha-lectura {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #f0f5fb;
+  border: 1px solid #d7e3f2;
+  border-radius: 8px;
+}
+.ficha-lectura-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.ficha-lectura-tit { font-weight: 600; color: var(--azul); font-size: 13px; }
+.ficha-lectura-periodo { font-size: 12px; color: var(--muted); }
+.ficha-lectura-nota { margin: 6px 0 0; font-size: 12px; color: var(--rojo); }

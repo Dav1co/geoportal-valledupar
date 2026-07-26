@@ -32,6 +32,18 @@ function fechaCorta(v: unknown): string {
   } catch { return "—"; }
 }
 
+// "202606" -> "2026-06"
+function fmtPeriodo(v: unknown): string {
+  const s = String(v ?? "").trim();
+  return s.length === 6 ? `${s.slice(0, 4)}-${s.slice(4, 6)}` : (s || "—");
+}
+
+type Lectura = {
+  periodo?: string; lectura_actual?: unknown; lectura_anterior?: unknown;
+  consumo?: unknown; determinacion?: string; determinacion_cod?: string;
+  estado_medidor?: string;
+} | null;
+
 // Secciones del catastro
 const SECCIONES: { titulo: string; campos: [string, string][] }[] = [
   {
@@ -142,6 +154,7 @@ export function PredioPanel({ id, onCerrar }: Props) {
   if (id === null) return null;
 
   const cargue = (predio?._cargue ?? null) as Cargue;
+  const lectura = (predio?._lectura ?? null) as Lectura;
 
   function toggle(titulo: string) {
     setAbiertas((prev) => {
@@ -192,6 +205,26 @@ export function PredioPanel({ id, onCerrar }: Props) {
                 <Fila et="Valor reclamo" v={pesos(cargue.valor_reclamo)} />
                 <Fila et="Saldo financiado" v={pesos(cargue.saldo_financiado)} />
               </dl>
+              {lectura && (
+                <div className="ficha-lectura">
+                  <div className="ficha-lectura-head">
+                    <span className="ficha-lectura-tit">Última lectura</span>
+                    <span className="ficha-lectura-periodo mono">{fmtPeriodo(lectura.periodo)}</span>
+                  </div>
+                  <dl className="ficha-datos">
+                    <Fila et="Lectura actual" v={limpio(lectura.lectura_actual)} />
+                    <Fila et="Lectura anterior" v={limpio(lectura.lectura_anterior)} />
+                    <Fila et="Consumo del periodo" v={lectura.consumo != null ? `${lectura.consumo} m³` : "—"} />
+                    <Fila et="Determinación" v={limpio(lectura.determinacion)} />
+                    <Fila et="Estado del medidor" v={limpio(lectura.estado_medidor)} />
+                  </dl>
+                  {["3", "4", "5"].includes(String(lectura.determinacion_cod)) && (
+                    <p className="ficha-lectura-nota">
+                      El consumo de este periodo no proviene de una lectura medida.
+                    </p>
+                  )}
+                </div>
+              )}
               <p className="ficha-cargue-pie">
                 Cargue del {fechaCorta(cargue.cargado_en)}
               </p>
