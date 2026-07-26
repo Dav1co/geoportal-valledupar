@@ -753,7 +753,7 @@ export default function App() {
                   }}>
                     Descargar lo visible
                   </button>
-                  <button className="btn-sel" style={{ marginTop: 6 }} onClick={() => descargarCSV({
+                  <button className="btn-sel" style={{ marginTop: 6 }} disabled={!hayFiltrosCom} onClick={() => descargarCSV({
                     medicion: fMedicion, facturacion: fFacturacion, consumo: fConsumo,
                     cartera: fCartera, ciclo: fCiclo, barrio: fBarrio, consumoMax: fConsumoMax,
                   })}>
