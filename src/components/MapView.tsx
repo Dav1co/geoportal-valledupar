@@ -67,6 +67,7 @@ type Props = {
   dibujando: boolean;
   resetLazo: number;
   onLazoCerrado: (ids: number[]) => void;
+  getVisiblesRef: { current: (() => number[]) | null };
 };
 
 export function MapView({
@@ -91,6 +92,7 @@ export function MapView({
   dibujando,
   resetLazo,
   onLazoCerrado,
+  getVisiblesRef,
 }: Props) {
   const contenedor = useRef<HTMLDivElement>(null);
   const mapa = useRef<maplibregl.Map | null>(null);
@@ -343,6 +345,17 @@ export function MapView({
       aplicarBase(map, base);
       aplicarModo(map, modoTerrenos);
       recontar(map);
+
+      getVisiblesRef.current = () => {
+        let fs: maplibregl.MapGeoJSONFeature[] = [];
+        try { fs = map.queryRenderedFeatures({ layers: ["predios-normal"] }); } catch { fs = []; }
+        const ids = new Set<number>();
+        for (const f of fs) {
+          const id = Number(f.properties?.id);
+          if (Number.isInteger(id)) ids.add(id);
+        }
+        return Array.from(ids);
+      };
 
       // Fuentes y capas del modo Rutas (vacías hasta que se elija una ruta).
       map.addSource("ruta-linea", { type: "geojson", data: geojsonVacio() as never });

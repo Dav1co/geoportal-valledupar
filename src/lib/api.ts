@@ -87,7 +87,27 @@ export type DetalleRuta = {
   metricas: MetricasRuta;
 };
 
+export type ExportaResp = {
+  ok: boolean;
+  total: number;
+  limite: number;
+  contratos: string[];
+};
+
+export type ExportaArgs = {
+  ids?: number[];
+  medicion?: string;
+  facturacion?: string;
+  consumo?: string;
+  cartera?: string;
+  ciclo?: string;
+  barrio?: string;
+  consumoMax?: string;
+};
+
 export const api = {
+  exportarContratos: (args: ExportaArgs) =>
+    callPost<ExportaResp>("geoportal-exportar", {}, args),
   buscar: (q: string) =>
     call<{ resultados: PredioResumen[] }>("geoportal-buscar", { q }),
   buscarMedidor: (q: string) =>

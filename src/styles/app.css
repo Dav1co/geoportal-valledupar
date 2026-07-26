@@ -698,3 +698,5 @@ body {
 .btn-sel-cancel { background: var(--muted); }
 .sel-activo { margin-top: 6px; }
 .sel-conteo { margin: 4px 0 6px; font-size: 13px; }
+
+.btn-sel:disabled { opacity: 0.5; cursor: not-allowed; }

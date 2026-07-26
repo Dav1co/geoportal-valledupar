@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "./auth/useSession";
 import { Login } from "./auth/Login";
 import {
@@ -22,7 +22,7 @@ import { PredioPanel } from "./components/PredioPanel";
 import { Watermark } from "./components/Watermark";
 import { Admin } from "./components/Admin";
 import { supabase } from "./lib/supabase";
-import { api, type RutaItem, type DetalleRuta } from "./lib/api";
+import { api, type RutaItem, type DetalleRuta, type ExportaArgs } from "./lib/api";
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
 
@@ -116,6 +116,8 @@ export default function App() {
   const [dibujando, setDibujando] = useState(false);
   const [seleccionLazo, setSeleccionLazo] = useState<number[]>([]);
   const [resetLazo, setResetLazo] = useState(0);
+  const [msgExport, setMsgExport] = useState("");
+  const getVisiblesRef = useRef<(() => number[]) | null>(null);
   const [filtro, setFiltro] = useState<FiltroContrato>(URL0?.filtro ?? "todos");
   const [estado, setEstado] = useState<FiltroEstado>(URL0?.estado ?? "");
   const [mostrarTerrenos, setMostrarTerrenos] = useState(URL0?.terrenos ?? true);
@@ -294,6 +296,35 @@ export default function App() {
     }
 
     return conds.length > 0 ? conds : null;
+  }
+
+  async function descargarCSV(args: ExportaArgs) {
+    setMsgExport("Generando…");
+    try {
+      const resp = await api.exportarContratos(args);
+      if (!resp.ok) {
+        setMsgExport(
+          `Son ${resp.total.toLocaleString("es-CO")} contratos y superan el límite de ${resp.limite.toLocaleString("es-CO")}. Aplica filtros para reducir.`
+        );
+        return;
+      }
+      if (!resp.contratos || resp.contratos.length === 0) {
+        setMsgExport("No hay contratos para exportar con esta selección.");
+        return;
+      }
+      const csv = "\ufeff" + ["contrato", ...resp.contratos].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const hoy = new Date();
+      const p2 = (n: number) => String(n).padStart(2, "0");
+      const nombre = `contratos_${hoy.getFullYear()}-${p2(hoy.getMonth() + 1)}-${p2(hoy.getDate())}.csv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = nombre; a.click();
+      URL.revokeObjectURL(url);
+      setMsgExport(`Descargados ${resp.contratos.length.toLocaleString("es-CO")} contratos.`);
+    } catch {
+      setMsgExport("No se pudo generar la descarga.");
+    }
   }
 
   const filtroComercial = modo === "comercial" ? construirFiltroComercial() : null;
@@ -709,6 +740,27 @@ export default function App() {
                     </div>
                   )}
                 </div>
+
+                <div className="seccion">
+                  <span className="filtro-rotulo">Descargar contratos (CSV)</span>
+                  <button className="btn-sel" disabled={seleccionLazo.length === 0} onClick={() => descargarCSV({ ids: seleccionLazo })}>
+                    Descargar selección{seleccionLazo.length > 0 ? ` (${seleccionLazo.length})` : ""}
+                  </button>
+                  <button className="btn-sel" style={{ marginTop: 6 }} onClick={() => {
+                    const ids = getVisiblesRef.current ? getVisiblesRef.current() : [];
+                    if (ids.length === 0) { setMsgExport("No hay predios visibles. Acércate en el mapa."); return; }
+                    descargarCSV({ ids });
+                  }}>
+                    Descargar lo visible
+                  </button>
+                  <button className="btn-sel" style={{ marginTop: 6 }} onClick={() => descargarCSV({
+                    medicion: fMedicion, facturacion: fFacturacion, consumo: fConsumo,
+                    cartera: fCartera, ciclo: fCiclo, barrio: fBarrio, consumoMax: fConsumoMax,
+                  })}>
+                    Descargar todo el filtro
+                  </button>
+                  {msgExport && <p className="hint" style={{ marginTop: 6 }}>{msgExport}</p>}
+                </div>
               </>
             )}
 
@@ -851,6 +903,7 @@ export default function App() {
               dibujando={dibujando}
               resetLazo={resetLazo}
               onLazoCerrado={(ids) => { setSeleccionLazo(ids); setDibujando(false); }}
+              getVisiblesRef={getVisiblesRef}
             />
             <Watermark email={email} />
             {modo === "comercial" && (
