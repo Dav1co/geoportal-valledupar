@@ -113,6 +113,9 @@ export default function App() {
   const [esAdmin, setEsAdmin] = useState(false);
   const [vista, setVista] = useState<"mapa" | "admin">("mapa");
   const [modo, setModo] = useState<Modo>("explorar");
+  const [dibujando, setDibujando] = useState(false);
+  const [seleccionLazo, setSeleccionLazo] = useState<number[]>([]);
+  const [resetLazo, setResetLazo] = useState(0);
   const [filtro, setFiltro] = useState<FiltroContrato>(URL0?.filtro ?? "todos");
   const [estado, setEstado] = useState<FiltroEstado>(URL0?.estado ?? "");
   const [mostrarTerrenos, setMostrarTerrenos] = useState(URL0?.terrenos ?? true);
@@ -384,7 +387,12 @@ export default function App() {
                 onChange={(e) => {
                   const nuevoModo = e.target.value as Modo;
                   setModo(nuevoModo);
-                  if (nuevoModo !== "comercial") setHeatMetrica(null);
+                  if (nuevoModo !== "comercial") {
+                    setHeatMetrica(null);
+                    setDibujando(false);
+                    setSeleccionLazo([]);
+                    setResetLazo((v) => v + 1);
+                  }
                 }}
               >
                 <option value="explorar">Explorar</option>
@@ -676,6 +684,31 @@ export default function App() {
                     </select>
                   )}
                 </div>
+
+                <div className="seccion">
+                  <span className="filtro-rotulo">Selección por área</span>
+                  {!dibujando && seleccionLazo.length === 0 && (
+                    <button className="btn-sel" onClick={() => { setSeleccionLazo([]); setResetLazo((n) => n + 1); setDibujando(true); }}>
+                      Seleccionar área
+                    </button>
+                  )}
+                  {dibujando && (
+                    <div className="sel-activo">
+                      <p className="hint">Clic para poner vértices · doble clic para cerrar</p>
+                      <button className="btn-sel btn-sel-cancel" onClick={() => setDibujando(false)}>
+                        Cancelar
+                      </button>
+                    </div>
+                  )}
+                  {!dibujando && seleccionLazo.length > 0 && (
+                    <div className="sel-activo">
+                      <p className="sel-conteo"><strong>{seleccionLazo.length}</strong> contratos seleccionados</p>
+                      <button className="btn-sel btn-sel-cancel" onClick={() => { setSeleccionLazo([]); setResetLazo((n) => n + 1); }}>
+                        Limpiar selección
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -815,6 +848,9 @@ export default function App() {
               onConteoComercial={setConteoCom}
               onStatsComercial={setStatsCom}
               onTerreno={setTerreno}
+              dibujando={dibujando}
+              resetLazo={resetLazo}
+              onLazoCerrado={(ids) => { setSeleccionLazo(ids); setDibujando(false); }}
             />
             <Watermark email={email} />
             {modo === "comercial" && (

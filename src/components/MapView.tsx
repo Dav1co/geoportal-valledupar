@@ -64,6 +64,9 @@ type Props = {
   onConteoComercial: (c: ConteoComercial) => void;
   onStatsComercial: (s: StatsComercial) => void;
   onTerreno: (info: TerrenoInfo | null) => void;
+  dibujando: boolean;
+  resetLazo: number;
+  onLazoCerrado: (ids: number[]) => void;
 };
 
 export function MapView({
@@ -85,6 +88,9 @@ export function MapView({
   onConteoComercial,
   onStatsComercial,
   onTerreno,
+  dibujando,
+  resetLazo,
+  onLazoCerrado,
 }: Props) {
   const contenedor = useRef<HTMLDivElement>(null);
   const mapa = useRef<maplibregl.Map | null>(null);
@@ -101,8 +107,26 @@ export function MapView({
   const filtroCatRutaRef = useRef(filtroCatastroRuta);
   const onTerr = useRef(onTerreno);
   const modoRef = useRef(modoTerrenos);
+  const dibujandoRef = useRef(dibujando);
+  const onLazoRef = useRef(onLazoCerrado);
+  const verticesRef = useRef<[number, number][]>([]);
 
   useEffect(() => { tokenRef.current = accessToken; }, [accessToken]);
+  useEffect(() => { onLazoRef.current = onLazoCerrado; }, [onLazoCerrado]);
+  useEffect(() => {
+    dibujandoRef.current = dibujando;
+    const map = mapa.current;
+    if (!map || !listo.current) return;
+    map.getCanvas().style.cursor = dibujando ? "crosshair" : "";
+    if (!dibujando) { verticesRef.current = []; pintarLazo(map, [], false); }
+  }, [dibujando]);
+  useEffect(() => {
+    const map = mapa.current;
+    if (!map || !listo.current) return;
+    verticesRef.current = [];
+    pintarLazo(map, [], false);
+    if (map.getLayer("lazo-sel")) map.setFilter("lazo-sel", ["in", ["get", "id"], ["literal", []]]);
+  }, [resetLazo]);
   useEffect(() => { onSel.current = onSeleccionar; }, [onSeleccionar]);
   useEffect(() => { onVarios.current = onSeleccionarVarios; }, [onSeleccionarVarios]);
   useEffect(() => { onCont.current = onConteo; }, [onConteo]);
@@ -323,7 +347,28 @@ export function MapView({
       // Fuentes y capas del modo Rutas (vacías hasta que se elija una ruta).
       map.addSource("ruta-linea", { type: "geojson", data: geojsonVacio() as never });
       map.addSource("ruta-puntos", { type: "geojson", data: geojsonVacio() as never });
+      map.addSource("lazo", { type: "geojson", data: geojsonVacio() as never });
       // Línea del recorrido: azul los tramos normales, rojo grueso los > 100 m.
+      map.addLayer({
+        id: "lazo-sel", type: "circle", source: "predios", "source-layer": "predios",
+        filter: ["in", ["get", "id"], ["literal", []]],
+        paint: { "circle-radius": 5, "circle-color": "#f5b301", "circle-stroke-color": "#12263a", "circle-stroke-width": 1 },
+      });
+      map.addLayer({
+        id: "lazo-relleno", type: "fill", source: "lazo",
+        filter: ["==", ["geometry-type"], "Polygon"],
+        paint: { "fill-color": "#1e5aa8", "fill-opacity": 0.12 },
+      });
+      map.addLayer({
+        id: "lazo-linea", type: "line", source: "lazo",
+        filter: ["==", ["geometry-type"], "LineString"],
+        paint: { "line-color": "#1e5aa8", "line-width": 2, "line-dasharray": [2, 1] },
+      });
+      map.addLayer({
+        id: "lazo-vertices", type: "circle", source: "lazo",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: { "circle-radius": 4, "circle-color": "#1e5aa8", "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 },
+      });
       map.addLayer({
         id: "ruta-linea-normal", type: "line", source: "ruta-linea",
         filter: ["<=", ["get", "m"], 100],
@@ -383,7 +428,20 @@ export function MapView({
     map.on("moveend", () => recontarComercial(map));
     map.on("idle", () => recontarComercial(map));
 
+    map.on("dblclick", (e) => {
+      if (!dibujandoRef.current) return;
+      e.preventDefault();
+      cerrarLazo(map);
+    });
+
     map.on("click", (e) => {
+      // MODO DIBUJO (lazo): cada clic agrega un vértice.
+      if (dibujandoRef.current) {
+        verticesRef.current = [...verticesRef.current, [e.lngLat.lng, e.lngLat.lat]];
+        pintarLazo(map, verticesRef.current, false);
+        return;
+      }
+
       // MODO TERRENOS: seleccionar el polígono clicado, mostrar su código.
       if (modoRef.current) {
         const feats = map.queryRenderedFeatures(e.point, { layers: ["terrenos-fill"] });
@@ -502,6 +560,25 @@ export function MapView({
       return { lng: c.lng, lat: c.lat, zoom: m.getZoom() };
     };
   }, []);
+
+  function cerrarLazo(map: maplibregl.Map) {
+    const verts = verticesRef.current;
+    if (verts.length < 3) { onLazoRef.current([]); return; }
+    pintarLazo(map, verts, true);
+    let feats: maplibregl.MapGeoJSONFeature[] = [];
+    try { feats = map.queryRenderedFeatures({ layers: ["predios-normal"] }); } catch { feats = []; }
+    const ids = new Set<number>();
+    for (const f of feats) {
+      const id = Number(f.properties?.id);
+      if (!Number.isInteger(id)) continue;
+      const g = f.geometry;
+      if (g.type !== "Point") continue;
+      if (dentroPolistr(g.coordinates as [number, number], verts)) ids.add(id);
+    }
+    const lista = Array.from(ids);
+    map.setFilter("lazo-sel", ["in", ["get", "id"], ["literal", lista]]);
+    onLazoRef.current(lista);
+  }
 
   function recontar(map: maplibregl.Map) {
     if (map.getZoom() < 15) {
@@ -727,6 +804,33 @@ function aplicarPorModo(
 
 
 // GeoJSON vacío inicial para las fuentes de ruta.
+function dentroPolistr(punto: [number, number], poly: [number, number][]): boolean {
+  const x = punto[0], y = punto[1];
+  let d = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+    const cruza = (yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (cruza) d = !d;
+  }
+  return d;
+}
+
+function pintarLazo(map: maplibregl.Map, vertices: [number, number][], cerrado: boolean) {
+  const src = map.getSource("lazo") as maplibregl.GeoJSONSource | undefined;
+  if (!src) return;
+  const feats: GeoJSON.Feature[] = vertices.map((v) => ({
+    type: "Feature", properties: {}, geometry: { type: "Point", coordinates: v },
+  }));
+  if (vertices.length >= 2) {
+    const coords = cerrado ? [...vertices, vertices[0]] : vertices;
+    feats.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } });
+  }
+  if (cerrado && vertices.length >= 3) {
+    feats.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...vertices, vertices[0]]] } });
+  }
+  src.setData({ type: "FeatureCollection", features: feats } as never);
+}
+
 function geojsonVacio() {
   return { type: "FeatureCollection", features: [] };
 }

@@ -681,3 +681,20 @@ body {
 .ficha-lectura-tit { font-weight: 600; color: var(--azul); font-size: 13px; }
 .ficha-lectura-periodo { font-size: 12px; color: var(--muted); }
 .ficha-lectura-nota { margin: 6px 0 0; font-size: 12px; color: var(--rojo); }
+
+/* Selección por área (lazo) */
+.btn-sel {
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 6px;
+  background: var(--azul);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-sel:hover { filter: brightness(1.08); }
+.btn-sel-cancel { background: var(--muted); }
+.sel-activo { margin-top: 6px; }
+.sel-conteo { margin: 4px 0 6px; font-size: 13px; }
