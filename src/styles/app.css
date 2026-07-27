@@ -700,3 +700,5 @@ body {
 .sel-conteo { margin: 4px 0 6px; font-size: 13px; }
 
 .btn-sel:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.leyenda-sep { font-weight: 600; color: var(--muted); margin-top: 6px; border-top: 1px solid #e0e6ec; padding-top: 6px; }

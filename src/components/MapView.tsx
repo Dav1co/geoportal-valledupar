@@ -56,6 +56,7 @@ type Props = {
   modoActivo: ModoMapa;
   filtroComercial: unknown[] | null;
   heatMetrica: HeatMetrica | null;
+  colorSemaforo: boolean;
   puntosRuta: PuntoRutaMap[] | null;
   filtroCatastroRuta: FiltroCatastroRuta;
   onSeleccionar: (id: number) => void;
@@ -81,6 +82,7 @@ export function MapView({
   modoActivo,
   filtroComercial,
   heatMetrica,
+  colorSemaforo,
   puntosRuta,
   filtroCatastroRuta,
   onSeleccionar,
@@ -98,6 +100,7 @@ export function MapView({
   const mapa = useRef<maplibregl.Map | null>(null);
   const listo = useRef(false);
   const heatRef = useRef<string | null>(heatMetrica);
+  const colorSemRef = useRef(colorSemaforo);
   const tokenRef = useRef(accessToken);
   const onSel = useRef(onSeleccionar);
   const onVarios = useRef(onSeleccionarVarios);
@@ -541,6 +544,13 @@ export function MapView({
   }, [heatMetrica]);
 
   useEffect(() => {
+    colorSemRef.current = colorSemaforo;
+    const map = mapa.current;
+    if (!map || !listo.current) return;
+    aplicarColorSemaforo(map, colorSemaforo);
+  }, [colorSemaforo]);
+
+  useEffect(() => {
     const map = mapa.current;
     if (map && listo.current) aplicarEstado(map, estado);
   }, [estado]);
@@ -900,4 +910,23 @@ function pintarRuta(
     [Math.max(...xs), Math.max(...ys)],
   ];
   map.fitBounds(bounds, { padding: 60, maxZoom: 17, duration: 600 });
+}
+
+function aplicarColorSemaforo(map: maplibregl.Map, activo: boolean) {
+  if (!map.getLayer("predios-normal")) return;
+  if (activo) {
+    map.setPaintProperty("predios-normal", "circle-color", [
+      "match", ["get", "semaforo_cartera"],
+      "entro_deuda", "#d32f2f",
+      "aumento", "#f57c00",
+      "mantuvo", "#fbc02d",
+      "abono", "#8e24aa",
+      "normalizo", "#2e7d32",
+      "normalizo_financiado", "#1565c0",
+      "al_dia", "#c8d0d8",
+      "#8a97a3",
+    ]);
+  } else {
+    map.setPaintProperty("predios-normal", "circle-color", "#2FB6C4");
+  }
 }

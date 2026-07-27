@@ -109,6 +109,8 @@ export default function App() {
   const [predioId, setPredioId] = useState<number | null>(null);
   const [panelMovilAbierto, setPanelMovilAbierto] = useState(false);
   const [heatMetrica, setHeatMetrica] = useState<HeatMetrica | null>(null);
+  const [colorSemaforo, setColorSemaforo] = useState(false);
+  const [fSemaforo, setFSemaforo] = useState("todos");
   const [apilados, setApilados] = useState<PredioApilado[] | null>(null);
   const [esAdmin, setEsAdmin] = useState(false);
   const [vista, setVista] = useState<"mapa" | "admin">("mapa");
@@ -259,6 +261,9 @@ export default function App() {
 
     if (fMedicion !== "todos") {
       conds.push(["==", ["get", "estado_medidor"], fMedicion]);
+    }
+    if (fSemaforo !== "todos") {
+      conds.push(["==", ["get", "semaforo_cartera"], fSemaforo]);
     }
     if (fFacturacion !== "todos") {
       if (fFacturacion === "34") {
@@ -717,6 +722,26 @@ export default function App() {
                 </div>
 
                 <div className="seccion">
+                  <span className="filtro-rotulo">Semáforo de cartera</span>
+                  <label className="filtro-check">
+                    <input type="checkbox" checked={colorSemaforo}
+                      onChange={(e) => setColorSemaforo(e.target.checked)} />
+                    Colorear por semáforo
+                  </label>
+                  <select className="modo-sel" style={{ marginTop: 8 }}
+                    value={fSemaforo} onChange={(e) => setFSemaforo(e.target.value)}>
+                    <option value="todos">Todas las categorías</option>
+                    <option value="entro_deuda">Entró a deuda</option>
+                    <option value="aumento">Aumentó deuda</option>
+                    <option value="mantuvo">Mantuvo la deuda</option>
+                    <option value="abono">Abonó</option>
+                    <option value="normalizo">Normalizó</option>
+                    <option value="normalizo_financiado">Normalizó (financiación)</option>
+                    <option value="al_dia">Al día</option>
+                  </select>
+                </div>
+
+                <div className="seccion">
                   <span className="filtro-rotulo">Selección por área</span>
                   {!dibujando && seleccionLazo.length === 0 && (
                     <button className="btn-sel" onClick={() => { setSeleccionLazo([]); setResetLazo((n) => n + 1); setDibujando(true); }}>
@@ -873,6 +898,18 @@ export default function App() {
               {estado && (
                 <span><i className="punto punto-estado" /> {rotuloEstado(estado)}</span>
               )}
+              {modo === "comercial" && colorSemaforo && (
+                <>
+                  <span className="leyenda-sep">Semáforo de cartera</span>
+                  <span><i className="punto" style={{ background: "#d32f2f" }} /> Entró a deuda</span>
+                  <span><i className="punto" style={{ background: "#f57c00" }} /> Aumentó deuda</span>
+                  <span><i className="punto" style={{ background: "#fbc02d" }} /> Mantuvo la deuda</span>
+                  <span><i className="punto" style={{ background: "#8e24aa" }} /> Abonó</span>
+                  <span><i className="punto" style={{ background: "#2e7d32" }} /> Normalizó</span>
+                  <span><i className="punto" style={{ background: "#1565c0" }} /> Normalizó (financiación)</span>
+                  <span><i className="punto" style={{ background: "#c8d0d8" }} /> Al día</span>
+                </>
+              )}
             </div>
           </aside>
 
@@ -888,6 +925,7 @@ export default function App() {
               modoActivo={modo as ModoMapa}
               filtroComercial={filtroComercial}
               heatMetrica={modo === "comercial" ? heatMetrica : null}
+              colorSemaforo={modo === "comercial" && colorSemaforo}
               puntosRuta={puntosRuta}
               filtroCatastroRuta={filtroCatRuta}
               onSeleccionar={(id) => {
