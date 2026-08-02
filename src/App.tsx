@@ -165,7 +165,9 @@ export default function App() {
         setEsAdmin(r.es_admin);
         if (r.permisos) setPermisos(r.permisos);
       })
-      .catch(() => setEsAdmin(false));
+      .catch(() => {
+        setEsAdmin(false);
+      });
   }, [session]);
 
   // Cargar la lista de barrios la primera vez que se entra al modo Comercial.
@@ -216,6 +218,7 @@ export default function App() {
     return <div className="pantalla-carga">Cargando…</div>;
   }
   if (!session) return <Login />;
+
 
   const email = session.user.email ?? "";
 

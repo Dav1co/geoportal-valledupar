@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { useMotivoRechazo } from "./useSession";
 
 const DOMINIO = "@emdupar.gov.co";
 
@@ -20,6 +21,7 @@ export function Login() {
   const [clave, setClave] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [entrando, setEntrando] = useState(false);
+  const motivo = useMotivoRechazo();
 
   async function ingresar() {
     setError(null);
@@ -44,7 +46,12 @@ export function Login() {
       password: clave,
     });
     setEntrando(false);
-    if (error) setError("Correo o contraseña incorrectos.");
+    if (error) {
+      setError("Correo o contraseña incorrectos.");
+      return;
+    }
+    // Si la sesión es válida pero el acceso está restringido (horario,
+    // usuario inactivo), useSession la rechaza y deja el motivo aquí.
   }
 
   return (
@@ -96,7 +103,7 @@ export function Login() {
           {entrando ? "Ingresando…" : "Ingresar"}
         </button>
 
-        {error && <p className="error">{error}</p>}
+        {(error || motivo) && <p className="error">{error ?? motivo}</p>}
       </div>
       <p className="login-foot">Acceso restringido · uso institucional</p>
     </div>

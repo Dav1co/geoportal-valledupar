@@ -760,3 +760,8 @@ body {
 .adm-editor-campos { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; }
 .adm-editor-et { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .adm-editor-checks { display: flex; flex-wrap: wrap; gap: 14px; }
+
+.pantalla-bloqueo { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f4f6f8; padding: 24px; }
+.bloqueo-caja { background: #fff; border-radius: 12px; padding: 32px 36px; max-width: 420px; text-align: center; box-shadow: 0 2px 12px rgba(18,38,58,.08); }
+.bloqueo-tit { font-size: 18px; font-weight: 600; color: #12263a; margin-bottom: 10px; }
+.bloqueo-msg { font-size: 14px; color: var(--muted); line-height: 1.6; margin: 0 0 20px; }
