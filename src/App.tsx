@@ -29,11 +29,6 @@ const fmt = (n: number) => n.toLocaleString("es-CO");
 type Modo = "explorar" | "focalizacion" | "comercial" | "rutas";
 
 // Solo estos correos ven el modo Rutas de lectura.
-const CORREOS_RUTAS = new Set([
-  "ingdaviddiazr@gmail.com",
-  "ddiazrodriguez@emdupar.gov.co",
-]);
-
 // --- Opciones de los filtros comerciales (código en BD -> etiqueta visible) ---
 type OpcionFiltro = { valor: string; etiqueta: string };
 
@@ -116,6 +111,9 @@ export default function App() {
   const [fCausal, setFCausal] = useState("todos");
   const [apilados, setApilados] = useState<PredioApilado[] | null>(null);
   const [esAdmin, setEsAdmin] = useState(false);
+  const [permisos, setPermisos] = useState({
+    explorar: true, focalizacion: false, comercial: false, rutas: false,
+  });
   const [vista, setVista] = useState<"mapa" | "admin">("mapa");
   const [modo, setModo] = useState<Modo>("explorar");
   const [dibujando, setDibujando] = useState(false);
@@ -163,7 +161,10 @@ export default function App() {
     }
     api.admin
       .perfil()
-      .then((r) => setEsAdmin(r.es_admin))
+      .then((r) => {
+        setEsAdmin(r.es_admin);
+        if (r.permisos) setPermisos(r.permisos);
+      })
       .catch(() => setEsAdmin(false));
   }, [session]);
 
@@ -181,11 +182,16 @@ export default function App() {
     }
   }, [modo, listaBarrios.length, listaCausales.length]);
 
+  const puedeVerRutas = esAdmin || permisos.rutas;
+  const puedeVerFocalizacion = esAdmin || permisos.focalizacion;
+  const puedeVerComercial = esAdmin || permisos.comercial;
+
   // Salvaguarda: si un usuario no autorizado cae en modo rutas, devolverlo a explorar.
   useEffect(() => {
-    const correo = (session?.user.email ?? "").toLowerCase();
-    if (modo === "rutas" && !CORREOS_RUTAS.has(correo)) setModo("explorar");
-  }, [modo, session]);
+    if (modo === "rutas" && !puedeVerRutas) setModo("explorar");
+    if (modo === "focalizacion" && !puedeVerFocalizacion) setModo("explorar");
+    if (modo === "comercial" && !puedeVerComercial) setModo("explorar");
+  }, [modo, puedeVerRutas, puedeVerFocalizacion, puedeVerComercial]);
 
   // Cargar la lista de rutas la primera vez que se entra al modo Rutas.
   useEffect(() => {
@@ -212,7 +218,6 @@ export default function App() {
   if (!session) return <Login />;
 
   const email = session.user.email ?? "";
-  const puedeVerRutas = CORREOS_RUTAS.has(email.toLowerCase());
 
   function irAPredio(id: number, x: number, y: number) {
     setApilados(null);
@@ -452,8 +457,12 @@ export default function App() {
                 }}
               >
                 <option value="explorar">Explorar</option>
-                <option value="focalizacion">Focalización</option>
-                <option value="comercial">Comercial</option>
+                {puedeVerFocalizacion && (
+                  <option value="focalizacion">Focalización</option>
+                )}
+                {puedeVerComercial && (
+                  <option value="comercial">Comercial</option>
+                )}
                 {puedeVerRutas && (
                   <option value="rutas">Rutas de lectura</option>
                 )}

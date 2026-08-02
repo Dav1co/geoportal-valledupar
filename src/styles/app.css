@@ -718,3 +718,45 @@ body {
 .pi-anillo-det { font-size: 12px; color: var(--muted); }
 
 .pi-d-nota { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+.adm-permisos { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 12px 12px; border-top: 1px solid #eef1f4; }
+.adm-permisos-et { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.adm-check { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #12263a; }
+.adm-sel { font-size: 12px; padding: 3px 6px; border: 1px solid #cfd8e0; border-radius: 6px; background: #fff; }
+
+/* --- Administración: pantalla ancha --- */
+.adm { width: 100%; padding: 24px 32px 48px; }
+.adm-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.adm-titulo { font-size: 20px; font-weight: 600; color: #12263a; margin: 0; }
+.adm-sub { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+.adm-cab-acciones { display: flex; align-items: center; gap: 12px; }
+.adm-nuevo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 16px; background: #f4f6f8; border-radius: 10px; margin-bottom: 18px; }
+.adm-nuevo .field { flex: 1 1 180px; min-width: 140px; }
+
+.adm-tabla-caja { border: 1px solid #e2e8ee; border-radius: 12px; overflow: hidden; }
+.adm-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+.adm-tabla thead tr { background: #f4f6f8; }
+.adm-tabla th { text-align: left; padding: 10px 14px; font-weight: 600; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.adm-tabla td { padding: 12px 14px; vertical-align: top; border-top: 1px solid #eef1f4; }
+.adm-c-usuario { width: 30%; }
+.adm-c-modos { width: 26%; }
+.adm-c-acceso { width: 16%; }
+.adm-c-acciones { width: 28%; text-align: right; }
+.adm-c-acciones .btn-link { margin-left: 10px; }
+.adm-inactivo { opacity: .5; }
+
+.adm-nombre { font-size: 14px; color: #12263a; display: flex; align-items: center; gap: 6px; }
+.adm-correo { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+.adm-correo-solo { font-size: 13px; color: #12263a; display: flex; align-items: center; gap: 6px; }
+.adm-estado { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.adm-tag-admin { font-size: 11px; padding: 1px 7px; border-radius: 4px; background: #ede7f6; color: #5e35b1; font-family: inherit; }
+.adm-etiquetas { display: flex; flex-wrap: wrap; gap: 4px; }
+.adm-etiqueta { font-size: 12px; padding: 2px 8px; border-radius: 4px; background: #e8f0fb; color: #1e5aa8; }
+.adm-nota { font-size: 12px; color: var(--muted); }
+.adm-acceso { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+.adm-editor { margin-top: 18px; border: 1px solid var(--azul); border-radius: 12px; padding: 16px 18px; background: #fff; }
+.adm-editor-tit { font-size: 14px; font-weight: 600; color: #12263a; margin-bottom: 14px; }
+.adm-editor-campos { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; }
+.adm-editor-et { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.adm-editor-checks { display: flex; flex-wrap: wrap; gap: 14px; }

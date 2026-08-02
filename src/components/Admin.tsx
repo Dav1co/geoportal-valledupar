@@ -3,6 +3,33 @@ import { api, type UsuarioAdmin } from "../lib/api";
 
 type Props = { onVolver: () => void };
 
+const MODOS: [keyof UsuarioAdmin, string][] = [
+  ["ver_explorar", "Explorar"],
+  ["ver_focalizacion", "Focalización"],
+  ["ver_comercial", "Comercial"],
+  ["ver_rutas", "Rutas"],
+];
+
+type Borrador = {
+  explorar: boolean;
+  focalizacion: boolean;
+  comercial: boolean;
+  rutas: boolean;
+  horario: string;
+  dias: string;
+};
+
+function aBorrador(u: UsuarioAdmin): Borrador {
+  return {
+    explorar: u.ver_explorar === true,
+    focalizacion: u.ver_focalizacion === true,
+    comercial: u.ver_comercial === true,
+    rutas: u.ver_rutas === true,
+    horario: u.horario ?? "laboral",
+    dias: u.dias ?? "habiles",
+  };
+}
+
 export function Admin({ onVolver }: Props) {
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -15,6 +42,12 @@ export function Admin({ onVolver }: Props) {
   const [clave, setClave] = useState("");
   const [rol, setRol] = useState("consulta");
   const [guardando, setGuardando] = useState(false);
+  const [abierto, setAbierto] = useState(false);
+
+  // Edición de permisos
+  const [editando, setEditando] = useState<string | null>(null);
+  const [borrador, setBorrador] = useState<Borrador | null>(null);
+  const [salvando, setSalvando] = useState(false);
 
   async function cargar() {
     setCargando(true);
@@ -62,6 +95,7 @@ export function Admin({ onVolver }: Props) {
       setNombre("");
       setClave("");
       setRol("consulta");
+      setAbierto(false);
       await cargar();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error guardando.");
@@ -70,7 +104,40 @@ export function Admin({ onVolver }: Props) {
     }
   }
 
-  async function cambiar(u: UsuarioAdmin, cambios: Partial<{ rol: string; activo: boolean }>) {
+  function abrirEdicion(u: UsuarioAdmin) {
+    setError(null);
+    setMsg(null);
+    if (editando === u.email) {
+      setEditando(null);
+      setBorrador(null);
+      return;
+    }
+    setEditando(u.email);
+    setBorrador(aBorrador(u));
+  }
+
+  async function guardarPermisos(u: UsuarioAdmin) {
+    if (!borrador) return;
+    setSalvando(true);
+    setError(null);
+    setMsg(null);
+    try {
+      await api.admin.permisos({ email: u.email, ...borrador });
+      setMsg(`Permisos actualizados para ${u.email}.`);
+      setEditando(null);
+      setBorrador(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function cambiar(
+    u: UsuarioAdmin,
+    cambios: Partial<{ rol: string; activo: boolean }>,
+  ) {
     setMsg(null);
     setError(null);
     try {
@@ -99,83 +166,221 @@ export function Admin({ onVolver }: Props) {
       .catch((e) => setError(e instanceof Error ? e.message : "Error."));
   }
 
+  const totalAdmin = usuarios.filter((u) => u.rol === "admin").length;
+
   return (
-    <div className="panel" style={{ maxWidth: 720, margin: "24px auto", width: "100%" }}>
-      <div className="panel-head">
-        <span className="panel-title">Administración de usuarios</span>
-        <button className="btn-link" onClick={onVolver}>Volver al mapa</button>
+    <div className="adm">
+      <div className="adm-cab">
+        <div>
+          <h2 className="adm-titulo">Administración de usuarios</h2>
+          <p className="adm-sub">
+            {usuarios.length} usuarios · {totalAdmin} administradores
+          </p>
+        </div>
+        <div className="adm-cab-acciones">
+          <button className="btn-sm" onClick={() => setAbierto((v) => !v)}>
+            {abierto ? "Cancelar" : "Nuevo usuario"}
+          </button>
+          <button className="btn-link" onClick={onVolver}>
+            Volver al mapa
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
-        <input
-          className="field"
-          placeholder="correo@emdupar.gov.co"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          className="field"
-          placeholder="Nombre (opcional)"
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-        />
-        <input
-          className="field"
-          placeholder="Clave inicial (mín. 8 caracteres)"
-          type="text"
-          value={clave}
-          onChange={(e) => setClave(e.target.value)}
-        />
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select className="field" value={rol} onChange={(e) => setRol(e.target.value)} style={{ flex: 1 }}>
+      {abierto && (
+        <div className="adm-nuevo">
+          <input
+            className="field"
+            placeholder="correo@emdupar.gov.co"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            className="field"
+            placeholder="Nombre (opcional)"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+          />
+          <input
+            className="field"
+            placeholder="Clave inicial (mín. 8)"
+            type="text"
+            value={clave}
+            onChange={(e) => setClave(e.target.value)}
+          />
+          <select
+            className="field"
+            value={rol}
+            onChange={(e) => setRol(e.target.value)}
+          >
             <option value="consulta">Consulta</option>
             <option value="admin">Administrador</option>
           </select>
           <button className="btn-sm" onClick={agregar} disabled={guardando}>
-            {guardando ? "…" : "Guardar usuario"}
+            {guardando ? "…" : "Guardar"}
           </button>
         </div>
-      </div>
+      )}
 
       {error && <p className="error">{error}</p>}
       {msg && <p className="hint">{msg}</p>}
       {cargando && <p className="hint">Cargando…</p>}
 
-      <ul className="resultados">
-        {usuarios.map((u) => (
-          <li key={u.email} style={{ opacity: u.activo ? 1 : 0.5 }}>
-            <div
-              className="resultado"
-              style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", cursor: "default" }}
-            >
-              <span style={{ flex: "1 1 220px" }}>
-                <span className="mono">{u.email}</span>
-                {u.nombre ? ` · ${u.nombre}` : ""}
-              </span>
-              <span className="rol-tag">
-                {u.rol === "admin" ? "Administrador" : "Consulta"}
-              </span>
-              <span style={{ display: "flex", gap: 6 }}>
-                <button
-                  className="btn-link"
-                  onClick={() => cambiar(u, { rol: u.rol === "admin" ? "consulta" : "admin" })}
-                >
-                  {u.rol === "admin" ? "Hacer consulta" : "Hacer admin"}
-                </button>
-                <button
-                  className="btn-link"
-                  onClick={() => cambiar(u, { activo: !u.activo })}
-                >
-                  {u.activo ? "Desactivar" : "Activar"}
-                </button>
-                <button className="btn-link" onClick={() => nuevaClave(u)}>
-                  Nueva clave
-                </button>
-              </span>
+      <div className="adm-tabla-caja">
+        <table className="adm-tabla">
+          <thead>
+            <tr>
+              <th className="adm-c-usuario">Usuario</th>
+              <th className="adm-c-modos">Modos</th>
+              <th className="adm-c-acceso">Acceso</th>
+              <th className="adm-c-acciones">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usuarios.map((u) => {
+              const esAdmin = u.rol === "admin";
+              const permitidos = MODOS.filter(([c]) => u[c] === true);
+              return (
+                <tr key={u.email} className={u.activo ? "" : "adm-inactivo"}>
+                  <td>
+                    {u.nombre && u.nombre !== u.email ? (
+                      <>
+                        <div className="adm-nombre">
+                          {u.nombre}
+                          {esAdmin && <span className="adm-tag-admin">Admin</span>}
+                        </div>
+                        <div className="adm-correo">{u.email}</div>
+                      </>
+                    ) : (
+                      <div className="adm-correo adm-correo-solo">
+                        {u.email}
+                        {esAdmin && <span className="adm-tag-admin">Admin</span>}
+                      </div>
+                    )}
+                    {!u.activo && <div className="adm-estado">Inactivo</div>}
+                  </td>
+                  <td>
+                    {esAdmin ? (
+                      <span className="adm-nota">Todos los modos</span>
+                    ) : permitidos.length === 0 ? (
+                      <span className="adm-nota">Sin acceso</span>
+                    ) : (
+                      <div className="adm-etiquetas">
+                        {permitidos.map(([c, et]) => (
+                          <span key={String(c)} className="adm-etiqueta">
+                            {et}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    {esAdmin ? (
+                      <span className="adm-nota">Sin restricción</span>
+                    ) : (
+                      <span className="adm-acceso">
+                        {u.horario === "extendido" ? "7:00–22:00" : "7:50–18:00"}
+                        <br />
+                        {u.dias === "todos" ? "Todos los días" : "Lunes a viernes"}
+                      </span>
+                    )}
+                  </td>
+                  <td className="adm-c-acciones">
+                    <button className="btn-link" onClick={() => abrirEdicion(u)}>
+                      {editando === u.email ? "Cerrar" : "Editar"}
+                    </button>
+                    <button
+                      className="btn-link"
+                      onClick={() =>
+                        cambiar(u, { rol: esAdmin ? "consulta" : "admin" })
+                      }
+                    >
+                      {esAdmin ? "Hacer consulta" : "Hacer admin"}
+                    </button>
+                    <button
+                      className="btn-link"
+                      onClick={() => cambiar(u, { activo: !u.activo })}
+                    >
+                      {u.activo ? "Desactivar" : "Activar"}
+                    </button>
+                    <button className="btn-link" onClick={() => nuevaClave(u)}>
+                      Nueva clave
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {editando && borrador && (
+        <div className="adm-editor">
+          <div className="adm-editor-tit">
+            Editando <span className="mono">{editando}</span>
+          </div>
+          <div className="adm-editor-campos">
+            <div>
+              <div className="adm-editor-et">Modos</div>
+              <div className="adm-editor-checks">
+                {(
+                  [
+                    ["explorar", "Explorar"],
+                    ["focalizacion", "Focalización"],
+                    ["comercial", "Comercial"],
+                    ["rutas", "Rutas"],
+                  ] as [keyof Borrador, string][]
+                ).map(([campo, et]) => (
+                  <label key={String(campo)} className="adm-check">
+                    <input
+                      type="checkbox"
+                      checked={borrador[campo] === true}
+                      onChange={(e) =>
+                        setBorrador({ ...borrador, [campo]: e.target.checked })
+                      }
+                    />
+                    {et}
+                  </label>
+                ))}
+              </div>
             </div>
-          </li>
-        ))}
-      </ul>
+            <div>
+              <div className="adm-editor-et">Horario</div>
+              <select
+                className="adm-sel"
+                value={borrador.horario}
+                onChange={(e) =>
+                  setBorrador({ ...borrador, horario: e.target.value })
+                }
+              >
+                <option value="laboral">Laboral</option>
+                <option value="extendido">Extendido</option>
+              </select>
+            </div>
+            <div>
+              <div className="adm-editor-et">Días</div>
+              <select
+                className="adm-sel"
+                value={borrador.dias}
+                onChange={(e) => setBorrador({ ...borrador, dias: e.target.value })}
+              >
+                <option value="habiles">Lunes a viernes</option>
+                <option value="todos">Todos los días</option>
+              </select>
+            </div>
+            <button
+              className="btn-sm"
+              disabled={salvando}
+              onClick={() => {
+                const u = usuarios.find((x) => x.email === editando);
+                if (u) guardarPermisos(u);
+              }}
+            >
+              {salvando ? "…" : "Guardar cambios"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

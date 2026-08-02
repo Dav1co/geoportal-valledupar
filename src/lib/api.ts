@@ -67,6 +67,12 @@ export type UsuarioAdmin = {
   rol: string;
   activo: boolean;
   creado_en: string;
+  ver_explorar: boolean;
+  ver_focalizacion: boolean;
+  ver_comercial: boolean;
+  ver_rutas: boolean;
+  horario: string;
+  dias: string;
 };
 
 export type RutaItem = { ruta: string; ciclo: string; predios: number };
@@ -132,9 +138,23 @@ export const api = {
     call<{ ruta: DetalleRuta }>("geoportal-ruta", { ruta }),
   admin: {
     perfil: () =>
-      call<{ es_admin: boolean }>("geoportal-admin", { accion: "perfil" }),
+      call<{ es_admin: boolean; permisos?: { explorar: boolean; focalizacion: boolean; comercial: boolean; rutas: boolean } }>("geoportal-admin", { accion: "perfil" }),
     listar: () =>
       call<{ usuarios: UsuarioAdmin[] }>("geoportal-admin", { accion: "listar" }),
+    permisos: (p: {
+      email: string;
+      explorar: boolean;
+      focalizacion: boolean;
+      comercial: boolean;
+      rutas: boolean;
+      horario: string;
+      dias: string;
+    }) =>
+      callPost<{ guardado: boolean }>(
+        "geoportal-admin",
+        { accion: "permisos" },
+        p,
+      ),
     guardar: (u: {
       email: string;
       nombre?: string;
