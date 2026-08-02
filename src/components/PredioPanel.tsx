@@ -96,7 +96,7 @@ const SECCIONES: { titulo: string; campos: [string, string][] }[] = [
       ["DIAM_ACOM", "Diámetro acometida"], ["PESEE_MED", "Posee medidor"],
       ["ESTPTO_MED", "Estado punto medidor"], ["EST_CAJA", "Estado caja"],
       ["LECTURA", "Lectura"], ["AN_MED", "Anomalía medidor"],
-      ["OBSERVACION_LECT", "Observación lectura"], ["CODANOMMED", "Código anomalía"],
+      ["CODANOMMED", "Código anomalía"],
       ["POSEE_LLAVE_PAS", "Posee llave de paso"], ["POSEE_REG_CORT", "Posee registro de corte"],
     ],
   },
@@ -120,14 +120,6 @@ const SECCIONES: { titulo: string; campos: [string, string][] }[] = [
       ["AN_NOSUS", "Anomalía no suscriptor"], ["ANOM_GENERAL", "Anomalía general"],
       ["DESPOS_FRAUDE", "Posible fraude"], ["MANTENIMIENTO", "Mantenimiento"],
       ["RE_PR", "Relación predio"], ["HAYATENCION", "Hubo atención"],
-    ],
-  },
-  {
-    titulo: "Levantamiento / auditoría",
-    campos: [
-      ["FECHA_CTA", "Fecha de cuenta"], ["DIGITADOR", "Digitador"],
-      ["HORA_INI", "Hora inicio"], ["HORA_FIN", "Hora fin"],
-      ["METODO TEXTO", "Método (texto)"], ["METODO COMPLETO", "Método (completo)"],
     ],
   },
 ];
