@@ -38,6 +38,8 @@ function fmtPeriodo(v: unknown): string {
   return s.length === 6 ? `${s.slice(0, 4)}-${s.slice(4, 6)}` : (s || "—");
 }
 
+type Foto = Record<string, unknown> | null;
+
 type Lectura = {
   periodo?: string; lectura_actual?: unknown; lectura_anterior?: unknown;
   consumo?: unknown; determinacion?: string; determinacion_cod?: string;
@@ -147,6 +149,7 @@ export function PredioPanel({ id, onCerrar }: Props) {
 
   const cargue = (predio?._cargue ?? null) as Cargue;
   const lectura = (predio?._lectura ?? null) as Lectura;
+  const foto = (predio?._foto ?? null) as Foto;
 
   function toggle(titulo: string) {
     setAbiertas((prev) => {
@@ -215,6 +218,31 @@ export function PredioPanel({ id, onCerrar }: Props) {
                       El consumo de este periodo no proviene de una lectura medida.
                     </p>
                   )}
+                </div>
+              )}
+              {foto && (
+                <div className="ficha-lectura">
+                  <div className="ficha-lectura-head">
+                    <span className="ficha-lectura-tit">Cartera (foto de corte)</span>
+                    <span className="ficha-lectura-periodo mono">{fmtPeriodo(foto.periodo)}</span>
+                  </div>
+                  <dl className="ficha-datos">
+                    <Fila et="Estado del producto" v={limpio(foto.estado_producto)} />
+                    <Fila et="Cartera total" v={pesos(foto.total_cartera)} />
+                    <Fila et="Facturas vencidas" v={limpio(foto.facturas_vencidas)} />
+                    <Fila et="Facturas con saldo" v={limpio(foto.facturas_con_saldos)} />
+                    <Fila et="Saldo financiado" v={pesos(foto.saldo_financiado)} />
+                    <Fila et="Valor castigado" v={pesos(foto.valor_castigado)} />
+                    <Fila et="Último pago" v={fechaCorta(foto.fecha_ult_pago)} />
+                    <Fila et="Valor último pago" v={pesos(foto.ultimo_pago)} />
+                    <Fila et="Fecha de alta" v={fechaCorta(foto.fecha_alta)} />
+                    <Fila et="Fecha de retiro" v={fechaCorta(foto.fecha_retiro)} />
+                    <Fila et="Última facturación" v={fechaCorta(foto.fecha_ult_facturacion)} />
+                    <Fila et="Instalación del medidor" v={fechaCorta(foto.fecha_instalacion)} />
+                  </dl>
+                  <p className="ficha-lectura-nota">
+                    Cifras del corte {fmtPeriodo(foto.periodo)}, no del día de hoy.
+                  </p>
                 </div>
               )}
               <p className="ficha-cargue-pie">
