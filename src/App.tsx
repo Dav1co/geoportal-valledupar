@@ -104,6 +104,27 @@ function leerURL() {
 
 const URL0 = leerURL();
 
+const CAUSALES = [
+  "99 USUARIO CON LECTURA",
+  "1 SUMINISTRO NO ENCONTRADO",
+  "11 CONEXIÓN DIRECTA",
+  "8 PREDIO ENREJADO CON CANDADO",
+  "30 CONEXION SUSPENDIDA",
+  "21 MEDIDOR CON VIDRIO ILEGIBLE",
+  "13 MEDIDOR DAÑADO",
+  "5 CAJA CON OBSTACULOS",
+  "22 MEDIDOR CON VIDRIO ROTO",
+  "6 CAJA INUNDADA",
+  "2 MEDIDOR DIFICIL ACCESO",
+  "7 USUARIO IMPIDE TOMA DE LECTURA",
+  "10 CONEXIÓN CORTADA",
+  "3 PREDIO DEMOLIDO",
+  "12 MEDIDOR VOLTEADO",
+  "4 ES UN LOTE",
+  "20 MEDIDOR DESTRUIDO",
+  "17 CONEXION PROFUNDA",
+];
+
 export default function App() {
   const { session, cargando } = useSession();
   const [predioId, setPredioId] = useState<number | null>(null);
@@ -111,6 +132,9 @@ export default function App() {
   const [heatMetrica, setHeatMetrica] = useState<HeatMetrica | null>(null);
   const [colorSemaforo, setColorSemaforo] = useState(false);
   const [fSemaforo, setFSemaforo] = useState("todos");
+  const [fEdadMed, setFEdadMed] = useState("todos");
+  const [fPago, setFPago] = useState("todos");
+  const [fCausal, setFCausal] = useState("todos");
   const [apilados, setApilados] = useState<PredioApilado[] | null>(null);
   const [esAdmin, setEsAdmin] = useState(false);
   const [vista, setVista] = useState<"mapa" | "admin">("mapa");
@@ -264,6 +288,15 @@ export default function App() {
     }
     if (fSemaforo !== "todos") {
       conds.push(["==", ["get", "semaforo_cartera"], fSemaforo]);
+    }
+    if (fEdadMed !== "todos") {
+      conds.push(["==", ["get", "edad_medidor"], fEdadMed]);
+    }
+    if (fPago !== "todos") {
+      conds.push(["==", ["get", "rango_pago"], fPago]);
+    }
+    if (fCausal !== "todos") {
+      conds.push(["==", ["get", "causal_lectura"], fCausal]);
     }
     if (fFacturacion !== "todos") {
       if (fFacturacion === "34") {
@@ -738,6 +771,44 @@ export default function App() {
                     <option value="normalizo">Normalizó</option>
                     <option value="normalizo_financiado">Normalizó (financiación)</option>
                     <option value="al_dia">Al día</option>
+                  </select>
+                </div>
+
+                <div className="seccion">
+                  <span className="filtro-rotulo">Edad del medidor</span>
+                  <select className="modo-sel" value={fEdadMed}
+                    onChange={(e) => setFEdadMed(e.target.value)}>
+                    <option value="todos">Todas las edades</option>
+                    <option value="nuevo">Nuevo (menos de 5 años)</option>
+                    <option value="medio">Medio (5 a 10 años)</option>
+                    <option value="viejo">Viejo (10 a 15 años)</option>
+                    <option value="muy_viejo">Muy viejo (más de 15 años)</option>
+                    <option value="sin_fecha">Sin fecha registrada</option>
+                  </select>
+                </div>
+
+                <div className="seccion">
+                  <span className="filtro-rotulo">Último pago</span>
+                  <select className="modo-sel" value={fPago}
+                    onChange={(e) => setFPago(e.target.value)}>
+                    <option value="todos">Cualquier fecha</option>
+                    <option value="reciente">Reciente (menos de 1 mes)</option>
+                    <option value="m1_3">De 1 a 3 meses</option>
+                    <option value="m3_6">De 3 a 6 meses</option>
+                    <option value="m6_12">De 6 a 12 meses</option>
+                    <option value="mas_1a">Más de un año</option>
+                    <option value="nunca">Nunca ha pagado</option>
+                  </select>
+                </div>
+
+                <div className="seccion">
+                  <span className="filtro-rotulo">Causal de lectura</span>
+                  <select className="modo-sel" value={fCausal}
+                    onChange={(e) => setFCausal(e.target.value)}>
+                    <option value="todos">Todas las causales</option>
+                    {CAUSALES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
                   </select>
                 </div>
 
