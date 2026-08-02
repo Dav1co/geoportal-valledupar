@@ -104,27 +104,6 @@ function leerURL() {
 
 const URL0 = leerURL();
 
-const CAUSALES = [
-  "99 USUARIO CON LECTURA",
-  "1 SUMINISTRO NO ENCONTRADO",
-  "11 CONEXIÓN DIRECTA",
-  "8 PREDIO ENREJADO CON CANDADO",
-  "30 CONEXION SUSPENDIDA",
-  "21 MEDIDOR CON VIDRIO ILEGIBLE",
-  "13 MEDIDOR DAÑADO",
-  "5 CAJA CON OBSTACULOS",
-  "22 MEDIDOR CON VIDRIO ROTO",
-  "6 CAJA INUNDADA",
-  "2 MEDIDOR DIFICIL ACCESO",
-  "7 USUARIO IMPIDE TOMA DE LECTURA",
-  "10 CONEXIÓN CORTADA",
-  "3 PREDIO DEMOLIDO",
-  "12 MEDIDOR VOLTEADO",
-  "4 ES UN LOTE",
-  "20 MEDIDOR DESTRUIDO",
-  "17 CONEXION PROFUNDA",
-];
-
 export default function App() {
   const { session, cargando } = useSession();
   const [predioId, setPredioId] = useState<number | null>(null);
@@ -163,6 +142,7 @@ export default function App() {
   const [fConsumoMax, setFConsumoMax] = useState("");
   const [barrioTexto, setBarrioTexto] = useState("");  // lo que se escribe
   const [listaBarrios, setListaBarrios] = useState<string[]>([]);
+  const [listaCausales, setListaCausales] = useState<string[]>([]);
   const [statsCom, setStatsCom] = useState<StatsComercial>({
     disponible: false, total: 0, conDeuda: 0, sinMedidor: 0, consumoAlto: 0,
     medicion: {}, facturacion: {}, consumo: {}, mora: {}, ciclo: {}, barrio: {},
@@ -192,7 +172,12 @@ export default function App() {
         .then((r) => setListaBarrios(r.barrios ?? []))
         .catch(() => setListaBarrios([]));
     }
-  }, [modo, listaBarrios.length]);
+    if (modo === "comercial" && listaCausales.length === 0) {
+      api.causales()
+        .then((r) => setListaCausales(r.causales ?? []))
+        .catch(() => setListaCausales([]));
+    }
+  }, [modo, listaBarrios.length, listaCausales.length]);
 
   // Salvaguarda: si un usuario no autorizado cae en modo rutas, devolverlo a explorar.
   useEffect(() => {
@@ -806,7 +791,7 @@ export default function App() {
                   <select className="modo-sel" value={fCausal}
                     onChange={(e) => setFCausal(e.target.value)}>
                     <option value="todos">Todas las causales</option>
-                    {CAUSALES.map((c) => (
+                    {listaCausales.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>

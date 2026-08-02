@@ -122,6 +122,8 @@ export const api = {
     }),
   barrios: () =>
     call<{ barrios: string[] }>("geoportal-barrios", {}),
+  causales: () =>
+    call<{ causales: string[] }>("geoportal-causales", {}),
   rutasLista: () =>
     call<{ rutas: RutaItem[] }>("geoportal-rutas-lista", {}),
   ruta: (ruta: string) =>
