@@ -180,6 +180,9 @@ export function PredioPanel({ id, onCerrar }: Props) {
                   <span className="ficha-estado">{String(cargue.estado)}</span>
                 )}
               </div>
+              <p className="ficha-cargue-pie">
+                Datos comerciales del cargue del {fechaCorta(cargue.cargado_en)}
+              </p>
               <dl className="ficha-datos">
                 <Fila et="Nombre" v={limpio(cargue.nombre)} />
                 <Fila et="Identificación" v={limpio(cargue.identificacion)} />
@@ -245,9 +248,6 @@ export function PredioPanel({ id, onCerrar }: Props) {
                   </p>
                 </div>
               )}
-              <p className="ficha-cargue-pie">
-                Cargue del {fechaCorta(cargue.cargado_en)}
-              </p>
             </div>
           ) : (
             <div className="ficha-sincargue">
