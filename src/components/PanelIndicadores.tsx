@@ -13,6 +13,13 @@ export type StatsComercial = {
   mora: Record<string, number>;          // al_dia..cronica
   ciclo: Record<string, number>;
   barrio: Record<string, number>;
+  semaforo: Record<string, number>;
+  edadMed: Record<string, number>;
+  pago: Record<string, number>;
+  causal: Record<string, number>;
+  deudaTotal: number;
+  conMedidor: number;
+  porPromedio: number;
 };
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
@@ -34,6 +41,50 @@ const ET_MORA: Record<string, string> = {
   alta: "Alta (9–60)", cronica: "Crónica (>60)",
 };
 const ORD_MORA = ["al_dia", "leve", "media", "alta", "cronica"];
+
+const ET_SEMAFORO: Record<string, string> = {
+  entro_deuda: "Entró a deuda", aumento: "Aumentó", mantuvo: "Mantuvo",
+  abono: "Abonó", normalizo: "Normalizó",
+  normalizo_financiado: "Normalizó (financ.)", al_dia: "Al día",
+};
+const ORD_SEMAFORO = ["entro_deuda", "aumento", "mantuvo", "abono", "normalizo", "normalizo_financiado", "al_dia"];
+
+const ET_EDAD: Record<string, string> = {
+  nuevo: "Nuevo (<5 años)", medio: "Medio (5-10)", viejo: "Viejo (10-15)",
+  muy_viejo: "Muy viejo (>15)", sin_fecha: "Sin fecha",
+};
+const ORD_EDAD = ["nuevo", "medio", "viejo", "muy_viejo", "sin_fecha"];
+
+const ET_PAGO: Record<string, string> = {
+  reciente: "Menos de 1 mes", m1_3: "1 a 3 meses", m3_6: "3 a 6 meses",
+  m6_12: "6 a 12 meses", mas_1a: "Más de un año", nunca: "Nunca ha pagado",
+};
+const ORD_PAGO = ["reciente", "m1_3", "m3_6", "m6_12", "mas_1a", "nunca"];
+
+const pesos = (n: number) => {
+  if (n >= 1000000000) return "$" + (n / 1000000000).toFixed(2) + " MM";
+  if (n >= 1000000) return "$" + (n / 1000000).toFixed(1) + " M";
+  return "$" + n.toLocaleString("es-CO");
+};
+
+function Anillo({ pct, color, titulo, detalle }: {
+  pct: number; color: string; titulo: string; detalle: string;
+}) {
+  return (
+    <div className="pi-anillo">
+      <svg viewBox="0 0 42 42" width="76" height="76">
+        <circle cx="21" cy="21" r="15.9" fill="none" stroke="#e1e0d9" strokeWidth="5" />
+        <circle cx="21" cy="21" r="15.9" fill="none" stroke={color} strokeWidth="5"
+          strokeDasharray={`${pct} ${100 - pct}`} strokeDashoffset="25" strokeLinecap="round" />
+        <text x="21" y="23.5" textAnchor="middle" fontSize="9" fontWeight="600" fill="#12263a">{pct}%</text>
+      </svg>
+      <div>
+        <div className="pi-anillo-tit">{titulo}</div>
+        <div className="pi-anillo-det">{detalle}</div>
+      </div>
+    </div>
+  );
+}
 
 // Una barra de conteo (etiqueta, valor, proporción respecto al máximo del grupo)
 function Barra({ etiqueta, valor, max, color }: {
@@ -144,8 +195,44 @@ export function PanelIndicadores({ stats, abierto, onToggle }: {
                 </div>
               </div>
 
+              {/* Cifra destacada, medidor y anillo */}
+              <div className="pi-destacados">
+                <div className="pi-destacado">
+                  <div className="pi-d-num">{pesos(stats.deudaTotal)}</div>
+                  <div className="pi-d-lbl">Cartera de los predios en pantalla</div>
+                </div>
+                {(() => {
+                  const conDato = Object.values(stats.medicion).reduce((a, b) => a + b, 0);
+                  const pct = conDato > 0 ? Math.round((stats.conMedidor / conDato) * 100) : 0;
+                  return (
+                    <div className="pi-destacado">
+                      <div className="pi-medidor-cab">
+                        <span className="pi-medidor-pct">{pct}%</span>
+                        <span className="pi-d-lbl">con medidor en buen estado</span>
+                      </div>
+                      <div className="pi-medidor-riel">
+                        <div className="pi-medidor-relleno" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="pi-d-nota">Sobre {fmt(conDato)} predios con dato de medición</div>
+                    </div>
+                  );
+                })()}
+                {(() => {
+                  const conFact = Object.values(stats.facturacion).reduce((a, b) => a + b, 0);
+                  const pct = conFact > 0 ? Math.round((stats.porPromedio / conFact) * 100) : 0;
+                  return (
+                    <Anillo pct={pct} color="#f57c00" titulo="Facturado por promedio"
+                      detalle={`${fmt(stats.porPromedio)} de ${fmt(conFact)} sin lectura real`} />
+                  );
+                })()}
+              </div>
+
               {/* Desgloses */}
               <div className="pi-grupos">
+                <Grupo titulo="Semáforo de cartera" datos={stats.semaforo} orden={ORD_SEMAFORO} etiquetas={ET_SEMAFORO} color="#8e24aa" />
+                <Grupo titulo="Edad del medidor" datos={stats.edadMed} orden={ORD_EDAD} etiquetas={ET_EDAD} color="#f57c00" />
+                <Grupo titulo="Último pago" datos={stats.pago} orden={ORD_PAGO} etiquetas={ET_PAGO} color="#1565c0" />
+                <GrupoTop titulo="Causales de lectura (top 6)" datos={stats.causal} n={6} />
                 <Grupo titulo="Medición" datos={stats.medicion} orden={["1","2","3"]} etiquetas={ET_MEDICION} color="#1e5aa8" />
                 <Grupo titulo="Facturación" datos={stats.facturacion} orden={["1","2","3","4","5"]} etiquetas={ET_FACTURACION} color="#1e5aa8" />
                 <Grupo titulo="Consumo del mes" datos={stats.consumo} orden={ORD_CONSUMO} etiquetas={ET_CONSUMO} color="#2e7d32" />

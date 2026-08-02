@@ -145,6 +145,8 @@ export default function App() {
   const [listaCausales, setListaCausales] = useState<string[]>([]);
   const [statsCom, setStatsCom] = useState<StatsComercial>({
     disponible: false, total: 0, conDeuda: 0, sinMedidor: 0, consumoAlto: 0,
+    semaforo: {}, edadMed: {}, pago: {}, causal: {},
+    deudaTotal: 0, conMedidor: 0, porPromedio: 0,
     medicion: {}, facturacion: {}, consumo: {}, mora: {}, ciclo: {}, barrio: {},
   });
   const [panelAbierto, setPanelAbierto] = useState(false);

@@ -37,6 +37,13 @@ export type StatsComercial = {
   mora: Record<string, number>;
   ciclo: Record<string, number>;
   barrio: Record<string, number>;
+  semaforo: Record<string, number>;
+  edadMed: Record<string, number>;
+  pago: Record<string, number>;
+  causal: Record<string, number>;
+  deudaTotal: number;
+  conMedidor: number;
+  porPromedio: number;
 };
 
 export type HeatMetrica =
@@ -635,6 +642,8 @@ export function MapView({
     const vacio = {
       disponible: false, total: 0, conDeuda: 0, sinMedidor: 0, consumoAlto: 0,
       medicion: {}, facturacion: {}, consumo: {}, mora: {}, ciclo: {}, barrio: {},
+      semaforo: {}, edadMed: {}, pago: {}, causal: {},
+      deudaTotal: 0, conMedidor: 0, porPromedio: 0,
     };
     if (map.getZoom() < 15) {
       onContCom.current({ disponible: false, total: 0 });
@@ -656,7 +665,12 @@ export function MapView({
     const mora: Record<string, number> = {};
     const ciclo: Record<string, number> = {};
     const barrio: Record<string, number> = {};
+    const semaforo: Record<string, number> = {};
+    const edadMed: Record<string, number> = {};
+    const pago: Record<string, number> = {};
+    const causal: Record<string, number> = {};
     let conDeuda = 0, sinMedidor = 0, consumoAlto = 0;
+    let deudaTotal = 0, conMedidor = 0, porPromedio = 0;
     const inc = (o: Record<string, number>, k: unknown) => {
       if (k === undefined || k === null || k === "") return;
       const s = String(k);
@@ -673,6 +687,14 @@ export function MapView({
       inc(mora, p.tramo_mora);
       inc(ciclo, p.ciclo);
       inc(barrio, p.barrio);
+      inc(semaforo, p.semaforo_cartera);
+      inc(edadMed, p.edad_medidor);
+      inc(pago, p.rango_pago);
+      inc(causal, p.causal_lectura);
+      const d = Number(p.deuda_total);
+      if (Number.isFinite(d) && d > 0) deudaTotal += d;
+      if (String(p.estado_medidor) === "1") conMedidor++;
+      if (String(p.determinacion_consumo) === "2") porPromedio++;
       if (p.tiene_deuda === true || p.tiene_deuda === "true") conDeuda++;
       if (String(p.estado_medidor) === "3") sinMedidor++;
       if (p.clase_consumo === "elevado" || p.clase_consumo === "grandes") consumoAlto++;
@@ -682,6 +704,8 @@ export function MapView({
     onStatsCom.current({
       disponible: true, total, conDeuda, sinMedidor, consumoAlto,
       medicion, facturacion, consumo, mora, ciclo, barrio,
+      semaforo, edadMed, pago, causal,
+      deudaTotal, conMedidor, porPromedio,
     });
   }
 

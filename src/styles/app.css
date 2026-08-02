@@ -704,3 +704,17 @@ body {
 .leyenda-sep { font-weight: 600; color: var(--muted); margin-top: 6px; border-top: 1px solid #e0e6ec; padding-top: 6px; }
 
 .buscador-criterio { width: 100%; margin-bottom: 8px; }
+
+.pi-destacados { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 14px 0 18px; }
+.pi-destacado { background: #f4f6f8; border-radius: 8px; padding: 12px 14px; }
+.pi-d-num { font-size: 26px; font-weight: 600; color: var(--azul); letter-spacing: -0.5px; }
+.pi-d-lbl { font-size: 12px; color: var(--muted); }
+.pi-medidor-cab { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.pi-medidor-pct { font-size: 26px; font-weight: 600; color: var(--ok); }
+.pi-medidor-riel { height: 8px; background: #dfe5ea; border-radius: 4px; overflow: hidden; }
+.pi-medidor-relleno { height: 100%; background: var(--ok); }
+.pi-anillo { background: #f4f6f8; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; }
+.pi-anillo-tit { font-size: 13px; font-weight: 600; color: #12263a; }
+.pi-anillo-det { font-size: 12px; color: var(--muted); }
+
+.pi-d-nota { font-size: 11px; color: var(--muted); margin-top: 6px; }
