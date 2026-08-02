@@ -188,7 +188,7 @@ export function MapView({
           predios: {
             type: "vector",
             tiles: [`${FUNCTIONS_URL}/geoportal-tiles/{z}/{x}/{y}`],
-            minzoom: 15,
+            minzoom: 14,
             maxzoom: 22,
           },
         },
