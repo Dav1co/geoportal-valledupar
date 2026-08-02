@@ -702,3 +702,5 @@ body {
 .btn-sel:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .leyenda-sep { font-weight: 600; color: var(--muted); margin-top: 6px; border-top: 1px solid #e0e6ec; padding-top: 6px; }
+
+.buscador-criterio { width: 100%; margin-bottom: 8px; }

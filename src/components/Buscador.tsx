@@ -3,6 +3,8 @@ import { api, type PredioResumen, type MedidorResumen } from "../lib/api";
 
 type Item = PredioResumen | MedidorResumen;
 
+type Criterio = "contrato" | "medidor" | "dir_catastro" | "dir_comercial";
+
 type Props = {
   onSeleccionar: (id: number, x: number, y: number) => void;
   // Modo de búsqueda: por contrato (default) o por serial de medidor.
@@ -14,12 +16,18 @@ export function Buscador({ onSeleccionar, modo = "contrato" }: Props) {
   const [resultados, setResultados] = useState<Item[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [criterio, setCriterio] = useState<Criterio>(
+    modo === "medidor" ? "medidor" : "contrato",
+  );
 
-  const esMedidor = modo === "medidor";
-  const minChars = esMedidor ? 5 : 2;
-  const placeholder = esMedidor
-    ? "Serial del medidor (mín. 5)"
-    : "Contrato o código de usuario";
+  const esDir = criterio === "dir_catastro" || criterio === "dir_comercial";
+  const minChars = esDir ? 6 : criterio === "medidor" ? 5 : 2;
+  const placeholder =
+    criterio === "medidor"
+      ? "Serial del medidor (mín. 5)"
+      : esDir
+        ? "Dirección o parte de ella (mín. 6)"
+        : "Contrato o código de usuario";
 
   async function buscar() {
     const texto = q.trim();
@@ -30,9 +38,14 @@ export function Buscador({ onSeleccionar, modo = "contrato" }: Props) {
     setBuscando(true);
     setError(null);
     try {
-      const { resultados } = esMedidor
-        ? await api.buscarMedidor(texto)
-        : await api.buscar(texto);
+      const { resultados } =
+        criterio === "medidor"
+          ? await api.buscarMedidor(texto)
+          : criterio === "dir_catastro"
+            ? await api.buscarDireccion(texto, "catastro")
+            : criterio === "dir_comercial"
+              ? await api.buscarDireccion(texto, "comercial")
+              : await api.buscar(texto);
       setResultados(resultados);
       if (resultados.length === 0) setError("Sin coincidencias.");
     } catch (e) {
@@ -44,6 +57,20 @@ export function Buscador({ onSeleccionar, modo = "contrato" }: Props) {
 
   return (
     <div className="buscador">
+      <select
+        className="modo-sel buscador-criterio"
+        value={criterio}
+        onChange={(e) => {
+          setCriterio(e.target.value as Criterio);
+          setResultados([]);
+          setError(null);
+        }}
+      >
+        <option value="contrato">Buscar por contrato</option>
+        <option value="medidor">Buscar por medidor</option>
+        <option value="dir_catastro">Dirección (catastro)</option>
+        <option value="dir_comercial">Dirección (base comercial)</option>
+      </select>
       <div className="buscador-input">
         <input
           className="field mono"
@@ -67,12 +94,12 @@ export function Buscador({ onSeleccionar, modo = "contrato" }: Props) {
               onClick={() => onSeleccionar(r.id, r.gps_x, r.gps_y)}
             >
               <span className="mono resultado-contrato">
-                {esMedidor
+                {criterio === "medidor"
                   ? (r as MedidorResumen).serial_medidor ?? "—"
                   : r.cod_usuario ?? "—"}
               </span>
               <span className="mono resultado-cod">
-                {esMedidor
+                {criterio === "medidor"
                   ? `${r.cod_usuario ?? "—"} · ${r.direccion ?? "—"}`
                   : r.direccion ?? "—"}
               </span>

@@ -463,12 +463,8 @@ export default function App() {
             {modo === "explorar" && (
               <>
                 <div className="seccion">
-                  <span className="filtro-rotulo">Buscar por contrato</span>
-                  <Buscador onSeleccionar={irAPredio} modo="contrato" />
-                </div>
-                <div className="seccion">
-                  <span className="filtro-rotulo">Buscar por serial de medidor</span>
-                  <Buscador onSeleccionar={irAPredio} modo="medidor" />
+                  <span className="filtro-rotulo">Buscar predio</span>
+                  <Buscador onSeleccionar={irAPredio} />
                 </div>
                 <div className="seccion">
                   <span className="filtro-rotulo">Mapa base</span>

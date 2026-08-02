@@ -112,6 +112,8 @@ export const api = {
     call<{ resultados: PredioResumen[] }>("geoportal-buscar", { q }),
   buscarMedidor: (q: string) =>
     call<{ resultados: MedidorResumen[] }>("geoportal-buscar-medidor", { q }),
+  buscarDireccion: (q: string, fuente: string) =>
+    call<{ resultados: PredioResumen[] }>("geoportal-buscar-direccion", { q, fuente }),
   detalle: (id: number) =>
     call<{ predio: Record<string, unknown> }>("geoportal-predio", {
       id: String(id),
