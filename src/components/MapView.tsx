@@ -581,8 +581,14 @@ export function MapView({
     const w = window as unknown as {
       __geoFly?: (x: number, y: number) => void;
       __geoVista?: () => { lng: number; lat: number; zoom: number } | null;
+      __geoZoomMin?: (z: number) => void;
     };
     w.__geoFly = (x, y) => mapa.current?.flyTo({ center: [x, y], zoom: 19 });
+    // Acerca al zoom pedido solo si estamos más lejos, sin mover el centro.
+    w.__geoZoomMin = (z) => {
+      const m = mapa.current;
+      if (m && m.getZoom() < z) m.easeTo({ zoom: z, duration: 600 });
+    };
     w.__geoVista = () => {
       const m = mapa.current;
       if (!m) return null;

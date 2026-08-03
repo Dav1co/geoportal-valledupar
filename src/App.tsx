@@ -378,7 +378,8 @@ export default function App() {
 
   function textoConteoComercial() {
     if (!hayFiltrosCom) return "Selecciona filtros para ver cuántos predios cumplen.";
-    if (!conteoCom.disponible) return "Acércate para contar los predios que cumplen.";
+    if (!conteoCom.disponible)
+      return "Acércate un poco más: los filtros se aplican desde este nivel de zoom.";
     return `${fmt(conteoCom.total)} predios cumplen los filtros en pantalla`;
   }
 
@@ -451,6 +452,11 @@ export default function App() {
                 onChange={(e) => {
                   const nuevoModo = e.target.value as Modo;
                   setModo(nuevoModo);
+                  if (nuevoModo === "comercial") {
+                    // Los filtros y la selección solo operan desde zoom 15.
+                    (window as unknown as { __geoZoomMin?: (z: number) => void })
+                      .__geoZoomMin?.(15);
+                  }
                   if (nuevoModo !== "comercial") {
                     setHeatMetrica(null);
                     setDibujando(false);
@@ -980,6 +986,22 @@ export default function App() {
           </aside>
 
           <main className="visor">
+            {modo === "comercial" && !conteoCom.disponible && (
+              <div className="banda-zoom">
+                <span>
+                  Acércate para aplicar filtros y seleccionar predios.
+                </span>
+                <button
+                  className="banda-zoom-btn"
+                  onClick={() =>
+                    (window as unknown as { __geoZoomMin?: (z: number) => void })
+                      .__geoZoomMin?.(15)
+                  }
+                >
+                  Acercar
+                </button>
+              </div>
+            )}
             <MapView
               accessToken={session.access_token}
               inicial={URL0?.inicial ?? null}
