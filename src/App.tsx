@@ -134,6 +134,8 @@ export default function App() {
   const [fFacturacion, setFFacturacion] = useState("todos");
   const [fConsumo, setFConsumo] = useState("todos");
   const [fCartera, setFCartera] = useState("todos");
+  const [fLado, setFLado] = useState<"aumentos" | "reducciones" | "sin_consumo">("aumentos");
+  const [fCambio, setFCambio] = useState("todos");
   const [conteoCom, setConteoCom] = useState<ConteoComercial>({ disponible: false, total: 0 });
   const [fCiclo, setFCiclo] = useState("todos");
   const [fBarrio, setFBarrio] = useState("");          // barrio seleccionado (exacto)
@@ -305,6 +307,22 @@ export default function App() {
     }
     if (fConsumo !== "todos") {
       conds.push(["==", ["get", "clase_consumo"], fConsumo]);
+    }
+    if (fCambio !== "todos") {
+      const g = (v: string) => ["==", ["get", "grupo_consumo"], v];
+      const d = ["get", "dif_consumo"];
+      if (fCambio === "sube_todos") conds.push(g("aumento"));
+      else if (fCambio === "sube_11") conds.push(["all", g("aumento"), [">=", d, 11]]);
+      else if (fCambio === "sube_6_10") conds.push(["all", g("aumento"), [">=", d, 6], ["<=", d, 10]]);
+      else if (fCambio === "sube_1_5") conds.push(["all", g("aumento"), ["<=", d, 5]]);
+      else if (fCambio === "reactivo") conds.push(["all", g("aumento"), ["==", ["get", "venia_de_cero"], true]]);
+      else if (fCambio === "baja_todos") conds.push(g("reduccion"));
+      else if (fCambio === "baja_11") conds.push(["all", g("reduccion"), ["<=", d, -11]]);
+      else if (fCambio === "baja_6_10") conds.push(["all", g("reduccion"), [">=", d, -10], ["<=", d, -6]]);
+      else if (fCambio === "baja_1_5") conds.push(["all", g("reduccion"), [">=", d, -5]]);
+      else if (fCambio === "sin_todos") conds.push(g("sin_consumo"));
+      else if (fCambio === "cayo_cero") conds.push(["all", g("sin_consumo"), ["<", d, 0]]);
+      else if (fCambio === "sigue_cero") conds.push(["all", g("sin_consumo"), ["==", d, 0]]);
     }
     if (fCartera !== "todos") {
       if (fCartera === "con_deuda") {
@@ -772,6 +790,42 @@ export default function App() {
                     <option value="normalizo">Normalizó</option>
                     <option value="normalizo_financiado">Normalizó (financiación)</option>
                     <option value="al_dia">Al día</option>
+                  </select>
+                </div>
+
+                <div className="seccion">
+                  <span className="filtro-rotulo">Cambio de consumo</span>
+                  <div className="cambio-switch">
+                    {([["aumentos", "Aumentos"], ["reducciones", "Reducciones"],
+                       ["sin_consumo", "Sin consumo"]] as const).map(([v, t]) => (
+                      <button key={v} type="button"
+                        className={"cambio-tab" + (fLado === v ? " activa" : "")}
+                        onClick={() => { setFLado(v); setFCambio("todos"); }}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                  <select className="modo-sel" style={{ marginTop: 8 }}
+                    value={fCambio} onChange={(e) => setFCambio(e.target.value)}>
+                    <option value="todos">Sin filtrar</option>
+                    {fLado === "aumentos" && <>
+                      <option value="sube_todos">Todos los aumentos</option>
+                      <option value="sube_11">Subió 11 m³ o más</option>
+                      <option value="sube_6_10">Subió 6 a 10 m³</option>
+                      <option value="sube_1_5">Subió 1 a 5 m³</option>
+                      <option value="reactivo">Se reactivó (venía en cero)</option>
+                    </>}
+                    {fLado === "reducciones" && <>
+                      <option value="baja_todos">Todas las reducciones</option>
+                      <option value="baja_11">Bajó 11 m³ o más</option>
+                      <option value="baja_6_10">Bajó 6 a 10 m³</option>
+                      <option value="baja_1_5">Bajó 1 a 5 m³</option>
+                    </>}
+                    {fLado === "sin_consumo" && <>
+                      <option value="sin_todos">Todos sin consumo</option>
+                      <option value="cayo_cero">Cayó a cero</option>
+                      <option value="sigue_cero">Sigue en cero</option>
+                    </>}
                   </select>
                 </div>
 

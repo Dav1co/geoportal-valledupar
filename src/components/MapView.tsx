@@ -6,6 +6,11 @@ import { FUNCTIONS_URL } from "../lib/supabase";
 // Valledupar
 const CENTRO: [number, number] = [-73.2532, 10.4631];
 
+// Version del formato de la tesela. Subirla cada vez que cambien los campos
+// que viajan en las teselas: genera URLs nuevas y evita que la cache
+// (1 h + stale 24 h) siga sirviendo la version anterior.
+const TESELA_V = 2;
+
 export type PredioApilado = {
   id: number;
   cod_usuario: string | null;
@@ -194,7 +199,7 @@ export function MapView({
           },
           predios: {
             type: "vector",
-            tiles: [`${FUNCTIONS_URL}/geoportal-tiles/{z}/{x}/{y}`],
+            tiles: [`${FUNCTIONS_URL}/geoportal-tiles/{z}/{x}/{y}?v=${TESELA_V}`],
             minzoom: 14,
             maxzoom: 22,
           },
