@@ -111,6 +111,8 @@ export type ExportaArgs = {
   consumoMax?: string;
 };
 
+export type BarrioHallado = { id: number; nombre: string; caja: [number, number, number, number] };
+
 export const api = {
   exportarContratos: (args: ExportaArgs) =>
     callPost<ExportaResp>("geoportal-exportar", {}, args),
@@ -130,6 +132,8 @@ export const api = {
     }),
   barrios: () =>
     call<{ barrios: string[] }>("geoportal-barrios", {}),
+  buscarBarrio: (q: string) =>
+    call<{ barrios: BarrioHallado[] }>("geoportal-buscar-barrio", { q }),
   causales: () =>
     call<{ causales: string[] }>("geoportal-causales", {}),
   rutasLista: () =>

@@ -22,7 +22,7 @@ import { PredioPanel } from "./components/PredioPanel";
 import { Watermark } from "./components/Watermark";
 import { Admin } from "./components/Admin";
 import { supabase } from "./lib/supabase";
-import { api, type RutaItem, type DetalleRuta, type ExportaArgs } from "./lib/api";
+import { api, type RutaItem, type DetalleRuta, type ExportaArgs, type BarrioHallado } from "./lib/api";
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
 
@@ -124,6 +124,9 @@ export default function App() {
   const [filtro, setFiltro] = useState<FiltroContrato>(URL0?.filtro ?? "todos");
   const [estado, setEstado] = useState<FiltroEstado>(URL0?.estado ?? "");
   const [mostrarTerrenos, setMostrarTerrenos] = useState(URL0?.terrenos ?? true);
+  const [mostrarBarrios, setMostrarBarrios] = useState(false);
+  const [qBarrio, setQBarrio] = useState("");
+  const [resBarrios, setResBarrios] = useState<BarrioHallado[]>([]);
   const [base, setBase] = useState<BaseMapa>(URL0?.base ?? "calles");
   const [modoTerrenos, setModoTerrenos] = useState(false);
   const [terreno, setTerreno] = useState<TerrenoInfo | null>(null);
@@ -528,6 +531,52 @@ export default function App() {
                     />
                     Mostrar terrenos
                   </label>
+                  <label className="filtro-check">
+                    <input
+                      type="checkbox"
+                      checked={mostrarBarrios}
+                      onChange={(e) => setMostrarBarrios(e.target.checked)}
+                    />
+                    Mostrar barrios
+                  </label>
+                  <input
+                    className="modo-sel"
+                    style={{ marginTop: 8 }}
+                    type="search"
+                    placeholder="Buscar barrio..."
+                    value={qBarrio}
+                    onChange={async (e) => {
+                      const v = e.target.value;
+                      setQBarrio(v);
+                      if (v.trim().length < 2) { setResBarrios([]); return; }
+                      try {
+                        const r = await api.buscarBarrio(v);
+                        setResBarrios(r.barrios ?? []);
+                      } catch { setResBarrios([]); }
+                    }}
+                  />
+                  {resBarrios.length > 0 && (
+                    <ul className="lista-barrios">
+                      {resBarrios.map((b) => (
+                        <li key={b.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const w = window as unknown as {
+                                __geoEncuadrar?: (a: number, b: number, c: number, d: number) => void;
+                              };
+                              w.__geoEncuadrar?.(b.caja[0], b.caja[1], b.caja[2], b.caja[3]);
+                              setMostrarBarrios(true);
+                              setResBarrios([]);
+                              setQBarrio(b.nombre);
+                            }}
+                          >
+                            {b.nombre}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <button
                     className={`btn-modo ${modoTerrenos ? "btn-modo-activo" : ""}`}
                     onClick={toggleModoTerrenos}
@@ -1062,6 +1111,7 @@ export default function App() {
               filtro={filtro}
               estado={estado}
               mostrarTerrenos={mostrarTerrenos}
+              mostrarBarrios={mostrarBarrios}
               base={base}
               modoTerrenos={modoTerrenos}
               modoActivo={modo as ModoMapa}

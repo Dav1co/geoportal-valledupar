@@ -9,7 +9,7 @@ const CENTRO: [number, number] = [-73.2532, 10.4631];
 // Version del formato de la tesela. Subirla cada vez que cambien los campos
 // que viajan en las teselas: genera URLs nuevas y evita que la cache
 // (1 h + stale 24 h) siga sirviendo la version anterior.
-const TESELA_V = 2;
+const TESELA_V = 3;
 
 export type PredioApilado = {
   id: number;
@@ -63,6 +63,7 @@ type Props = {
   filtro: FiltroContrato;
   estado: FiltroEstado;
   mostrarTerrenos: boolean;
+  mostrarBarrios: boolean;
   base: BaseMapa;
   modoTerrenos: boolean;
   modoActivo: ModoMapa;
@@ -89,6 +90,7 @@ export function MapView({
   filtro,
   estado,
   mostrarTerrenos,
+  mostrarBarrios,
   base,
   modoTerrenos,
   modoActivo,
@@ -211,6 +213,43 @@ export function MapView({
             type: "raster",
             source: "satelital",
             layout: { visibility: "none" },
+          },
+          {
+            id: "barrios-fill",
+            type: "fill",
+            source: "predios",
+            "source-layer": "barrios",
+            layout: { visibility: "none" },
+            paint: { "fill-color": "#c98b3a", "fill-opacity": 0.06 },
+          },
+          {
+            id: "barrios-linea",
+            type: "line",
+            source: "predios",
+            "source-layer": "barrios",
+            layout: { visibility: "none" },
+            paint: {
+              "line-color": "#b5741f",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.8, 17, 2],
+              "line-opacity": 0.85,
+            },
+          },
+          {
+            id: "barrios-etiqueta",
+            type: "symbol",
+            source: "predios",
+            "source-layer": "barrios",
+            layout: {
+              visibility: "none",
+              "text-field": ["get", "nombre"],
+              "text-size": ["interpolate", ["linear"], ["zoom"], 12, 10, 17, 14],
+              "text-allow-overlap": false,
+            },
+            paint: {
+              "text-color": "#7a4d0d",
+              "text-halo-color": "#ffffff",
+              "text-halo-width": 1.6,
+            },
           },
           {
             id: "terrenos-fill",
@@ -357,6 +396,7 @@ export function MapView({
       aplicarPorModo(map, modoActivo, filtroComercial, filtroCatRutaRef.current, heatRef.current);
       aplicarEstado(map, estado);
       aplicarTerrenos(map, mostrarTerrenos);
+      aplicarBarrios(map, mostrarBarrios);
       aplicarBase(map, base);
       aplicarModo(map, modoTerrenos);
       recontar(map);
@@ -574,6 +614,11 @@ export function MapView({
 
   useEffect(() => {
     const map = mapa.current;
+    if (map && listo.current) aplicarBarrios(map, mostrarBarrios);
+  }, [mostrarBarrios]);
+
+  useEffect(() => {
+    const map = mapa.current;
     if (map && listo.current) aplicarBase(map, base);
   }, [base]);
 
@@ -587,8 +632,13 @@ export function MapView({
       __geoFly?: (x: number, y: number) => void;
       __geoVista?: () => { lng: number; lat: number; zoom: number } | null;
       __geoZoomMin?: (z: number) => void;
+      __geoEncuadrar?: (xmin: number, ymin: number, xmax: number, ymax: number) => void;
     };
     w.__geoFly = (x, y) => mapa.current?.flyTo({ center: [x, y], zoom: 19 });
+    w.__geoEncuadrar = (xmin: number, ymin: number, xmax: number, ymax: number) =>
+      mapa.current?.fitBounds([[xmin, ymin], [xmax, ymax]], {
+        padding: 60, maxZoom: 17, duration: 700,
+      });
     // Acerca al zoom pedido solo si estamos más lejos, sin mover el centro.
     w.__geoZoomMin = (z) => {
       const m = mapa.current;
@@ -745,6 +795,13 @@ function aplicarEstado(map: maplibregl.Map, estado: FiltroEstado) {
   map.setPaintProperty("predios-normal", "circle-stroke-opacity", 0.25);
   map.setPaintProperty("predios-clandestino", "circle-opacity", 0.25);
   map.setPaintProperty("predios-clandestino", "circle-stroke-opacity", 0.25);
+}
+
+function aplicarBarrios(map: maplibregl.Map, mostrar: boolean) {
+  const v = mostrar ? "visible" : "none";
+  map.setLayoutProperty("barrios-fill", "visibility", v);
+  map.setLayoutProperty("barrios-linea", "visibility", v);
+  map.setLayoutProperty("barrios-etiqueta", "visibility", v);
 }
 
 function aplicarTerrenos(map: maplibregl.Map, mostrar: boolean) {
