@@ -9,7 +9,7 @@ const CENTRO: [number, number] = [-73.2532, 10.4631];
 // Version del formato de la tesela. Subirla cada vez que cambien los campos
 // que viajan en las teselas: genera URLs nuevas y evita que la cache
 // (1 h + stale 24 h) siga sirviendo la version anterior.
-const TESELA_V = 4;
+const TESELA_V = 5;
 
 export type PredioApilado = {
   id: number;
@@ -202,7 +202,9 @@ export function MapView({
           predios: {
             type: "vector",
             tiles: [`${FUNCTIONS_URL}/geoportal-tiles/{z}/{x}/{y}?v=${TESELA_V}`],
-            minzoom: 14,
+            // Desde z10 para que lleguen las manzanas agregadas; los predios
+            // sueltos solo viajan desde z13, asi que el peso sigue bajo.
+            minzoom: 10,
             maxzoom: 22,
           },
         },
@@ -213,6 +215,26 @@ export function MapView({
             type: "raster",
             source: "satelital",
             layout: { visibility: "none" },
+          },
+          {
+            // Manzanas agregadas: solo a zoom lejano, para orientarse.
+            id: "manzanas-circulo",
+            type: "circle",
+            source: "predios",
+            "source-layer": "manzanas",
+            maxzoom: 13,
+            paint: {
+              "circle-radius": [
+                "interpolate", ["linear"], ["zoom"],
+                10, ["interpolate", ["linear"], ["get", "predios"], 1, 2, 50, 4, 300, 7],
+                13, ["interpolate", ["linear"], ["get", "predios"], 1, 4, 50, 9, 300, 15],
+              ],
+              "circle-color": "#3b82f6",
+              "circle-opacity": 0.45,
+              "circle-stroke-width": 1,
+              "circle-stroke-color": "#1e3a8a",
+              "circle-stroke-opacity": 0.45,
+            },
           },
           {
             id: "barrios-fill",
@@ -522,6 +544,18 @@ export function MapView({
     });
 
     map.on("click", (e) => {
+      // MANZANAS AGREGADAS: acercar a la zona, sin abrir ficha.
+      if (map.getZoom() < 13) {
+        const mz = map.queryRenderedFeatures(
+          [[e.point.x - 12, e.point.y - 12], [e.point.x + 12, e.point.y + 12]],
+          { layers: ["manzanas-circulo"] },
+        );
+        if (mz.length > 0) {
+          map.easeTo({ center: e.lngLat, zoom: 15, duration: 800 });
+          return;
+        }
+      }
+
       // MODO DIBUJO (lazo): cada clic agrega un vértice.
       if (dibujandoRef.current) {
         verticesRef.current = [...verticesRef.current, [e.lngLat.lng, e.lngLat.lat]];
