@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type UsuarioAdmin, type EstadoPausa } from "../lib/api";
+import { api, type UsuarioAdmin, type EstadoPausa, type Accesos } from "../lib/api";
 
 type Props = { onVolver: () => void };
 
@@ -50,6 +50,9 @@ export function Admin({ onVolver }: Props) {
   const [salvando, setSalvando] = useState(false);
   const [pausa, setPausa] = useState<EstadoPausa | null>(null);
   const [cambiandoPausa, setCambiandoPausa] = useState(false);
+  const [pestana, setPestana] = useState<"usuarios" | "accesos">("usuarios");
+  const [accesos, setAccesos] = useState<Accesos | null>(null);
+  const [cargandoAcc, setCargandoAcc] = useState(false);
 
   async function cargar() {
     setCargando(true);
@@ -68,6 +71,22 @@ export function Admin({ onVolver }: Props) {
     cargar();
     api.admin.pausa().then((r) => setPausa(r.pausa)).catch(() => {});
   }, []);
+
+  async function cargarAccesos() {
+    setCargandoAcc(true);
+    try {
+      const r = await api.admin.accesos(7);
+      setAccesos(r.accesos);
+    } catch {
+      setError("No se pudieron cargar los accesos.");
+    } finally {
+      setCargandoAcc(false);
+    }
+  }
+
+  useEffect(() => {
+    if (pestana === "accesos") cargarAccesos();
+  }, [pestana]);
 
   async function cambiarPausa(activar: boolean) {
     if (activar) {
@@ -278,6 +297,74 @@ export function Admin({ onVolver }: Props) {
       {msg && <p className="hint">{msg}</p>}
       {cargando && <p className="hint">Cargando…</p>}
 
+      <div className="adm-pestanas">
+        <button
+          className={"adm-pest" + (pestana === "usuarios" ? " activa" : "")}
+          onClick={() => setPestana("usuarios")}
+        >Usuarios</button>
+        <button
+          className={"adm-pest" + (pestana === "accesos" ? " activa" : "")}
+          onClick={() => setPestana("accesos")}
+        >Accesos</button>
+      </div>
+
+      {pestana === "accesos" && (
+        <div className="adm-accesos">
+          <div className="adm-acc-cab">
+            <strong>Activos ahora</strong>
+            <button className="btn-sm" onClick={cargarAccesos} disabled={cargandoAcc}>
+              {cargandoAcc ? "..." : "Actualizar"}
+            </button>
+          </div>
+          {!accesos || accesos.activos.length === 0 ? (
+            <p className="hint">Nadie con actividad en los últimos 15 minutos.</p>
+          ) : (
+            <table className="adm-tabla">
+              <thead><tr><th>Usuario</th><th>Hace</th><th>Acciones</th><th>IP</th></tr></thead>
+              <tbody>
+                {accesos.activos.map((a) => (
+                  <tr key={a.email}>
+                    <td>{a.email}</td>
+                    <td>{a.minutos === 0 ? "ahora" : a.minutos + " min"}</td>
+                    <td>{a.acciones}</td>
+                    <td className="mono">{a.ip ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <div className="adm-acc-cab" style={{ marginTop: 18 }}>
+            <strong>Ingresos de los últimos 7 días</strong>
+          </div>
+          {!accesos || accesos.ingresos.length === 0 ? (
+            <p className="hint">Sin ingresos registrados en el período.</p>
+          ) : (
+            <table className="adm-tabla">
+              <thead><tr><th>Usuario</th><th>Cuándo</th><th>IP</th><th>Resultado</th></tr></thead>
+              <tbody>
+                {accesos.ingresos.map((g, i) => (
+                  <tr key={i}>
+                    <td>{g.email}</td>
+                    <td>{new Date(g.cuando).toLocaleString("es-CO")}</td>
+                    <td className="mono">{g.ip ?? "—"}</td>
+                    <td>
+                      <span className={"acc-res" + (g.resultado === "ok" ? " ok" : " no")}>
+                        {g.resultado === "ok" ? "Entró"
+                          : g.resultado === "pausado" ? "Rechazado: suspendido"
+                          : g.resultado === "fuera_horario" ? "Rechazado: fuera de horario"
+                          : "Rechazado"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {pestana === "usuarios" && (
       <div className="adm-tabla-caja">
         <table className="adm-tabla">
           <thead>
@@ -365,6 +452,7 @@ export function Admin({ onVolver }: Props) {
           </tbody>
         </table>
       </div>
+      )}
 
       {editando && borrador && (
         <div className="adm-editor">

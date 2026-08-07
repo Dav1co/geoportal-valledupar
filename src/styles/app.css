@@ -850,3 +850,19 @@ body {
   color: #fff !important;
   border-color: #b91c1c !important;
 }
+
+/* Pestañas de administración */
+.adm-pestanas { display: flex; gap: 4px; margin: 16px 0 12px; }
+.adm-pest {
+  padding: 7px 16px; border: 0; border-radius: 6px 6px 0 0;
+  background: rgba(255,255,255,.05); color: #9aa4b2;
+  font-size: 13px; cursor: pointer;
+}
+.adm-pest.activa { background: #2563eb; color: #fff; font-weight: 600; }
+.adm-acc-cab {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.acc-res { font-size: 12px; }
+.acc-res.ok { color: #4ade80; }
+.acc-res.no { color: #fca5a5; }
