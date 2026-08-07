@@ -113,6 +113,8 @@ export type ExportaArgs = {
 
 export type BarrioHallado = { id: number; nombre: string; caja: [number, number, number, number] };
 
+export type EstadoPausa = { pausado: boolean; pausado_por: string | null; pausado_en: string | null; afectados: number };
+
 export const api = {
   exportarContratos: (args: ExportaArgs) =>
     callPost<ExportaResp>("geoportal-exportar", {}, args),
@@ -145,6 +147,10 @@ export const api = {
       call<{ es_admin: boolean; permisos?: { explorar: boolean; focalizacion: boolean; comercial: boolean; rutas: boolean } }>("geoportal-admin", { accion: "perfil" }),
     listar: () =>
       call<{ usuarios: UsuarioAdmin[] }>("geoportal-admin", { accion: "listar" }),
+    pausa: () =>
+      call<{ pausa: EstadoPausa }>("geoportal-admin", { accion: "pausa" }),
+    pausaSet: (pausar: boolean) =>
+      callPost<{ pausa: EstadoPausa }>("geoportal-admin", { accion: "pausa_set" }, { pausar }),
     permisos: (p: {
       email: string;
       explorar: boolean;

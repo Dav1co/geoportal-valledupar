@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type UsuarioAdmin } from "../lib/api";
+import { api, type UsuarioAdmin, type EstadoPausa } from "../lib/api";
 
 type Props = { onVolver: () => void };
 
@@ -48,6 +48,8 @@ export function Admin({ onVolver }: Props) {
   const [editando, setEditando] = useState<string | null>(null);
   const [borrador, setBorrador] = useState<Borrador | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [pausa, setPausa] = useState<EstadoPausa | null>(null);
+  const [cambiandoPausa, setCambiandoPausa] = useState(false);
 
   async function cargar() {
     setCargando(true);
@@ -64,7 +66,30 @@ export function Admin({ onVolver }: Props) {
 
   useEffect(() => {
     cargar();
+    api.admin.pausa().then((r) => setPausa(r.pausa)).catch(() => {});
   }, []);
+
+  async function cambiarPausa(activar: boolean) {
+    if (activar) {
+      const n = pausa?.afectados ?? 0;
+      if (!window.confirm(
+        "Se va a suspender el acceso de " + n + " usuarios de consulta.\n\n" +
+        "Los administradores seguiran entrando. Ningun perfil se modifica: " +
+        "al reactivar, todos vuelven como estaban.\n\nContinuar?"
+      )) return;
+    }
+    setCambiandoPausa(true);
+    setError(null);
+    try {
+      const r = await api.admin.pausaSet(activar);
+      setPausa(r.pausa);
+      setMsg(activar ? "Acceso suspendido." : "Acceso restablecido.");
+    } catch {
+      setError("No se pudo cambiar el estado del acceso.");
+    } finally {
+      setCambiandoPausa(false);
+    }
+  }
 
   async function agregar() {
     setMsg(null);
@@ -170,6 +195,33 @@ export function Admin({ onVolver }: Props) {
 
   return (
     <div className="adm">
+      {pausa && (
+        <div className={"adm-pausa" + (pausa.pausado ? " activa" : "")}>
+          <div>
+            <strong>
+              {pausa.pausado ? "Acceso suspendido" : "Acceso normal"}
+            </strong>
+            <p className="adm-pausa-txt">
+              {pausa.pausado
+                ? "Los " + pausa.afectados + " usuarios de consulta no pueden entrar. " +
+                  "Suspendido por " + (pausa.pausado_por ?? "") +
+                  (pausa.pausado_en
+                    ? " el " + new Date(pausa.pausado_en).toLocaleString("es-CO")
+                    : "") + "."
+                : "Los " + pausa.afectados + " usuarios de consulta entran con su horario habitual."}
+            </p>
+          </div>
+          <button
+            className={pausa.pausado ? "btn-sm" : "btn-sm btn-peligro"}
+            disabled={cambiandoPausa}
+            onClick={() => cambiarPausa(!pausa.pausado)}
+          >
+            {cambiandoPausa
+              ? "..."
+              : pausa.pausado ? "Restablecer acceso" : "Suspender acceso"}
+          </button>
+        </div>
+      )}
       <div className="adm-cab">
         <div>
           <h2 className="adm-titulo">Administración de usuarios</h2>
