@@ -9,7 +9,7 @@ const CENTRO: [number, number] = [-73.2532, 10.4631];
 // Version del formato de la tesela. Subirla cada vez que cambien los campos
 // que viajan en las teselas: genera URLs nuevas y evita que la cache
 // (1 h + stale 24 h) siga sirviendo la version anterior.
-const TESELA_V = 3;
+const TESELA_V = 4;
 
 export type PredioApilado = {
   id: number;
@@ -235,6 +235,23 @@ export function MapView({
             },
           },
           {
+            // Barrio resaltado tras buscarlo. Vacío hasta que se elige uno.
+            id: "barrio-sel",
+            type: "fill",
+            source: "predios",
+            "source-layer": "barrios",
+            filter: ["==", ["get", "id"], -1],
+            paint: { "fill-color": "#1e5aa8", "fill-opacity": 0.35 },
+          },
+          {
+            id: "barrio-sel-linea",
+            type: "line",
+            source: "predios",
+            "source-layer": "barrios",
+            filter: ["==", ["get", "id"], -1],
+            paint: { "line-color": "#1e5aa8", "line-width": 2.5 },
+          },
+          {
             id: "barrios-etiqueta",
             type: "symbol",
             source: "predios",
@@ -256,6 +273,7 @@ export function MapView({
             type: "fill",
             source: "predios",
             "source-layer": "terrenos",
+            minzoom: 16,
             paint: { "fill-color": "#8fa3b0", "fill-opacity": 0.12 },
           },
           {
@@ -263,6 +281,7 @@ export function MapView({
             type: "line",
             source: "predios",
             "source-layer": "terrenos",
+            minzoom: 16,
             paint: {
               "line-color": "#7d8f9b",
               "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.5, 18, 1.2],
@@ -633,6 +652,7 @@ export function MapView({
       __geoVista?: () => { lng: number; lat: number; zoom: number } | null;
       __geoZoomMin?: (z: number) => void;
       __geoEncuadrar?: (xmin: number, ymin: number, xmax: number, ymax: number) => void;
+      __geoResaltarBarrio?: (id: number | null) => void;
     };
     w.__geoFly = (x, y) => mapa.current?.flyTo({ center: [x, y], zoom: 19 });
     w.__geoEncuadrar = (xmin: number, ymin: number, xmax: number, ymax: number) =>
@@ -640,6 +660,13 @@ export function MapView({
         padding: 60, maxZoom: 17, duration: 700,
       });
     // Acerca al zoom pedido solo si estamos más lejos, sin mover el centro.
+    w.__geoResaltarBarrio = (id) => {
+      const m = mapa.current;
+      if (!m || !listo.current) return;
+      const f = ["==", ["get", "id"], id ?? -1];
+      m.setFilter("barrio-sel", f as never);
+      m.setFilter("barrio-sel-linea", f as never);
+    };
     w.__geoZoomMin = (z) => {
       const m = mapa.current;
       if (m && m.getZoom() < z) m.easeTo({ zoom: z, duration: 600 });

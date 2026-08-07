@@ -548,7 +548,14 @@ export default function App() {
                     onChange={async (e) => {
                       const v = e.target.value;
                       setQBarrio(v);
-                      if (v.trim().length < 2) { setResBarrios([]); return; }
+                      if (v.trim().length < 2) {
+                        setResBarrios([]);
+                        if (v.trim() === "") {
+                          const w = window as unknown as { __geoResaltarBarrio?: (i: number | null) => void };
+                          w.__geoResaltarBarrio?.(null);
+                        }
+                        return;
+                      }
                       try {
                         const r = await api.buscarBarrio(v);
                         setResBarrios(r.barrios ?? []);
@@ -564,8 +571,10 @@ export default function App() {
                             onClick={() => {
                               const w = window as unknown as {
                                 __geoEncuadrar?: (a: number, b: number, c: number, d: number) => void;
+                                __geoResaltarBarrio?: (i: number | null) => void;
                               };
                               w.__geoEncuadrar?.(b.caja[0], b.caja[1], b.caja[2], b.caja[3]);
+                              w.__geoResaltarBarrio?.(b.id);
                               setMostrarBarrios(true);
                               setResBarrios([]);
                               setQBarrio(b.nombre);
