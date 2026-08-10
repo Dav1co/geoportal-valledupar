@@ -21,12 +21,13 @@ import { Buscador } from "./components/Buscador";
 import { PredioPanel } from "./components/PredioPanel";
 import { Watermark } from "./components/Watermark";
 import { Admin } from "./components/Admin";
+import { Dashboard } from "./dashboard/Dashboard";
 import { supabase } from "./lib/supabase";
 import { api, type RutaItem, type DetalleRuta, type ExportaArgs, type BarrioHallado } from "./lib/api";
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
 
-type Modo = "explorar" | "focalizacion" | "comercial" | "rutas";
+type Modo = "explorar" | "focalizacion" | "comercial" | "rutas" | "dashboard";
 
 // Solo estos correos ven el modo Rutas de lectura.
 // --- Opciones de los filtros comerciales (código en BD -> etiqueta visible) ---
@@ -69,6 +70,7 @@ const DESC_MODO: Record<Modo, string> = {
   focalizacion: "Aísla predios sin contrato y resalta estados del predio.",
   comercial: "Filtra por cartera, consumo y medición (datos de Acuo).",
   rutas: "Revisa el recorrido de una ruta de lectura y sus anomalías.",
+  dashboard: "Tablero Comercial: indicadores de facturación, recaudo y cartera.",
 };
 
 // Lee el estado de la vista desde el hash de la URL
@@ -113,6 +115,7 @@ export default function App() {
   const [esAdmin, setEsAdmin] = useState(false);
   const [permisos, setPermisos] = useState({
     explorar: true, focalizacion: false, comercial: false, rutas: false,
+    dashboard: false,
   });
   const [vista, setVista] = useState<"mapa" | "admin">("mapa");
   const [modo, setModo] = useState<Modo>("explorar");
@@ -192,13 +195,15 @@ export default function App() {
   const puedeVerRutas = esAdmin || permisos.rutas;
   const puedeVerFocalizacion = esAdmin || permisos.focalizacion;
   const puedeVerComercial = esAdmin || permisos.comercial;
+  const puedeVerDashboard = esAdmin || permisos.dashboard;
 
   // Salvaguarda: si un usuario no autorizado cae en modo rutas, devolverlo a explorar.
   useEffect(() => {
     if (modo === "rutas" && !puedeVerRutas) setModo("explorar");
     if (modo === "focalizacion" && !puedeVerFocalizacion) setModo("explorar");
     if (modo === "comercial" && !puedeVerComercial) setModo("explorar");
-  }, [modo, puedeVerRutas, puedeVerFocalizacion, puedeVerComercial]);
+    if (modo === "dashboard" && !puedeVerDashboard) setModo("explorar");
+  }, [modo, puedeVerRutas, puedeVerFocalizacion, puedeVerComercial, puedeVerDashboard]);
 
   // Cargar la lista de rutas la primera vez que se entra al modo Rutas.
   useEffect(() => {
@@ -495,6 +500,9 @@ export default function App() {
                 )}
                 {puedeVerRutas && (
                   <option value="rutas">Rutas de lectura</option>
+                )}
+                {puedeVerDashboard && (
+                  <option value="dashboard">Dashboard</option>
                 )}
               </select>
               <div className="modo-desc">{DESC_MODO[modo]}</div>
@@ -1098,6 +1106,7 @@ export default function App() {
           </aside>
 
           <main className="visor">
+            {modo === "dashboard" && puedeVerDashboard ? <Dashboard /> : <>
             {modo === "comercial" && !conteoCom.disponible && (
               <div className="banda-zoom">
                 <span>
@@ -1152,6 +1161,7 @@ export default function App() {
                 onToggle={() => setPanelAbierto((v) => !v)}
               />
             )}
+            </>}
           </main>
         </div>
       )}

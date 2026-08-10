@@ -71,6 +71,7 @@ export type UsuarioAdmin = {
   ver_focalizacion: boolean;
   ver_comercial: boolean;
   ver_rutas: boolean;
+  ver_dashboard: boolean;
   horario: string;
   dias: string;
 };
@@ -142,13 +143,15 @@ export const api = {
     call<{ barrios: BarrioHallado[] }>("geoportal-buscar-barrio", { q }),
   causales: () =>
     call<{ causales: string[] }>("geoportal-causales", {}),
+  bi: (vista: string, filtros?: Record<string, string>) =>
+    callPost<{ datos: Record<string, unknown>[] }>("geoportal-bi", {}, { vista, filtros }),
   rutasLista: () =>
     call<{ rutas: RutaItem[] }>("geoportal-rutas-lista", {}),
   ruta: (ruta: string) =>
     call<{ ruta: DetalleRuta }>("geoportal-ruta", { ruta }),
   admin: {
     perfil: () =>
-      call<{ es_admin: boolean; permisos?: { explorar: boolean; focalizacion: boolean; comercial: boolean; rutas: boolean } }>("geoportal-admin", { accion: "perfil" }),
+      call<{ es_admin: boolean; permisos?: { explorar: boolean; focalizacion: boolean; comercial: boolean; rutas: boolean; dashboard: boolean } }>("geoportal-admin", { accion: "perfil" }),
     listar: () =>
       call<{ usuarios: UsuarioAdmin[] }>("geoportal-admin", { accion: "listar" }),
     pausa: () =>
@@ -163,6 +166,7 @@ export const api = {
       focalizacion: boolean;
       comercial: boolean;
       rutas: boolean;
+      dashboard: boolean;
       horario: string;
       dias: string;
     }) =>

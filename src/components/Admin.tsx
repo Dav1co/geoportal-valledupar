@@ -8,6 +8,7 @@ const MODOS: [keyof UsuarioAdmin, string][] = [
   ["ver_focalizacion", "Focalización"],
   ["ver_comercial", "Comercial"],
   ["ver_rutas", "Rutas"],
+  ["ver_dashboard", "Dashboard"],
 ];
 
 type Borrador = {
@@ -15,6 +16,7 @@ type Borrador = {
   focalizacion: boolean;
   comercial: boolean;
   rutas: boolean;
+  dashboard: boolean;
   horario: string;
   dias: string;
 };
@@ -25,6 +27,7 @@ function aBorrador(u: UsuarioAdmin): Borrador {
     focalizacion: u.ver_focalizacion === true,
     comercial: u.ver_comercial === true,
     rutas: u.ver_rutas === true,
+    dashboard: u.ver_dashboard === true,
     horario: u.horario ?? "laboral",
     dias: u.dias ?? "habiles",
   };
@@ -469,6 +472,7 @@ export function Admin({ onVolver }: Props) {
                     ["focalizacion", "Focalización"],
                     ["comercial", "Comercial"],
                     ["rutas", "Rutas"],
+                    ["dashboard", "Dashboard"],
                   ] as [keyof Borrador, string][]
                 ).map(([campo, et]) => (
                   <label key={String(campo)} className="adm-check">

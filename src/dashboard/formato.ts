@@ -1,0 +1,94 @@
+// Formato es-CO del tablero. Regla: nunca celdas vacías ni "(En blanco)";
+// cuando un dato no existe se muestra "—" o un texto que explica por qué.
+
+const MESES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+export function etiquetaPeriodo(p: string): string {
+  if (!/^\d{6}$/.test(p)) return p;
+  const mes = MESES[Number(p.slice(4)) - 1] ?? p.slice(4);
+  return `${mes} ${p.slice(0, 4)}`;
+}
+
+export function etiquetaCorta(p: string): string {
+  const larga = etiquetaPeriodo(p);
+  return larga.length > 4 ? `${larga.slice(0, 3)} ${p.slice(0, 4)}` : larga;
+}
+
+// $ 5.983,96 M — montos en millones; sin decimales desde 10.000 M.
+export function fmtMillones(v: number | null): string {
+  if (v == null) return "—";
+  const m = v / 1e6;
+  const dec = Math.abs(m) >= 10_000 ? 0 : 2;
+  return `$ ${m.toLocaleString("es-CO", {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec,
+  })} M`;
+}
+
+export function fmtEntero(v: number | null): string {
+  return v == null ? "—" : v.toLocaleString("es-CO", { maximumFractionDigits: 0 });
+}
+
+export function fmtPct(v: number | null): string {
+  if (v == null) return "—";
+  return `${v.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
+}
+
+// Diferencia entre dos valores: "+$ 12,3 M (+2,1 %)".
+export function fmtDelta(
+  actual: number | null,
+  base: number | null,
+  formato: (v: number | null) => string = fmtMillones,
+): string {
+  if (actual == null || base == null) return "—";
+  const d = actual - base;
+  const signo = d >= 0 ? "+" : "−";
+  const abs = formato(Math.abs(d));
+  const pct =
+    base !== 0
+      ? ` (${signo}${(Math.abs(d / base) * 100).toLocaleString("es-CO", {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })} %)`
+      : "";
+  return `${signo}${abs}${pct}`;
+}
+
+// CIFRAS COMPLETAS, sin abreviar: $ 5.983.961.190,61 en vez de
+// "$ 5.983,96 M". Es el formato de la pantalla Consolidado, que se copia
+// a Excel para informes de gerencia — un valor abreviado no se puede
+// sumar ni cruzar. La abreviación se queda en las tarjetas de KPI de las
+// otras pantallas, donde el espacio manda y nadie copia el número.
+export function fmtPesosCompleto(v: number | null, decimales = 2): string {
+  if (v == null) return "—";
+  // \u00A0 = espacio de no separación: mantiene el "$" pegado a la cifra
+  // para que nunca quede colgando en la línea anterior.
+  return `$\u00A0${v.toLocaleString("es-CO", {
+    minimumFractionDigits: decimales,
+    maximumFractionDigits: decimales,
+  })}`;
+}
+
+// Entero completo con separador de miles (m³, cupones, contratos).
+export function fmtEnteroCompleto(v: number | null): string {
+  return v == null ? "—" : v.toLocaleString("es-CO", { maximumFractionDigits: 0 });
+}
+
+// Variación absoluta en cifras completas, con signo explícito.
+export function fmtDeltaCompleto(actual: number | null, base: number | null): string {
+  if (actual == null || base == null) return "—";
+  const d = actual - base;
+  return `${d >= 0 ? "+" : "−"}${fmtPesosCompleto(Math.abs(d))}`;
+}
+
+// Variación porcentual con signo.
+export function fmtDeltaPct(actual: number | null, base: number | null): string {
+  if (actual == null || base == null || base === 0) return "—";
+  const d = ((actual - base) / Math.abs(base)) * 100;
+  return `${d >= 0 ? "+" : "−"}${Math.abs(d).toLocaleString("es-CO", {
+    minimumFractionDigits: 1, maximumFractionDigits: 1,
+  })} %`;
+}

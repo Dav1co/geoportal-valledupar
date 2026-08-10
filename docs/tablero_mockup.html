@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero Comercial — EMDUPAR (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@110,500;110,700;110,800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --tinta:#0A2540;        /* azul institucional profundo */
+    --tinta-2:#123A5E;
+    --agua:#0E7C86;         /* acento agua */
+    --agua-suave:#E3F1F2;
+    --papel:#F6F8F9;
+    --carta:#FFFFFF;
+    --linea:#DDE5EA;
+    --texto:#22313F;
+    --texto-suave:#5D6E7E;
+    /* Paleta fija de años — igual en TODAS las páginas */
+    --a2023:#9AA7B5;
+    --a2024:#C98A2D;
+    --a2025:#4FA3C7;
+    --a2026:#0A2540;
+    --ok:#2E7D5B;
+    --alerta:#B3402A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--papel);color:var(--texto);font-size:14px}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- estructura ---------- */
+  .app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
+  aside{background:var(--tinta);color:#CFDCE8;padding:22px 0;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+  .marca{padding:0 22px 18px;border-bottom:1px solid rgba(255,255,255,.12)}
+  .marca h1{font-family:'Archivo',sans-serif;font-weight:800;font-stretch:110%;font-size:17px;color:#fff;letter-spacing:.4px}
+  .marca span{font-size:11px;color:#8FB4CE;display:block;margin-top:3px;letter-spacing:.6px;text-transform:uppercase}
+  nav{margin-top:14px;flex:1;overflow-y:auto}
+  nav button{display:block;width:100%;text-align:left;background:none;border:none;color:#CFDCE8;
+    font:inherit;font-size:13.5px;padding:10px 22px;cursor:pointer;border-left:3px solid transparent}
+  nav button:hover{background:rgba(255,255,255,.06);color:#fff}
+  nav button.activa{background:rgba(255,255,255,.10);color:#fff;border-left-color:var(--agua);font-weight:600}
+  nav button.pendiente{color:#7189A0;cursor:not-allowed;font-style:italic}
+  nav button:focus-visible{outline:2px solid var(--agua);outline-offset:-2px}
+  .pie-nav{padding:14px 22px;font-size:10.5px;color:#7189A0;border-top:1px solid rgba(255,255,255,.12)}
+
+  main{padding:0 30px 44px}
+  .tope{position:sticky;top:0;z-index:5;background:var(--papel);padding:18px 0 12px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .tope::after{content:"";position:absolute;left:-30px;right:-30px;bottom:0;height:3px;
+    background:linear-gradient(90deg,var(--agua) 0%,#5FB7BF 45%,transparent 100%)}
+  .tope h2{font-family:'Archivo',sans-serif;font-weight:700;font-stretch:110%;font-size:22px;color:var(--tinta)}
+  .corte{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .chip{background:var(--agua-suave);color:var(--agua);border:1px solid #BFDFE1;border-radius:999px;
+    padding:5px 12px;font-size:12px;font-weight:600}
+  .chip.dia{background:#fff;color:var(--texto-suave);border-color:var(--linea)}
+  .leyenda-anios{display:flex;gap:10px;font-size:11.5px;color:var(--texto-suave)}
+  .leyenda-anios i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+
+  /* ---------- tarjetas ---------- */
+  .fila{display:grid;gap:14px;margin-top:18px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .carta{background:var(--carta);border:1px solid var(--linea);border-radius:10px;padding:16px 18px}
+  .kpi .eti{font-size:11.5px;color:var(--texto-suave);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+  .kpi .valor{font-family:'Archivo',sans-serif;font-weight:800;font-stretch:110%;font-size:26px;color:var(--tinta);margin-top:6px}
+  .kpi .sub{font-size:12px;color:var(--texto-suave);margin-top:4px}
+  .kpi.ok .valor{color:var(--ok)} .kpi.mal .valor{color:var(--alerta)}
+  .carta h3{font-family:'Archivo',sans-serif;font-weight:700;font-stretch:110%;font-size:14.5px;color:var(--tinta);margin-bottom:12px}
+  .carta .nota{font-size:12px;color:var(--texto-suave);margin-top:10px}
+  .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:2fr 1fr}.g32{grid-template-columns:1fr 2fr}
+  @media(max-width:980px){.g2,.g3,.g32{grid-template-columns:1fr}.app{grid-template-columns:1fr}aside{position:static;height:auto}}
+
+  .lienzo{position:relative;height:280px}.lienzo.alto{height:330px}.lienzo.bajo{height:220px}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--texto-suave);
+     text-align:right;padding:8px 10px;border-bottom:2px solid var(--linea)}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--linea)}
+  tr:last-child td{border-bottom:none}
+  td.neg{color:var(--alerta);font-weight:600} td.pos{color:var(--ok);font-weight:600}
+  tr.total td{font-weight:700;color:var(--tinta);border-top:2px solid var(--linea)}
+
+  .semaforo{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700}
+  .semaforo.rojo{background:#F7E5E0;color:var(--alerta)}
+  .semaforo.verde{background:#E2F0E9;color:var(--ok)}
+  .semaforo.ambar{background:#F7EEDC;color:#8A5F14}
+
+  .barra-meta{height:14px;background:#E8EEF2;border-radius:999px;overflow:hidden;margin-top:8px}
+  .barra-meta i{display:block;height:100%;background:var(--agua)}
+  .marca-meta{position:relative;height:0}
+  .marca-meta i{position:absolute;top:-18px;width:2px;height:22px;background:var(--tinta)}
+
+  .aviso{background:#FBF6EA;border:1px solid #EAD9AE;border-radius:10px;padding:14px 18px;
+    font-size:13px;color:#6B5619;margin-top:18px}
+  .pagina{display:none}.pagina.activa{display:block}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside>
+  <div class="marca">
+    <h1>Tablero Comercial</h1>
+    <span>EMDUPAR S.A. E.S.P.</span>
+  </div>
+  <nav id="menu">
+    <button data-p="resumen" class="activa">Resumen ejecutivo</button>
+    <button data-p="recaudo">Recaudo</button>
+    <button data-p="pagos">Pagos por día</button>
+    <button data-p="cupones">Cupones</button>
+    <button data-p="facturacion">Facturación</button>
+    <button data-p="cartera">Cartera</button>
+    <button data-p="analisis">Análisis del mes</button>
+    <button data-p="lecturas">Lecturas y observaciones</button>
+    <button data-p="notas">Notas</button>
+    <button data-p="metas">Metas y proyección</button>
+    <button data-p="conceptos">Conceptos</button>
+    <button data-p="consolidado">Consolidado</button>
+    <button class="pendiente" title="Fuente de datos por identificar">Pérdidas e IPUF · pendiente</button>
+  </nav>
+  <div class="pie-nav">Mockup de diseño · datos del corte real<br>Geoportal · agosto 2026</div>
+</aside>
+
+<main>
+  <div class="tope">
+    <h2 id="titulo">Resumen ejecutivo</h2>
+    <div class="corte">
+      <span class="chip">Corte mensual: julio 2026</span>
+      <span class="chip dia">Cartera diaria: 4 ago 2026</span>
+      <span class="leyenda-anios num">
+        <span><i style="background:var(--a2023)"></i>2023</span>
+        <span><i style="background:var(--a2024)"></i>2024</span>
+        <span><i style="background:var(--a2025)"></i>2025</span>
+        <span><i style="background:var(--a2026)"></i>2026</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- ============ RESUMEN ============ -->
+  <section class="pagina activa" id="p-resumen">
+    <div class="fila kpis">
+      <div class="carta kpi"><div class="eti">Facturación del mes</div><div class="valor num">$ 5.983,96 M</div><div class="sub">julio 2026</div></div>
+      <div class="carta kpi"><div class="eti">Recaudo del mes</div><div class="valor num">$ 4.999,65 M</div><div class="sub">83,6 % de lo facturado</div></div>
+      <div class="carta kpi mal"><div class="eti">% Recaudo 0–30</div><div class="valor num">70,7 %</div><div class="sub">Meta: 85 % <span class="semaforo rojo">bajo</span></div></div>
+      <div class="carta kpi"><div class="eti">% Recaudo del año</div><div class="valor num">77,2 %</div><div class="sub">$ 27.160,6 M de $ 35.187,8 M</div></div>
+      <div class="carta kpi"><div class="eti">Cartera total</div><div class="valor num">$ 117.303 M</div><div class="sub">52.065 contratos con deuda</div></div>
+      <div class="carta kpi"><div class="eti">Contratos activos</div><div class="valor num">111.205</div><div class="sub">facturados en el período</div></div>
+    </div>
+    <div class="fila g3">
+      <div class="carta">
+        <h3>Recaudo diario acumulado — julio vs. junio y julio 2025</h3>
+        <div class="lienzo"><canvas id="ch-res-diario"></canvas></div>
+        <div class="nota">Cada serie conserva su color de año en todo el tablero.</div>
+      </div>
+      <div class="carta">
+        <h3>El mes en una mirada</h3>
+        <table class="num">
+          <tr><td>Notas aplicadas</td><td class="neg">−$ 213,1 M</td></tr>
+          <tr><td>Saldo a favor</td><td>$ 86,5 M</td></tr>
+          <tr><td>Saldo financiado</td><td>$ 9.587,4 M</td></tr>
+          <tr><td>Recaudo de cartera</td><td>$ 293,7 M</td></tr>
+          <tr><td>Δ cartera vs. junio</td><td class="neg">+$ 412,8 M</td></tr>
+        </table>
+        <div class="nota">Sin campos "(En blanco)": todos los indicadores se anclan al último mes con datos cargados.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RECAUDO ============ -->
+  <section class="pagina" id="p-recaudo">
+    <div class="fila g3">
+      <div class="carta">
+        <h3>Recaudo total por mes y año</h3>
+        <div class="lienzo alto"><canvas id="ch-rec-mensual"></canvas></div>
+      </div>
+      <div class="carta">
+        <h3>Julio 2026 por edad del recaudo</h3>
+        <div class="lienzo alto"><canvas id="ch-rec-edades"></canvas></div>
+        <div class="nota">0–30 = pago corriente · 60–360 y &gt;360 = recuperación de cartera.</div>
+      </div>
+    </div>
+    <div class="fila g2">
+      <div class="carta">
+        <h3>Recaudo diario — comparación de tres series</h3>
+        <div class="lienzo"><canvas id="ch-rec-diario"></canvas></div>
+      </div>
+      <div class="carta">
+        <h3>Acumulado del mes, día a día</h3>
+        <div class="lienzo"><canvas id="ch-rec-acum"></canvas></div>
+        <div class="nota">Fuente diaria: fecha de grabación del pago (últimos 6 meses de detalle).</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PAGOS POR DÍA ============ -->
+  <section class="pagina" id="p-pagos">
+    <div class="fila kpis">
+      <div class="carta kpi"><div class="eti">Junio 2026</div><div class="valor num">$ 5.001.485.840</div></div>
+      <div class="carta kpi"><div class="eti">Julio 2026</div><div class="valor num">$ 4.999.646.069</div></div>
+      <div class="carta kpi mal"><div class="eti">Diferencia jun → jul</div><div class="valor num">−$ 1.839.771</div><div class="sub">al cierre de mes completo</div></div>
+    </div>
+    <div class="fila">
+      <div class="carta">
+        <h3>Matriz de recaudo por día y mes — 2026 ($ millones)</h3>
+        <div style="max-height:430px;overflow:auto"><table class="num" id="tabla-pagos"></table></div>
+        <div class="nota">La comparación entre dos meses se corta automáticamente al último día con pagos del mes en curso, para comparar períodos equivalentes.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CUPONES ============ -->
+  <section class="pagina" id="p-cupones">
+    <div class="fila kpis">
+      <div class="carta kpi"><div class="eti">Cupones procesados (jul)</div><div class="valor num">75.860</div></div>
+      <div class="carta kpi"><div class="eti">Recaudo vía BBVA</div><div class="valor num">71,5 %</div><div class="sub">convenio + PSE</div></div>
+      <div class="carta kpi"><div class="eti">Canales activos</div><div class="valor num">10</div><div class="sub">agencias / cuentas</div></div>
+    </div>
+    <div class="fila g3">
+      <div class="carta">
+        <h3>Cupones procesados por mes</h3>
+        <div class="lienzo alto"><canvas id="ch-cup-mes"></canvas></div>
+      </div>
+      <div class="carta">
+        <h3>Recaudo por agencia / cuenta — 2026</h3>
+        <div class="lienzo alto"><canvas id="ch-cup-agencia"></canvas></div>
+        <div class="nota">Máximo seis porciones; los canales menores se agrupan en "Otras".</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FACTURACIÓN ============ -->
+  <section class="pagina" id="p-facturacion">
+    <div class="fila g3">
+      <div class="carta">
+        <h3>Facturación por mes y año</h3>
+        <div class="lienzo alto"><canvas id="ch-fac-mensual"></canvas></div>
+      </div>
+      <div class="carta">
+        <h3>Julio 2026 por clasificador</h3>
+        <div class="lienzo alto"><canvas id="ch-fac-clasif"></canvas></div>
+        <div class="nota">El clasificador sale de la tabla de ruteo de conceptos — desaparece la porción "(En blanco)" del tablero anterior.</div>
+      </div>
+    </div>
+    <div class="fila kpis">
+      <div class="carta kpi"><div class="eti">Contratos acueducto</div><div class="valor num">111.206</div></div>
+      <div class="carta kpi"><div class="eti">Facturado acueducto</div><div class="valor num">$ 2.518,4 M</div></div>
+      <div class="carta kpi"><div class="eti">Contratos alcantarillado</div><div class="valor num">109.666</div></div>
+      <div class="carta kpi"><div class="eti">Facturado alcantarillado</div><div class="valor num">$ 2.271,9 M</div></div>
+      <div class="carta kpi mal"><div class="eti">Subsidios facturados</div><div class="valor num">−$ 515,7 M</div><div class="sub">conceptos 26 a 33</div></div>
+    </div>
+  </section>
+
+  <!-- ============ CARTERA ============ -->
+  <section class="pagina" id="p-cartera">
+    <div class="fila g3">
+      <div class="carta">
+        <h3>Cartera total por mes y año</h3>
+        <div class="lienzo alto"><canvas id="ch-car-mensual"></canvas></div>
+      </div>
+      <div class="carta">
+        <h3>Composición por clasificador</h3>
+        <div class="lienzo alto"><canvas id="ch-car-clasif"></canvas></div>
+      </div>
+    </div>
+    <div class="fila g2">
+      <div class="carta">
+        <h3>Cartera por rango de deuda (meses)</h3>
+        <div class="lienzo"><canvas id="ch-car-rangos"></canvas></div>
+        <div class="nota num">Los buckets largos (&gt;60 meses: $ 94 mil M) concentran la cartera de difícil recaudo, incluida la prescrita.</div>
+      </div>
+      <div class="carta">
+        <h3>Suscriptores por rango de deuda</h3>
+        <div class="lienzo"><canvas id="ch-car-susc"></canvas></div>
+        <div class="nota num">94 mil suscriptores deben 8 meses o menos; 13 mil concentran la deuda mayor a 60 meses.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ANÁLISIS DEL MES ============ -->
+  <section class="pagina" id="p-analisis">
+    <div class="fila">
+      <div class="carta">
+        <h3>Comparativo de cierres</h3>
+        <table class="num">
+          <thead><tr><th>Período</th><th>Facturación</th><th>Recaudo</th><th>Recaudo 0–30</th><th>Recaudo 60–360</th><th>Recaudo &gt; 360</th></tr></thead>
+          <tbody>
+            <tr><td>julio 2026</td><td>5.983.961.191</td><td>4.999.646.069</td><td>4.230.115.402</td><td>552.418.906</td><td>184.926.310</td></tr>
+            <tr><td>junio 2026</td><td>6.087.964.376</td><td>5.001.485.840</td><td>4.257.874.604</td><td>546.605.185</td><td>197.006.051</td></tr>
+            <tr><td>julio 2025</td><td>5.868.662.617</td><td>5.177.146.147</td><td>4.340.424.289</td><td>664.361.518</td><td>172.360.341</td></tr>
+          </tbody>
+        </table>
+        <div class="nota">Siempre tres filas: mes de corte, mes anterior y mismo mes del año anterior — sin celdas vacías.</div>
+      </div>
+    </div>
+    <div class="fila g2">
+      <div class="carta">
+        <h3>Contratos facturados por uso</h3>
+        <div class="lienzo"><canvas id="ch-ana-uso"></canvas></div>
+      </div>
+      <div class="carta">
+        <h3>Contratos residenciales por estrato</h3>
+        <div class="lienzo"><canvas id="ch-ana-estrato"></canvas></div>
+      </div>
+    </div>
+    <div class="fila kpis">
+      <div class="carta kpi"><div class="eti">m³ facturados</div><div class="valor num">1.652.143</div></div>
+      <div class="carta kpi"><div class="eti">Contratos con pago</div><div class="valor num">78.412</div></div>
+      <div class="carta kpi"><div class="eti">Recaudo de cartera</div><div class="valor num">$ 293,7 M</div></div>
+      <div class="carta kpi"><div class="eti">Saldo a favor</div><div class="valor num">$ 86,5 M</div></div>
+    </div>
+  </section>
+
+  <!-- ============ LECTURAS Y OBSERVACIONES ============ -->
+  <section class="pagina" id="p-lecturas">
+    <div class="fila g32">
+      <div class="carta">
+        <h3>Observación de lectura — julio 2026</h3>
+        <table class="num">
+          <thead><tr><th>Observación</th><th>Contratos</th></tr></thead>
+          <tbody>
+            <tr><td>99 · Usuario con lectura</td><td>88.873</td></tr>
+            <tr><td>1 · Suministro no encontrado</td><td>7.735</td></tr>
+            <tr><td>11 · Conexión directa</td><td>3.986</td></tr>
+            <tr><td>8 · Predio enrejado</td><td>646</td></tr>
+            <tr><td>30 · Conexión suspendida</td><td>490</td></tr>
+            <tr><td>13 · Medidor dañado</td><td>480</td></tr>
+            <tr><td>21 · Vidrio ilegible</td><td>397</td></tr>
+            <tr><td>5 · Caja con obstáculos</td><td>172</td></tr>
+            <tr><td>Otras observaciones</td><td>8.426</td></tr>
+            <tr class="total"><td>Total</td><td>111.205</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="carta">
+        <h3>Método de cálculo del consumo</h3>
+        <div class="lienzo"><canvas id="ch-lec-metodo"></canvas></div>
+        <div class="nota">Señal de salud del ciclo de lectura: la lectura real (CALCCODL) debe rondar el 70 %. Si cae, ese mes se facturó por promedio en una porción anormal de predios.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ NOTAS ============ -->
+  <section class="pagina" id="p-notas">
+    <div class="fila g2">
+      <div class="carta">
+        <h3>Valor de notas por causal — 2026</h3>
+        <div class="lienzo alto"><canvas id="ch-not-causal"></canvas></div>
+        <div class="nota">Dos causales concentran casi el 80 %: recargo moratorio y corrección de consumos. Las 15 restantes se agrupan.</div>
+      </div>
+      <div class="carta">
+        <h3>Valor de notas aplicado por mes y año ($ millones)</h3>
+        <div class="lienzo alto"><canvas id="ch-not-mesanio"></canvas></div>
+        <div class="nota">Las notas conservan su signo: crédito negativo, débito positivo. Aquí se muestra la magnitud aplicada.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ METAS ============ -->
+  <section class="pagina" id="p-metas">
+    <div class="fila g32">
+      <div class="carta">
+        <h3>Agosto 2026 · avance</h3>
+        <div class="kpi">
+          <div class="eti">Recaudo acumulado al día 8</div>
+          <div class="valor num">$ 1.184,3 M</div>
+          <div class="sub num">Promedio diario actual: $ 148,0 M · quedan 23 días</div>
+        </div>
+        <div class="barra-meta"><i style="width:23.7%"></i></div>
+        <div class="marca-meta"><i style="left:90%" title="Meta $5.000 M"></i></div>
+        <div class="nota num">Barra sobre la meta oficial del año: $ 5.000 M.</div>
+      </div>
+      <div class="carta">
+        <h3>Escenarios de cierre del mes</h3>
+        <table class="num">
+          <thead><tr><th>Meta</th><th>Faltante</th><th>Promedio diario necesario</th><th>Estado</th></tr></thead>
+          <tbody>
+            <tr><td>$ 4.500 M</td><td>3.315,7 M</td><td>144,2 M/día</td><td><span class="semaforo verde">alcanzable</span></td></tr>
+            <tr><td>$ 5.000 M</td><td>3.815,7 M</td><td>165,9 M/día</td><td><span class="semaforo ambar">exigente</span></td></tr>
+            <tr><td>$ 5.500 M</td><td>4.315,7 M</td><td>187,6 M/día</td><td><span class="semaforo rojo">fuera de ritmo</span></td></tr>
+            <tr><td>$ 6.000 M</td><td>4.815,7 M</td><td>209,4 M/día</td><td><span class="semaforo rojo">fuera de ritmo</span></td></tr>
+          </tbody>
+        </table>
+        <div class="nota">El estado compara el promedio necesario contra el promedio diario real del mes. Las metas viven en una tabla de parámetros editable.</div>
+      </div>
+    </div>
+    <div class="fila">
+      <div class="carta">
+        <h3>Recaudo mensual real y ritmo necesario</h3>
+        <div class="lienzo"><canvas id="ch-met-serie"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPTOS ============ -->
+  <section class="pagina" id="p-conceptos">
+    <div class="fila">
+      <div class="carta">
+        <h3>Facturado por concepto y mes — 2026 ($ millones)</h3>
+        <table class="num">
+          <thead><tr><th>Concepto</th><th>Abril</th><th>Mayo</th><th>Junio</th><th>Julio</th></tr></thead>
+          <tbody>
+            <tr><td>1 · Cargo fijo acueducto</td><td>612,4</td><td>615,1</td><td>618,0</td><td>616,2</td></tr>
+            <tr><td>2 · Consumo acueducto</td><td>1.878,5</td><td>1.911,8</td><td>1.950,6</td><td>1.902,2</td></tr>
+            <tr><td>3 · Cargo fijo alcantarillado</td><td>539,7</td><td>541,9</td><td>545,3</td><td>542,8</td></tr>
+            <tr><td>4 · Servicio alcantarillado</td><td>1.702,3</td><td>1.728,6</td><td>1.740,9</td><td>1.729,1</td></tr>
+            <tr><td>Otros conceptos y terceros</td><td>1.167,1</td><td>1.302,6</td><td>1.233,2</td><td>1.193,7</td></tr>
+            <tr class="total"><td>Total facturado</td><td>5.900,0</td><td>6.100,0</td><td>6.088,0</td><td>5.984,0</td></tr>
+          </tbody>
+        </table>
+        <div class="nota">Los conceptos se agrupan por identificador, nunca por nombre: hay conceptos distintos con nombre repetido.</div>
+      </div>
+    </div>
+    <div class="fila">
+      <div class="carta">
+        <h3>Recaudo por concepto y mes — 2026 ($ millones)</h3>
+        <table class="num">
+          <thead><tr><th>Concepto</th><th>Abril</th><th>Mayo</th><th>Junio</th><th>Julio</th></tr></thead>
+          <tbody>
+            <tr><td>1 · Cargo fijo acueducto</td><td>512,8</td><td>521,4</td><td>519,9</td><td>517,3</td></tr>
+            <tr><td>2 · Consumo acueducto</td><td>1.571,0</td><td>1.606,2</td><td>1.602,1</td><td>1.598,4</td></tr>
+            <tr><td>3 · Cargo fijo alcantarillado</td><td>451,2</td><td>456,8</td><td>455,7</td><td>454,0</td></tr>
+            <tr><td>4 · Servicio alcantarillado</td><td>1.424,5</td><td>1.451,9</td><td>1.448,3</td><td>1.443,6</td></tr>
+            <tr><td>Otros conceptos y terceros</td><td>840,5</td><td>963,7</td><td>975,5</td><td>986,3</td></tr>
+            <tr class="total"><td>Total recaudo</td><td>4.800,0</td><td>5.000,0</td><td>5.001,5</td><td>4.999,6</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONSOLIDADO ============ -->
+  <section class="pagina" id="p-consolidado">
+    <div class="fila">
+      <div class="carta">
+        <h3>Cierre por vigencia</h3>
+        <table class="num">
+          <thead><tr><th>Vigencia</th><th>Facturado</th><th>Recaudo total</th><th>% Recaudo</th><th>Cartera al cierre</th></tr></thead>
+          <tbody>
+            <tr><td>2023</td><td>66.512 M</td><td>51.880 M</td><td>78,0 %</td><td>97.214 M</td></tr>
+            <tr><td>2024</td><td>68.230 M</td><td>55.266 M</td><td>81,0 %</td><td>108.056 M</td></tr>
+            <tr><td>2025</td><td>70.184 M</td><td>58.253 M</td><td>83,0 %</td><td>114.980 M</td></tr>
+            <tr class="total"><td>2026 (a julio)</td><td>41.585 M</td><td>35.347 M</td><td>85,0 %</td><td>117.303 M</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="fila g2">
+      <div class="carta">
+        <h3>% recaudo sobre facturado por vigencia</h3>
+        <div class="lienzo"><canvas id="ch-con-pct"></canvas></div>
+      </div>
+      <div class="carta">
+        <h3>Cartera al cierre de cada vigencia</h3>
+        <div class="lienzo"><canvas id="ch-con-cartera"></canvas></div>
+      </div>
+    </div>
+    <div class="aviso">La página <strong>Pérdidas e IPUF</strong> queda fuera de este mockup: su fuente (agua producida, tarifa m³ y metas IPUF) no proviene del sistema comercial y está por identificar con el área técnica.</div>
+  </section>
+
+</main>
+</div>
+
+<script>
+/* ================= paleta y utilidades ================= */
+const C = getComputedStyle(document.documentElement);
+const col = v => C.getPropertyValue(v).trim();
+const A = {y23:col('--a2023'), y24:col('--a2024'), y25:col('--a2025'), y26:col('--a2026'),
+           agua:col('--agua'), tinta:col('--tinta'), ok:col('--ok'), mal:col('--alerta')};
+Chart.defaults.font.family = "'IBM Plex Sans',sans-serif";
+Chart.defaults.color = col('--texto-suave');
+Chart.defaults.plugins.legend.labels.boxWidth = 10;
+Chart.defaults.plugins.legend.labels.boxHeight = 10;
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const gridY = {grid:{color:'#EAF0F4'}, border:{display:false}};
+const gridX = {grid:{display:false}, border:{display:false}};
+const fmtMilM = v => v + ' mil M';
+
+/* ================= datos de muestra (del corte real) ================= */
+const recMensual = {
+  y2024:[4.3,4.4,4.6,4.4,4.5,4.6,4.7,4.6,4.7,4.8,4.5,4.6],
+  y2025:[4.6,4.7,4.9,4.7,4.8,4.9,5.0,4.9,5.0,5.2,4.8,4.9],
+  y2026:[4.7,4.9,5.1,4.8,5.0,5.0,5.0]
+};
+const facMensual = {
+  y2025:[5.1,6.7,6.0,5.9,5.7,5.7,5.8,5.8,5.8,5.9,5.8,5.9],
+  y2026:[5.8,6.0,5.7,5.9,6.1,6.1,6.0]
+};
+const carMensual = {
+  y2023:[89,90,91,92,93,94,94,95,95,96,97,97],
+  y2024:[98,99,100,101,102,103,104,106,106,107,107,108],
+  y2025:[109,110,110,111,112,112,113,113,114,114,115,115],
+  y2026:[116,117,117,117,118,118,117.3]
+};
+/* recaudo diario acumulado (mil M) — curvas suavizadas de los cierres reales */
+function curva(total, dias){
+  const pesos = Array.from({length:dias},(_,i)=>{
+    const d=i+1; return 0.55 + 0.85*Math.exp(-Math.pow((d-9)/5.5,2)) + 0.55*Math.exp(-Math.pow((d-19)/4.5,2));
+  });
+  const suma = pesos.reduce((a,b)=>a+b,0);
+  let acc=0; return pesos.map(p=>{acc+=p/suma*total; return +acc.toFixed(2)});
+}
+const acumJul26 = curva(5.00,31), acumJun26 = curva(5.00,30), acumJul25 = curva(4.63,31);
+const diarioDe = a => a.map((v,i)=> +(v-(i?a[i-1]:0)).toFixed(2));
+
+/* ================= navegación ================= */
+const titulos = {resumen:'Resumen ejecutivo', recaudo:'Recaudo', pagos:'Pagos por día',
+  cupones:'Cupones', facturacion:'Facturación', cartera:'Cartera',
+  analisis:'Análisis del mes · julio 2026', lecturas:'Lecturas y observaciones',
+  notas:'Notas', metas:'Metas y proyección', conceptos:'Conceptos',
+  consolidado:'Consolidado por vigencia'};
+const creadas = new Set();
+document.getElementById('menu').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-p]'); if(!b) return;
+  document.querySelectorAll('#menu button').forEach(x=>x.classList.remove('activa'));
+  b.classList.add('activa');
+  const p = b.dataset.p;
+  document.querySelectorAll('.pagina').forEach(x=>x.classList.remove('activa'));
+  document.getElementById('p-'+p).classList.add('activa');
+  document.getElementById('titulo').textContent = titulos[p];
+  montar(p);
+});
+
+/* ================= gráficas por página ================= */
+function montar(p){
+  if(creadas.has(p)) return; creadas.add(p);
+  const dias31 = Array.from({length:31},(_,i)=>i+1);
+
+  if(p==='resumen'){
+    new Chart('ch-res-diario',{type:'line',data:{labels:dias31,datasets:[
+      {label:'jul 2026',data:acumJul26,borderColor:A.y26,backgroundColor:A.y26,tension:.3,pointRadius:0,borderWidth:2.5},
+      {label:'jun 2026',data:acumJun26,borderColor:A.agua,backgroundColor:A.agua,tension:.3,pointRadius:0,borderWidth:2,borderDash:[6,4]},
+      {label:'jul 2025',data:acumJul25,borderColor:A.y25,backgroundColor:A.y25,tension:.3,pointRadius:0,borderWidth:2}
+    ]},options:{maintainAspectRatio:false,scales:{y:{...gridY,ticks:{callback:fmtMilM}},x:gridX}}});
+  }
+
+  if(p==='recaudo'){
+    new Chart('ch-rec-mensual',{type:'bar',data:{labels:MESES,datasets:[
+      {label:'2024',data:recMensual.y2024,backgroundColor:A.y24},
+      {label:'2025',data:recMensual.y2025,backgroundColor:A.y25},
+      {label:'2026',data:recMensual.y2026,backgroundColor:A.y26}
+    ]},options:{maintainAspectRatio:false,scales:{y:{...gridY,ticks:{callback:fmtMilM}},x:gridX}}});
+    new Chart('ch-rec-edades',{type:'doughnut',data:{labels:['0–30 días','60–360 días','> 360 días','Otros'],
+      datasets:[{data:[4230,552,185,33],backgroundColor:[A.y26,A.agua,A.y24,'#C9D4DC']}]},
+      options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom'}}}});
+    new Chart('ch-rec-diario',{type:'bar',data:{labels:dias31,datasets:[
+      {label:'jul 2026',data:diarioDe(acumJul26),backgroundColor:A.y26},
+      {label:'jul 2025',data:diarioDe(acumJul25),backgroundColor:A.y25}
+    ]},options:{maintainAspectRatio:false,scales:{y:{...gridY,ticks:{callback:fmtMilM}},x:{...gridX,ticks:{maxTicksLimit:11}}}}});
+    new Chart('ch-rec-acum',{type:'line',data:{labels:dias31,datasets:[
+      {label:'jul 2026',data:acumJul26,borderColor:A.y26,tension:.3,pointRadius:0,borderWidth:2.5},
+      {label:'jun 2026',data:acumJun26,borderColor:A.agua,tension:.3,pointRadius:0,borderWidth:2,borderDash:[6,4]},
+      {label:'jul 2025',data:acumJul25,borderColor:A.y25,tension:.3,pointRadius:0,borderWidth:2}
+    ]},options:{maintainAspectRatio:false,scales:{y:{...gridY,ticks:{callback:fmtMilM}},x:{...gridX,ticks:{maxTicksLimit:11}}}}});
+  }
+
+  if(p==='facturacion'){
+    new Chart('ch-fac-mensual',{type:'bar',data:{labels:MESES,datasets:[
+      {label:'2025',data:facMensual.y2025,backgroundColor:A.y25},
+      {label:'2026',data:facMensual.y2026,backgroundColor:A.y26}
+    ]},options:{maintainAspectRatio:false,scales:{y:{...gridY,ticks:{callback:fmtMilM}},x:gridX}}});
+    new Chart('ch-fac-clasif',{type:'doughnut',data:{labels:['Acueducto','Alcantarillado','Otros','Tercero'],
+      datasets:[{data:[2518,2272,894,300],backgroundColor:[A.y26,A.agua,A.y24,'#C9D4DC']}]},
+      options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom'}}}});
+  }
+
+  if(p==='cartera'){
+    new Chart('ch-car-mensual',{type:'bar',data:{labels:MESES,datasets:[
+      {label:'2023',data:carMensual.y2023,backgroundColor:A.y23},
+      {label:'2024',data:carMensual.y2024,backgroundColor:A.y24},
+      {label:'2025',data:carMensual.y2025,backgroundColor:A.y25},
+      {label:'2026',data:carMensual.y2026,backgroundColor:A.y26}
+    ]},options:{maintainAspectRatio:false,scales:{y:{...gridY,min:80,ticks:{callback:fmtMilM}},x:gridX}}});
+    new Chart('ch-car-clasif',{type:'doughnut',data:{labels:['Acueducto 61,5 %','Alcantarillado 33,3 %','Otros 3,5 %','Tercero 1,7 %'],
+      datasets:[{data:[61.5,33.3,3.5,1.7],backgroundColor:[A.y26,A.agua,A.y24,'#C9D4DC']}]},
+      options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom'}}}});
+    const rangos=['0–8','9–12','13–18','19–36','37–48','49–54','55–60','> 60'];
+    new Chart('ch-car-rangos',{type:'bar',data:{labels:rangos,datasets:[
+      {label:'Cartera (mil M)',data:[12,1,1,3,3,1,1,94],backgroundColor:A.y26}
+    ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{...gridY,ticks:{callback:fmtMilM}},x:gridX}}});
+    new Chart('ch-car-susc',{type:'bar',data:{labels:rangos,datasets:[
+      {label:'Suscriptores (miles)',data:[94,1,1,2,1,1,0.4,13],backgroundColor:A.agua}
+    ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{...gridY,ticks:{callback:v=>v+' mil'}},x:gridX}}});
+  }
+
+  if(p==='analisis'){
+    new Chart('ch-ana-uso',{type:'bar',data:{labels:['Residencial','Comercial','Oficial','Especial','Industrial'],
+      datasets:[{data:[102787,7970,267,168,14],backgroundColor:A.y26}]},
+      options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{x:{...gridY,type:'logarithmic'},y:gridX}}});
+    new Chart('ch-ana-estrato',{type:'bar',data:{labels:['Estrato 1','Estrato 2','Estrato 3','Estrato 4','Estrato 5','Estrato 6'],
+      datasets:[{data:[32376,36420,22230,7463,3394,904],backgroundColor:A.agua}]},
+      options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:gridY,x:gridX}}});
+  }
+
+  if(p==='notas'){
+    new Chart('ch-not-causal',{type:'doughnut',data:{
+      labels:['Recargo moratorio 40,9 %','Corrección de consumos 37,8 %','Registro masivo 6,0 %','Cambio de estrato 2,7 %','Medidor y accesorios 2,2 %','Otras causales 10,4 %'],
+      datasets:[{data:[40.9,37.8,6.0,2.7,2.2,10.4],
+        backgroundColor:[A.y26,A.agua,A.y24,A.y25,'#7B5EA7','#C9D4DC']}]},
+      options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom'}}}});
+    new Chart('ch-not-mesanio',{type:'bar',data:{labels:MESES.slice(0,7),datasets:[
+      {label:'2025',data:[870,451,542,157,434,428,281],backgroundColor:A.y25},
+      {label:'2026',data:[310,154,217,173,87,73,213],backgroundColor:A.y26}
+    ]},options:{indexAxis:'y',maintainAspectRatio:false,
+      scales:{x:{...gridY,ticks:{callback:v=>'$ '+v}},y:gridX}}});
+  }
+
+  if(p==='pagos'){
+    const diasMes=[31,28,31,30,31,30,31], totales=[4.7,4.9,5.1,4.8,5.0,5.0,5.0];
+    const cols = totales.map((t,i)=>diarioDe(curva(t,diasMes[i])));
+    const f = v => v==null?'':(v*1000).toLocaleString('es-CO',{maximumFractionDigits:0});
+    let html='<thead><tr><th>Día</th>'+MESES.slice(0,7).map(m=>'<th>'+m+'</th>').join('')+'</tr></thead><tbody>';
+    for(let d=0;d<31;d++){
+      html+='<tr><td>'+(d+1)+'</td>'+cols.map(c=>'<td>'+f(c[d])+'</td>').join('')+'</tr>';
+    }
+    html+='<tr class="total"><td>Total</td>'+totales.map(t=>'<td>'+f(t)+'</td>').join('')+'</tr></tbody>';
+    document.getElementById('tabla-pagos').innerHTML=html;
+  }
+
+  if(p==='cupones'){
+    const mesesCup=['E 25','F','M','A','M','J','J','A','S','O','N','D','E 26','F','M','A','M','J','J'];
+    new Chart('ch-cup-mes',{type:'bar',data:{labels:mesesCup,datasets:[
+      {data:[74,73,76,73,74,76,80,74,78,81,76,76,76,76,76,76,76,76,75.9],
+       backgroundColor:mesesCup.map((_,i)=> i>=12?A.y26:A.y25)}]},
+      options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{...gridY,ticks:{callback:v=>v+' mil'}},x:gridX}}});
+    new Chart('ch-cup-agencia',{type:'doughnut',data:{
+      labels:['BBVA convenio 49,3 %','BBVA PSE 22,2 %','Bogotá mercado 14,4 %','Bogotá PSE 5,4 %','Davivienda 6,0 %','Otras 2,7 %'],
+      datasets:[{data:[49.3,22.2,14.4,5.4,6.0,2.7],
+        backgroundColor:[A.y26,A.agua,A.y24,A.y25,'#7B5EA7','#C9D4DC']}]},
+      options:{maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom'}}}});
+  }
+
+  if(p==='lecturas'){
+    new Chart('ch-lec-metodo',{type:'bar',data:{
+      labels:['CALCCODL · lectura real','Promedio','Ajuste'],
+      datasets:[{data:[70.2,21.4,8.4],backgroundColor:[A.ok,A.y24,A.mal]}]},
+      options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{x:{...gridY,max:100,ticks:{callback:v=>v+' %'}},y:gridX}}});
+  }
+
+  if(p==='metas'){
+    new Chart('ch-met-serie',{type:'bar',data:{labels:MESES,datasets:[
+      {type:'bar',label:'Recaudo 2026',data:[4.7,4.9,5.1,4.8,5.0,5.0,5.0,null,null,null,null,null],backgroundColor:A.y26},
+      {type:'line',label:'Meta $5.000 M',data:Array(12).fill(5.0),borderColor:A.mal,borderWidth:2,borderDash:[7,5],pointRadius:0}
+    ]},options:{maintainAspectRatio:false,scales:{y:{...gridY,min:4,ticks:{callback:fmtMilM}},x:gridX}}});
+  }
+
+  if(p==='consolidado'){
+    new Chart('ch-con-pct',{type:'line',data:{labels:['2023','2024','2025','2026'],datasets:[
+      {data:[78,81,83,85],borderColor:A.agua,backgroundColor:A.agua,borderWidth:2.5,pointRadius:5,pointBackgroundColor:[A.y23,A.y24,A.y25,A.y26]}]},
+      options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{...gridY,min:70,max:90,ticks:{callback:v=>v+' %'}},x:gridX}}});
+    new Chart('ch-con-cartera',{type:'bar',data:{labels:['2023','2024','2025','2026 (jul)'],datasets:[
+      {data:[97.2,108.1,115.0,117.3],backgroundColor:[A.y23,A.y24,A.y25,A.y26]}]},
+      options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{...gridY,min:80,ticks:{callback:fmtMilM}},x:gridX}}});
+  }
+}
+montar('resumen');
+</script>
+</body>
+</html>

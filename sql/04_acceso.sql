@@ -1,0 +1,78 @@
+-- =====================================================================
+-- 04_acceso.sql · ENTREGA 1 · Modo Dashboard: solo el acceso
+-- ---------------------------------------------------------------------
+-- Independiente de 01–03 (puede ejecutarse solo). Lo único que altera
+-- de lo existente: la columna ver_dashboard y la rama 'dashboard' en
+-- las tres funciones de permisos (pasos manuales indicados, porque sus
+-- definiciones no están versionadas en el repo).
+-- =====================================================================
+
+-- 1) Columna del modo nuevo (default false: nadie lo ve hasta otorgarlo).
+alter table public.geoportal_lista_blanca
+  add column if not exists ver_dashboard boolean not null default false;
+
+-- ---------------------------------------------------------------------
+-- 2) geoportal_puede: reconocer 'dashboard'.
+-- Inspecciona la definición vigente:
+--
+--   select pg_get_functiondef(oid) from pg_proc where proname = 'geoportal_puede';
+--
+-- y re-créala añadiendo la rama del modo nuevo. Si tiene la forma
+-- esperada (CASE por modo sobre geoportal_lista_blanca), la rama es:
+--
+--   when 'dashboard' then coalesce(lb.ver_dashboard, false)
+--
+-- (ajusta alias/estructura a la definición real).
+-- ---------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------
+-- 3) geoportal_mis_permisos: para que el permiso llegue al perfil que
+-- carga el frontend. Inspecciona igual que arriba
+--
+--   select pg_get_functiondef(oid) from pg_proc where proname = 'geoportal_mis_permisos';
+--
+-- y añade al objeto que devuelve la clave:
+--
+--   'dashboard', coalesce(lb.ver_dashboard, false)
+--
+-- ---------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------
+-- 4) geoportal_admin_permisos: para que la casilla de Admin persista.
+-- Inspecciona
+--
+--   select pg_get_functiondef(oid) from pg_proc where proname = 'geoportal_admin_permisos';
+--
+-- y añade el parámetro p_dashboard boolean default false y su UPDATE:
+--
+--   ver_dashboard = p_dashboard
+--
+-- (la Edge Function geoportal-admin ya lo envía tras este despliegue).
+-- ---------------------------------------------------------------------
+
+-- =====================================================================
+-- VERIFICACIONES (correr a mano tras los pasos anteriores)
+-- =====================================================================
+-- 1) La columna existe y arranca en false para todos:
+--      select email, ver_dashboard from public.geoportal_lista_blanca;
+--
+-- 2) Otórgate el modo directamente (mientras la casilla de Admin
+--    termina de conectarse en la Entrega 1):
+--      update public.geoportal_lista_blanca
+--      set ver_dashboard = true
+--      where lower(email) = '<tu_correo>';
+--
+-- 3) geoportal_puede responde por modo:
+--      select public.geoportal_puede('<tu_correo>', 'dashboard');   -- true
+--      select public.geoportal_puede('<otro_correo>', 'dashboard'); -- false
+--      select public.geoportal_puede('<tu_correo>', 'comercial');   -- igual que antes
+--
+-- 4) El perfil trae la clave nueva:
+--      select public.geoportal_mis_permisos('<tu_correo>');
+--      -- debe incluir "dashboard": true
+--
+-- 5) Los modos existentes no cambiaron para nadie:
+--      select email, ver_explorar, ver_focalizacion, ver_comercial,
+--             ver_rutas, ver_dashboard
+--      from public.geoportal_lista_blanca order by email;
+-- =====================================================================
