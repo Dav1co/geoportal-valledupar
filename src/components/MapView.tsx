@@ -334,12 +334,12 @@ export function MapView({
             "source-layer": "predios",
             filter: ["!=", ["get", "clandestino"], true],
             paint: {
-              "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 18, 7],
-              "circle-color": "#2FB6C4",
-              "circle-stroke-width": 1,
-              "circle-stroke-color": "#0F1B24",
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2.4, 15, 4, 18, 7],
+              "circle-color": "#3B76E8",
+              "circle-stroke-width": 0.7,
+              "circle-stroke-color": "#3F4854",
               "circle-opacity": 1,
-              "circle-stroke-opacity": 1,
+              "circle-stroke-opacity": 0.9,
             },
           },
           {
@@ -371,12 +371,12 @@ export function MapView({
             "source-layer": "predios",
             filter: ["==", ["get", "clandestino"], true],
             paint: {
-              "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 4, 18, 8],
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 1.6, 15, 2.6, 18, 4.5],
               "circle-color": "#E5484D",
-              "circle-stroke-width": 1.5,
+              "circle-stroke-width": 0.6,
               "circle-stroke-color": "#2A0E0F",
               "circle-opacity": 1,
-              "circle-stroke-opacity": 1,
+              "circle-stroke-opacity": 0.8,
             },
           },
           {
