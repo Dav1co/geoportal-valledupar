@@ -64,6 +64,12 @@
 --   v_pqr_dim               : periodo (exacto) — preagregado de PQR
 --   v_fact_detalle_dim      : periodo (exacto) — preagregado del detalle;
 --                             se trae completo y se filtra en el navegador
+--   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
+--                             lotes de conciliacion bancaria del mes en curso
+--   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
+--                             comparable entre meses al mismo dia de corte
+--   v_ipuf                  : periodo (exacto), desde, hasta — serie
+--                             historica de perdidas (IPUF), 114 periodos
 -- ---------------------------------------------------------------------
 create or replace function public.geoportal_bi_consulta(
   p_vista   text,
@@ -266,6 +272,31 @@ begin
   elsif p_vista = 'v_consolidado_anio' then
     select coalesce(jsonb_agg(to_jsonb(t) order by t.anio), '[]'::jsonb) into resultado
     from bi.v_consolidado_anio t;
+
+  -- ---- Recaudo diario: conciliaciones bancarias del mes en curso ----
+  elsif p_vista = 'v_recaudo_diario' then
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.dia, t.entidad_recaudo), '[]'::jsonb)
+      into resultado
+    from bi.v_recaudo_diario t
+    where (p_filtros ->> 'periodo' is null or t.periodo_registro = p_filtros ->> 'periodo');
+
+  -- ---- Serie diaria comparable entre meses (dia x mes) ----
+  elsif p_vista = 'v_recaudo_diario_mes' then
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.periodo, t.dia), '[]'::jsonb)
+      into resultado
+    from bi.v_recaudo_diario_mes t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  -- ---- Perdidas: serie historica completa del IPUF ----
+  elsif p_vista = 'v_ipuf' then
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.periodo), '[]'::jsonb)
+      into resultado
+    from bi.v_ipuf t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
   else
     raise exception 'vista_no_permitida: %', p_vista
