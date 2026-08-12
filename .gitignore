@@ -3,3 +3,8 @@ dist
 .env
 .env.*
 .DS_Store
+
+# Artefacto de compilacion incremental de TypeScript: lo regenera cada
+# `tsc -b` y solo describe el estado local, asi que ensuciaba el diff
+# de cada commit sin aportar nada al repositorio.
+tsconfig.tsbuildinfo
