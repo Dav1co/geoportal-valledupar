@@ -13,6 +13,8 @@ import { CarteraDetallado } from "./paginas/CarteraDetallado";
 import { Pqr } from "./paginas/Pqr";
 import { Notas } from "./paginas/Notas";
 import { Cupones } from "./paginas/Cupones";
+import { RecaudoDiario } from "./paginas/RecaudoDiario";
+import { Perdidas } from "./paginas/Perdidas";
 import { Consolidado } from "./paginas/Consolidado";
 import "./dashboard.css";
 
@@ -33,6 +35,13 @@ const PAGINAS = [
   { id: "pqr", titulo: "PQR", fuente: "reclamos" },
   { id: "notas", titulo: "Notas", fuente: "notas" },
   { id: "cupones", titulo: "Cupones", fuente: "cupones_pagos" },
+  // Las dos siguientes NO se rigen por el selector mensual como las
+  // demás: el recaudo diario va por delante (mes en curso, se reemplaza
+  // cada día) y el IPUF va por detrás (llega con un mes de rezago). Su
+  // fuente queda vacía a propósito: v_periodos_fuente no las declara,
+  // así que el selector no debe marcarles huecos que no existen.
+  { id: "recaudo-diario", titulo: "Recaudo diario", fuente: "" },
+  { id: "perdidas", titulo: "Pérdidas (IPUF)", fuente: "" },
   { id: "consolidado", titulo: "Consolidado", fuente: "facturacion_agrupado" },
 ] as const;
 type PaginaId = (typeof PAGINAS)[number]["id"];
@@ -195,6 +204,12 @@ export function Dashboard() {
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "cupones" && (
         <Cupones key={recarga} periodo={periodo} onIrAPeriodo={setPeriodo} />
+      )}
+      {!error && filas && filas.length > 0 && periodo && pagina === "recaudo-diario" && (
+        <RecaudoDiario key={recarga} periodo={periodo} onIrAPeriodo={setPeriodo} />
+      )}
+      {!error && filas && filas.length > 0 && periodo && pagina === "perdidas" && (
+        <Perdidas key={recarga} periodo={periodo} onIrAPeriodo={setPeriodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "consolidado" && (
         <Consolidado key={recarga} periodo={periodo} />

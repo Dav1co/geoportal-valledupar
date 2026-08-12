@@ -669,3 +669,121 @@ export function comoKpiMes(r: Record<string, unknown>): KpiMes {
     contratos_con_cartera: n(r.contratos_con_cartera),
   };
 }
+
+// ---------------------------------------------------------------------
+// Recaudo diario (conciliaciones bancarias) y Pérdidas (IPUF).
+// ---------------------------------------------------------------------
+
+// bi.v_recaudo_diario: un lote de conciliación bancaria por fila.
+// Es el mes EN CURSO: la tabla de hechos se reemplaza en cada cargue.
+export type RecaudoLote = {
+  conciliacion: string;
+  entidad: string;
+  dia: string;
+  periodo_registro: string;
+  valor_procesado: number | null;
+  num_cupones: number | null;
+  cupones_procesados: number | null;
+  conciliacion_cerrada: string;
+  cierre_automatico: string;
+  funcionario: string;
+};
+
+export function comoRecaudoLote(r: Record<string, unknown>): RecaudoLote {
+  return {
+    conciliacion: String(r.conciliacion ?? ""),
+    entidad: String(r.entidad_recaudo ?? r.entidad ?? ""),
+    dia: String(r.dia ?? ""),
+    periodo_registro: String(r.periodo_registro ?? ""),
+    valor_procesado: n(r.valor_procesado),
+    num_cupones: n(r.num_cupones),
+    cupones_procesados: n(r.cupones_procesados),
+    conciliacion_cerrada: String(r.conciliacion_cerrada ?? ""),
+    cierre_automatico: String(r.cierre_automatico ?? ""),
+    funcionario: String(r.funcionario ?? ""),
+  };
+}
+
+// bi.v_recaudo_diario_mes: serie diaria comparable entre períodos.
+// `origen` distingue el mes cerrado ('cierre', desde recaudo_detalle)
+// del mes en curso ('curso', desde las conciliaciones). No son la
+// misma medición y la pantalla lo dice.
+export type RecaudoDiaMes = {
+  periodo: string;
+  dia: number | null;
+  fecha: string;
+  valor_dia: number | null;
+  valor_acumulado: number | null;
+  transacciones: number | null;
+  origen: string;
+};
+
+export function comoRecaudoDiaMes(r: Record<string, unknown>): RecaudoDiaMes {
+  return {
+    periodo: String(r.periodo ?? ""),
+    dia: n(r.dia),
+    fecha: String(r.fecha ?? ""),
+    valor_dia: n(r.valor_dia),
+    valor_acumulado: n(r.valor_acumulado),
+    transacciones: n(r.transacciones),
+    origen: String(r.origen ?? ""),
+  };
+}
+
+// bi.v_ipuf: serie histórica de pérdidas, 114 períodos desde 201701.
+// Los porcentajes vienen en puntos (13.68 = 13,68 %), no en fracción.
+export type Ipuf = {
+  periodo: string;
+  ano: number | null;
+  mes: number | null;
+  fecha: string;
+  ipuf: number | null;
+  icuf: number | null;
+  isuf: number | null;
+  isuf_meta: number | null;
+  ianc: number | null;
+  meta_ipuf: number | null;
+  ipuf_estandar: number | null;
+  ipuf_anio_corrido: number | null;
+  brecha_meta_real: number | null;
+  brecha_estandar_real: number | null;
+  agua_potable: number | null;
+  agua_facturada: number | null;
+  suscriptores: number | null;
+  perdida_total_m3: number | null;
+  perdida_total_pesos: number | null;
+  perdida_sin_admisible_m3: number | null;
+  perdida_sin_admisible_pesos: number | null;
+  perdida_sobre_meta_m3: number | null;
+  perdida_sobre_meta_pesos: number | null;
+  tarifa_m3: number | null;
+};
+
+export function comoIpuf(r: Record<string, unknown>): Ipuf {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ano: n(r.ano),
+    mes: n(r.mes),
+    fecha: String(r.fecha ?? ""),
+    ipuf: n(r.ipuf),
+    icuf: n(r.icuf),
+    isuf: n(r.isuf),
+    isuf_meta: n(r.isuf_meta),
+    ianc: n(r.ianc),
+    meta_ipuf: n(r.meta_ipuf_emdupar),
+    ipuf_estandar: n(r.ipuf_estandar),
+    ipuf_anio_corrido: n(r.ipuf_anio_corrido),
+    brecha_meta_real: n(r.brecha_meta_real),
+    brecha_estandar_real: n(r.brecha_estandar_real),
+    agua_potable: n(r.agua_potable),
+    agua_facturada: n(r.agua_facturada),
+    suscriptores: n(r.numero_de_suscriptores),
+    perdida_total_m3: n(r.perdida_total),
+    perdida_total_pesos: n(r.perdida_total_pesos),
+    perdida_sin_admisible_m3: n(r.perdida_sin_admisible),
+    perdida_sin_admisible_pesos: n(r.perdida_sin_admisible_pesos),
+    perdida_sobre_meta_m3: n(r.perdidas_superiores_meta),
+    perdida_sobre_meta_pesos: n(r.perdidas_superiores_meta_pesos),
+    tarifa_m3: n(r.tarifa_m3),
+  };
+}

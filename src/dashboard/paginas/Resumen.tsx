@@ -1,8 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { biCache } from "../cacheBi";
-import { comoRecaudoDia, type KpiAnio, type KpiMes, type RecaudoDia } from "../tipos";
+import {
+  comoRecaudoDia,
+  comoRecaudoDiaMes,
+  type KpiAnio,
+  type KpiMes,
+  type RecaudoDia,
+  type RecaudoDiaMes,
+} from "../tipos";
 import { SinDatos } from "../SinDatos";
-import { LineasPorDia, colorAnio } from "../graficas";
+import { LineasPorDia, TablaPlegable, colorAnio } from "../graficas";
 import {
   etiquetaPeriodo,
   fmtDelta,
@@ -39,6 +46,16 @@ export function Resumen({ filas, anios, periodo, comparado }: Props) {
     biCache("v_recaudo_diario_cierre")
       .then((r) => setDiario((r.datos ?? []).map(comoRecaudoDia)))
       .catch(() => setDiario([]));
+  }, []);
+
+  // Mes EN CURSO desde las conciliaciones bancarias: es la única fuente
+  // que va por delante del cierre mensual. Sirve para saber cómo va el
+  // mes que todavía no cierra, que el resto del Resumen no puede decir.
+  const [enCurso, setEnCurso] = useState<RecaudoDiaMes[]>([]);
+  useEffect(() => {
+    biCache("v_recaudo_diario_mes")
+      .then((r) => setEnCurso((r.datos ?? []).map(comoRecaudoDiaMes)))
+      .catch(() => setEnCurso([]));
   }, []);
   const porPeriodo = new Map(filas.map((f) => [f.periodo, f]));
   const sel = porPeriodo.get(periodo);
@@ -122,6 +139,39 @@ export function Resumen({ filas, anios, periodo, comparado }: Props) {
     sel.cartera_total != null && anterior?.cartera_total != null
       ? sel.cartera_total - anterior.cartera_total
       : null;
+
+  // ---- mes en curso (conciliaciones bancarias) ----
+  // No depende del período del selector: este archivo va siempre por
+  // delante del cierre, así que muestra el mes que esté cargado.
+  const mesEnCurso = enCurso.find((f) => f.origen === "curso")?.periodo ?? null;
+  const diasCurso = enCurso.filter((f) => f.origen === "curso");
+  const diaCorteCurso = diasCurso.length ? Math.max(...diasCurso.map((f) => f.dia ?? 0)) : null;
+  const acumEnCurso =
+    [...diasCurso].sort((a, b) => (b.dia ?? 0) - (a.dia ?? 0))[0]?.valor_acumulado ?? null;
+
+  const cierresCurso = [...new Set(enCurso.filter((f) => f.origen === "cierre").map((f) => f.periodo))].sort();
+  const comparativaCurso = cierresCurso
+    .map((per) => {
+      const hasta = enCurso
+        .filter((f) => f.periodo === per && (f.dia ?? 0) <= (diaCorteCurso ?? 0))
+        .sort((a, b) => (b.dia ?? 0) - (a.dia ?? 0))[0];
+      return { periodo: per, acumulado: hasta?.valor_acumulado ?? null };
+    })
+    .filter((c) => c.acumulado != null);
+
+  const anioCurso = mesEnCurso ? Number(mesEnCurso.slice(0, 4)) : anioBase;
+  const serieCursoDe = (per: string) =>
+    Array.from({ length: 31 }, (_, i) => enCurso.find((f) => f.periodo === per && f.dia === i + 1)?.valor_acumulado ?? null);
+  const seriesEnCurso = mesEnCurso
+    ? [
+        ...cierresCurso.map((per) => ({
+          nombre: etiquetaPeriodo(per),
+          color: colorAnio(Number(per.slice(0, 4)), anioCurso),
+          valores: serieCursoDe(per),
+        })),
+        { nombre: `${etiquetaPeriodo(mesEnCurso)} (en curso)`, color: "#0A2540", valores: serieCursoDe(mesEnCurso) },
+      ]
+    : [];
 
   return (
     <>
@@ -262,6 +312,58 @@ export function Resumen({ filas, anios, periodo, comparado }: Props) {
           </div>
         </div>
       </div>
+
+      {mesEnCurso && (
+        <div className="dash-fila">
+          <div className="dash-carta">
+            <h3>
+              Cómo va el mes en curso — {etiquetaPeriodo(mesEnCurso)}
+              {diaCorteCurso && <span className="dash-marca"> al día {diaCorteCurso}</span>}
+            </h3>
+            <LineasPorDia
+              series={seriesEnCurso}
+              formatoValor={fmtMillones}
+              formatoEjeY={(v) => (v / 1e9).toLocaleString("es-CO", { maximumFractionDigits: 1 }) + " mil M"}
+              diaCorte={diaCorteCurso}
+              alto={260}
+            />
+            <TablaPlegable titulo="Datos: acumulado al mismo día de corte">
+              <table className="dash-tabla num">
+                <thead>
+                  <tr><th>Período</th><th>Acumulado al día {diaCorteCurso ?? "—"}</th><th>Diferencia</th></tr>
+                </thead>
+                <tbody>
+                  <tr className="dash-fila-fuerte">
+                    <td>{etiquetaPeriodo(mesEnCurso)} <span className="dash-marca">en curso</span></td>
+                    <td className="num">{fmtMillones(acumEnCurso)}</td>
+                    <td className="num">—</td>
+                  </tr>
+                  {comparativaCurso.map((c) => {
+                    const dif = acumEnCurso != null && c.acumulado != null ? acumEnCurso - c.acumulado : null;
+                    return (
+                      <tr key={c.periodo}>
+                        <td>{etiquetaPeriodo(c.periodo)}</td>
+                        <td className="num">{fmtMillones(c.acumulado)}</td>
+                        <td className={`num ${dif != null && dif < 0 ? "dash-neg" : ""}`}>
+                          {dif == null ? "—" : `${dif >= 0 ? "+" : "−"}${fmtMillones(Math.abs(dif))}`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TablaPlegable>
+            <div className="dash-nota">
+              Esta curva viene de las conciliaciones bancarias del día, no del
+              cierre mensual: es el único dato del tablero que va por delante
+              del cierre. Las líneas de referencia son meses ya cerrados, que
+              miden el recaudo aplicado al contrato — sirven para saber si el
+              mes va bien o mal al mismo día de corte, no para cuadrar cifras
+              entre sí. El detalle por entidad está en <b>Recaudo diario</b>.
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
