@@ -247,6 +247,32 @@
   margin-right: 4px;
   vertical-align: -1px;
 }
+/* Leyenda interactiva: cada mes se prende y apaga con un clic. Solo
+   aparece como botón donde la gráfica recibe onToggle; en las demás
+   sigue siendo un <span> estático. */
+.dash-leyenda-btn {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: inherit;
+}
+.dash-leyenda-btn:hover {
+  background: var(--dash-fondo-suave, #F1F5F8);
+}
+.dash-leyenda-btn:focus-visible {
+  outline: 2px solid var(--dash-acento, #0E7C86);
+  outline-offset: 1px;
+}
+.dash-leyenda-btn.off {
+  color: var(--dash-texto-suave);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
 .dash-leyenda b {
   color: var(--dash-texto);
   font-weight: 600;

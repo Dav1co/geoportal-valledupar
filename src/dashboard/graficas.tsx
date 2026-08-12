@@ -225,26 +225,46 @@ export function LineasPorcentaje({
 // Eje X = día del mes (1..31), así que meses distintos se superponen y
 // se comparan al mismo día. Es la forma correcta de comparar un mes en
 // curso contra meses cerrados: al mismo día de corte, no al final.
+// Tres props opcionales, todas con el render de siempre por defecto:
+//   destacada : nombre de la serie protagonista. Se dibuja sólida, gruesa
+//               y por encima; las demás pasan a punteadas y finas, para
+//               que se lean como referencia de fondo.
+//   ocultas   : series apagadas. Salen del dibujo Y del cálculo del
+//               máximo, así que el eje se reajusta al encender y apagar.
+//   onToggle  : hace la leyenda interactiva. Sin ella la leyenda es
+//               estática, como antes.
 export function LineasPorDia({
   series,
   formatoValor,
   formatoEjeY,
   alto = 300,
   diaCorte,
+  destacada,
+  ocultas,
+  onToggle,
 }: {
   series: { nombre: string; color: string; valores: (number | null)[] }[]; // índice 0 = día 1
   formatoValor: (v: number) => string;
   formatoEjeY: (v: number) => string;
   alto?: number;
   diaCorte?: number | null;
+  destacada?: string;
+  ocultas?: string[];
+  onToggle?: (nombre: string) => void;
 }) {
   const { ref, tip, mover, salir } = useTip();
   const ancho = 720;
   const m = { izq: 56, der: 10, arr: 10, aba: 26 };
   const plotW = ancho - m.izq - m.der;
   const plotH = alto - m.arr - m.aba;
+  const apagada = (n: string) => (ocultas ?? []).includes(n);
+  const visibles = series.filter((s) => !apagada(s.nombre));
+  // Orden de pintado: la destacada al final, para que quede encima.
+  const enOrden = [...visibles].sort(
+    (a, b) => Number(a.nombre === destacada) - Number(b.nombre === destacada),
+  );
   const dias = Math.max(...series.map((s) => s.valores.length), 1);
-  const vals = series.flatMap((s) => s.valores.filter((v): v is number => v != null));
+  const vals = visibles.flatMap((s) => s.valores.filter((v): v is number => v != null));
   const max = Math.max(1, ...vals);
   const escX = (i: number) => m.izq + (plotW * i) / Math.max(1, dias - 1);
   const escY = (v: number) => m.arr + plotH * (1 - v / (max * 1.05));
@@ -275,15 +295,27 @@ export function LineasPorDia({
             stroke="#B3402A" strokeWidth={1} strokeDasharray="4 3"
           />
         )}
-        {series.map((s) => {
+        {enOrden.map((s) => {
+          const esta = destacada != null && s.nombre === destacada;
+          const fondo = destacada != null && !esta;
           const d = s.valores
             .map((v, i) => (v == null ? null : `${escX(i)},${escY(v)}`))
             .filter(Boolean)
             .map((p, i) => (i === 0 ? `M ${p}` : `L ${p}`))
             .join(" ");
-          return <path key={s.nombre} d={d} fill="none" stroke={s.color} strokeWidth={2} />;
+          return (
+            <path
+              key={s.nombre}
+              d={d}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={esta ? 3 : fondo ? 1.5 : 2}
+              strokeDasharray={fondo ? "5 4" : undefined}
+              strokeLinecap="round"
+            />
+          );
         })}
-        {series.map((s) =>
+        {enOrden.map((s) =>
           s.valores.map((v, i) =>
             v == null ? null : (
               <circle
@@ -298,11 +330,29 @@ export function LineasPorDia({
       </svg>
       <CapaTip tip={tip} />
       <div className="dash-leyenda">
-        {series.map((s) => (
-          <span key={s.nombre}>
-            <i style={{ background: s.color }} /> {s.nombre}
-          </span>
-        ))}
+        {series.map((s) => {
+          const off = apagada(s.nombre);
+          const contenido = (
+            <>
+              <i style={{ background: s.color, opacity: off ? 0.25 : 1 }} />
+              {s.nombre}
+            </>
+          );
+          return onToggle ? (
+            <button
+              key={s.nombre}
+              type="button"
+              className={`dash-leyenda-btn${off ? " off" : ""}`}
+              onClick={() => onToggle(s.nombre)}
+              aria-pressed={!off}
+              title={off ? `Mostrar ${s.nombre}` : `Ocultar ${s.nombre}`}
+            >
+              {contenido}
+            </button>
+          ) : (
+            <span key={s.nombre}>{contenido}</span>
+          );
+        })}
       </div>
     </div>
   );

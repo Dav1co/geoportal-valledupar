@@ -9,7 +9,7 @@ import {
   type RecaudoLote,
 } from "../tipos";
 import { etiquetaPeriodo, fmtEntero, fmtMillones, fmtPesosCompleto } from "../formato";
-import { BarrasHorizontales, LineasPorDia, TablaPlegable, colorAnio } from "../graficas";
+import { BarrasHorizontales, LineasPorDia, TablaPlegable } from "../graficas";
 
 // Pantalla del mes EN CURSO. Se alimenta de las conciliaciones bancarias
 // que entran cada día, no del cierre mensual: responde "cómo va el mes",
@@ -18,7 +18,9 @@ import { BarrasHorizontales, LineasPorDia, TablaPlegable, colorAnio } from "../g
 // La comparación contra meses anteriores se hace SIEMPRE al mismo día de
 // corte. Comparar 10 días contra meses completos no diría nada.
 
-const COLOR_CURSO = "#0A2540";
+// Único color saturado de las dos gráficas: todo lo demás es gris de
+// fondo, así que el mes en curso se identifica sin leer la leyenda.
+const COLOR_CURSO = "#0E7C86";
 
 type Props = { periodo: string; onIrAPeriodo?: (p: string) => void };
 
@@ -27,6 +29,10 @@ export function RecaudoDiario({ periodo, onIrAPeriodo }: Props) {
   const [serie, setSerie] = useState<RecaudoDiaMes[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<Record<string, string>>({});
+  // Series apagadas desde la leyenda. Vive aquí y no dentro de cada
+  // gráfica para que las dos compartan el estado: apagar julio en una
+  // lo apaga en la otra.
+  const [ocultas, setOcultas] = useState<string[]>([]);
 
   function cargar() {
     setError(null);
@@ -130,22 +136,51 @@ export function RecaudoDiario({ periodo, onIrAPeriodo }: Props) {
       ? ((acumCurso - promedioPrevios) / promedioPrevios) * 100
       : null;
 
-  // ---- series para la gráfica día × mes ----
-  const anios = cierres.map((p) => Number(p.slice(0, 4)));
-  const anioMax = Math.max(...anios, Number(enCurso.slice(0, 4)));
-  const porDia = (per: string) =>
-    Array.from({ length: 31 }, (_, i) => {
+  // ---- series para las dos gráficas día × mes ----
+  // Los meses cerrados son referencia de fondo: gris, de más claro
+  // (el más antiguo) a más oscuro. El mes en curso lleva el único
+  // color saturado, y la gráfica lo dibuja sólido, grueso y encima.
+  const grisDe = (i: number, n: number) => {
+    const t = n <= 1 ? 1 : i / (n - 1); // 0 = más antiguo
+    const l = Math.round(202 - t * 78); // 202 -> 124
+    return `rgb(${l}, ${l + 8}, ${l + 18})`;
+  };
+
+  // Último día con dato de cada período: más allá no se dibuja nada,
+  // para que el mes en curso termine en el día de corte y no caiga a
+  // cero. Dentro del rango, un día sin lote SÍ es cero recaudado.
+  const ultimoDiaDe = (per: string) =>
+    Math.max(0, ...serie.filter((f) => f.periodo === per).map((f) => f.dia ?? 0));
+
+  const porDia = (per: string, campo: "valor_acumulado" | "valor_dia") => {
+    const tope = ultimoDiaDe(per);
+    return Array.from({ length: 31 }, (_, i) => {
+      if (i + 1 > tope) return null;
       const f = serie.find((x) => x.periodo === per && x.dia === i + 1);
-      return f?.valor_acumulado ?? null;
+      if (f) return f[campo] ?? 0;
+      // Hueco dentro del mes: no hubo recaudo ese día. En el acumulado
+      // se deja nulo y la línea lo puentea (el acumulado no baja); en
+      // el diario es un cero real y así debe verse.
+      return campo === "valor_dia" ? 0 : null;
     });
-  const seriesDia = [
-    ...cierres.map((per) => ({
+  };
+
+  const nombreCurso = `${etiquetaPeriodo(enCurso)} (en curso)`;
+  const construirSeries = (campo: "valor_acumulado" | "valor_dia") => [
+    ...cierres.map((per, i) => ({
       nombre: etiquetaPeriodo(per),
-      color: colorAnio(Number(per.slice(0, 4)), anioMax),
-      valores: porDia(per),
+      color: grisDe(i, cierres.length),
+      valores: porDia(per, campo),
     })),
-    { nombre: `${etiquetaPeriodo(enCurso)} (en curso)`, color: COLOR_CURSO, valores: porDia(enCurso) },
+    { nombre: nombreCurso, color: COLOR_CURSO, valores: porDia(enCurso, campo) },
   ];
+  const seriesAcumulado = construirSeries("valor_acumulado");
+  const seriesDiario = construirSeries("valor_dia");
+
+  const alternar = (nombre: string) =>
+    setOcultas((prev) =>
+      prev.includes(nombre) ? prev.filter((n) => n !== nombre) : [...prev, nombre],
+    );
 
   // ---- por entidad bancaria ----
   const porEntidad = [...new Map(
@@ -212,23 +247,51 @@ export function RecaudoDiario({ periodo, onIrAPeriodo }: Props) {
         </div>
       </div>
 
-      <div className="dash-fila">
+      <div className="dash-fila-g3">
         <div className="dash-carta">
           <h3>Acumulado día a día: el mes en curso sobre los meses cerrados</h3>
           <LineasPorDia
-            series={seriesDia}
+            series={seriesAcumulado}
             formatoValor={fmtMillones}
             formatoEjeY={(v) => (v / 1e9).toLocaleString("es-CO", { maximumFractionDigits: 1 }) + " mil M"}
             diaCorte={diaCorte}
+            destacada={nombreCurso}
+            ocultas={ocultas}
+            onToggle={alternar}
           />
           <div className="dash-nota">
-            El eje horizontal es el día del mes, así que las curvas se
-            superponen y el mes en curso se lee contra los anteriores en el
-            mismo punto del calendario. La línea vertical marca hasta dónde
-            llega el dato de hoy: a la derecha de esa marca el mes en curso
-            todavía no existe.
+            Responde <b>cómo va el mes</b>: la distancia vertical entre la
+            línea de color y las grises al mismo día es lo que se lleva de
+            adelanto o de atraso. La marca vertical señala hasta dónde llega
+            el dato de hoy; a su derecha el mes en curso todavía no existe.
           </div>
         </div>
+
+        <div className="dash-carta">
+          <h3>Recaudo de cada día, sin acumular</h3>
+          <LineasPorDia
+            series={seriesDiario}
+            formatoValor={fmtMillones}
+            formatoEjeY={(v) => (v / 1e6).toLocaleString("es-CO", { maximumFractionDigits: 0 }) + " M"}
+            diaCorte={diaCorte}
+            destacada={nombreCurso}
+            ocultas={ocultas}
+            onToggle={alternar}
+          />
+          <div className="dash-nota">
+            La misma serie sin acumular responde otra pregunta: <b>qué días
+            entra la plata</b>. Aquí se ven los picos de vencimiento y los
+            días sin recaudo, que la curva acumulada esconde porque solo
+            puede subir o quedarse plana.
+          </div>
+        </div>
+      </div>
+
+      <div className="dash-nota" style={{ marginTop: "-6px" }}>
+        Los meses cerrados van en gris punteado y el mes en curso en color:
+        son referencia de fondo, no series equivalentes. Un clic en cualquier
+        mes de la leyenda lo enciende o lo apaga <b>en las dos gráficas a la
+        vez</b>, y el eje se reajusta a lo que quede visible.
       </div>
 
       <div className="dash-fila-g3">
