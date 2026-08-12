@@ -81,6 +81,17 @@ type Props = {
   dibujando: boolean;
   resetLazo: number;
   onLazoCerrado: (ids: number[]) => void;
+  // --- trazador de rutas (modo Rutas) ---
+  // trazando: cada clic agrega un vértice a la polilínea del recorrido.
+  // Es un modo aparte del lazo: aquel cierra un polígono para seleccionar,
+  // este dibuja una línea abierta que después captura por corredor.
+  trazando: boolean;
+  trazoLinea: [number, number][];
+  trazoRadio: number;
+  numeracion: { x: number; y: number; n: number; tipo: string }[] | null;
+  sinCapturar: { x: number; y: number }[] | null;
+  onTrazoVertice: (lng: number, lat: number) => void;
+  onTrazoCerrar: () => void;
   getVisiblesRef: { current: (() => number[]) | null };
 };
 
@@ -108,6 +119,13 @@ export function MapView({
   dibujando,
   resetLazo,
   onLazoCerrado,
+  trazando,
+  trazoLinea,
+  trazoRadio,
+  numeracion,
+  sinCapturar,
+  onTrazoVertice,
+  onTrazoCerrar,
   getVisiblesRef,
 }: Props) {
   const contenedor = useRef<HTMLDivElement>(null);
@@ -129,9 +147,29 @@ export function MapView({
   const dibujandoRef = useRef(dibujando);
   const onLazoRef = useRef(onLazoCerrado);
   const verticesRef = useRef<[number, number][]>([]);
+  const trazandoRef = useRef(trazando);
+  const onTrazoVerticeRef = useRef(onTrazoVertice);
+  const onTrazoCerrarRef = useRef(onTrazoCerrar);
 
   useEffect(() => { tokenRef.current = accessToken; }, [accessToken]);
   useEffect(() => { onLazoRef.current = onLazoCerrado; }, [onLazoCerrado]);
+  useEffect(() => { onTrazoVerticeRef.current = onTrazoVertice; }, [onTrazoVertice]);
+  useEffect(() => { onTrazoCerrarRef.current = onTrazoCerrar; }, [onTrazoCerrar]);
+
+  // Modo trazo: cursor de cruz, igual que el lazo.
+  useEffect(() => {
+    trazandoRef.current = trazando;
+    const map = mapa.current;
+    if (!map || !listo.current) return;
+    map.getCanvas().style.cursor = trazando || dibujando ? "crosshair" : "";
+  }, [trazando, dibujando]);
+
+  // Repintar la línea, el corredor, la numeración y los no capturados.
+  useEffect(() => {
+    const map = mapa.current;
+    if (!map || !listo.current) return;
+    pintarTrazo(map, trazoLinea, trazoRadio, numeracion, sinCapturar);
+  }, [trazoLinea, trazoRadio, numeracion, sinCapturar]);
   useEffect(() => {
     dibujandoRef.current = dibujando;
     const map = mapa.current;
@@ -457,6 +495,9 @@ export function MapView({
       map.addSource("ruta-linea", { type: "geojson", data: geojsonVacio() as never });
       map.addSource("ruta-puntos", { type: "geojson", data: geojsonVacio() as never });
       map.addSource("lazo", { type: "geojson", data: geojsonVacio() as never });
+      map.addSource("trazo", { type: "geojson", data: geojsonVacio() as never });
+      map.addSource("trazo-num", { type: "geojson", data: geojsonVacio() as never });
+      map.addSource("trazo-fuera", { type: "geojson", data: geojsonVacio() as never });
       // Línea del recorrido: azul los tramos normales, rojo grueso los > 100 m.
       map.addLayer({
         id: "lazo-sel", type: "circle", source: "predios", "source-layer": "predios",
@@ -477,6 +518,66 @@ export function MapView({
         id: "lazo-vertices", type: "circle", source: "lazo",
         filter: ["==", ["geometry-type"], "Point"],
         paint: { "circle-radius": 4, "circle-color": "#1e5aa8", "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 },
+      });
+
+      // ---- TRAZADOR DE RUTAS ----
+      // El corredor se dibuja como una línea muy gruesa y translúcida en
+      // vez de un polígono de buffer: un buffer real habría que
+      // recalcularlo en el cliente en cada vértice, y con 1.600 puntos se
+      // nota. El ancho se interpola por zoom para que corresponda a los
+      // metros reales (ver anchoCorredor).
+      map.addLayer({
+        id: "trazo-corredor", type: "line", source: "trazo",
+        filter: ["==", ["geometry-type"], "LineString"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#0E7C86",
+          "line-opacity": 0.18,
+          "line-width": anchoCorredor(15),
+        },
+      });
+      map.addLayer({
+        id: "trazo-linea", type: "line", source: "trazo",
+        filter: ["==", ["geometry-type"], "LineString"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#0E7C86", "line-width": 2.5 },
+      });
+      map.addLayer({
+        id: "trazo-vertices", type: "circle", source: "trazo",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-radius": 4, "circle-color": "#0E7C86",
+          "circle-stroke-color": "#fff", "circle-stroke-width": 1.5,
+        },
+      });
+      // Predios de la ruta que la línea NO tocó: rojos, para decidir qué
+      // hacer con ellos antes de exportar.
+      map.addLayer({
+        id: "trazo-fuera-capa", type: "circle", source: "trazo-fuera",
+        paint: {
+          "circle-radius": 5, "circle-color": "#B3402A",
+          "circle-stroke-color": "#fff", "circle-stroke-width": 1.2,
+          "circle-opacity": 0.9,
+        },
+      });
+      // Numeración resultante, etiquetada sobre cada predio capturado.
+      map.addLayer({
+        id: "trazo-num-punto", type: "circle", source: "trazo-num",
+        paint: {
+          "circle-radius": 7,
+          "circle-color": ["case", ["==", ["get", "tipo"], "agrupado"], "#C98A2D", "#0A2540"],
+          "circle-stroke-color": "#fff", "circle-stroke-width": 1.2,
+        },
+      });
+      map.addLayer({
+        id: "trazo-num-texto", type: "symbol", source: "trazo-num",
+        minzoom: 15,
+        layout: {
+          "text-field": ["to-string", ["get", "n"]],
+          "text-size": 10,
+          "text-allow-overlap": true,
+        },
+        paint: { "text-color": "#fff" },
       });
       map.addLayer({
         id: "ruta-linea-normal", type: "line", source: "ruta-linea",
@@ -538,6 +639,12 @@ export function MapView({
     map.on("idle", () => recontarComercial(map));
 
     map.on("dblclick", (e) => {
+      // El trazo de ruta se cierra con doble clic, igual que el lazo.
+      if (trazandoRef.current) {
+        e.preventDefault();
+        onTrazoCerrarRef.current();
+        return;
+      }
       if (!dibujandoRef.current) return;
       e.preventDefault();
       cerrarLazo(map);
@@ -554,6 +661,14 @@ export function MapView({
           map.easeTo({ center: e.lngLat, zoom: 15, duration: 800 });
           return;
         }
+      }
+
+      // MODO TRAZO (rutas): cada clic agrega un vértice al recorrido.
+      // Va antes que el lazo y que la ficha del predio: mientras se traza,
+      // el clic no debe abrir nada.
+      if (trazandoRef.current) {
+        onTrazoVerticeRef.current(e.lngLat.lng, e.lngLat.lat);
+        return;
       }
 
       // MODO DIBUJO (lazo): cada clic agrega un vértice.
@@ -1005,6 +1120,75 @@ function pintarLazo(map: maplibregl.Map, vertices: [number, number][], cerrado: 
     feats.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...vertices, vertices[0]]] } });
   }
   src.setData({ type: "FeatureCollection", features: feats } as never);
+}
+
+/**
+ * Ancho de línea que representa un corredor de `radioM` metros a cada lado.
+ *
+ * MapLibre mide line-width en píxeles, así que hay que interpolarlo por
+ * zoom. A zoom z y latitud φ, un píxel son 156543,03 · cos(φ) / 2^z metros.
+ * Se fija φ en la latitud de Valledupar (10,46°) y se dan dos paradas: el
+ * interpolador exponencial de base 2 reproduce exactamente la relación,
+ * porque la escala se duplica con cada nivel de zoom.
+ */
+function anchoCorredor(radioM: number): maplibregl.DataDrivenPropertyValueSpecification<number> {
+  const mPorPx = (z: number) => (156543.03392 * Math.cos((10.46 * Math.PI) / 180)) / 2 ** z;
+  const px = (z: number) => (2 * radioM) / mPorPx(z);
+  return [
+    "interpolate", ["exponential", 2], ["zoom"],
+    12, px(12),
+    20, px(20),
+  ] as never;
+}
+
+/** Pinta la polilínea, sus vértices, la numeración y los no capturados. */
+function pintarTrazo(
+  map: maplibregl.Map,
+  linea: [number, number][],
+  radioM: number,
+  numeracion: { x: number; y: number; n: number; tipo: string }[] | null,
+  sinCapturar: { x: number; y: number }[] | null,
+) {
+  const src = map.getSource("trazo") as maplibregl.GeoJSONSource | undefined;
+  if (src) {
+    const feats: GeoJSON.Feature[] = linea.map((c) => ({
+      type: "Feature", properties: {},
+      geometry: { type: "Point", coordinates: c },
+    }));
+    if (linea.length >= 2) {
+      feats.push({
+        type: "Feature", properties: {},
+        geometry: { type: "LineString", coordinates: linea },
+      });
+    }
+    src.setData({ type: "FeatureCollection", features: feats } as never);
+  }
+  if (map.getLayer("trazo-corredor")) {
+    map.setPaintProperty("trazo-corredor", "line-width", anchoCorredor(radioM));
+  }
+
+  const srcNum = map.getSource("trazo-num") as maplibregl.GeoJSONSource | undefined;
+  if (srcNum) {
+    srcNum.setData({
+      type: "FeatureCollection",
+      features: (numeracion ?? []).map((p) => ({
+        type: "Feature",
+        properties: { n: p.n, tipo: p.tipo },
+        geometry: { type: "Point", coordinates: [p.x, p.y] },
+      })),
+    } as never);
+  }
+
+  const srcFuera = map.getSource("trazo-fuera") as maplibregl.GeoJSONSource | undefined;
+  if (srcFuera) {
+    srcFuera.setData({
+      type: "FeatureCollection",
+      features: (sinCapturar ?? []).map((p) => ({
+        type: "Feature", properties: {},
+        geometry: { type: "Point", coordinates: [p.x, p.y] },
+      })),
+    } as never);
+  }
 }
 
 function geojsonVacio() {

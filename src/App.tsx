@@ -22,6 +22,8 @@ import { PredioPanel } from "./components/PredioPanel";
 import { Watermark } from "./components/Watermark";
 import { Admin } from "./components/Admin";
 import { Dashboard } from "./dashboard/Dashboard";
+import { TrazadorRuta, type EstadoTrazo } from "./components/TrazadorRuta";
+import type { Capturado, PuntoRuta as PuntoTrazo } from "./lib/trazado";
 import { supabase } from "./lib/supabase";
 import { api, type RutaItem, type DetalleRuta, type ExportaArgs, type BarrioHallado } from "./lib/api";
 
@@ -161,6 +163,14 @@ export default function App() {
   const [detalleRuta, setDetalleRuta] = useState<DetalleRuta | null>(null);
   const [cargandoRuta, setCargandoRuta] = useState(false);
   const [filtroCatRuta, setFiltroCatRuta] = useState<FiltroCatastroRuta>("ninguno");
+  // --- trazador de rutas ---
+  const [trazoEstado, setTrazoEstado] = useState<EstadoTrazo>("inactivo");
+  const [trazoLinea, setTrazoLinea] = useState<[number, number][]>([]);
+  const [trazoRadio, setTrazoRadio] = useState(15);
+  const [trazoNum, setTrazoNum] = useState<
+    { x: number; y: number; n: number; tipo: string }[] | null
+  >(null);
+  const [trazoFuera, setTrazoFuera] = useState<{ x: number; y: number }[] | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -1015,14 +1025,68 @@ export default function App() {
                     onChange={(e) => setRutaSel(e.target.value)}
                   >
                     <option value="">Elige una ruta…</option>
+                    {/* OJO: RutaItem.ruta YA viene como el par "ciclo|ruta"
+                        desde geoportal_rutas_lista (select ciclo||'|'||ruta
+                        as ruta). No hay que volver a componerlo: hacerlo
+                        produce "1|1|10101" y el RPC lo parte mal, dejando
+                        todas las rutas en cero puntos. */}
                     {listaRutas.map((r) => (
                       <option key={r.ruta} value={r.ruta}>
-                        Ruta {r.ruta} · ciclo {r.ciclo} · {r.predios} predios
+                        Ruta {r.ruta.split("|")[1] ?? r.ruta} · ciclo {r.ciclo} · {r.predios} predios
                       </option>
                     ))}
                   </select>
                   {cargandoRuta && <p className="contador">Cargando recorrido…</p>}
                 </div>
+
+                {/* Trazador: redibuja el orden de lectura sobre el mapa y
+                    exporta la numeración propuesta. No escribe en la base. */}
+                {rutaSel && detalleRuta && !cargandoRuta && (
+                  <div className="seccion">
+                    <span className="filtro-rotulo">Trazar orden de lectura</span>
+                    <TrazadorRuta
+                      /* rutaSel YA es "ciclo|ruta": viene así de la lista. */
+                      ciclo={rutaSel.split("|")[0]}
+                      ruta={rutaSel.split("|")[1] ?? rutaSel}
+                      puntos={detalleRuta.puntos as PuntoTrazo[]}
+                      /* Contratos de la ruta que NO tienen punto en el mapa:
+                         la lista cuenta contratos y el detalle solo trae los
+                         que cruzan con el catastro. La cobertura promedia
+                         85 % y hay rutas al 0 %. */
+                      sinUbicar={Math.max(
+                        0,
+                        (listaRutas.find((r) => r.ruta === rutaSel)?.predios ??
+                          detalleRuta.puntos.length) - detalleRuta.puntos.length,
+                      )}
+                      estado={trazoEstado}
+                      linea={trazoLinea.map(([x, y]) => ({ x, y }))}
+                      radio={trazoRadio}
+                      onRadio={setTrazoRadio}
+                      onIniciar={() => {
+                        setTrazoEstado("trazando");
+                        setTrazoLinea([]);
+                        setTrazoNum(null);
+                        setTrazoFuera(null);
+                      }}
+                      onDeshacer={() => setTrazoLinea((l) => l.slice(0, -1))}
+                      onCerrar={() => setTrazoEstado("cerrado")}
+                      onCancelar={() => {
+                        setTrazoEstado("inactivo");
+                        setTrazoLinea([]);
+                        setTrazoNum(null);
+                        setTrazoFuera(null);
+                      }}
+                      onResultado={(caps: Capturado[], fuera) => {
+                        setTrazoNum(
+                          caps.map((c) => ({
+                            x: c.x, y: c.y, n: c.consecutivoNuevo, tipo: c.tipo,
+                          })),
+                        );
+                        setTrazoFuera(fuera.map((p) => ({ x: p.x, y: p.y })));
+                      }}
+                    />
+                  </div>
+                )}
 
                 {detalleRuta && !cargandoRuta && (
                   <div className="seccion">
@@ -1151,6 +1215,13 @@ export default function App() {
               dibujando={dibujando}
               resetLazo={resetLazo}
               onLazoCerrado={(ids) => { setSeleccionLazo(ids); setDibujando(false); }}
+              trazando={modo === "rutas" && trazoEstado === "trazando"}
+              trazoLinea={trazoLinea}
+              trazoRadio={trazoRadio}
+              numeracion={modo === "rutas" ? trazoNum : null}
+              sinCapturar={modo === "rutas" ? trazoFuera : null}
+              onTrazoVertice={(lng, lat) => setTrazoLinea((l) => [...l, [lng, lat]])}
+              onTrazoCerrar={() => setTrazoEstado("cerrado")}
               getVisiblesRef={getVisiblesRef}
             />
             <Watermark email={email} />

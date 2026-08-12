@@ -866,3 +866,49 @@ body {
 .acc-res { font-size: 12px; }
 .acc-res.ok { color: #4ade80; }
 .acc-res.no { color: #fca5a5; }
+
+/* ---------------------------------------------------------------------
+   Trazador de rutas (modo Rutas). Panel para redibujar el orden de
+   lectura sobre el mapa y exportar la numeración propuesta.
+   --------------------------------------------------------------------- */
+.trazador { display: flex; flex-direction: column; gap: 10px; }
+
+.trazador-aviso {
+  border-left: 3px solid #B3402A;
+  background: #FDF3F1;
+  padding: 10px 12px;
+  border-radius: 0 4px 4px 0;
+  font-size: 12.5px;
+}
+.trazador-aviso p { margin: 6px 0 0; color: #5D4A46; }
+
+.trazador-nota { font-size: 11.5px; color: #5D6E7E; margin: 0; line-height: 1.45; }
+
+.trazador-botones { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.trazador-radio { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.trazador-radio input { width: 100%; }
+
+.trazador-resumen {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px;
+  font-size: 12px; padding: 8px 10px;
+  background: #F1F5F8; border-radius: 4px;
+}
+
+.trazador-tabla-scroll { max-height: 320px; overflow: auto; border: 1px solid #DCE5EC; border-radius: 4px; }
+.trazador-tabla-scroll table { width: 100%; font-size: 11.5px; }
+.trazador-tabla-scroll th {
+  position: sticky; top: 0; background: #F1F5F8; z-index: 1;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+}
+/* Los agrupados comparten consecutivo: se tiñen para que se lea de un
+   vistazo que varias filas son la misma puerta física. */
+.trazador-tabla-scroll tr.agrupado { background: #FDF7EC; }
+
+.trazador-acciones { display: flex; gap: 2px; white-space: nowrap; }
+.trazador-acciones button {
+  border: 1px solid #C9D4DC; background: #fff; border-radius: 3px;
+  width: 20px; height: 20px; line-height: 1; cursor: pointer; font-size: 11px;
+  color: #35485C; padding: 0;
+}
+.trazador-acciones button:hover { background: #EAF0F4; }
