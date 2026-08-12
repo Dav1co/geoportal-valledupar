@@ -884,7 +884,24 @@ body {
 
 .trazador-nota { font-size: 11.5px; color: #5D6E7E; margin: 0; line-height: 1.45; }
 
+/* Los botones usan btn-sel (accion principal) y btn-modo (secundaria),
+   los mismos del panel lateral. Ambos vienen a ancho completo porque en
+   el panel se apilan; aqui van en fila, asi que se reparte el espacio. */
 .trazador-botones { display: flex; gap: 6px; flex-wrap: wrap; }
+.trazador-botones .btn-sel,
+.trazador-botones .btn-modo {
+  flex: 1 1 auto;
+  width: auto;
+  margin-top: 0;
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+.trazador .btn-sel:disabled,
+.trazador .btn-modo:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  filter: none;
+}
 
 .trazador-radio { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .trazador-radio input { width: 100%; }
@@ -896,7 +913,16 @@ body {
 }
 
 .trazador-tabla-scroll { max-height: 320px; overflow: auto; border: 1px solid #DCE5EC; border-radius: 4px; }
-.trazador-tabla-scroll table { width: 100%; font-size: 11.5px; }
+/* La tabla se define aqui: .dash-tabla vive en la hoja del dashboard y
+   fuera de ese arbol no aplica. */
+.trazador-tabla { width: 100%; font-size: 11.5px; border-collapse: collapse; }
+.trazador-tabla th,
+.trazador-tabla td {
+  padding: 4px 6px;
+  border-bottom: 1px solid #E7EDF2;
+  text-align: left;
+}
+.trazador-tabla td.tnum { text-align: right; font-variant-numeric: tabular-nums; }
 .trazador-tabla-scroll th {
   position: sticky; top: 0; background: #F1F5F8; z-index: 1;
   font-size: 10px; text-transform: uppercase; letter-spacing: .04em;

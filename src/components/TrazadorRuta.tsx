@@ -105,7 +105,7 @@ export function TrazadorRuta({
 
       {/* ---- controles del trazo ---- */}
       {estado === "inactivo" && (
-        <button className="dash-boton" onClick={onIniciar}>
+        <button className="btn-sel" onClick={onIniciar}>
           Trazar recorrido
         </button>
       )}
@@ -122,13 +122,13 @@ export function TrazadorRuta({
             )}
           </p>
           <div className="trazador-botones">
-            <button className="dash-boton" onClick={onDeshacer} disabled={!linea.length}>
+            <button className="btn-modo" onClick={onDeshacer} disabled={!linea.length}>
               Deshacer
             </button>
-            <button className="dash-boton" onClick={onCerrar} disabled={linea.length < 2}>
+            <button className="btn-sel" onClick={onCerrar} disabled={linea.length < 2}>
               Cerrar trazo
             </button>
-            <button className="dash-boton dash-boton-suave" onClick={onCancelar}>
+            <button className="btn-modo" onClick={onCancelar}>
               Cancelar
             </button>
           </div>
@@ -165,7 +165,7 @@ export function TrazadorRuta({
           )}
 
           <div className="trazador-tabla-scroll">
-            <table className="dash-tabla">
+            <table className="trazador-tabla">
               <thead>
                 <tr>
                   <th>Nuevo</th><th>Actual</th><th>Contrato</th>
@@ -178,11 +178,11 @@ export function TrazadorRuta({
                     i === 0 || capturados[i - 1].grupo !== c.grupo;
                   return (
                     <tr key={c.contrato} className={c.tipo === "agrupado" ? "agrupado" : ""}>
-                      <td className="num">{primeroDelGrupo ? c.consecutivoNuevo : ""}</td>
-                      <td className="num">{c.consecutivoActual}</td>
+                      <td className="tnum">{primeroDelGrupo ? c.consecutivoNuevo : ""}</td>
+                      <td className="tnum">{c.consecutivoActual}</td>
                       <td>{c.contrato}</td>
                       <td>{c.tipo === "agrupado" ? "agrupado" : "único"}</td>
-                      <td className="num">{c.distanciaLinea}</td>
+                      <td className="tnum">{c.distanciaLinea}</td>
                       <td className="trazador-acciones">
                         {primeroDelGrupo && (
                           <>
@@ -213,17 +213,17 @@ export function TrazadorRuta({
           {excluidos.size > 0 && (
             <p className="trazador-nota">
               {excluidos.size} excluidos.{" "}
-              <button className="enlace" onClick={() => setExcluidos(new Set())}>
+              <button className="btn-link" onClick={() => setExcluidos(new Set())}>
                 Devolverlos
               </button>
             </p>
           )}
 
           <div className="trazador-botones">
-            <button className="dash-boton" onClick={descargar} disabled={!capturados.length}>
+            <button className="btn-sel" onClick={descargar} disabled={!capturados.length}>
               Exportar CSV
             </button>
-            <button className="dash-boton dash-boton-suave" onClick={onCancelar}>
+            <button className="btn-modo" onClick={onCancelar}>
               Empezar de nuevo
             </button>
           </div>
