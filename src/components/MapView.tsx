@@ -9,7 +9,7 @@ const CENTRO: [number, number] = [-73.2532, 10.4631];
 // Version del formato de la tesela. Subirla cada vez que cambien los campos
 // que viajan en las teselas: genera URLs nuevas y evita que la cache
 // (1 h + stale 24 h) siga sirviendo la version anterior.
-const TESELA_V = 5;
+const TESELA_V = 6;
 
 export type PredioApilado = {
   id: number;
@@ -64,6 +64,8 @@ type Props = {
   estado: FiltroEstado;
   mostrarTerrenos: boolean;
   mostrarBarrios: boolean;
+  mostrarRedAcueducto: boolean;
+  mostrarRedAlcantarillado: boolean;
   base: BaseMapa;
   modoTerrenos: boolean;
   modoActivo: ModoMapa;
@@ -102,6 +104,8 @@ export function MapView({
   estado,
   mostrarTerrenos,
   mostrarBarrios,
+  mostrarRedAcueducto,
+  mostrarRedAlcantarillado,
   base,
   modoTerrenos,
   modoActivo,
@@ -295,6 +299,41 @@ export function MapView({
             },
           },
           {
+            // Redes de servicio. Solo dibujo: sin evento de clic, sin
+            // cursor de puntero y sin ficha. La tesela solo lleva la
+            // geometría, así que no hay atributos que mostrar.
+            // minzoom 15, el mismo umbral de la tesela: a z14 las dos
+            // redes engordaban la tesela un 12,6 % y a esa distancia
+            // todavía no se distinguen las calles.
+            id: "red-acueducto",
+            type: "line",
+            source: "predios",
+            "source-layer": "red_acueducto",
+            minzoom: 15,
+            layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+            paint: {
+              "line-color": "#1E88C7",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 15, 1.2, 19, 3.2],
+              "line-opacity": 0.9,
+            },
+          },
+          {
+            id: "red-alcantarillado",
+            type: "line",
+            source: "predios",
+            "source-layer": "red_alcantarillado",
+            minzoom: 15,
+            layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+            paint: {
+              // Ocre y punteada frente al azul continuo del acueducto:
+              // se distinguen aunque coincidan sobre la misma calle.
+              "line-color": "#B5741F",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 15, 1, 19, 2.6],
+              "line-dasharray": [3, 2],
+              "line-opacity": 0.9,
+            },
+          },
+          {
             // Barrio resaltado tras buscarlo. Vacío hasta que se elige uno.
             id: "barrio-sel",
             type: "fill",
@@ -476,6 +515,7 @@ export function MapView({
       aplicarEstado(map, estado);
       aplicarTerrenos(map, mostrarTerrenos);
       aplicarBarrios(map, mostrarBarrios);
+      aplicarRedes(map, mostrarRedAcueducto, mostrarRedAlcantarillado);
       aplicarBase(map, base);
       aplicarModo(map, modoTerrenos);
       recontar(map);
@@ -785,6 +825,14 @@ export function MapView({
     if (map && listo.current) aplicarBarrios(map, mostrarBarrios);
   }, [mostrarBarrios]);
 
+  // Redes de servicio: solo se encienden y se apagan.
+  useEffect(() => {
+    const map = mapa.current;
+    if (map && listo.current) {
+      aplicarRedes(map, mostrarRedAcueducto, mostrarRedAlcantarillado);
+    }
+  }, [mostrarRedAcueducto, mostrarRedAlcantarillado]);
+
   useEffect(() => {
     const map = mapa.current;
     if (map && listo.current) aplicarBase(map, base);
@@ -978,6 +1026,11 @@ function aplicarBarrios(map: maplibregl.Map, mostrar: boolean) {
   map.setLayoutProperty("barrios-fill", "visibility", v);
   map.setLayoutProperty("barrios-linea", "visibility", v);
   map.setLayoutProperty("barrios-etiqueta", "visibility", v);
+}
+
+function aplicarRedes(map: maplibregl.Map, acueducto: boolean, alcantarillado: boolean) {
+  map.setLayoutProperty("red-acueducto", "visibility", acueducto ? "visible" : "none");
+  map.setLayoutProperty("red-alcantarillado", "visibility", alcantarillado ? "visible" : "none");
 }
 
 function aplicarTerrenos(map: maplibregl.Map, mostrar: boolean) {

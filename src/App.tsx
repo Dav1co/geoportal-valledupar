@@ -130,6 +130,9 @@ export default function App() {
   const [estado, setEstado] = useState<FiltroEstado>(URL0?.estado ?? "");
   const [mostrarTerrenos, setMostrarTerrenos] = useState(URL0?.terrenos ?? true);
   const [mostrarBarrios, setMostrarBarrios] = useState(false);
+  // Redes de servicio: solo visualización, apagadas por defecto.
+  const [mostrarRedAcu, setMostrarRedAcu] = useState(false);
+  const [mostrarRedAlc, setMostrarRedAlc] = useState(false);
   const [qBarrio, setQBarrio] = useState("");
   const [resBarrios, setResBarrios] = useState<BarrioHallado[]>([]);
   const [base, setBase] = useState<BaseMapa>(URL0?.base ?? "calles");
@@ -556,6 +559,25 @@ export default function App() {
                       onChange={(e) => setMostrarBarrios(e.target.checked)}
                     />
                     Mostrar barrios
+                  </label>
+                  {/* Redes de servicio: solo visualización. Se dibujan desde
+                      z15, el mismo umbral de la tesela, y no responden al
+                      clic: la tesela no lleva atributos. */}
+                  <label className="filtro-check">
+                    <input
+                      type="checkbox"
+                      checked={mostrarRedAcu}
+                      onChange={(e) => setMostrarRedAcu(e.target.checked)}
+                    />
+                    Mostrar red de acueducto
+                  </label>
+                  <label className="filtro-check">
+                    <input
+                      type="checkbox"
+                      checked={mostrarRedAlc}
+                      onChange={(e) => setMostrarRedAlc(e.target.checked)}
+                    />
+                    Mostrar red de alcantarillado
                   </label>
                   <input
                     className="modo-sel"
@@ -1194,6 +1216,8 @@ export default function App() {
               estado={estado}
               mostrarTerrenos={mostrarTerrenos}
               mostrarBarrios={mostrarBarrios}
+              mostrarRedAcueducto={mostrarRedAcu}
+              mostrarRedAlcantarillado={mostrarRedAlc}
               base={base}
               modoTerrenos={modoTerrenos}
               modoActivo={modo as ModoMapa}
