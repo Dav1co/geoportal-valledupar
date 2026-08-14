@@ -17,6 +17,27 @@ export function colorAnio(anio: number, anioMax: number): string {
   return COLORES_ANIO[Math.min(d, COLORES_ANIO.length - 1)];
 }
 
+// Tinta: reservada para la serie protagonista de una comparación (el
+// período elegido, o el mes en curso). El resto de la paleta queda
+// para las series de referencia.
+export const COLOR_PROTAGONISTA = COLORES_ANIO[0];
+const COLORES_FONDO = COLORES_ANIO.slice(1); // celeste, ocre, gris
+
+// Color de una serie de referencia dentro de una misma vista, con
+// `reciente` = 0 para la más cercana al presente. Recorre la paleta del
+// mockup y, cuando hay más series que tonos, da otra vuelta aclarando
+// hacia el blanco: así cada serie conserva un color propio sin
+// introducir colores nuevos. El alfa las deja traslúcidas, para que se
+// lean como fondo y no compitan con la protagonista.
+export function colorReferencia(reciente: number, alfa = 0.75): string {
+  const base = COLORES_FONDO[reciente % COLORES_FONDO.length];
+  const vuelta = Math.floor(reciente / COLORES_FONDO.length);
+  const mezcla = Math.min(0.5, 0.3 * vuelta);
+  const claro = (c: number) => Math.round(c + (255 - c) * mezcla);
+  const [r, g, b] = [1, 3, 5].map((i) => claro(parseInt(base.slice(i, i + 2), 16)));
+  return `rgba(${r}, ${g}, ${b}, ${alfa})`;
+}
+
 export const MESES_CORTO = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 // ---------- tooltip compartido ----------

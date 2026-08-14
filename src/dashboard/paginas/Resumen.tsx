@@ -9,7 +9,13 @@ import {
   type RecaudoDiaMes,
 } from "../tipos";
 import { SinDatos } from "../SinDatos";
-import { LineasPorDia, TablaPlegable, colorAnio } from "../graficas";
+import {
+  COLOR_PROTAGONISTA,
+  LineasPorDia,
+  TablaPlegable,
+  colorAnio,
+  colorReferencia,
+} from "../graficas";
 import {
   etiquetaPeriodo,
   fmtDelta,
@@ -126,7 +132,7 @@ export function Resumen({ filas, anios, periodo, comparado }: Props) {
   };
   const seriesDiarias = periodosDiarios.includes(periodo)
     ? [
-        { nombre: etiquetaPeriodo(periodo), color: "#0A2540", valores: serieDe(periodo) },
+        { nombre: etiquetaPeriodo(periodo), color: COLOR_PROTAGONISTA, valores: serieDe(periodo) },
         ...previos.map((p, i) => ({
           nombre: etiquetaPeriodo(p),
           color: colorAnio(anioBase - (previos.length - i), anioBase),
@@ -159,17 +165,23 @@ export function Resumen({ filas, anios, periodo, comparado }: Props) {
     })
     .filter((c) => c.acumulado != null);
 
-  const anioCurso = mesEnCurso ? Number(mesEnCurso.slice(0, 4)) : anioBase;
   const serieCursoDe = (per: string) =>
     Array.from({ length: 31 }, (_, i) => enCurso.find((f) => f.periodo === per && f.dia === i + 1)?.valor_acumulado ?? null);
+  // Aquí todos los meses cerrados caen dentro del mismo año, así que
+  // colorearlos por año los dejaba a todos del mismo tono: siete líneas
+  // iguales y el mes en curso perdido entre ellas. Se colorean por
+  // cercanía al presente con la misma paleta del mockup que usa la
+  // gráfica de arriba, y la tinta queda para el mes en curso, que la
+  // gráfica dibuja sólido, grueso y encima (`destacada`).
+  const nombreCurso = mesEnCurso ? `${etiquetaPeriodo(mesEnCurso)} (en curso)` : "";
   const seriesEnCurso = mesEnCurso
     ? [
-        ...cierresCurso.map((per) => ({
+        ...cierresCurso.map((per, i) => ({
           nombre: etiquetaPeriodo(per),
-          color: colorAnio(Number(per.slice(0, 4)), anioCurso),
+          color: colorReferencia(cierresCurso.length - 1 - i), // 0 = el más reciente
           valores: serieCursoDe(per),
         })),
-        { nombre: `${etiquetaPeriodo(mesEnCurso)} (en curso)`, color: "#0A2540", valores: serieCursoDe(mesEnCurso) },
+        { nombre: nombreCurso, color: COLOR_PROTAGONISTA, valores: serieCursoDe(mesEnCurso) },
       ]
     : [];
 
@@ -325,6 +337,7 @@ export function Resumen({ filas, anios, periodo, comparado }: Props) {
               formatoValor={fmtMillones}
               formatoEjeY={(v) => (v / 1e9).toLocaleString("es-CO", { maximumFractionDigits: 1 }) + " mil M"}
               diaCorte={diaCorteCurso}
+              destacada={nombreCurso}
               alto={260}
             />
             <TablaPlegable titulo="Datos: acumulado al mismo día de corte">
