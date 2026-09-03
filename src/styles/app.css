@@ -211,6 +211,19 @@ body {
 }
 .filtro-check input { accent-color: var(--azul); width: 15px; height: 15px; }
 
+/* Casillas de estrato: fila compacta de seis. Deshabilitadas fuera del
+   uso Residencial — se ven apagadas y no responden, en vez de
+   desaparecer, para que se entienda que la opción existe pero no aplica. */
+.filtro-estratos { display: flex; gap: 10px; flex-wrap: wrap; }
+.filtro-estratos .filtro-check { gap: 5px; }
+.filtro-estratos-off { opacity: 0.45; }
+.filtro-estratos-off .filtro-check { cursor: not-allowed; }
+.filtro-estratos-off .filtro-check input { cursor: not-allowed; }
+.filtro-pista {
+  display: block; margin-top: 6px; font-size: 11.5px;
+  color: var(--muted); line-height: 1.35;
+}
+
 /* ---------- contador dinámico ---------- */
 .contador {
   margin: 8px 0 10px; padding: 8px 10px;

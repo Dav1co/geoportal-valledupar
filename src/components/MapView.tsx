@@ -9,7 +9,7 @@ const CENTRO: [number, number] = [-73.2532, 10.4631];
 // Version del formato de la tesela. Subirla cada vez que cambien los campos
 // que viajan en las teselas: genera URLs nuevas y evita que la cache
 // (1 h + stale 24 h) siga sirviendo la version anterior.
-const TESELA_V = 6;
+const TESELA_V = 7;
 
 export type PredioApilado = {
   id: number;

@@ -67,6 +67,24 @@ const OPC_CARTERA: OpcionFiltro[] = [
   { valor: "cronica", etiqueta: "Mora crónica (más de 60)" },
 ];
 
+// Uso del predio. El valor es el texto EXACTO de predios_comercial.categoria
+// (viene con prefijo numérico del origen); la etiqueta es lo que se lee.
+const USO_RESIDENCIAL = "1 - Residencial";
+const OPC_USO: OpcionFiltro[] = [
+  { valor: "todos", etiqueta: "Todos" },
+  { valor: USO_RESIDENCIAL, etiqueta: "Residencial" },
+  { valor: "3 - Comercial", etiqueta: "Comercial" },
+  { valor: "2 - Industrial", etiqueta: "Industrial" },
+  { valor: "5 - Oficial", etiqueta: "Oficial" },
+  { valor: "9 - Especial", etiqueta: "Especial" },
+];
+
+// Estratos, solo válidos en Residencial. En los demás usos `subcategoria`
+// existe pero significa otra cosa: hay 7.438 predios comerciales con
+// subcategoría 1 que no son estrato 1. Por eso las casillas se deshabilitan
+// fuera de Residencial en vez de filtrar por un dato que no es comparable.
+const ESTRATOS = ["1", "2", "3", "4", "5", "6"];
+
 const DESC_MODO: Record<Modo, string> = {
   explorar: "Busca predios, cambia el mapa base y activa capas.",
   focalizacion: "Aísla predios sin contrato y resalta estados del predio.",
@@ -145,6 +163,8 @@ export default function App() {
   const [fFacturacion, setFFacturacion] = useState("todos");
   const [fConsumo, setFConsumo] = useState("todos");
   const [fCartera, setFCartera] = useState("todos");
+  const [fUso, setFUso] = useState("todos");
+  const [fEstratos, setFEstratos] = useState<string[]>([]);
   const [fLado, setFLado] = useState<"aumentos" | "reducciones" | "sin_consumo">("aumentos");
   const [fCambio, setFCambio] = useState("todos");
   const [conteoCom, setConteoCom] = useState<ConteoComercial>({ disponible: false, total: 0 });
@@ -355,6 +375,15 @@ export default function App() {
         conds.push(["==", ["get", "tramo_mora"], fCartera]);
       }
     }
+    if (fUso !== "todos") {
+      conds.push(["==", ["get", "categoria"], fUso]);
+      // El estrato solo se cruza con Residencial. Fuera de ahí la
+      // subcategoría no es estrato y filtrar por ella daría un resultado
+      // que parece correcto y no lo es.
+      if (fUso === USO_RESIDENCIAL && fEstratos.length > 0) {
+        conds.push(["any", ...fEstratos.map((e) => ["==", ["get", "subcategoria"], e])]);
+      }
+    }
     if (fCiclo !== "todos") {
       conds.push(["==", ["get", "ciclo"], fCiclo]);
     }
@@ -402,7 +431,32 @@ export default function App() {
   const filtroComercial = modo === "comercial" ? construirFiltroComercial() : null;
   const puntosRuta: PuntoRutaMap[] | null =
     modo === "rutas" && detalleRuta ? detalleRuta.puntos : null;
-  const hayFiltrosCom = fMedicion !== "todos" || fFacturacion !== "todos" || fConsumo !== "todos" || fCartera !== "todos" || fCiclo !== "todos" || fBarrio !== "" || fConsumoMax.trim() !== "";
+  // Todo filtro que entre en construirFiltroComercial tiene que estar
+  // también aquí y en limpiarComercial. Si falta, el contador dice "sin
+  // filtros" mientras el mapa sí está filtrando, y "limpiar" deja el
+  // filtro puesto sin que se note.
+  const hayFiltrosCom =
+    fMedicion !== "todos" || fFacturacion !== "todos" || fConsumo !== "todos" ||
+    fCartera !== "todos" || fCiclo !== "todos" || fBarrio !== "" ||
+    fConsumoMax.trim() !== "" || fUso !== "todos" ||
+    fSemaforo !== "todos" || fEdadMed !== "todos" || fPago !== "todos" ||
+    fCausal !== "todos" || fCambio !== "todos";
+
+  // Las casillas de estrato solo viven bajo Residencial.
+  const estratoHabilitado = fUso === USO_RESIDENCIAL;
+
+  // Al salir de Residencial se limpia la selección de estratos: dejarla
+  // guardada haría que reaparecieran filtrando al volver, sin que se vea.
+  function cambiarUso(v: string) {
+    setFUso(v);
+    if (v !== USO_RESIDENCIAL) setFEstratos([]);
+  }
+
+  function alternarEstrato(e: string) {
+    setFEstratos((prev) =>
+      prev.includes(e) ? prev.filter((x) => x !== e) : [...prev, e],
+    );
+  }
 
   function limpiarComercial() {
     setFConsumoMax("");
@@ -411,6 +465,13 @@ export default function App() {
     setFConsumo("todos");
     setFCartera("todos");
     setFCiclo("todos");
+    setFUso("todos");
+    setFEstratos([]);
+    setFSemaforo("todos");
+    setFEdadMed("todos");
+    setFPago("todos");
+    setFCausal("todos");
+    setFCambio("todos");
     setFBarrio("");
     setBarrioTexto("");
   }
@@ -768,6 +829,50 @@ export default function App() {
                       <option key={o.valor} value={o.valor}>{o.etiqueta}</option>
                     ))}
                   </select>
+                </div>
+                <div className="seccion">
+                  <span className="filtro-rotulo">Uso</span>
+                  <select
+                    className="filtro-select"
+                    value={fUso}
+                    onChange={(e) => cambiarUso(e.target.value)}
+                  >
+                    {OPC_USO.map((o) => (
+                      <option key={o.valor} value={o.valor}>{o.etiqueta}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="seccion">
+                  <span className="filtro-rotulo">Estrato</span>
+                  <div
+                    className={`filtro-estratos${estratoHabilitado ? "" : " filtro-estratos-off"}`}
+                  >
+                    {ESTRATOS.map((e) => (
+                      <label
+                        key={e}
+                        className="filtro-check"
+                        title={
+                          estratoHabilitado
+                            ? `Estrato ${e}`
+                            : "El estrato solo aplica al uso Residencial"
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={!estratoHabilitado}
+                          checked={fEstratos.includes(e)}
+                          onChange={() => alternarEstrato(e)}
+                        />
+                        {e}
+                      </label>
+                    ))}
+                  </div>
+                  {!estratoHabilitado && (
+                    <span className="filtro-pista">
+                      Solo aplica al uso Residencial: en los demás usos la
+                      subcategoría no es estrato.
+                    </span>
+                  )}
                 </div>
                 <div className="seccion">
                   <span className="filtro-rotulo">Ciclo</span>
