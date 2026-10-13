@@ -37,6 +37,14 @@ export function fmtPct(v: number | null): string {
   return `${v.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
 }
 
+// IPUF: m³ por suscriptor-mes, NO un porcentaje. "13,68 m³/susc·mes".
+// conUnidad=false deja solo el número (encabezados de tabla que ya traen la unidad).
+export function fmtIpuf(v: number | null, conUnidad = true): string {
+  if (v == null) return "—";
+  const n = v.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return conUnidad ? `${n} m³/susc·mes` : n;
+}
+
 // Diferencia entre dos valores: "+$ 12,3 M (+2,1 %)".
 export function fmtDelta(
   actual: number | null,

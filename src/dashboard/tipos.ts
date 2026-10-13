@@ -731,7 +731,8 @@ export function comoRecaudoDiaMes(r: Record<string, unknown>): RecaudoDiaMes {
 }
 
 // bi.v_ipuf: serie histórica de pérdidas, 114 períodos desde 201701.
-// Los porcentajes vienen en puntos (13.68 = 13,68 %), no en fracción.
+// El IPUF, el ICUF, el ISUF y las referencias del IPUF (meta, estándar,
+// año tarifario) vienen en m³/suscriptor-mes (13.68), NO en porcentaje.
 export type Ipuf = {
   periodo: string;
   ano: number | null;

@@ -165,21 +165,34 @@ export function LineasPorcentaje({
   etiquetas,
   series,
   alto = 300,
+  formatoTick = (t) => `${t.toLocaleString("es-CO", { maximumFractionDigits: 0 })} %`,
+  formatoValor = (v) => `${v.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`,
+  tituloY,
+  sinTope = false,
+  paso = 5,
 }: {
   etiquetas: string[];
   series: SerieLinea[];
   alto?: number;
+  // Por defecto la gráfica es de porcentajes (eje 0–100, ticks y tooltip con "%").
+  // Para otra unidad (p. ej. IPUF en m³/susc·mes): formatos propios, sin tope de 100,
+  // y `paso` = múltiplo al que se redondean los límites del eje.
+  formatoTick?: (t: number) => string;
+  formatoValor?: (v: number) => string;
+  tituloY?: string;
+  sinTope?: boolean;
+  paso?: number;
 }) {
   const { ref, tip, mover, salir } = useTip();
   const ancho = 720;
-  const m = { izq: 44, der: 10, arr: 10, aba: 30 };
+  const m = { izq: 44, der: 10, arr: tituloY ? 24 : 10, aba: 30 };
   const plotW = ancho - m.izq - m.der;
   const plotH = alto - m.arr - m.aba;
   const vals = series.flatMap((s) => s.valores.filter((v): v is number => v != null));
   const crudoMin = Math.min(...vals), crudoMax = Math.max(...vals);
   const margen = Math.max(1, (crudoMax - crudoMin) * 0.15);
-  const min = Math.max(0, Math.floor((crudoMin - margen) / 5) * 5);
-  const max = Math.min(100, Math.ceil((crudoMax + margen) / 5) * 5);
+  const min = Math.max(0, Math.floor((crudoMin - margen) / paso) * paso);
+  const max = Math.min(sinTope ? Infinity : 100, Math.ceil((crudoMax + margen) / paso) * paso);
   const escX = (i: number) =>
     m.izq + (etiquetas.length <= 1 ? plotW / 2 : (plotW * i) / (etiquetas.length - 1));
   const escY = (v: number) => m.arr + plotH * (1 - (v - min) / (max - min || 1));
@@ -189,11 +202,14 @@ export function LineasPorcentaje({
   return (
     <div ref={ref} className="dash-grafica" onMouseLeave={salir}>
       <svg viewBox={`0 0 ${ancho} ${alto}`} style={{ width: "100%", height: "auto" }} role="img">
+        {tituloY ? (
+          <text x={m.izq - 6} y={11} fontSize={10} fill="#5D6E7E">{tituloY}</text>
+        ) : null}
         {ticks.map((t, i) => (
           <g key={i}>
             <line x1={m.izq} x2={ancho - m.der} y1={escY(t)} y2={escY(t)} stroke="#EAF0F4" strokeWidth={1} />
             <text x={m.izq - 6} y={escY(t) + 3.5} textAnchor="end" fontSize={10} fill="#5D6E7E">
-              {t.toLocaleString("es-CO", { maximumFractionDigits: 0 })} %
+              {formatoTick(t)}
             </text>
           </g>
         ))}
@@ -223,7 +239,7 @@ export function LineasPorcentaje({
                 r={9}
                 fill="transparent"
                 onMouseMove={(e) =>
-                  mover(e, `${etiquetas[i]} · ${s.nombre}`, `${v.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`)
+                  mover(e, `${etiquetas[i]} · ${s.nombre}`, formatoValor(v))
                 }
               />
             ),

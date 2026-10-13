@@ -6,6 +6,7 @@ import {
   etiquetaCorta,
   etiquetaPeriodo,
   fmtEntero,
+  fmtIpuf,
   fmtMillones,
   fmtPct,
 } from "../formato";
@@ -15,8 +16,10 @@ import { BarrasMensuales, LineasPorcentaje, TablaPlegable, colorAnio } from "../
 // enero de 2017, en su propio archivo y con un mes de rezago respecto
 // al resto del tablero.
 //
-// El IPUF es un índice en puntos (13,68 = 13,68 %), no una fracción, y
-// se juzga contra dos referencias distintas que el origen ya trae:
+// El IPUF, el ICUF y el ISUF son m³ por suscriptor-mes (13,68 m³/susc·mes),
+// NO porcentajes (ISUF = ICUF + IPUF, verificado en los 117 períodos); solo
+// el IANC y "% facturada sobre potabilizada" son porcentajes. El IPUF se
+// juzga contra dos referencias distintas que el origen ya trae:
 // la META de EMDUPAR (compromiso propio) y el ESTÁNDAR regulatorio.
 
 const COLOR_IPUF = "#0A2540";
@@ -75,16 +78,16 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
   const hace12 = idx >= 12 ? cronologico[idx - 12] : undefined;
 
   const sobreMeta = sel.ipuf != null && sel.meta_ipuf != null && sel.ipuf > sel.meta_ipuf;
-  const deltaPp = (a: number | null, b: number | null) =>
+  const deltaIpuf = (a: number | null, b: number | null) =>
     a == null || b == null
       ? "—"
-      : `${a - b >= 0 ? "+" : "−"}${Math.abs(a - b).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pp`;
+      : `${a - b >= 0 ? "+" : "−"}${fmtIpuf(Math.abs(a - b))}`;
 
   // Índice mensual contra sus dos referencias, serie completa.
   const etiquetas = cronologico.map((f) => etiquetaCorta(f.periodo));
   const seriesIndice = [
     { nombre: "IPUF real", color: COLOR_IPUF, valores: cronologico.map((f) => f.ipuf) },
-    { nombre: "IPUF año corrido", color: COLOR_ANIO_CORRIDO, valores: cronologico.map((f) => f.ipuf_anio_corrido) },
+    { nombre: "IPUF del año tarifario", color: COLOR_ANIO_CORRIDO, valores: cronologico.map((f) => f.ipuf_anio_corrido) },
     { nombre: "Meta EMDUPAR", color: COLOR_META, valores: cronologico.map((f) => f.meta_ipuf) },
     { nombre: "Estándar regulatorio", color: COLOR_ESTANDAR, valores: cronologico.map((f) => f.ipuf_estandar) },
   ];
@@ -110,9 +113,9 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
       <div className="dash-kpis">
         <div className={`dash-carta dash-kpi ${sobreMeta ? "dash-kpi-mal" : ""}`}>
           <div className="dash-eti">IPUF del mes</div>
-          <div className="dash-valor num">{fmtPct(sel.ipuf)}</div>
+          <div className="dash-valor num">{fmtIpuf(sel.ipuf)}</div>
           <div className="dash-sub2">
-            Meta {fmtPct(sel.meta_ipuf)}{" "}
+            Meta {fmtIpuf(sel.meta_ipuf)}{" "}
             <span className={`dash-semaforo ${sobreMeta ? "rojo" : "verde"}`}>
               {sobreMeta ? "sobre la meta" : "en meta"}
             </span>
@@ -121,17 +124,17 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
 
         <div className="dash-carta dash-kpi">
           <div className="dash-eti">Contra el mes anterior</div>
-          <div className="dash-valor num">{deltaPp(sel.ipuf, anterior?.ipuf ?? null)}</div>
+          <div className="dash-valor num">{deltaIpuf(sel.ipuf, anterior?.ipuf ?? null)}</div>
           <div className="dash-sub2">
-            {anterior ? `${etiquetaPeriodo(anterior.periodo)}: ${fmtPct(anterior.ipuf)}` : "Sin mes previo"}
+            {anterior ? `${etiquetaPeriodo(anterior.periodo)}: ${fmtIpuf(anterior.ipuf)}` : "Sin mes previo"}
           </div>
         </div>
 
         <div className="dash-carta dash-kpi">
           <div className="dash-eti">Contra el mismo mes del año pasado</div>
-          <div className="dash-valor num">{deltaPp(sel.ipuf, hace12?.ipuf ?? null)}</div>
+          <div className="dash-valor num">{deltaIpuf(sel.ipuf, hace12?.ipuf ?? null)}</div>
           <div className="dash-sub2">
-            {hace12 ? `${etiquetaPeriodo(hace12.periodo)}: ${fmtPct(hace12.ipuf)}` : "Sin doce meses de historia"}
+            {hace12 ? `${etiquetaPeriodo(hace12.periodo)}: ${fmtIpuf(hace12.ipuf)}` : "Sin doce meses de historia"}
           </div>
         </div>
 
@@ -158,25 +161,33 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
       <div className="dash-fila">
         <div className="dash-carta">
           <h3>El índice contra sus dos referencias, mes a mes</h3>
-          <LineasPorcentaje etiquetas={etiquetas} series={seriesIndice} />
+          <LineasPorcentaje
+            etiquetas={etiquetas}
+            series={seriesIndice}
+            tituloY="m³/susc·mes"
+            formatoTick={(t) => t.toLocaleString("es-CO", { maximumFractionDigits: 0 })}
+            formatoValor={fmtIpuf}
+            sinTope
+            paso={4}
+          />
           <TablaPlegable titulo="Datos: índices por período">
             <table className="dash-tabla num">
               <thead>
                 <tr>
-                  <th>Período</th><th>IPUF</th><th>Año corrido</th><th>Meta</th>
-                  <th>Estándar</th><th>ICUF</th><th>ISUF</th><th>IANC</th>
+                  <th>Período</th><th>IPUF (m³/susc·mes)</th><th>Año tarifario</th><th>Meta</th>
+                  <th>Estándar</th><th>ICUF (m³/susc·mes)</th><th>ISUF (m³/susc·mes)</th><th>IANC</th>
                 </tr>
               </thead>
               <tbody>
                 {[...cronologico].reverse().map((f) => (
                   <tr key={f.periodo} className={f.periodo === periodo ? "dash-fila-fuerte" : ""}>
                     <td>{etiquetaPeriodo(f.periodo)}</td>
-                    <td className="num">{fmtPct(f.ipuf)}</td>
-                    <td className="num">{fmtPct(f.ipuf_anio_corrido)}</td>
-                    <td className="num">{fmtPct(f.meta_ipuf)}</td>
-                    <td className="num">{fmtPct(f.ipuf_estandar)}</td>
-                    <td className="num">{fmtPct(f.icuf)}</td>
-                    <td className="num">{fmtPct(f.isuf)}</td>
+                    <td className="num">{fmtIpuf(f.ipuf, false)}</td>
+                    <td className="num">{fmtIpuf(f.ipuf_anio_corrido, false)}</td>
+                    <td className="num">{fmtIpuf(f.meta_ipuf, false)}</td>
+                    <td className="num">{fmtIpuf(f.ipuf_estandar, false)}</td>
+                    <td className="num">{fmtIpuf(f.icuf, false)}</td>
+                    <td className="num">{fmtIpuf(f.isuf, false)}</td>
                     <td className="num">{fmtPct(f.ianc)}</td>
                   </tr>
                 ))}
@@ -184,10 +195,11 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
             </table>
           </TablaPlegable>
           <div className="dash-nota">
-            El eje se ajusta al rango observado, no a 0–100. La <b>meta</b> es
+            El eje se ajusta al rango observado. La <b>meta</b> es
             el compromiso de EMDUPAR y el <b>estándar</b> el de la regulación:
             la distancia entre las dos líneas grises y la azul es el tamaño
-            del problema, y la verde dice si el año va corrigiendo o no.
+            del problema. La verde es el <b>IPUF del año tarifario</b>: un
+            valor fijo por año, no un acumulado que se va sumando.
           </div>
         </div>
       </div>
@@ -242,7 +254,7 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
                 <td>Consumo facturado por suscriptor</td>
                 <td className="num">
                   {sel.agua_facturada != null && sel.suscriptores
-                    ? `${(sel.agua_facturada / sel.suscriptores).toLocaleString("es-CO", { maximumFractionDigits: 1 })} m³`
+                    ? fmtIpuf(sel.agua_facturada / sel.suscriptores)
                     : "—"}
                 </td>
               </tr>
