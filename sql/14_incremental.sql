@@ -147,13 +147,13 @@ declare n integer;
 begin
   delete from bi.v_recaudo_detalle_dim where periodo = p_periodo;
   insert into bi.v_recaudo_detalle_dim
-  select periodo, bi.f_fecha(fecha_grabacion), bi.f_num(concepto)::int,
+  select periodo, bi.f_fecha(fecha_grabacion), coalesce(bi.f_num(concepto_id), bi.f_num(concepto))::int,
          sum(bi.f_num(valor_recaudo)), count(*)
   from hechos.recaudo_detalle
   where periodo = p_periodo
     and bi.f_fecha(fecha_grabacion) is not null
-    and bi.f_num(concepto) is not null
-  group by periodo, bi.f_fecha(fecha_grabacion), bi.f_num(concepto)::int;
+    and coalesce(bi.f_num(concepto_id), bi.f_num(concepto)) is not null
+  group by periodo, bi.f_fecha(fecha_grabacion), coalesce(bi.f_num(concepto_id), bi.f_num(concepto))::int;
   get diagnostics n = row_count;
   return n;
 end $$;
