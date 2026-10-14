@@ -149,3 +149,89 @@ end $function$;
 --   anterior (sin la rama v_consumo_ciclo_dim) desde sql/25_notas_dim.sql
 -- drop function bi.recalcular_consumo_ciclo_dim(text);
 -- drop table bi.v_consumo_ciclo_dim;
+
+-- =====================================================================
+-- A2 · CONSUMO COBRADO (consumo_cargos) junto al consumo medido
+-- ---------------------------------------------------------------------
+-- Verificado por David en 202609 contra facturacion_contratos (concepto
+-- "2- CONSUMO ACUEDUCTO", una fila por contrato, 107.549 contratos,
+-- 1.785.395 m3): facturacion_sspd.consumo_periodo coincide con esa linea en
+-- los 107.548 contratos comunes; consumo_cargos coincide en 107.543 de
+-- 107.549. Los 4.310 contratos sin linea 2 son los de consumo cero. Control
+-- repetido en solo lectura para 202602-202609: ningun contrato sin linea 2
+-- tiene cargos > 0; sspd = linea 2 sin una sola diferencia (202606-202609);
+-- m3 de cargos vs linea 2 dentro de 0,1 % (maximo 0,092 % en 202604).
+--
+-- SIGNIFICADO DE LAS COLUMNAS (las anteriores NO cambian):
+--   · m3_facturados / contratos_consumo_cero / contratos_consumo_nulo:
+--     miden consumo_facturado (el consumo "medido" que reporta el sistema).
+--   · m3_cargos / contratos_cargos_cero / contratos_cargos_nulo: miden
+--     consumo_cargos (el consumo COBRADO en la factura; coincide con
+--     sspd.consumo_periodo en >99,97 % de los contratos). consumo_cargos
+--     nunca es NULL: contratos_cargos_nulo vale 0.
+--   · contratos_cobrado_sin_medido: consumo_facturado nulo o 0 con
+--     consumo_cargos > 0 (cobrado por promedio sin consumo medido).
+--
+-- SALVEDADES (observaciones, sin correccion):
+--   · 202601 se sale del patron: 293 contratos "cobrado sin medido" contra
+--     58 a 98 en los demas periodos (218 con consumo_facturado vacio y
+--     cargos > 0). Es el periodo de los archivos con nombre _202612.
+--   · HIPOTESIS para el Paso 2: dos contratos con modificacion directa
+--     ([FOVC]/[FAJF], "Modificacion Directa de Consumos") sugieren que
+--     consumo_facturado es el consumo PREVIO a la modificacion directa,
+--     mientras consumo_cargos coincide con sspd y con la linea 2.
+--   · seis contratos de 202609 con cargos = 0 y sspd = linea 2 > 0: no se
+--     corrigen; no comparten ciclo,
+--     observacion ni metodo.
+-- ---------------------------------------------------------------------
+alter table bi.v_consumo_ciclo_dim
+  add column m3_cargos                    numeric,
+  add column contratos_cargos_cero        bigint,
+  add column contratos_cargos_nulo        bigint,
+  add column contratos_cobrado_sin_medido bigint;
+-- (el ACL de la tabla no cambia con el ALTER)
+
+create or replace function bi.recalcular_consumo_ciclo_dim(p_periodo text)
+returns integer language plpgsql as $$
+declare n integer;
+begin
+  delete from bi.v_consumo_ciclo_dim where periodo = p_periodo;
+  insert into bi.v_consumo_ciclo_dim (
+    periodo, ciclo, categoria, subcategoria, con_medidor, contratos, contratos_consumo_cero,
+    contratos_consumo_nulo, m3_facturados, facturado_acueducto, contratos_en_sspd,
+    m3_cargos, contratos_cargos_cero, contratos_cargos_nulo, contratos_cobrado_sin_medido)
+  select c.periodo,
+    c.ciclo,
+    case when btrim(coalesce(regexp_replace(btrim(c.categoria),'^-?\d+\s+',''),'')) !~ '[A-Za-z0-9]' or upper(btrim(regexp_replace(btrim(c.categoria),'^-?\d+\s+',''))) = 'NULO' then '(sin dato)' else btrim(regexp_replace(btrim(c.categoria),'^-?\d+\s+','')) end as categoria,
+    case when btrim(coalesce(regexp_replace(btrim(c.subcategoria),'^-?\d+\s+',''),'')) !~ '[A-Za-z0-9]' or upper(btrim(regexp_replace(btrim(c.subcategoria),'^-?\d+\s+',''))) = 'NULO' then '(sin dato)' else btrim(regexp_replace(btrim(c.subcategoria),'^-?\d+\s+','')) end as subcategoria,
+    (nullif(btrim(c.medidor),'') is not null and upper(btrim(c.medidor)) not in ('NO APLICA','0','00','N/A','NA','NULL','NONE','NAN','-','--')) as con_medidor,
+    count(distinct c.contrato) as contratos,
+    count(distinct c.contrato) filter (where bi.f_num(c.consumo_facturado) = 0) as contratos_consumo_cero,
+    count(distinct c.contrato) filter (where bi.f_num(c.consumo_facturado) is null) as contratos_consumo_nulo,
+    sum(bi.f_num(c.consumo_facturado)) as m3_facturados,
+    sum(bi.f_num(s.total_facturado)) as facturado_acueducto,
+    count(distinct c.contrato) filter (where s.contrato is not null) as contratos_en_sspd,
+    sum(bi.f_num(c.consumo_cargos)) as m3_cargos,
+    count(distinct c.contrato) filter (where bi.f_num(c.consumo_cargos) = 0) as contratos_cargos_cero,
+    count(distinct c.contrato) filter (where bi.f_num(c.consumo_cargos) is null) as contratos_cargos_nulo,
+    count(distinct c.contrato) filter (where (bi.f_num(c.consumo_facturado) is null or bi.f_num(c.consumo_facturado) = 0)
+                                        and bi.f_num(c.consumo_cargos) > 0) as contratos_cobrado_sin_medido
+  from hechos.consumo_metodo c
+  left join hechos.facturacion_sspd s on s.contrato = c.contrato and s.periodo = c.periodo
+  where c.periodo = p_periodo
+  group by 1,2,3,4,5;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+-- (create or replace conserva el ACL de la funcion: REVOKE de A sigue vigente)
+
+-- Recarga: select bi.recalcular_consumo_ciclo_dim('202601'); ... 202602..202605, 202607..202609
+-- Comprobaciones: EXCEPT en ambos sentidos contra la consulta de referencia
+-- ampliada, sumas contra consumo_metodo (sum(consumo_cargos)), ACL igual.
+
+-- ROLLBACK de A2:
+-- alter table bi.v_consumo_ciclo_dim drop column m3_cargos, drop column contratos_cargos_cero,
+--   drop column contratos_cargos_nulo, drop column contratos_cobrado_sin_medido;
+-- y volver a crear bi.recalcular_consumo_ciclo_dim con el cuerpo del PASO 1 de este
+-- archivo (insert sin lista de columnas y sin los cuatro campos de cargos); luego
+-- recargar los 8 periodos.
