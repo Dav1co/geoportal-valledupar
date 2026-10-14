@@ -338,6 +338,37 @@ export function comoConsumoCicloDim(r: Record<string, unknown>): ConsumoCicloDim
   };
 }
 
+// bi.v_desviacion_dim (sql/27): contratos por ciclo x categoria x subcategoria x
+// tipo_desviacion x grupo_umbral. Solo existe para periodos con los 6 anteriores.
+// tipo_desviacion: sin_desviacion | positiva | negativa | sin_historial | sin_promedio.
+// grupo_umbral: ge40 (promedio >= 40 m3) | lt40 | sin_umbral.
+export type DesviacionDim = {
+  periodo: string;
+  ciclo: string;
+  categoria: string;
+  subcategoria: string;
+  tipo_desviacion: string;
+  grupo_umbral: string;
+  contratos: number;
+  m3_periodo: number | null;
+  m3_promedio: number | null;
+  contratos_cero_6m: number;
+};
+export function comoDesviacionDim(r: Record<string, unknown>): DesviacionDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    categoria: String(r.categoria ?? ""),
+    subcategoria: String(r.subcategoria ?? ""),
+    tipo_desviacion: String(r.tipo_desviacion ?? ""),
+    grupo_umbral: String(r.grupo_umbral ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    m3_periodo: n(r.m3_periodo),
+    m3_promedio: n(r.m3_promedio),
+    contratos_cero_6m: n(r.contratos_cero_6m) ?? 0,
+  };
+}
+
 export type FactDetalleDim = {
   periodo: string;
   ciclo: string;
