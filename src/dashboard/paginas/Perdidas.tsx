@@ -198,7 +198,7 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
                     <td className="num">{fmtIpuf(f.ipuf_estandar, false)}</td>
                     <td className="num">{fmtIpuf(f.icuf, false)}</td>
                     <td className="num">{fmtIpuf(f.isuf, false)}</td>
-                    <td className="num">{fmtPct(f.ianc)}</td>
+                    <td className="num">{fmtPct(f.ianc == null ? null : f.ianc * 100)}</td>
                   </tr>
                 ))}
               </tbody>
