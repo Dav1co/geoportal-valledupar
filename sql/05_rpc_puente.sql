@@ -67,6 +67,10 @@
 --   v_consumo_ciclo_dim     : periodo (exacto; sin él, el último con datos
 --                             en esta tabla) — contratos por ciclo, medición
 --                             y consumo cero (sql/26_consumo_ciclo_dim.sql)
+--   v_desviacion_dim        : periodo (exacto; sin él, el último con datos
+--                             en esta tabla) — contratos con desviación
+--                             significativa, Res. CRA 943/2021 art. 1.13.1.6
+--                             (sql/27_desviacion_dim.sql)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -229,6 +233,20 @@ begin
     from bi.v_consumo_ciclo_dim t
     where t.periodo = coalesce(p_filtros ->> 'periodo',
                                (select max(periodo) from bi.v_consumo_ciclo_dim));
+
+  elsif p_vista = 'v_desviacion_dim' then
+    -- ~1.000 filas por período (ciclo x categoría x subcategoría x tipo_desviacion
+    -- x grupo_umbral). La pantalla lo trae UNA vez y agrega en el navegador. Sin
+    -- período se usa el último con datos EN ESTA TABLA: los períodos sin 6
+    -- anteriores no tienen filas (es lo correcto) y no deben dar una respuesta vacía.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by length(t.ciclo), t.ciclo, t.categoria, t.subcategoria,
+                      t.tipo_desviacion, t.grupo_umbral),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_desviacion_dim t
+    where t.periodo = coalesce(p_filtros ->> 'periodo',
+                               (select max(periodo) from bi.v_desviacion_dim));
 
   elsif p_vista = 'v_cartera_contratos_dim' then
     select coalesce(jsonb_agg(to_jsonb(t) order by t.ciclo, t.uso, t.estrato), '[]'::jsonb)
