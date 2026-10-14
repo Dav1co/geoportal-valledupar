@@ -28,8 +28,6 @@ export function IpufAnualBloque({ anual, periodo }: { anual: IpufAnual[]; period
   const metaEsEstandar = anual.some((a) => a.meta != null && a.estandar != null && Math.abs(a.meta - a.estandar) < 1e-9);
   const estandar = anual[anual.length - 1].estandar;
   const hayParcial = anual.some((a) => a.parcial);
-  // El tramo con tarifa de la fuente por debajo del cargo vigente (202606-202609).
-  const conTarifaDesfasada = anual.some((a) => a.desde <= "202609" && a.hasta >= "202606");
 
   return (
     <div className="dash-fila-g2">
@@ -91,9 +89,6 @@ export function IpufAnualBloque({ anual, periodo }: { anual: IpufAnual[]; period
             <> Desde jul 2026 (Res. CRA 1032) no hay meta transitoria: la meta es el estándar regulatorio.</>
           )}
           {" "}Exceso sobre la meta = suma mensual de máx(0, IPUF − meta) × suscriptores × tarifa por m³ del mes.
-          {conTarifaDesfasada && (
-            <> En 202606 a 202609 la tarifa de la fuente está 3,3 % por debajo del cargo por consumo vigente.</>
-          )}
         </div>
       </div>
     </div>
