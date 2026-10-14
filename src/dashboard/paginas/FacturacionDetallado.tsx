@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { biCache } from "../cacheBi";
-import { comoFactDetalleDim, type FactDetalleDim } from "../tipos";
-import { etiquetaPeriodo, fmtEntero, fmtMillones, fmtPct } from "../formato";
+import {
+  comoConsumoCicloDim,
+  comoFactDetalleDim,
+  type ConsumoCicloDim,
+  type FactDetalleDim,
+} from "../tipos";
+import { etiquetaCiclo, etiquetaPeriodo, fmtEntero, fmtMillones, fmtPct, numeroCiclo } from "../formato";
 import { BarrasHorizontales, Dona, TablaPlegable } from "../graficas";
 import { SinDatos } from "../SinDatos";
 import { PanelFiltros, TODOS, type DefFiltro } from "../PanelFiltros";
+import { ContratosCicloMedicion } from "./ContratosCicloMedicion";
 
 const COLOR_USO: Record<string, string> = {
   Residencial: "#0A2540",
@@ -26,6 +32,10 @@ type Props = { periodo: string };
 export function FacturacionDetallado({ periodo }: Props) {
   const [datos, setDatos] = useState<FactDetalleDim[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Sección "Contratos por ciclo, medición y consumo cero": su propia carga y
+  // su propio error, para que un fallo aquí no afecte al resto de la pantalla.
+  const [consumo, setConsumo] = useState<ConsumoCicloDim[] | null>(null);
+  const [errorConsumo, setErrorConsumo] = useState<string | null>(null);
   const [valores, setValores] = useState<Record<string, string>>({
     ciclo: TODOS, uso: TODOS, subcategoria: TODOS,
   });
@@ -38,6 +48,14 @@ export function FacturacionDetallado({ periodo }: Props) {
     biCache("v_fact_detalle_dim", { periodo })
       .then((r) => setDatos((r.datos ?? []).map(comoFactDetalleDim)))
       .catch((e: Error) => setError(e.message));
+    cargarConsumo();
+  }
+  function cargarConsumo() {
+    setErrorConsumo(null);
+    setConsumo(null);
+    biCache("v_consumo_ciclo_dim", { periodo })
+      .then((r) => setConsumo((r.datos ?? []).map(comoConsumoCicloDim)))
+      .catch((e: Error) => setErrorConsumo(e.message));
   }
   useEffect(cargar, [periodo]);
 
@@ -46,7 +64,22 @@ export function FacturacionDetallado({ periodo }: Props) {
     const unicos = (f: (x: FactDetalleDim) => string) =>
       [...new Set(d.map(f))].sort((a, b) => a.localeCompare(b, "es"));
     return [
-      { id: "ciclo", etiqueta: "Ciclo de facturación", opciones: unicos((x) => x.ciclo) },
+      // Ciclos de la facturación ('CICLO 05') y de consumo ('5'), unidos y
+      // comparados por número: así el 24 se puede filtrar aunque la facturación
+      // todavía no lo traiga (sus bloques quedan en cero).
+      {
+        id: "ciclo",
+        etiqueta: "Ciclo de facturación",
+        opciones: [
+          ...new Set(
+            [...d.map((x) => x.ciclo), ...(consumo ?? []).map((x) => x.ciclo)]
+              .map(numeroCiclo)
+              .filter((n): n is number => n != null),
+          ),
+        ]
+          .sort((a, b) => a - b)
+          .map(etiquetaCiclo),
+      },
       { id: "uso", etiqueta: "Uso", opciones: unicos((x) => x.uso) },
       {
         id: "subcategoria",
@@ -58,14 +91,14 @@ export function FacturacionDetallado({ periodo }: Props) {
         ayuda: "Solo aplica a uso Residencial",
       },
     ];
-  }, [datos]);
+  }, [datos, consumo]);
 
   // Filtrado en el navegador: instantáneo, sin volver a la base.
   const filtrado = useMemo(() => {
     const d = datos ?? [];
     return d.filter(
       (x) =>
-        (valores.ciclo === TODOS || x.ciclo === valores.ciclo) &&
+        (valores.ciclo === TODOS || numeroCiclo(x.ciclo) === numeroCiclo(valores.ciclo)) &&
         (valores.uso === TODOS || x.uso === valores.uso) &&
         (valores.subcategoria === TODOS || x.subcategoria === valores.subcategoria),
     );
@@ -301,6 +334,14 @@ export function FacturacionDetallado({ periodo }: Props) {
             </div>
           </div>
         </div>
+
+        <ContratosCicloMedicion
+          periodo={periodo}
+          datos={consumo}
+          error={errorConsumo}
+          onReintentar={cargarConsumo}
+          valores={valores}
+        />
       </div>
     </div>
   );
