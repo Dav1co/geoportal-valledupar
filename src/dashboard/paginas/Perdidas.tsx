@@ -13,6 +13,7 @@ import {
 import { BarrasMensuales, LineasPorcentaje, TablaPlegable, colorAnio } from "../graficas";
 import { excesoSobreMeta, resumenAnual } from "../ipufAnual";
 import { IndicesAnualesSeccion, IpufAnualBloque } from "./PerdidasAnual";
+import { IndicadoresLectura } from "./IndicadoresLectura";
 
 // Pérdidas de agua (IPUF). Serie histórica larga: 114 períodos desde
 // enero de 2017, en su propio archivo y con un mes de rezago respecto
@@ -170,6 +171,8 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
           </div>
         </div>
       </div>
+
+      <IndicadoresLectura periodo={periodo} />
 
       <div className="dash-fila">
         <div className="dash-carta">
