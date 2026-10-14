@@ -39,8 +39,8 @@ export const LIM_DIAS_MAX = 32;
 // Observaciones con menos de este % de los contratos filtrados se agrupan en
 // "Otras" (salvo "Sin medidor" y la observación 99, que siempre se ven).
 export const UMBRAL_OTRAS_PCT = 0.3;
-const CODIGO_CON_LECTURA = 99;
-const SIN_MEDIDOR = "Sin medidor";
+export const CODIGO_CON_LECTURA = 99;
+export const SIN_MEDIDOR = "Sin medidor";
 // Primer período con fecha de instalación en consumo_metodo (antes viene vacía).
 export const PRIMER_PERIODO_ANTIGUEDAD = "202605";
 
@@ -61,7 +61,7 @@ const COLOR = {
 };
 
 const pct = (parte: number, total: number) => (total > 0 ? (parte / total) * 100 : null);
-const textoObservacion = (o: string) => o.replace(/^\d+\s+/, "");
+export const textoObservacion = (o: string) => o.replace(/^\d+\s+/, "");
 
 type Props = {
   periodo: string;
