@@ -137,7 +137,9 @@ export function IndicadoresLectura({ periodo }: { periodo: string }) {
             return (
               <>
                 <div className="dash-valor num">{fmtEntero(sostenido)}</div>
-                <div className="dash-sub2 num">{fmtPct(pct(sostenido, total))} de los contratos</div>
+                <div className="dash-sub2 num">
+                  {fmtPct(pct(sostenido, total))} sobre contratos facturados ({fmtEntero(total)})
+                </div>
               </>
             );
           }}
