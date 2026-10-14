@@ -71,6 +71,13 @@
 --                             en esta tabla) — contratos con desviación
 --                             significativa, Res. CRA 943/2021 art. 1.13.1.6
 --                             (sql/27_desviacion_dim.sql)
+--   v_lectura_ciclo_dim     : periodo (exacto; sin él, el último con datos
+--                             en esta tabla) — lectura efectiva y tiempos de
+--                             lectura por ciclo (sql/28_lectura_ciclo_dim.sql)
+--   v_observacion_dim       : ídem — observación de lectura por categoría,
+--                             estrato y ciclo (sql/29_observacion_dim.sql)
+--   v_medidor_antig_dim     : ídem — antigüedad del medidor por categoría y
+--                             estrato, sin ciclo (sql/30_medidor_antig_dim.sql)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -248,6 +255,43 @@ begin
     where t.periodo = coalesce(p_filtros ->> 'periodo',
                                (select max(periodo) from bi.v_desviacion_dim));
 
+  elsif p_vista = 'v_lectura_ciclo_dim' then
+    -- ~120-170 filas por período (ciclo x con_medidor x resultado_lectura x
+    -- rango_dias). La pantalla lo trae UNA vez y agrega en el navegador. Sin
+    -- período, el último con datos EN ESTA TABLA (consumo_metodo no tiene 202606).
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by length(t.ciclo), t.ciclo, t.con_medidor, t.resultado_lectura, t.rango_dias),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_lectura_ciclo_dim t
+    where t.periodo = coalesce(p_filtros ->> 'periodo',
+                               (select max(periodo) from bi.v_lectura_ciclo_dim));
+
+  elsif p_vista = 'v_observacion_dim' then
+    -- ~1.200-1.400 filas por período (categoría x subcategoría x ciclo x
+    -- observación x con_medidor x resultado_lectura). Se trae UNA vez y se filtra
+    -- (ciclo, uso, estrato) en el navegador.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.categoria, t.subcategoria, length(t.ciclo), t.ciclo,
+                      t.codigo_observacion nulls first, t.observacion,
+                      t.con_medidor, t.resultado_lectura),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_observacion_dim t
+    where t.periodo = coalesce(p_filtros ->> 'periodo',
+                               (select max(periodo) from bi.v_observacion_dim));
+
+  elsif p_vista = 'v_medidor_antig_dim' then
+    -- ~100-300 filas por período (categoría x subcategoría x banda_antiguedad x
+    -- resultado_lectura), sin ciclo. 202601-202604 traen todo 'Sin fecha'.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.categoria, t.subcategoria, t.banda_antiguedad, t.resultado_lectura),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_medidor_antig_dim t
+    where t.periodo = coalesce(p_filtros ->> 'periodo',
+                               (select max(periodo) from bi.v_medidor_antig_dim));
+
   elsif p_vista = 'v_cartera_contratos_dim' then
     select coalesce(jsonb_agg(to_jsonb(t) order by t.ciclo, t.uso, t.estrato), '[]'::jsonb)
       into resultado
@@ -385,4 +429,12 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 --      con un usuario CON el modo: la pantalla Resumen carga y en
 --      public.geoportal_auditoria aparece accion = 'ver_dashboard';
 --      con un usuario SIN el modo: la función responde 403.
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de las ramas v_lectura_ciclo_dim, v_observacion_dim y
+-- v_medidor_antig_dim (35 -> 38 ramas): volver a la version de este archivo en el
+-- commit a0a4295 (35 ramas, hasta v_desviacion_dim) y volver a ejecutarlo
+-- (create or replace conserva el ACL). Antes de retirar las ramas, quitar las tres
+-- vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function.
 -- =====================================================================
