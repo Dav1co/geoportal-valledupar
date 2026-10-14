@@ -292,6 +292,41 @@ export function comoCarteraRuta(r: Record<string, unknown>): CarteraRuta {
 // bi.v_fact_detalle_dim: preagregado del detalle por las dimensiones
 // filtrables. Se trae UNA vez por período y se filtra en el navegador.
 // OJO: consumo solo es m³ en los conceptos 2 y 4.
+// bi.v_consumo_ciclo_dim: contratos por ciclo, medición y consumo cero
+// (periodo x ciclo x categoria x subcategoria x con_medidor). El ciclo viene
+// tal como está en consumo_metodo ('1'..'24'); categoria/subcategoria ya sin
+// el código numérico ('Residencial', 'ESTRATO 1'). Los numeric pueden llegar
+// como texto del RPC. facturado_acueducto es null donde no hay facturacion_sspd
+// (202601 a 202605) y es SOLO acueducto.
+export type ConsumoCicloDim = {
+  periodo: string;
+  ciclo: string;
+  categoria: string;
+  subcategoria: string;
+  con_medidor: boolean;
+  contratos: number | null;
+  contratos_consumo_cero: number | null;
+  contratos_consumo_nulo: number | null;
+  m3_facturados: number | null;
+  facturado_acueducto: number | null;
+  contratos_en_sspd: number | null;
+};
+export function comoConsumoCicloDim(r: Record<string, unknown>): ConsumoCicloDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    categoria: String(r.categoria ?? ""),
+    subcategoria: String(r.subcategoria ?? ""),
+    con_medidor: r.con_medidor === true || r.con_medidor === "true",
+    contratos: n(r.contratos),
+    contratos_consumo_cero: n(r.contratos_consumo_cero),
+    contratos_consumo_nulo: n(r.contratos_consumo_nulo),
+    m3_facturados: n(r.m3_facturados),
+    facturado_acueducto: n(r.facturado_acueducto),
+    contratos_en_sspd: n(r.contratos_en_sspd),
+  };
+}
+
 export type FactDetalleDim = {
   periodo: string;
   ciclo: string;
