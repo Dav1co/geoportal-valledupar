@@ -595,3 +595,8 @@
   font-size: 9.5px;
   letter-spacing: 0.3px;
 }
+
+/* Marca simple en una fila de tabla (sin texto): barra ámbar a la izquierda. */
+.dash-tabla tr.dash-fila-marca td:first-child {
+  box-shadow: inset 3px 0 0 #C98A2D;
+}
