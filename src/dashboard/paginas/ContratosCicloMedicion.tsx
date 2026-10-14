@@ -18,10 +18,16 @@ import { TODOS } from "../PanelFiltros";
 // ACUEDUCTO de facturacion_sspd). Usa los filtros de la pantalla (ciclo, uso,
 // estrato) y su selector de período; no usa "Comparar con".
 
-// Porcentaje de contratos con consumo cero a partir del cual se marca la fila
-// de la tabla. Es una marca visual, sin texto: en 202609 solo la supera el
-// ciclo 21 (18,8 %); el resto de ciclos queda por debajo del 3 %.
-export const UMBRAL_CONSUMO_CERO_PCT = 10;
+// Porcentaje de contratos con consumo COBRADO en cero (consumo_cargos = 0) a
+// partir del cual se marca la fila de la tabla. Es una CONVENCIÓN DEL TABLERO,
+// no una norma: una marca visual, sin texto. En 202609 solo la supera el ciclo
+// 21 (21,9 %); el resto de ciclos queda por debajo del 12 %.
+export const UMBRAL_CONSUMO_CERO_PCT = 15;
+
+// Dos medidas de consumo:
+//  · "cobrado (cargos)" = consumo_cargos, el consumo de la factura; coincide con
+//    el consumo de sspd. Nunca es nulo.
+//  · "medido" = consumo_facturado, el consumo que reporta el sistema.
 
 const COLOR_CON_MEDIDOR = "#0A2540";
 const COLOR_SIN_MEDIDOR = "#C98A2D";
@@ -30,15 +36,16 @@ type Acum = {
   contratos: number;
   conMedidor: number;
   sinMedidor: number;
-  cero: number;
-  nulo: number;
-  m3: number;
+  cero: number;          // contratos con consumo cobrado (cargos) = 0
+  sinMedido: number;     // cobrados por promedio: consumo medido vacío o 0 con cargos > 0
+  m3Cargos: number;
+  m3Medido: number;
   facturado: number;
   hayFacturado: boolean;
   enSspd: number;
 };
 const vacio = (): Acum => ({
-  contratos: 0, conMedidor: 0, sinMedidor: 0, cero: 0, nulo: 0, m3: 0,
+  contratos: 0, conMedidor: 0, sinMedidor: 0, cero: 0, sinMedido: 0, m3Cargos: 0, m3Medido: 0,
   facturado: 0, hayFacturado: false, enSspd: 0,
 });
 
@@ -46,9 +53,10 @@ function sumar(a: Acum, x: ConsumoCicloDim) {
   const c = x.contratos ?? 0;
   a.contratos += c;
   if (x.con_medidor) a.conMedidor += c; else a.sinMedidor += c;
-  a.cero += x.contratos_consumo_cero ?? 0;
-  a.nulo += x.contratos_consumo_nulo ?? 0;
-  a.m3 += x.m3_facturados ?? 0;
+  a.cero += x.contratos_cargos_cero ?? 0;
+  a.sinMedido += x.contratos_cobrado_sin_medido ?? 0;
+  a.m3Cargos += x.m3_cargos ?? 0;
+  a.m3Medido += x.m3_facturados ?? 0;
   if (x.facturado_acueducto != null) {
     a.facturado += x.facturado_acueducto;
     a.hayFacturado = true;
@@ -168,14 +176,14 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
               <div className="dash-sub2 num">{fmtPct(pct(total.sinMedidor, total.contratos))} de los contratos</div>
             </div>
             <div className="dash-carta dash-kpi">
-              <div className="dash-eti">Con consumo cero</div>
+              <div className="dash-eti">Consumo cobrado en cero (cargos)</div>
               <div className="dash-valor num">{fmtEntero(total.cero)}</div>
               <div className="dash-sub2 num">{fmtPct(pct(total.cero, total.contratos))} de los contratos</div>
             </div>
             <div className="dash-carta dash-kpi">
-              <div className="dash-eti">Sin dato de consumo</div>
-              <div className="dash-valor num">{fmtEntero(total.nulo)}</div>
-              <div className="dash-sub2 num">{fmtPct(pct(total.nulo, total.contratos))} de los contratos</div>
+              <div className="dash-eti">Cobrado por promedio sin consumo medido</div>
+              <div className="dash-valor num">{fmtEntero(total.sinMedido)}</div>
+              <div className="dash-sub2 num">{fmtPct(pct(total.sinMedido, total.contratos))} de los contratos</div>
             </div>
           </div>
 
@@ -204,8 +212,9 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
                   <thead>
                     <tr>
                       <th>Ciclo</th><th>Contratos</th><th>Con medidor</th><th>Sin medidor</th>
-                      <th>% sin medidor</th><th>Consumo cero</th><th>% cero</th><th>Sin dato</th>
-                      <th>m³</th><th>Facturado acueducto</th><th>Promedio acueducto por contrato</th>
+                      <th>% sin medidor</th><th>Consumo cobrado en cero</th><th>% cero</th>
+                      <th>Cobrado sin consumo medido</th><th>m³ cobrados (cargos)</th><th>m³ medidos</th>
+                      <th>Facturado acueducto</th><th>Promedio acueducto por contrato</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -220,8 +229,9 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
                           <td className="num">{fmtPct(pct(a.sinMedidor, a.contratos))}</td>
                           <td className="num">{fmtEntero(a.cero)}</td>
                           <td className="num">{fmtPct(pCero)}</td>
-                          <td className="num">{fmtEntero(a.nulo)}</td>
-                          <td className="num">{fmtEntero(a.m3)}</td>
+                          <td className="num">{fmtEntero(a.sinMedido)}</td>
+                          <td className="num">{fmtEntero(a.m3Cargos)}</td>
+                          <td className="num">{fmtEntero(a.m3Medido)}</td>
                           <td className="num">{facturado(a)}</td>
                           <td className="num">{promedio(a)}</td>
                         </tr>
@@ -235,8 +245,9 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
                       <td className="num">{fmtPct(pct(total.sinMedidor, total.contratos))}</td>
                       <td className="num">{fmtEntero(total.cero)}</td>
                       <td className="num">{fmtPct(pct(total.cero, total.contratos))}</td>
-                      <td className="num">{fmtEntero(total.nulo)}</td>
-                      <td className="num">{fmtEntero(total.m3)}</td>
+                      <td className="num">{fmtEntero(total.sinMedido)}</td>
+                      <td className="num">{fmtEntero(total.m3Cargos)}</td>
+                      <td className="num">{fmtEntero(total.m3Medido)}</td>
                       <td className="num">{facturado(total)}</td>
                       <td className="num">{promedio(total)}</td>
                     </tr>
@@ -253,7 +264,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
                 <table className="dash-tabla num">
                   <thead>
                     <tr>
-                      <th>Grupo</th><th>Contratos</th><th>Consumo cero</th><th>% cero</th>
+                      <th>Grupo</th><th>Contratos</th><th>Consumo cobrado en cero</th><th>% cero</th>
                       <th>Promedio acueducto por contrato</th>
                     </tr>
                   </thead>
@@ -272,7 +283,8 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
               </TablaPlegable>
               <div className="dash-nota">
                 Ciclo tal como viene en consumo; facturado = acueducto (sspd).
-                Medidor vacío = sin medidor.
+                Medidor vacío = sin medidor. Consumo cobrado = consumo de la
+                factura (cargos); consumo medido = el que reporta el sistema.
               </div>
             </div>
           </div>
