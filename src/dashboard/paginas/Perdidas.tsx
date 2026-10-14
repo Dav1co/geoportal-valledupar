@@ -11,6 +11,8 @@ import {
   fmtPct,
 } from "../formato";
 import { BarrasMensuales, LineasPorcentaje, TablaPlegable, colorAnio } from "../graficas";
+import { resumenAnual } from "../ipufAnual";
+import { IndicesAnualesSeccion, IpufAnualBloque } from "./PerdidasAnual";
 
 // Pérdidas de agua (IPUF). Serie histórica larga: 114 períodos desde
 // enero de 2017, en su propio archivo y con un mes de rezago respecto
@@ -46,6 +48,9 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
     () => [...(filas ?? [])].sort((a, b) => a.periodo.localeCompare(b.periodo)),
     [filas],
   );
+
+  // Resumen por año tarifario (jul-jun): alimenta los bloques anuales.
+  const anual = useMemo(() => resumenAnual(filas ?? []), [filas]);
 
   if (error) {
     return (
@@ -110,6 +115,8 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
 
   return (
     <>
+      <IpufAnualBloque anual={anual} periodo={periodo} />
+
       <div className="dash-kpis">
         <div className={`dash-carta dash-kpi ${sobreMeta ? "dash-kpi-mal" : ""}`}>
           <div className="dash-eti">IPUF del mes</div>
@@ -294,6 +301,8 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
           </div>
         </div>
       </div>
+
+      <IndicesAnualesSeccion anual={anual} />
     </>
   );
 }
