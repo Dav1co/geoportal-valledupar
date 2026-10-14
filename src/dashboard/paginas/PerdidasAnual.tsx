@@ -10,11 +10,24 @@ const COLOR_META = "#C98A2D";
 const COLOR_ESTANDAR = "#9AA7B5";
 const COLOR_ICUF = "#0E7C86";
 
-// "2026-27 (parcial, 3 meses)"
-const rotulo = (a: IpufAnual) => (a.parcial ? `${a.etiqueta} (parcial, ${a.meses} meses)` : a.etiqueta);
-const marca = (a: IpufAnual) => (a.parcial ? `${a.etiqueta}*` : a.etiqueta);
+// El año tarifario 2026-27 es el de la entrada en vigencia de la Res. CRA 1032:
+// mientras es parcial se rotula como su primer semestre. Los meses ("3 meses")
+// salen de los datos cargados (a.meses), no son fijos.
+//   tabla / tooltip: "PERIODO INICIO JUL-DIC 2026 (parcial, 3 meses)"
+//   eje de la gráfica (corto): "INICIO JUL-DIC 2026*"
+const esInicio1032 = (a: IpufAnual) => a.parcial && a.inicio === 2026;
+const meses = (n: number) => `${n} ${n === 1 ? "mes" : "meses"}`;
+const nombreParcial = (a: IpufAnual) => (esInicio1032(a) ? "PERIODO INICIO JUL-DIC 2026" : a.etiqueta);
+const rotulo = (a: IpufAnual) => (a.parcial ? `${nombreParcial(a)} (parcial, ${meses(a.meses)})` : a.etiqueta);
+const marca = (a: IpufAnual) => (a.parcial ? `${esInicio1032(a) ? "INICIO JUL-DIC 2026" : a.etiqueta}*` : a.etiqueta);
 const signo = (v: number | null) =>
   v == null ? "—" : `${v >= 0 ? "+" : "−"}${fmtIpuf(Math.abs(v), false)}`;
+// Nota del asterisco, con los meses realmente cargados: "* PERIODO INICIO JUL-DIC 2026: año parcial, jul–sep 2026 (3 meses)."
+const notaParcial = (anual: IpufAnual[]) =>
+  anual
+    .filter((a) => a.parcial)
+    .map((a) => `* ${nombreParcial(a)}: año parcial, ${mesAnio(a.desde).replace(/ \d{4}$/, "")}–${mesAnio(a.hasta)} (${meses(a.meses)}).`)
+    .join(" ");
 // "jun 2025"
 const mesAnio = (p: string) => etiquetaPeriodo(p).replace(/^(\p{L}{3})\p{L}*/u, "$1");
 
@@ -34,7 +47,7 @@ export function IpufAnualBloque({ anual, periodo }: { anual: IpufAnual[]; period
       <div className="dash-carta">
         <h3>IPUF anual por año tarifario</h3>
         <BarrasAnuales
-          datos={anual.map((a) => ({ etiqueta: marca(a), valor: a.ipuf, meta: a.meta, parcial: a.parcial }))}
+          datos={anual.map((a) => ({ etiqueta: marca(a), etiquetaLarga: rotulo(a), valor: a.ipuf, meta: a.meta, parcial: a.parcial }))}
           estandar={estandar}
           formatoValor={fmtIpuf}
           formatoCorto={(v) => fmtIpuf(v, false)}
@@ -46,7 +59,7 @@ export function IpufAnualBloque({ anual, periodo }: { anual: IpufAnual[]; period
           colorMeta={COLOR_META}
           colorEstandar={COLOR_ESTANDAR}
         />
-        {hayParcial && <div className="dash-nota">* Año parcial: jul–sep 2026 (3 meses).</div>}
+        {hayParcial && <div className="dash-nota">{notaParcial(anual)}</div>}
       </div>
 
       <div className="dash-carta">
@@ -161,7 +174,7 @@ export function IndicesAnualesSeccion({ anual }: { anual: IpufAnual[] }) {
             ICUF = agua facturada ÷ suscriptores; ISUF = agua producida ÷ suscriptores (ambos del año
             tarifario completo, en m³/suscriptor-mes); IANC = (producida − facturada) ÷ producida, en %.
             ISUF − ICUF = IPUF anual.
-            {hayParcial && <> * Año parcial: jul–sep 2026 (3 meses).</>}
+            {hayParcial && <> {notaParcial(anual)}</>}
           </div>
         </div>
       </div>

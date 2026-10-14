@@ -521,7 +521,7 @@ export function BarrasAnuales({
   colorEstandar = "#9AA7B5",
   alto = 230,
 }: {
-  datos: { etiqueta: string; valor: number | null; meta?: number | null; parcial?: boolean }[];
+  datos: { etiqueta: string; etiquetaLarga?: string; valor: number | null; meta?: number | null; parcial?: boolean }[];
   estandar?: number | null;
   formatoValor: (v: number) => string;   // tooltip
   formatoCorto: (v: number) => string;   // sobre la barra
@@ -582,7 +582,7 @@ export function BarrasAnuales({
                 fillOpacity={d.parcial ? 0.4 : 1}
                 stroke={d.parcial ? color : "none"}
                 strokeDasharray={d.parcial ? "4 3" : undefined}
-                onMouseMove={(e) => mover(e, `${d.etiqueta} · ${nombreValor}`, formatoValor(d.valor!))}
+                onMouseMove={(e) => mover(e, `${d.etiquetaLarga ?? d.etiqueta} · ${nombreValor}`, formatoValor(d.valor!))}
               />
               <text x={cx(i)} y={escY(d.valor) - 5} textAnchor="middle" fontSize={10} fill="#0A2540" className="num">
                 {formatoCorto(d.valor)}
@@ -598,7 +598,7 @@ export function BarrasAnuales({
         {datos.map((d, i) =>
           d.meta == null ? null : (
             <circle key={`m-${d.etiqueta}`} cx={cx(i)} cy={escY(d.meta)} r={4} fill={colorMeta} stroke="#fff" strokeWidth={1}
-                    onMouseMove={(e) => mover(e, `${d.etiqueta} · ${nombreMeta}`, formatoValor(d.meta!))} />
+                    onMouseMove={(e) => mover(e, `${d.etiquetaLarga ?? d.etiqueta} · ${nombreMeta}`, formatoValor(d.meta!))} />
           ),
         )}
         {datos.map((d, i) => (
