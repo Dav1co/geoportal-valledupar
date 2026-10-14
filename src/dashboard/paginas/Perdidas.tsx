@@ -95,6 +95,9 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
   const etiquetas = cronologico.map((f) => etiquetaCorta(f.periodo));
   const seriesIndice = [
     { nombre: "IPUF real", color: COLOR_IPUF, valores: cronologico.map((f) => f.ipuf) },
+    // OJO (jul-sep 2026): IPUFAR_ANO del origen trae el literal 16 desde 202607
+    // (hasta 202606 traía 16,0337...), así que esta línea queda plana en 16,00 en el
+    // año tarifario parcial; corregir en la fuente. El frontend solo la grafica.
     { nombre: "IPUF del año tarifario", color: COLOR_ANIO_CORRIDO, valores: cronologico.map((f) => f.ipuf_anio_corrido) },
     { nombre: "Meta EMDUPAR", color: COLOR_META, valores: cronologico.map((f) => f.meta_ipuf) },
     { nombre: "Estándar regulatorio", color: COLOR_ESTANDAR, valores: cronologico.map((f) => f.ipuf_estandar) },
