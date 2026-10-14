@@ -503,6 +503,123 @@ export function BarrasApiladas({
   );
 }
 
+// ---------- barras anuales con referencias ----------
+// Una barra por año (p. ej. IPUF anual) con una línea de META que sigue a cada
+// año, una línea punteada de ESTÁNDAR y, opcionalmente, barras PARCIALES
+// (menos de 12 meses) dibujadas más claras y con borde punteado.
+export function BarrasAnuales({
+  datos,
+  estandar,
+  formatoValor,
+  formatoCorto,
+  tituloY,
+  nombreValor = "Valor",
+  nombreMeta = "Meta",
+  nombreEstandar = "Estándar",
+  color = "#0A2540",
+  colorMeta = "#C98A2D",
+  colorEstandar = "#9AA7B5",
+  alto = 230,
+}: {
+  datos: { etiqueta: string; valor: number | null; meta?: number | null; parcial?: boolean }[];
+  estandar?: number | null;
+  formatoValor: (v: number) => string;   // tooltip
+  formatoCorto: (v: number) => string;   // sobre la barra
+  tituloY?: string;
+  nombreValor?: string;
+  nombreMeta?: string;
+  nombreEstandar?: string;
+  color?: string;
+  colorMeta?: string;
+  colorEstandar?: string;
+  alto?: number;
+}) {
+  const { ref, tip, mover, salir } = useTip();
+  const ancho = 720;
+  const m = { izq: 44, der: 10, arr: tituloY ? 24 : 12, aba: 30 };
+  const plotW = ancho - m.izq - m.der;
+  const plotH = alto - m.arr - m.aba;
+  const crudo = Math.max(
+    1,
+    ...datos.flatMap((d) => [d.valor ?? 0, d.meta ?? 0]),
+    estandar ?? 0,
+  );
+  // Escala "bonita": hasta 5 marcas, con 12 % de aire para la cifra sobre la barra.
+  const paso = [1, 2, 5, 10, 20, 50, 100].find((p) => (crudo * 1.12) / p <= 5) ?? 100;
+  const max = Math.ceil((crudo * 1.12) / paso) * paso;
+  const escY = (v: number) => m.arr + plotH * (1 - v / max);
+  const ticks = Array.from({ length: Math.round(max / paso) + 1 }, (_, i) => i * paso);
+  const slot = plotW / Math.max(1, datos.length);
+  const barW = Math.min(46, slot * 0.62);
+  const cx = (i: number) => m.izq + slot * (i + 0.5);
+  const puntosMeta = datos
+    .map((d, i) => (d.meta != null ? `${cx(i)},${escY(d.meta)}` : null))
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div ref={ref} className="dash-grafica" onMouseLeave={salir}>
+      <svg viewBox={`0 0 ${ancho} ${alto}`} style={{ width: "100%", height: "auto" }} role="img">
+        {tituloY ? <text x={m.izq - 6} y={11} fontSize={10} fill="#5D6E7E">{tituloY}</text> : null}
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={m.izq} x2={ancho - m.der} y1={escY(t)} y2={escY(t)} stroke="#EAF0F4" strokeWidth={1} />
+            <text x={m.izq - 6} y={escY(t) + 3.5} textAnchor="end" fontSize={10} fill="#5D6E7E">
+              {t.toLocaleString("es-CO", { maximumFractionDigits: 0 })}
+            </text>
+          </g>
+        ))}
+        {datos.map((d, i) =>
+          d.valor == null ? null : (
+            <g key={d.etiqueta}>
+              <rect
+                x={cx(i) - barW / 2}
+                y={escY(d.valor)}
+                width={barW}
+                height={Math.max(1, escY(0) - escY(d.valor))}
+                rx={2}
+                fill={color}
+                fillOpacity={d.parcial ? 0.4 : 1}
+                stroke={d.parcial ? color : "none"}
+                strokeDasharray={d.parcial ? "4 3" : undefined}
+                onMouseMove={(e) => mover(e, `${d.etiqueta} · ${nombreValor}`, formatoValor(d.valor!))}
+              />
+              <text x={cx(i)} y={escY(d.valor) - 5} textAnchor="middle" fontSize={10} fill="#0A2540" className="num">
+                {formatoCorto(d.valor)}
+              </text>
+            </g>
+          ),
+        )}
+        {estandar != null ? (
+          <line x1={m.izq} x2={ancho - m.der} y1={escY(estandar)} y2={escY(estandar)}
+                stroke={colorEstandar} strokeWidth={1.5} strokeDasharray="5 4" />
+        ) : null}
+        {puntosMeta ? <polyline points={puntosMeta} fill="none" stroke={colorMeta} strokeWidth={2} /> : null}
+        {datos.map((d, i) =>
+          d.meta == null ? null : (
+            <circle key={`m-${d.etiqueta}`} cx={cx(i)} cy={escY(d.meta)} r={4} fill={colorMeta} stroke="#fff" strokeWidth={1}
+                    onMouseMove={(e) => mover(e, `${d.etiqueta} · ${nombreMeta}`, formatoValor(d.meta!))} />
+          ),
+        )}
+        {datos.map((d, i) => (
+          <text key={`x-${d.etiqueta}`} x={cx(i)} y={alto - 10} textAnchor="middle" fontSize={9.5} fill="#5D6E7E">
+            {d.etiqueta}
+          </text>
+        ))}
+      </svg>
+      <CapaTip tip={tip} />
+      <div className="dash-leyenda">
+        <span><i style={{ background: color }} /> {nombreValor}</span>
+        <span><i style={{ background: colorMeta }} /> {nombreMeta}</span>
+        {estandar != null && <span><i style={{ background: colorEstandar }} /> {nombreEstandar}</span>}
+        {datos.some((d) => d.parcial) && (
+          <span><i style={{ background: color, opacity: 0.4 }} /> Año parcial (menos de 12 meses)</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------- dona ----------
 type Parte = { etiqueta: string; valor: number; color: string; pct: number | null };
 
