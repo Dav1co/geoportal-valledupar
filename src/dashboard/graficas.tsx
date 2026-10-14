@@ -448,14 +448,16 @@ export function BarrasApiladas({
   datos,
   series,
   formatoValor,
+  margenIzq = 86,
 }: {
   datos: { etiqueta: string; valores: number[] }[]; // un valor por serie, en su orden
   series: { nombre: string; color: string }[];
   formatoValor: (v: number) => string;
+  margenIzq?: number;   // ancho reservado a las etiquetas (más si son textos largos)
 }) {
   const { ref, tip, mover, salir } = useTip();
   const filaH = 20, gap = 4;
-  const ancho = 720, izq = 86, der = 12;
+  const ancho = 720, izq = margenIzq, der = 12;
   const alto = Math.max(60, datos.length * (filaH + gap) + 10);
   const max = Math.max(1, ...datos.map((d) => d.valores.reduce((s, v) => s + Math.max(0, v), 0)));
   const escala = (v: number) => (Math.max(0, v) / max) * (ancho - izq - der);

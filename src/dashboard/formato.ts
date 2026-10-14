@@ -49,6 +49,13 @@ export function fmtEntero(v: number | null): string {
   return v == null ? "—" : v.toLocaleString("es-CO", { maximumFractionDigits: 0 });
 }
 
+// Número con decimales fijos y coma decimal: 30,6.
+export function fmtDecimal(v: number | null, decimales = 1): string {
+  return v == null
+    ? "—"
+    : v.toLocaleString("es-CO", { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
+}
+
 export function fmtPct(v: number | null): string {
   if (v == null) return "—";
   return `${v.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
