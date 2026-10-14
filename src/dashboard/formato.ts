@@ -38,6 +38,13 @@ export function etiquetaCiclo(n: number): string {
   return `CICLO ${String(n).padStart(2, "0")}`;
 }
 
+// Pesos en millones SIN decimales, para columnas de tabla donde fmtMillones
+// mezclaría cifras con y sin decimales: $ 26.870 M.
+export function fmtMillonesEnteros(v: number | null): string {
+  if (v == null) return "—";
+  return `$ ${(v / 1e6).toLocaleString("es-CO", { maximumFractionDigits: 0 })} M`;
+}
+
 export function fmtEntero(v: number | null): string {
   return v == null ? "—" : v.toLocaleString("es-CO", { maximumFractionDigits: 0 });
 }
