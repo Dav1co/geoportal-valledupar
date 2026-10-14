@@ -28,6 +28,16 @@ export function fmtMillones(v: number | null): string {
   })} M`;
 }
 
+// Ciclos: la facturación los trae como 'CICLO 05' y consumo_metodo como '5'.
+// Se comparan por número; la etiqueta usa el formato de la facturación.
+export function numeroCiclo(c: string): number | null {
+  const m = /\d+/.exec(c);
+  return m ? Number(m[0]) : null;
+}
+export function etiquetaCiclo(n: number): string {
+  return `CICLO ${String(n).padStart(2, "0")}`;
+}
+
 export function fmtEntero(v: number | null): string {
   return v == null ? "—" : v.toLocaleString("es-CO", { maximumFractionDigits: 0 });
 }
