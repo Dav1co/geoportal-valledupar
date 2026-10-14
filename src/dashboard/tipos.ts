@@ -297,7 +297,10 @@ export function comoCarteraRuta(r: Record<string, unknown>): CarteraRuta {
 // tal como está en consumo_metodo ('1'..'24'); categoria/subcategoria ya sin
 // el código numérico ('Residencial', 'ESTRATO 1'). Los numeric pueden llegar
 // como texto del RPC. facturado_acueducto es null donde no hay facturacion_sspd
-// (202601 a 202605) y es SOLO acueducto.
+// (202601 a 202605) y es SOLO acueducto. Dos medidas de consumo: "medido"
+// (consumo_facturado: m3_facturados, contratos_consumo_*) y "cobrado" en la
+// factura (consumo_cargos: m3_cargos, contratos_cargos_*); consumo_cargos nunca
+// es nulo y coincide con el consumo de sspd.
 export type ConsumoCicloDim = {
   periodo: string;
   ciclo: string;
@@ -310,6 +313,10 @@ export type ConsumoCicloDim = {
   m3_facturados: number | null;
   facturado_acueducto: number | null;
   contratos_en_sspd: number | null;
+  m3_cargos: number | null;
+  contratos_cargos_cero: number | null;
+  contratos_cargos_nulo: number | null;
+  contratos_cobrado_sin_medido: number | null;
 };
 export function comoConsumoCicloDim(r: Record<string, unknown>): ConsumoCicloDim {
   return {
@@ -324,6 +331,10 @@ export function comoConsumoCicloDim(r: Record<string, unknown>): ConsumoCicloDim
     m3_facturados: n(r.m3_facturados),
     facturado_acueducto: n(r.facturado_acueducto),
     contratos_en_sspd: n(r.contratos_en_sspd),
+    m3_cargos: n(r.m3_cargos),
+    contratos_cargos_cero: n(r.contratos_cargos_cero),
+    contratos_cargos_nulo: n(r.contratos_cargos_nulo),
+    contratos_cobrado_sin_medido: n(r.contratos_cobrado_sin_medido),
   };
 }
 
