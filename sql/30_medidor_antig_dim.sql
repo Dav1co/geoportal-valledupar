@@ -10,11 +10,12 @@
 --    REFERENCIA, que es el primer dia del mes evaluado (constante c_ref_dias =
 --    0 dentro de la funcion: desplazamiento en dias sobre ese primer dia).
 --    Anos CUMPLIDOS: '0-5' (0 <= a < 5), '5-10', '10-15', '>15' (a >= 15).
---  · Bandas fuera de la escala:
---      'Sin medidor'          contratos sin medidor (observacion nula) -> la
---                             suma cuadra con los contratos del periodo
---      'Sin fecha'            con medidor y fecha_instalacion nula
---      'Fecha inconsistente'  fecha_instalacion posterior a la de referencia
+--  · Bandas finales: '0-5', '5-10', '10-15', '>15', 'Sin fecha', 'Sin medidor'.
+--      'Sin medidor'  contratos sin medidor (observacion nula) -> la suma
+--                     cuadra con los contratos del periodo
+--      'Sin fecha'    con medidor y fecha_instalacion nula O POSTERIOR a la
+--                     fecha de referencia (174 contratos en 202609): no hay una
+--                     banda aparte para las fechas inconsistentes
 --  · FECHA CENTINELA 1986-01-01: queda DENTRO de '>15' (decision de David). En
 --    202609 son 6.314 contratos con exactamente esa fecha y su antiguedad real
 --    es DESCONOCIDA (puede ser un valor por defecto del sistema); la banda '>15'
@@ -77,8 +78,7 @@ begin
              categoria, subcategoria, observacion)
   select p_periodo::text, categoria, subcategoria,
          case when not con_medidor then 'Sin medidor'
-              when fi is null then 'Sin fecha'
-              when fi > v_ref then 'Fecha inconsistente'
+              when fi is null or fi > v_ref then 'Sin fecha'
               when extract(year from age(v_ref, fi)) < 5  then '0-5'
               when extract(year from age(v_ref, fi)) < 10 then '5-10'
               when extract(year from age(v_ref, fi)) < 15 then '10-15'
@@ -89,8 +89,7 @@ begin
   from u
   group by categoria, subcategoria, resultado,
            case when not con_medidor then 'Sin medidor'
-                when fi is null then 'Sin fecha'
-                when fi > v_ref then 'Fecha inconsistente'
+                when fi is null or fi > v_ref then 'Sin fecha'
                 when extract(year from age(v_ref, fi)) < 5  then '0-5'
                 when extract(year from age(v_ref, fi)) < 10 then '5-10'
                 when extract(year from age(v_ref, fi)) < 15 then '10-15'
