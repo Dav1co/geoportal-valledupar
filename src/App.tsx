@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "./auth/useSession";
 import { Login } from "./auth/Login";
 import {
@@ -240,14 +240,32 @@ export default function App() {
     if (modo === "dashboard" && !puedeVerDashboard) setModo("explorar");
   }, [modo, puedeVerRutas, puedeVerFocalizacion, puedeVerComercial, puedeVerDashboard]);
 
-  // Cargar la lista de rutas la primera vez que se entra al modo Rutas.
+  // Cargar la lista de rutas la primera vez que se entra al modo Rutas o al
+  // modo Comercial (su filtro de ciclo usa los mismos ciclos). El endpoint
+  // exige el permiso "rutas", así que sin él no se pide (el filtro cae a la
+  // lista de respaldo). rutasPedida evita una segunda petición si se cambia
+  // de modo mientras la primera sigue en vuelo.
+  const rutasPedida = useRef(false);
   useEffect(() => {
-    if (modo === "rutas" && listaRutas.length === 0) {
+    if ((modo === "rutas" || (modo === "comercial" && puedeVerRutas)) &&
+        listaRutas.length === 0 && !rutasPedida.current) {
+      rutasPedida.current = true;
       api.rutasLista()
         .then((r) => setListaRutas(r.rutas ?? []))
-        .catch(() => setListaRutas([]));
+        .catch(() => setListaRutas([]))
+        .finally(() => { rutasPedida.current = false; });
     }
-  }, [modo, listaRutas.length]);
+  }, [modo, puedeVerRutas, listaRutas.length]);
+
+  // Ciclos del filtro del mapa comercial: los reales de la lista de rutas
+  // (sin el 9999 de "sin ciclo"), en orden numérico. Si la lista no está
+  // (sin permiso de rutas o falló la carga) se usa el respaldo 1..24.
+  const ciclosFiltro = useMemo(() => {
+    const reales = [...new Set(listaRutas.map((r) => r.ciclo))]
+      .filter((c) => /^\d+$/.test(c) && c !== "9999")
+      .sort((a, b) => Number(a) - Number(b));
+    return reales.length ? reales : Array.from({ length: 24 }, (_, i) => String(i + 1));
+  }, [listaRutas]);
 
   // Cuando se elige una ruta, cargar su detalle (recorrido + métricas).
   useEffect(() => {
@@ -884,7 +902,7 @@ export default function App() {
                     onChange={(e) => setFCiclo(e.target.value)}
                   >
                     <option value="todos">Todos</option>
-                    {Array.from({ length: 23 }, (_, i) => String(i + 1)).map((c) => (
+                    {ciclosFiltro.map((c) => (
                       <option key={c} value={c}>Ciclo {c}</option>
                     ))}
                   </select>
