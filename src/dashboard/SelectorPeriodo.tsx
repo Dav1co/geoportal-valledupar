@@ -11,6 +11,8 @@ type Props = {
   onCambio: (p: string) => void;
   comparado: string | null;
   onComparado: (p: string | null) => void;
+  // false = la pantalla activa no compara períodos: no se muestra el control.
+  conComparacion?: boolean;
   nota?: string;
   // Períodos que la pantalla activa SÍ puede mostrar. Los demás se
   // marcan "(sin datos)": el usuario ve que existen pero sabe que esa
@@ -24,6 +26,7 @@ export function SelectorPeriodo({
   onCambio,
   comparado,
   onComparado,
+  conComparacion = true,
   nota,
   sinDatos,
 }: Props) {
@@ -43,6 +46,7 @@ export function SelectorPeriodo({
           ))}
         </select>
       </label>
+      {conComparacion && (
       <label>
         <span>Comparar con</span>
         <select
@@ -59,6 +63,7 @@ export function SelectorPeriodo({
             ))}
         </select>
       </label>
+      )}
       {nota && <span className="dash-selper-nota">{nota}</span>}
     </div>
   );

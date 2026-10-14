@@ -46,6 +46,15 @@ const PAGINAS = [
 ] as const;
 type PaginaId = (typeof PAGINAS)[number]["id"];
 
+// Pantallas que reciben `comparado` y muestran Δ contra otro período. En las
+// demás el control "Comparar con" no hace nada, así que se oculta.
+const PAGINAS_CON_COMPARACION: ReadonlySet<PaginaId> = new Set<PaginaId>([
+  "resumen",
+  "facturacion-agrupado",
+  "recaudo-agrupado",
+  "cartera-agrupado",
+]);
+
 // Modo Dashboard del geoportal (Tablero Comercial).
 // Entrega 2: pantalla Resumen ejecutivo servida por bi.v_kpi_mes.
 export function Dashboard() {
@@ -60,6 +69,19 @@ export function Dashboard() {
   // Cambia al pulsar "Actualizar": va como key de la pantalla activa, así
   // que la remonta y vuelve a pedir con el caché ya vacío.
   const [recarga, setRecarga] = useState(0);
+
+  // Cambiar el período limpia la comparación solo si ahora coincidiría con
+  // él (comparar un período contra sí mismo no dice nada).
+  function cambiarPeriodo(p: string) {
+    setPeriodo(p);
+    setComparado((c) => (c === p ? null : c));
+  }
+
+  // Al entrar a una pantalla que no compara, la comparación se descarta.
+  function cambiarPagina(id: PaginaId) {
+    setPagina(id);
+    if (!PAGINAS_CON_COMPARACION.has(id)) setComparado(null);
+  }
 
   function actualizarDatos() {
     limpiarCacheBi();
@@ -131,9 +153,10 @@ export function Dashboard() {
             <SelectorPeriodo
               periodos={filas.map((f) => f.periodo)}
               valor={periodo}
-              onCambio={setPeriodo}
+              onCambio={cambiarPeriodo}
               comparado={comparado}
               onComparado={setComparado}
+              conComparacion={PAGINAS_CON_COMPARACION.has(pagina)}
               sinDatos={disponiblesPagina}
               nota={
                 desdeDetalle
@@ -150,7 +173,7 @@ export function Dashboard() {
           <button
             key={p.id}
             className={pagina === p.id ? "activa" : ""}
-            onClick={() => setPagina(p.id)}
+            onClick={() => cambiarPagina(p.id)}
           >
             {p.titulo}
           </button>
@@ -197,19 +220,19 @@ export function Dashboard() {
         <CarteraDetallado key={recarga} periodo={periodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "pqr" && (
-        <Pqr key={recarga} periodo={periodo} onIrAPeriodo={setPeriodo} />
+        <Pqr key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "notas" && (
-        <Notas key={recarga} periodo={periodo} onIrAPeriodo={setPeriodo} />
+        <Notas key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "cupones" && (
-        <Cupones key={recarga} periodo={periodo} onIrAPeriodo={setPeriodo} />
+        <Cupones key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "recaudo-diario" && (
-        <RecaudoDiario key={recarga} periodo={periodo} onIrAPeriodo={setPeriodo} />
+        <RecaudoDiario key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "perdidas" && (
-        <Perdidas key={recarga} periodo={periodo} onIrAPeriodo={setPeriodo} />
+        <Perdidas key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "consolidado" && (
         <Consolidado key={recarga} periodo={periodo} />
