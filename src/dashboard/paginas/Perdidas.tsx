@@ -11,7 +11,7 @@ import {
   fmtPct,
 } from "../formato";
 import { BarrasMensuales, LineasPorcentaje, TablaPlegable, colorAnio } from "../graficas";
-import { resumenAnual } from "../ipufAnual";
+import { excesoSobreMeta, resumenAnual } from "../ipufAnual";
 import { IndicesAnualesSeccion, IpufAnualBloque } from "./PerdidasAnual";
 
 // Pérdidas de agua (IPUF). Serie histórica larga: 114 períodos desde
@@ -83,6 +83,9 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
   const hace12 = idx >= 12 ? cronologico[idx - 12] : undefined;
 
   const sobreMeta = sel.ipuf != null && sel.meta_ipuf != null && sel.ipuf > sel.meta_ipuf;
+  // Exceso REAL sobre la meta del mes. La columna perdidas_superiores_meta del
+  // origen vale meta x suscriptores (el volumen que la meta permite), no el exceso.
+  const exceso = excesoSobreMeta(sel);
   const deltaIpuf = (a: number | null, b: number | null) =>
     a == null || b == null
       ? "—"
@@ -158,9 +161,9 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
 
         <div className="dash-carta dash-kpi">
           <div className="dash-eti">Pérdida por encima de la meta</div>
-          <div className="dash-valor num">{fmtMillones(sel.perdida_sobre_meta_pesos)}</div>
+          <div className="dash-valor num">{fmtMillones(exceso?.pesos ?? null)}</div>
           <div className="dash-sub2 num">
-            {fmtEntero(sel.perdida_sobre_meta_m3)} m³ · lo que excede el compromiso propio
+            {fmtEntero(exceso?.m3 ?? null)} m³ · lo que excede el compromiso propio
           </div>
         </div>
       </div>
@@ -288,8 +291,8 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
               </tr>
               <tr>
                 <td>Por encima de la meta propia</td>
-                <td className="num">{fmtEntero(sel.perdida_sobre_meta_m3)}</td>
-                <td className="num">{fmtMillones(sel.perdida_sobre_meta_pesos)}</td>
+                <td className="num">{fmtEntero(exceso?.m3 ?? null)}</td>
+                <td className="num">{fmtMillones(exceso?.pesos ?? null)}</td>
               </tr>
             </tbody>
           </table>
