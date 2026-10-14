@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { biCache } from "../cacheBi";
 import {
   comoConsumoCicloDim,
+  comoDesviacionDim,
   comoFactDetalleDim,
   type ConsumoCicloDim,
+  type DesviacionDim,
   type FactDetalleDim,
 } from "../tipos";
 import { etiquetaCiclo, etiquetaPeriodo, fmtEntero, fmtMillones, fmtPct, numeroCiclo } from "../formato";
@@ -11,6 +13,7 @@ import { BarrasHorizontales, Dona, TablaPlegable } from "../graficas";
 import { SinDatos } from "../SinDatos";
 import { PanelFiltros, TODOS, type DefFiltro } from "../PanelFiltros";
 import { ContratosCicloMedicion } from "./ContratosCicloMedicion";
+import { ContratosDesviacion } from "./ContratosDesviacion";
 
 const COLOR_USO: Record<string, string> = {
   Residencial: "#0A2540",
@@ -36,6 +39,9 @@ export function FacturacionDetallado({ periodo }: Props) {
   // su propio error, para que un fallo aquí no afecte al resto de la pantalla.
   const [consumo, setConsumo] = useState<ConsumoCicloDim[] | null>(null);
   const [errorConsumo, setErrorConsumo] = useState<string | null>(null);
+  // Sección "Contratos con desviación significativa": igual, carga propia.
+  const [desv, setDesv] = useState<DesviacionDim[] | null>(null);
+  const [errorDesv, setErrorDesv] = useState<string | null>(null);
   const [valores, setValores] = useState<Record<string, string>>({
     ciclo: TODOS, uso: TODOS, subcategoria: TODOS,
   });
@@ -49,6 +55,7 @@ export function FacturacionDetallado({ periodo }: Props) {
       .then((r) => setDatos((r.datos ?? []).map(comoFactDetalleDim)))
       .catch((e: Error) => setError(e.message));
     cargarConsumo();
+    cargarDesv();
   }
   function cargarConsumo() {
     setErrorConsumo(null);
@@ -56,6 +63,13 @@ export function FacturacionDetallado({ periodo }: Props) {
     biCache("v_consumo_ciclo_dim", { periodo })
       .then((r) => setConsumo((r.datos ?? []).map(comoConsumoCicloDim)))
       .catch((e: Error) => setErrorConsumo(e.message));
+  }
+  function cargarDesv() {
+    setErrorDesv(null);
+    setDesv(null);
+    biCache("v_desviacion_dim", { periodo })
+      .then((r) => setDesv((r.datos ?? []).map(comoDesviacionDim)))
+      .catch((e: Error) => setErrorDesv(e.message));
   }
   useEffect(cargar, [periodo]);
 
@@ -340,6 +354,14 @@ export function FacturacionDetallado({ periodo }: Props) {
           datos={consumo}
           error={errorConsumo}
           onReintentar={cargarConsumo}
+          valores={valores}
+        />
+
+        <ContratosDesviacion
+          periodo={periodo}
+          datos={desv}
+          error={errorDesv}
+          onReintentar={cargarDesv}
           valores={valores}
         />
       </div>
