@@ -369,6 +369,90 @@ export function comoDesviacionDim(r: Record<string, unknown>): DesviacionDim {
   };
 }
 
+// bi.v_lectura_ciclo_dim (sql/28): lectura efectiva y tiempos por ciclo.
+// resultado_lectura: avance | igual | menor | sin_lectura.
+// rango_dias: menos_min | en_rango | mas_max | sin_fecha (limites 28 y 32 dias).
+export type LecturaCicloDim = {
+  periodo: string;
+  ciclo: string;
+  con_medidor: boolean;
+  resultado_lectura: string;
+  rango_dias: string;
+  contratos: number;
+  contratos_con_dias: number;
+  dias_suma: number | null;
+  dias_min: number | null;
+  dias_max: number | null;
+  dia_modal: number | null;
+};
+export function comoLecturaCicloDim(r: Record<string, unknown>): LecturaCicloDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    con_medidor: r.con_medidor === true || r.con_medidor === "true",
+    resultado_lectura: String(r.resultado_lectura ?? ""),
+    rango_dias: String(r.rango_dias ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    contratos_con_dias: n(r.contratos_con_dias) ?? 0,
+    dias_suma: n(r.dias_suma),
+    dias_min: n(r.dias_min),
+    dias_max: n(r.dias_max),
+    dia_modal: n(r.dia_modal),
+  };
+}
+
+// bi.v_observacion_dim (sql/29): observacion de lectura por categoria, estrato y ciclo.
+// observacion viene normalizada ('99 USUARIO CON LECTURA'; vacia = 'Sin medidor').
+export type ObservacionDim = {
+  periodo: string;
+  categoria: string;
+  subcategoria: string;
+  ciclo: string;
+  observacion: string;
+  codigo_observacion: number | null;
+  con_medidor: boolean;
+  resultado_lectura: string;
+  contratos: number;
+  contratos_cero: number;
+};
+export function comoObservacionDim(r: Record<string, unknown>): ObservacionDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    categoria: String(r.categoria ?? ""),
+    subcategoria: String(r.subcategoria ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    observacion: String(r.observacion ?? ""),
+    codigo_observacion: n(r.codigo_observacion),
+    con_medidor: r.con_medidor === true || r.con_medidor === "true",
+    resultado_lectura: String(r.resultado_lectura ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    contratos_cero: n(r.contratos_cero) ?? 0,
+  };
+}
+
+// bi.v_medidor_antig_dim (sql/30): antiguedad del medidor, sin ciclo.
+// banda_antiguedad: 0-5 | 5-10 | 10-15 | >15 | Sin fecha | Sin medidor.
+export type MedidorAntigDim = {
+  periodo: string;
+  categoria: string;
+  subcategoria: string;
+  banda_antiguedad: string;
+  resultado_lectura: string;
+  contratos: number;
+  contratos_cero: number;
+};
+export function comoMedidorAntigDim(r: Record<string, unknown>): MedidorAntigDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    categoria: String(r.categoria ?? ""),
+    subcategoria: String(r.subcategoria ?? ""),
+    banda_antiguedad: String(r.banda_antiguedad ?? ""),
+    resultado_lectura: String(r.resultado_lectura ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    contratos_cero: n(r.contratos_cero) ?? 0,
+  };
+}
+
 export type FactDetalleDim = {
   periodo: string;
   ciclo: string;
