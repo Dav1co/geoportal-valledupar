@@ -64,6 +64,9 @@
 --   v_pqr_dim               : periodo (exacto) — preagregado de PQR
 --   v_fact_detalle_dim      : periodo (exacto) — preagregado del detalle;
 --                             se trae completo y se filtra en el navegador
+--   v_consumo_ciclo_dim     : periodo (exacto; sin él, el último con datos
+--                             en esta tabla) — contratos por ciclo, medición
+--                             y consumo cero (sql/26_consumo_ciclo_dim.sql)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -213,6 +216,19 @@ begin
     from bi.v_cartera_detalle_dim t
     where t.periodo = coalesce(p_filtros ->> 'periodo',
                                (select periodo from bi.v_ultimo_periodo));
+
+  elsif p_vista = 'v_consumo_ciclo_dim' then
+    -- ~380 filas por período (ciclo x categoría x subcategoría x medidor). La
+    -- pantalla lo trae UNA vez y filtra en el navegador. Sin período se usa el
+    -- último con datos EN ESTA TABLA, no el último global: consumo_metodo puede
+    -- ir un período atrás (p. ej. 202606 no existe).
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by length(t.ciclo), t.ciclo, t.categoria, t.subcategoria, t.con_medidor),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_consumo_ciclo_dim t
+    where t.periodo = coalesce(p_filtros ->> 'periodo',
+                               (select max(periodo) from bi.v_consumo_ciclo_dim));
 
   elsif p_vista = 'v_cartera_contratos_dim' then
     select coalesce(jsonb_agg(to_jsonb(t) order by t.ciclo, t.uso, t.estrato), '[]'::jsonb)
