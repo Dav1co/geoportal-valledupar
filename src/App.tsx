@@ -168,6 +168,8 @@ export default function App() {
   const [fLado, setFLado] = useState<"aumentos" | "reducciones" | "sin_consumo">("aumentos");
   const [fCambio, setFCambio] = useState("todos");
   const [conteoCom, setConteoCom] = useState<ConteoComercial>({ disponible: false, total: 0 });
+  // Zoom del mapa: las redes de servicio solo se dibujan desde z15.
+  const [zoomMapa, setZoomMapa] = useState<number>(URL0?.inicial?.zoom ?? 0);
   const [fCiclo, setFCiclo] = useState("todos");
   const [fBarrio, setFBarrio] = useState("");          // barrio seleccionado (exacto)
   const [fConsumoMax, setFConsumoMax] = useState("");
@@ -1298,10 +1300,17 @@ export default function App() {
 
           <main className="visor">
             {modo === "dashboard" && puedeVerDashboard ? <Dashboard /> : <>
-            {modo === "comercial" && !conteoCom.disponible && (
+            {/* Una sola banda: la comercial (si aplica) absorbe el aviso de las redes. */}
+            {((modo === "comercial" && !conteoCom.disponible) ||
+              ((mostrarRedAcu || mostrarRedAlc) && zoomMapa < 15)) && (
               <div className="banda-zoom">
                 <span>
-                  Acércate para aplicar filtros y seleccionar predios.
+                  {modo === "comercial" && !conteoCom.disponible
+                    ? "Acércate para aplicar filtros y seleccionar predios."
+                    : "Acércate para ver las redes: se dibujan desde un zoom más cercano."}
+                  {modo === "comercial" && !conteoCom.disponible &&
+                    (mostrarRedAcu || mostrarRedAlc) &&
+                    " Las redes también aparecen desde ese nivel."}
                 </span>
                 <button
                   className="banda-zoom-btn"
@@ -1323,6 +1332,7 @@ export default function App() {
               mostrarBarrios={mostrarBarrios}
               mostrarRedAcueducto={mostrarRedAcu}
               mostrarRedAlcantarillado={mostrarRedAlc}
+              onZoom={setZoomMapa}
               base={base}
               modoTerrenos={modoTerrenos}
               modoActivo={modo as ModoMapa}

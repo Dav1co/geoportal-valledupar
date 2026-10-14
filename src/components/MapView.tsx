@@ -78,6 +78,9 @@ type Props = {
   onSeleccionarVarios: (lista: PredioApilado[]) => void;
   onConteo: (c: Conteo) => void;
   onConteoComercial: (c: ConteoComercial) => void;
+  // Zoom actual del mapa (al iniciar y al terminar cada zoom): lo usa el
+  // aviso "acércate" de las redes en App.
+  onZoom?: (z: number) => void;
   onStatsComercial: (s: StatsComercial) => void;
   onTerreno: (info: TerrenoInfo | null) => void;
   dibujando: boolean;
@@ -118,6 +121,7 @@ export function MapView({
   onSeleccionarVarios,
   onConteo,
   onConteoComercial,
+  onZoom,
   onStatsComercial,
   onTerreno,
   dibujando,
@@ -142,6 +146,7 @@ export function MapView({
   const onVarios = useRef(onSeleccionarVarios);
   const onCont = useRef(onConteo);
   const onContCom = useRef(onConteoComercial);
+  const onZoomRef = useRef(onZoom);
   const onStatsCom = useRef(onStatsComercial);
   const modoRef2 = useRef(modoActivo);
   const puntosRutaRef = useRef(puntosRuta);
@@ -192,6 +197,7 @@ export function MapView({
   useEffect(() => { onVarios.current = onSeleccionarVarios; }, [onSeleccionarVarios]);
   useEffect(() => { onCont.current = onConteo; }, [onConteo]);
   useEffect(() => { onContCom.current = onConteoComercial; }, [onConteoComercial]);
+  useEffect(() => { onZoomRef.current = onZoom; }, [onZoom]);
   useEffect(() => { onStatsCom.current = onStatsComercial; }, [onStatsComercial]);
   useEffect(() => { modoRef2.current = modoActivo; }, [modoActivo]);
   useEffect(() => {
@@ -673,6 +679,8 @@ export function MapView({
       pintarRuta(map, puntosRutaRef.current);
     });
 
+    map.on("zoomend", () => onZoomRef.current?.(map.getZoom()));
+    onZoomRef.current?.(map.getZoom());
     map.on("moveend", () => recontar(map));
     map.on("idle", () => recontar(map));
     map.on("moveend", () => recontarComercial(map));
