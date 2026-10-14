@@ -440,6 +440,69 @@ export function BarrasHorizontales({
   );
 }
 
+// ---------- barras horizontales apiladas ----------
+// Una fila por categoría (p. ej. ciclo) con los valores de cada serie uno
+// a continuación del otro (p. ej. contratos con y sin medidor). Mismo
+// trazo, tooltip y leyenda que las barras horizontales simples.
+export function BarrasApiladas({
+  datos,
+  series,
+  formatoValor,
+}: {
+  datos: { etiqueta: string; valores: number[] }[]; // un valor por serie, en su orden
+  series: { nombre: string; color: string }[];
+  formatoValor: (v: number) => string;
+}) {
+  const { ref, tip, mover, salir } = useTip();
+  const filaH = 20, gap = 4;
+  const ancho = 720, izq = 86, der = 12;
+  const alto = Math.max(60, datos.length * (filaH + gap) + 10);
+  const max = Math.max(1, ...datos.map((d) => d.valores.reduce((s, v) => s + Math.max(0, v), 0)));
+  const escala = (v: number) => (Math.max(0, v) / max) * (ancho - izq - der);
+
+  return (
+    <div ref={ref} className="dash-grafica" onMouseLeave={salir}>
+      <svg viewBox={`0 0 ${ancho} ${alto}`} style={{ width: "100%", height: "auto" }} role="img">
+        {datos.map((d, i) => {
+          const y = i * (filaH + gap) + 5;
+          let x = izq;
+          return (
+            <g key={d.etiqueta}>
+              <text x={izq - 8} y={y + filaH / 2 + 3.5} textAnchor="end" fontSize={10.5} fill="#5D6E7E">
+                {d.etiqueta}
+              </text>
+              {series.map((s, k) => {
+                const w = escala(d.valores[k] ?? 0);
+                const x0 = x;
+                x += w;
+                return w > 0 ? (
+                  <rect
+                    key={s.nombre}
+                    x={x0}
+                    y={y}
+                    width={w}
+                    height={filaH}
+                    fill={s.color}
+                    onMouseMove={(e) => mover(e, `${d.etiqueta} · ${s.nombre}`, formatoValor(d.valores[k] ?? 0))}
+                  />
+                ) : null;
+              })}
+            </g>
+          );
+        })}
+      </svg>
+      <CapaTip tip={tip} />
+      <div className="dash-leyenda">
+        {series.map((s) => (
+          <span key={s.nombre}>
+            <i style={{ background: s.color }} /> {s.nombre}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------- dona ----------
 type Parte = { etiqueta: string; valor: number; color: string; pct: number | null };
 
