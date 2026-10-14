@@ -14,6 +14,7 @@ import { SinDatos } from "../SinDatos";
 import { PanelFiltros, TODOS, type DefFiltro } from "../PanelFiltros";
 import { ContratosCicloMedicion } from "./ContratosCicloMedicion";
 import { ContratosDesviacion } from "./ContratosDesviacion";
+import { ContratosLectura } from "./ContratosLectura";
 
 const COLOR_USO: Record<string, string> = {
   Residencial: "#0A2540",
@@ -364,6 +365,8 @@ export function FacturacionDetallado({ periodo }: Props) {
           onReintentar={cargarDesv}
           valores={valores}
         />
+
+        <ContratosLectura periodo={periodo} valores={valores} />
       </div>
     </div>
   );
