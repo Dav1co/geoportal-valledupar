@@ -12,6 +12,7 @@ import { etiquetaPeriodo, fmtEntero, fmtMillones, fmtPct } from "../formato";
 import { BarrasHorizontales, LineasPorDia, TablaPlegable, colorAnio } from "../graficas";
 import { SinDatos } from "../SinDatos";
 import { PanelFiltros, TODOS, type DefFiltro } from "../PanelFiltros";
+import { ROTULO } from "../rotulos";
 
 const DIAS_SEMANA = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -81,7 +82,7 @@ export function RecaudoDetallado({ periodo }: Props) {
   if (error) {
     return (
       <div className="dash-estado">
-        <p>No se pudo cargar el recaudo detallado: {error}</p>
+        <p>No se pudo cargar el {ROTULO.recaudoDesagregado.toLowerCase()}: {error}</p>
         <button className="dash-boton" onClick={cargar}>Reintentar</button>
       </div>
     );

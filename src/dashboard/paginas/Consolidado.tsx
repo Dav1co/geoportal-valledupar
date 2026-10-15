@@ -13,6 +13,7 @@ import {
   fmtPct,
 } from "../formato";
 import { TablaPlegable } from "../graficas";
+import { ROTULO } from "../rotulos";
 
 // Consolidado NO abrevia: la pantalla se copia a Excel para informes de
 // gerencia y un valor abreviado no se puede sumar ni cruzar.
@@ -270,8 +271,8 @@ export function Consolidado({ periodo }: Props) {
           <p className="dash-nota" style={{ marginTop: 0 }}>
             Si un mes se sale de la línea, la pantalla especializada dice por
             qué: un salto en <b>notas</b> se explica en Notas por causal; una
-            caída del <b>% de recaudo</b>, en Recaudo agrupado por composición
-            de edades; un salto de <b>cartera</b>, en Cartera detallado por
+            caída del <b>% de recaudo</b>, en {ROTULO.recaudoConsolidado} por composición
+            de edades; un salto de <b>cartera</b>, en {ROTULO.carteraDesagregada} por
             barrio y antigüedad; y un cambio en <b>cupones</b> o en el ticket de
             pago, en Cupones por canal.
           </p>

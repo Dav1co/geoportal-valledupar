@@ -4,6 +4,7 @@ import { comoKpiAnio, comoKpiMes, type KpiAnio, type KpiMes } from "./tipos";
 import { etiquetaPeriodo } from "./formato";
 import { SelectorPeriodo } from "./SelectorPeriodo";
 import { Resumen } from "./paginas/Resumen";
+import { ROTULO } from "./rotulos";
 import { FacturacionAgrupado } from "./paginas/FacturacionAgrupado";
 import { RecaudoAgrupado } from "./paginas/RecaudoAgrupado";
 import { CarteraAgrupado } from "./paginas/CarteraAgrupado";
@@ -26,12 +27,12 @@ import "./dashboard.css";
 // período del selector tiene datos.
 const PAGINAS = [
   { id: "resumen", titulo: "Resumen ejecutivo", fuente: "facturacion_agrupado" },
-  { id: "facturacion-agrupado", titulo: "Facturación agrupado", fuente: "facturacion_agrupado" },
-  { id: "recaudo-agrupado", titulo: "Recaudo agrupado", fuente: "recaudo_agrupado" },
-  { id: "cartera-agrupado", titulo: "Cartera agrupado", fuente: "cartera_resumen" },
-  { id: "facturacion-detallado", titulo: "Facturación detallado", fuente: "facturacion_contratos" },
-  { id: "recaudo-detallado", titulo: "Recaudo detallado", fuente: "recaudo_detalle" },
-  { id: "cartera-detallado", titulo: "Cartera detallado", fuente: "cartera_edades" },
+  { id: "facturacion-agrupado", titulo: ROTULO.facturacionConsolidada, fuente: "facturacion_agrupado" },
+  { id: "recaudo-agrupado", titulo: ROTULO.recaudoConsolidado, fuente: "recaudo_agrupado" },
+  { id: "cartera-agrupado", titulo: ROTULO.carteraConsolidada, fuente: "cartera_resumen" },
+  { id: "facturacion-detallado", titulo: ROTULO.facturacionDesagregada, fuente: "facturacion_contratos" },
+  { id: "recaudo-detallado", titulo: ROTULO.recaudoDesagregado, fuente: "recaudo_detalle" },
+  { id: "cartera-detallado", titulo: ROTULO.carteraDesagregada, fuente: "cartera_edades" },
   { id: "pqr", titulo: "PQR", fuente: "reclamos" },
   { id: "notas", titulo: "Notas", fuente: "notas" },
   { id: "cupones", titulo: "Cupones", fuente: "cupones_pagos" },
