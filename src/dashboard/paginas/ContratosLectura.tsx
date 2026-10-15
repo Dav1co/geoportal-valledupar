@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useRama, type Estado } from "../useRama";
-import { biCache } from "../cacheBi";
 import {
   comoLecturaCicloDim,
   comoMedidorAntigDim,
@@ -23,30 +22,30 @@ import {
 } from "../formato";
 import { BarrasApiladas, TablaPlegable } from "../graficas";
 import { TODOS } from "../PanelFiltros";
+import { useVacioConsumo } from "../useVacioConsumo";
+import {
+  CODIGO_CON_LECTURA,
+  LIM_DIAS_MAX,
+  LIM_DIAS_MIN,
+  PRIMER_PERIODO_ANTIGUEDAD,
+  SIN_MEDIDOR,
+  UMBRAL_OTRAS_PCT,
+  textoObservacion,
+} from "../lecturaComun";
+import { PromedioConsumoAntiguedad } from "./PromedioConsumoAntiguedad";
 
-// Sección "Lectura" de Facturación detallado: lectura efectiva, tiempos de
-// lectura, observaciones de lectura y antigüedad de los medidores. Fuentes:
+// Secciones de lectura y medición: lectura efectiva y tiempos de lectura (Facturación
+// desagregada) y observaciones de lectura y medidores por antigüedad (Pérdidas). Fuentes:
 // bi.v_observacion_dim, bi.v_lectura_ciclo_dim y bi.v_medidor_antig_dim
-// (sql/28, 29 y 30; todas de consumo_metodo). Usa los filtros de la pantalla
-// (ciclo, uso, estrato) y su selector de período; no usa "Comparar con".
+// (sql/28, 29 y 30; todas de consumo_metodo). Usan los filtros de su pantalla
+// (ciclo, uso, estrato) y su selector de período; no usan "Comparar con".
 //
 // Cada tabla trae SOLO algunas dimensiones, así que cada bloque aplica los
 // filtros que su tabla permite y avisa de los que no:
 //   · Lectura efectiva y observaciones: ciclo, uso y estrato (v_observacion_dim).
 //   · Tiempos de lectura: solo ciclo (v_lectura_ciclo_dim no trae uso ni estrato).
 //   · Antigüedad del medidor: uso y estrato (v_medidor_antig_dim no trae ciclo).
-
-// Intervalo regulatorio entre lecturas, en días. Es la ÚNICA definición en el
-// front; el SQL (sql/28) clasifica con los mismos límites (28 y 32).
-export const LIM_DIAS_MIN = 28;
-export const LIM_DIAS_MAX = 32;
-// Observaciones con menos de este % de los contratos filtrados se agrupan en
-// "Otras" (salvo "Sin medidor" y la observación 99, que siempre se ven).
-export const UMBRAL_OTRAS_PCT = 0.3;
-export const CODIGO_CON_LECTURA = 99;
-export const SIN_MEDIDOR = "Sin medidor";
-// Primer período con fecha de instalación en consumo_metodo (antes viene vacía).
-export const PRIMER_PERIODO_ANTIGUEDAD = "202605";
+// Las constantes y funciones compartidas con las demás secciones viven en ../lecturaComun.
 
 const BANDAS_ESCALA = ["0-5", "5-10", "10-15", ">15"];
 const BANDAS = [...BANDAS_ESCALA, "Sin fecha", SIN_MEDIDOR];
@@ -65,82 +64,40 @@ const COLOR = {
 };
 
 const pct = (parte: number, total: number) => (total > 0 ? (parte / total) * 100 : null);
-export const textoObservacion = (o: string) => o.replace(/^\d+\s+/, "");
 
 type Props = {
   periodo: string;
   valores: Record<string, string>;     // filtros de la pantalla: ciclo, uso, subcategoria
 };
 
-type Disponibles = string[] | "error" | null;
+const pasaCicloDe = (valores: Record<string, string>) => {
+  const nCiclo = valores.ciclo === TODOS ? null : numeroCiclo(valores.ciclo);
+  return { nCiclo, pasa: (c: string) => nCiclo == null || numeroCiclo(c) === nCiclo };
+};
+const pasaUsoDe = (valores: Record<string, string>) => (cat: string, sub: string) =>
+  (valores.uso === TODOS || cat === valores.uso) &&
+  (valores.subcategoria === TODOS || sub === valores.subcategoria);
 
+// Lectura efectiva y tiempos de lectura (se quedan en Facturación desagregada).
 export function ContratosLectura({ periodo, valores }: Props) {
   const obs = useRama("v_observacion_dim", periodo, comoObservacionDim);
   const lec = useRama("v_lectura_ciclo_dim", periodo, comoLecturaCicloDim);
-  const ant = useRama("v_medidor_antig_dim", periodo, comoMedidorAntigDim);
+  const hayVacio = [obs.datos, lec.datos].some((d) => d != null && d.length === 0);
+  const vacio = useVacioConsumo(hayVacio);
 
-  // Períodos que tiene la fuente: solo se consulta si algún bloque llega vacío.
-  const [disponibles, setDisponibles] = useState<Disponibles>(null);
-  const hayVacio = [obs.datos, lec.datos, ant.datos].some((d) => d != null && d.length === 0);
-  useEffect(() => {
-    if (!hayVacio) return;
-    biCache("v_periodos_fuente")
-      .then((r) =>
-        setDisponibles(
-          (r.datos ?? [])
-            .filter((x) => String(x.fuente) === "consumo_metodo")
-            .map((x) => String(x.periodo))
-            .sort(),
-        ),
-      )
-      .catch(() => setDisponibles("error"));
-  }, [hayVacio]);
-
-  const nCiclo = valores.ciclo === TODOS ? null : numeroCiclo(valores.ciclo);
+  const { pasa: pasaCiclo } = pasaCicloDe(valores);
+  const pasaUso = pasaUsoDe(valores);
   const filtraUso = valores.uso !== TODOS || valores.subcategoria !== TODOS;
-  const pasaCiclo = (c: string) => nCiclo == null || numeroCiclo(c) === nCiclo;
-  const pasaUso = (cat: string, sub: string) =>
-    (valores.uso === TODOS || cat === valores.uso) &&
-    (valores.subcategoria === TODOS || sub === valores.subcategoria);
-
   const obsF = useMemo(
     () => (obs.datos ?? []).filter((x) => pasaCiclo(x.ciclo) && pasaUso(x.categoria, x.subcategoria)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [obs.datos, nCiclo, valores.uso, valores.subcategoria],
+    [obs.datos, valores.ciclo, valores.uso, valores.subcategoria],
   );
   const lecF = useMemo(
     () => (lec.datos ?? []).filter((x) => pasaCiclo(x.ciclo)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lec.datos, nCiclo],
+    [lec.datos, valores.ciclo],
   );
-  const antF = useMemo(
-    () => (ant.datos ?? []).filter((x) => pasaUso(x.categoria, x.subcategoria)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ant.datos, valores.uso, valores.subcategoria],
-  );
-
-  // Sin datos en las tres ramas: UN solo aviso arriba y los bloques quedan ocultos.
-  const cargadas = [obs.datos, lec.datos, ant.datos].every((d) => d != null);
-  const todasVacias = cargadas && [obs.datos, lec.datos, ant.datos].every((d) => d!.length === 0);
-  if (todasVacias) {
-    return (
-      <div className="dash-fila"><div className="dash-carta">
-        <h3>Lectura — {etiquetaPeriodo(periodo)}</h3>
-        <div className="dash-estado">
-          <p><b>Sin datos de lectura para este período.</b></p>
-          {disponibles == null ? (
-            <p>Verificando los períodos disponibles…</p>
-          ) : disponibles === "error" || disponibles.length === 0 ? null : (
-            <p>
-              Hay datos de lectura desde <b>{etiquetaPeriodo(disponibles[0])}</b> hasta{" "}
-              <b>{etiquetaPeriodo(disponibles[disponibles.length - 1])}</b>.
-            </p>
-          )}
-        </div>
-      </div></div>
-    );
-  }
-  const vacio = <div className="dash-estado">Sin datos de esta sección para este período.</div>;
 
   return (
     <>
@@ -155,14 +112,48 @@ export function ContratosLectura({ periodo, valores }: Props) {
       <Bloque titulo="Tiempos de lectura" estado={lec} vacio={vacio}>
         <TiemposLectura filas={lecF} filtraUso={filtraUso} />
       </Bloque>
+    </>
+  );
+}
 
-      <Bloque titulo="Observaciones de lectura" estado={obs} vacio={vacio}>
-        <Observaciones filas={obsF} />
-      </Bloque>
+// Observaciones de lectura (se muestra en Pérdidas).
+export function ObservacionesLectura({ periodo, valores }: Props) {
+  const obs = useRama("v_observacion_dim", periodo, comoObservacionDim);
+  const vacio = useVacioConsumo(obs.datos != null && obs.datos.length === 0);
+  const { pasa: pasaCiclo } = pasaCicloDe(valores);
+  const pasaUso = pasaUsoDe(valores);
+  const obsF = useMemo(
+    () => (obs.datos ?? []).filter((x) => pasaCiclo(x.ciclo) && pasaUso(x.categoria, x.subcategoria)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [obs.datos, valores.ciclo, valores.uso, valores.subcategoria],
+  );
+  return (
+    <Bloque titulo="Observaciones de lectura" estado={obs} vacio={vacio}>
+      <Observaciones filas={obsF} />
+    </Bloque>
+  );
+}
 
+// Medidores por antigüedad y promedio de consumo por antigüedad (se muestra en Pérdidas).
+// v_medidor_antig_dim no trae ciclo: el filtro de ciclo no aplica.
+export function MedidoresAntiguedad({ periodo, valores }: Props) {
+  const ant = useRama("v_medidor_antig_dim", periodo, comoMedidorAntigDim);
+  const vacio = useVacioConsumo(ant.datos != null && ant.datos.length === 0);
+  const pasaUso = pasaUsoDe(valores);
+  const { nCiclo } = pasaCicloDe(valores);
+  const antF = useMemo(
+    () => (ant.datos ?? []).filter((x) => pasaUso(x.categoria, x.subcategoria)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ant.datos, valores.uso, valores.subcategoria],
+  );
+  return (
+    <>
       <Bloque titulo="Medidores por antigüedad" estado={ant} vacio={vacio}>
         <Antiguedad filas={antF} periodo={periodo} filtraCiclo={nCiclo != null} />
       </Bloque>
+      {ant.datos != null && ant.datos.length > 0 ? (
+        <PromedioConsumoAntiguedad filas={ant.datos} periodo={periodo} />
+      ) : null}
     </>
   );
 }
@@ -197,25 +188,6 @@ const SinFiltrados = () => (
     <div className="dash-nota">No hay contratos con los filtros elegidos en este período.</div>
   </div></div>
 );
-
-// Contratos con una observación de lectura distinta de «99 USUARIO CON LECTURA» y de
-// «Sin medidor» (a nivel de las filas recibidas). Lo usa la ficha «Con observación de
-// lectura» de la sección de contratos por ciclo y medición.
-export function resumenConObservacion(filas: ObservacionDim[]) {
-  let contratos = 0, cero = 0, conMedidor = 0;
-  const m = new Map<string, { texto: string; contratos: number }>();
-  for (const x of filas) {
-    if (x.con_medidor) conMedidor += x.contratos;
-    if (x.observacion === SIN_MEDIDOR || x.codigo_observacion === CODIGO_CON_LECTURA) continue;
-    contratos += x.contratos;
-    cero += x.contratos_cero;
-    const it = m.get(x.observacion) ?? { texto: textoObservacion(x.observacion), contratos: 0 };
-    it.contratos += x.contratos;
-    m.set(x.observacion, it);
-  }
-  const causal = [...m.values()].sort((a, b) => b.contratos - a.contratos)[0] ?? null;
-  return { contratos, cero, conMedidor, causal };
-}
 
 // ---------------------------------------------------------------------
 // a) Lectura efectiva (v_observacion_dim: trae ciclo, uso, estrato y medidor)

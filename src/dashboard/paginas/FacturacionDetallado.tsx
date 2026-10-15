@@ -4,18 +4,18 @@ import {
   comoConsumoCicloDim,
   comoDesviacionDim,
   comoFactDetalleDim,
-  type ConsumoCicloDim,
   type DesviacionDim,
   type FactDetalleDim,
 } from "../tipos";
-import { etiquetaCiclo, etiquetaPeriodo, fmtEntero, fmtMillones, fmtPct, numeroCiclo } from "../formato";
+import { etiquetaPeriodo, fmtEntero, fmtMillones, fmtPct, numeroCiclo } from "../formato";
 import { BarrasHorizontales, Dona, TablaPlegable } from "../graficas";
 import { SinDatos } from "../SinDatos";
 import { PanelFiltros, TODOS, type DefFiltro } from "../PanelFiltros";
-import { ContratosCicloMedicion } from "./ContratosCicloMedicion";
 import { ContratosDesviacion } from "./ContratosDesviacion";
 import { ContratosLectura } from "./ContratosLectura";
-import { ConsumoRangosBasico } from "./ConsumoRangosBasico";
+import { ConsumoBasicoSeccion } from "./ConsumoRangosBasico";
+import { filtrosCicloUsoEstrato } from "../lecturaComun";
+import { useRama } from "../useRama";
 
 const COLOR_USO: Record<string, string> = {
   Residencial: "#0A2540",
@@ -37,10 +37,9 @@ type Props = { periodo: string };
 export function FacturacionDetallado({ periodo }: Props) {
   const [datos, setDatos] = useState<FactDetalleDim[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Sección "Contratos por ciclo, medición y consumo cero": su propia carga y
-  // su propio error, para que un fallo aquí no afecte al resto de la pantalla.
-  const [consumo, setConsumo] = useState<ConsumoCicloDim[] | null>(null);
-  const [errorConsumo, setErrorConsumo] = useState<string | null>(null);
+  // v_consumo_ciclo_dim solo alimenta aquí las opciones del filtro de ciclo (trae el 24); la sección
+  // "Contratos por ciclo, medición y consumo cero" se muestra ahora en Pérdidas, con su propia carga.
+  const consumo = useRama("v_consumo_ciclo_dim", periodo, comoConsumoCicloDim).datos;
   // Sección "Contratos con desviación significativa": igual, carga propia.
   const [desv, setDesv] = useState<DesviacionDim[] | null>(null);
   const [errorDesv, setErrorDesv] = useState<string | null>(null);
@@ -56,15 +55,7 @@ export function FacturacionDetallado({ periodo }: Props) {
     biCache("v_fact_detalle_dim", { periodo })
       .then((r) => setDatos((r.datos ?? []).map(comoFactDetalleDim)))
       .catch((e: Error) => setError(e.message));
-    cargarConsumo();
     cargarDesv();
-  }
-  function cargarConsumo() {
-    setErrorConsumo(null);
-    setConsumo(null);
-    biCache("v_consumo_ciclo_dim", { periodo })
-      .then((r) => setConsumo((r.datos ?? []).map(comoConsumoCicloDim)))
-      .catch((e: Error) => setErrorConsumo(e.message));
   }
   function cargarDesv() {
     setErrorDesv(null);
@@ -75,39 +66,13 @@ export function FacturacionDetallado({ periodo }: Props) {
   }
   useEffect(cargar, [periodo]);
 
-  const filtros: DefFiltro[] = useMemo(() => {
-    const d = datos ?? [];
-    const unicos = (f: (x: FactDetalleDim) => string) =>
-      [...new Set(d.map(f))].sort((a, b) => a.localeCompare(b, "es"));
-    return [
-      // Ciclos de la facturación ('CICLO 05') y de consumo ('5'), unidos y
-      // comparados por número: así el 24 se puede filtrar aunque la facturación
-      // todavía no lo traiga (sus bloques quedan en cero).
-      {
-        id: "ciclo",
-        etiqueta: "Ciclo de facturación",
-        opciones: [
-          ...new Set(
-            [...d.map((x) => x.ciclo), ...(consumo ?? []).map((x) => x.ciclo)]
-              .map(numeroCiclo)
-              .filter((n): n is number => n != null),
-          ),
-        ]
-          .sort((a, b) => a - b)
-          .map(etiquetaCiclo),
-      },
-      { id: "uso", etiqueta: "Uso", opciones: unicos((x) => x.uso) },
-      {
-        id: "subcategoria",
-        etiqueta: "Estrato",
-        // Solo con uso Residencial la subcategoría es el estrato; en el
-        // resto trae el diámetro de la acometida.
-        visible: (v) => v.uso === "Residencial",
-        opciones: unicos((x) => (x.uso === "Residencial" ? x.subcategoria : "")).filter(Boolean),
-        ayuda: "Solo aplica a uso Residencial",
-      },
-    ];
-  }, [datos, consumo]);
+  const filtros: DefFiltro[] = useMemo(
+    () => filtrosCicloUsoEstrato(
+      [...(datos ?? []).map((x) => x.ciclo), ...(consumo ?? []).map((x) => x.ciclo)],
+      (datos ?? []).map((x) => ({ uso: x.uso, subcategoria: x.subcategoria })),
+    ),
+    [datos, consumo],
+  );
 
   // Filtrado en el navegador: instantáneo, sin volver a la base.
   const filtrado = useMemo(() => {
@@ -351,14 +316,6 @@ export function FacturacionDetallado({ periodo }: Props) {
           </div>
         </div>
 
-        <ContratosCicloMedicion
-          periodo={periodo}
-          datos={consumo}
-          error={errorConsumo}
-          onReintentar={cargarConsumo}
-          valores={valores}
-        />
-
         <ContratosDesviacion
           periodo={periodo}
           datos={desv}
@@ -369,7 +326,7 @@ export function FacturacionDetallado({ periodo }: Props) {
 
         <ContratosLectura periodo={periodo} valores={valores} />
 
-        <ConsumoRangosBasico periodo={periodo} valores={valores} />
+        <ConsumoBasicoSeccion periodo={periodo} valores={valores} />
       </div>
     </div>
   );

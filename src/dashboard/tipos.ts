@@ -440,6 +440,7 @@ export type MedidorAntigDim = {
   resultado_lectura: string;
   contratos: number;
   contratos_cero: number;
+  m3_cargos: number | null;   // suma de consumo_cargos; nula en periodos anteriores a 202605
 };
 export function comoMedidorAntigDim(r: Record<string, unknown>): MedidorAntigDim {
   return {
@@ -450,6 +451,7 @@ export function comoMedidorAntigDim(r: Record<string, unknown>): MedidorAntigDim
     resultado_lectura: String(r.resultado_lectura ?? ""),
     contratos: n(r.contratos) ?? 0,
     contratos_cero: n(r.contratos_cero) ?? 0,
+    m3_cargos: n(r.m3_cargos),
   };
 }
 

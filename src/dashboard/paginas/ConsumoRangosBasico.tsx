@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { biCache } from "../cacheBi";
+import { useMemo, type ReactNode } from "react";
 import {
   comoConsumoBasicoDim,
   comoConsumoRangoDim,
@@ -19,11 +18,13 @@ import {
 import { BarrasApiladas, BarrasPareja, TablaPlegable } from "../graficas";
 import { TODOS } from "../PanelFiltros";
 import { useRama, type Estado } from "../useRama";
+import { useVacioConsumo } from "../useVacioConsumo";
 
-// Dos secciones de Facturación detallado, debajo de "Lectura":
-//   · Rangos de consumo (bi.v_consumo_rango_dim, sql/31): ciclo, uso y estrato aplican.
-//   · Consumo básico (bi.v_consumo_basico_dim, sql/32): solo Residencial, estratos 1 a 3.
-// Usan los filtros de la pantalla y su selector de período; no usan "Comparar con".
+// Dos secciones de consumo:
+//   · Rangos de consumo (bi.v_consumo_rango_dim, sql/31): ciclo, uso y estrato aplican. Se muestra en Pérdidas.
+//   · Consumo básico (bi.v_consumo_basico_dim, sql/32): solo Residencial, estratos 1 a 3. Sigue en
+//     Facturación desagregada.
+// Usan los filtros de su pantalla y su selector de período; no usan "Comparar con".
 
 // Límite del consumo básico, en m³ por contrato y mes. DEBE coincidir con
 // c_basico de bi.recalcular_consumo_basico_dim (sql/32_consumo_basico_dim.sql).
@@ -51,74 +52,42 @@ type Props = {
   valores: Record<string, string>;     // filtros de la pantalla: ciclo, uso, subcategoria
 };
 
-export function ConsumoRangosBasico({ periodo, valores }: Props) {
+// Contratos y volumen por rango de consumo (se muestra en Pérdidas).
+export function ConsumoRangosSeccion({ periodo, valores }: Props) {
   const rango = useRama("v_consumo_rango_dim", periodo, comoConsumoRangoDim);
-  const basico = useRama("v_consumo_basico_dim", periodo, comoConsumoBasicoDim);
-
-  // Períodos que tiene la fuente: solo se consulta si las dos ramas llegan vacías.
-  const [disponibles, setDisponibles] = useState<string[] | "error" | null>(null);
-  const cargadas = rango.datos != null && basico.datos != null;
-  const todasVacias = cargadas && rango.datos!.length === 0 && basico.datos!.length === 0;
-  useEffect(() => {
-    if (!todasVacias) return;
-    biCache("v_periodos_fuente")
-      .then((r) =>
-        setDisponibles(
-          (r.datos ?? [])
-            .filter((x) => String(x.fuente) === "consumo_metodo")
-            .map((x) => String(x.periodo))
-            .sort(),
-        ),
-      )
-      .catch(() => setDisponibles("error"));
-  }, [todasVacias]);
-
-  // Sin datos en las dos ramas: UN solo aviso arriba y las secciones quedan ocultas.
-  if (todasVacias) {
-    return (
-      <div className="dash-fila"><div className="dash-carta">
-        <h3>Rangos de consumo y consumo básico — {etiquetaPeriodo(periodo)}</h3>
-        <div className="dash-estado">
-          <p><b>Sin datos de consumo para este período.</b></p>
-          {disponibles == null ? (
-            <p>Verificando los períodos disponibles…</p>
-          ) : disponibles === "error" || disponibles.length === 0 ? null : (
-            <p>
-              Hay datos de consumo desde <b>{etiquetaPeriodo(disponibles[0])}</b> hasta{" "}
-              <b>{etiquetaPeriodo(disponibles[disponibles.length - 1])}</b>.
-            </p>
-          )}
-        </div>
-      </div></div>
-    );
-  }
-
+  const vacio = useVacioConsumo(rango.datos != null && rango.datos.length === 0);
   const nCiclo = valores.ciclo === TODOS ? null : numeroCiclo(valores.ciclo);
   return (
-    <>
-      <Bloque titulo="Rangos de consumo" estado={rango}>
-        <RangosConsumo
-          periodo={periodo}
-          filas={(rango.datos ?? []).filter(
-            (x) =>
-              (nCiclo == null || numeroCiclo(x.ciclo) === nCiclo) &&
-              (valores.uso === TODOS || x.categoria === valores.uso) &&
-              (valores.subcategoria === TODOS || x.subcategoria === valores.subcategoria),
-          )}
-        />
-      </Bloque>
+    <Bloque titulo="Rangos de consumo" estado={rango} vacio={vacio}>
+      <RangosConsumo
+        periodo={periodo}
+        filas={(rango.datos ?? []).filter(
+          (x) =>
+            (nCiclo == null || numeroCiclo(x.ciclo) === nCiclo) &&
+            (valores.uso === TODOS || x.categoria === valores.uso) &&
+            (valores.subcategoria === TODOS || x.subcategoria === valores.subcategoria),
+        )}
+      />
+    </Bloque>
+  );
+}
 
-      <Bloque titulo={`Consumo básico (hasta ${BASICO_M3} m³)`} estado={basico}>
-        <ConsumoBasico periodo={periodo} nCiclo={nCiclo} valores={valores} filas={basico.datos ?? []} />
-      </Bloque>
-    </>
+// Consumo básico (se queda en Facturación desagregada).
+export function ConsumoBasicoSeccion({ periodo, valores }: Props) {
+  const basico = useRama("v_consumo_basico_dim", periodo, comoConsumoBasicoDim);
+  const vacio = useVacioConsumo(basico.datos != null && basico.datos.length === 0);
+  const nCiclo = valores.ciclo === TODOS ? null : numeroCiclo(valores.ciclo);
+  return (
+    <Bloque titulo={`Consumo básico (hasta ${BASICO_M3} m³)`} estado={basico} vacio={vacio}>
+      <ConsumoBasico periodo={periodo} nCiclo={nCiclo} valores={valores} filas={basico.datos ?? []} />
+    </Bloque>
   );
 }
 
 // Cada bloque maneja su propio estado: cargando, error con reintento.
 function Bloque<T>({
-  titulo, estado, children,
-}: { titulo: string; estado: Estado<T>; children: ReactNode }) {
+  titulo, estado, vacio, children,
+}: { titulo: string; estado: Estado<T>; vacio: ReactNode; children: ReactNode }) {
   if (estado.error) {
     return (
       <div className="dash-fila"><div className="dash-carta">
@@ -134,12 +103,7 @@ function Bloque<T>({
     return <div className="dash-fila"><div className="dash-carta"><h3>{titulo}</h3><div className="dash-estado">Cargando…</div></div></div>;
   }
   if (estado.datos.length === 0) {
-    return (
-      <div className="dash-fila"><div className="dash-carta">
-        <h3>{titulo}</h3>
-        <div className="dash-estado">Sin datos de esta sección para este período.</div>
-      </div></div>
-    );
+    return <div className="dash-fila"><div className="dash-carta"><h3>{titulo}</h3>{vacio}</div></div>;
   }
   return <>{children}</>;
 }

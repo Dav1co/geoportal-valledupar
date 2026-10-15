@@ -17,7 +17,7 @@ import { BarrasApiladas, TablaPlegable } from "../graficas";
 import { SinDatos } from "../SinDatos";
 import { TODOS } from "../PanelFiltros";
 import { useRama, type Estado } from "../useRama";
-import { resumenConObservacion } from "./ContratosLectura";
+import { UMBRAL_CONSUMO_CERO_PCT, resumenConObservacion } from "../lecturaComun";
 
 // Sección de Facturación detallado: contratos por ciclo, medición y consumo
 // cero. Fuente: bi.v_consumo_ciclo_dim (consumo_metodo + facturado de
@@ -28,7 +28,6 @@ import { resumenConObservacion } from "./ContratosLectura";
 // partir del cual se marca la fila de la tabla. Es una CONVENCIÓN DEL TABLERO,
 // no una norma: una marca visual, sin texto. En 202609 solo la supera el ciclo
 // 21 (21,9 %); el resto de ciclos queda por debajo del 12 %.
-export const UMBRAL_CONSUMO_CERO_PCT = 15;
 
 // Dos medidas de consumo:
 //  · "cobrado (cargos)" = consumo_cargos, el consumo de la factura; coincide con

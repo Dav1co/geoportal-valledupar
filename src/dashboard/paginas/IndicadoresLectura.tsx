@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { comoDesviacionDim, comoMedidorAntigDim, comoObservacionDim } from "../tipos";
 import { ETIQ_CON_MEDIDOR, ETIQ_CON_MEDIDOR_CAP, ETIQ_SIN_MEDIDOR, etiquetaPeriodo, fmtEntero, fmtPct } from "../formato";
 import { useRama, type Estado } from "../useRama";
-import { CODIGO_CON_LECTURA, SIN_MEDIDOR, textoObservacion } from "./ContratosLectura";
+import { CODIGO_CON_LECTURA, SIN_MEDIDOR, textoObservacion } from "../lecturaComun";
 
 // Fila de indicadores de lectura y medición a NIVEL EMPRESA, junto al IPUF de
 // Pérdidas: suma de todas las filas de cada rama (sin ciclo, uso ni estrato), en

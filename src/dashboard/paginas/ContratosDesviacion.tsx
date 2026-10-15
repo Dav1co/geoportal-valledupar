@@ -5,22 +5,21 @@ import { etiquetaCiclo, etiquetaPeriodo, fmtEntero, fmtPct, numeroCiclo } from "
 import { BarrasHorizontales, TablaPlegable } from "../graficas";
 import { SinDatos } from "../SinDatos";
 import { TODOS } from "../PanelFiltros";
+import { UMBRAL_TASA_DESVIACION_PCT } from "../lecturaComun";
 
 // Sección de Facturación detallado: contratos con desviación significativa de
-// consumo (Res. CRA 943 de 2021, art. 1.13.1.6) y, aparte, contratos con 6
-// meses o más en consumo cero. Fuente: bi.v_desviacion_dim (sql/27), calculada
+// consumo (Res. CRA 943 de 2021, art. 1.13.1.6). Los contratos con 6 meses o más
+// en consumo cero (cero sostenido) se muestran ahora en Pérdidas (CeroSostenido.tsx).
+// Fuente: bi.v_desviacion_dim (sql/27), calculada
 // sobre la línea 2 de facturacion_contratos.
 //
-// "Cero nuevo" (contratos en cero en el período pero con menos de 6 meses) NO se
-// muestra: cruzarlo con consumo_metodo mezclaría dos fuentes. Un "cero nuevo"
-// exacto requeriría una columna contratos_cero_mes en bi.v_desviacion_dim. Usa los filtros de la pantalla
-// (ciclo, uso, estrato) y su selector de período; no usa "Comparar con".
+// Usa los filtros de la pantalla (ciclo, uso, estrato) y su selector de período;
+// no usa "Comparar con".
 
 // Tasa de desviación (desviados / evaluables) a partir de la cual se marca la
 // fila de un ciclo en la tabla. Es una CONVENCIÓN DEL TABLERO, no una norma:
 // una marca visual, sin texto. Referencia en 202609: promedio 11,6 %; superan
 // el 15 % los ciclos 1, 3, 12 y 20 (el 12 llega a 19 %; en 202608, 21 %).
-export const UMBRAL_TASA_DESVIACION_PCT = 15;
 
 const COLOR_TASA = "#C0392B";
 
@@ -33,12 +32,11 @@ type Acum = {
   negativa: number;
   sinHistorial: number;
   sinPromedio: number;
-  cero6m: number;
   ge40: { evaluables: number; positiva: number; negativa: number };
   lt40: { evaluables: number; positiva: number; negativa: number };
 };
 const vacio = (): Acum => ({
-  total: 0, sinDesviacion: 0, positiva: 0, negativa: 0, sinHistorial: 0, sinPromedio: 0, cero6m: 0,
+  total: 0, sinDesviacion: 0, positiva: 0, negativa: 0, sinHistorial: 0, sinPromedio: 0,
   ge40: { evaluables: 0, positiva: 0, negativa: 0 },
   lt40: { evaluables: 0, positiva: 0, negativa: 0 },
 });
@@ -46,7 +44,6 @@ const vacio = (): Acum => ({
 function sumar(a: Acum, x: DesviacionDim) {
   const c = x.contratos;
   a.total += c;
-  a.cero6m += x.contratos_cero_6m;
   switch (x.tipo_desviacion) {
     case "sin_desviacion": a.sinDesviacion += c; break;
     case "positiva": a.positiva += c; break;
@@ -350,59 +347,6 @@ export function ContratosDesviacion({ periodo, datos, error, onReintentar, valor
               <div className="dash-nota">
                 Los contratos con promedio en cero no tienen grupo de umbral y
                 no entran en esta tabla.
-              </div>
-            </div>
-          </div>
-
-          <div className="dash-fila">
-            <div className="dash-carta dash-kpi">
-              <div className="dash-eti">Contratos con 6 meses o más en consumo cero</div>
-              <div className="dash-valor num">{fmtEntero(total.cero6m)}</div>
-              <div className="dash-sub2 num">{fmtPct(pct(total.cero6m, total.total))} de los {fmtEntero(total.total)} contratos del período</div>
-            </div>
-          </div>
-
-          <div className="dash-fila">
-            <div className="dash-carta">
-              <h3>Cero sostenido por ciclo y por categoría</h3>
-              <TablaPlegable titulo="Datos: contratos con 6 meses o más en consumo cero">
-                <table className="dash-tabla num">
-                  <thead>
-                    <tr><th>Grupo</th><th>Contratos</th><th>Cero sostenido</th><th>% de los contratos</th></tr>
-                  </thead>
-                  <tbody>
-                    {porCiclo.map(([n, a]) => (
-                      <tr key={`z-${n}`}>
-                        <td>{n >= 0 ? etiquetaCiclo(n) : "(sin ciclo)"}</td>
-                        <td className="num">{fmtEntero(a.total)}</td>
-                        <td className="num">{fmtEntero(a.cero6m)}</td>
-                        <td className="num">{fmtPct(pct(a.cero6m, a.total))}</td>
-                      </tr>
-                    ))}
-                    {porCategoria.map(([nombre, a]) => (
-                      <tr key={`zc-${nombre}`}>
-                        <td>{nombre}</td>
-                        <td className="num">{fmtEntero(a.total)}</td>
-                        <td className="num">{fmtEntero(a.cero6m)}</td>
-                        <td className="num">{fmtPct(pct(a.cero6m, a.total))}</td>
-                      </tr>
-                    ))}
-                    {porEstrato.map(([nombre, a]) => (
-                      <tr key={`ze-${nombre}`}>
-                        <td>Residencial · {nombre}</td>
-                        <td className="num">{fmtEntero(a.total)}</td>
-                        <td className="num">{fmtEntero(a.cero6m)}</td>
-                        <td className="num">{fmtPct(pct(a.cero6m, a.total))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </TablaPlegable>
-              <div className="dash-nota">
-                Cero sostenido: contratos que existen en la facturación y no
-                tienen consumo (línea 2) en el período ni en los 5 anteriores.
-                Es un indicador aparte de la desviación: un mismo contrato
-                puede estar en ambos.
               </div>
             </div>
           </div>
