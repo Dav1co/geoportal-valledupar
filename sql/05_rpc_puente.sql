@@ -82,6 +82,17 @@
 --                             consumo (sql/31_consumo_rango_dim.sql)
 --   v_consumo_basico_dim    : ídem — consumo básico, residencial estratos 1 a
 --                             3 (sql/32_consumo_basico_dim.sql)
+--   v_recaudo_eficiencia_dim: periodo (exacto), desde, hasta; sin ninguno, el ultimo
+--                             con datos — recaudo frente a facturado por ciclo,
+--                             uso y estrato (sql/33_recaudo_eficiencia_dim.sql)
+--   v_recaudo_ritmo_dim     : ídem — recaudo diario acumulado del mes por fecha de
+--                             grabacion (sql/34_recaudo_ritmo_dim.sql)
+--   v_recaudo_edad_dim      : ídem — recaudo por edad de la deuda y servicio
+--                             (sql/35_recaudo_edad_dim.sql)
+--   v_notas_causal_dim      : ídem — notas por ciclo, categoria y causal
+--                             (sql/36_notas_causal_dim.sql)
+--   v_recaudo_entidad_dim   : ídem — recaudo por entidad y agencia
+--                             (sql/37_recaudo_entidad_dim.sql)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -408,6 +419,82 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  -- Recaudo desagregada (sql/33 a 37)
+  elsif p_vista = 'v_recaudo_eficiencia_dim' then
+    -- Con periodo, desde o hasta se devuelven esos periodos; sin ninguno, el ultimo con
+    -- datos EN ESTA TABLA.
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.periodo, length(t.ciclo), t.ciclo, t.categoria, t.subcategoria), '[]'::jsonb)
+      into resultado
+    from bi.v_recaudo_eficiencia_dim t
+    where case
+            when p_filtros ->> 'periodo' is null and p_filtros ->> 'desde' is null
+                 and p_filtros ->> 'hasta' is null
+              then t.periodo = (select max(periodo) from bi.v_recaudo_eficiencia_dim)
+            else (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+             and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+             and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta')
+          end;
+
+  elsif p_vista = 'v_recaudo_ritmo_dim' then
+    -- Con periodo, desde o hasta se devuelven esos periodos; sin ninguno, el ultimo con
+    -- datos EN ESTA TABLA.
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.periodo, t.dia), '[]'::jsonb)
+      into resultado
+    from bi.v_recaudo_ritmo_dim t
+    where case
+            when p_filtros ->> 'periodo' is null and p_filtros ->> 'desde' is null
+                 and p_filtros ->> 'hasta' is null
+              then t.periodo = (select max(periodo) from bi.v_recaudo_ritmo_dim)
+            else (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+             and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+             and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta')
+          end;
+
+  elsif p_vista = 'v_recaudo_edad_dim' then
+    -- Con periodo, desde o hasta se devuelven esos periodos; sin ninguno, el ultimo con
+    -- datos EN ESTA TABLA.
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.periodo, t.orden, t.servicio), '[]'::jsonb)
+      into resultado
+    from bi.v_recaudo_edad_dim t
+    where case
+            when p_filtros ->> 'periodo' is null and p_filtros ->> 'desde' is null
+                 and p_filtros ->> 'hasta' is null
+              then t.periodo = (select max(periodo) from bi.v_recaudo_edad_dim)
+            else (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+             and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+             and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta')
+          end;
+
+  elsif p_vista = 'v_notas_causal_dim' then
+    -- Con periodo, desde o hasta se devuelven esos periodos; sin ninguno, el ultimo con
+    -- datos EN ESTA TABLA.
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.periodo, length(t.ciclo), t.ciclo, t.categoria, t.causal), '[]'::jsonb)
+      into resultado
+    from bi.v_notas_causal_dim t
+    where case
+            when p_filtros ->> 'periodo' is null and p_filtros ->> 'desde' is null
+                 and p_filtros ->> 'hasta' is null
+              then t.periodo = (select max(periodo) from bi.v_notas_causal_dim)
+            else (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+             and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+             and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta')
+          end;
+
+  elsif p_vista = 'v_recaudo_entidad_dim' then
+    -- Con periodo, desde o hasta se devuelven esos periodos; sin ninguno, el ultimo con
+    -- datos EN ESTA TABLA.
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.periodo, t.entidad, t.agencia, t.categoria), '[]'::jsonb)
+      into resultado
+    from bi.v_recaudo_entidad_dim t
+    where case
+            when p_filtros ->> 'periodo' is null and p_filtros ->> 'desde' is null
+                 and p_filtros ->> 'hasta' is null
+              then t.periodo = (select max(periodo) from bi.v_recaudo_entidad_dim)
+            else (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+             and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+             and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta')
+          end;
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -477,4 +564,13 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- v_medidor_antig_dim) y volver a ejecutarlo (create or replace conserva el ACL).
 -- Antes de retirar las ramas, quitar las dos vistas de VISTAS_PERMITIDAS en
 -- geoportal-bi y redesplegar la Edge Function.
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de las ramas de Recaudo desagregada (v_recaudo_eficiencia_dim,
+-- v_recaudo_ritmo_dim, v_recaudo_edad_dim, v_notas_causal_dim y
+-- v_recaudo_entidad_dim; 40 -> 45 ramas): volver a la version de este archivo en el
+-- commit fc966b0 (40 ramas, hasta v_consumo_basico_dim) y volver a ejecutarlo
+-- (create or replace conserva el ACL). Antes de retirar las ramas, quitar las cinco
+-- vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function.
 -- =====================================================================
