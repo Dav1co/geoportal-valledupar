@@ -197,6 +197,25 @@ const SinFiltrados = () => (
   </div></div>
 );
 
+// Contratos con una observación de lectura distinta de «99 USUARIO CON LECTURA» y de
+// «Sin medidor» (a nivel de las filas recibidas). Lo usa la ficha «Con observación de
+// lectura» de la sección de contratos por ciclo y medición.
+export function resumenConObservacion(filas: ObservacionDim[]) {
+  let contratos = 0, cero = 0, conMedidor = 0;
+  const m = new Map<string, { texto: string; contratos: number }>();
+  for (const x of filas) {
+    if (x.con_medidor) conMedidor += x.contratos;
+    if (x.observacion === SIN_MEDIDOR || x.codigo_observacion === CODIGO_CON_LECTURA) continue;
+    contratos += x.contratos;
+    cero += x.contratos_cero;
+    const it = m.get(x.observacion) ?? { texto: textoObservacion(x.observacion), contratos: 0 };
+    it.contratos += x.contratos;
+    m.set(x.observacion, it);
+  }
+  const causal = [...m.values()].sort((a, b) => b.contratos - a.contratos)[0] ?? null;
+  return { contratos, cero, conMedidor, causal };
+}
+
 // ---------------------------------------------------------------------
 // a) Lectura efectiva (v_observacion_dim: trae ciclo, uso, estrato y medidor)
 // ---------------------------------------------------------------------

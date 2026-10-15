@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { biCache } from "../cacheBi";
-import type { ConsumoCicloDim } from "../tipos";
+import { comoObservacionDim, type ConsumoCicloDim, type ObservacionDim } from "../tipos";
 import {
   ETIQ_SIN_MEDIDOR,
   ETIQ_SIN_MEDIDOR_CAP,
@@ -14,6 +14,8 @@ import {
 import { BarrasApiladas, TablaPlegable } from "../graficas";
 import { SinDatos } from "../SinDatos";
 import { TODOS } from "../PanelFiltros";
+import { useRama, type Estado } from "../useRama";
+import { resumenConObservacion } from "./ContratosLectura";
 
 // Sección de Facturación detallado: contratos por ciclo, medición y consumo
 // cero. Fuente: bi.v_consumo_ciclo_dim (consumo_metodo + facturado de
@@ -85,6 +87,9 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
   const [disponibles, setDisponibles] = useState<string[] | "error" | null>(null);
   const vacioPeriodo = datos != null && datos.length === 0;
 
+  // Ficha «Con observación de lectura»: viene de v_observacion_dim (las observaciones no
+  // están en la tabla de esta sección). biCache comparte la consulta con la sección Lectura.
+  const obs = useRama("v_observacion_dim", periodo, comoObservacionDim);
 
   // Solo si el período no tiene filas: qué períodos sí tiene esta fuente.
   useEffect(() => {
@@ -178,6 +183,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
               <div className="dash-valor num">{fmtEntero(total.sinMedidor)}</div>
               <div className="dash-sub2 num">{fmtPct(pct(total.sinMedidor, total.contratos))} de los contratos</div>
             </div>
+            <FichaObservacion estado={obs} nCiclo={nCiclo} valores={valores} />
             <div className="dash-carta dash-kpi">
               <div className="dash-eti">Consumo cobrado en cero (cargos)</div>
               <div className="dash-valor num">{fmtEntero(total.cero)}</div>
@@ -294,5 +300,67 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
         </>
       )}
     </>
+  );
+}
+
+// Ficha «Con observación de lectura»: contratos con una observación distinta de
+// «99 USUARIO CON LECTURA» y de «Sin medidor». Respeta ciclo, uso y estrato. Porcentaje
+// sobre los contratos con medidor; debajo, cuántos tienen consumo cobrado en cero y la
+// causal más frecuente. Estado propio: cargando, error con reintento y "—".
+function FichaObservacion({
+  estado, nCiclo, valores,
+}: { estado: Estado<ObservacionDim>; nCiclo: number | null; valores: Record<string, string> }) {
+  const r = useMemo(
+    () =>
+      resumenConObservacion(
+        (estado.datos ?? []).filter(
+          (x) =>
+            (nCiclo == null || numeroCiclo(x.ciclo) === nCiclo) &&
+            (valores.uso === TODOS || x.categoria === valores.uso) &&
+            (valores.subcategoria === TODOS || x.subcategoria === valores.subcategoria),
+        ),
+      ),
+    [estado.datos, nCiclo, valores.uso, valores.subcategoria],
+  );
+  const titulo = "Con observación de lectura";
+  let cuerpo;
+  if (estado.error) {
+    cuerpo = (
+      <>
+        <div className="dash-valor num">—</div>
+        <div className="dash-sub2">
+          No se pudo cargar.{" "}
+          <button className="dash-boton" onClick={estado.recargar}>Reintentar</button>
+        </div>
+      </>
+    );
+  } else if (estado.datos == null) {
+    cuerpo = <div className="dash-valor num">…</div>;
+  } else if (estado.datos.length === 0) {
+    cuerpo = (
+      <>
+        <div className="dash-valor num">—</div>
+        <div className="dash-sub2">Sin datos de observaciones para este período</div>
+      </>
+    );
+  } else {
+    cuerpo = (
+      <>
+        <div className="dash-valor num">{fmtEntero(r.contratos)}</div>
+        <div className="dash-sub2 num">
+          {fmtPct(pct(r.contratos, r.conMedidor))} de los {fmtEntero(r.conMedidor)} contratos con medidor
+        </div>
+        <div className="dash-sub2 num">
+          {fmtEntero(r.cero)} con consumo cobrado en cero
+          {r.causal ? ` · más frecuente: ${r.causal.texto} (${fmtEntero(r.causal.contratos)})` : ""}
+        </div>
+      </>
+    );
+  }
+  return (
+    <div className="dash-carta dash-kpi">
+      <div className="dash-eti">{titulo}</div>
+      {cuerpo}
+    </div>
   );
 }
