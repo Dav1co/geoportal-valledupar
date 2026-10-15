@@ -29,6 +29,12 @@
 --    que tiene medidor, luego lectura, luego mayor consumo cobrado);
 --    sum(contratos) = contratos distintos del periodo.
 --  · contratos_cero = contratos con consumo cobrado (consumo_cargos) = 0.
+--  · m3_cargos = suma de consumo_cargos de esos mismos contratos (misma desduplicacion; la suma por
+--    periodo coincide con sum(m3_cargos) de bi.v_consumo_rango_dim). Promedio por contrato y banda =
+--    m3_cargos / contratos. En 'Sin medidor' y 'Sin fecha' tambien se suma. Periodos con la columna
+--    llena: los recalculados desde que existe (202605 a 202609); antes queda nula.
+--    ROLLBACK de la columna: no se borra (sin DROP); se vuelve a la version anterior de la funcion
+--    (commit anterior de este archivo) y la columna queda ignorada.
 --
 -- Periodos: 202601 a 202609 (no existe 202606 en la fuente).
 -- Orden (cada paso con aprobacion):
@@ -44,9 +50,13 @@ create table bi.v_medidor_antig_dim (
   resultado_lectura text,
   contratos         bigint,
   contratos_cero    bigint,
+  m3_cargos         numeric,
   primary key (periodo, categoria, subcategoria, banda_antiguedad, resultado_lectura)
 );
 revoke all on bi.v_medidor_antig_dim from public, anon, authenticated;
+-- BASE VIVA (la tabla ya existia sin m3_cargos): la columna se anade al final, nula hasta recalcular.
+-- Sin DROP; el ACL de la tabla no cambia. En una instalacion nueva esta linea no hace nada.
+alter table bi.v_medidor_antig_dim add column if not exists m3_cargos numeric default null;
 
 create or replace function bi.recalcular_medidor_antig_dim(p_periodo text)
 returns integer language plpgsql as $$
@@ -68,7 +78,8 @@ begin
                 when bi.f_num(lectura_actual) > bi.f_num(lectura_anterior) then 'avance'
                 when bi.f_num(lectura_actual) = bi.f_num(lectura_anterior) then 'igual'
                 else 'menor' end as resultado,
-           (bi.f_num(consumo_cargos) = 0) as cero
+           (bi.f_num(consumo_cargos) = 0) as cero,
+           bi.f_num(consumo_cargos) as cons
     from hechos.consumo_metodo
     where periodo = p_periodo
     order by contrato,
@@ -85,7 +96,8 @@ begin
               else '>15' end as banda_antiguedad,
          resultado,
          count(*) as contratos,
-         count(*) filter (where cero) as contratos_cero
+         count(*) filter (where cero) as contratos_cero,
+         sum(cons) as m3_cargos
   from u
   group by categoria, subcategoria, resultado,
            case when not con_medidor then 'Sin medidor'
