@@ -505,6 +505,67 @@ export function BarrasApiladas({
   );
 }
 
+// ---------- barras en pareja (dos participaciones por categoría) ----------
+// Una fila por categoría con DOS barras finas en la misma escala de porcentaje
+// (p. ej. % de contratos y % del volumen por rango de consumo), cada una con su
+// cifra al final. Sirve para ver cuándo una categoría pesa más en una medida que
+// en la otra.
+export function BarrasPareja({
+  datos,
+  nombreA,
+  nombreB,
+  colorA = "#0A2540",
+  colorB = "#C98A2D",
+  margenIzq = 70,
+}: {
+  datos: { etiqueta: string; a: number; b: number; textoA: string; textoB: string }[];
+  nombreA: string;
+  nombreB: string;
+  colorA?: string;
+  colorB?: string;
+  margenIzq?: number;
+}) {
+  const { ref, tip, mover, salir } = useTip();
+  const barH = 10, gapBar = 2, gapFila = 8;
+  const filaH = barH * 2 + gapBar;
+  const ancho = 720, izq = margenIzq, der = 96;
+  const alto = Math.max(60, datos.length * (filaH + gapFila) + 8);
+  const max = Math.max(1, ...datos.flatMap((d) => [d.a, d.b]));
+  const escala = (v: number) => (Math.max(0, v) / max) * (ancho - izq - der);
+
+  return (
+    <div ref={ref} className="dash-grafica" onMouseLeave={salir}>
+      <svg viewBox={`0 0 ${ancho} ${alto}`} style={{ width: "100%", height: "auto" }} role="img">
+        {datos.map((d, i) => {
+          const y = i * (filaH + gapFila) + 4;
+          return (
+            <g key={d.etiqueta}>
+              <text x={izq - 8} y={y + filaH / 2 + 3.5} textAnchor="end" fontSize={10.5} fill="#5D6E7E">
+                {d.etiqueta}
+              </text>
+              <rect x={izq} y={y} width={Math.max(2, escala(d.a))} height={barH} rx={2} fill={colorA}
+                    onMouseMove={(e) => mover(e, `${d.etiqueta} · ${nombreA}`, d.textoA)} />
+              <text x={izq + Math.max(2, escala(d.a)) + 5} y={y + barH - 1.5} fontSize={9.5} fill="#5D6E7E" className="num">
+                {d.textoA}
+              </text>
+              <rect x={izq} y={y + barH + gapBar} width={Math.max(2, escala(d.b))} height={barH} rx={2} fill={colorB}
+                    onMouseMove={(e) => mover(e, `${d.etiqueta} · ${nombreB}`, d.textoB)} />
+              <text x={izq + Math.max(2, escala(d.b)) + 5} y={y + barH * 2 + gapBar - 1.5} fontSize={9.5} fill="#5D6E7E" className="num">
+                {d.textoB}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <CapaTip tip={tip} />
+      <div className="dash-leyenda">
+        <span><i style={{ background: colorA }} /> {nombreA}</span>
+        <span><i style={{ background: colorB }} /> {nombreB}</span>
+      </div>
+    </div>
+  );
+}
+
 // ---------- barras anuales con referencias ----------
 // Una barra por año (p. ej. IPUF anual) con una línea de META que sigue a cada
 // año, una línea punteada de ESTÁNDAR y, opcionalmente, barras PARCIALES

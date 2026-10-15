@@ -453,6 +453,69 @@ export function comoMedidorAntigDim(r: Record<string, unknown>): MedidorAntigDim
   };
 }
 
+// bi.v_consumo_rango_dim (sql/31): contratos, m3 y facturado por rango de consumo cobrado.
+// rango_consumo: 0 | 1-5 | 6-10 | 11-15 | 16-20 | 21-30 | 31-40 | 41-60 | 61-100 | >100 | Sin dato.
+export type ConsumoRangoDim = {
+  periodo: string;
+  ciclo: string;
+  categoria: string;
+  subcategoria: string;
+  con_medidor: boolean;
+  rango_consumo: string;
+  contratos: number;
+  m3_cargos: number | null;
+  facturado_acueducto: number | null;
+};
+export function comoConsumoRangoDim(r: Record<string, unknown>): ConsumoRangoDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    categoria: String(r.categoria ?? ""),
+    subcategoria: String(r.subcategoria ?? ""),
+    con_medidor: r.con_medidor === true || r.con_medidor === "true",
+    rango_consumo: String(r.rango_consumo ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    m3_cargos: n(r.m3_cargos),
+    facturado_acueducto: n(r.facturado_acueducto),
+  };
+}
+
+// bi.v_consumo_basico_dim (sql/32): consumo basico (16 m3) en residencial estratos 1 a 3.
+export type ConsumoBasicoDim = {
+  periodo: string;
+  ciclo: string;
+  categoria: string;
+  subcategoria: string;
+  con_medidor: boolean;
+  contratos: number;
+  contratos_cero: number;
+  contratos_hasta_basico: number;
+  contratos_sobre_basico: number;
+  contratos_sin_dato: number;
+  m3_total: number | null;
+  m3_basico: number | null;
+  m3_exceso: number | null;
+  facturado_acueducto: number | null;
+};
+export function comoConsumoBasicoDim(r: Record<string, unknown>): ConsumoBasicoDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    categoria: String(r.categoria ?? ""),
+    subcategoria: String(r.subcategoria ?? ""),
+    con_medidor: r.con_medidor === true || r.con_medidor === "true",
+    contratos: n(r.contratos) ?? 0,
+    contratos_cero: n(r.contratos_cero) ?? 0,
+    contratos_hasta_basico: n(r.contratos_hasta_basico) ?? 0,
+    contratos_sobre_basico: n(r.contratos_sobre_basico) ?? 0,
+    contratos_sin_dato: n(r.contratos_sin_dato) ?? 0,
+    m3_total: n(r.m3_total),
+    m3_basico: n(r.m3_basico),
+    m3_exceso: n(r.m3_exceso),
+    facturado_acueducto: n(r.facturado_acueducto),
+  };
+}
+
 export type FactDetalleDim = {
   periodo: string;
   ciclo: string;

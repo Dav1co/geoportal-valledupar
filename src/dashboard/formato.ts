@@ -49,6 +49,11 @@ export function fmtEntero(v: number | null): string {
   return v == null ? "—" : v.toLocaleString("es-CO", { maximumFractionDigits: 0 });
 }
 
+// Rótulos de pantalla para la presencia de medidor. UNA sola definición: las
+// secciones nuevas (rangos y consumo básico) no escriben "medidor" a mano.
+export const ETIQ_CON_MEDIDOR = "con medidor registrado";
+export const ETIQ_SIN_MEDIDOR = "sin medidor registrado";
+
 // Número con decimales fijos y coma decimal: 30,6.
 export function fmtDecimal(v: number | null, decimales = 1): string {
   return v == null
