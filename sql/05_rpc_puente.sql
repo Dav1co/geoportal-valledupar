@@ -78,6 +78,10 @@
 --                             estrato y ciclo (sql/29_observacion_dim.sql)
 --   v_medidor_antig_dim     : ídem — antigüedad del medidor por categoría y
 --                             estrato, sin ciclo (sql/30_medidor_antig_dim.sql)
+--   v_consumo_rango_dim     : ídem — contratos, m3 y facturado por rango de
+--                             consumo (sql/31_consumo_rango_dim.sql)
+--   v_consumo_basico_dim    : ídem — consumo básico, residencial estratos 1 a
+--                             3 (sql/32_consumo_basico_dim.sql)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -292,6 +296,34 @@ begin
     where t.periodo = coalesce(p_filtros ->> 'periodo',
                                (select max(periodo) from bi.v_medidor_antig_dim));
 
+  elsif p_vista = 'v_consumo_rango_dim' then
+    -- ~1.400-1.550 filas por período (ciclo x categoría x subcategoría x
+    -- con_medidor x rango_consumo). Se trae UNA vez y se filtra en el navegador.
+    -- Sin período, el último con datos EN ESTA TABLA. Los rangos salen en orden de
+    -- consumo, no alfabético.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by length(t.ciclo), t.ciclo, t.categoria, t.subcategoria, t.con_medidor,
+                      case t.rango_consumo when '0' then 0 when '1-5' then 1 when '6-10' then 2
+                        when '11-15' then 3 when '16-20' then 4 when '21-30' then 5
+                        when '31-40' then 6 when '41-60' then 7 when '61-100' then 8
+                        when '>100' then 9 else 10 end),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_consumo_rango_dim t
+    where t.periodo = coalesce(p_filtros ->> 'periodo',
+                               (select max(periodo) from bi.v_consumo_rango_dim));
+
+  elsif p_vista = 'v_consumo_basico_dim' then
+    -- ~120-140 filas por período (ciclo x subcategoría x con_medidor; solo
+    -- Residencial estratos 1, 2 y 3).
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by length(t.ciclo), t.ciclo, t.categoria, t.subcategoria, t.con_medidor),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_consumo_basico_dim t
+    where t.periodo = coalesce(p_filtros ->> 'periodo',
+                               (select max(periodo) from bi.v_consumo_basico_dim));
+
   elsif p_vista = 'v_cartera_contratos_dim' then
     select coalesce(jsonb_agg(to_jsonb(t) order by t.ciclo, t.uso, t.estrato), '[]'::jsonb)
       into resultado
@@ -437,4 +469,12 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- commit a0a4295 (35 ramas, hasta v_desviacion_dim) y volver a ejecutarlo
 -- (create or replace conserva el ACL). Antes de retirar las ramas, quitar las tres
 -- vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function.
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de las ramas v_consumo_rango_dim y v_consumo_basico_dim (38 -> 40
+-- ramas): volver a la version de este archivo en el commit f77682b (38 ramas, hasta
+-- v_medidor_antig_dim) y volver a ejecutarlo (create or replace conserva el ACL).
+-- Antes de retirar las ramas, quitar las dos vistas de VISTAS_PERMITIDAS en
+-- geoportal-bi y redesplegar la Edge Function.
 -- =====================================================================
