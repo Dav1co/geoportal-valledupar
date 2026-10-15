@@ -10,12 +10,15 @@ import {
   type ObservacionDim,
 } from "../tipos";
 import {
+  ETIQ_SIN_MEDIDOR,
+  ETIQ_SIN_MEDIDOR_CAP,
   etiquetaCiclo,
   etiquetaPeriodo,
   fmtDecimal,
   fmtEntero,
   fmtPct,
   numeroCiclo,
+  rotuloMostrado,
 } from "../formato";
 import { BarrasApiladas, TablaPlegable } from "../graficas";
 import { TODOS } from "../PanelFiltros";
@@ -233,7 +236,7 @@ function LecturaEfectiva({ filas }: { filas: ObservacionDim[] }) {
         {tarjeta("Lectura igual a la anterior", igual)}
         {tarjeta("Lectura menor a la anterior", menor)}
         {tarjeta("Sin lectura, con medidor", sinCon)}
-        {tarjeta("Sin lectura, sin medidor", sinSin)}
+        {tarjeta(`Sin lectura, ${ETIQ_SIN_MEDIDOR}`, sinSin)}
       </div>
       <div className="dash-fila">
         <div className="dash-carta">
@@ -289,7 +292,7 @@ function LecturaEfectiva({ filas }: { filas: ObservacionDim[] }) {
           <div className="dash-nota">
             El resultado sale de comparar la lectura actual con la anterior: avance
             (actual mayor), igual, menor (vuelta de medidor o error) o sin lectura
-            (falta alguna de las dos; incluye los contratos sin medidor).
+            (falta alguna de las dos; incluye los contratos {ETIQ_SIN_MEDIDOR}).
           </div>
         </div>
       </div>
@@ -485,7 +488,7 @@ function Observaciones({ filas }: { filas: ObservacionDim[] }) {
         <h3>Observaciones de lectura</h3>
         <BarrasApiladas
           datos={items.map((it) => ({
-            etiqueta: it.texto,
+            etiqueta: rotuloMostrado(it.texto),
             valores: [it.contratos - it.cero, it.cero],
           }))}
           series={[
@@ -506,7 +509,7 @@ function Observaciones({ filas }: { filas: ObservacionDim[] }) {
             <tbody>
               {items.map((it) => (
                 <tr key={it.texto}>
-                  <td>{it.texto}</td>
+                  <td>{rotuloMostrado(it.texto)}</td>
                   <td className="num">{fmtEntero(it.contratos)}</td>
                   <td className="num">{fmtPct(pct(it.contratos, total))}</td>
                   <td className="num">{fmtEntero(it.cero)}</td>
@@ -553,8 +556,8 @@ function Observaciones({ filas }: { filas: ObservacionDim[] }) {
           </details>
         )}
         <div className="dash-nota">
-          Observación registrada por el lector. «Sin medidor» agrupa los contratos sin
-          medidor; las observaciones que pesan menos de {fmtPct(UMBRAL_OTRAS_PCT)} de los
+          Observación registrada por el lector. «{ETIQ_SIN_MEDIDOR_CAP}» agrupa los contratos
+          {" "}{ETIQ_SIN_MEDIDOR}; las observaciones que pesan menos de {fmtPct(UMBRAL_OTRAS_PCT)} de los
           contratos se agrupan en «Otras» (con su detalle desplegable). El consumo en cero
           es el consumo cobrado.
         </div>
@@ -616,7 +619,7 @@ function Antiguedad({
           <>
             <BarrasApiladas
               datos={porBanda.map(([b, a]) => ({
-                etiqueta: b === "Sin fecha" || b === SIN_MEDIDOR ? b : `${b} años`,
+                etiqueta: b === "Sin fecha" || b === SIN_MEDIDOR ? rotuloMostrado(b) : `${b} años`,
                 valores: [a.contratos - a.cero, a.cero],
               }))}
               series={[
@@ -636,7 +639,7 @@ function Antiguedad({
                 <tbody>
                   {porBanda.map(([b, a]) => (
                     <tr key={b}>
-                      <td>{b === "Sin fecha" || b === SIN_MEDIDOR ? b : `${b} años`}</td>
+                      <td>{b === "Sin fecha" || b === SIN_MEDIDOR ? rotuloMostrado(b) : `${b} años`}</td>
                       <td className="num">{fmtEntero(a.contratos)}</td>
                       <td className="num">{fmtPct(pct(a.contratos, total))}</td>
                       <td className="num">{fmtEntero(a.cero)}</td>

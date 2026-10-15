@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { biCache } from "../cacheBi";
 import type { ConsumoCicloDim } from "../tipos";
 import {
+  ETIQ_SIN_MEDIDOR,
+  ETIQ_SIN_MEDIDOR_CAP,
   etiquetaCiclo,
   etiquetaPeriodo,
   fmtEntero,
@@ -83,6 +85,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
   const [disponibles, setDisponibles] = useState<string[] | "error" | null>(null);
   const vacioPeriodo = datos != null && datos.length === 0;
 
+
   // Solo si el período no tiene filas: qué períodos sí tiene esta fuente.
   useEffect(() => {
     if (!vacioPeriodo) return;
@@ -97,8 +100,8 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
       .catch(() => setDisponibles("error"));
   }, [vacioPeriodo]);
 
+  const nCiclo = valores.ciclo === TODOS ? null : numeroCiclo(valores.ciclo);
   const filtrado = useMemo(() => {
-    const nCiclo = valores.ciclo === TODOS ? null : numeroCiclo(valores.ciclo);
     return (datos ?? []).filter(
       (x) =>
         (nCiclo == null || numeroCiclo(x.ciclo) === nCiclo) &&
@@ -171,7 +174,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
               <div className="dash-sub2 num">con medidor {fmtEntero(total.conMedidor)}</div>
             </div>
             <div className="dash-carta dash-kpi">
-              <div className="dash-eti">Sin medidor</div>
+              <div className="dash-eti">{ETIQ_SIN_MEDIDOR_CAP}</div>
               <div className="dash-valor num">{fmtEntero(total.sinMedidor)}</div>
               <div className="dash-sub2 num">{fmtPct(pct(total.sinMedidor, total.contratos))} de los contratos</div>
             </div>
@@ -189,7 +192,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
 
           <div className="dash-fila">
             <div className="dash-carta">
-              <h3>Contratos por ciclo, con y sin medidor</h3>
+              <h3>Contratos por ciclo, con y {ETIQ_SIN_MEDIDOR}</h3>
               <BarrasApiladas
                 datos={porCiclo.map(([n, a]) => ({
                   etiqueta: n >= 0 ? etiquetaCiclo(n) : "(sin ciclo)",
@@ -197,7 +200,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
                 }))}
                 series={[
                   { nombre: "Con medidor", color: COLOR_CON_MEDIDOR },
-                  { nombre: "Sin medidor", color: COLOR_SIN_MEDIDOR },
+                  { nombre: ETIQ_SIN_MEDIDOR_CAP, color: COLOR_SIN_MEDIDOR },
                 ]}
                 formatoValor={(v) => `${fmtEntero(v)} contratos`}
               />
@@ -211,8 +214,8 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
                 <table className="dash-tabla num">
                   <thead>
                     <tr>
-                      <th>Ciclo</th><th>Contratos</th><th>Con medidor</th><th>Sin medidor</th>
-                      <th>% sin medidor</th><th>Consumo cobrado en cero</th><th>% cero</th>
+                      <th>Ciclo</th><th>Contratos</th><th>Con medidor</th><th>{ETIQ_SIN_MEDIDOR_CAP}</th>
+                      <th>% {ETIQ_SIN_MEDIDOR}</th><th>Consumo cobrado en cero</th><th>% cero</th>
                       <th>Cobrado sin consumo medido</th><th>m³ cobrados (cargos)</th><th>m³ medidos</th>
                       <th>Facturado acueducto</th><th>Promedio acueducto por contrato</th>
                     </tr>
@@ -259,8 +262,8 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
 
           <div className="dash-fila">
             <div className="dash-carta">
-              <h3>Con medidor frente a sin medidor</h3>
-              <TablaPlegable titulo="Datos: con y sin medidor">
+              <h3>Con medidor frente a {ETIQ_SIN_MEDIDOR}</h3>
+              <TablaPlegable titulo={`Datos: con y ${ETIQ_SIN_MEDIDOR}`}>
                 <table className="dash-tabla num">
                   <thead>
                     <tr>
@@ -269,7 +272,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
                     </tr>
                   </thead>
                   <tbody>
-                    {([["Con medidor", conMed], ["Sin medidor", sinMed]] as [string, Acum][]).map(([nombre, a]) => (
+                    {([["Con medidor", conMed], [ETIQ_SIN_MEDIDOR_CAP, sinMed]] as [string, Acum][]).map(([nombre, a]) => (
                       <tr key={nombre}>
                         <td>{nombre}</td>
                         <td className="num">{fmtEntero(a.contratos)}</td>
@@ -283,7 +286,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
               </TablaPlegable>
               <div className="dash-nota">
                 Ciclo tal como viene en consumo; facturado = acueducto (sspd).
-                Medidor vacío = sin medidor. Consumo cobrado = consumo de la
+                Medidor vacío = {ETIQ_SIN_MEDIDOR}. Consumo cobrado = consumo de la
                 factura (cargos); consumo medido = el que reporta el sistema.
               </div>
             </div>

@@ -53,6 +53,13 @@ export function fmtEntero(v: number | null): string {
 // secciones nuevas (rangos y consumo básico) no escriben "medidor" a mano.
 export const ETIQ_CON_MEDIDOR = "con medidor registrado";
 export const ETIQ_SIN_MEDIDOR = "sin medidor registrado";
+export const ETIQ_SIN_MEDIDOR_CAP = "Sin medidor registrado";
+
+// Texto mostrado para un valor guardado: la base guarda 'Sin medidor' (v_observacion_dim y
+// v_medidor_antig_dim) y NO se cambia; solo se muestra distinto. Cualquier otro valor pasa igual.
+export function rotuloMostrado(valor: string): string {
+  return valor === "Sin medidor" ? ETIQ_SIN_MEDIDOR_CAP : valor;
+}
 
 // Número con decimales fijos y coma decimal: 30,6.
 export function fmtDecimal(v: number | null, decimales = 1): string {
