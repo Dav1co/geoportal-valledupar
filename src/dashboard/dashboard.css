@@ -600,3 +600,66 @@
 .dash-tabla tr.dash-fila-marca td:first-child {
   box-shadow: inset 3px 0 0 #C98A2D;
 }
+
+/* ---------- Recaudo desagregada: filtros por bloque y barras con meta ---------- */
+.dash-filtros-bloque {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 0 0 12px;
+}
+.dash-filtros-bloque label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--dash-texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dash-filtros-bloque select {
+  font: inherit;
+  font-size: 12.5px;
+  min-width: 150px;
+  max-width: 100%;
+  color: var(--dash-texto);
+  background: #fff;
+  border: 1px solid var(--dash-linea);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.dash-filtros-bloque select:focus-visible {
+  outline: 2px solid var(--dash-agua);
+}
+.dash-meta-fila {
+  display: grid;
+  grid-template-columns: minmax(70px, 120px) 1fr 64px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin: 4px 0;
+}
+.dash-meta-pista {
+  position: relative;
+  height: 16px;
+  background: var(--dash-papel);
+  border-radius: 4px;
+}
+.dash-meta-relleno {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--dash-tinta);
+}
+.dash-meta-marca {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #c98a2d;
+}
+.dash-meta-leyenda {
+  font-size: 11.5px;
+  color: var(--dash-texto-suave);
+  margin: 4px 0 8px;
+}

@@ -13,12 +13,27 @@ import { BarrasHorizontales, LineasPorDia, TablaPlegable, colorAnio } from "../g
 import { SinDatos } from "../SinDatos";
 import { PanelFiltros, TODOS, type DefFiltro } from "../PanelFiltros";
 import { ROTULO } from "../rotulos";
+import { RecaudoDesagregadaSecciones } from "./RecaudoDesagregadaSecciones";
 
 const DIAS_SEMANA = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 type Props = { periodo: string };
 
+// Detalle diario (arriba) + secciones de eficiencia, ritmo, corriente/rezagado, notas y entidades
+// (abajo). Las secciones nuevas cargan por su cuenta: si el período no tiene detalle diario,
+// el aviso de arriba no las oculta.
 export function RecaudoDetallado({ periodo }: Props) {
+  return (
+    <>
+      <DetalleDiario periodo={periodo} />
+      <div className="dash-con-panel-cuerpo">
+        <RecaudoDesagregadaSecciones periodo={periodo} />
+      </div>
+    </>
+  );
+}
+
+function DetalleDiario({ periodo }: Props) {
   const [dias, setDias] = useState<RecaudoDia[] | null>(null);
   const [detalle, setDetalle] = useState<RecaudoDetalleDim[]>([]);
   const [mapa, setMapa] = useState<ConceptoMapa[]>([]);

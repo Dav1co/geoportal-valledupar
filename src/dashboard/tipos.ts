@@ -1012,3 +1012,129 @@ export function comoIpuf(r: Record<string, unknown>): Ipuf {
     tarifa_m3: n(r.tarifa_m3),
   };
 }
+
+// ---------------------------------------------------------------------
+// Recaudo desagregada (sql/33 a 37)
+// ---------------------------------------------------------------------
+export type RecaudoEficienciaDim = {
+  periodo: string;
+  ciclo: string;
+  categoria: string;
+  subcategoria: string;
+  contratos_facturados: number;
+  facturado: number | null;
+  contratos_pagadores: number;
+  recaudo_neto: number | null;
+  contratos_pago_1: number;
+  contratos_pago_2mas: number;
+  recaudo_pago_2mas: number | null;
+};
+export function comoRecaudoEficienciaDim(r: Record<string, unknown>): RecaudoEficienciaDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    categoria: String(r.categoria ?? ""),
+    subcategoria: String(r.subcategoria ?? ""),
+    contratos_facturados: n(r.contratos_facturados) ?? 0,
+    facturado: n(r.facturado),
+    contratos_pagadores: n(r.contratos_pagadores) ?? 0,
+    recaudo_neto: n(r.recaudo_neto),
+    contratos_pago_1: n(r.contratos_pago_1) ?? 0,
+    contratos_pago_2mas: n(r.contratos_pago_2mas) ?? 0,
+    recaudo_pago_2mas: n(r.recaudo_pago_2mas),
+  };
+}
+
+export type RecaudoRitmoDim = {
+  periodo: string;
+  dia: number;
+  recaudo_dia: number | null;
+  recaudo_acumulado: number | null;
+  pct_acumulado_del_recaudo: number | null;
+  facturado_mes: number | null;
+  pct_acumulado_del_facturado: number | null;
+  ultimo_dia_con_datos: number | null;
+  mes_completo: boolean;
+};
+export function comoRecaudoRitmoDim(r: Record<string, unknown>): RecaudoRitmoDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    dia: n(r.dia) ?? 0,
+    recaudo_dia: n(r.recaudo_dia),
+    recaudo_acumulado: n(r.recaudo_acumulado),
+    pct_acumulado_del_recaudo: n(r.pct_acumulado_del_recaudo),
+    facturado_mes: n(r.facturado_mes),
+    pct_acumulado_del_facturado: n(r.pct_acumulado_del_facturado),
+    ultimo_dia_con_datos: n(r.ultimo_dia_con_datos),
+    mes_completo: r.mes_completo === true || r.mes_completo === "true",
+  };
+}
+
+export type RecaudoEdadDim = {
+  periodo: string;
+  tramo: string;
+  orden: number;
+  servicio: string;
+  recaudo: number | null;
+  conceptos: number;
+};
+export function comoRecaudoEdadDim(r: Record<string, unknown>): RecaudoEdadDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    tramo: String(r.tramo ?? ""),
+    orden: n(r.orden) ?? 0,
+    servicio: String(r.servicio ?? ""),
+    recaudo: n(r.recaudo),
+    conceptos: n(r.conceptos) ?? 0,
+  };
+}
+
+export type NotasCausalDim = {
+  periodo: string;
+  ciclo: string;
+  categoria: string;
+  causal: string;
+  notas: number;
+  notas_credito: number;
+  notas_debito: number;
+  valor: number | null;
+  valor_credito: number | null;
+  valor_debito: number | null;
+};
+export function comoNotasCausalDim(r: Record<string, unknown>): NotasCausalDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    categoria: String(r.categoria ?? ""),
+    causal: String(r.causal ?? ""),
+    notas: n(r.notas) ?? 0,
+    notas_credito: n(r.notas_credito) ?? 0,
+    notas_debito: n(r.notas_debito) ?? 0,
+    valor: n(r.valor),
+    valor_credito: n(r.valor_credito),
+    valor_debito: n(r.valor_debito),
+  };
+}
+
+export type RecaudoEntidadDim = {
+  periodo: string;
+  entidad: string;
+  agencia: string;
+  categoria: string;
+  en_linea: boolean;
+  cupones: number;
+  valor: number | null;
+  contratos: number;
+};
+export function comoRecaudoEntidadDim(r: Record<string, unknown>): RecaudoEntidadDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    entidad: String(r.entidad ?? ""),
+    agencia: String(r.agencia ?? ""),
+    categoria: String(r.categoria ?? ""),
+    en_linea: r.en_linea === true || r.en_linea === "true",
+    cupones: n(r.cupones) ?? 0,
+    valor: n(r.valor),
+    contratos: n(r.contratos) ?? 0,
+  };
+}
