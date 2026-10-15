@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import { comoDesviacionDim, comoMedidorAntigDim, comoObservacionDim } from "../tipos";
-import { etiquetaPeriodo, fmtEntero, fmtPct } from "../formato";
+import { ETIQ_CON_MEDIDOR, ETIQ_CON_MEDIDOR_CAP, ETIQ_SIN_MEDIDOR, etiquetaPeriodo, fmtEntero, fmtPct } from "../formato";
 import { useRama, type Estado } from "../useRama";
 import { CODIGO_CON_LECTURA, SIN_MEDIDOR, textoObservacion } from "./ContratosLectura";
 
@@ -96,7 +96,7 @@ export function IndicadoresLectura({ periodo }: { periodo: string }) {
       </div></div>
 
       <div className="dash-kpis">
-        <Tarjeta titulo="Contratos sin medidor" estado={obs} sinDato={SIN_CONSUMO}>
+        <Tarjeta titulo={`Contratos ${ETIQ_SIN_MEDIDOR}`} estado={obs} sinDato={SIN_CONSUMO}>
           {() => (
             <>
               <div className="dash-valor num">{fmtEntero(t.sinMedidor)}</div>
@@ -105,13 +105,13 @@ export function IndicadoresLectura({ periodo }: { periodo: string }) {
           )}
         </Tarjeta>
 
-        <Tarjeta titulo="Con medidor y sin avance de lectura" estado={obs} sinDato={SIN_CONSUMO}>
+        <Tarjeta titulo={`${ETIQ_CON_MEDIDOR_CAP} y sin avance de lectura`} estado={obs} sinDato={SIN_CONSUMO}>
           {() => (
             <>
               <div className="dash-valor num">{fmtEntero(t.sinAvance)}</div>
               <div className="dash-sub2 num">
-                {fmtPct(pct(t.sinAvance, t.conMedidor))} de los {fmtEntero(t.conMedidor)} contratos con
-                medidor (lectura igual, menor o sin lectura)
+                {fmtPct(pct(t.sinAvance, t.conMedidor))} de los {fmtEntero(t.conMedidor)} contratos {ETIQ_CON_MEDIDOR}{" "}
+                (lectura igual, menor o sin lectura)
               </div>
             </>
           )}

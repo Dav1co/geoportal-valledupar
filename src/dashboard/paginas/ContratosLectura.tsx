@@ -10,6 +10,7 @@ import {
   type ObservacionDim,
 } from "../tipos";
 import {
+  ETIQ_CON_MEDIDOR,
   ETIQ_SIN_MEDIDOR,
   ETIQ_SIN_MEDIDOR_CAP,
   etiquetaCiclo,
@@ -254,7 +255,7 @@ function LecturaEfectiva({ filas }: { filas: ObservacionDim[] }) {
         {tarjeta("Con avance de lectura", avance)}
         {tarjeta("Lectura igual a la anterior", igual)}
         {tarjeta("Lectura menor a la anterior", menor)}
-        {tarjeta("Sin lectura, con medidor", sinCon)}
+        {tarjeta(`Sin lectura, ${ETIQ_CON_MEDIDOR}`, sinCon)}
         {tarjeta(`Sin lectura, ${ETIQ_SIN_MEDIDOR}`, sinSin)}
       </div>
       <div className="dash-fila">

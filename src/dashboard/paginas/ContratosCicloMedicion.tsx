@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { biCache } from "../cacheBi";
 import { comoObservacionDim, type ConsumoCicloDim, type ObservacionDim } from "../tipos";
 import {
+  ETIQ_CON_MEDIDOR,
+  ETIQ_CON_MEDIDOR_CAP,
   ETIQ_SIN_MEDIDOR,
   ETIQ_SIN_MEDIDOR_CAP,
   etiquetaCiclo,
@@ -176,7 +178,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
             <div className="dash-carta dash-kpi">
               <div className="dash-eti">Contratos</div>
               <div className="dash-valor num">{fmtEntero(total.contratos)}</div>
-              <div className="dash-sub2 num">con medidor {fmtEntero(total.conMedidor)}</div>
+              <div className="dash-sub2 num">{ETIQ_CON_MEDIDOR} {fmtEntero(total.conMedidor)}</div>
             </div>
             <div className="dash-carta dash-kpi">
               <div className="dash-eti">{ETIQ_SIN_MEDIDOR_CAP}</div>
@@ -198,14 +200,14 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
 
           <div className="dash-fila">
             <div className="dash-carta">
-              <h3>Contratos por ciclo, con y {ETIQ_SIN_MEDIDOR}</h3>
+              <h3>Contratos por ciclo, {ETIQ_CON_MEDIDOR} y {ETIQ_SIN_MEDIDOR}</h3>
               <BarrasApiladas
                 datos={porCiclo.map(([n, a]) => ({
                   etiqueta: n >= 0 ? etiquetaCiclo(n) : "(sin ciclo)",
                   valores: [a.conMedidor, a.sinMedidor],
                 }))}
                 series={[
-                  { nombre: "Con medidor", color: COLOR_CON_MEDIDOR },
+                  { nombre: ETIQ_CON_MEDIDOR_CAP, color: COLOR_CON_MEDIDOR },
                   { nombre: ETIQ_SIN_MEDIDOR_CAP, color: COLOR_SIN_MEDIDOR },
                 ]}
                 formatoValor={(v) => `${fmtEntero(v)} contratos`}
@@ -220,7 +222,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
                 <table className="dash-tabla num">
                   <thead>
                     <tr>
-                      <th>Ciclo</th><th>Contratos</th><th>Con medidor</th><th>{ETIQ_SIN_MEDIDOR_CAP}</th>
+                      <th>Ciclo</th><th>Contratos</th><th>{ETIQ_CON_MEDIDOR_CAP}</th><th>{ETIQ_SIN_MEDIDOR_CAP}</th>
                       <th>% {ETIQ_SIN_MEDIDOR}</th><th>Consumo cobrado en cero</th><th>% cero</th>
                       <th>Cobrado sin consumo medido</th><th>m³ cobrados (cargos)</th><th>m³ medidos</th>
                       <th>Facturado acueducto</th><th>Promedio acueducto por contrato</th>
@@ -268,8 +270,8 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
 
           <div className="dash-fila">
             <div className="dash-carta">
-              <h3>Con medidor frente a {ETIQ_SIN_MEDIDOR}</h3>
-              <TablaPlegable titulo={`Datos: con y ${ETIQ_SIN_MEDIDOR}`}>
+              <h3>{ETIQ_CON_MEDIDOR_CAP} frente a {ETIQ_SIN_MEDIDOR}</h3>
+              <TablaPlegable titulo={`Datos: ${ETIQ_CON_MEDIDOR} y ${ETIQ_SIN_MEDIDOR}`}>
                 <table className="dash-tabla num">
                   <thead>
                     <tr>
@@ -278,7 +280,7 @@ export function ContratosCicloMedicion({ periodo, datos, error, onReintentar, va
                     </tr>
                   </thead>
                   <tbody>
-                    {([["Con medidor", conMed], [ETIQ_SIN_MEDIDOR_CAP, sinMed]] as [string, Acum][]).map(([nombre, a]) => (
+                    {([[ETIQ_CON_MEDIDOR_CAP, conMed], [ETIQ_SIN_MEDIDOR_CAP, sinMed]] as [string, Acum][]).map(([nombre, a]) => (
                       <tr key={nombre}>
                         <td>{nombre}</td>
                         <td className="num">{fmtEntero(a.contratos)}</td>
@@ -348,7 +350,7 @@ function FichaObservacion({
       <>
         <div className="dash-valor num">{fmtEntero(r.contratos)}</div>
         <div className="dash-sub2 num">
-          {fmtPct(pct(r.contratos, r.conMedidor))} de los {fmtEntero(r.conMedidor)} contratos con medidor
+          {fmtPct(pct(r.contratos, r.conMedidor))} de los {fmtEntero(r.conMedidor)} contratos {ETIQ_CON_MEDIDOR}
         </div>
         <div className="dash-sub2 num">
           {fmtEntero(r.cero)} con consumo cobrado en cero

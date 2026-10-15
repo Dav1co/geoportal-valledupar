@@ -52,6 +52,7 @@ export function fmtEntero(v: number | null): string {
 // Rótulos de pantalla para la presencia de medidor. UNA sola definición: las
 // secciones nuevas (rangos y consumo básico) no escriben "medidor" a mano.
 export const ETIQ_CON_MEDIDOR = "con medidor registrado";
+export const ETIQ_CON_MEDIDOR_CAP = "Con medidor registrado";
 export const ETIQ_SIN_MEDIDOR = "sin medidor registrado";
 export const ETIQ_SIN_MEDIDOR_CAP = "Sin medidor registrado";
 
