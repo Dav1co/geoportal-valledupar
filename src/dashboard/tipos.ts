@@ -1421,3 +1421,29 @@ export function comoMapaCalorCoberturaDim(r: Record<string, unknown>): MapaCalor
     calculado_en: String(r.calculado_en ?? ""),
   };
 }
+
+// Mapa de calor, cartera por grupo de mora (sql/42): 8 filas por período = 2 capas x 2 ámbitos ('capa' y 'universo') x 2 grupos
+// ('mora_profunda': más de 8 facturas vencidas; 'hasta_8': 8 o menos o sin registro). Calculada sobre TODOS los contratos; un grupo
+// con 1 a 4 contratos llega con NULL en contratos y valores.
+export type MapaCalorCarteraDim = {
+  periodo: string;
+  capa: string;
+  ambito: string;
+  grupo: string;
+  contratos: number | null;
+  valor_cartera: number | null;
+  valor_financiado: number | null;
+  calculado_en: string;
+};
+export function comoMapaCalorCarteraDim(r: Record<string, unknown>): MapaCalorCarteraDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    capa: String(r.capa ?? ""),
+    ambito: String(r.ambito ?? ""),
+    grupo: String(r.grupo ?? ""),
+    contratos: n(r.contratos),
+    valor_cartera: n(r.valor_cartera),
+    valor_financiado: n(r.valor_financiado),
+    calculado_en: String(r.calculado_en ?? ""),
+  };
+}

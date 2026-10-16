@@ -3,16 +3,18 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { biCache } from "../cacheBi";
 import {
+  comoMapaCalorCarteraDim,
   comoMapaCalorCoberturaDim,
   comoMapaCalorDim,
+  type MapaCalorCarteraDim,
   type MapaCalorCoberturaDim,
   type MapaCalorDim,
 } from "../tipos";
-import { etiquetaPeriodo, fmtDecimal, fmtEntero } from "../formato";
+import { etiquetaPeriodo, fmtDecimal, fmtEntero, fmtMillonesEnteros } from "../formato";
 import { CENTRO_VALLEDUPAR, FUENTE_BASE_CALLES } from "../../lib/mapaBase";
 import {
   CAPAS, COLOR_SUPRIMIDA, MIN_CONTRATOS, capaDe, claseDe, clasesPorCuantiles, colorClase, conteoCapa, cuadrado, intervalos, nClases, nSuprimidas,
-  pctCartera, pctCelda, sumaCapa, type CapaId,
+  pctCelda, sumaCapa, type CapaId,
 } from "../mapaCalorComun";
 
 // Mapa de calor: contratos sin medidor, con observación y de consumo bajo (tablas bi.v_mapa_calor_dim y
@@ -24,7 +26,7 @@ const FUENTE = "bi.v_mapa_calor_dim y bi.v_mapa_calor_cobertura_dim (hechos.cons
 const pct1 = (v: number | null) => (v == null ? "—" : `${fmtDecimal(v, 1)} %`);
 
 const PARTES = [
-  { id: "resumen", titulo: "Resumen" }, { id: "mapa", titulo: "Mapa" },
+  { id: "resumen", titulo: "Resumen" }, { id: "cartera", titulo: "Cartera por grupo de mora" }, { id: "mapa", titulo: "Mapa" },
   { id: "tabla", titulo: "Tabla resumen del período" }, { id: "metodologia", titulo: "Metodología y fuentes" },
 ];
 
@@ -57,7 +59,7 @@ function Pie({ periodo, calculado, formula }: { periodo: string; calculado: stri
   );
 }
 
-type Datos = { celdas: MapaCalorDim[]; cob: MapaCalorCoberturaDim[] };
+type Datos = { celdas: MapaCalorDim[]; cob: MapaCalorCoberturaDim[]; car: MapaCalorCarteraDim[] };
 
 // ---------- mapa (MapLibre con importación estática, como el mapa del geoportal) ----------
 function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: string; todas: MapaCalorDim[]; celdas: MapaCalorDim[]; capaId: CapaId; cartera: boolean }) {
@@ -194,6 +196,64 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
   );
 }
 
+// ---------- cartera por grupo de mora (bi.v_mapa_calor_cartera_dim): todos los contratos de la capa, sin coordenadas ni celdas ----------
+const FUENTE_CAR = "bi.v_mapa_calor_cartera_dim (hechos.consumo_metodo y hechos.cartera_contrato)";
+const fechaDe = (xs: { calculado_en: string }[]) => { const f = xs.map((x) => x.calculado_en).filter(Boolean).sort().pop(); return f ? new Date(f).toLocaleString("es-CO") : "—"; };
+const pesosM = (v: number | null) => (v == null ? MENOS_5 : fmtMillonesEnteros(v));
+const GRUPOS_CAR = [
+  { id: "mora_profunda", titulo: "Más de 8 facturas vencidas (mora profunda)" },
+  { id: "hasta_8", titulo: "8 facturas vencidas o menos" },
+];
+function CarteraGrupos({ car, periodoTxt, calculado }: { car: MapaCalorCarteraDim[]; periodoTxt: string; calculado: string }) {
+  if (!car.length) return <div className="dash-estado">No hay cartera por grupo de mora calculada para este período.</div>;
+  const fila = (ambito: string, grupo: string) => car.find((x) => x.ambito === ambito && x.grupo === grupo);
+  // Totales del ámbito (solo si los dos grupos están publicados; si uno viene NULL, no se pueden calcular los porcentajes)
+  const total = (ambito: string) => {
+    const a = fila(ambito, "mora_profunda"), b = fila(ambito, "hasta_8");
+    if (!a || !b || a.contratos == null || b.contratos == null || a.valor_cartera == null || b.valor_cartera == null) return null;
+    return { contratos: a.contratos + b.contratos, valor: a.valor_cartera + b.valor_cartera };
+  };
+  const tCapa = total("capa"), tUni = total("universo");
+  const pct = (v: number | null, t: number | undefined) => (v == null || !t ? "—" : `${fmtDecimal((v / t) * 100, 1)} %`);
+  const profunda = fila("capa", "mora_profunda");
+  const frase = profunda && tCapa && profunda.contratos != null && profunda.valor_cartera != null && tCapa.valor > 0
+    ? `El ${fmtDecimal((profunda.contratos / tCapa.contratos) * 100, 1)} % de los contratos de la capa concentra el ${fmtDecimal((profunda.valor_cartera / tCapa.valor) * 100, 1)} % de su cartera.`
+    : null;
+  return (
+    <>
+      {frase ? <div className="dash-nota"><b>{frase}</b></div> : null}
+      <div className="dash-kpis">
+        {GRUPOS_CAR.map((g) => {
+          const c = fila("capa", g.id), u = fila("universo", g.id);
+          const fin = (x: MapaCalorCarteraDim | undefined) => (x == null || x.valor_financiado == null || x.valor_cartera == null ? MENOS_5 : `${fmtMillonesEnteros(x.valor_financiado)} (${pct(x.valor_financiado, x.valor_cartera)})`);
+          return (
+            <div key={g.id} className="dash-carta dash-kpi">
+              <div className="dash-eti">{g.titulo}</div>
+              <div className="dash-valor num">{c?.contratos == null ? MENOS_5 : `${fmtEntero(c.contratos)} contratos`}</div>
+              <div className="dash-sub2">{pct(c?.contratos ?? null, tCapa?.contratos)} de los contratos de la capa</div>
+              <div className="dash-sub2">Cartera: {pesosM(c?.valor_cartera ?? null)} · {pct(c?.valor_cartera ?? null, tCapa?.valor)} de la cartera de la capa</div>
+              <div className="dash-sub2">de ello, financiado: {fin(c)}</div>
+              <div className="dash-sub2"><i>En todo el universo de la capa: {u?.contratos == null ? MENOS_5 : `${fmtEntero(u.contratos)} contratos`} ({pct(u?.contratos ?? null, tUni?.contratos)} de los contratos)</i></div>
+              <div className="dash-sub2"><i>Cartera del universo: {pesosM(u?.valor_cartera ?? null)} ({pct(u?.valor_cartera ?? null, tUni?.valor)} de la cartera); de ello, financiado: {fin(u)}</i></div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="dash-nota"><b>Es una descripción de la cartera de la capa; no indica causa.</b></div>
+      <div className="dash-nota">El grupo de 8 o menos incluye contratos sin deuda; su cartera es en gran parte financiada (convenios).</div>
+      <div className="dash-nota">Un valor «{MENOS_5}» indica un grupo con 1 a 4 contratos, que no se publica.</div>
+      <div className="dash-nota">Fuente: {FUENTE_CAR}. Período: {periodoTxt}. Calculado: {calculado}.</div>
+      <details><summary>ⓘ Cómo se calcula</summary><div className="dash-nota">
+        Cartera = total_cartera = saldo_pendiente + saldo_financiado, sumada entre los productos (filas) de cada contrato; los vacíos cuentan 0 y no incluye saldos a favor.
+        Grupos: máximo de facturas vencidas del contrato en el período mayor que 8 (mora profunda), u 8 o menos o sin registro de cartera. «De ello, financiado» = saldo_financiado.
+        Capa y universo tienen la misma definición del mapa (la capa «Sin medidor o con observación» se mide sobre todos los contratos del período; «Consumo bajo», sobre los residenciales con medidor y lectura real).
+        Se calcula sobre todos los contratos, sin depender de coordenadas ni de celdas del mapa. Los porcentajes son sobre el total de la capa o de su universo.
+        2.343 contratos con cartera (cerca del 0,1 % de la cartera) quedan fuera del universo de consumo y no aparecen aquí. La fuente no desglosa si saldo_pendiente incluye intereses u otros cargos.
+      </div></details>
+    </>
+  );
+}
+
 // ---------- sección ----------
 export function MapaCalor({ periodo }: { periodo: string }) {
   const [datos, setDatos] = useState<Datos | null>(null);
@@ -201,7 +261,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
   const [intento, setIntento] = useState(0);
   const [capaId, setCapaId] = useState<CapaId>("sin_medidor_obs");
   const [cartera, setCartera] = useState(false);
-  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({ resumen: true, mapa: true, metodologia: true });
+  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({ resumen: true, cartera: true, mapa: true, metodologia: true });
   function cambiar(id: string, abierta: boolean) { setAbiertas((a) => (a[id] === abierta ? a : { ...a, [id]: abierta })); }
   function abrir(id: string) {
     cambiar(id, true);
@@ -212,8 +272,10 @@ export function MapaCalor({ periodo }: { periodo: string }) {
     let vivo = true;
     setDatos(null);
     setError(null);
-    Promise.all([biCache("v_mapa_calor_dim", { periodo }), biCache("v_mapa_calor_cobertura_dim", { periodo })])
-      .then(([m, c]) => { if (vivo) setDatos({ celdas: (m.datos ?? []).map(comoMapaCalorDim), cob: (c.datos ?? []).map(comoMapaCalorCoberturaDim) }); })
+    Promise.all([biCache("v_mapa_calor_dim", { periodo }), biCache("v_mapa_calor_cobertura_dim", { periodo }), biCache("v_mapa_calor_cartera_dim", { periodo })])
+      .then(([m, c, k]) => {
+        if (vivo) setDatos({ celdas: (m.datos ?? []).map(comoMapaCalorDim), cob: (c.datos ?? []).map(comoMapaCalorCoberturaDim), car: (k.datos ?? []).map(comoMapaCalorCarteraDim) });
+      })
       .catch((e: Error) => { if (vivo) setError(e.message); });
     return () => { vivo = false; };
   }, [periodo, intento]);
@@ -249,7 +311,6 @@ export function MapaCalor({ periodo }: { periodo: string }) {
   const periodoTxt = etiquetaPeriodo(periodo);
   const suma = sumaCapa(celdasCapa, cartera);
   const supCapa = nSuprimidas(celdasCapa, cartera);
-  const pc = pctCartera(celdasCapa);
 
   return (
     <div className="dash-fila"><div className="dash-carta">
@@ -284,12 +345,19 @@ export function MapaCalor({ periodo }: { periodo: string }) {
             sub={`${fmtEntero(cob?.contratos_con_coordenadas ?? null)} con coordenadas; ${fmtEntero(cob?.contratos_sin_coordenadas ?? null)} sin ellas`} />
           <Kpi eti="Contratos en celdas suprimidas" valor={fmtEntero(cob?.contratos_en_celdas_suprimidas ?? null)}
             sub={`celdas con menos de ${MIN_CONTRATOS} contratos: no se dibujan`} />
-          <Kpi eti="Contratos con más de 8 facturas vencidas (mora profunda)" valor={`${pct1(pc.dentro)} frente a ${pct1(pc.universo)}`}
-            sub="% dentro de la capa frente al % en todo el universo de la capa (celdas con los dos conteos publicados)" />
+          <div className="dash-carta dash-kpi">
+            <div className="dash-eti">Cartera por grupo de mora</div>
+            <div className="dash-sub2">Contratos con más de 8 facturas vencidas y su cartera, calculados sobre todos los contratos de la capa.</div>
+            <button className="dash-boton-indice" onClick={() => abrir("cartera")}>Ver cartera por grupo de mora</button>
+          </div>
         </div>
         <div className="dash-nota"><b>El filtro excluye los contratos con mora profunda, que con frecuencia corresponden a predios cortados o retirados; es una descripción, no indica causa.</b></div>
         <Pie periodo={periodoTxt} calculado={calculado}
-          formula={`Contratos en la capa = suma de contratos_capa (con el interruptor, de contratos_capa_cartera: los que se mantienen) de las celdas publicadas; los conteos suprimidos (1 a 4 contratos) no se suman, así que la cifra es un mínimo. Porcentaje del universo = esa suma ÷ contratos del universo de la capa. Cobertura = contratos con coordenadas ÷ universo. Mora profunda: contratos con más de 8 facturas vencidas = contratos − los que se mantienen; su porcentaje se calcula dentro de la capa y en toda la base de la capa, solo con las celdas cuyos dos conteos están publicados.`} />
+          formula={`Contratos en la capa = suma de contratos_capa (con el interruptor, de contratos_capa_cartera: los que se mantienen) de las celdas publicadas; los conteos suprimidos (1 a 4 contratos) no se suman, así que la cifra es un mínimo. Porcentaje del universo = esa suma ÷ contratos del universo de la capa. Cobertura = contratos con coordenadas ÷ universo. Los contratos con mora profunda (más de 8 facturas vencidas) y su cartera se calculan sobre todos los contratos de la capa, no sobre las celdas, en la parte «Cartera por grupo de mora».`} />
+      </Parte>
+
+      <Parte id="cartera" titulo={`Cartera de la capa por grupo de mora — ${cap.nombre}`} abierta={!!abiertas.cartera} onCambio={(o) => cambiar("cartera", o)}>
+        <CarteraGrupos car={datos.car.filter((x) => x.capa === capaId)} periodoTxt={periodoTxt} calculado={fechaDe(datos.car)} />
       </Parte>
 
       <Parte id="mapa" titulo="Mapa" abierta={!!abiertas.mapa} onCambio={(o) => cambiar("mapa", o)}>
@@ -329,6 +397,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
           <ul className="dash-nota">
             <li><b>Sin medidor o con observación:</b> contrato sin medidor registrado, o con una observación de lectura distinta de la normal. No cuentan la observación vacía ni los códigos 99 (lectura normal) y 30, 10, 3 y 4 (conexión suspendida, cortada, predio demolido o lote). Códigos que sí cuentan: 1, 2, 5, 6, 7, 8, 11, 12, 13, 17, 21 y 22. Universo: todos los contratos del período.</li>
             <li><b>Consumo bajo (5 m³ o menos):</b> contratos residenciales con medidor y lectura real (observación 99 y función CALCCODL) con consumo cobrado de 0 a 5 m³, ceros incluidos. Universo: los residenciales con lectura real, con cualquier consumo.</li>
+            <li><b>Cartera por grupo de mora:</b> se calcula sobre todos los contratos de la capa y de su universo (no sobre las celdas): contratos y total_cartera (saldo_pendiente + saldo_financiado) sumado entre los productos de cada contrato, separados en más de 8 facturas vencidas (mora profunda) y 8 o menos o sin registro. No incluye saldos a favor.</li>
             <li><b>Interruptor de cartera:</b> excluye los contratos con mora profunda, es decir, con más de 8 facturas vencidas (máximo de facturas vencidas del contrato en el período en hechos.cartera_contrato). Se mantienen los de 0 a 8 facturas vencidas y los que no tienen registro de cartera en el período. Se asume una factura por mes, así que 8 facturas equivalen a 8 meses de deuda.</li>
           </ul>
           <div className="dash-nota"><b>Un consumo cero puede ser un predio desocupado, un corte o un medidor detenido:</b> el mapa no distingue entre ellos.</div>

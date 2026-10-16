@@ -29,21 +29,6 @@ export const sumaCapa = (celdas: MapaCalorDim[], cartera: boolean) =>
   celdas.reduce((s, c) => s + (conteoCapa(c, cartera) ?? 0), 0);
 export const nSuprimidas = (celdas: MapaCalorDim[], cartera: boolean) => celdas.filter((c) => conteoCapa(c, cartera) == null).length;
 
-// % de contratos con mora profunda (más de 8 facturas vencidas) = los que no se mantienen: dentro de la capa y en todo el universo de la capa.
-// Solo entran las celdas cuyos dos conteos están publicados, para que numerador y denominador sean del mismo conjunto.
-export function pctCartera(celdas: MapaCalorDim[]) {
-  let capaN = 0, capaC = 0, baseN = 0, baseC = 0;
-  for (const c of celdas) {
-    if (c.contratos_capa != null && c.contratos_capa_cartera != null) { capaN += c.contratos_capa; capaC += c.contratos_capa_cartera; }
-    if (c.contratos_base_cartera != null) { baseN += c.contratos_base; baseC += c.contratos_base_cartera; }
-  }
-  return {
-    dentro: capaN > 0 ? ((capaN - capaC) / capaN) * 100 : null,
-    universo: baseN > 0 ? ((baseN - baseC) / baseN) * 100 : null,
-    capaN, capaC, baseN, baseC,
-  };
-}
-
 // Cinco clases por cuantiles de los porcentajes conocidos. Con empates (muchos ceros) se funden las clases repetidas.
 export type Clases = { cortes: number[]; min: number; max: number };
 export function clasesPorCuantiles(pcts: number[]): Clases | null {
