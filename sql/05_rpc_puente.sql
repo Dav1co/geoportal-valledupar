@@ -105,7 +105,8 @@
 --                             ciclo y resumen por ciclo (sql/40 y sql/41)
 --   v_mapa_calor_dim        : periodo (exacto), desde, hasta; SIN filtro devuelve todos los
 --   v_mapa_calor_cobertura_dim  periodos — mapa de calor: celdas de 250 m publicadas por capa y
---                             su cobertura (sql/42_mapa_calor_dim.sql)
+--   v_mapa_calor_cartera_dim    su cobertura, y cartera por grupo de mora de la capa
+--                             (sql/42_mapa_calor_dim.sql)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -603,6 +604,18 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  elsif p_vista = 'v_mapa_calor_cartera_dim' then
+    -- Mapa de calor, cartera por grupo de mora de cada capa y su universo (sql/42): 8 filas por periodo (56 hoy). Se calcula sobre todos los
+    -- contratos, sin depender de coordenadas; un grupo con 1 a 4 contratos llega con NULL.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, t.capa, t.ambito, t.grupo),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_mapa_calor_cartera_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -707,4 +720,10 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- ROLLBACK de las ramas v_mapa_calor_dim y v_mapa_calor_cobertura_dim (51 -> 53 ramas): volver a la version de este archivo
 -- con 51 ramas (hasta v_reclamo_metodo_ciclo_dim) y volver a ejecutarlo (create or replace conserva el ACL). Antes de
 -- retirar las ramas, quitar las dos vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v21).
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de la rama v_mapa_calor_cartera_dim (53 -> 54 ramas): volver a la version de este archivo con 53 ramas (hasta
+-- v_mapa_calor_cobertura_dim, commit 3518512) y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar la
+-- rama, quitar la vista de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v22).
 -- =====================================================================

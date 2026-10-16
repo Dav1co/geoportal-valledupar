@@ -1,8 +1,8 @@
 -- =====================================================================
 -- sql/42 · MAPA DE CALOR (dimension espacial agregada) · Fase A: solo base de datos y cargador
 -- =====================================================================
--- Dos tablas por periodo, capa y celda de 250 m para pintar un mapa de calor estatico con dos capas y un interruptor
--- de cartera. PRIVACIDAD: solo agregados por celda; nunca coordenadas individuales, contratos, direcciones ni nombres.
+-- Tres tablas por periodo y capa (dos por celda de 250 m para pintar un mapa de calor estatico con dos capas y un interruptor
+-- de cartera, y una de cartera por grupo de mora calculada sobre TODOS los contratos de la capa). PRIVACIDAD: solo agregados por celda; nunca coordenadas individuales, contratos, direcciones ni nombres.
 --
 -- bi.v_mapa_calor_dim · GRANO: periodo x capa x celda (SOLO celdas publicadas)
 --  · celda_x = floor(x/250), celda_y = floor(y/250), con x e y en EPSG:3116 (MAGNA-SIRGAS / Colombia Bogota, en metros)
@@ -14,6 +14,15 @@
 --  · SUPRESION EN EL SERVIDOR: una celda se publica solo si contratos_base >= 5; dentro de una celda publicada, cualquier
 --    conteo entre 1 y 4 se publica como NULL (el 0 se conserva). Las celdas con menos de 5 contratos de base NO tienen
 --    fila: sus contratos se cuentan en la tabla de cobertura.
+-- bi.v_mapa_calor_cartera_dim · GRANO: periodo x capa x ambito x grupo (8 filas por periodo)
+--  · ambito 'capa' = contratos de la capa; ambito 'universo' = todos los contratos de la base de la capa (misma definicion
+--    que el mapa). SOBRE TODOS LOS CONTRATOS: no depende de coordenadas ni de celdas.
+--  · grupo 'mora_profunda' = maximo de facturas_vencidas del contrato en el periodo > 8; 'hasta_8' = 8 o menos o SIN registro
+--    en cartera_contrato. El corte es el mismo del interruptor del mapa.
+--  · contratos; valor_cartera = total_cartera (= saldo_pendiente + saldo_financiado) sumado entre las filas (productos) de cada
+--    contrato, vacio = 0; valor_financiado = saldo_financiado sumado igual. No incluye saldos a favor. La fuente no desglosa si
+--    saldo_pendiente incluye intereses u otros cargos.
+--  · Supresion: un grupo con 1 a 4 contratos publica contratos, valor_cartera y valor_financiado en NULL.
 -- bi.v_mapa_calor_cobertura_dim · GRANO: periodo x capa
 --  · contratos_universo = contratos_con_coordenadas + contratos_sin_coordenadas
 --    = contratos_en_celdas_publicadas + contratos_en_celdas_suprimidas + contratos_sin_coordenadas.
@@ -74,6 +83,19 @@ create table bi.v_mapa_calor_cobertura_dim (
 );
 revoke all on bi.v_mapa_calor_cobertura_dim from public, anon, authenticated;
 
+create table bi.v_mapa_calor_cartera_dim (
+  periodo            text,
+  capa               text,
+  ambito             text,
+  grupo              text,
+  contratos          bigint,
+  valor_cartera      numeric,
+  valor_financiado   numeric,
+  calculado_en       timestamptz,
+  primary key (periodo, capa, ambito, grupo)
+);
+revoke all on bi.v_mapa_calor_cartera_dim from public, anon, authenticated;
+
 create or replace function bi.recalcular_mapa_calor(p_periodo text)
 returns integer language plpgsql as $$
 declare
@@ -86,6 +108,7 @@ declare
 begin
   delete from bi.v_mapa_calor_dim where periodo = p_periodo;
   delete from bi.v_mapa_calor_cobertura_dim where periodo = p_periodo;
+  delete from bi.v_mapa_calor_cartera_dim where periodo = p_periodo;
   if not exists (select 1 from hechos.consumo_metodo where periodo = p_periodo) then
     return 0;
   end if;
@@ -114,7 +137,9 @@ begin
     from r),
   cv as (
     select btrim(contrato)::bigint as c,
-           max(case when btrim(facturas_vencidas) ~ '^[0-9]+$' then btrim(facturas_vencidas)::numeric end) as mx
+           max(case when btrim(facturas_vencidas) ~ '^[0-9]+$' then btrim(facturas_vencidas)::numeric end) as mx,
+           coalesce(sum(bi.f_num(total_cartera)), 0) as tot,
+           coalesce(sum(bi.f_num(saldo_financiado)), 0) as fin
     from hechos.cartera_contrato
     where periodo = p_periodo and btrim(contrato) ~ '^[0-9]+$'
     group by 1),
@@ -127,7 +152,8 @@ begin
           where geom is not null and btrim(cod_usuario) ~ '^[0-9]+$') q
     order by c, id),
   j as materialized (
-    select x.capa, pc.gx, pc.gy, x.en_capa, not coalesce(cv.mx > c_mora, false) as cart
+    select x.capa, pc.gx, pc.gy, x.en_capa, not coalesce(cv.mx > c_mora, false) as cart,
+           coalesce(cv.tot, 0) as tot, coalesce(cv.fin, 0) as fin
     from (select 'sin_medidor_obs'::text as capa, cn, l1 as en_capa from k
           union all
           select 'consumo_bajo'::text, cn, l2 from k where u2) x
@@ -148,6 +174,24 @@ begin
            coalesce((select sum(base) from cel where cel.capa = j.capa and cel.base < c_min_base), 0),
            now()
     from j group by j.capa
+    returning 1),
+  ins_car as (
+    insert into bi.v_mapa_calor_cartera_dim
+    select p_periodo, g.capa, g.ambito, g.grupo,
+           case when coalesce(h.n, 0) between 1 and 4 then null else coalesce(h.n, 0) end,
+           case when coalesce(h.n, 0) between 1 and 4 then null else coalesce(h.val, 0) end,
+           case when coalesce(h.n, 0) between 1 and 4 then null else coalesce(h.fin, 0) end,
+           now()
+    from (select c.capa, am.ambito, gr.grupo
+          from (values ('sin_medidor_obs'), ('consumo_bajo')) c(capa)
+          cross join (values ('capa'), ('universo')) am(ambito)
+          cross join (values ('mora_profunda'), ('hasta_8')) gr(grupo)) g
+    left join (
+      select j.capa, am2.ambito, case when j.cart then 'hasta_8' else 'mora_profunda' end as grupo,
+             count(*) as n, sum(j.tot) as val, sum(j.fin) as fin
+      from j cross join lateral (values ('universo', true), ('capa', coalesce(j.en_capa, false))) am2(ambito, ok)
+      where am2.ok
+      group by 1, 2, 3) h on h.capa = g.capa and h.ambito = g.ambito and h.grupo = g.grupo
     returning 1)
   insert into bi.v_mapa_calor_dim
   select p_periodo, cel.capa, cel.gx, cel.gy,
@@ -166,7 +210,7 @@ end;
 $$;
 revoke all on function bi.recalcular_mapa_calor(text) from public, anon, authenticated;
 
--- >>> PASO 2 · despachador: +1 rama (las dos tablas se llenan juntas) y +1 limpieza de huerfanos ----------
+-- >>> PASO 2 · despachador: +1 rama (las tres tablas se llenan juntas) y +1 limpieza de huerfanos ----------
 -- OJO: es el despachador VIVO (definicion viva + las lineas nuevas); otras copias publicadas pueden diferir.
 -- create or replace conserva su ACL postgres=X.
 CREATE OR REPLACE FUNCTION bi.recalcular(p_tabla text, p_periodo text)
@@ -201,7 +245,7 @@ begin
   elsif p_tabla in ('bi.v_reclamo_metodo_banda_dim', 'bi.v_reclamo_metodo_ciclo_dim') then n := bi.recalcular_reclamo_metodo_resumen(p_periodo);
   elsif p_tabla = 'bi.v_recaudo_ticket_dim' then n := bi.recalcular_recaudo_ticket_dim(p_periodo);
   elsif p_tabla = 'bi.v_recaudo_cuadre_dim' then n := bi.recalcular_recaudo_cuadre_dim(p_periodo);
-  elsif p_tabla in ('bi.v_mapa_calor_dim', 'bi.v_mapa_calor_cobertura_dim') then n := bi.recalcular_mapa_calor(p_periodo);
+  elsif p_tabla in ('bi.v_mapa_calor_dim', 'bi.v_mapa_calor_cobertura_dim', 'bi.v_mapa_calor_cartera_dim') then n := bi.recalcular_mapa_calor(p_periodo);
   else raise exception 'tabla_no_recalculable: %', p_tabla using errcode = 'P0001';
   end if;
 
@@ -290,10 +334,12 @@ begin
     where not exists (select 1 from hechos.consumo_metodo f where f.periodo = t.periodo);
     delete from bi.v_reclamo_metodo_ciclo_dim t
     where not exists (select 1 from hechos.consumo_metodo f where f.periodo = t.periodo);
-  elsif p_tabla in ('bi.v_mapa_calor_dim', 'bi.v_mapa_calor_cobertura_dim') then
+  elsif p_tabla in ('bi.v_mapa_calor_dim', 'bi.v_mapa_calor_cobertura_dim', 'bi.v_mapa_calor_cartera_dim') then
     delete from bi.v_mapa_calor_dim t
     where not exists (select 1 from hechos.consumo_metodo f where f.periodo = t.periodo);
     delete from bi.v_mapa_calor_cobertura_dim t
+    where not exists (select 1 from hechos.consumo_metodo f where f.periodo = t.periodo);
+    delete from bi.v_mapa_calor_cartera_dim t
     where not exists (select 1 from hechos.consumo_metodo f where f.periodo = t.periodo);
   end if;
 
