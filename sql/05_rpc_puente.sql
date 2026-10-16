@@ -93,6 +93,13 @@
 --                             (sql/36_notas_causal_dim.sql)
 --   v_recaudo_entidad_dim   : ídem — recaudo por entidad y agencia
 --                             (sql/37_recaudo_entidad_dim.sql)
+--   v_cambio_medidor_dim    : periodo (exacto), desde, hasta; SIN filtro devuelve todos los
+--                             periodos — cambios de medidor entre periodos consecutivos
+--                             (sql/38_cambio_medidor_dim.sql)
+--   v_submedicion_ref_dim   : periodo (exacto), desde, hasta; SIN filtro devuelve todos los
+--   v_submedicion_ciclo_dim   periodos — submedicion por vejez del medidor: referencia por
+--   v_submedicion_rango_dim   estrato y banda, sumas por ciclo y por rango de consumo
+--                             (sql/39_submedicion_dim.sql)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -495,6 +502,55 @@ begin
              and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta')
           end;
 
+  elsif p_vista = 'v_cambio_medidor_dim' then
+    -- Cambios de medidor entre periodos consecutivos (sql/38): ~530 a 2.000 filas por periodo, 7.502 en los 7
+    -- periodos de hoy (~2 MB). Con periodo (exacto) devuelve solo ese periodo; SIN periodo devuelve TODOS (a
+    -- diferencia de las otras dims, que sin periodo traen el ultimo): la serie por periodo es el uso de la vista.
+    -- Tambien admite desde y hasta. Se trae una vez y se filtra en el navegador.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, length(t.ciclo), t.ciclo, t.uso, t.estrato, t.tipo_evento, t.banda_ant, t.metodo_act),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_cambio_medidor_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  elsif p_vista = 'v_submedicion_ref_dim' then
+    -- Submedicion por vejez del medidor (sql/39): referencia por estrato y banda de antiguedad, ~40 filas por periodo
+    -- (159 en los 4 periodos de hoy). Con periodo (exacto), desde o hasta devuelve esos periodos; SIN filtro devuelve TODOS.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, t.estrato, case t.banda_antig when '0-3' then 1 when '3-5' then 2 when '5-10' then 3 when '10-15' then 4 when '>15 (fecha real)' then 5 when '>15 (1986-01-01)' then 6 else 7 end),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_submedicion_ref_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  elsif p_vista = 'v_submedicion_ciclo_dim' then
+    -- Submedicion por vejez (sql/39): sumas por ciclo y estrato, ~85 filas por periodo (338 hoy). Mismos filtros.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, length(t.ciclo), t.ciclo, t.estrato),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_submedicion_ciclo_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  elsif p_vista = 'v_submedicion_rango_dim' then
+    -- Submedicion por vejez (sql/39): sumas por ciclo, estrato y rango de consumo, ~600 filas por periodo (2.349 hoy).
+    -- Mismos filtros.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, length(t.ciclo), t.ciclo, t.estrato, case t.rango_m3 when '1-5' then 1 when '6-10' then 2 when '11-15' then 3 when '16-20' then 4 when '21-30' then 5 when '31-40' then 6 when '41-60' then 7 when '61-100' then 8 else 9 end),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_submedicion_rango_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -573,4 +629,18 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- commit fc966b0 (40 ramas, hasta v_consumo_basico_dim) y volver a ejecutarlo
 -- (create or replace conserva el ACL). Antes de retirar las ramas, quitar las cinco
 -- vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function.
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de la rama v_cambio_medidor_dim (45 -> 46 ramas): volver a la version de este archivo en el
+-- commit 9bb866e (45 ramas, hasta v_recaudo_entidad_dim) y volver a ejecutarlo (create or replace conserva el
+-- ACL). Antes de retirar la rama, quitar la vista de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la
+-- Edge Function (v18).
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de las ramas v_submedicion_ref_dim, v_submedicion_ciclo_dim y v_submedicion_rango_dim (46 -> 49 ramas):
+-- volver a la version de este archivo con 46 ramas (hasta v_cambio_medidor_dim) y volver a ejecutarlo (create or replace
+-- conserva el ACL). Antes de retirar las ramas, quitar las tres vistas de VISTAS_PERMITIDAS en geoportal-bi y
+-- redesplegar la Edge Function (v19).
 -- =====================================================================
