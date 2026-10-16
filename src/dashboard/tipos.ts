@@ -1140,3 +1140,43 @@ export function comoRecaudoEntidadDim(r: Record<string, unknown>): RecaudoEntida
     contratos: n(r.contratos) ?? 0,
   };
 }
+
+// bi.v_cambio_medidor_dim (sql/38): cambios de medidor entre un periodo y el anterior disponible, por
+// contrato. tipo_evento: reposicion | instalacion_nueva | retiro | sin_cambio (control).
+// banda_ant: 0-5 | 5-10 | 10-15 | >15 (fecha real) | >15 (1986-01-01) | Sin fecha | Sin medidor.
+// metodo_act: lectura | promedio | otro. m3_ant y m3_act suman solo los contratos pareados.
+export type CambioMedidorDim = {
+  periodo: string;
+  periodo_ant: string;
+  meses_intervalo: number;
+  ciclo: string;
+  uso: string;
+  estrato: string;
+  tipo_evento: string;
+  banda_ant: string;
+  metodo_act: string;
+  contratos: number;
+  contratos_pareados: number;
+  m3_ant: number | null;
+  m3_act: number | null;
+  contratos_con_medidor_ant: number;
+};
+export function comoCambioMedidorDim(r: Record<string, unknown>): CambioMedidorDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    periodo_ant: String(r.periodo_ant ?? ""),
+    meses_intervalo: n(r.meses_intervalo) ?? 1,
+    ciclo: String(r.ciclo ?? ""),
+    uso: String(r.uso ?? ""),
+    estrato: String(r.estrato ?? ""),
+    tipo_evento: String(r.tipo_evento ?? ""),
+    banda_ant: String(r.banda_ant ?? ""),
+    metodo_act: String(r.metodo_act ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    contratos_pareados: n(r.contratos_pareados) ?? 0,
+    m3_ant: n(r.m3_ant),
+    m3_act: n(r.m3_act),
+    contratos_con_medidor_ant: n(r.contratos_con_medidor_ant) ?? 0,
+  };
+}
+

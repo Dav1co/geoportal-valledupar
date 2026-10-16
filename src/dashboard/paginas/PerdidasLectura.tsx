@@ -7,10 +7,12 @@ import { ConsumoRangosSeccion } from "./ConsumoRangosBasico";
 import { MedidoresAntiguedad, ObservacionesLectura } from "./ContratosLectura";
 import { CeroSostenido } from "./CeroSostenido";
 import { ContratosCicloMedicion } from "./ContratosCicloMedicion";
+import { CambiosMedidor } from "./CambiosMedidor";
 
 // Secciones de lectura, medición y consumo de la pantalla de Pérdidas, debajo de «Lectura y medición».
 // Orden: contratos y volumen por rango; medidores por antigüedad (con el promedio de consumo);
-// observaciones de lectura; cero sostenido; contratos por ciclo con y sin medidor registrado.
+// observaciones de lectura; cero sostenido; contratos por ciclo con y sin medidor registrado; y, al final,
+// los cambios de medidor entre periodos (CambiosMedidor, bi.v_cambio_medidor_dim).
 // Tienen su propio panel de filtros (ciclo, uso, estrato) con las mismas reglas de Facturación
 // desagregada: no afecta a las gráficas del IPUF de arriba. Medidores por antigüedad no usa ciclo.
 // v_consumo_ciclo_dim y v_desviacion_dim se cargan aquí, cada una con su error y su reintento.
@@ -62,6 +64,7 @@ export function PerdidasLectura({ periodo }: { periodo: string }) {
           onReintentar={cargarConsumo}
           valores={valores}
         />
+        <CambiosMedidor periodo={periodo} valores={valores} />
       </div>
     </div>
   );
