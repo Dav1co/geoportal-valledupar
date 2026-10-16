@@ -15,6 +15,7 @@ import { excesoSobreMeta, resumenAnual } from "../ipufAnual";
 import { IndicesAnualesSeccion, IpufAnualBloque } from "./PerdidasAnual";
 import { IndicadoresLectura } from "./IndicadoresLectura";
 import { PerdidasLectura } from "./PerdidasLectura";
+import { SubmedicionVejez } from "./SubmedicionVejez";
 
 // Pérdidas de agua (IPUF). Serie histórica larga: 114 períodos desde
 // enero de 2017, en su propio archivo y con un mes de rezago respecto
@@ -175,6 +176,7 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
 
       <IndicadoresLectura periodo={periodo} />
       <PerdidasLectura periodo={periodo} />
+      <SubmedicionVejez periodo={periodo} ipufSerie={filas} />
 
       <div className="dash-fila">
         <div className="dash-carta">

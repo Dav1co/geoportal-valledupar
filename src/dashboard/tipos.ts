@@ -1180,3 +1180,112 @@ export function comoCambioMedidorDim(r: Record<string, unknown>): CambioMedidorD
   };
 }
 
+// bi.v_submedicion_ref_dim, v_submedicion_ciclo_dim y v_submedicion_rango_dim (sql/39): submedicion por vejez del medidor.
+// Universo: residencial, medidor registrado, observacion 99, funcion CALCCODL, 0 < consumo_cargos <= 100, antiguedad al cierre.
+// banda_antig: 0-3 | 3-5 | 5-10 | 10-15 | >15 (fecha real) | >15 (1986-01-01) | Sin fecha. rango_m3: 1-5 ... 61-100.
+export type SubmedicionRefDim = {
+  periodo: string;
+  estrato: string;
+  banda_antig: string;
+  contratos_medidor: number;
+  contratos: number;
+  contratos_promedio: number;
+  m3_consumo: number | null;
+  ref_nuevos_media_m3: number | null;
+  n_nuevos: number;
+  media_vejez_m3: number | null;
+  n_vejez: number;
+  tarifa_m3: number | null;
+  contratos_bajo_ref: number | null;
+  m3_perdidos_bruta: number | null;
+  m3_exceso: number | null;
+  max_m3: number | null;
+  calculado_en: string;
+  contratos_cero: number;
+  contratos_sobre_max: number;
+};
+export function comoSubmedicionRefDim(r: Record<string, unknown>): SubmedicionRefDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    estrato: String(r.estrato ?? ""),
+    banda_antig: String(r.banda_antig ?? ""),
+    contratos_medidor: n(r.contratos_medidor) ?? 0,
+    contratos: n(r.contratos) ?? 0,
+    contratos_promedio: n(r.contratos_promedio) ?? 0,
+    m3_consumo: n(r.m3_consumo),
+    ref_nuevos_media_m3: n(r.ref_nuevos_media_m3),
+    n_nuevos: n(r.n_nuevos) ?? 0,
+    media_vejez_m3: n(r.media_vejez_m3),
+    n_vejez: n(r.n_vejez) ?? 0,
+    tarifa_m3: n(r.tarifa_m3),
+    contratos_bajo_ref: n(r.contratos_bajo_ref),
+    m3_perdidos_bruta: n(r.m3_perdidos_bruta),
+    m3_exceso: n(r.m3_exceso),
+    max_m3: n(r.max_m3),
+    calculado_en: String(r.calculado_en ?? ""),
+    contratos_cero: n(r.contratos_cero) ?? 0,
+    contratos_sobre_max: n(r.contratos_sobre_max) ?? 0,
+  };
+}
+
+export type SubmedicionCicloDim = {
+  periodo: string;
+  ciclo: string;
+  estrato: string;
+  contratos: number;
+  m3_consumo: number | null;
+  m3_perdidos_bruta: number | null;
+  contratos_vejez: number;
+  m3_perdidos_atrib: number | null;
+  tarifa_m3: number | null;
+  contratos_bajo_ref: number | null;
+  m3_exceso: number | null;
+  max_m3: number | null;
+  calculado_en: string;
+};
+export function comoSubmedicionCicloDim(r: Record<string, unknown>): SubmedicionCicloDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    estrato: String(r.estrato ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    m3_consumo: n(r.m3_consumo),
+    m3_perdidos_bruta: n(r.m3_perdidos_bruta),
+    contratos_vejez: n(r.contratos_vejez) ?? 0,
+    m3_perdidos_atrib: n(r.m3_perdidos_atrib),
+    tarifa_m3: n(r.tarifa_m3),
+    contratos_bajo_ref: n(r.contratos_bajo_ref),
+    m3_exceso: n(r.m3_exceso),
+    max_m3: n(r.max_m3),
+    calculado_en: String(r.calculado_en ?? ""),
+  };
+}
+
+export type SubmedicionRangoDim = {
+  periodo: string;
+  ciclo: string;
+  estrato: string;
+  rango_m3: string;
+  contratos: number;
+  m3_consumo: number | null;
+  contratos_bajo_ref: number | null;
+  m3_perdidos_bruta: number | null;
+  tarifa_m3: number | null;
+  max_m3: number | null;
+  calculado_en: string;
+};
+export function comoSubmedicionRangoDim(r: Record<string, unknown>): SubmedicionRangoDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    estrato: String(r.estrato ?? ""),
+    rango_m3: String(r.rango_m3 ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    m3_consumo: n(r.m3_consumo),
+    contratos_bajo_ref: n(r.contratos_bajo_ref),
+    m3_perdidos_bruta: n(r.m3_perdidos_bruta),
+    tarifa_m3: n(r.tarifa_m3),
+    max_m3: n(r.max_m3),
+    calculado_en: String(r.calculado_en ?? ""),
+  };
+}
