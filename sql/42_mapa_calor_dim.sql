@@ -8,7 +8,9 @@
 --  · celda_x = floor(x/250), celda_y = floor(y/250), con x e y en EPSG:3116 (MAGNA-SIRGAS / Colombia Bogota, en metros)
 --    y un origen constante para todos los periodos. lon_centro y lat_centro: centro de la celda en EPSG:4326, 5 decimales.
 --  · contratos_base: contratos de la base de la capa en la celda. contratos_capa: los que cumplen la capa.
---    contratos_base_cartera y contratos_capa_cartera: los anteriores con 8 o mas facturas vencidas.
+--    contratos_base_cartera y contratos_capa_cartera: los anteriores que SE MANTIENEN con el interruptor de cartera, es decir,
+--    SIN MORA PROFUNDA (8 o menos facturas vencidas, o sin registro en cartera_contrato del periodo). Se conserva el sufijo
+--    «_cartera» por compatibilidad con la RPC, la Edge Function y los tipos; ya NO cuentan los contratos con cartera.
 --  · SUPRESION EN EL SERVIDOR: una celda se publica solo si contratos_base >= 5; dentro de una celda publicada, cualquier
 --    conteo entre 1 y 4 se publica como NULL (el 0 se conserva). Las celdas con menos de 5 contratos de base NO tienen
 --    fila: sus contratos se cuentan en la tabla de cobertura.
@@ -22,8 +24,15 @@
 --    observacion vacia y los codigos 99, 30, 10, 3 y 4.
 --  · 'consumo_bajo'     base: contratos residenciales con medidor registrado y lectura real (observacion 99 y funcion
 --    CALCCODL), con cualquier consumo.  capa: consumo_cargos entre 0 y 5 m3, ceros incluidos.
---  · CARTERA: 8 o mas facturas vencidas en hechos.cartera_contrato del mismo periodo (maximo de facturas_vencidas por
---    contrato; el texto se convierte a numero solo si cumple ^[0-9]+$; sin fila de cartera = no cartera).
+--  · CARTERA (interruptor «excluir mora profunda»): se EXCLUYEN los contratos con MAS de 8 facturas vencidas en
+--    hechos.cartera_contrato del mismo periodo (maximo de facturas_vencidas por contrato; el texto se convierte a numero
+--    solo si cumple ^[0-9]+$). Se mantienen los de 0 a 8 facturas vencidas y los SIN registro de cartera en el periodo.
+--    Se asume una factura por mes: 8 facturas equivalen a 8 meses de deuda.
+--  · SUPRESION COMPLEMENTARIA (APAGADA por defecto, constante c_supr_compl): como la columna «_cartera» cuenta los que se
+--    mantienen, la diferencia con el conteo de la capa (o de la base) es el numero de contratos con mora profunda y puede
+--    quedar entre 1 y 4. Con la constante en true, en ese caso el conteo
+--    «_cartera» tambien se publica como NULL, para que no se pueda deducir un conteo pequeno. Con la regla simple (1 a 4 en
+--    NULL solo en cada columna) esa diferencia ya se podia deducir en la version anterior de este mapa.
 --
 -- COORDENADAS: public.predios_comercial (cod_usuario = contrato, geom POINT 4326). Un contrato puede tener varios
 -- predios: se toma el de menor id. Las coordenadas NO son una fuente del cargador: si cambian, se recalcula a mano.
@@ -71,7 +80,8 @@ declare
   c_celda    constant integer := 250;   -- lado de la celda, en metros
   c_srid     constant integer := 3116;  -- sistema metrico fijo (origen constante)
   c_min_base constant integer := 5;     -- minimo de contratos de base para publicar una celda
-  c_cartera  constant integer := 8;     -- facturas vencidas para contar como cartera
+  c_mora     constant integer := 8;     -- mas de 8 facturas vencidas = mora profunda (se excluye con el interruptor)
+  c_supr_compl constant boolean := false; -- true: suprimir tambien el «_cartera» cuando (total - mantenidos) esta entre 1 y 4
   n integer;
 begin
   delete from bi.v_mapa_calor_dim where periodo = p_periodo;
@@ -117,7 +127,7 @@ begin
           where geom is not null and btrim(cod_usuario) ~ '^[0-9]+$') q
     order by c, id),
   j as materialized (
-    select x.capa, pc.gx, pc.gy, x.en_capa, coalesce(cv.mx >= c_cartera, false) as cart
+    select x.capa, pc.gx, pc.gy, x.en_capa, not coalesce(cv.mx > c_mora, false) as cart
     from (select 'sin_medidor_obs'::text as capa, cn, l1 as en_capa from k
           union all
           select 'consumo_bajo'::text, cn, l2 from k where u2) x
@@ -127,7 +137,7 @@ begin
     select capa, gx, gy,
            count(*) as base,
            count(*) filter (where en_capa) as capa_n,
-           count(*) filter (where cart) as base_c,
+           count(*) filter (where cart) as base_c,          -- «cart» = se mantiene (sin mora profunda)
            count(*) filter (where en_capa and cart) as capa_c
     from j where gx is not null
     group by capa, gx, gy),
@@ -145,8 +155,8 @@ begin
          round(st_y(st_transform(st_setsrid(st_makepoint((cel.gx + 0.5) * c_celda, (cel.gy + 0.5) * c_celda), c_srid), 4326))::numeric, 5),
          cel.base,
          case when cel.capa_n  between 1 and 4 then null else cel.capa_n  end,
-         case when cel.base_c  between 1 and 4 then null else cel.base_c  end,
-         case when cel.capa_c  between 1 and 4 then null else cel.capa_c  end,
+         case when cel.base_c between 1 and 4 or (c_supr_compl and cel.base - cel.base_c between 1 and 4) then null else cel.base_c end,
+         case when cel.capa_c between 1 and 4 or (c_supr_compl and cel.capa_n - cel.capa_c between 1 and 4) then null else cel.capa_c end,
          now()
   from cel
   where cel.base >= c_min_base;
