@@ -106,11 +106,10 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
           const t = (v: unknown) => (Number(v) < 0 ? MENOS_5 : fmtEntero(Number(v)));
           const lineas = [
             `<b>${p.capaNombre}</b>`,
-            `Contratos de la capa: ${t(p.cap)}`,
+            `${p.conCartera ? "Contratos de la capa que se mantienen (sin mora profunda)" : "Contratos de la capa"}: ${t(p.cap)}`,
             `Contratos de la celda: ${fmtEntero(Number(p.base))}`,
             `Porcentaje: ${Number(p.pct) < 0 ? MENOS_5 : `${fmtDecimal(Number(p.pct), 1)} %`}`,
           ];
-          if (p.conCartera) lineas.push(`Con 8 o más facturas vencidas: ${t(p.capCart)}`);
           popup.setLngLat(e.lngLat).setHTML(`<div style="font-size:12px;line-height:1.45">${lineas.join("<br/>")}</div>`).addTo(map);
         };
         map.on("mousemove", "celdas-fill", mostrar);
@@ -187,7 +186,7 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
         </div>
       ) : null}
       <div className="dash-nota">
-        Cada cuadrado es una celda de 250 m. Color: {cartera ? "contratos de la capa con 8 o más facturas vencidas" : "contratos de la capa"} ÷ contratos de la celda,
+        Cada cuadrado es una celda de 250 m. Color: {cartera ? "contratos de la capa que se mantienen (sin más de 8 facturas vencidas)" : "contratos de la capa"} ÷ contratos de la celda,
         en clases por cuantiles de las celdas de la capa en el período (las clases repetidas se funden; las celdas con 0 contratos en la capa van en el tono más claro).
         Las celdas con menos de {MIN_CONTRATOS} contratos en total no se dibujan.
       </div>
@@ -267,7 +266,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
           </select>
         </label>
         <label>
-          <input type="checkbox" checked={cartera} onChange={(e) => setCartera(e.target.checked)} /> Solo contratos con 8 o más facturas vencidas
+          <input type="checkbox" checked={cartera} onChange={(e) => setCartera(e.target.checked)} /> Excluir contratos con más de 8 facturas vencidas
         </label>
       </div>
       <nav className="dash-indice" aria-label="Contenido de la sección">
@@ -277,7 +276,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
 
       <Parte id="resumen" titulo={`Resumen — ${cap.nombre}`} abierta={!!abiertas.resumen} onCambio={(o) => cambiar("resumen", o)}>
         <div className="dash-kpis">
-          <Kpi eti={cartera ? "Contratos en la capa con 8 o más facturas vencidas" : "Contratos en la capa"} valor={fmtEntero(suma)}
+          <Kpi eti={cartera ? "Contratos en la capa que se mantienen (sin mora profunda)" : "Contratos en la capa"} valor={fmtEntero(suma)}
             sub={`suma de ${fmtEntero(celdasCapa.length)} celdas publicadas${supCapa ? `; ${fmtEntero(supCapa)} celdas con «${MENOS_5}» no suman` : ""}`} />
           <Kpi eti="Porcentaje del universo de la capa" valor={pct1(cob && cob.contratos_universo ? (suma / cob.contratos_universo) * 100 : null)}
             sub={`universo: ${fmtEntero(cob?.contratos_universo ?? null)} contratos`} />
@@ -285,24 +284,24 @@ export function MapaCalor({ periodo }: { periodo: string }) {
             sub={`${fmtEntero(cob?.contratos_con_coordenadas ?? null)} con coordenadas; ${fmtEntero(cob?.contratos_sin_coordenadas ?? null)} sin ellas`} />
           <Kpi eti="Contratos en celdas suprimidas" valor={fmtEntero(cob?.contratos_en_celdas_suprimidas ?? null)}
             sub={`celdas con menos de ${MIN_CONTRATOS} contratos: no se dibujan`} />
-          <Kpi eti="Con 8 o más facturas vencidas" valor={`${pct1(pc.dentro)} frente a ${pct1(pc.universo)}`}
-            sub="dentro de la capa frente a todo el universo de la capa (celdas publicadas)" />
+          <Kpi eti="Contratos con más de 8 facturas vencidas (mora profunda)" valor={`${pct1(pc.dentro)} frente a ${pct1(pc.universo)}`}
+            sub="% dentro de la capa frente al % en todo el universo de la capa (celdas con los dos conteos publicados)" />
         </div>
-        <div className="dash-nota"><b>Es una asociación descriptiva: los contratos cortados o retirados pierden con frecuencia el medidor, así que la cartera puede ser causa y no efecto de la capa.</b></div>
+        <div className="dash-nota"><b>El filtro excluye los contratos con mora profunda, que con frecuencia corresponden a predios cortados o retirados; es una descripción, no indica causa.</b></div>
         <Pie periodo={periodoTxt} calculado={calculado}
-          formula={`Contratos en la capa = suma de contratos_capa (o de contratos_capa_cartera con el interruptor) de las celdas publicadas; los conteos suprimidos (1 a 4 contratos) no se suman, así que la cifra es un mínimo. Porcentaje del universo = esa suma ÷ contratos del universo de la capa. Cobertura = contratos con coordenadas ÷ universo. Comparación de cartera: contratos con 8 o más facturas vencidas ÷ contratos, dentro de la capa y en toda la base de la capa, solo con celdas cuyos conteos están publicados.`} />
+          formula={`Contratos en la capa = suma de contratos_capa (con el interruptor, de contratos_capa_cartera: los que se mantienen) de las celdas publicadas; los conteos suprimidos (1 a 4 contratos) no se suman, así que la cifra es un mínimo. Porcentaje del universo = esa suma ÷ contratos del universo de la capa. Cobertura = contratos con coordenadas ÷ universo. Mora profunda: contratos con más de 8 facturas vencidas = contratos − los que se mantienen; su porcentaje se calcula dentro de la capa y en toda la base de la capa, solo con las celdas cuyos dos conteos están publicados.`} />
       </Parte>
 
       <Parte id="mapa" titulo="Mapa" abierta={!!abiertas.mapa} onCambio={(o) => cambiar("mapa", o)}>
         <MapaCeldas periodo={periodo} todas={datos.celdas} celdas={celdasCapa} capaId={capaId} cartera={cartera} />
         <Pie periodo={periodoTxt} calculado={calculado}
-          formula="Cada celda es un cuadrado de 250 m centrado en el punto publicado (±125 m). Porcentaje = contratos de la capa ÷ contratos de la celda (con el interruptor, solo los de 8 o más facturas vencidas ÷ contratos de la celda). Cinco clases por cuantiles de las celdas de la capa en el período, con un solo tono por capa. Gris: conteo suprimido (menos de 5 contratos). Al pasar el cursor o tocar una celda se ven sus conteos." />
+          formula="Cada celda es un cuadrado de 250 m centrado en el punto publicado (±125 m). Porcentaje = contratos de la capa ÷ contratos de la celda (con el interruptor, solo los que se mantienen, es decir, sin más de 8 facturas vencidas, ÷ contratos de la celda). Cinco clases por cuantiles de las celdas de la capa en el período, con un solo tono por capa. Gris: conteo suprimido (menos de 5 contratos). Al pasar el cursor o tocar una celda se ven sus conteos. Los conteos de 1 a 4 contratos se suprimen en cada columna; restando una columna de otra puede deducirse un conteo pequeño dentro de una celda de 5 o más contratos, sin identificar contratos." />
       </Parte>
 
       <Parte id="tabla" titulo="Tabla resumen del período" abierta={!!abiertas.tabla} onCambio={(o) => cambiar("tabla", o)}>
         <div className="dash-tabla-scroll">
           <table className="dash-tabla num">
-            <thead><tr><th>Capa</th><th>Universo</th><th>Con coordenadas</th><th>En celdas publicadas</th><th>En celdas suprimidas</th><th>Celdas publicadas</th><th>Contratos en la capa</th><th>Con 8 o más facturas vencidas</th></tr></thead>
+            <thead><tr><th>Capa</th><th>Universo</th><th>Con coordenadas</th><th>En celdas publicadas</th><th>En celdas suprimidas</th><th>Celdas publicadas</th><th>Contratos en la capa</th><th>Que se mantienen (sin mora profunda)</th></tr></thead>
             <tbody>
               {CAPAS.map((c) => {
                 const cb = datos.cob.find((x) => x.capa === c.id);
@@ -322,7 +321,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
         </div>
         <div className="dash-nota">«Contratos en la capa» suma solo las celdas con conteo publicado; los conteos de 1 a 4 contratos aparecen como «{MENOS_5}» en el mapa y no suman.</div>
         <Pie periodo={periodoTxt} calculado={calculado}
-          formula="Universo, con coordenadas, en celdas publicadas y en celdas suprimidas vienen de la tabla de cobertura (universo = con coordenadas + sin coordenadas = publicadas + suprimidas + sin coordenadas). Contratos en la capa = suma de las celdas publicadas con conteo conocido, sin y con la condición de 8 o más facturas vencidas." />
+          formula="Universo, con coordenadas, en celdas publicadas y en celdas suprimidas vienen de la tabla de cobertura (universo = con coordenadas + sin coordenadas = publicadas + suprimidas + sin coordenadas). Contratos en la capa = suma de las celdas publicadas con conteo conocido, sin y con el interruptor (los que se mantienen: sin más de 8 facturas vencidas o sin registro de cartera)." />
       </Parte>
 
       <Parte id="metodologia" titulo="Metodología y fuentes" abierta={!!abiertas.metodologia} onCambio={(o) => cambiar("metodologia", o)}>
@@ -330,14 +329,14 @@ export function MapaCalor({ periodo }: { periodo: string }) {
           <ul className="dash-nota">
             <li><b>Sin medidor o con observación:</b> contrato sin medidor registrado, o con una observación de lectura distinta de la normal. No cuentan la observación vacía ni los códigos 99 (lectura normal) y 30, 10, 3 y 4 (conexión suspendida, cortada, predio demolido o lote). Códigos que sí cuentan: 1, 2, 5, 6, 7, 8, 11, 12, 13, 17, 21 y 22. Universo: todos los contratos del período.</li>
             <li><b>Consumo bajo (5 m³ o menos):</b> contratos residenciales con medidor y lectura real (observación 99 y función CALCCODL) con consumo cobrado de 0 a 5 m³, ceros incluidos. Universo: los residenciales con lectura real, con cualquier consumo.</li>
-            <li><b>Cartera:</b> contratos con 8 o más facturas vencidas en el mismo período.</li>
+            <li><b>Interruptor de cartera:</b> excluye los contratos con mora profunda, es decir, con más de 8 facturas vencidas (máximo de facturas vencidas del contrato en el período en hechos.cartera_contrato). Se mantienen los de 0 a 8 facturas vencidas y los que no tienen registro de cartera en el período. Se asume una factura por mes, así que 8 facturas equivalen a 8 meses de deuda.</li>
           </ul>
           <div className="dash-nota"><b>Un consumo cero puede ser un predio desocupado, un corte o un medidor detenido:</b> el mapa no distingue entre ellos.</div>
         </Sub>
         <Sub titulo="Celdas y supresión">
           <div className="dash-nota">
             Cuadrícula de 250 m en EPSG:3116 (MAGNA-SIRGAS / Colombia Bogotá), con el mismo origen en todos los períodos. Solo se publican las celdas con {MIN_CONTRATOS} o más contratos de la base de la capa;
-            dentro de una celda publicada, un conteo de 1 a 4 contratos se oculta («{MENOS_5}») y el cero se conserva. Los contratos de celdas no publicadas se cuentan en la cobertura, no en el mapa.
+            dentro de una celda publicada, un conteo de 1 a 4 contratos se oculta («{MENOS_5}») y el cero se conserva. Los contratos de celdas no publicadas se cuentan en la cobertura, no en el mapa. Los conteos de 1 a 4 contratos se suprimen en cada columna; restando una columna de otra puede deducirse un conteo pequeño dentro de una celda de 5 o más contratos, sin identificar contratos.
           </div>
         </Sub>
         <Sub titulo="Universos distintos por capa">

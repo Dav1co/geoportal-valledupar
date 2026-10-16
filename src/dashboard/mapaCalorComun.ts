@@ -2,6 +2,7 @@ import type { MapaCalorDim } from "./tipos";
 
 // Lógica pura del mapa de calor (sin React ni MapLibre): sumas, porcentajes, clases por cuantiles y cuadrados de 250 m.
 // Los NULL de las columnas de capa y de cartera son conteos suprimidos (1 a 4): se tratan como «desconocido», nunca como 0.
+// Las columnas «_cartera» cuentan los contratos que SE MANTIENEN con el interruptor: sin mora profunda (sin más de 8 facturas vencidas, o sin registro).
 
 export type CapaId = "sin_medidor_obs" | "consumo_bajo";
 export const CAPAS: { id: CapaId; nombre: string; ramp: string[] }[] = [
@@ -15,7 +16,7 @@ export const M_POR_GRADO = 111320;
 
 export const capaDe = (id: string) => CAPAS.find((c) => c.id === id) ?? CAPAS[0];
 
-// Conteo de la capa de una celda según el interruptor de cartera (null = suprimido).
+// Conteo de la capa de una celda según el interruptor de cartera: con él, los contratos de la capa que se mantienen (null = suprimido).
 export const conteoCapa = (c: MapaCalorDim, cartera: boolean) => (cartera ? c.contratos_capa_cartera : c.contratos_capa);
 // Porcentaje de la celda: conteo de la capa ÷ contratos de la base (null si el conteo está suprimido).
 export function pctCelda(c: MapaCalorDim, cartera: boolean): number | null {
@@ -28,7 +29,7 @@ export const sumaCapa = (celdas: MapaCalorDim[], cartera: boolean) =>
   celdas.reduce((s, c) => s + (conteoCapa(c, cartera) ?? 0), 0);
 export const nSuprimidas = (celdas: MapaCalorDim[], cartera: boolean) => celdas.filter((c) => conteoCapa(c, cartera) == null).length;
 
-// % de contratos con 8 o más facturas vencidas: dentro de la capa y en todo el universo de la capa (celdas publicadas).
+// % de contratos con mora profunda (más de 8 facturas vencidas) = los que no se mantienen: dentro de la capa y en todo el universo de la capa.
 // Solo entran las celdas cuyos dos conteos están publicados, para que numerador y denominador sean del mismo conjunto.
 export function pctCartera(celdas: MapaCalorDim[]) {
   let capaN = 0, capaC = 0, baseN = 0, baseC = 0;
@@ -37,8 +38,8 @@ export function pctCartera(celdas: MapaCalorDim[]) {
     if (c.contratos_base_cartera != null) { baseN += c.contratos_base; baseC += c.contratos_base_cartera; }
   }
   return {
-    dentro: capaN > 0 ? (capaC / capaN) * 100 : null,
-    universo: baseN > 0 ? (baseC / baseN) * 100 : null,
+    dentro: capaN > 0 ? ((capaN - capaC) / capaN) * 100 : null,
+    universo: baseN > 0 ? ((baseN - baseC) / baseN) * 100 : null,
     capaN, capaC, baseN, baseC,
   };
 }
