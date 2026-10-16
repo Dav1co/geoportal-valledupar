@@ -2,9 +2,10 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { FUNCTIONS_URL } from "../lib/supabase";
+import { CENTRO_VALLEDUPAR, FUENTE_BASE_CALLES } from "../lib/mapaBase";
 
 // Valledupar
-const CENTRO: [number, number] = [-73.2532, 10.4631];
+const CENTRO = CENTRO_VALLEDUPAR;
 
 // Version del formato de la tesela. Subirla cada vez que cambien los campos
 // que viajan en las teselas: genera URLs nuevas y evita que la cache
@@ -233,12 +234,7 @@ export function MapView({
         version: 8,
         glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
         sources: {
-          base: {
-            type: "raster",
-            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-            tileSize: 256,
-            attribution: "© OpenStreetMap",
-          },
+          base: FUENTE_BASE_CALLES,
           satelital: {
             type: "raster",
             tiles: [
