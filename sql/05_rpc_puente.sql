@@ -103,6 +103,9 @@
 --   v_reclamo_metodo_banda_dim: periodo (exacto), desde, hasta; SIN filtro devuelve todos los
 --   v_reclamo_metodo_ciclo_dim  periodos — reclamos segun el metodo de facturacion: resumen sin
 --                             ciclo y resumen por ciclo (sql/40 y sql/41)
+--   v_mapa_calor_dim        : periodo (exacto), desde, hasta; SIN filtro devuelve todos los
+--   v_mapa_calor_cobertura_dim  periodos — mapa de calor: celdas de 250 m publicadas por capa y
+--                             su cobertura (sql/42_mapa_calor_dim.sql)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -577,6 +580,29 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  elsif p_vista = 'v_mapa_calor_dim' then
+    -- Mapa de calor, celdas de 250 m publicadas por periodo y capa (sql/42): ~1.150 filas por periodo, 8.067 hoy. Solo celdas con
+    -- >= 5 contratos de base; los conteos de 1 a 4 llegan como NULL (supresion hecha en la base).
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, t.capa, t.celda_x, t.celda_y),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_mapa_calor_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  elsif p_vista = 'v_mapa_calor_cobertura_dim' then
+    -- Cobertura del mapa de calor por periodo y capa (sql/42): 2 filas por periodo.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, t.capa),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_mapa_calor_cobertura_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -675,4 +701,10 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- ROLLBACK de las ramas v_reclamo_metodo_banda_dim y v_reclamo_metodo_ciclo_dim (49 -> 51 ramas): volver a la version de este
 -- archivo con 49 ramas (hasta v_submedicion_rango_dim) y volver a ejecutarlo (create or replace conserva el ACL). Antes de
 -- retirar las ramas, quitar las dos vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v20).
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de las ramas v_mapa_calor_dim y v_mapa_calor_cobertura_dim (51 -> 53 ramas): volver a la version de este archivo
+-- con 51 ramas (hasta v_reclamo_metodo_ciclo_dim) y volver a ejecutarlo (create or replace conserva el ACL). Antes de
+-- retirar las ramas, quitar las dos vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v21).
 -- =====================================================================
