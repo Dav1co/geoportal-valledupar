@@ -233,7 +233,7 @@ export function Dashboard() {
         <RecaudoDiario key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "perdidas" && (
-        <Perdidas key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
+        <Perdidas key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} onIrAPqr={() => cambiarPagina("pqr")} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "consolidado" && (
         <Consolidado key={recarga} periodo={periodo} />

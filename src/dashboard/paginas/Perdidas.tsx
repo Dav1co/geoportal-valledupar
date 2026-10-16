@@ -16,6 +16,7 @@ import { IndicesAnualesSeccion, IpufAnualBloque } from "./PerdidasAnual";
 import { IndicadoresLectura } from "./IndicadoresLectura";
 import { PerdidasLectura } from "./PerdidasLectura";
 import { SubmedicionVejez } from "./SubmedicionVejez";
+import { ReclamosMetodoPerdidas } from "./ReclamosMetodoPerdidas";
 
 // Pérdidas de agua (IPUF). Serie histórica larga: 114 períodos desde
 // enero de 2017, en su propio archivo y con un mes de rezago respecto
@@ -32,9 +33,9 @@ const COLOR_META = "#C98A2D";
 const COLOR_ESTANDAR = "#9AA7B5";
 const COLOR_ANIO_CORRIDO = "#0E7C86";
 
-type Props = { periodo: string; onIrAPeriodo?: (p: string) => void };
+type Props = { periodo: string; onIrAPeriodo?: (p: string) => void; onIrAPqr?: () => void };
 
-export function Perdidas({ periodo, onIrAPeriodo }: Props) {
+export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
   const [filas, setFilas] = useState<Ipuf[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -316,6 +317,8 @@ export function Perdidas({ periodo, onIrAPeriodo }: Props) {
       </div>
 
       <IndicesAnualesSeccion anual={anual} />
+
+      <ReclamosMetodoPerdidas onIrAPqr={onIrAPqr} />
     </>
   );
 }

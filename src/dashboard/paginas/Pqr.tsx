@@ -5,6 +5,7 @@ import { etiquetaCorta, etiquetaPeriodo, fmtEntero, fmtMillones, fmtPct } from "
 import { BarrasHorizontales, LineasPorcentaje, TablaPlegable } from "../graficas";
 import { PanelFiltros, TODOS, type DefFiltro } from "../PanelFiltros";
 import { AvisoHuecos, SinDatos, huecosDe } from "../SinDatos";
+import { ReclamosMetodo } from "./ReclamosMetodo";
 
 const TOP = 15;
 
@@ -295,6 +296,8 @@ export function Pqr({ periodo, onIrAPeriodo }: Props) {
             </TablaPlegable>
           </div>
         </div>
+
+        <ReclamosMetodo periodo={periodo} />
       </div>
     </div>
   );

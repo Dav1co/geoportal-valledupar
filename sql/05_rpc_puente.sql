@@ -100,6 +100,9 @@
 --   v_submedicion_ciclo_dim   periodos — submedicion por vejez del medidor: referencia por
 --   v_submedicion_rango_dim   estrato y banda, sumas por ciclo y por rango de consumo
 --                             (sql/39_submedicion_dim.sql)
+--   v_reclamo_metodo_banda_dim: periodo (exacto), desde, hasta; SIN filtro devuelve todos los
+--   v_reclamo_metodo_ciclo_dim  periodos — reclamos segun el metodo de facturacion: resumen sin
+--                             ciclo y resumen por ciclo (sql/40 y sql/41)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -551,6 +554,29 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  elsif p_vista = 'v_reclamo_metodo_banda_dim' then
+    -- Reclamos segun el metodo de facturacion, resumen SIN ciclo (sql/41): ~730 filas por periodo, 3.539 en los 7 periodos de
+    -- hoy (~1,6 MB sin comprimir). Con periodo (exacto), desde o hasta devuelve esos periodos; SIN filtro devuelve TODOS.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, t.metodo_ant, t.metodo_act, case t.banda_antig when '0-3' then 1 when '3-5' then 2 when '5-10' then 3 when '10-15' then 4 when '>15 (fecha real)' then 5 when '>15 (1986-01-01)' then 6 when 'Sin fecha' then 7 when 'Sin medidor' then 8 else 9 end, t.estrato, t.uso),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_reclamo_metodo_banda_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  elsif p_vista = 'v_reclamo_metodo_ciclo_dim' then
+    -- Reclamos segun el metodo de facturacion, resumen por ciclo y metodo del periodo (sql/41): ~110 filas por periodo, 786 hoy.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, length(t.ciclo), t.ciclo, t.metodo_act),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_reclamo_metodo_ciclo_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -643,4 +669,10 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- volver a la version de este archivo con 46 ramas (hasta v_cambio_medidor_dim) y volver a ejecutarlo (create or replace
 -- conserva el ACL). Antes de retirar las ramas, quitar las tres vistas de VISTAS_PERMITIDAS en geoportal-bi y
 -- redesplegar la Edge Function (v19).
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de las ramas v_reclamo_metodo_banda_dim y v_reclamo_metodo_ciclo_dim (49 -> 51 ramas): volver a la version de este
+-- archivo con 49 ramas (hasta v_submedicion_rango_dim) y volver a ejecutarlo (create or replace conserva el ACL). Antes de
+-- retirar las ramas, quitar las dos vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v20).
 -- =====================================================================

@@ -1289,3 +1289,81 @@ export function comoSubmedicionRangoDim(r: Record<string, unknown>): Submedicion
     calculado_en: String(r.calculado_en ?? ""),
   };
 }
+
+// Reclamos según el método de facturación (sql/41): A por banda de antigüedad, estrato y uso; B por ciclo.
+// Solo agregados: contratos-mes y solicitudes distintas por contrato y período.
+export type ReclamoMetodoBandaDim = {
+  periodo: string;
+  metodo_ant: string;
+  metodo_act: string;
+  banda_antig: string;
+  estrato: string;
+  uso: string;
+  contratos: number;
+  solicitudes_consumo: number;
+  solicitudes_promedio: number;
+  solicitudes_medidor: number;
+  solicitudes_otras: number;
+  solicitudes_desocupado: number;
+  solicitudes_cartera: number;
+  solicitudes_admin: number;
+  contratos_con_reclamo: number;
+  contratos_con_rec_consumo_prom: number;
+  calculado_en: string;
+};
+export function comoReclamoMetodoBandaDim(r: Record<string, unknown>): ReclamoMetodoBandaDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    metodo_ant: String(r.metodo_ant ?? ""),
+    metodo_act: String(r.metodo_act ?? ""),
+    banda_antig: String(r.banda_antig ?? ""),
+    estrato: String(r.estrato ?? ""),
+    uso: String(r.uso ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    solicitudes_consumo: n(r.solicitudes_consumo) ?? 0,
+    solicitudes_promedio: n(r.solicitudes_promedio) ?? 0,
+    solicitudes_medidor: n(r.solicitudes_medidor) ?? 0,
+    solicitudes_otras: n(r.solicitudes_otras) ?? 0,
+    solicitudes_desocupado: n(r.solicitudes_desocupado) ?? 0,
+    solicitudes_cartera: n(r.solicitudes_cartera) ?? 0,
+    solicitudes_admin: n(r.solicitudes_admin) ?? 0,
+    contratos_con_reclamo: n(r.contratos_con_reclamo) ?? 0,
+    contratos_con_rec_consumo_prom: n(r.contratos_con_rec_consumo_prom) ?? 0,
+    calculado_en: String(r.calculado_en ?? ""),
+  };
+}
+
+export type ReclamoMetodoCicloDim = {
+  periodo: string;
+  ciclo: string;
+  metodo_act: string;
+  contratos: number;
+  solicitudes_consumo: number;
+  solicitudes_promedio: number;
+  solicitudes_medidor: number;
+  solicitudes_otras: number;
+  solicitudes_desocupado: number;
+  solicitudes_cartera: number;
+  solicitudes_admin: number;
+  contratos_con_reclamo: number;
+  contratos_con_rec_consumo_prom: number;
+  calculado_en: string;
+};
+export function comoReclamoMetodoCicloDim(r: Record<string, unknown>): ReclamoMetodoCicloDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    ciclo: String(r.ciclo ?? ""),
+    metodo_act: String(r.metodo_act ?? ""),
+    contratos: n(r.contratos) ?? 0,
+    solicitudes_consumo: n(r.solicitudes_consumo) ?? 0,
+    solicitudes_promedio: n(r.solicitudes_promedio) ?? 0,
+    solicitudes_medidor: n(r.solicitudes_medidor) ?? 0,
+    solicitudes_otras: n(r.solicitudes_otras) ?? 0,
+    solicitudes_desocupado: n(r.solicitudes_desocupado) ?? 0,
+    solicitudes_cartera: n(r.solicitudes_cartera) ?? 0,
+    solicitudes_admin: n(r.solicitudes_admin) ?? 0,
+    contratos_con_reclamo: n(r.contratos_con_reclamo) ?? 0,
+    contratos_con_rec_consumo_prom: n(r.contratos_con_rec_consumo_prom) ?? 0,
+    calculado_en: String(r.calculado_en ?? ""),
+  };
+}
