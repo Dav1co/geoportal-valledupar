@@ -12,11 +12,25 @@
 --  · ciclo, uso y estrato: los del periodo ACTUAL (mismas reglas de sql/29: sin el codigo numerico inicial;
 --    vacio o NULO -> '(sin dato)'; ciclo vacio -> '(sin ciclo)').
 --  · tipo_evento (solo contratos presentes en los dos periodos):
---      reposicion         con medidor en ambos periodos y serial DISTINTO
+--      CON MEDIDOR EN AMBOS PERIODOS Y SERIAL DISTINTO, segun la continuidad de la lectura (lectura_anterior del periodo
+--      actual frente a lectura_actual del periodo anterior; las lecturas son texto con punto decimal y solo se
+--      convierten si cumplen ^[0-9]+(\.[0-9]+)?$):
+--        reposicion_confirmada        la lectura reinicia: lectura_anterior del periodo <= 10 y menor que la del periodo
+--                                     anterior (reinicio claro de un medidor nuevo)
+--        cambio_serial_continuo       lectura_anterior del periodo = lectura_actual del anterior (probable recodificacion
+--                                     del serial, no un cambio fisico)
+--        cambio_serial_retroceso      la lectura retrocede pero queda POR ENCIMA de 10
+--        cambio_serial_lectura_mayor  la lectura sube respecto de la del periodo anterior
+--        reposicion_sin_lectura       alguna de las dos lecturas esta vacia o no es numerica
+--        no_concluyente               solo en pares de DOS meses (202605 -> 202607, porque 202606 no existe): la
+--                                     continuidad no se puede evaluar; solo vale la deteccion de reinicio a 10 o menos
+--                                     (reposicion_confirmada), y el resto de los cambios de serial queda aqui
 --      sin_cambio         con medidor en ambos periodos y el mismo serial (control)
 --      instalacion_nueva  sin medidor en el periodo anterior y con medidor en el actual
 --      retiro             con medidor en el anterior y sin medidor en el actual
 --    Quedan fuera los contratos nuevos (no estaban en el periodo anterior) y los sin medidor en ambos.
+--    HALLAZGO (202609): de 2.519 cambios de serial, el 97,5 % de los que tienen lectura evaluable conserva la continuidad
+--    (igual que el 100 % de los contratos sin cambio): es una recodificacion masiva de seriales, no cambios fisicos.
 --  · banda_ant: antiguedad del medidor ANTERIOR (fecha_instalacion del periodo anterior) al CIERRE del periodo
 --    anterior, en anos cumplidos: '0-5', '5-10', '10-15', '>15 (fecha real)', '>15 (1986-01-01)' (fecha
 --    centinela, antiguedad real desconocida), 'Sin fecha' (nula o posterior al cierre) y 'Sin medidor'. La fecha de
@@ -89,7 +103,9 @@ begin
            substring(upper(btrim(p.observacion)) from '^(\d+)\s')::int as cod,
            upper(btrim(p.funcion)) as fn,
            case when p.fecha_instalacion ~ '^\d{4}-\d{2}-\d{2}' then left(p.fecha_instalacion, 10)::date end as fi,
-           bi.f_num(p.consumo_facturado) as cf
+           bi.f_num(p.consumo_facturado) as cf,
+           case when btrim(p.lectura_anterior) ~ '^[0-9]+(\.[0-9]+)?$' then btrim(p.lectura_anterior)::numeric end as la,
+           case when btrim(p.lectura_actual)   ~ '^[0-9]+(\.[0-9]+)?$' then btrim(p.lectura_actual)::numeric end as lc
     from (
       select distinct on (periodo, contrato) *
       from hechos.consumo_metodo
@@ -107,7 +123,14 @@ begin
     from r),
   j as (
     select b.ciclo, b.uso, b.estrato,
-           case when a.con_med and b.con_med then (case when a.serial <> b.serial then 'reposicion' else 'sin_cambio' end)
+           case when a.con_med and b.con_med then
+                  (case when a.serial = b.serial then 'sin_cambio'
+                        when b.la is not null and a.lc is not null and b.la < a.lc and b.la <= 10 then 'reposicion_confirmada'
+                        when v_meses > 1 then 'no_concluyente'
+                        when b.la is null or a.lc is null then 'reposicion_sin_lectura'
+                        when b.la = a.lc then 'cambio_serial_continuo'
+                        when b.la < a.lc then 'cambio_serial_retroceso'
+                        else 'cambio_serial_lectura_mayor' end)
                 when not a.con_med and b.con_med then 'instalacion_nueva'
                 when a.con_med and not b.con_med then 'retiro' end as tipo_evento,
            case when not a.con_med then 'Sin medidor'
@@ -241,6 +264,6 @@ end $function$;
 
 -- >>> PASO 4 · controles ------------------------------------------------
 --   EXCEPT en ambos sentidos, periodo por periodo, contra una consulta de referencia independiente (otro metodo
---   de desduplicacion y de clasificacion). Cifras de 202609, uso Residencial: 2.113 reposiciones con medidor en
---   ambos periodos; 897 de ellas pareadas; 65.503 sin_cambio pareados; grupo A por ciclo: ciclo 8 -> 274 cambios y
---   145 pareados, ciclo 1 -> 218 y 90.
+--   de desduplicacion y de clasificacion). Control: la suma de los seis tipos de cambio de serial de 202609 es 2.519 (todos
+--   los usos) y los sin_cambio de 202609 son 100.819; en los pares de un mes, el 100 % de los sin_cambio con lectura
+--   evaluable es continuo.
