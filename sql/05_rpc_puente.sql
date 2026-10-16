@@ -107,6 +107,9 @@
 --   v_mapa_calor_cobertura_dim  periodos — mapa de calor: celdas de 250 m publicadas por capa y
 --   v_mapa_calor_cartera_dim    su cobertura, y cartera por grupo de mora de la capa
 --                             (sql/42_mapa_calor_dim.sql)
+--   v_proy_recaudo_total, v_proy_cumplimiento, v_proy_anual, v_proy_recaudo : periodo (exacto), desde, hasta; SIN filtro
+--                             devuelven todos los periodos — proyeccion de recaudo 2026 y cumplimiento
+--                             diario frente a la meta (sql/43_proyeccion_recaudo.sql)
 --   v_recaudo_diario        : periodo (exacto, sobre periodo_registro) —
 --                             lotes de conciliacion bancaria del mes en curso
 --   v_recaudo_diario_mes    : periodo (exacto), desde, hasta — serie diaria
@@ -616,6 +619,50 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  elsif p_vista = 'v_proy_recaudo_total' then
+    -- Proyeccion de recaudo 2026 (sql/43): real y proyectado por mes, con y sin terceros, y sus acumulados. 12 filas; solo valores en pesos.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_proy_recaudo_total t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  elsif p_vista = 'v_proy_cumplimiento' then
+    -- Cumplimiento diario del recaudo frente a la meta certificada y la meta propia (sql/43): una fila por dia de cada mes con meta (61 hoy).
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, t.dia),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_proy_cumplimiento t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  elsif p_vista = 'v_proy_anual' then
+    -- Recaudo del ano completo, mensual y acumulado: propio, propio corregido con el avance y certificado (sql/43). 12 filas.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_proy_anual t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  elsif p_vista = 'v_proy_recaudo' then
+    -- Proyeccion de recaudo 2026 por ruta y mes: real y proyectado, con su grupo (servicio, otros, tercero) (sql/43). 108 filas hoy; solo valores en pesos.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo, t.tipo, t.ruta, t.grupo),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_proy_recaudo t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -726,4 +773,10 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- ROLLBACK de la rama v_mapa_calor_cartera_dim (53 -> 54 ramas): volver a la version de este archivo con 53 ramas (hasta
 -- v_mapa_calor_cobertura_dim, commit 3518512) y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar la
 -- rama, quitar la vista de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v22).
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de las ramas v_proy_recaudo_total, v_proy_cumplimiento, v_proy_anual y v_proy_recaudo (54 -> 58 ramas): volver a la version de este
+-- archivo con 54 ramas (hasta v_mapa_calor_cartera_dim, commit 3e91c94) y volver a ejecutarlo (create or replace conserva el ACL).
+-- Antes de retirar las ramas, quitar las tres vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v23).
 -- =====================================================================
