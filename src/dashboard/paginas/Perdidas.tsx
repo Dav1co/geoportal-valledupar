@@ -17,6 +17,7 @@ import { IndicadoresLectura } from "./IndicadoresLectura";
 import { PerdidasLectura } from "./PerdidasLectura";
 import { SubmedicionVejez } from "./SubmedicionVejez";
 import { ReclamosMetodoPerdidas } from "./ReclamosMetodoPerdidas";
+import { MapaCalor } from "./MapaCalor";
 
 // Pérdidas de agua (IPUF). Serie histórica larga: 114 períodos desde
 // enero de 2017, en su propio archivo y con un mes de rezago respecto
@@ -319,6 +320,8 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
       <IndicesAnualesSeccion anual={anual} />
 
       <ReclamosMetodoPerdidas onIrAPqr={onIrAPqr} />
+
+      <MapaCalor periodo={periodo} />
     </>
   );
 }

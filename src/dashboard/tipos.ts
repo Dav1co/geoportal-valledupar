@@ -1367,3 +1367,57 @@ export function comoReclamoMetodoCicloDim(r: Record<string, unknown>): ReclamoMe
     calculado_en: String(r.calculado_en ?? ""),
   };
 }
+
+// Mapa de calor (sql/42): celdas de 250 m publicadas por período y capa, y su cobertura. Los NULL de las columnas de
+// capa y de cartera son conteos suprimidos (1 a 4 contratos): NO son 0.
+export type MapaCalorDim = {
+  periodo: string;
+  capa: string;
+  celda_x: number;
+  celda_y: number;
+  lon_centro: number;
+  lat_centro: number;
+  contratos_base: number;
+  contratos_capa: number | null;
+  contratos_base_cartera: number | null;
+  contratos_capa_cartera: number | null;
+  calculado_en: string;
+};
+export function comoMapaCalorDim(r: Record<string, unknown>): MapaCalorDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    capa: String(r.capa ?? ""),
+    celda_x: n(r.celda_x) ?? 0,
+    celda_y: n(r.celda_y) ?? 0,
+    lon_centro: n(r.lon_centro) ?? 0,
+    lat_centro: n(r.lat_centro) ?? 0,
+    contratos_base: n(r.contratos_base) ?? 0,
+    contratos_capa: n(r.contratos_capa),
+    contratos_base_cartera: n(r.contratos_base_cartera),
+    contratos_capa_cartera: n(r.contratos_capa_cartera),
+    calculado_en: String(r.calculado_en ?? ""),
+  };
+}
+
+export type MapaCalorCoberturaDim = {
+  periodo: string;
+  capa: string;
+  contratos_universo: number;
+  contratos_con_coordenadas: number;
+  contratos_sin_coordenadas: number;
+  contratos_en_celdas_publicadas: number;
+  contratos_en_celdas_suprimidas: number;
+  calculado_en: string;
+};
+export function comoMapaCalorCoberturaDim(r: Record<string, unknown>): MapaCalorCoberturaDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    capa: String(r.capa ?? ""),
+    contratos_universo: n(r.contratos_universo) ?? 0,
+    contratos_con_coordenadas: n(r.contratos_con_coordenadas) ?? 0,
+    contratos_sin_coordenadas: n(r.contratos_sin_coordenadas) ?? 0,
+    contratos_en_celdas_publicadas: n(r.contratos_en_celdas_publicadas) ?? 0,
+    contratos_en_celdas_suprimidas: n(r.contratos_en_celdas_suprimidas) ?? 0,
+    calculado_en: String(r.calculado_en ?? ""),
+  };
+}
