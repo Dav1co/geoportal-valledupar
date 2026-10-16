@@ -240,12 +240,12 @@ function CarteraGrupos({ car, periodoTxt, calculado }: { car: MapaCalorCarteraDi
         })}
       </div>
       <div className="dash-nota"><b>Es una descripción de la cartera de la capa; no indica causa.</b></div>
-      <div className="dash-nota">El grupo de 8 o menos incluye contratos sin deuda; su cartera es en gran parte financiada (convenios).</div>
+      <div className="dash-nota">El grupo de 8 facturas vencidas o menos incluye contratos sin deuda; su cartera es en gran parte financiada (convenios).</div>
       <div className="dash-nota">Un valor «{MENOS_5}» indica un grupo con 1 a 4 contratos, que no se publica.</div>
       <div className="dash-nota">Fuente: {FUENTE_CAR}. Período: {periodoTxt}. Calculado: {calculado}.</div>
       <details><summary>ⓘ Cómo se calcula</summary><div className="dash-nota">
         Cartera = total_cartera = saldo_pendiente + saldo_financiado, sumada entre los productos (filas) de cada contrato; los vacíos cuentan 0 y no incluye saldos a favor.
-        Grupos: máximo de facturas vencidas del contrato en el período mayor que 8 (mora profunda), u 8 o menos o sin registro de cartera. «De ello, financiado» = saldo_financiado.
+        Grupos: máximo de facturas vencidas del contrato en el período mayor que 8 (mora profunda), o con 8 facturas vencidas o menos, o sin registro de cartera. «De ello, financiado» = saldo_financiado.
         Capa y universo tienen la misma definición del mapa (la capa «Sin medidor o con observación» se mide sobre todos los contratos del período; «Consumo bajo», sobre los residenciales con medidor y lectura real).
         Se calcula sobre todos los contratos, sin depender de coordenadas ni de celdas del mapa. Los porcentajes son sobre el total de la capa o de su universo.
         2.343 contratos con cartera (cerca del 0,1 % de la cartera) quedan fuera del universo de consumo y no aparecen aquí. La fuente no desglosa si saldo_pendiente incluye intereses u otros cargos.
@@ -397,7 +397,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
           <ul className="dash-nota">
             <li><b>Sin medidor o con observación:</b> contrato sin medidor registrado, o con una observación de lectura distinta de la normal. No cuentan la observación vacía ni los códigos 99 (lectura normal) y 30, 10, 3 y 4 (conexión suspendida, cortada, predio demolido o lote). Códigos que sí cuentan: 1, 2, 5, 6, 7, 8, 11, 12, 13, 17, 21 y 22. Universo: todos los contratos del período.</li>
             <li><b>Consumo bajo (5 m³ o menos):</b> contratos residenciales con medidor y lectura real (observación 99 y función CALCCODL) con consumo cobrado de 0 a 5 m³, ceros incluidos. Universo: los residenciales con lectura real, con cualquier consumo.</li>
-            <li><b>Cartera por grupo de mora:</b> se calcula sobre todos los contratos de la capa y de su universo (no sobre las celdas): contratos y total_cartera (saldo_pendiente + saldo_financiado) sumado entre los productos de cada contrato, separados en más de 8 facturas vencidas (mora profunda) y 8 o menos o sin registro. No incluye saldos a favor.</li>
+            <li><b>Cartera por grupo de mora:</b> se calcula sobre todos los contratos de la capa y de su universo (no sobre las celdas): contratos y total_cartera (saldo_pendiente + saldo_financiado) sumado entre los productos de cada contrato, separados en más de 8 facturas vencidas (mora profunda) y 8 facturas vencidas o menos (o sin registro). No incluye saldos a favor.</li>
             <li><b>Interruptor de cartera:</b> excluye los contratos con mora profunda, es decir, con más de 8 facturas vencidas (máximo de facturas vencidas del contrato en el período en hechos.cartera_contrato). Se mantienen los de 0 a 8 facturas vencidas y los que no tienen registro de cartera en el período. Se asume una factura por mes, así que 8 facturas equivalen a 8 meses de deuda.</li>
           </ul>
           <div className="dash-nota"><b>Un consumo cero puede ser un predio desocupado, un corte o un medidor detenido:</b> el mapa no distingue entre ellos.</div>

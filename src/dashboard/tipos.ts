@@ -1423,7 +1423,7 @@ export function comoMapaCalorCoberturaDim(r: Record<string, unknown>): MapaCalor
 }
 
 // Mapa de calor, cartera por grupo de mora (sql/42): 8 filas por período = 2 capas x 2 ámbitos ('capa' y 'universo') x 2 grupos
-// ('mora_profunda': más de 8 facturas vencidas; 'hasta_8': 8 o menos o sin registro). Calculada sobre TODOS los contratos; un grupo
+// ('mora_profunda': más de 8 facturas vencidas; 'hasta_8': 8 facturas vencidas o menos o sin registro). Calculada sobre TODOS los contratos; un grupo
 // con 1 a 4 contratos llega con NULL en contratos y valores.
 export type MapaCalorCarteraDim = {
   periodo: string;
