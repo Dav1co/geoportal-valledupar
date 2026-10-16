@@ -10,7 +10,7 @@ import {
   numeroCiclo,
   rotuloMostrado,
 } from "../formato";
-import { BarrasHorizontales, LineasPorcentaje, TablaPlegable } from "../graficas";
+import { BarrasApiladas, BarrasHorizontales, LineasPorcentaje, TablaPlegable } from "../graficas";
 import { TODOS } from "../PanelFiltros";
 
 // Cambios de medidor entre periodos consecutivos (bi.v_cambio_medidor_dim, sql/38). Una sola carga SIN
@@ -18,11 +18,14 @@ import { TODOS } from "../PanelFiltros";
 // del selector global es el periodo ACTUAL de cada par (se compara con el anterior disponible en la fuente).
 // Solo agregados: sin contratos ni seriales; minimo de 5 por celda (el resto en «Otros»).
 //
-// «Reposicion» = serial de medidor distinto entre los dos periodos, con medidor en ambos: puede ser un
+// Un cambio de serial (medidor distinto entre los dos periodos, con medidor en ambos) NO siempre es un cambio fisico: en 202609
+// el 97,5 % conserva la continuidad de la lectura (recodificacion). Solo «reposicion_confirmada» (la lectura reinicia a 10 m3 o
+// menos) cuenta como reposicion. Antes: «Reposicion» = serial de medidor distinto entre los dos periodos, con medidor en ambos: puede ser un
 // recambio fisico o una reasignacion del catalogo. «Sin cambio» (mismo serial) es el control.
 
 const MIN_CELDA = 5;            // celdas con menos de 5 se suman en «Otros»
-const MUESTRA_PEQUENA = 30;     // pareados por debajo de los cuales se marca «muestra pequeña»
+// En pantalla, la columna contratos_pareados de la base se rotula «Contratos comparables» (mismo dato, nombre interno sin cambio).
+const MUESTRA_PEQUENA = 30;     // contratos comparables (contratos_pareados) por debajo de los cuales se marca «muestra pequeña»
 const OTROS = "Otros (menos de 5 contratos)";
 const COLOR = { tinta: "#0A2540", agua: "#0E7C86", ambar: "#C98A2D", gris: "#9AA7B5" };
 const BANDAS = ["0-5", "5-10", "10-15", ">15 (fecha real)", ">15 (1986-01-01)", "Sin fecha"];
@@ -34,31 +37,45 @@ const etiquetaBanda = (b: string) =>
 const TEXTO = {
   titulo: "Cambios de medidor",
   definicion:
-    "Contratos cuyo medidor cambió de serial entre un período y el anterior disponible (reposición), junto con las instalaciones nuevas y los retiros. Cada período se compara con el anterior; los contratos sin cambio de serial sirven de control.",
+    "Contratos cuyo medidor cambió de serial entre un período y el anterior disponible, clasificados según la continuidad de la lectura, junto con las instalaciones nuevas y los retiros. Cada período se compara con el anterior; los contratos sin cambio de serial sirven de control.",
+  hallazgo:
+    "Un cambio de serial no siempre es un cambio físico de medidor. En 202609, de 2.519 cambios de serial, el 97,5 % de los que tienen lectura evaluable conserva la continuidad de la lectura —igual que los contratos sin cambio—: es una recodificación masiva de seriales, y 968 cambios no tienen lectura evaluable. Solo se cuenta como reposición confirmada el cambio de serial cuya lectura reinicia a 10 m³ o menos.",
+  dosMeses:
+    "En el par de dos meses (202605→202607) la continuidad de la lectura no es evaluable: solo se detecta el reinicio de la lectura a 10 m³ o menos (reposición confirmada) y el resto de los cambios de serial queda como «no concluyente».",
   sinPar601: "no tiene un período anterior en la fuente: la comparación empieza en 202602.",
   sinPar606: "no existe en la fuente de consumo, así que no hay par para ese mes. 202607 se compara con 202605.",
   antiguedad: "La antigüedad del medidor existe desde 202605; antes, todos los medidores aparecen en «Sin fecha». La banda «Más de 15 años (fecha 1986-01-01)» indica fecha desconocida o por defecto.",
   cicloSeparado: "En 202609 el ciclo 5 se separó en el 5 y el 24.",
+  comparables:
+    "Contratos con medidor registrado en el período y en el período disponible anterior; son los únicos sobre los que se puede comparar el consumo antes y después. Además deben tener lectura real (observación 99 y función CALCCODL) y consumo facturado en ambos meses.",
   notaConsumo:
-    "Solo contratos con lectura real en ambos meses. El primer mes tras el cambio suele facturarse por promedio, así que el efecto se confirma en los meses siguientes. «Reposición» significa serial distinto y puede ser un recambio físico o una reasignación. Son diferencias de un mes, sin error estándar: indicativas.",
+    "Solo contratos con lectura real en ambos meses. El primer mes tras el cambio suele facturarse por promedio, así que el efecto se confirma en los meses siguientes. Reposición confirmada = serial distinto con la lectura reiniciada a 10 m³ o menos. Son diferencias de un mes, sin error estándar: indicativas.",
 };
 const pct1 = (v: number | null) => (v == null ? "—" : `${fmtDecimal(v, 1)} %`);
 const pct2 = (v: number | null) => (v == null ? "—" : `${fmtDecimal(v, 2)} %`);
 const porMil = (v: number | null) => (v == null ? "—" : fmtDecimal(v, 1));
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 
-type Acum = { repo: number; conMed: number; inst: number; ret: number; sinCambio: number; conMedSin: number };
-const vacio = (): Acum => ({ repo: 0, conMed: 0, inst: 0, ret: 0, sinCambio: 0, conMedSin: 0 });
+type Acum = { repo: number; cont: number; sinLec: number; otros: number; cambios: number; conMed: number; inst: number; ret: number; sinCambio: number; conMedSin: number };
+const vacio = (): Acum => ({ repo: 0, cont: 0, sinLec: 0, otros: 0, cambios: 0, conMed: 0, inst: 0, ret: 0, sinCambio: 0, conMedSin: 0 });
 function sumar(a: Acum, x: CambioMedidorDim) {
   a.conMed += x.contratos_con_medidor_ant;
-  if (x.tipo_evento === "reposicion") a.repo += x.contratos;
-  else if (x.tipo_evento === "instalacion_nueva") a.inst += x.contratos;
-  else if (x.tipo_evento === "retiro") a.ret += x.contratos;
-  else if (x.tipo_evento === "sin_cambio") { a.sinCambio += x.contratos; a.conMedSin += x.contratos_con_medidor_ant; }
+  const c = x.contratos;
+  switch (x.tipo_evento) {
+    case "reposicion_confirmada": a.repo += c; a.cambios += c; break;
+    case "cambio_serial_continuo": a.cont += c; a.cambios += c; break;
+    case "reposicion_sin_lectura": a.sinLec += c; a.cambios += c; break;
+    case "cambio_serial_retroceso":
+    case "cambio_serial_lectura_mayor":
+    case "no_concluyente": a.otros += c; a.cambios += c; break;
+    case "instalacion_nueva": a.inst += c; break;
+    case "retiro": a.ret += c; break;
+    case "sin_cambio": a.sinCambio += c; a.conMedSin += x.contratos_con_medidor_ant; break;
+  }
 }
 const tasaMil = (a: Acum) => { const r = ratio(a.repo, a.conMed); return r == null ? null : r * 1000; };
 
-// Agrupa por clave; los grupos con menos de MIN_CELDA reposiciones se suman en «Otros».
+// Agrupa por clave; los grupos con menos de MIN_CELDA cambios de serial se suman en «Otros».
 function agrupar(filas: CambioMedidorDim[], clave: (x: CambioMedidorDim) => string, ordenar: (a: [string, Acum], b: [string, Acum]) => number) {
   const m = new Map<string, Acum>();
   for (const x of filas) { const k = clave(x); const a = m.get(k) ?? vacio(); sumar(a, x); m.set(k, a); }
@@ -66,9 +83,10 @@ function agrupar(filas: CambioMedidorDim[], clave: (x: CambioMedidorDim) => stri
   const otros = vacio();
   let hayOtros = false;
   for (const [k, a] of m) {
-    if (a.repo < MIN_CELDA) {
+    if (a.cambios < MIN_CELDA) {
       hayOtros = true;
-      otros.repo += a.repo; otros.conMed += a.conMed; otros.inst += a.inst; otros.ret += a.ret;
+      otros.repo += a.repo; otros.cont += a.cont; otros.sinLec += a.sinLec; otros.otros += a.otros; otros.cambios += a.cambios;
+      otros.conMed += a.conMed; otros.inst += a.inst; otros.ret += a.ret;
       otros.sinCambio += a.sinCambio; otros.conMedSin += a.conMedSin;
     } else grandes.push([k, a]);
   }
@@ -146,7 +164,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
   const periodoAnt = delPeriodo[0].periodo_ant;
   const tot = vacio();
   for (const x of delPeriodo) sumar(tot, x);
-  const repoPromedio = delPeriodo.filter((x) => x.tipo_evento === "reposicion" && x.metodo_act === "promedio").reduce((s, x) => s + x.contratos, 0);
+  const repoPromedio = delPeriodo.filter((x) => x.tipo_evento === "reposicion_confirmada" && x.metodo_act === "promedio").reduce((s, x) => s + x.contratos, 0);
   const tasa = ratio(tot.repo, tot.conMed);
 
   // ----- serie por periodo (respeta los filtros) -----
@@ -154,7 +172,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
     const a = vacio(); let m = 1;
     for (const x of filtradas) if (x.periodo === p) { sumar(a, x); m = x.meses_intervalo; }
     const t = ratio(a.repo, a.conMed);
-    return { p, repo: a.repo, meses: m, tasaMensual: t == null ? null : (t * 100) / m };
+    return { p, repo: a.repo, cont: a.cont, sinLec: a.sinLec, otros: a.otros, meses: m, tasaMensual: t == null ? null : (t * 100) / m };
   });
 
   // ----- por ciclo, uso, estrato, banda y método (periodo actual) -----
@@ -175,7 +193,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
     const tot = metodos.reduce((s, k) => s + m[k], 0);
     return { m, tot };
   };
-  const metRepo = porMetodo("reposicion");
+  const metRepo = porMetodo("reposicion_confirmada");
   const metCtl = porMetodo("sin_cambio");
 
   // ----- consumo antes y después (reposicion frente al control sin cambio) -----
@@ -186,7 +204,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
     return p;
   };
   const filaConsumo = (nombre: string, xs: CambioMedidorDim[]) => {
-    const A = sumPar(xs, "reposicion"), B = sumPar(xs, "sin_cambio");
+    const A = sumPar(xs, "reposicion_confirmada"), B = sumPar(xs, "sin_cambio");
     const dif = (p: Par) => (p.n > 0 ? (p.act - p.ant) / p.n : null);
     const dA = dif(A), dB = dif(B);
     return {
@@ -200,7 +218,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
     const grandes: ReturnType<typeof filaConsumo>[] = [];
     const resto: CambioMedidorDim[] = [];
     for (const [k, v] of g) {
-      if (sumPar(v, "reposicion").n < MIN_CELDA) resto.push(...v); else grandes.push(filaConsumo(k, v));
+      if (sumPar(v, "reposicion_confirmada").n < MIN_CELDA) resto.push(...v); else grandes.push(filaConsumo(k, v));
     }
     grandes.sort((a, b) => (orden ? orden.indexOf(a.nombre) - orden.indexOf(b.nombre) : a.nombre.localeCompare(b.nombre, "es")));
     const o = resto.length ? filaConsumo(OTROS, resto) : null;
@@ -214,12 +232,12 @@ export function CambiosMedidor({ periodo, valores }: Props) {
   const TablaConsumo = ({ titulo, filas: fs, fmt }: { titulo: string; filas: ReturnType<typeof filaConsumo>[]; fmt?: (k: string) => string }) => (
     <>
       <h3>{titulo}</h3>
-      {fs.length === 0 ? <div className="dash-nota">Sin contratos pareados con los filtros elegidos.</div> : (
+      {fs.length === 0 ? <div className="dash-nota">Sin contratos comparables con los filtros elegidos.</div> : (
         <div className="dash-tabla-scroll">
           <table className="dash-tabla num">
             <thead>
               <tr>
-                <th>Grupo</th><th>Contratos pareados</th><th>Promedio antes (m³)</th><th>Promedio después (m³)</th>
+                <th>Grupo</th><th>Contratos comparables</th><th>Promedio antes (m³)</th><th>Promedio después (m³)</th>
                 <th>Diferencia (m³)</th><th>Diferencia del control (m³)</th><th>Efecto neto (m³)</th>
               </tr>
             </thead>
@@ -253,6 +271,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
     <tr key={k}>
       <td>{k}</td>
       <td className="num">{fmtEntero(a.repo)}</td>
+      <td className="num">{fmtEntero(a.cambios)}</td>
       <td className="num">{fmtEntero(a.conMed)}</td>
       <td className="num">{porMil(tasaMil(a))}</td>
       <td className="num">{fmtEntero(a.inst)}</td>
@@ -261,7 +280,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
   const tablaGrupo = (primera: string, filasG: [string, Acum][], fmtNombre?: (k: string) => string) => (
     <div className="dash-tabla-scroll">
       <table className="dash-tabla num">
-        <thead><tr><th>{primera}</th><th>Reposiciones</th><th>Contratos con medidor anterior</th><th>Tasa por 1.000</th><th>Instalaciones nuevas</th></tr></thead>
+        <thead><tr><th>{primera}</th><th>Reposiciones confirmadas</th><th>Cambios de serial (todos)</th><th>Contratos con medidor anterior</th><th>Tasa confirmada por 1.000</th><th>Instalaciones nuevas</th></tr></thead>
         <tbody>{filasG.map(([k, a]) => filaTabla(fmtNombre ? fmtNombre(k) : k, a))}</tbody>
       </table>
     </div>
@@ -284,44 +303,50 @@ export function CambiosMedidor({ periodo, valores }: Props) {
           Se compara {etiquetaPeriodo(periodo)} con {etiquetaPeriodo(periodoAnt)}
           {meses > 1 ? ` (intervalo de ${meses} meses: 202606 no existe en la fuente).` : "."}
         </div>
+        <div className="dash-nota" style={{ borderLeft: "3px solid #C98A2D", paddingLeft: 8 }}><b>Aviso:</b> {TEXTO.hallazgo}{meses > 1 ? ` ${TEXTO.dosMeses}` : ""}</div>
         <div className="dash-kpis">
-          <Kpi eti="Reposiciones" valor={fmtEntero(tot.repo)} sub="serial de medidor distinto" />
-          <Kpi eti="Tasa de reposición" valor={`${porMil(tasaMil(tot))} por 1.000`}
+          <Kpi eti="Reposiciones confirmadas" valor={fmtEntero(tot.repo)} sub="serial distinto y lectura que reinicia a 10 m³ o menos" />
+          <Kpi eti="Tasa de reposición confirmada" valor={`${porMil(tasaMil(tot))} por 1.000`}
             sub={`${pct2(tasa == null ? null : tasa * 100)} de ${fmtEntero(tot.conMed)} contratos con medidor anterior${
               meses > 1 ? ` · equivalente mensual: ${porMil(tasa == null ? null : (tasa * 1000) / meses)} por 1.000` : ""}`} />
+          <Kpi eti="Cambios de serial con lectura continua (probable recodificación)" valor={fmtEntero(tot.cont)} sub={meses > 1 ? "no evaluable en un par de dos meses" : "lectura anterior = lectura actual previa"} />
+          <Kpi eti="Sin lectura evaluable" valor={fmtEntero(tot.sinLec)} sub="cambio de serial con alguna lectura vacía" />
+          <Kpi eti={meses > 1 ? "No concluyente" : "Otros cambios de serial"} valor={fmtEntero(tot.otros)} sub={meses > 1 ? "par de dos meses" : "lectura que retrocede sin reiniciar o que sube"} />
           <Kpi eti="Instalaciones nuevas" valor={fmtEntero(tot.inst)} sub="sin medidor antes, con medidor ahora" />
           <Kpi eti="Retiros" valor={fmtEntero(tot.ret)} sub="con medidor antes, sin medidor ahora" />
-          <Kpi eti="Reposiciones facturadas por promedio" valor={pct1(pctDe(repoPromedio, tot.repo))}
+          <Kpi eti="Reposiciones confirmadas facturadas por promedio" valor={pct1(pctDe(repoPromedio, tot.repo))}
             sub={`${fmtEntero(repoPromedio)} de ${fmtEntero(tot.repo)} en ${etiquetaPeriodo(periodo)}`} />
         </div>
       </div></div>
 
       {/* 2) Serie por periodo */}
       <div className="dash-fila"><div className="dash-carta">
-        <h3>Reposiciones y tasa mensual por período</h3>
-        <BarrasHorizontales
-          datos={serie.map((s) => ({ etiqueta: `${etiquetaCorta(s.p)}${s.meses > 1 ? ` (${s.meses} meses)` : ""}`, valor: s.repo }))}
-          formatoValor={(v) => `${fmtEntero(v)} reposiciones`}
-          color={COLOR.agua}
+        <h3>Cambios de serial por período y tasa mensual de reposición confirmada</h3>
+        <BarrasApiladas
+          datos={serie.map((s2) => ({ etiqueta: `${etiquetaCorta(s2.p)}${s2.meses > 1 ? ` (${s2.meses} meses)` : ""}`, valores: [s2.repo, s2.cont, s2.sinLec, s2.otros] }))}
+          series={[{ nombre: "Reposiciones confirmadas", color: COLOR.agua }, { nombre: "Lectura continua (probable recodificación)", color: COLOR.gris },
+            { nombre: "Sin lectura evaluable", color: COLOR.ambar }, { nombre: "Otros / no concluyente", color: COLOR.tinta }]}
+          formatoValor={(v) => `${fmtEntero(v)} contratos`}
+          margenIzq={130}
         />
         <LineasPorcentaje
           etiquetas={serie.map((s) => etiquetaCorta(s.p))}
-          series={[{ nombre: "Tasa mensual de reposición", color: COLOR.tinta, valores: serie.map((s) => s.tasaMensual) }]}
+          series={[{ nombre: "Tasa mensual de reposición confirmada", color: COLOR.tinta, valores: serie.map((s) => s.tasaMensual) }]}
           sinTope
           paso={1}
           formatoTick={(t) => `${fmtDecimal(t, 1)} %`}
           formatoValor={(v) => `${fmtDecimal(v, 2)} %`}
         />
-        <TablaPlegable titulo="Datos: reposiciones y tasa por período">
+        <TablaPlegable titulo="Datos: cambios de serial y tasa por período">
           <table className="dash-tabla num">
-            <thead><tr><th>Período</th><th>Meses del intervalo</th><th>Reposiciones</th><th>Tasa del intervalo</th><th>Tasa mensual</th></tr></thead>
+            <thead><tr><th>Período</th><th>Meses del intervalo</th><th>Reposiciones confirmadas</th><th>Lectura continua</th><th>Sin lectura</th><th>Otros / no concluyente</th><th>Tasa del intervalo</th><th>Tasa mensual</th></tr></thead>
             <tbody>
               {serie.map((s) => {
                 const a = vacio(); for (const x of filtradas) if (x.periodo === s.p) sumar(a, x);
                 const t = ratio(a.repo, a.conMed);
                 return (
                   <tr key={s.p}>
-                    <td>{etiquetaCorta(s.p)}</td><td className="num">{s.meses}</td><td className="num">{fmtEntero(s.repo)}</td>
+                    <td>{etiquetaCorta(s.p)}</td><td className="num">{s.meses}</td><td className="num">{fmtEntero(s.repo)}</td><td className="num">{fmtEntero(s.cont)}</td><td className="num">{fmtEntero(s.sinLec)}</td><td className="num">{fmtEntero(s.otros)}</td>
                     <td className="num">{pct2(t == null ? null : t * 100)}</td><td className="num">{pct2(s.tasaMensual)}</td>
                   </tr>
                 );
@@ -330,22 +355,22 @@ export function CambiosMedidor({ periodo, valores }: Props) {
           </table>
         </TablaPlegable>
         <div className="dash-nota">
-          La tasa mensual es la tasa del intervalo dividida entre sus meses: 202607 se compara con 202605 porque
+          La tasa es la de las reposiciones confirmadas; la mensual es la tasa del intervalo dividida entre sus meses: 202607 se compara con 202605 porque
           202606 no existe en la fuente. Respeta los filtros de ciclo, uso y estrato.
         </div>
       </div></div>
 
       {/* 3) Por ciclo */}
       <div className="dash-fila"><div className="dash-carta">
-        <h3>Reposiciones por ciclo — {etiquetaPeriodo(periodo)}</h3>
+        <h3>Reposiciones confirmadas por ciclo — {etiquetaPeriodo(periodo)}</h3>
         {barras(porCiclo)}
         {tablaGrupo("Ciclo", porCiclo)}
-        <div className="dash-nota">Ordenado por la tasa de reposición. Los ciclos con menos de {MIN_CELDA} reposiciones se suman en «{OTROS}». {TEXTO.cicloSeparado}</div>
+        <div className="dash-nota">Ordenado por la tasa de reposición confirmada. Los ciclos con menos de {MIN_CELDA} cambios de serial se suman en «{OTROS}». {TEXTO.cicloSeparado}</div>
       </div></div>
 
       {/* 4) Por uso y por estrato */}
       <div className="dash-fila"><div className="dash-carta">
-        <h3>Reposiciones por uso{valores.uso === "Residencial" ? " y por estrato" : ""}</h3>
+        <h3>Reposiciones confirmadas por uso{valores.uso === "Residencial" ? " y por estrato" : ""}</h3>
         {barras(porUso)}
         {tablaGrupo("Uso", porUso)}
         {valores.uso === "Residencial" ? (
@@ -359,7 +384,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
 
       {/* 5) Por banda de antigüedad del medidor anterior */}
       <div className="dash-fila"><div className="dash-carta">
-        <h3>Reposiciones por antigüedad del medidor anterior</h3>
+        <h3>Reposiciones confirmadas por antigüedad del medidor anterior</h3>
         {porBanda.length === 0 ? <div className="dash-nota">Sin datos de antigüedad para este período.</div> : (
           <>
             {barras(porBanda, etiquetaBanda)}
@@ -374,7 +399,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
         <h3>Cómo se factura el período actual: reposición frente a sin cambio</h3>
         <div className="dash-tabla-scroll">
           <table className="dash-tabla num">
-            <thead><tr><th>Método de facturación</th><th>Reposiciones</th><th>% de las reposiciones</th><th>Sin cambio (control)</th><th>% del control</th></tr></thead>
+            <thead><tr><th>Método de facturación</th><th>Reposiciones confirmadas</th><th>% de las confirmadas</th><th>Sin cambio (control)</th><th>% del control</th></tr></thead>
             <tbody>
               {[["lectura", "Lectura"], ["promedio", "Promedio"], ["otro", "Otro"]].map(([k, nombre]) => (
                 <tr key={k}>
@@ -395,12 +420,14 @@ export function CambiosMedidor({ periodo, valores }: Props) {
       {/* 7) Consumo antes y después */}
       <div className="dash-fila"><div className="dash-carta">
         <h3>Consumo antes y después del cambio — {etiquetaPeriodo(periodo)}</h3>
+        {consumoTotal.n < MUESTRA_PEQUENA ? <div className="dash-nota"><b>Muestra pequeña:</b> solo {fmtEntero(consumoTotal.n)} contratos comparables entre las reposiciones confirmadas (con lectura real en ambos meses). Las diferencias son indicativas y se confirmarán con más períodos.</div> : null}
         <TablaConsumo titulo="Por estrato (residencial)" filas={consumoEstrato} />
         <TablaConsumo titulo="Por antigüedad del medidor anterior" filas={consumoBanda} fmt={etiquetaBanda} />
         <div className="dash-nota">
-          Efecto neto = diferencia de las reposiciones menos la diferencia del control (contratos sin cambio de serial, con los mismos filtros).
-          Los grupos con menos de {MIN_CELDA} contratos pareados se suman en «{OTROS}»; con menos de {MUESTRA_PEQUENA}, «muestra pequeña». {TEXTO.notaConsumo}
+          Solo reposiciones confirmadas frente a sin cambio. Efecto neto = diferencia de las reposiciones confirmadas menos la diferencia del control (contratos sin cambio de serial, con los mismos filtros).
+          Los grupos con menos de {MIN_CELDA} contratos comparables se suman en «{OTROS}»; con menos de {MUESTRA_PEQUENA}, «muestra pequeña». {TEXTO.notaConsumo}
         </div>
+        <details><summary>ⓘ Cómo se calcula</summary><div className="dash-nota">{TEXTO.comparables} Promedio antes y después = m³ del período anterior y del actual ÷ contratos comparables. Diferencia = promedio después − promedio antes; efecto neto = diferencia de las reposiciones confirmadas − diferencia del control (sin cambio de serial).</div></details>
       </div></div>
     </>
   );

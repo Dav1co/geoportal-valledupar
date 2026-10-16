@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { biCache } from "../cacheBi";
 import {
-  comoCambioMedidorDim,
   comoSubmedicionCicloDim,
   comoSubmedicionRangoDim,
   comoSubmedicionRefDim,
-  type CambioMedidorDim,
   type Ipuf,
   type SubmedicionRangoDim,
   type SubmedicionRefDim,
@@ -233,7 +231,6 @@ type Props = { periodo: string; ipufSerie: Ipuf[] };
 export function SubmedicionVejez({ periodo, ipufSerie }: Props) {
   const ref = useVista("v_submedicion_ref_dim", comoSubmedicionRefDim);
   const cic = useVista("v_submedicion_ciclo_dim", comoSubmedicionCicloDim);
-  const cambios = useVista("v_cambio_medidor_dim", comoCambioMedidorDim);
   const [verRangos, setVerRangos] = useState(false);
   // Abiertas por defecto: resumen (fichas), distribución por vejez y metodología. Solo en memoria.
   const [abiertas, setAbiertas] = useState<Record<string, boolean>>({ resumen: true, vejez: true, metodologia: true });
@@ -371,18 +368,6 @@ export function SubmedicionVejez({ periodo, ipufSerie }: Props) {
     for (const k of ciclos) for (const r of RANGOS) max = Math.max(max, valor(k, r) ?? 0);
     const porRango = RANGOS.map((r) => ({ etiqueta: `${r} m³`, valor: [...g.values()].reduce((s, f) => s + (f.get(r)?.b ?? 0), 0) }));
     return { ciclos, valor, max, porRango };
-  })();
-
-  // Contraste con la comparación pareada (Cambios de medidor): efecto neto, residencial, mismo estrato
-  const efectoPareado = (() => {
-    const c = (cambios.datos ?? []).filter((x: CambioMedidorDim) => x.periodo === periodo && x.uso === "Residencial" && filtraEstr(x.estrato));
-    const dif = (tipo: string) => {
-      let n = 0, a = 0, b = 0;
-      for (const x of c) if (x.tipo_evento === tipo) { n += x.contratos_pareados; a += x.m3_ant ?? 0; b += x.m3_act ?? 0; }
-      return n >= MIN_CELDA ? (b - a) / n : null;
-    };
-    const r = dif("reposicion"), s = dif("sin_cambio");
-    return r != null && s != null ? r - s : null;
   })();
 
   // Calculadora de retorno
@@ -649,17 +634,16 @@ export function SubmedicionVejez({ periodo, ipufSerie }: Props) {
           <Pie fuente={fuenteRef} periodo={etiquetaPeriodo(periodo)} calculado={calculado} formula="Cada m³ de cambio en la referencia mueve la atribuible en (contratos del grupo de vejez) × 1 m³, y en pesos × la tarifa del período." />
         </Sub>
 
-        <Sub titulo="Contraste con la comparación pareada de «Cambios de medidor»">
+        <Sub titulo="Contraste con la comparación de consumo antes y después de «Cambios de medidor»">
           <div className="dash-nota">
-            {efectoPareado != null
-              ? `En la comparación pareada de ${etiquetaPeriodo(periodo)} (medidores reemplazados frente a medidores sin cambio, solo contratos con lectura real en ambos meses), el efecto neto observado es de ${efectoPareado > 0 ? "+" : ""}${fmtDecimal(efectoPareado, 2)} m³ por contrato en el primer mes. `
-              : "La comparación pareada de este período no tiene suficientes contratos para un efecto neto. "}
-            Es una diferencia de un mes, sin error estándar, y el primer mes tras el cambio suele facturarse por promedio. La validación definitiva de esta estimación depende del período 202610.
+            Aún no hay muestra suficiente de reposiciones confirmadas (cambio de serial con la lectura reiniciada a 10 m³ o menos) para medir con la comparación de consumo antes y después el efecto
+            de cambiar el medidor. En 202609, el 97,5 % de los cambios de serial con lectura evaluable conservó la continuidad de la lectura: fue una recodificación de seriales y no
+            un cambio físico. La validación de esta estimación se hará con el período 202610.
           </div>
           <button className="dash-boton" onClick={() => { const h = [...document.querySelectorAll("h3")].find((x) => x.textContent?.startsWith("Cambios de medidor")); h?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
             Ir a «Cambios de medidor»
           </button>
-          <Pie fuente="bi.v_cambio_medidor_dim (sql/38)" periodo={etiquetaPeriodo(periodo)} calculado="—" formula="Efecto neto = (diferencia promedio de consumo de las reposiciones) − (diferencia promedio de los contratos sin cambio), residencial y con el filtro de estrato." />
+          <Pie fuente="bi.v_cambio_medidor_dim (sql/38)" periodo={etiquetaPeriodo(periodo)} calculado="—" formula="Reposición confirmada = serial distinto con la lectura anterior del período de 10 m³ o menos y menor que la lectura actual del período previo. Continuidad = lectura anterior igual a la lectura actual previa. Contratos comparables: contratos con medidor registrado en el período y en el período disponible anterior; son los únicos sobre los que se puede comparar el consumo antes y después." />
         </Sub>
 
         </Parte>

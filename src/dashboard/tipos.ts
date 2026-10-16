@@ -1156,7 +1156,7 @@ export type CambioMedidorDim = {
   banda_ant: string;
   metodo_act: string;
   contratos: number;
-  contratos_pareados: number;
+  contratos_pareados: number;   // en pantalla se rotula «Contratos comparables» (mismo dato; nombre interno sin cambio)
   m3_ant: number | null;
   m3_act: number | null;
   contratos_con_medidor_ant: number;
