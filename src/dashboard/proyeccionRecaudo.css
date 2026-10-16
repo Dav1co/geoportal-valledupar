@@ -1,0 +1,21 @@
+/* Pantalla «Proyección y cumplimiento» (RECAUDO DIARIO). Solo estilos propios; reutiliza los tokens de dashboard.css. */
+.proy-seccion { margin-top: 2.2rem; }
+.proy-seccion > h2 { color: var(--dash-tinta); font-size: 1.15rem; margin: 0 0 .25rem; }
+.proy-sub { color: var(--dash-texto-suave); font-size: .85rem; margin: 0 0 .9rem; }
+.proy-semaforo { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-weight: 700; }
+.proy-verde { background: #dff3e4; color: #1b6b36; }
+.proy-ambar { background: #fdf0cf; color: #8a5a00; }
+.proy-rojo { background: #fbe0de; color: #a12a22; }
+.proy-sinmeta { color: var(--dash-texto-suave); font-style: italic; }
+.proy-dia-festivo { color: #a12a22; font-weight: 600; }
+.proy-dia-finde { color: var(--dash-agua); font-weight: 600; }
+.proy-tabla td.num, .proy-tabla th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.proy-tabla .proy-proy { background: var(--dash-agua-suave); }
+.proy-tabla tr.proy-subtotal td { font-weight: 600; border-top: 1px solid var(--dash-linea); }
+.proy-tabla tr.proy-total td { font-weight: 700; background: var(--dash-agua-suave); border-top: 1px solid var(--dash-linea); }
+.proy-tabla tr.proy-acum td { color: var(--dash-texto-suave); }
+.proy-tabla tr.proy-meta td { font-style: italic; border-top: 2px solid var(--dash-linea); }
+.proy-tabla td.proy-rotulo { white-space: nowrap; }
+.proy-leyenda { font-size: .8rem; color: var(--dash-texto-suave); margin-top: .5rem; }
+.proy-error { border: 1px solid var(--dash-linea); border-radius: 8px; padding: .8rem 1rem; color: var(--dash-texto); }
+.proy-error button { margin-left: .6rem; }

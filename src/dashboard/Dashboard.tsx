@@ -15,6 +15,7 @@ import { Pqr } from "./paginas/Pqr";
 import { Notas } from "./paginas/Notas";
 import { Cupones } from "./paginas/Cupones";
 import { RecaudoDiario } from "./paginas/RecaudoDiario";
+import { ProyeccionRecaudo } from "./paginas/ProyeccionRecaudo";
 import { Perdidas } from "./paginas/Perdidas";
 import { Consolidado } from "./paginas/Consolidado";
 import "./dashboard.css";
@@ -230,7 +231,10 @@ export function Dashboard() {
         <Cupones key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "recaudo-diario" && (
-        <RecaudoDiario key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
+        <>
+          <RecaudoDiario key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
+          <ProyeccionRecaudo key={`proy-${recarga}`} />
+        </>
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "perdidas" && (
         <Perdidas key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} onIrAPqr={() => cambiarPagina("pqr")} />
