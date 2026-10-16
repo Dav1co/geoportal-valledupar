@@ -23,6 +23,7 @@ create table if not exists bi.proy_meta_certificada (
   fuente         text    not null,
   cargado_en     timestamptz not null default now()
 );
+alter table bi.proy_meta_certificada enable row level security;
 insert into bi.proy_meta_certificada (periodo, meta_servicios, meta_otros, fuente) values
  ('202609', 4950119156.06, 133838079.60, 'FO-GF-33 corregido (Nuevo2), columnas M, filas 43 y 53'),
  ('202610', 4927731207.54, 134217206.60, 'FO-GF-33 corregido (Nuevo2), columnas N, filas 43 y 53'),
@@ -102,6 +103,7 @@ create table if not exists bi.calendario_festivos (
   fecha  date primary key,
   nombre text not null
 );
+alter table bi.calendario_festivos enable row level security;
 insert into bi.calendario_festivos (fecha, nombre) values
  ('2026-01-01','Año Nuevo'),('2026-01-12','Reyes Magos'),('2026-03-23','San José'),
  ('2026-04-02','Jueves Santo'),('2026-04-03','Viernes Santo'),('2026-05-01','Dia del Trabajo'),
