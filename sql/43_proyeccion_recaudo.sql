@@ -242,3 +242,30 @@ select periodo, tipo,
        round(sum(corregida_st)   over (order by periodo)) as acum_propia_corregida,
        round(sum(certificada_st) over (order by periodo)) as acum_certificada
 from b;
+
+-- PASO 4 (objetos NUEVOS en bi; no alteran nada existente): presupuesto de la vigencia del FO-GF-33 por mes.
+-- Fuente: FO-GF-33 corregido (Nuevo2), proyeccion presupuesto vigencia, filas 57 a 59. Valores en pesos.
+--   subsidio = deficit de subsidios presupuestado; recaudo + otros = recaudo sin subsidios.
+-- RLS activado y sin politicas: la tabla y la vista se validan SOLO con el rol propietario (claude_ro las ve vacias);
+-- la RPC (rama 59 de sql/05) las lee con SECURITY DEFINER.
+create table if not exists bi.proy_presupuesto_fo (
+  periodo     text primary key,
+  subsidio    numeric not null,
+  recaudo     numeric not null,
+  otros       numeric not null,
+  fuente      text not null default 'FO-GF-33 corregido (Nuevo2), proyeccion presupuesto vigencia, filas 57 a 59',
+  cargado_en  timestamptz not null default now()
+);
+alter table bi.proy_presupuesto_fo enable row level security;
+
+create or replace view bi.v_proy_presupuesto_fo as
+select periodo,
+       round(subsidio)                  as subsidio,
+       round(recaudo)                   as recaudo,
+       round(otros)                     as otros,
+       round(recaudo + otros)           as sin_subsidios,
+       round(recaudo + otros + subsidio) as con_subsidios,
+       round(sum(recaudo + otros)            over (order by periodo)) as acum_sin_subsidios,
+       round(sum(recaudo + otros + subsidio) over (order by periodo)) as acum_con_subsidios
+from bi.proy_presupuesto_fo;
+

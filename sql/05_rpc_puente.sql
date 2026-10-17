@@ -663,6 +663,17 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  elsif p_vista = 'v_proy_presupuesto_fo' then
+    -- Presupuesto de la vigencia del FO-GF-33 por mes (subsidio, recaudo, otros; sin y con subsidios; acumulados) (sql/43). 12 filas; solo valores en pesos.
+    select coalesce(jsonb_agg(to_jsonb(t)
+             order by t.periodo),
+             '[]'::jsonb)
+      into resultado
+    from bi.v_proy_presupuesto_fo t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -779,4 +790,10 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- ROLLBACK de las ramas v_proy_recaudo_total, v_proy_cumplimiento, v_proy_anual y v_proy_recaudo (54 -> 58 ramas): volver a la version de este
 -- archivo con 54 ramas (hasta v_mapa_calor_cartera_dim, commit 3e91c94) y volver a ejecutarlo (create or replace conserva el ACL).
 -- Antes de retirar las ramas, quitar las tres vistas de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v23).
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de la rama v_proy_presupuesto_fo (58 -> 59 ramas): volver a la version de este archivo con 58 ramas (hasta v_proy_recaudo,
+-- commit db128c3) y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar la rama, quitar la vista de
+-- VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v24).
 -- =====================================================================
