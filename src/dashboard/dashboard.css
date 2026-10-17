@@ -202,11 +202,14 @@
 }
 
 /* ---------- navegación entre páginas ---------- */
+/* Las pestañas pasan a otra línea cuando no caben (sin desplazamiento horizontal). Cada pestaña mide 36 px y las líneas se separan 6 px
+   (paso de 42 px): el fondo dibuja la línea base de cada fila a todo el ancho, en lugar del borde inferior de una sola línea. */
 .dash-nav {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 6px 0;
   margin-top: 14px;
-  border-bottom: 1px solid var(--dash-linea);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 35px, var(--dash-linea) 35px 36px, transparent 36px 42px);
 }
 .dash-nav button {
   font: inherit;
@@ -216,7 +219,12 @@
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
-  padding: 8px 14px;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap; /* el rótulo no se parte: todas las pestañas con la misma altura */
   cursor: pointer;
 }
 .dash-nav button:hover {
