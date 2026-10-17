@@ -158,8 +158,8 @@ function leerNumero(t: string): number | null {
 
 // Ficha «Qué parte del IPUF explica la submedición»: aporte = m3 atribuibles (3 años o más) ÷ suscriptores del período.
 type SerieIpuf = { p: string; a3: number };
-function IpufExplicacion({ periodo, serie, ipufSerie, calculado, fuente }: {
-  periodo: string; serie: SerieIpuf[]; ipufSerie: Ipuf[]; calculado: string; fuente: string;
+function IpufExplicacion({ periodo, serie, ipufSerie, calculado, fuente, grafica }: {
+  periodo: string; serie: SerieIpuf[]; ipufSerie: Ipuf[]; calculado: string; fuente: string; grafica?: ReactNode;
 }) {
   const filas = serie.map((s) => {
     const i = ipufSerie.find((x) => x.periodo === s.p);
@@ -202,6 +202,7 @@ function IpufExplicacion({ periodo, serie, ipufSerie, calculado, fuente }: {
         <span style={{ color: "#0A2540" }}>■</span> Submedición estimada {fmtDecimal(h.aporte, 2)} · <span style={{ color: "#9AA7B5" }}>■</span> Resto del IPUF (otras fuentes) {fmtDecimal(resto, 2)}
         {h.meta != null ? <> · <span style={{ color: "#C98A2D" }}>▌</span> Meta {fmtDecimal(h.meta, 2)}</> : null}
       </div>
+      {grafica}
       <div className="dash-nota">
         La submedición estimada equivale a {fmtDecimal(h.aporte, 2)} m³ por suscriptor al mes, frente a un IPUF de {fmtDecimal(h.ip, 2)}
         {h.meta != null ? ` y una meta de ${fmtDecimal(h.meta, 2)}` : ""}. Eso es cerca del {fmtDecimal(h.pctIpuf ?? 0, 1)} % del IPUF
@@ -449,22 +450,6 @@ export function SubmedicionVejez({ periodo, valores, onCambioValores }: Props) {
             </table>
           </TablaPlegable>
           <Pie fuente={fuenteRef} periodo={etiquetaPeriodo(periodo)} calculado={calculado} formula="Brecha neta de la banda = m3_perdidos_bruta − m3_exceso = Σ (referencia − consumo) de sus contratos. Brecha por contrato = brecha neta ÷ contratos. % bajo la referencia = contratos con consumo menor que la referencia ÷ contratos." />
-        </Sub>
-
-        <Sub titulo="Consumo promedio por banda frente a la referencia">
-          <LineasPorcentaje
-            etiquetas={BANDAS.slice(0, 6).map(etiquetaBanda)}
-            series={estratosOrden.flatMap((e, i) => {
-              const por = (b: string) => { const x = delPer.find((y) => y.estrato === e && y.banda_antig === b); return x && x.contratos >= MIN_CELDA && x.m3_consumo != null ? x.m3_consumo / x.contratos : null; };
-              const lineas = [{ nombre: nombreEstrato(e), color: COLORES[i % COLORES.length], valores: BANDAS.slice(0, 6).map(por) }];
-              const r = refEstrato(e)?.ref_nuevos_media_m3;
-              if (estratosOrden.length === 1 && r != null) lineas.push({ nombre: `Referencia ${nombreEstrato(e)}`, color: "#9AA7B5", valores: BANDAS.slice(0, 6).map(() => r) });
-              return lineas;
-            })}
-            sinTope paso={2} formatoTick={(t) => `${fmtDecimal(t, 0)}`} formatoValor={(v) => `${fmtDecimal(v, 1)} m³`} tituloY="m³ por contrato"
-          />
-          <div className="dash-nota">La referencia de cada estrato es su consumo promedio en la banda 0-3 años{estratosOrden.length === 1 ? " (línea gris)" : ""}. Celdas con menos de {MIN_CELDA} contratos no se grafican.</div>
-          <Pie fuente={fuenteRef} periodo={etiquetaPeriodo(periodo)} calculado={calculado} formula="Consumo promedio de la banda = m3_consumo ÷ contratos del universo. Referencia = promedio de la banda 0-3 años del estrato." />
         </Sub>
 
         </Parte>
@@ -738,6 +723,28 @@ export function SubmedicionVejez({ periodo, valores, onCambioValores }: Props) {
   );
 }
 
+// Consumo promedio por banda de antigüedad frente a la referencia, con TODOS los estratos (no depende de filtros). La referencia de cada
+// estrato es su consumo en la banda 0-3 años, que es el primer punto de su línea.
+function ConsumoPorBanda({ filas, periodo, calculado }: { filas: SubmedicionRefDim[]; periodo: string; calculado: string }) {
+  const delPer = filas.filter((x) => x.periodo === periodo);
+  const estratos = [...new Set(delPer.map((x) => x.estrato))].sort();
+  return (
+    <Sub titulo="Consumo promedio por banda frente a la referencia">
+      <div className="dash-sin-filtro">No depende de filtros.</div>
+      <LineasPorcentaje
+        etiquetas={BANDAS.slice(0, 6).map(etiquetaBanda)}
+        series={estratos.map((e, i) => {
+          const por = (b: string) => { const x = delPer.find((y) => y.estrato === e && y.banda_antig === b); return x && x.contratos >= MIN_CELDA && x.m3_consumo != null ? x.m3_consumo / x.contratos : null; };
+          return { nombre: nombreEstrato(e), color: COLORES[i % COLORES.length], valores: BANDAS.slice(0, 6).map(por) };
+        })}
+        sinTope paso={2} formatoTick={(t) => `${fmtDecimal(t, 0)}`} formatoValor={(v) => `${fmtDecimal(v, 1)} m³`} tituloY="m³ por contrato"
+      />
+      <div className="dash-nota">La referencia de cada estrato es su consumo promedio en la banda de 0 a 3 años, que es el primer punto de cada línea. Celdas con menos de {MIN_CELDA} contratos no se grafican.</div>
+      <Pie fuente={FUENTE_REF} periodo={etiquetaPeriodo(periodo)} calculado={calculado} formula="Consumo promedio de la banda = m3_consumo ÷ contratos del universo. Referencia = promedio de la banda 0-3 años del estrato." />
+    </Sub>
+  );
+}
+
 // Explicación «Qué parte del IPUF explica la submedición» y su tabla por período, FUERA del plegable de Submedición: se calcula con
 // la serie de TODOS los estratos (no depende de filtros), con los mismos datos de v_submedicion_ref_dim que ya carga la sección.
 export function SubmedicionExplicacion({ periodo, ipufSerie }: { periodo: string; ipufSerie: Ipuf[] }) {
@@ -751,7 +758,8 @@ export function SubmedicionExplicacion({ periodo, ipufSerie }: { periodo: string
   return (
     <div className="dash-fila"><div className="dash-carta">
       <IpufExplicacion periodo={periodo} serie={serie} ipufSerie={ipufSerie}
-        calculado={fechaCalculo(filas.filter((x) => x.periodo === periodo))} fuente={FUENTE_REF} />
+        calculado={fechaCalculo(filas.filter((x) => x.periodo === periodo))} fuente={FUENTE_REF}
+        grafica={<ConsumoPorBanda filas={filas} periodo={periodo} calculado={fechaCalculo(filas.filter((x) => x.periodo === periodo))} />} />
     </div></div>
   );
 }
