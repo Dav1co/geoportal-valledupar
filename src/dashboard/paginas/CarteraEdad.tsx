@@ -387,7 +387,7 @@ export function MetodologiaEdad() {
         <li>
           <b>Lectura de los límites: pendiente de confirmar.</b> Provisionalmente, cada etiqueta es el <b>límite superior</b> de su tramo (720 = 361 a 720 días).
           La evidencia: la etiqueta 360 pesa lo de un mes y la 720 lo de un año completo. La lectura inferior (360 = 360 a 719) es la que usa el tablero
-          anterior, y arroja 79,6 % de cartera mayor a 360 días en septiembre de 2026 frente a 78,7 % con la lectura provisional.
+          anterior, y arroja un porcentaje algo mayor de cartera mayor a 360 días que la lectura provisional.
         </li>
         <li>
           <b>Privacidad.</b> Solo se publican valores agregados en pesos por etiqueta, uso, estrato y servicio: ningún contrato, barrio, ciclo ni persona. Si
@@ -396,8 +396,8 @@ export function MetodologiaEdad() {
         </li>
         <li>
           <b>Cuadre.</b> El total por período es el del reporte de edades y coincide con el de la tabla de ciclo y barrio. Frente al reporte resumen de cartera
-          hay una diferencia menor (de $ 0,13 a $ 0,25 M entre marzo y septiembre de 2026, 0,1 a 0,2 por mil); su causa no está determinada. Frente al
-          detalle por contrato coincide en siete de ocho períodos (febrero de 2026 difiere en $ 0,21 M).
+          hay una diferencia menor entre marzo y septiembre de 2026; su causa no está determinada. Frente al
+          detalle por contrato coincide en siete de ocho períodos (febrero de 2026 tiene una diferencia menor).
         </li>
         <li>
           <b>Es una descripción, no una causa.</b> Estas cifras muestran dónde está la cartera y qué tan vieja es; no explican por qué ni indican qué

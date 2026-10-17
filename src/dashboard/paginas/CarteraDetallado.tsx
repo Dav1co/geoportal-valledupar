@@ -97,7 +97,7 @@ function CarteraDetalladoPeriodo({ periodo, onIrAPeriodo }: Props) {
           <div className="dash-aviso">
             Esta zona usa los tramos de la tabla de ciclo y barrio, que lee las etiquetas como <b>límite inferior</b> (su «Más de 360 días» incluye
             la etiqueta 360). Las zonas de edad de arriba usan la lectura provisional de límites superiores, por eso las cifras de «Más de 360 días»
-            difieren (en septiembre de 2026: $ 95.698 M frente a $ 94.625 M). El total y la cartera financiada son los mismos.
+            difieren entre ambas zonas. La lectura de los límites sigue pendiente de confirmar; el total y la cartera financiada son los mismos.
           </div>
           <CarteraCicloBarrio
             periodo={periodo}
