@@ -9,6 +9,7 @@ import { ESTRATOS_FILTRO, USOS_FILTRO, periodosDe } from "../edadCarteraCalculo"
 import { ROTULO } from "../rotulos";
 import { AntiguedadEdad, MetodologiaEdad, PanoramaEdad, UsoEstratoEdad } from "./CarteraEdad";
 import { CarteraCicloBarrio } from "./CarteraCicloBarrio";
+import { ZonaMovimientoMora, ZonaSuspensionesCortes } from "./CarteraMora";
 
 // Cartera desagregada, en zonas como Pérdidas:
 //  1. Panorama (abierta): fichas y mezcla por tramo de edad.
@@ -24,7 +25,7 @@ export function CarteraDetallado(props: Props) {
   return <CarteraDetalladoPeriodo key={props.periodo} {...props} />;
 }
 
-const PLEGABLES = ["cd-antig", "cd-uso", "cd-ciclo", "cd-metod"];
+const PLEGABLES = ["cd-antig", "cd-uso", "cd-mov", "cd-scrr", "cd-ciclo", "cd-metod"];
 const PLEGABLES_INICIAL = { "cd-antig": true };
 const FILTROS_VACIO = { uso: TODOS, subcategoria: TODOS };
 
@@ -90,6 +91,14 @@ function CarteraDetalladoPeriodo({ periodo, onIrAPeriodo }: Props) {
         </Plegable>
         <Plegable id="cd-uso" diferido titulo="Por uso y estrato" marca={marca} abierto={!!pl.abiertos["cd-uso"]} onCambio={(o) => pl.cambiar("cd-uso", o)}>
           <UsoEstratoEdad filas={filas} periodo={periodo} uso={uso} estrato={estrato} />
+        </Plegable>
+
+        <h2 className="dash-zona">Mora y suspensiones</h2>
+        <Plegable id="cd-mov" diferido titulo="Movimiento de la mora" marca={marca} abierto={!!pl.abiertos["cd-mov"]} onCambio={(o) => pl.cambiar("cd-mov", o)}>
+          <ZonaMovimientoMora periodo={periodo} uso={uso} estrato={estrato} onLimpiar={limpiar} />
+        </Plegable>
+        <Plegable id="cd-scrr" diferido titulo="Suspensiones y cortes (SCRR)" marca={marca} abierto={!!pl.abiertos["cd-scrr"]} onCambio={(o) => pl.cambiar("cd-scrr", o)}>
+          <ZonaSuspensionesCortes periodo={periodo} uso={uso} estrato={estrato} onLimpiar={limpiar} />
         </Plegable>
 
         <h2 className="dash-zona">Ciclo y barrio</h2>
