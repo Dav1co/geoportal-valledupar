@@ -18,6 +18,7 @@ import { PerdidasLectura } from "./PerdidasLectura";
 import { SubmedicionVejez } from "./SubmedicionVejez";
 import { ReclamosMetodoPerdidas } from "./ReclamosMetodoPerdidas";
 import { MapaCalor } from "./MapaCalor";
+import { Plegable, usePlegables } from "../Plegable";
 
 // Pérdidas de agua (IPUF). Serie histórica larga: 114 períodos desde
 // enero de 2017, en su propio archivo y con un mes de rezago respecto
@@ -39,6 +40,8 @@ type Props = { periodo: string; onIrAPeriodo?: (p: string) => void; onIrAPqr?: (
 export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
   const [filas, setFilas] = useState<Ipuf[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Plegables de la pantalla (todos cerrados al entrar); solo en memoria.
+  const pl = usePlegables({});
 
   function cargar() {
     setError(null);
@@ -126,8 +129,10 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
 
   return (
     <>
+      <h2 className="dash-zona">IPUF</h2>
       <IpufAnualBloque anual={anual} periodo={periodo} />
 
+      <Plegable id="pl-ipuf" titulo="IPUF mensual y demás indicadores" abierto={!!pl.abiertos["pl-ipuf"]} onCambio={(o) => pl.cambiar("pl-ipuf", o)}>
       <div className="dash-kpis">
         <div className={`dash-carta dash-kpi ${sobreMeta ? "dash-kpi-mal" : ""}`}>
           <div className="dash-eti">IPUF del mes</div>
@@ -175,10 +180,6 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
           </div>
         </div>
       </div>
-
-      <IndicadoresLectura periodo={periodo} />
-      <PerdidasLectura periodo={periodo} />
-      <SubmedicionVejez periodo={periodo} ipufSerie={filas} />
 
       <div className="dash-fila">
         <div className="dash-carta">
@@ -318,6 +319,11 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
       </div>
 
       <IndicesAnualesSeccion anual={anual} />
+      </Plegable>
+
+      <IndicadoresLectura periodo={periodo} />
+      <PerdidasLectura periodo={periodo} />
+      <SubmedicionVejez periodo={periodo} ipufSerie={filas} />
 
       <ReclamosMetodoPerdidas onIrAPqr={onIrAPqr} />
 
