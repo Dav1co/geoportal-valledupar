@@ -670,6 +670,30 @@ export function comoCarteraContratosDim(r: Record<string, unknown>): CarteraCont
   };
 }
 
+// bi.v_cartera_edad_dim (sql/45): cartera por etiqueta cruda de edad x uso x estrato x servicio, en pesos. Sin ciclo, barrio ni contrato.
+// uso: '1','3','5','9' u 'otros'; estrato: '1'..'6' u 'otros'; etiqueta: '0'..'1801' o 'sin_edad' (financiada); orden 0..17 y 99.
+export type CarteraEdadDim = {
+  periodo: string;
+  uso: string;
+  estrato: string;
+  servicio: string;
+  etiqueta: string;
+  orden: number;
+  valor: number;
+};
+
+export function comoCarteraEdadDim(r: Record<string, unknown>): CarteraEdadDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    uso: String(r.uso ?? ""),
+    estrato: String(r.estrato ?? ""),
+    servicio: String(r.servicio ?? ""),
+    etiqueta: String(r.etiqueta ?? ""),
+    orden: n(r.orden) ?? 99,
+    valor: n(r.valor) ?? 0,
+  };
+}
+
 // bi.v_pqr_mes: serie mensual de reclamos y recursos. Un período sin
 // archivo NO genera fila (para poder dibujar hueco, no cero).
 export type PqrMes = {
