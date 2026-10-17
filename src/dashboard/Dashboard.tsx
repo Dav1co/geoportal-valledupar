@@ -210,7 +210,7 @@ export function Dashboard() {
         <RecaudoDetallado key={recarga} periodo={periodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "cartera-detallado" && (
-        <CarteraDetallado key={recarga} periodo={periodo} />
+        <CarteraDetallado key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />
       )}
       {!error && filas && filas.length > 0 && periodo && pagina === "pqr" && (
         <Pqr key={recarga} periodo={periodo} onIrAPeriodo={cambiarPeriodo} />

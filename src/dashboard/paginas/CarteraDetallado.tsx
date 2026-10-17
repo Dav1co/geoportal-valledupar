@@ -1,90 +1,63 @@
 import { useEffect, useMemo, useState } from "react";
 import { biCache } from "../cacheBi";
-import {
-  comoCarteraContratosDim,
-  comoCarteraDetalleDim,
-  type CarteraContratosDim,
-  type CarteraDetalleDim,
-} from "../tipos";
-import { etiquetaPeriodo, fmtEntero, fmtMillones, fmtPct } from "../formato";
-import { BarrasHorizontales, Dona, TablaPlegable } from "../graficas";
+import { comoCarteraEdadDim, type CarteraEdadDim } from "../tipos";
 import { SinDatos } from "../SinDatos";
 import { PanelFiltros, TODOS, type DefFiltro } from "../PanelFiltros";
+import { MarcaFiltro, Plegable, usePlegables } from "../Plegable";
+import { normalizarFiltrosCartera, useEstadoSesion } from "../memoriaSesion";
+import { ESTRATOS_FILTRO, USOS_FILTRO, periodosDe } from "../edadCarteraCalculo";
 import { ROTULO } from "../rotulos";
+import { AntiguedadEdad, MetodologiaEdad, PanoramaEdad, UsoEstratoEdad } from "./CarteraEdad";
+import { CarteraCicloBarrio } from "./CarteraCicloBarrio";
 
-// Tramos de edad: rampa secuencial de un tono, igual que Cartera
-// agrupado, porque la antigüedad es una magnitud ordenada.
-const COLOR_TRAMO: Record<string, string> = {
-  "Hasta 60 días": "#8FB4CE",
-  "60 a 180 días": "#4FA3C7",
-  "180 a 360 días": "#2E7D9E",
-  "Más de 360 días": "#0A2540",
-};
+// Cartera desagregada, en zonas como Pérdidas:
+//  1. Panorama (abierta): fichas y mezcla por tramo de edad.
+//  2. Antigüedad (abierta al entrar): las 19 etiquetas de edad y su evolución.
+//  3. Por uso y estrato · 4. Por ciclo y barrio (lo que ya existía) · 5. Metodología: plegables cerrados que no montan ni consultan hasta abrirse.
+// La dimensión de edad (v_cartera_edad_dim) se trae UNA vez con todos los períodos (biCache) y alimenta las zonas 1 a 3. Los filtros de uso y
+// estrato son compartidos por todas las zonas y se recuerdan durante la sesión de la pestaña, por período; comuna, barrio y ciclo viven en la zona 4.
 
-const TOP_BARRIOS = 20;
+type Props = { periodo: string; onIrAPeriodo?: (p: string) => void };
 
-type Props = { periodo: string };
+// Al cambiar de período se reinicia la pantalla (clave = período): el estado recordado es por período y no se arrastra de uno a otro.
+export function CarteraDetallado(props: Props) {
+  return <CarteraDetalladoPeriodo key={props.periodo} {...props} />;
+}
 
-export function CarteraDetallado({ periodo }: Props) {
-  const [datos, setDatos] = useState<CarteraDetalleDim[] | null>(null);
-  const [contratos, setContratos] = useState<CarteraContratosDim[]>([]);
+const PLEGABLES = ["cd-antig", "cd-uso", "cd-ciclo", "cd-metod"];
+const PLEGABLES_INICIAL = { "cd-antig": true };
+const FILTROS_VACIO = { uso: TODOS, subcategoria: TODOS };
+
+function CarteraDetalladoPeriodo({ periodo, onIrAPeriodo }: Props) {
+  const [filas, setFilas] = useState<CarteraEdadDim[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [valores, setValores] = useState<Record<string, string>>({
-    comuna: TODOS, barrio: TODOS, ciclo: TODOS, uso: TODOS, subcategoria: TODOS,
-  });
+  const pl = usePlegables(PLEGABLES_INICIAL, `cartera.${periodo}.plegables`, PLEGABLES);
+  const [valores, setValores] = useEstadoSesion<Record<string, string>>(`cartera.${periodo}.filtros`, FILTROS_VACIO, normalizarFiltrosCartera);
 
   function cargar() {
     setError(null);
-    setDatos(null);
-    Promise.all([
-      biCache("v_cartera_detalle_dim", { periodo }),
-      biCache("v_cartera_contratos_dim", { periodo }),
-    ])
-      .then(([d, c]) => {
-        setDatos((d.datos ?? []).map(comoCarteraDetalleDim));
-        setContratos((c.datos ?? []).map(comoCarteraContratosDim));
-      })
+    setFilas(null);
+    biCache("v_cartera_edad_dim")
+      .then((r) => setFilas((r.datos ?? []).map(comoCarteraEdadDim)))
       .catch((e: Error) => setError(e.message));
   }
-  useEffect(cargar, [periodo]);
+  useEffect(cargar, []);
 
-  const filtros: DefFiltro[] = useMemo(() => {
-    const d = datos ?? [];
-    const unicos = (f: (x: CarteraDetalleDim) => string) =>
-      [...new Set(d.map(f))].sort((a, b) => a.localeCompare(b, "es"));
-    // El barrio se acota a la comuna elegida: 350 barrios en una lista
-    // plana son inmanejables, y comuna → barrio es jerarquía natural.
-    const barrios = [...new Set(
-      d.filter((x) => valores.comuna === TODOS || x.comuna === valores.comuna).map((x) => x.barrio),
-    )].sort((a, b) => a.localeCompare(b, "es"));
-    return [
-      { id: "comuna", etiqueta: "Comuna", opciones: unicos((x) => x.comuna) },
-      { id: "barrio", etiqueta: "Barrio", opciones: barrios, buscable: true, ayuda: "Se acota a la comuna elegida" },
-      { id: "ciclo", etiqueta: "Ciclo", opciones: unicos((x) => x.ciclo) },
-      { id: "uso", etiqueta: "Uso", opciones: unicos((x) => x.uso) },
+  const filtros: DefFiltro[] = useMemo(
+    () => [
+      { id: "uso", etiqueta: "Uso", opciones: USOS_FILTRO.map((u) => u.nombre) },
       {
         id: "subcategoria",
         etiqueta: "Estrato",
-        visible: (v) => v.uso === "Residencial",
-        opciones: [...new Set(
-          d.filter((x) => x.uso === "Residencial").map((x) => x.subcategoria),
-        )].sort((a, b) => a.localeCompare(b, "es")),
-        ayuda: "Solo aplica a uso Residencial",
+        visible: (v) => v.uso === TODOS || v.uso === "Residencial",
+        opciones: ESTRATOS_FILTRO.map((e) => e.nombre),
+        ayuda: "Solo con uso Todos o Residencial",
       },
-    ];
-  }, [datos, valores.comuna]);
-
-  const filtrado = useMemo(() => {
-    const d = datos ?? [];
-    return d.filter(
-      (x) =>
-        (valores.comuna === TODOS || x.comuna === valores.comuna) &&
-        (valores.barrio === TODOS || x.barrio === valores.barrio) &&
-        (valores.ciclo === TODOS || x.ciclo === valores.ciclo) &&
-        (valores.uso === TODOS || x.uso === valores.uso) &&
-        (valores.subcategoria === TODOS || x.subcategoria === valores.subcategoria),
-    );
-  }, [datos, valores]);
+    ],
+    [],
+  );
+  const cambiarValores = (v: Record<string, string>) => setValores({ uso: v.uso ?? TODOS, subcategoria: v.subcategoria ?? TODOS });
+  const limpiar = () => setValores(FILTROS_VACIO);
 
   if (error) {
     return (
@@ -94,247 +67,50 @@ export function CarteraDetallado({ periodo }: Props) {
       </div>
     );
   }
-  if (!datos) return <div className="dash-estado">Cargando detalle de cartera…</div>;
-  if (datos.length === 0) {
-    return (
-      <SinDatos
-        periodo={periodo}
-        fuente="detalle de cartera (se conservan solo 6 períodos)"
-        disponibles={[]}
-      />
-    );
+  if (!filas) return <div className="dash-estado">Cargando la edad de la cartera…</div>;
+  const disponibles = periodosDe(filas);
+  if (!disponibles.includes(periodo)) {
+    return <SinDatos periodo={periodo} fuente="cartera por edad (detalle de cartera)" disponibles={disponibles} onIr={onIrAPeriodo} />;
   }
 
-  const suma = (campo: keyof CarteraDetalleDim) =>
-    filtrado.reduce((s, x) => s + ((x[campo] as number | null) ?? 0), 0);
-
-  const cartera = suma("cartera");
-  const tHasta60 = suma("t_hasta_60");
-  const t60180 = suma("t_60_180");
-  const t180360 = suma("t_180_360");
-  const tMay360 = suma("t_may_360");
-  const carteraTotalPeriodo = (datos ?? []).reduce((s, x) => s + (x.cartera ?? 0), 0);
-
-  // Contratos con deuda del corte: cartera_contrato no tiene barrio, así
-  // que solo se cruza por las dimensiones que ambas comparten.
-  const contratosCorte = contratos.filter(
-    (c) =>
-      (valores.ciclo === TODOS || c.ciclo === valores.ciclo) &&
-      (valores.uso === TODOS || c.uso === valores.uso) &&
-      (valores.subcategoria === TODOS || c.estrato === valores.subcategoria),
-  );
-  const conDeuda = contratosCorte.reduce((s, c) => s + (c.contratos_con_deuda ?? 0), 0);
-  const filtraBarrio = valores.barrio !== TODOS || valores.comuna !== TODOS;
-
-  // La financiada por barrio: cartera total menos los tramos de edad.
-  const noFinanciada = tHasta60 + t60180 + t180360 + tMay360;
-  const financiada = cartera - noFinanciada;
-  const carteraInferida = filtrado
-    .filter((x) => x.comuna_origen === "catastro")
-    .reduce((s, x) => s + (x.cartera ?? 0), 0);
-  const pctInferida = cartera ? (carteraInferida / cartera) * 100 : 0;
-
-  const donaTramos = [
-    { etiqueta: "Hasta 60 días", valor: tHasta60 },
-    { etiqueta: "60 a 180 días", valor: t60180 },
-    { etiqueta: "180 a 360 días", valor: t180360 },
-    { etiqueta: "Más de 360 días", valor: tMay360 },
-  ].map((t) => ({
-    ...t,
-    color: COLOR_TRAMO[t.etiqueta],
-    pct: noFinanciada ? (t.valor / noFinanciada) * 100 : null,
-  }));
-
-  const agrupar = (clave: (x: CarteraDetalleDim) => string) => {
-    const m = new Map<string, number>();
-    for (const x of filtrado) m.set(clave(x), (m.get(clave(x)) ?? 0) + (x.cartera ?? 0));
-    return [...m.entries()].map(([etiqueta, valor]) => ({ etiqueta, valor }));
-  };
-
-  const porBarrio = agrupar((x) => x.barrio).sort((a, b) => b.valor - a.valor);
-  const porComuna = agrupar((x) => x.comuna).sort((a, b) => b.valor - a.valor);
-  const porCiclo = agrupar((x) => x.ciclo).sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, "es"));
-
-  // Barrios con mayor peso de cartera vieja: el foco real de cobranza.
-  const criticos = [...filtrado.reduce((m, x) => {
-    const a = m.get(x.barrio) ?? { cartera: 0, vieja: 0 };
-    a.cartera += x.cartera ?? 0;
-    a.vieja += x.t_may_360 ?? 0;
-    m.set(x.barrio, a);
-    return m;
-  }, new Map<string, { cartera: number; vieja: number }>()).entries()]
-    .filter(([, a]) => a.cartera > 0)
-    .map(([barrio, a]) => ({ barrio, ...a, pct: (a.vieja / a.cartera) * 100 }))
-    .sort((a, b) => b.vieja - a.vieja)
-    .slice(0, TOP_BARRIOS);
+  const marca = <MarcaFiltro valores={valores} />;
+  const uso = valores.uso ?? TODOS;
+  const estrato = valores.subcategoria ?? TODOS;
 
   return (
     <div className="dash-con-panel">
-      <PanelFiltros
-        filtros={filtros}
-        valores={valores}
-        onCambio={setValores}
-        resumen={`${fmtMillones(cartera)} · ${porBarrio.length} barrio(s)`}
-      />
-
+      <PanelFiltros filtros={filtros} valores={valores} onCambio={cambiarValores} />
       <div className="dash-con-panel-cuerpo">
-        <div className="dash-aviso">
-          La <b>cartera del corte</b> es el total, con la deuda financiada
-          incluida; los <b>tramos de antigüedad</b> cubren solo la parte no
-          financiada, porque los acuerdos de pago no tienen edad asignada. La
-          diferencia entre ambos es justamente la cartera financiada, que aquí
-          puede verse por barrio.
-          {pctInferida > 0 && (
-            <>
-              {" "}Además, <b>{fmtPct(pctInferida)} de esta cartera
-              ({fmtMillones(carteraInferida)})</b> se muestra con la comuna
-              <b> completada desde el catastro</b>: en el sistema comercial esos
-              predios —los de la comuna 2— no tienen comuna asignada. Es un dato
-              correcto pero derivado; conviene advertirlo si se usa en un informe
-              oficial.
-            </>
-          )}
-        </div>
+        <h2 className="dash-zona">Panorama de la cartera</h2>
+        <PanoramaEdad filas={filas} periodo={periodo} uso={uso} estrato={estrato} onLimpiar={limpiar} />
 
-        <div className="dash-kpis">
-          <div className="dash-carta dash-kpi">
-            <div className="dash-eti">Cartera del corte</div>
-            <div className="dash-valor num">{fmtMillones(cartera)}</div>
-            <div className="dash-sub2">
-              {cartera < carteraTotalPeriodo
-                ? `${fmtPct((cartera / carteraTotalPeriodo) * 100)} de la cartera no financiada`
-                : "sin filtros aplicados"}
-            </div>
-          </div>
-          <div className="dash-carta dash-kpi dash-kpi-mal">
-            <div className="dash-eti">Más de 360 días</div>
-            <div className="dash-valor num">{fmtMillones(tMay360)}</div>
-            <div className="dash-sub2">
-              {fmtPct(cartera ? (tMay360 / cartera) * 100 : null)} del corte · difícil recaudo
-            </div>
-          </div>
-          <div className="dash-carta dash-kpi">
-            <div className="dash-eti">Barrios en el corte</div>
-            <div className="dash-valor num">{fmtEntero(porBarrio.length)}</div>
-            <div className="dash-sub2">de {porComuna.length} comuna(s)</div>
-          </div>
-          <div className="dash-carta dash-kpi">
-            <div className="dash-eti">Contratos con deuda</div>
-            <div className="dash-valor num">{filtraBarrio ? "—" : fmtEntero(conDeuda)}</div>
-            <div className="dash-sub2">
-              {filtraBarrio
-                ? "no disponible al filtrar por territorio"
-                : "según el detalle por contrato"}
-            </div>
-          </div>
-          <div className="dash-carta dash-kpi">
-            <div className="dash-eti">Cartera financiada</div>
-            <div className="dash-valor num">{fmtMillones(financiada)}</div>
-            <div className="dash-sub2">
-              {fmtPct(cartera ? (financiada / cartera) * 100 : null)} del corte ·
-              acuerdos de pago, sin edad asignada
-            </div>
-          </div>
-        </div>
+        <h2 className="dash-zona">Edad de la cartera</h2>
+        <Plegable id="cd-antig" titulo="Antigüedad (vejez): etiquetas de edad y evolución" marca={marca} abierto={!!pl.abiertos["cd-antig"]} onCambio={(o) => pl.cambiar("cd-antig", o)}>
+          <AntiguedadEdad filas={filas} periodo={periodo} uso={uso} estrato={estrato} />
+        </Plegable>
+        <Plegable id="cd-uso" diferido titulo="Por uso y estrato" marca={marca} abierto={!!pl.abiertos["cd-uso"]} onCambio={(o) => pl.cambiar("cd-uso", o)}>
+          <UsoEstratoEdad filas={filas} periodo={periodo} uso={uso} estrato={estrato} />
+        </Plegable>
 
-        <div className="dash-fila-g3">
-          <div className="dash-carta">
-            <h3>Barrios con mayor cartera — {etiquetaPeriodo(periodo)}</h3>
-            <BarrasHorizontales
-              datos={porBarrio.slice(0, TOP_BARRIOS)}
-              formatoValor={fmtMillones}
-            />
-            <TablaPlegable titulo={`Datos: cartera por barrio (${porBarrio.length})`}>
-              <table className="dash-tabla num">
-                <thead><tr><th>Barrio</th><th>Cartera</th><th>%</th></tr></thead>
-                <tbody>
-                  {porBarrio.map((b) => (
-                    <tr key={b.etiqueta}>
-                      <td>{b.etiqueta}</td>
-                      <td className="num">{fmtMillones(b.valor)}</td>
-                      <td className="num">{fmtPct(cartera ? (b.valor / cartera) * 100 : null)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TablaPlegable>
-            <div className="dash-nota">
-              La gráfica muestra los {TOP_BARRIOS} de mayor cartera; la tabla
-              trae los {porBarrio.length} del corte completo.
-            </div>
+        <h2 className="dash-zona">Ciclo y barrio</h2>
+        <Plegable id="cd-ciclo" diferido titulo="Por ciclo y barrio (barrios, antigüedad no financiada, foco de cobranza y ciclo)" marca={marca} abierto={!!pl.abiertos["cd-ciclo"]} onCambio={(o) => pl.cambiar("cd-ciclo", o)}>
+          <div className="dash-aviso">
+            Esta zona usa los tramos de la tabla de ciclo y barrio, que lee las etiquetas como <b>límite inferior</b> (su «Más de 360 días» incluye
+            la etiqueta 360). Las zonas de edad de arriba usan la lectura provisional de límites superiores, por eso las cifras de «Más de 360 días»
+            difieren (en septiembre de 2026: $ 95.698 M frente a $ 94.625 M). El total y la cartera financiada son los mismos.
           </div>
+          <CarteraCicloBarrio
+            periodo={periodo}
+            uso={uso}
+            subcategoria={estrato}
+            onCambioCompartidos={(u, s) => setValores({ uso: u, subcategoria: s })}
+          />
+        </Plegable>
 
-          <div className="dash-carta">
-            <h3>Antigüedad de la cartera no financiada</h3>
-            <Dona partes={donaTramos} formatoTitulo={fmtMillones} />
-            <TablaPlegable titulo="Datos: antigüedad">
-              <table className="dash-tabla num">
-                <thead><tr><th>Tramo</th><th>Cartera</th><th>%</th></tr></thead>
-                <tbody>
-                  {donaTramos.map((t) => (
-                    <tr key={t.etiqueta}>
-                      <td>{t.etiqueta}</td>
-                      <td className="num">{fmtMillones(t.valor)}</td>
-                      <td className="num">{fmtPct(t.pct)}</td>
-                    </tr>
-                  ))}
-                  <tr className="dash-total">
-                    <td>Total no financiada</td>
-                    <td className="num">{fmtMillones(noFinanciada)}</td>
-                    <td className="num">100,0 %</td>
-                  </tr>
-                </tbody>
-              </table>
-            </TablaPlegable>
-          </div>
-        </div>
-
-        <div className="dash-fila-g2">
-          <div className="dash-carta">
-            <h3>Foco de cobranza: barrios con más deuda vieja</h3>
-            <div className="dash-tabla-scroll">
-              <table className="dash-tabla num">
-                <thead>
-                  <tr><th>Barrio</th><th>&gt; 360 días</th><th>Cartera total</th><th>% vieja</th></tr>
-                </thead>
-                <tbody>
-                  {criticos.map((c) => (
-                    <tr key={c.barrio}>
-                      <td>{c.barrio}</td>
-                      <td className="num">{fmtMillones(c.vieja)}</td>
-                      <td className="num">{fmtMillones(c.cartera)}</td>
-                      <td className={`num ${c.pct > 85 ? "dash-neg" : ""}`}>{fmtPct(c.pct)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="dash-nota">
-              Ordenado por monto de deuda mayor a 360 días, no por porcentaje: un
-              barrio pequeño con 100 % de deuda vieja pesa menos que uno grande
-              con 80 %. El porcentaje se resalta por encima del 85 %.
-            </div>
-          </div>
-
-          <div className="dash-carta">
-            <h3>Cartera por ciclo</h3>
-            <BarrasHorizontales datos={porCiclo} formatoValor={fmtMillones} color="#0E7C86" />
-            <TablaPlegable titulo="Datos: cartera por ciclo">
-              <table className="dash-tabla num">
-                <thead><tr><th>Ciclo</th><th>Cartera</th><th>%</th></tr></thead>
-                <tbody>
-                  {porCiclo.map((c) => (
-                    <tr key={c.etiqueta}>
-                      <td>{c.etiqueta}</td>
-                      <td className="num">{fmtMillones(c.valor)}</td>
-                      <td className="num">{fmtPct(cartera ? (c.valor / cartera) * 100 : null)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TablaPlegable>
-          </div>
-        </div>
+        <h2 className="dash-zona">Metodología</h2>
+        <Plegable id="cd-metod" diferido titulo="Metodología y sustento" abierto={!!pl.abiertos["cd-metod"]} onCambio={(o) => pl.cambiar("cd-metod", o)}>
+          <MetodologiaEdad />
+        </Plegable>
       </div>
     </div>
   );
