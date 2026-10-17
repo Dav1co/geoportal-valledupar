@@ -46,6 +46,9 @@ create table bi.v_cartera_edad_dim (
   primary key (periodo, uso, estrato, servicio, etiqueta)
 );
 revoke all on bi.v_cartera_edad_dim from public, anon, authenticated;
+-- Sin seguridad por filas, como sus hermanas (v_cartera_detalle_dim, v_recaudo_edad_dim): el entorno la activo al crear la tabla (sin politicas) y
+-- claude_ro veia 0 filas (la RPC SECURITY DEFINER, que corre como propietario, si las veia). Toda dimension nueva debe llevar esta linea desde el principio.
+alter table bi.v_cartera_edad_dim disable row level security;
 
 create or replace function bi.recalcular_cartera_edad(p_periodo text)
 returns integer language plpgsql as $$
@@ -250,6 +253,7 @@ end $function$;
 --      de cartera_contrato (los valores se verifican al aplicar; no se versionan aqui).
 --   e) ACL igual a la de v_cartera_detalle_dim.
 
+-- (09_quitar_rls_dimension.sql, ya aplicado, es esta misma linea.)
 -- ROLLBACK (solo si ninguna pantalla lo usa todavia; los scripts estan en el scratchpad, no en el repo):
 --   RPC:         ROLLBACK_geoportal_bi_consulta_59ramas.sql (create or replace conserva el ACL), tras quitar la vista de la Edge (v25).
 --   Despachador: ROLLBACK_recalcular_antes_cartera_edad.sql.
