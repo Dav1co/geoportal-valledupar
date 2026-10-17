@@ -46,7 +46,7 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
   const pl = usePlegables({});
   // Filtros de los dos paneles (cada panel sigue dentro de su plegable). El de Lectura también gobierna los cambios de medidor.
   const [vLectura, setVLectura] = useState<Record<string, string>>({ ciclo: TODOS, uso: TODOS, subcategoria: TODOS });
-  const [vSubm, setVSubm] = useState<Record<string, string>>({ ciclo: TODOS, subcategoria: TODOS });
+  const [vSubm, setVSubm] = useState<Record<string, string>>({ subcategoria: TODOS });
 
   function cargar() {
     setError(null);

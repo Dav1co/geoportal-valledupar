@@ -252,15 +252,15 @@ export function SubmedicionVejez({ periodo, valores, onCambioValores }: Props) {
 
   const filas = ref.datos ?? [];
   const periodos = useMemo(() => [...new Set(filas.map((x) => x.periodo))].sort(), [filas]);
+  // Solo el estrato: el ciclo no aplica a Submedición (la fuente por estrato y banda no trae ciclo).
   const filtros = useMemo(
     () => filtrosCicloUsoEstrato(
-      (cic.datos ?? []).map((x) => x.ciclo),
+      [],
       [...new Set(filas.map((x) => x.estrato))].map((e) => ({ uso: "Residencial", subcategoria: e })),
-    ).filter((f) => f.id !== "uso").map((f) => (f.id === "subcategoria" ? { ...f, visible: undefined } : f)),
-    [cic.datos, filas],
+    ).filter((f) => f.id === "subcategoria").map((f) => ({ ...f, visible: undefined })),
+    [filas],
   );
   const estr = valores.subcategoria;
-  const nCiclo = valores.ciclo === TODOS ? null : numeroCiclo(valores.ciclo);
   const filtraEstr = (e: string) => estr === TODOS || e === estr;
 
   // Estrato × banda del período (ignora el ciclo: la tabla no lo trae)
@@ -393,9 +393,7 @@ export function SubmedicionVejez({ periodo, valores, onCambioValores }: Props) {
       <div className="dash-con-panel-cuerpo">
         <div className="dash-fila"><div className="dash-carta">
           {encabezado}
-          {nCiclo != null ? (
-            <div className="dash-nota">El filtro de ciclo solo afecta al Pareto por ciclo y al mapa de calor; las demás piezas (por estrato y banda) no traen ciclo.</div>
-          ) : null}
+          <div className="dash-nota">El ciclo no aplica a Submedición: la fuente por estrato y banda no trae ciclo. El filtro de ciclo solo filtra el detalle de lectura y los cambios de medidor. Aquí solo se filtra por estrato.</div>
           <div className="dash-nota">Períodos con datos: {periodosTxt}. 202606 no existe en la fuente.</div>
         </div></div>
 
