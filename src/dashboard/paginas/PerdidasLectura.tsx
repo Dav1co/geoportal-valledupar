@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { biCache } from "../cacheBi";
 import { comoConsumoCicloDim, comoDesviacionDim, type ConsumoCicloDim, type DesviacionDim } from "../tipos";
-import { PanelFiltros } from "../PanelFiltros";
+import { PanelFiltros, TODOS } from "../PanelFiltros";
 import { filtrosCicloUsoEstrato } from "../lecturaComun";
 import { ConsumoRangosSeccion } from "./ConsumoRangosBasico";
 import { MedidoresAntiguedad, ObservacionesLectura } from "./ContratosLectura";
@@ -38,19 +38,31 @@ export function PerdidasLectura({ periodo, valores, onCambioValores }: { periodo
   }
   useEffect(() => { cargarConsumo(); cargarDesv(); }, [periodo]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Opciones de ciclo, uso y estrato: las de consumo por ciclo (trae el ciclo 24 y todos los usos).
+  // Opciones de ciclo, uso y estrato: las de consumo por ciclo (trae el ciclo 24 y todos los usos). En Pérdidas el estrato se ofrece
+  // con uso «Todos» o «Residencial» (con «Todos» solo coinciden las filas residenciales, que son las que traen estrato).
   const filtros = useMemo(
     () => filtrosCicloUsoEstrato(
       (consumo ?? []).map((x) => x.ciclo),
       (consumo ?? []).map((x) => ({ uso: x.categoria, subcategoria: x.subcategoria })),
-    ),
+    ).map((f) => (f.id === "subcategoria"
+      ? { ...f, visible: (v: Record<string, string>) => v.uso === TODOS || v.uso === "Residencial", ayuda: "El estrato solo aplica a uso Residencial." }
+      : f)),
     [consumo],
   );
 
+  // Si el uso pasa a uno no residencial, el panel limpia el estrato; aquí se explica por qué.
+  const [aviso, setAviso] = useState("");
+  function cambiarValores(nuevos: Record<string, string>) {
+    const limpiado = valores.subcategoria !== TODOS && nuevos.subcategoria === TODOS && nuevos.uso !== TODOS && nuevos.uso !== "Residencial";
+    setAviso(limpiado ? `Se limpió el estrato (${valores.subcategoria}) porque solo aplica a uso Residencial.` : "");
+    onCambioValores(nuevos);
+  }
+
   return (
     <div className="dash-con-panel">
-      <PanelFiltros filtros={filtros} valores={valores} onCambio={onCambioValores} />
+      <PanelFiltros filtros={filtros} valores={valores} onCambio={cambiarValores} />
       <div className="dash-con-panel-cuerpo">
+        {aviso ? <div className="dash-aviso">{aviso}</div> : null}
         <ConsumoRangosSeccion periodo={periodo} valores={valores} />
         <MedidoresAntiguedad periodo={periodo} valores={valores} />
         <ObservacionesLectura periodo={periodo} valores={valores} />
