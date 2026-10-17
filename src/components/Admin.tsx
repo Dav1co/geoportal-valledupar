@@ -421,7 +421,9 @@ export function Admin({ onVolver }: Props) {
                       <span className="adm-nota">Sin restricción</span>
                     ) : (
                       <span className="adm-acceso">
-                        {u.horario === "extendido" ? "7:00–22:00" : "7:50–18:00"}
+                        {u.horario === "sin_restriccion"
+                          ? "Sin restricción horaria"
+                          : u.horario === "extendido" ? "7:00–22:00" : "7:50–18:00"}
                         <br />
                         {u.dias === "todos" ? "Todos los días" : "Lunes a viernes"}
                       </span>
@@ -499,6 +501,7 @@ export function Admin({ onVolver }: Props) {
               >
                 <option value="laboral">Laboral</option>
                 <option value="extendido">Extendido</option>
+                <option value="sin_restriccion">Sin restricción horaria</option>
               </select>
             </div>
             <div>
