@@ -3,6 +3,7 @@ import { biCache, limpiarCacheBi } from "./cacheBi";
 import { comoKpiAnio, comoKpiMes, type KpiAnio, type KpiMes } from "./tipos";
 import { etiquetaPeriodo } from "./formato";
 import { SelectorPeriodo } from "./SelectorPeriodo";
+import { BarraPestanas } from "./BarraPestanas";
 import { Resumen } from "./paginas/Resumen";
 import { ROTULO } from "./rotulos";
 import { FacturacionAgrupado } from "./paginas/FacturacionAgrupado";
@@ -170,17 +171,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <nav className="dash-nav">
-        {PAGINAS.map((p) => (
-          <button
-            key={p.id}
-            className={pagina === p.id ? "activa" : ""}
-            onClick={() => cambiarPagina(p.id)}
-          >
-            {p.titulo}
-          </button>
-        ))}
-      </nav>
+      <BarraPestanas paginas={PAGINAS} activa={pagina} onCambio={cambiarPagina} />
 
       {error && (
         <div className="dash-estado">
