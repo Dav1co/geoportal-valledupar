@@ -18,6 +18,7 @@ import {
   numeroCiclo,
 } from "../formato";
 import { BarrasHorizontales, LineasPorcentaje, TablaPlegable } from "../graficas";
+import { irCuandoExista } from "../Plegable";
 import { PanelFiltros, TODOS } from "../PanelFiltros";
 import { filtrosCicloUsoEstrato } from "../lecturaComun";
 
@@ -27,6 +28,7 @@ import { filtrosCicloUsoEstrato } from "../lecturaComun";
 // La pérdida atribuible = suma, sobre los contratos de vejez, de (referencia − consumo). La bruta es un techo teórico.
 
 const MIN_CELDA = 5;
+const FUENTE_REF = "bi.v_submedicion_ref_dim (hechos.consumo_metodo; tarifa de hechos.facturacion_contratos)";
 const BANDAS = ["0-3", "3-5", "5-10", "10-15", ">15 (fecha real)", ">15 (1986-01-01)", "Sin fecha"];
 const VEJEZ = ["3-5", "5-10", "10-15", ">15 (fecha real)", ">15 (1986-01-01)"];
 const CINCO_MAS = ["5-10", "10-15", ">15 (fecha real)", ">15 (1986-01-01)"];
@@ -154,8 +156,8 @@ function leerNumero(t: string): number | null {
 
 // Ficha «Qué parte del IPUF explica la submedición»: aporte = m3 atribuibles (3 años o más) ÷ suscriptores del período.
 type SerieIpuf = { p: string; a3: number };
-function IpufExplicacion({ periodo, serie, ipufSerie, filtraEstrato, filtraCiclo, calculado, fuente }: {
-  periodo: string; serie: SerieIpuf[]; ipufSerie: Ipuf[]; filtraEstrato: boolean; filtraCiclo: boolean; calculado: string; fuente: string;
+function IpufExplicacion({ periodo, serie, ipufSerie, calculado, fuente }: {
+  periodo: string; serie: SerieIpuf[]; ipufSerie: Ipuf[]; calculado: string; fuente: string;
 }) {
   const filas = serie.map((s) => {
     const i = ipufSerie.find((x) => x.periodo === s.p);
@@ -170,7 +172,7 @@ function IpufExplicacion({ periodo, serie, ipufSerie, filtraEstrato, filtraCiclo
   const h = filas.find((f) => f.p === periodo);
   const titulo = "Qué parte del IPUF explica la submedición";
   if (!h || h.aporte == null || h.ip == null) {
-    return <Sub titulo={titulo}><div className="dash-nota">Este período no tiene IPUF mensual o suscriptores en la fuente de pérdidas, así que no se calcula la ficha.</div></Sub>;
+    return <Sub titulo={titulo}><div className="dash-sin-filtro">No depende de filtros.</div><div className="dash-nota">Este período no tiene IPUF mensual o suscriptores en la fuente de pérdidas, así que no se calcula la ficha.</div></Sub>;
   }
   const resto = Math.max(h.ip - h.aporte, 0);
   const escala = Math.max(h.ip, h.meta ?? 0) * 1.04;
@@ -179,8 +181,7 @@ function IpufExplicacion({ periodo, serie, ipufSerie, filtraEstrato, filtraCiclo
       : "El IPUF del período no supera la meta, así que no hay reducción pendiente.") : "";
   return (
     <Sub titulo={titulo}>
-      {filtraCiclo ? <div className="dash-nota">Con filtro de ciclo se usa el total sin ciclo: esta ficha no se desagrega por ciclo.</div> : null}
-      {filtraEstrato ? <div className="dash-nota">Con filtro de estrato solo se cuentan los m³ de ese estrato; el IPUF y los suscriptores son del total.</div> : null}
+      <div className="dash-sin-filtro">No depende de filtros.</div>
       <div className="dash-kpis">
         <Kpi eti="Submedición estimada" valor={`${fmtDecimal(h.aporte, 2)} m³/susc·mes`} sub={`${fmtEntero(h.m3)} m³ ÷ ${fmtEntero(h.susc ?? 0)} suscriptores`} />
         <Kpi eti="% del IPUF" valor={pct1(h.pctIpuf)} sub={`IPUF del mes: ${fmtDecimal(h.ip, 2)}`} />
@@ -226,9 +227,9 @@ function IpufExplicacion({ periodo, serie, ipufSerie, filtraEstrato, filtraCiclo
   );
 }
 
-type Props = { periodo: string; ipufSerie: Ipuf[] };
+type Props = { periodo: string };
 
-export function SubmedicionVejez({ periodo, ipufSerie }: Props) {
+export function SubmedicionVejez({ periodo }: Props) {
   const ref = useVista("v_submedicion_ref_dim", comoSubmedicionRefDim);
   const cic = useVista("v_submedicion_ciclo_dim", comoSubmedicionCicloDim);
   const [verRangos, setVerRangos] = useState(false);
@@ -240,7 +241,7 @@ export function SubmedicionVejez({ periodo, ipufSerie }: Props) {
   }
   function abrir(id: string) {
     cambiar(id, true);
-    window.setTimeout(() => document.getElementById(`subm-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    irCuandoExista(`subm-${id}`);
   }
   const rng = useVista("v_submedicion_rango_dim", comoSubmedicionRangoDim, verRangos);
   const [valores, setValores] = useState<Record<string, string>>({ ciclo: TODOS, subcategoria: TODOS });
@@ -307,7 +308,7 @@ export function SubmedicionVejez({ periodo, ipufSerie }: Props) {
   }
 
   const calculado = fechaCalculo(delPer);
-  const fuenteRef = "bi.v_submedicion_ref_dim (hechos.consumo_metodo; tarifa de hechos.facturacion_contratos)";
+  const fuenteRef = FUENTE_REF;
   const a3 = sumaNeta(bandas, VEJEZ), a5 = sumaNeta(bandas, CINCO_MAS), a10 = sumaNeta(bandas, DIEZ_MAS);
   const c3 = sumaContratos(bandas, VEJEZ), c5 = sumaContratos(bandas, CINCO_MAS), c10 = sumaContratos(bandas, DIEZ_MAS);
   const universo = [...bandas.values()].reduce((s, b) => s + b.contratos, 0);
@@ -419,8 +420,7 @@ export function SubmedicionVejez({ periodo, ipufSerie }: Props) {
           {tarifa != null ? <div className="dash-nota">Tarifa del período: $ {fmtDecimal(tarifa, 2)} por m³. Las fichas usan el filtro de estrato y no el de ciclo.</div> : null}
           <Pie fuente={fuenteRef} periodo={etiquetaPeriodo(periodo)} calculado={calculado}
             formula="Atribuible = Σ (referencia − consumo) sobre los contratos de 3 años o más = bruta − exceso de esas bandas. Pesos = m³ × tarifa. Adicionales = Σ por estrato y banda de (contratos bajo la referencia − contratos × proporción bajo la referencia de la banda 0-3)." />
-          <IpufExplicacion periodo={periodo} serie={serie} ipufSerie={ipufSerie} filtraEstrato={estr !== TODOS} filtraCiclo={nCiclo != null}
-            calculado={calculado} fuente={fuenteRef} />
+
         </>
         </Parte>
         <Parte id="vejez" titulo="Distribución por vejez" abierta={!!abiertas.vejez} onCambio={(o) => cambiar("vejez", o)}>
@@ -731,5 +731,23 @@ export function SubmedicionVejez({ periodo, ipufSerie }: Props) {
         </Parte>
       </div>
     </div>
+  );
+}
+
+// Explicación «Qué parte del IPUF explica la submedición» y su tabla por período, FUERA del plegable de Submedición: se calcula con
+// la serie de TODOS los estratos (no depende de filtros), con los mismos datos de v_submedicion_ref_dim que ya carga la sección.
+export function SubmedicionExplicacion({ periodo, ipufSerie }: { periodo: string; ipufSerie: Ipuf[] }) {
+  const ref = useVista("v_submedicion_ref_dim", comoSubmedicionRefDim);
+  const filas = ref.datos ?? [];
+  const serie = useMemo(
+    () => [...new Set(filas.map((x) => x.periodo))].sort().map((p) => ({ p, a3: sumaNeta(porBanda(filas.filter((x) => x.periodo === p)), VEJEZ) })),
+    [filas],
+  );
+  if (ref.error || !ref.datos) return <Reintento titulo="Qué parte del IPUF explica la submedición" e={ref} />;
+  return (
+    <div className="dash-fila"><div className="dash-carta">
+      <IpufExplicacion periodo={periodo} serie={serie} ipufSerie={ipufSerie}
+        calculado={fechaCalculo(filas.filter((x) => x.periodo === periodo))} fuente={FUENTE_REF} />
+    </div></div>
   );
 }

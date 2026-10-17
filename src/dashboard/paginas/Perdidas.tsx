@@ -15,7 +15,7 @@ import { excesoSobreMeta, resumenAnual } from "../ipufAnual";
 import { IndicesAnualesSeccion, IpufAnualBloque } from "./PerdidasAnual";
 import { IndicadoresLectura } from "./IndicadoresLectura";
 import { PerdidasLectura } from "./PerdidasLectura";
-import { SubmedicionVejez } from "./SubmedicionVejez";
+import { SubmedicionExplicacion, SubmedicionVejez } from "./SubmedicionVejez";
 import { ReclamosMetodoPerdidas } from "./ReclamosMetodoPerdidas";
 import { MapaCalor } from "./MapaCalor";
 import { Plegable, usePlegables } from "../Plegable";
@@ -321,9 +321,16 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
       <IndicesAnualesSeccion anual={anual} />
       </Plegable>
 
+      <h2 className="dash-zona">Lectura y submedición</h2>
       <IndicadoresLectura periodo={periodo} />
-      <PerdidasLectura periodo={periodo} />
-      <SubmedicionVejez periodo={periodo} ipufSerie={filas} />
+      <SubmedicionExplicacion periodo={periodo} ipufSerie={filas} />
+
+      <Plegable id="pl-lectura" titulo="Detalle de lectura y medición" abierto={!!pl.abiertos["pl-lectura"]} onCambio={(o) => pl.cambiar("pl-lectura", o)}>
+        <PerdidasLectura periodo={periodo} />
+      </Plegable>
+      <Plegable id="pl-subm" titulo="Submedición por vejez (análisis completo)" abierto={!!pl.abiertos["pl-subm"]} onCambio={(o) => pl.cambiar("pl-subm", o)}>
+        <SubmedicionVejez periodo={periodo} />
+      </Plegable>
 
       <ReclamosMetodoPerdidas onIrAPqr={onIrAPqr} />
 
