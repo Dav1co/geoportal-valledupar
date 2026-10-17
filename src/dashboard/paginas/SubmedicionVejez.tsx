@@ -227,9 +227,9 @@ function IpufExplicacion({ periodo, serie, ipufSerie, calculado, fuente }: {
   );
 }
 
-type Props = { periodo: string };
+type Props = { periodo: string; valores: Record<string, string>; onCambioValores: (v: Record<string, string>) => void };
 
-export function SubmedicionVejez({ periodo }: Props) {
+export function SubmedicionVejez({ periodo, valores, onCambioValores }: Props) {
   const ref = useVista("v_submedicion_ref_dim", comoSubmedicionRefDim);
   const cic = useVista("v_submedicion_ciclo_dim", comoSubmedicionCicloDim);
   const [verRangos, setVerRangos] = useState(false);
@@ -244,7 +244,6 @@ export function SubmedicionVejez({ periodo }: Props) {
     irCuandoExista(`subm-${id}`);
   }
   const rng = useVista("v_submedicion_rango_dim", comoSubmedicionRangoDim, verRangos);
-  const [valores, setValores] = useState<Record<string, string>>({ ciclo: TODOS, subcategoria: TODOS });
   const [modoMapa, setModoMapa] = useState<"pct" | "bruta">("pct");
   // Calculadora: estado SOLO en memoria (no se guarda ni se envía a ningún servidor; se borra al recargar).
   const [valorMedidor, setValorMedidor] = useState("");
@@ -390,7 +389,7 @@ export function SubmedicionVejez({ periodo }: Props) {
 
   return (
     <div className="dash-con-panel">
-      <PanelFiltros filtros={filtros} valores={valores} onCambio={setValores} />
+      <PanelFiltros filtros={filtros} valores={valores} onCambio={onCambioValores} />
       <div className="dash-con-panel-cuerpo">
         <div className="dash-fila"><div className="dash-carta">
           {encabezado}

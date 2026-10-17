@@ -94,9 +94,10 @@ function agrupar(filas: CambioMedidorDim[], clave: (x: CambioMedidorDim) => stri
   return hayOtros ? [...grandes, [OTROS, otros] as [string, Acum]] : grandes;
 }
 
-type Props = { periodo: string; valores: Record<string, string> };
+// parte: «consumo» = solo «Consumo antes y después del cambio»; «resto» = el resto del bloque; «todo» = todo (valor por defecto).
+type Props = { periodo: string; valores: Record<string, string>; parte?: "todo" | "consumo" | "resto" };
 
-export function CambiosMedidor({ periodo, valores }: Props) {
+export function CambiosMedidor({ periodo, valores, parte = "todo" }: Props) {
   const [filas, setFilas] = useState<CambioMedidorDim[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
@@ -296,6 +297,7 @@ export function CambiosMedidor({ periodo, valores }: Props) {
 
   return (
     <>
+      {parte !== "consumo" && (<>
       {/* 1) Fichas */}
       <div className="dash-fila"><div className="dash-carta">
         {encabezado}
@@ -417,6 +419,10 @@ export function CambiosMedidor({ periodo, valores }: Props) {
         </div>
       </div></div>
 
+      </>)}
+
+      {parte !== "resto" && (
+      <>
       {/* 7) Consumo antes y después */}
       <div className="dash-fila"><div className="dash-carta">
         <h3>Consumo antes y después del cambio — {etiquetaPeriodo(periodo)}</h3>
@@ -429,6 +435,8 @@ export function CambiosMedidor({ periodo, valores }: Props) {
         </div>
         <details><summary>ⓘ Cómo se calcula</summary><div className="dash-nota">{TEXTO.comparables} Promedio antes y después = m³ del período anterior y del actual ÷ contratos comparables. Diferencia = promedio después − promedio antes; efecto neto = diferencia de las reposiciones confirmadas − diferencia del control (sin cambio de serial).</div></details>
       </div></div>
+      </>
+      )}
     </>
   );
 }

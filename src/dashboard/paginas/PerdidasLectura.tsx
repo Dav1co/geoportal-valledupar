@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { biCache } from "../cacheBi";
 import { comoConsumoCicloDim, comoDesviacionDim, type ConsumoCicloDim, type DesviacionDim } from "../tipos";
-import { PanelFiltros, TODOS } from "../PanelFiltros";
+import { PanelFiltros } from "../PanelFiltros";
 import { filtrosCicloUsoEstrato } from "../lecturaComun";
 import { ConsumoRangosSeccion } from "./ConsumoRangosBasico";
 import { MedidoresAntiguedad, ObservacionesLectura } from "./ContratosLectura";
 import { CeroSostenido } from "./CeroSostenido";
 import { ContratosCicloMedicion } from "./ContratosCicloMedicion";
-import { CambiosMedidor } from "./CambiosMedidor";
 
 // Secciones de lectura, medición y consumo de la pantalla de Pérdidas, debajo de «Lectura y medición».
 // Orden: contratos y volumen por rango; medidores por antigüedad (con el promedio de consumo);
@@ -17,12 +16,11 @@ import { CambiosMedidor } from "./CambiosMedidor";
 // desagregada: no afecta a las gráficas del IPUF de arriba. Medidores por antigüedad no usa ciclo.
 // v_consumo_ciclo_dim y v_desviacion_dim se cargan aquí, cada una con su error y su reintento.
 
-export function PerdidasLectura({ periodo }: { periodo: string }) {
+export function PerdidasLectura({ periodo, valores, onCambioValores }: { periodo: string; valores: Record<string, string>; onCambioValores: (v: Record<string, string>) => void }) {
   const [consumo, setConsumo] = useState<ConsumoCicloDim[] | null>(null);
   const [errorConsumo, setErrorConsumo] = useState<string | null>(null);
   const [desv, setDesv] = useState<DesviacionDim[] | null>(null);
   const [errorDesv, setErrorDesv] = useState<string | null>(null);
-  const [valores, setValores] = useState<Record<string, string>>({ ciclo: TODOS, uso: TODOS, subcategoria: TODOS });
 
   function cargarConsumo() {
     setErrorConsumo(null);
@@ -51,7 +49,7 @@ export function PerdidasLectura({ periodo }: { periodo: string }) {
 
   return (
     <div className="dash-con-panel">
-      <PanelFiltros filtros={filtros} valores={valores} onCambio={setValores} />
+      <PanelFiltros filtros={filtros} valores={valores} onCambio={onCambioValores} />
       <div className="dash-con-panel-cuerpo">
         <ConsumoRangosSeccion periodo={periodo} valores={valores} />
         <MedidoresAntiguedad periodo={periodo} valores={valores} />
@@ -64,7 +62,6 @@ export function PerdidasLectura({ periodo }: { periodo: string }) {
           onReintentar={cargarConsumo}
           valores={valores}
         />
-        <CambiosMedidor periodo={periodo} valores={valores} />
       </div>
     </div>
   );

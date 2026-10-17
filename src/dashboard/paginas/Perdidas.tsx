@@ -18,7 +18,9 @@ import { PerdidasLectura } from "./PerdidasLectura";
 import { SubmedicionExplicacion, SubmedicionVejez } from "./SubmedicionVejez";
 import { ReclamosMetodoPerdidas } from "./ReclamosMetodoPerdidas";
 import { MapaCalor } from "./MapaCalor";
-import { Plegable, usePlegables } from "../Plegable";
+import { MarcaFiltro, Plegable, usePlegables } from "../Plegable";
+import { TODOS } from "../PanelFiltros";
+import { CambiosMedidor } from "./CambiosMedidor";
 
 // Pérdidas de agua (IPUF). Serie histórica larga: 114 períodos desde
 // enero de 2017, en su propio archivo y con un mes de rezago respecto
@@ -42,6 +44,9 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
   const [error, setError] = useState<string | null>(null);
   // Plegables de la pantalla (todos cerrados al entrar); solo en memoria.
   const pl = usePlegables({});
+  // Filtros de los dos paneles (cada panel sigue dentro de su plegable). El de Lectura también gobierna los cambios de medidor.
+  const [vLectura, setVLectura] = useState<Record<string, string>>({ ciclo: TODOS, uso: TODOS, subcategoria: TODOS });
+  const [vSubm, setVSubm] = useState<Record<string, string>>({ ciclo: TODOS, subcategoria: TODOS });
 
   function cargar() {
     setError(null);
@@ -325,14 +330,29 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
       <IndicadoresLectura periodo={periodo} />
       <SubmedicionExplicacion periodo={periodo} ipufSerie={filas} />
 
-      <Plegable id="pl-lectura" titulo="Detalle de lectura y medición" abierto={!!pl.abiertos["pl-lectura"]} onCambio={(o) => pl.cambiar("pl-lectura", o)}>
-        <PerdidasLectura periodo={periodo} />
+      <Plegable id="pl-lectura" titulo="Detalle de lectura y medición" abierto={!!pl.abiertos["pl-lectura"]} onCambio={(o) => pl.cambiar("pl-lectura", o)}
+        marca={<MarcaFiltro valores={vLectura} />}>
+        <PerdidasLectura periodo={periodo} valores={vLectura} onCambioValores={setVLectura} />
       </Plegable>
-      <Plegable id="pl-subm" titulo="Submedición por vejez (análisis completo)" abierto={!!pl.abiertos["pl-subm"]} onCambio={(o) => pl.cambiar("pl-subm", o)}>
-        <SubmedicionVejez periodo={periodo} />
+      <Plegable id="pl-subm" titulo="Submedición por vejez (análisis completo)" abierto={!!pl.abiertos["pl-subm"]} onCambio={(o) => pl.cambiar("pl-subm", o)}
+        marca={<MarcaFiltro valores={vSubm} />}>
+        <SubmedicionVejez periodo={periodo} valores={vSubm} onCambioValores={setVSubm} />
       </Plegable>
 
-      <ReclamosMetodoPerdidas onIrAPqr={onIrAPqr} />
+      <h2 className="dash-zona">Cambios de medidor y reclamos</h2>
+      <div className="dash-fila">
+        <span className="dash-sin-filtro">Depende del filtro de «Detalle de lectura y medición» (ciclo, uso y estrato).</span>{" "}
+        <MarcaFiltro valores={vLectura} onLimpiar={() => setVLectura({ ciclo: TODOS, uso: TODOS, subcategoria: TODOS })} />
+      </div>
+      <CambiosMedidor periodo={periodo} valores={vLectura} parte="consumo" />
+      <Plegable id="pl-cambios" titulo="Cambios de medidor: detalle por período, ciclo, uso, antigüedad y método" abierto={!!pl.abiertos["pl-cambios"]}
+        onCambio={(o) => pl.cambiar("pl-cambios", o)} marca={<MarcaFiltro valores={vLectura} />}>
+        <CambiosMedidor periodo={periodo} valores={vLectura} parte="resto" />
+      </Plegable>
+      <Plegable id="pl-reclamos" titulo="Reclamos según el método de facturación" abierto={!!pl.abiertos["pl-reclamos"]} onCambio={(o) => pl.cambiar("pl-reclamos", o)}
+        marca={<span className="dash-sin-filtro">No depende de filtros</span>}>
+        <ReclamosMetodoPerdidas onIrAPqr={onIrAPqr} />
+      </Plegable>
 
       <MapaCalor periodo={periodo} />
     </>

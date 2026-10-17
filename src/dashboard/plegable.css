@@ -1,7 +1,8 @@
-/* Plegable reutilizable y marcas de la reorganización de Pérdidas. Reutiliza las clases dash-fila / dash-carta de las «Partes»
-   de Submedición y Mapa de calor; aquí solo lo que no existía. */
+/* Plegable reutilizable y marcas de la reorganización de Pérdidas; aquí solo lo que no existía en dashboard.css. */
 .dash-zona { margin: 30px 0 4px; font-size: 1.1rem; color: var(--dash-tinta); border-bottom: 1px solid var(--dash-linea); padding-bottom: 6px; }
-.dash-plegable > .dash-carta > details > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; cursor: pointer; }
+.dash-plegable > details > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; cursor: pointer; background: var(--dash-carta);
+  border: 1px solid var(--dash-linea); border-radius: 10px; padding: 14px 18px; }
+.dash-plegable > details[open] > summary { border-color: var(--dash-agua); }
 .dash-plegable-cuerpo { margin-top: 12px; }
 .dash-marca-filtro { display: inline-flex; align-items: center; gap: 8px; background: #fdf0cf; color: #8a5a00; border: 1px solid #ecd9a0;
   border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }

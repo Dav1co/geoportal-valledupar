@@ -1,19 +1,32 @@
 import { useCallback, useState, type ReactNode } from "react";
+import { TODOS } from "./PanelFiltros";
 import "./plegable.css";
 
-// Plegable controlado por estado, con el mismo aspecto que las «Partes» de Submedición y Mapa de calor. Al estar controlado, un
+// Plegable controlado por estado: encabezado en forma de barra (como una carta) y, debajo, el contenido con sus propias cartas. Al estar controlado, un
 // enlace puede abrirlo (usePlegables().abrirYIr). `marca` va en el encabezado, visible aunque esté cerrado (p. ej. «Filtro activo»).
 // `diferido`: si es true, el contenido no se monta hasta abrirlo (lo usará la Fase 2; por defecto se monta siempre).
 export function Plegable({ id, titulo, abierto, onCambio, marca, diferido = false, children }: {
   id: string; titulo: ReactNode; abierto: boolean; onCambio: (abierto: boolean) => void; marca?: ReactNode; diferido?: boolean; children: ReactNode;
 }) {
   return (
-    <div id={id} className="dash-fila dash-plegable"><div className="dash-carta">
+    <div id={id} className="dash-fila dash-plegable">
       <details open={abierto} onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; if (o !== abierto) onCambio(o); }}>
         <summary><b>{titulo}</b>{marca}</summary>
         {!diferido || abierto ? <div className="dash-plegable-cuerpo">{children}</div> : null}
       </details>
-    </div></div>
+    </div>
+  );
+}
+
+// «● Filtro activo: …» con los valores distintos de «todos». En un encabezado cerrado va sin botón; en una pieza abierta, con «Limpiar».
+export function MarcaFiltro({ valores, onLimpiar }: { valores: Record<string, string>; onLimpiar?: () => void }) {
+  const activos = Object.values(valores).filter((v) => v && v !== TODOS);
+  if (!activos.length) return null;
+  return (
+    <span className="dash-marca-filtro">
+      ● Filtro activo: {activos.join(" · ")}
+      {onLimpiar ? <button type="button" onClick={onLimpiar}>Limpiar</button> : null}
+    </span>
   );
 }
 
