@@ -19,6 +19,7 @@ import {
 } from "../formato";
 import { BarrasHorizontales, LineasPorcentaje, TablaPlegable } from "../graficas";
 import { irCuandoExista } from "../Plegable";
+import { normalizarBanderas, useEstadoSesion } from "../memoriaSesion";
 import { PanelFiltros, TODOS } from "../PanelFiltros";
 import { filtrosCicloUsoEstrato } from "../lecturaComun";
 
@@ -113,6 +114,7 @@ const Carta = ({ titulo, children }: { titulo: string; children: ReactNode }) =>
   <div className="dash-fila"><div className="dash-carta"><h3>{titulo}</h3>{children}</div></div>
 );
 // Parte colapsable de la sección (estado de colapso solo en memoria; el índice abre y desplaza).
+const PARTES_DEFECTO: Record<string, boolean> = { resumen: true, vejez: true, metodologia: true };
 const PARTES = [
   { id: "resumen", titulo: "Resumen" }, { id: "vejez", titulo: "Distribución por vejez" }, { id: "estrato", titulo: "Por estrato" },
   { id: "ciclo", titulo: "Por ciclo" }, { id: "rangos", titulo: "Rangos de consumo" }, { id: "cascada", titulo: "Cascada y serie" },
@@ -232,9 +234,10 @@ type Props = { periodo: string; valores: Record<string, string>; onCambioValores
 export function SubmedicionVejez({ periodo, valores, onCambioValores }: Props) {
   const ref = useVista("v_submedicion_ref_dim", comoSubmedicionRefDim);
   const cic = useVista("v_submedicion_ciclo_dim", comoSubmedicionCicloDim);
-  const [verRangos, setVerRangos] = useState(false);
-  // Abiertas por defecto: resumen (fichas), distribución por vejez y metodología. Solo en memoria.
-  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({ resumen: true, vejez: true, metodologia: true });
+  // Abiertas por defecto: resumen (fichas), distribución por vejez y metodología. Se recuerdan durante la sesión.
+  const [abiertas, setAbiertas] = useEstadoSesion<Record<string, boolean>>(`${periodo}.subm.partes`, PARTES_DEFECTO, normalizarBanderas(PARTES.map((x) => x.id), PARTES_DEFECTO));
+  // Los rangos solo se consultan al abrir su parte (también si se recordó abierta).
+  const [verRangos, setVerRangos] = useState(!!abiertas.rangos);
   function cambiar(id: string, abierta: boolean) {
     setAbiertas((a) => (a[id] === abierta ? a : { ...a, [id]: abierta }));
     if (id === "rangos" && abierta) setVerRangos(true);
@@ -260,6 +263,10 @@ export function SubmedicionVejez({ periodo, valores, onCambioValores }: Props) {
     ).filter((f) => f.id === "subcategoria").map((f) => ({ ...f, visible: undefined })),
     [filas],
   );
+  // Un estrato recordado de la sesión que no existe en este período se descarta en silencio.
+  useEffect(() => {
+    if (ref.datos && valores.subcategoria !== TODOS && !filas.some((x) => x.estrato === valores.subcategoria)) onCambioValores({ subcategoria: TODOS });
+  }, [ref.datos]);   // eslint-disable-line react-hooks/exhaustive-deps
   const estr = valores.subcategoria;
   const filtraEstr = (e: string) => estr === TODOS || e === estr;
 

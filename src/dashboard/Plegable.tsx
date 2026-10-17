@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, type ReactNode } from "react";
+import { normalizarBanderas, useEstadoSesion } from "./memoriaSesion";
 import { TODOS } from "./PanelFiltros";
 import "./plegable.css";
 
@@ -51,9 +52,9 @@ export function irCuandoExista(idDestino: string, esperarContenido = false, tope
   obs.observe(document.body, { childList: true, subtree: true });
 }
 
-// Estado abierto/cerrado de varios plegables, solo en memoria.
-export function usePlegables(inicial: Record<string, boolean>) {
-  const [abiertos, setAbiertos] = useState<Record<string, boolean>>(inicial);
+// Estado abierto/cerrado de varios plegables; se recuerda durante la sesión de la pestaña (ver memoriaSesion.ts).
+export function usePlegables(inicial: Record<string, boolean>, clave: string, ids: string[]) {
+  const [abiertos, setAbiertos] = useEstadoSesion<Record<string, boolean>>(clave, inicial, normalizarBanderas(ids, inicial));
   const cambiar = useCallback((id: string, abierto: boolean) => setAbiertos((a) => (a[id] === abierto ? a : { ...a, [id]: abierto })), []);
   // Abre los plegables indicados (el que contiene el destino primero) y desplaza al destino cuando ya esté montado.
   const abrirYIr = useCallback((ids: string[], destino?: string) => {

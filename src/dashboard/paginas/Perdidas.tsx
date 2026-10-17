@@ -19,6 +19,7 @@ import { SubmedicionExplicacion, SubmedicionVejez } from "./SubmedicionVejez";
 import { ReclamosMetodoPerdidas } from "./ReclamosMetodoPerdidas";
 import { MapaCalor } from "./MapaCalor";
 import { MarcaFiltro, Plegable, usePlegables } from "../Plegable";
+import { normalizarFiltrosLectura, normalizarFiltrosSubmedicion, useEstadoSesion } from "../memoriaSesion";
 import { TODOS } from "../PanelFiltros";
 import { CambiosMedidor } from "./CambiosMedidor";
 
@@ -39,14 +40,23 @@ const COLOR_ANIO_CORRIDO = "#0E7C86";
 
 type Props = { periodo: string; onIrAPeriodo?: (p: string) => void; onIrAPqr?: () => void };
 
-export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
+// Al cambiar de período se reinicia la pantalla (clave = período): el estado recordado es por período y no se arrastra de uno a otro.
+export function Perdidas(props: Props) {
+  return <PerdidasPeriodo key={props.periodo} {...props} />;
+}
+
+const PLEGABLES = ["pl-ipuf", "pl-lectura", "pl-subm", "pl-cambios", "pl-reclamos"];
+const LECTURA_VACIO = { ciclo: TODOS, uso: TODOS, subcategoria: TODOS };
+const SUBM_VACIO = { subcategoria: TODOS };
+
+function PerdidasPeriodo({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
   const [filas, setFilas] = useState<Ipuf[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Plegables de la pantalla (todos cerrados al entrar); solo en memoria.
-  const pl = usePlegables({});
+  const pl = usePlegables({}, `${periodo}.plegables`, PLEGABLES);
   // Filtros de los dos paneles (cada panel sigue dentro de su plegable). El de Lectura también gobierna los cambios de medidor.
-  const [vLectura, setVLectura] = useState<Record<string, string>>({ ciclo: TODOS, uso: TODOS, subcategoria: TODOS });
-  const [vSubm, setVSubm] = useState<Record<string, string>>({ subcategoria: TODOS });
+  const [vLectura, setVLectura] = useEstadoSesion<Record<string, string>>(`${periodo}.filtros.lectura`, LECTURA_VACIO, normalizarFiltrosLectura);
+  const [vSubm, setVSubm] = useEstadoSesion<Record<string, string>>(`${periodo}.filtros.submedicion`, SUBM_VACIO, normalizarFiltrosSubmedicion);
 
   function cargar() {
     setError(null);
@@ -342,7 +352,7 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
       <h2 className="dash-zona">Cambios de medidor y reclamos</h2>
       <div className="dash-fila">
         <span className="dash-sin-filtro">Depende del filtro de «Detalle de lectura y medición» (ciclo, uso y estrato).</span>{" "}
-        <MarcaFiltro valores={vLectura} onLimpiar={() => setVLectura({ ciclo: TODOS, uso: TODOS, subcategoria: TODOS })} />
+        <MarcaFiltro valores={vLectura} onLimpiar={() => setVLectura(LECTURA_VACIO)} />
       </div>
       <CambiosMedidor periodo={periodo} valores={vLectura} parte="consumo" />
       <Plegable id="pl-cambios" diferido titulo="Cambios de medidor: detalle por período, ciclo, uso, antigüedad y método" abierto={!!pl.abiertos["pl-cambios"]}

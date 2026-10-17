@@ -50,6 +50,16 @@ export function PerdidasLectura({ periodo, valores, onCambioValores }: { periodo
     [consumo],
   );
 
+  // Un filtro recordado de la sesión que ya no existe entre las opciones se descarta en silencio.
+  useEffect(() => {
+    if (!consumo) return;
+    const valido = (id: string, v: string) => v === TODOS || (filtros.find((f) => f.id === id)?.opciones ?? []).includes(v);
+    const nuevos = { ...valores };
+    let cambio = false;
+    for (const id of ["ciclo", "uso", "subcategoria"]) if (!valido(id, valores[id] ?? TODOS)) { nuevos[id] = TODOS; cambio = true; }
+    if (cambio) onCambioValores(nuevos);
+  }, [consumo]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   // Si el uso pasa a uno no residencial, el panel limpia el estrato; aquí se explica por qué.
   const [aviso, setAviso] = useState("");
   function cambiarValores(nuevos: Record<string, string>) {

@@ -3,6 +3,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { biCache } from "../cacheBi";
 import { irCuandoExista } from "../Plegable";
+import { normalizarBanderas, useEstadoSesion } from "../memoriaSesion";
 import {
   comoMapaCalorCarteraDim,
   comoMapaCalorCoberturaDim,
@@ -26,6 +27,7 @@ const MENOS_5 = "menos de 5 contratos";
 const FUENTE = "bi.v_mapa_calor_dim y bi.v_mapa_calor_cobertura_dim (hechos.consumo_metodo, hechos.cartera_contrato; coordenadas de public.predios_comercial)";
 const pct1 = (v: number | null) => (v == null ? "—" : `${fmtDecimal(v, 1)} %`);
 
+const PARTES_DEFECTO: Record<string, boolean> = { resumen: true, cartera: true, mapa: true };
 const PARTES = [
   { id: "resumen", titulo: "Resumen" }, { id: "cartera", titulo: "Cartera por grupo de mora" }, { id: "mapa", titulo: "Mapa" },
   { id: "tabla", titulo: "Tabla resumen del período" }, { id: "metodologia", titulo: "Metodología y fuentes" },
@@ -262,7 +264,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
   const [intento, setIntento] = useState(0);
   const [capaId, setCapaId] = useState<CapaId>("sin_medidor_obs");
   const [cartera, setCartera] = useState(false);
-  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({ resumen: true, cartera: true, mapa: true });
+  const [abiertas, setAbiertas] = useEstadoSesion<Record<string, boolean>>(`${periodo}.mapa.partes`, PARTES_DEFECTO, normalizarBanderas(PARTES.map((x) => x.id), PARTES_DEFECTO));
   function cambiar(id: string, abierta: boolean) { setAbiertas((a) => (a[id] === abierta ? a : { ...a, [id]: abierta })); }
   function abrir(id: string) {
     cambiar(id, true);
