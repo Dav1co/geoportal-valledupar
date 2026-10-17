@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { biCache } from "../cacheBi";
+import { irCuandoExista } from "../Plegable";
 import {
   comoMapaCalorCarteraDim,
   comoMapaCalorCoberturaDim,
@@ -261,11 +262,11 @@ export function MapaCalor({ periodo }: { periodo: string }) {
   const [intento, setIntento] = useState(0);
   const [capaId, setCapaId] = useState<CapaId>("sin_medidor_obs");
   const [cartera, setCartera] = useState(false);
-  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({ resumen: true, cartera: true, mapa: true, metodologia: true });
+  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({ resumen: true, cartera: true, mapa: true });
   function cambiar(id: string, abierta: boolean) { setAbiertas((a) => (a[id] === abierta ? a : { ...a, [id]: abierta })); }
   function abrir(id: string) {
     cambiar(id, true);
-    window.setTimeout(() => document.getElementById(`mapc-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    irCuandoExista(`mapc-${id}`);
   }
 
   useEffect(() => {
