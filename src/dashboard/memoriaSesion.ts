@@ -1,6 +1,7 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { TODOS } from "./PanelFiltros";
 import { numeroCiclo } from "./formato";
+import { ESTRATOS_FILTRO, USOS_FILTRO } from "./edadCarteraCalculo";
 
 // Memoria del estado de la pantalla de Pérdidas durante la sesión de la pestaña (sessionStorage, nunca localStorage). Solo se guardan
 // banderas abierto/cerrado y valores de filtros, nada que identifique personas. Toda lectura y escritura va en try/catch: si el
@@ -55,4 +56,19 @@ export function normalizarFiltrosLectura(x: unknown): Record<string, string> | n
 // Filtro del panel de Submedición (solo estrato).
 export function normalizarFiltrosSubmedicion(x: unknown): Record<string, string> | null {
   return esObjeto(x) ? { subcategoria: estratoValido(x.subcategoria) } : null;
+}
+
+// Filtros compartidos de Cartera desagregada (uso y estrato). Con un uso distinto de «todos» o Residencial, el estrato se descarta (misma regla
+// que en Pérdidas). Los nombres se validan contra la lista cerrada de la pantalla.
+export function normalizarFiltrosCartera(x: unknown): Record<string, string> | null {
+  if (!esObjeto(x)) return null;
+  const uso = typeof x.uso === "string" && USOS_FILTRO.some((u) => u.nombre === x.uso) ? x.uso : TODOS;
+  const sub = (uso === TODOS || uso === "Residencial") && typeof x.subcategoria === "string" && ESTRATOS_FILTRO.some((e) => e.nombre === x.subcategoria)
+    ? x.subcategoria : TODOS;
+  return { uso, subcategoria: sub };
+}
+// Filtros propios de la zona «Por ciclo y barrio» (comuna, barrio, ciclo): textos cortos; el barrio y la comuna se validan contra los datos al usarse.
+export function normalizarFiltrosUbicacion(x: unknown): Record<string, string> | null {
+  if (!esObjeto(x)) return null;
+  return { comuna: cadena(x.comuna, 40), barrio: cadena(x.barrio, 80), ciclo: cadena(x.ciclo, 20) };
 }
