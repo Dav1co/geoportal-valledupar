@@ -69,7 +69,7 @@ function variacion(actual: number, previo: number | null | undefined, etiquetaPr
   return `${fmtVariacionMillones(d)}${pct == null ? "" : ` (${signo(pct)}${fmtPct(Math.abs(pct))})`} frente a ${etiquetaPeriodo(etiquetaPrevio)}`;
 }
 
-function Ficha({ etiqueta, valor, sub, mal = false }: { etiqueta: string; valor: string; sub: string; mal?: boolean }) {
+export function Ficha({ etiqueta, valor, sub, mal = false }: { etiqueta: string; valor: string; sub: string; mal?: boolean }) {
   return (
     <div className={`dash-carta dash-kpi ${mal ? "dash-kpi-mal" : ""}`}>
       <div className="dash-eti">{etiqueta}</div>

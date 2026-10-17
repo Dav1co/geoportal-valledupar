@@ -15,3 +15,8 @@
 .dash-sangria { padding-left: 22px; }
 .dash-metodologia ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
 .dash-metodologia li { margin-bottom: 8px; }
+/* Cartera desagregada · movimiento de la mora y suspensiones y cortes */
+.dash-lectura { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.55; }
+.dash-lectura li { margin-bottom: 8px; }
+.dash-matriz td, .dash-matriz th { white-space: nowrap; }
+.dash-matriz th { white-space: normal; min-width: 84px; }
