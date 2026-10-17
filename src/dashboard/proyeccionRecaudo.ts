@@ -1,4 +1,4 @@
-// Utilidades de la pantalla «Proyección y cumplimiento» (RECAUDO DIARIO). Lógica pura, sin React: tipos y convertidores de
+// Utilidades de la pantalla «Proyección y cumplimiento» (RECAUDO DIARIO). Nombres oficiales de las proyecciones en NOM_*. Lógica pura, sin React: tipos y convertidores de
 // las vistas v_proy_* (sql/43), semáforo, resumen del mes en curso y armado de la tabla en formato FO-GF-33.
 // Todo está en base SIN terceros salvo donde dice «con terceros». Los subsidios NO entran en ninguna cifra de recaudo.
 
@@ -208,7 +208,7 @@ export function armarTablaFO(rutas: RecaudoRuta[], metaCertificadaPorMes: Map<st
   filas.push({ clave: "acum_sin", etiqueta: "Acumulado sin terceros", tipo: "acum", valores: aSin, total: aSin[aSin.length - 1] ?? null });
   filas.push({ clave: "acum_con", etiqueta: "Acumulado con terceros", tipo: "acum", valores: aCon, total: aCon[aCon.length - 1] ?? null });
   const meta = periodos.map((p) => metaCertificadaPorMes.get(p) ?? null);
-  filas.push({ clave: "meta", etiqueta: "Meta certificada FO-GF-33 (sin terceros)", tipo: "meta", valores: meta, total: null });
+  filas.push({ clave: "meta", etiqueta: "Meta de la proyección comercial certificada (sin terceros)", tipo: "meta", valores: meta, total: null });
   return { anio, periodos, estado, filas };
 }
 
@@ -223,15 +223,102 @@ export function metaCertificadaPorMes(cum: CumplimientoDia[], anual: AnualMes[] 
   return out;
 }
 
-// ---------- subsidios (informativo) ----------
-export type FilaSubsidio = { periodo: string; recaudoConTerceros: number | null; deficit: number | null; ingresosTotales: number | null };
-export function armarSubsidios(totales: TotalMes[], subs: SubsidioMes[]): FilaSubsidio[] {
-  const s = new Map(subs.map((x) => [x.periodo, x.deficitAbs]));
-  return totales
-    .filter((t) => t.tipo === "real" && s.get(t.periodo) != null)
-    .sort((a, b) => a.periodo.localeCompare(b.periodo))
-    .map((t) => {
-      const d = s.get(t.periodo) ?? null;
-      return { periodo: t.periodo, recaudoConTerceros: t.conTerceros, deficit: d, ingresosTotales: t.conTerceros != null && d != null ? t.conTerceros + d : null };
-    });
+// ---------- nombres oficiales ----------
+export const NOM_CERT = "Proyección comercial certificada";
+export const NOM_ACT = "Proyección comportamiento actual";
+export const NOM_COR = "Proyección comportamiento actual (corregida con el avance)";
+export const NOM_PRES = "Presupuesto de la vigencia (FO-GF-33)";
+
+// ---------- presupuesto del FO ----------
+export type Presupuesto = {
+  periodo: string; subsidio: number | null; recaudo: number | null; otros: number | null;
+  sinSubs: number | null; conSubs: number | null; acumSin: number | null; acumCon: number | null;
+};
+export const comoPresupuesto = (r: Record<string, unknown>): Presupuesto => ({
+  periodo: txt(r.periodo), subsidio: num(r.subsidio), recaudo: num(r.recaudo), otros: num(r.otros),
+  sinSubs: num(r.sin_subsidios), conSubs: num(r.con_subsidios), acumSin: num(r.acum_sin_subsidios), acumCon: num(r.acum_con_subsidios),
+});
+
+// ---------- año completo en dos bases ----------
+// Base principal: sin subsidios. Con subsidios = sin subsidios + déficit de subsidios del mes.
+// Subsidio del mes: real (deficit_abs de v_facturacion_mes) en los meses con recaudo real y dato; si no, el subsidio del presupuesto FO.
+export type LineaProy = {
+  clave: "cert" | "act" | "cor"; nombre: string; color: string;
+  sin: (number | null)[]; con: (number | null)[]; acumSin: (number | null)[]; acumCon: (number | null)[];
+  cumplSin: (number | null)[]; cumplCon: (number | null)[]; // % acumulado / presupuesto anual de la misma base
+  totalSin: number | null; totalCon: number | null; difSin: number | null; difCon: number | null;
+};
+export type Anio = {
+  periodos: string[]; tipos: string[];
+  subsidio: (number | null)[]; subOrigen: ("real" | "presupuesto FO" | null)[]; subReal: number | null; subFO: number | null; subAnio: number | null;
+  presSin: (number | null)[]; presCon: (number | null)[]; presAcumSin: (number | null)[]; presAcumCon: (number | null)[];
+  presTotalSin: number | null; presTotalCon: number | null;
+  proys: LineaProy[];
+};
+
+const acumular = (v: (number | null)[]) => { let a: number | null = 0; return v.map((x) => (a == null || x == null ? (a = null) : (a += x))); };
+const sumaTodos = (v: (number | null)[]) => (v.some((x) => x == null) ? null : v.reduce<number>((a, b) => a + (b as number), 0));
+const ultimo = <T,>(v: T[]) => (v.length ? v[v.length - 1] : null);
+
+export function armarAnio(anual: AnualMes[], pres: Presupuesto[], subs: SubsidioMes[]): Anio | null {
+  const a = [...anual].sort((x, y) => x.periodo.localeCompare(y.periodo));
+  if (!a.length) return null;
+  const periodos = a.map((m) => m.periodo), tipos = a.map((m) => m.tipo);
+  const P = new Map(pres.map((x) => [x.periodo, x])), S = new Map(subs.map((x) => [x.periodo, x.deficitAbs]));
+  const subOrigen = a.map((m) => {
+    if (m.tipo === "real" && S.get(m.periodo) != null) return "real" as const;
+    return P.get(m.periodo)?.subsidio != null ? ("presupuesto FO" as const) : null;
+  });
+  const subsidio = a.map((m, i) => (subOrigen[i] === "real" ? (S.get(m.periodo) ?? null) : subOrigen[i] === "presupuesto FO" ? (P.get(m.periodo)?.subsidio ?? null) : null));
+  const presSin = periodos.map((p) => P.get(p)?.sinSubs ?? null), presCon = periodos.map((p) => P.get(p)?.conSubs ?? null);
+  const presAcumSin = periodos.map((p) => P.get(p)?.acumSin ?? null), presAcumCon = periodos.map((p) => P.get(p)?.acumCon ?? null);
+  const presTotalSin = ultimo(presAcumSin), presTotalCon = ultimo(presAcumCon);
+  const mk = (clave: LineaProy["clave"], nombre: string, color: string, sin: (number | null)[]): LineaProy => {
+    const con = sin.map((v, i) => (v == null || subsidio[i] == null ? null : v + (subsidio[i] as number)));
+    const acumSin = acumular(sin), acumCon = acumular(con);
+    const totalSin = ultimo(acumSin), totalCon = ultimo(acumCon);
+    return {
+      clave, nombre, color, sin, con, acumSin, acumCon,
+      cumplSin: acumSin.map((x) => { const d = divSegura(x, presTotalSin); return d == null ? null : d * 100; }),
+      cumplCon: acumCon.map((x) => { const d = divSegura(x, presTotalCon); return d == null ? null : d * 100; }),
+      totalSin, totalCon, difSin: diferencia(totalSin, presTotalSin), difCon: diferencia(totalCon, presTotalCon),
+    };
+  };
+  const subReal = sumaTodos(subsidio.filter((_, i) => subOrigen[i] === "real")), subFO = sumaTodos(subsidio.filter((_, i) => subOrigen[i] === "presupuesto FO"));
+  return {
+    periodos, tipos, subsidio, subOrigen, subReal, subFO, subAnio: sumaTodos(subsidio),
+    presSin, presCon, presAcumSin, presAcumCon, presTotalSin, presTotalCon,
+    proys: [
+      mk("cert", NOM_CERT, "#0a2540", a.map((m) => m.certificada)),
+      mk("act", NOM_ACT, "#0E7C86", a.map((m) => m.propia)),
+      mk("cor", NOM_COR, "#c27a00", a.map((m) => m.corregida)),
+    ],
+  };
+}
+
+// ---------- escenarios de 60, 65, 70 y 75 mil millones ----------
+export const METAS_ESCENARIO = [60e9, 65e9, 70e9, 75e9];
+export type Escenarios = {
+  periodoCorte: string; acumConTerceros: number | null; restantes: number; subAnio: number | null; promProyectado: number | null;
+  filas: { meta: number; reqRecaudo: number | null; reqIngresos: number | null; difRecaudo: number | null; difIngresos: number | null }[];
+};
+// Recaudo requerido por mes en los meses restantes (los proyectados), sobre el recaudo CON terceros:
+//   si la meta es de recaudo  : (meta − acumulado con terceros al último mes real) ÷ meses restantes
+//   si la meta es de ingresos : (meta − subsidios del año − acumulado con terceros al último mes real) ÷ meses restantes
+export function armarEscenarios(tot: TotalMes[], anio: Anio | null): Escenarios | null {
+  const t = [...tot].sort((x, y) => x.periodo.localeCompare(y.periodo));
+  const reales = t.filter((x) => x.tipo === "real"), proy = t.filter((x) => x.tipo !== "real");
+  if (!reales.length || !proy.length || !anio) return null;
+  const corte = reales[reales.length - 1], acum = corte.acumConTerceros;
+  const conT = proy.map((x) => x.conTerceros);
+  const prom = conT.some((x) => x == null) ? null : (conT as number[]).reduce((a, b) => a + b, 0) / conT.length;
+  const n = proy.length;
+  return {
+    periodoCorte: corte.periodo, acumConTerceros: acum, restantes: n, subAnio: anio.subAnio, promProyectado: prom,
+    filas: METAS_ESCENARIO.map((meta) => {
+      const rr = acum == null ? null : (meta - acum) / n;
+      const ri = acum == null || anio.subAnio == null ? null : (meta - anio.subAnio - acum) / n;
+      return { meta, reqRecaudo: rr, reqIngresos: ri, difRecaudo: diferencia(rr, prom), difIngresos: diferencia(ri, prom) };
+    }),
+  };
 }
