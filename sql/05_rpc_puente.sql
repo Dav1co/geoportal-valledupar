@@ -683,6 +683,15 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  elsif p_vista = 'v_cartera_pago_dim' then
+    -- Pagos y mora de la cartera: contratos y saldo por uso x estrato x mora x antiguedad del ultimo pago x cobertura del ultimo pago (sql/46). ~410 filas por periodo; solo conteos de 5 o mas y valores en pesos, sin contrato, barrio ni ciclo.
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.uso, t.estrato, t.mora, t.banda_fecha, t.banda_cobertura), '[]'::jsonb)
+      into resultado
+    from bi.v_cartera_pago_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -811,4 +820,10 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- ROLLBACK de la rama v_cartera_edad_dim (59 -> 60 ramas): volver a la version de este archivo con 59 ramas (hasta v_proy_presupuesto_fo,
 -- commit anterior a esta rama) y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar la rama, quitar la vista de
 -- VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v25). Despues, bi.v_cartera_edad_dim se retira segun sql/45.
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de la rama v_cartera_pago_dim (60 -> 61 ramas): volver a la version de este archivo con 60 ramas (hasta v_cartera_edad_dim, commit
+-- anterior a esta rama) y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar la rama, quitar la vista de VISTAS_PERMITIDAS
+-- en geoportal-bi y redesplegar la Edge Function (v26). Despues, bi.v_cartera_pago_dim se retira segun sql/46.
 -- =====================================================================
