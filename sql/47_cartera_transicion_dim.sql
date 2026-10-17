@@ -26,9 +26,9 @@
 --   1) tabla + funciones + revoke   2) despachador   3) Edge v28 y rama 62 de la RPC   4) carga   5) controles
 -- =====================================================================
 
--- >>> PASO 1 · tabla, funciones, permisos --------------------------------
+-- >>> PASO 1 (IDEMPOTENTE: se puede repetir tras un fallo parcial) · tabla, funciones, permisos --------------------------------
 
-create table bi.v_cartera_transicion_dim (
+create table if not exists bi.v_cartera_transicion_dim (
   periodo          text,
   referencia       text,
   uso              text,
@@ -276,7 +276,7 @@ begin
   end if;
 
   return n;
-end $function$
+end $function$;
 
 -- >>> PASO 3 · Edge v28 y rama 62 de la RPC -------------------------------
 -- Edge (geoportal-web): agregar "v_cartera_transicion_dim" a VISTAS_PERMITIDAS y desplegar. Va ANTES de la RPC. sql/05 queda IGUAL A LO VIVO hasta aplicar.

@@ -27,9 +27,9 @@
 --   1) tabla + funcion + revoke   2) despachador   3) Edge v27   4) rama 61 de la RPC   5) carga   6) controles
 -- =====================================================================
 
--- >>> PASO 1 · tabla, funcion, permisos --------------------------------
+-- >>> PASO 1 (IDEMPOTENTE: se puede repetir tras un fallo parcial) · tabla, funcion, permisos --------------------------------
 
-create table bi.v_cartera_pago_dim (
+create table if not exists bi.v_cartera_pago_dim (
   periodo          text,
   uso              text,
   estrato          text,

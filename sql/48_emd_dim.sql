@@ -26,9 +26,9 @@
 --   1) tabla + funcion + revoke   2) despachador   3) Edge v28 y rama 63 de la RPC   4) carga   5) controles
 -- =====================================================================
 
--- >>> PASO 1 · tabla, funcion, permisos --------------------------------
+-- >>> PASO 1 (IDEMPOTENTE: se puede repetir tras un fallo parcial) · tabla, funcion, permisos --------------------------------
 
-create table bi.v_emd_dim (
+create table if not exists bi.v_emd_dim (
   periodo          text,
   uso              text,
   estrato          text,
@@ -256,7 +256,7 @@ begin
   end if;
 
   return n;
-end $function$
+end $function$;
 
 -- >>> PASO 3 · Edge v28 y rama 63 de la RPC -------------------------------
 -- Edge (geoportal-web): agregar "v_emd_dim" a VISTAS_PERMITIDAS y desplegar (v28, junto con "v_cartera_transicion_dim"). Va ANTES de la RPC.
