@@ -266,7 +266,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
   function cambiar(id: string, abierta: boolean) { setAbiertas((a) => (a[id] === abierta ? a : { ...a, [id]: abierta })); }
   function abrir(id: string) {
     cambiar(id, true);
-    irCuandoExista(`mapc-${id}`);
+    irCuandoExista(`mapc-${id}`, true);
   }
 
   useEffect(() => {

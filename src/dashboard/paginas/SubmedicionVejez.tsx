@@ -241,7 +241,7 @@ export function SubmedicionVejez({ periodo, valores, onCambioValores }: Props) {
   }
   function abrir(id: string) {
     cambiar(id, true);
-    irCuandoExista(`subm-${id}`);
+    irCuandoExista(`subm-${id}`, true);
   }
   const rng = useVista("v_submedicion_rango_dim", comoSubmedicionRangoDim, verRangos);
   const [modoMapa, setModoMapa] = useState<"pct" | "bruta">("pct");

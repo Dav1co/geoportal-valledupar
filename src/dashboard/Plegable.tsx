@@ -1,18 +1,22 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { TODOS } from "./PanelFiltros";
 import "./plegable.css";
 
 // Plegable controlado por estado: encabezado en forma de barra (como una carta) y, debajo, el contenido con sus propias cartas. Al estar controlado, un
 // enlace puede abrirlo (usePlegables().abrirYIr). `marca` va en el encabezado, visible aunque esté cerrado (p. ej. «Filtro activo»).
-// `diferido`: si es true, el contenido no se monta hasta abrirlo (lo usará la Fase 2; por defecto se monta siempre).
+// `diferido`: el contenido no se monta ni consulta hasta la primera apertura (por defecto se monta siempre).
 export function Plegable({ id, titulo, abierto, onCambio, marca, diferido = false, children }: {
   id: string; titulo: ReactNode; abierto: boolean; onCambio: (abierto: boolean) => void; marca?: ReactNode; diferido?: boolean; children: ReactNode;
 }) {
+  // Con `diferido`, el contenido se monta en la primera apertura y ya no se desmonta (conserva su estado; los datos quedan en biCache).
+  const visto = useRef(false);
+  if (abierto) visto.current = true;
+  const montar = !diferido || visto.current;
   return (
     <div id={id} className="dash-fila dash-plegable">
       <details open={abierto} onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; if (o !== abierto) onCambio(o); }}>
         <summary><b>{titulo}</b>{marca}</summary>
-        {!diferido || abierto ? <div className="dash-plegable-cuerpo">{children}</div> : null}
+        {montar ? <div className="dash-plegable-cuerpo">{children}</div> : null}
       </details>
     </div>
   );
@@ -32,11 +36,13 @@ export function MarcaFiltro({ valores, onLimpiar }: { valores: Record<string, st
 
 // Desplaza hasta el elemento en cuanto exista en el DOM (sin temporizador fijo): si ya está, tras el siguiente cuadro; si no, espera
 // a que React monte el contenido con un MutationObserver (con un tope por si el elemento nunca aparece).
-export function irCuandoExista(idDestino: string, topeMs = 5000) {
+export function irCuandoExista(idDestino: string, esperarContenido = false, topeMs = 5000) {
   const ir = (el: HTMLElement) => el.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Con esperarContenido, el destino es una parte plegable: se espera a que su cuerpo (lo que sigue al <summary>) ya esté montado.
+  const listo = (el: HTMLElement) => !esperarContenido || (el.querySelector("details")?.children.length ?? 0) > 1;
   const intentar = () => {
     const el = document.getElementById(idDestino);
-    if (el) { requestAnimationFrame(() => ir(el)); return true; }
+    if (el && listo(el)) { requestAnimationFrame(() => ir(el)); return true; }
     return false;
   };
   if (intentar()) return;

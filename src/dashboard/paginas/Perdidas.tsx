@@ -137,7 +137,7 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
       <h2 className="dash-zona">IPUF</h2>
       <IpufAnualBloque anual={anual} periodo={periodo} />
 
-      <Plegable id="pl-ipuf" titulo="IPUF mensual y demás indicadores" abierto={!!pl.abiertos["pl-ipuf"]} onCambio={(o) => pl.cambiar("pl-ipuf", o)}>
+      <Plegable id="pl-ipuf" diferido titulo="IPUF mensual y demás indicadores" abierto={!!pl.abiertos["pl-ipuf"]} onCambio={(o) => pl.cambiar("pl-ipuf", o)}>
       <div className="dash-kpis">
         <div className={`dash-carta dash-kpi ${sobreMeta ? "dash-kpi-mal" : ""}`}>
           <div className="dash-eti">IPUF del mes</div>
@@ -330,11 +330,11 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
       <IndicadoresLectura periodo={periodo} />
       <SubmedicionExplicacion periodo={periodo} ipufSerie={filas} />
 
-      <Plegable id="pl-lectura" titulo="Detalle de lectura y medición" abierto={!!pl.abiertos["pl-lectura"]} onCambio={(o) => pl.cambiar("pl-lectura", o)}
+      <Plegable id="pl-lectura" diferido titulo="Detalle de lectura y medición" abierto={!!pl.abiertos["pl-lectura"]} onCambio={(o) => pl.cambiar("pl-lectura", o)}
         marca={<MarcaFiltro valores={vLectura} />}>
         <PerdidasLectura periodo={periodo} valores={vLectura} onCambioValores={setVLectura} />
       </Plegable>
-      <Plegable id="pl-subm" titulo="Submedición por vejez (análisis completo)" abierto={!!pl.abiertos["pl-subm"]} onCambio={(o) => pl.cambiar("pl-subm", o)}
+      <Plegable id="pl-subm" diferido titulo="Submedición por vejez (análisis completo)" abierto={!!pl.abiertos["pl-subm"]} onCambio={(o) => pl.cambiar("pl-subm", o)}
         marca={<MarcaFiltro valores={vSubm} />}>
         <SubmedicionVejez periodo={periodo} valores={vSubm} onCambioValores={setVSubm} />
       </Plegable>
@@ -345,11 +345,11 @@ export function Perdidas({ periodo, onIrAPeriodo, onIrAPqr }: Props) {
         <MarcaFiltro valores={vLectura} onLimpiar={() => setVLectura({ ciclo: TODOS, uso: TODOS, subcategoria: TODOS })} />
       </div>
       <CambiosMedidor periodo={periodo} valores={vLectura} parte="consumo" />
-      <Plegable id="pl-cambios" titulo="Cambios de medidor: detalle por período, ciclo, uso, antigüedad y método" abierto={!!pl.abiertos["pl-cambios"]}
+      <Plegable id="pl-cambios" diferido titulo="Cambios de medidor: detalle por período, ciclo, uso, antigüedad y método" abierto={!!pl.abiertos["pl-cambios"]}
         onCambio={(o) => pl.cambiar("pl-cambios", o)} marca={<MarcaFiltro valores={vLectura} />}>
         <CambiosMedidor periodo={periodo} valores={vLectura} parte="resto" />
       </Plegable>
-      <Plegable id="pl-reclamos" titulo="Reclamos según el método de facturación" abierto={!!pl.abiertos["pl-reclamos"]} onCambio={(o) => pl.cambiar("pl-reclamos", o)}
+      <Plegable id="pl-reclamos" diferido titulo="Reclamos según el método de facturación" abierto={!!pl.abiertos["pl-reclamos"]} onCambio={(o) => pl.cambiar("pl-reclamos", o)}
         marca={<span className="dash-sin-filtro">No depende de filtros</span>}>
         <ReclamosMetodoPerdidas onIrAPqr={onIrAPqr} />
       </Plegable>
