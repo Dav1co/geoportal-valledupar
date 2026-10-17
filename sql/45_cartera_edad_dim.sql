@@ -17,13 +17,17 @@
 -- filas y de contratos por ciclo es muy distinto en las dos fuentes), asi que no se puede contar contratos por ciclo
 -- para aplicar el minimo de 5. Con ciclo la dimension tendria ~2.700 filas por periodo (~21.600), por debajo de 100.000, y se puede
 -- agregar si se obtiene un ciclo consistente.
--- MINIMO 5: el reporte de edades no trae contratos. Para (uso, estrato) se cuentan los contratos con deuda de cartera_contrato del
--- mismo periodo; si el grupo tiene menos de 5, o el uso o el estrato no son de la lista, el valor va a 'otros'. Las sumas no cambian.
--- Limite documentado (supresion complementaria apagada por decision de David): una celda etiqueta x uso x estrato puede tener menos
--- de 5 contratos aunque su grupo (uso, estrato) tenga 5 o mas; es un valor en pesos, no un conteo.
--- Cuadre: el total por periodo es igual a hechos.cartera_edades. Contra cartera_contrato es igual en 7 de 8 periodos (202602 difiere
--- por un monto menor); contra cartera_resumen difiere por montos menores en 202603 a 202609 (cartera_resumen viene
--- redondeada a pesos enteros y 202602 es igual).
+-- MINIMO 5 (privacidad): el reporte de edades NO trae contratos, asi que el minimo se aplica por (uso, estrato) con los contratos con
+-- deuda (total_cartera > 0) de hechos.cartera_contrato del mismo periodo. Si el grupo (uso, estrato) tiene menos de 5 contratos, o el
+-- uso no es 1, 3, 5 o 9, o el estrato no es de 1 a 6, su valor va a 'otros'. Las sumas no cambian.
+-- LIMITE: una celda etiqueta x uso x estrato PUEDE tener menos de 5 contratos aunque su grupo (uso, estrato) tenga 5 o mas, porque el
+-- minimo no se aplica por etiqueta de edad (la supresion complementaria esta apagada por decision de David, ver la metodologia).
+-- Lo que se publica es un valor AGREGADO en pesos por etiqueta, uso, estrato y servicio: ningun dato de contrato, barrio ni persona.
+-- CUADRE: el total por periodo es igual a hechos.cartera_edades, que es contra lo que comparan el control de suma y el EXCEPT 0/0
+-- (referencia independiente: columnas cf_cartN de la misma tabla, tolerancia de $ 1 por coma flotante).
+--  · Contra hechos.cartera_contrato (suma por contrato) es igual en 7 de 8 periodos; 202602 difiere por un monto menor (cartera_contrato mayor).
+--  · Contra hechos.cartera_resumen difiere por montos menores en 202603 a 202609 (cartera_resumen MENOR que cartera_edades); 202602 es igual.
+--    Es una diferencia de las fuentes de origen y no de esta dimension; no se determino su causa.
 --
 -- Orden (cada paso con aprobacion):
 --   1) tabla + funcion + revoke   2) despachador   3) rama en la RPC y en la Edge   4) carga   5) controles
