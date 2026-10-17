@@ -202,9 +202,9 @@
 }
 
 /* ---------- navegación entre páginas ---------- */
-/* Dos líneas fijas dentro de un mismo contenedor con desplazamiento horizontal compartido (BarraPestanas.tsx), sin barra visible.
-   Cada pestaña mide 36 px y las líneas se separan 6 px (paso de 42 px): el fondo de la pista dibuja la línea base de cada fila a todo
-   el ancho de lo desplazable. Alto total: 78 px. */
+/* Cuadrícula alineada de 2 filas (BarraPestanas.tsx) dentro de un contenedor con desplazamiento horizontal, sin barra visible. Dos filas
+   de 36 px y 6 px de separación: alto total de 78 px. El fondo de la pista dibuja la línea base de cada fila a todo el ancho; «Resumen
+   ejecutivo» (doble alto) tapa las dos y dibuja la suya al pie. */
 .dash-nav {
   margin-top: 14px;
   overflow-x: auto;
@@ -217,13 +217,16 @@
 .dash-nav::-webkit-scrollbar { display: none; }
 .dash-nav-pista {
   display: grid;
-  grid-auto-rows: 36px;
+  /* A | espacio | B C D | separación | E F G ; el resto (pantallas nuevas) en columnas implícitas */
+  grid-template-columns: max-content 10px repeat(3, max-content) 17px repeat(3, max-content);
+  grid-auto-columns: max-content;
+  grid-template-rows: 36px 36px;
   row-gap: 6px;
   width: max-content;
   min-width: 100%;
   background-image: repeating-linear-gradient(to bottom, transparent 0 35px, var(--dash-linea) 35px 36px, transparent 36px 42px);
 }
-.dash-nav-fila { display: flex; }
+.dash-nav-sep { grid-column: 6; grid-row: 1 / span 2; border-left: 1px solid var(--dash-linea); margin: 4px 0 4px 8px; }
 /* Desvanecido en el borde con contenido fuera de vista. */
 .dash-nav.hay-der { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
 .dash-nav.hay-izq { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
@@ -236,14 +239,24 @@
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
-  height: 36px;
+  align-self: stretch; /* ocupa la altura de su celda: 36 px, o 78 px en «Resumen ejecutivo» */
   box-sizing: border-box;
   padding: 0 15px;
   display: inline-flex;
   align-items: center;
+  justify-content: center; /* en una columna, el rótulo más corto queda centrado bajo el más largo */
   flex: 0 0 auto;
   white-space: nowrap; /* el rótulo no se parte: todas las pestañas con la misma altura */
   cursor: pointer;
+}
+/* Pestaña de doble alto: tapa las líneas base de las dos filas y dibuja la suya al pie. */
+.dash-nav button.doble {
+  background-color: var(--dash-papel);
+  background-image: linear-gradient(var(--dash-linea), var(--dash-linea));
+  background-size: 100% 1px;
+  background-position: bottom;
+  background-repeat: no-repeat;
+  background-origin: border-box;
 }
 .dash-nav button:hover {
   color: var(--dash-tinta);

@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 
-// Barra de pestañas del dashboard: dos líneas fijas dentro de un mismo contenedor con desplazamiento horizontal compartido (las dos
-// líneas se mueven juntas). Sin barra de desplazamiento visible; con rueda, gesto táctil o arrastre del trackpad. La pestaña activa se
-// mantiene a la vista (solo se desplaza la barra, nunca la página).
-const LINEA_1 = new Set<string>([
-  "resumen", "facturacion-agrupado", "recaudo-agrupado", "cartera-agrupado", "facturacion-detallado", "recaudo-detallado", "cartera-detallado",
-]);
+// Barra de pestañas del dashboard: cuadrícula alineada de 2 filas dentro de un contenedor con desplazamiento horizontal (sin barra visible).
+//   A: «Resumen ejecutivo» a doble alto  |  B, C, D: consolidadas (fila 1) y desagregadas (fila 2)  |  E, F, G: PQR, Notas, Cupones (fila 1)
+//   y Recaudo diario, Pérdidas, Consolidado (fila 2). Columnas de la cuadrícula: 1 = A, 2 = espacio, 3 a 5 = B a D, 6 = línea de
+//   separación, 7 a 9 = E a G. Cada columna mide lo que mide su rótulo más ancho. El orden del DOM (y del teclado) es el de lectura:
+//   fila por fila. La pestaña activa se mantiene a la vista (solo se desplaza la barra, nunca la página).
+type Celda = { col: number; fila: number; filas?: number };
+const CELDAS: Record<string, Celda> = {
+  "resumen": { col: 1, fila: 1, filas: 2 },
+  "facturacion-agrupado": { col: 3, fila: 1 }, "recaudo-agrupado": { col: 4, fila: 1 }, "cartera-agrupado": { col: 5, fila: 1 },
+  "facturacion-detallado": { col: 3, fila: 2 }, "recaudo-detallado": { col: 4, fila: 2 }, "cartera-detallado": { col: 5, fila: 2 },
+  "pqr": { col: 7, fila: 1 }, "notas": { col: 8, fila: 1 }, "cupones": { col: 9, fila: 1 },
+  "recaudo-diario": { col: 7, fila: 2 }, "perdidas": { col: 8, fila: 2 }, "consolidado": { col: 9, fila: 2 },
+};
 
 export function BarraPestanas<T extends string>({ paginas, activa, onCambio }: {
   paginas: readonly { id: T; titulo: string }[]; activa: T; onCambio: (id: T) => void;
@@ -50,18 +57,25 @@ export function BarraPestanas<T extends string>({ paginas, activa, onCambio }: {
     return () => { n.removeEventListener("wheel", alRueda); window.removeEventListener("resize", alCambiarTamano); };
   }, []);
 
-  const linea1 = paginas.filter((p) => LINEA_1.has(p.id)), linea2 = paginas.filter((p) => !LINEA_1.has(p.id));
+  // Una pantalla nueva que no esté en el mapa se agrega en columnas siguientes, de a dos por columna.
+  let extra = 0;
+  const celdas = paginas
+    .map((p) => ({ p, c: CELDAS[p.id] ?? { col: 11 + Math.floor(extra / 2), fila: 1 + (extra++ % 2) } }))
+    .sort((a, b) => a.c.fila - b.c.fila || a.c.col - b.c.col);
   return (
     <nav ref={nav} onScroll={medir} className={`dash-nav${borde.izq ? " hay-izq" : ""}${borde.der ? " hay-der" : ""}`}>
       <div className="dash-nav-pista">
-        {[linea1, linea2].map((linea, i) => (
-          <div className="dash-nav-fila" key={i}>
-            {linea.map((p) => (
-              <button key={p.id} className={activa === p.id ? "activa" : ""} aria-current={activa === p.id ? "page" : undefined} onClick={() => onCambio(p.id)}>
-                {p.titulo}
-              </button>
-            ))}
-          </div>
+        <span className="dash-nav-sep" aria-hidden="true" />
+        {celdas.map(({ p, c }) => (
+          <button
+            key={p.id}
+            className={`${activa === p.id ? "activa" : ""}${c.filas ? " doble" : ""}`.trim()}
+            aria-current={activa === p.id ? "page" : undefined}
+            style={{ gridColumn: c.col, gridRow: c.filas ? `${c.fila} / span ${c.filas}` : c.fila }}
+            onClick={() => onCambio(p.id)}
+          >
+            {p.titulo}
+          </button>
         ))}
       </div>
     </nav>
