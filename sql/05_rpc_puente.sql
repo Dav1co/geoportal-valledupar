@@ -692,6 +692,24 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  elsif p_vista = 'v_cartera_transicion_dim' then
+    -- Movimiento de la mora: transiciones de contratos entre el grupo de mora del periodo de origen y el del destino, por uso x estrato; referencia 'anterior' (mes previo) y 'base' (primer periodo) (sql/47). Solo conteos de 5 o mas y valores en pesos, sin contrato, barrio ni ciclo.
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.referencia, t.uso, t.estrato, t.grupo_origen, t.grupo_destino), '[]'::jsonb)
+      into resultado
+    from bi.v_cartera_transicion_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
+  elsif p_vista = 'v_emd_dim' then
+    -- Suspensiones y cortes: conceptos EMD facturados (codigos 600, 602, 603, 605, 606) por uso x estrato x mora x estado del producto (sql/48). LO FACTURADO NO ES LA ACTIVIDAD FISICA EN TERRENO. Solo conteos de 5 o mas y valores en pesos.
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.codigo, t.uso, t.estrato, t.mora, t.estado_producto), '[]'::jsonb)
+      into resultado
+    from bi.v_emd_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -826,4 +844,10 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- ROLLBACK de la rama v_cartera_pago_dim (60 -> 61 ramas): volver a la version de este archivo con 60 ramas (hasta v_cartera_edad_dim, commit
 -- anterior a esta rama) y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar la rama, quitar la vista de VISTAS_PERMITIDAS
 -- en geoportal-bi y redesplegar la Edge Function (v26). Despues, bi.v_cartera_pago_dim se retira segun sql/46.
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de las ramas v_cartera_transicion_dim y v_emd_dim (61 -> 63 ramas): volver a la version de este archivo con 61 ramas (hasta v_cartera_pago_dim,
+-- commit anterior a estas ramas) y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar las ramas, quitar las dos vistas de
+-- VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v27). Despues, las dos tablas se retiran segun sql/47 y sql/48.
 -- =====================================================================
