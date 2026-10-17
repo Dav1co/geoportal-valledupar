@@ -694,6 +694,60 @@ export function comoCarteraEdadDim(r: Record<string, unknown>): CarteraEdadDim {
   };
 }
 
+// bi.v_cartera_transicion_dim (sql/47): transiciones de contratos entre el grupo de mora del periodo origen y el del destino. referencia: 'anterior'
+// (mes previo) o 'base' (primer periodo de la fuente). contratos y saldos pueden ser NULL en la ultima celda (menos de 5 contratos). Sin contrato, barrio ni ciclo.
+export type CarteraTransicionDim = {
+  periodo: string;
+  referencia: string;
+  uso: string;
+  estrato: string;
+  grupo_origen: string;
+  grupo_destino: string;
+  contratos: number | null;
+  saldo_origen: number | null;
+  saldo_destino: number | null;
+};
+
+export function comoCarteraTransicionDim(r: Record<string, unknown>): CarteraTransicionDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    referencia: String(r.referencia ?? ""),
+    uso: String(r.uso ?? ""),
+    estrato: String(r.estrato ?? ""),
+    grupo_origen: String(r.grupo_origen ?? ""),
+    grupo_destino: String(r.grupo_destino ?? ""),
+    contratos: n(r.contratos),
+    saldo_origen: n(r.saldo_origen),
+    saldo_destino: n(r.saldo_destino),
+  };
+}
+
+// bi.v_emd_dim (sql/48): conceptos EMD FACTURADOS (600, 602, 603, 605, 606) por uso x estrato x mora x estado del producto. LO FACTURADO NO ES LA ACTIVIDAD
+// FISICA EN TERRENO. Confiable desde 202605; antes, una fila codigo 'sin_datos'. contratos = pares contrato-codigo; pueden ser NULL en la celda 'agrupado'.
+export type EmdDim = {
+  periodo: string;
+  uso: string;
+  estrato: string;
+  codigo: string;
+  mora: string;
+  estado_producto: string;
+  contratos: number | null;
+  valor_facturado: number | null;
+};
+
+export function comoEmdDim(r: Record<string, unknown>): EmdDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    uso: String(r.uso ?? ""),
+    estrato: String(r.estrato ?? ""),
+    codigo: String(r.codigo ?? ""),
+    mora: String(r.mora ?? ""),
+    estado_producto: String(r.estado_producto ?? ""),
+    contratos: n(r.contratos),
+    valor_facturado: n(r.valor_facturado),
+  };
+}
+
 // bi.v_pqr_mes: serie mensual de reclamos y recursos. Un período sin
 // archivo NO genera fila (para poder dibujar hueco, no cero).
 export type PqrMes = {
