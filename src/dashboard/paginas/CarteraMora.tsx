@@ -20,7 +20,7 @@ const COLOR_CODIGO: Record<string, string> = { "600": "#4FA3C7", "602": "#0A2540
 const signo = (v: number) => `${v < 0 ? "−" : "+"}${fmtEntero(Math.abs(v))}`;
 
 type Estado<T> = { datos: T | null; error: string | null; recargar: () => void };
-function useVista<T>(vista: string, convertir: (r: Record<string, unknown>) => T): Estado<T[]> {
+export function useVista<T>(vista: string, convertir: (r: Record<string, unknown>) => T): Estado<T[]> {
   const [datos, setDatos] = useState<T[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
@@ -33,19 +33,19 @@ function useVista<T>(vista: string, convertir: (r: Record<string, unknown>) => T
   }, [vista, intento]);
   return { datos, error, recargar: () => setIntento((i) => i + 1) };
 }
-function Cargando<T>({ estado, que, children }: { estado: Estado<T[]>; que: string; children: (d: T[]) => JSX.Element }) {
+export function Cargando<T>({ estado, que, children }: { estado: Estado<T[]>; que: string; children: (d: T[]) => JSX.Element }) {
   if (estado.error) {
     return (<div className="dash-estado"><p>No se pudo cargar {que}: {estado.error}</p><button className="dash-boton" onClick={estado.recargar}>Reintentar</button></div>);
   }
   if (!estado.datos) return <div className="dash-estado">Cargando {que}…</div>;
   return children(estado.datos);
 }
-const SinCombinacion = () => (
+export const SinCombinacion = () => (
   <div className="dash-aviso">
     No hay contratos para esta combinación de uso y estrato en este período: por el mínimo de 5 contratos se agrupa en <b>Otros / sin clasificar</b>. Elija otra o limpie el filtro.
   </div>
 );
-const Lectura = ({ lineas }: { lineas: string[] }) => (
+export const Lectura = ({ lineas }: { lineas: string[] }) => (
   <div className="dash-carta">
     <h3>Lectura en palabras</h3>
     <ul className="dash-lectura">{lineas.map((l, i) => <li key={i}>{l}</li>)}</ul>
