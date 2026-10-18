@@ -10,6 +10,7 @@ import { ROTULO } from "../rotulos";
 import { AntiguedadEdad, MetodologiaEdad, PanoramaEdad, UsoEstratoEdad } from "./CarteraEdad";
 import { CarteraCicloBarrio } from "./CarteraCicloBarrio";
 import { ZonaMovimientoMora, ZonaSuspensionesCortes } from "./CarteraMora";
+import { ZonaCarteraConcepto } from "./CarteraConcepto";
 
 // Cartera desagregada, en zonas como Pérdidas:
 //  1. Panorama (abierta): fichas y mezcla por tramo de edad.
@@ -25,7 +26,7 @@ export function CarteraDetallado(props: Props) {
   return <CarteraDetalladoPeriodo key={props.periodo} {...props} />;
 }
 
-const PLEGABLES = ["cd-antig", "cd-uso", "cd-mov", "cd-scrr", "cd-ciclo", "cd-metod"];
+const PLEGABLES = ["cd-antig", "cd-uso", "cd-mov", "cd-scrr", "cd-conc", "cd-ciclo", "cd-metod"];
 const PLEGABLES_INICIAL = { "cd-antig": true };
 const FILTROS_VACIO = { uso: TODOS, subcategoria: TODOS };
 
@@ -99,6 +100,11 @@ function CarteraDetalladoPeriodo({ periodo, onIrAPeriodo }: Props) {
         </Plegable>
         <Plegable id="cd-scrr" diferido titulo="Suspensiones y cortes (SCRR)" marca={marca} abierto={!!pl.abiertos["cd-scrr"]} onCambio={(o) => pl.cambiar("cd-scrr", o)}>
           <ZonaSuspensionesCortes periodo={periodo} uso={uso} estrato={estrato} onLimpiar={limpiar} />
+        </Plegable>
+
+        <h2 className="dash-zona">Composición por concepto</h2>
+        <Plegable id="cd-conc" diferido titulo="Cartera por concepto" marca={marca} abierto={!!pl.abiertos["cd-conc"]} onCambio={(o) => pl.cambiar("cd-conc", o)}>
+          <ZonaCarteraConcepto periodo={periodo} uso={uso} estrato={estrato} onLimpiar={limpiar} />
         </Plegable>
 
         <h2 className="dash-zona">Ciclo y barrio</h2>
