@@ -16,9 +16,9 @@ export const ROTULO_GRUPO: Record<string, string> = {
   no_esta: "Ya no está",
   agrupada: "Agrupada (celdas pequeñas)",
 };
-/** Mora profunda = más de 8 facturas vencidas (grupos 9-24 y más de 24). */
+/** Rango de gestión drástica = más de 8 facturas vencidas (grupos 9-24 y más de 24). */
 export const PROFUNDA = new Set(["v9_24", "v_mas24"]);
-/** Con deuda o sin ella pero fuera de la mora profunda y existente en ambos meses. */
+/** Con deuda o sin ella pero fuera del rango de gestión drástica y existente en ambos meses. */
 const FUERA = new Set(["sin_deuda", "al_dia", "v1_2", "v3_8"]);
 const CON_DEUDA = new Set(["al_dia", "v1_2", "v3_8", "v9_24", "v_mas24"]);
 
@@ -94,7 +94,7 @@ export function matrizTransicion(filas: CarteraTransicionDim[]) {
 }
 
 export type Cohorte = {
-  base: number;            // contratos en mora profunda en el mes base (los que se pueden clasificar)
+  base: number;            // contratos en el rango de gestión drástica en el mes base (los que se pueden clasificar)
   siguen: number;
   bajan: number;           // a 8 facturas o menos, con deuda
   sinDeuda: number;
@@ -103,7 +103,7 @@ export type Cohorte = {
   saldoBase: number;
   saldoDestino: number;
 };
-/** Contratos que estaban en mora profunda en el mes base y dónde están en `periodo` (filas de referencia 'base' de ese periodo). */
+/** Contratos que estaban en el rango de gestión drástica en el mes base y dónde están en `periodo` (filas de referencia 'base' de ese periodo). */
 export function cohorte(filas: CarteraTransicionDim[]): Cohorte {
   const k: Cohorte = { base: 0, siguen: 0, bajan: 0, sinDeuda: 0, yaNoEstan: 0, agrupados: 0, saldoBase: 0, saldoDestino: 0 };
   for (const f of filas) {
@@ -169,7 +169,7 @@ export function emdCruce(filas: EmdDim[], periodo: string, campo: "mora" | "esta
   return { codigos, get, totalCodigo: (cod: string, vs: string[]) => vs.reduce((s, v) => s + get(cod, v), 0) };
 }
 
-/** De los contratos con corte o suspensión facturado (600, 602, 605), cuántos están en cada estado del producto y en mora profunda. */
+/** De los contratos con corte o suspensión facturado (600, 602, 605), cuántos están en cada estado del producto y en el rango de gestión drástica. */
 export function corteSuspensionDetalle(filas: EmdDim[], periodo: string) {
   const del = filas.filter((f) => f.periodo === periodo && CORTE_SUSP.has(f.codigo) && f.contratos != null);
   const total = del.reduce((s, f) => s + c(f.contratos), 0);
@@ -178,7 +178,7 @@ export function corteSuspensionDetalle(filas: EmdDim[], periodo: string) {
   return { total, activos: porEstado("activo"), suspendidos: porEstado("suspendido"), coactivos: porEstado("coactivo"), retirados: porEstado("retirado"), profunda };
 }
 
-/** Mora profunda con y sin corte o suspensión facturado en el mes: «con» sale de v_emd_dim; el universo de la mora profunda, de la transición (destino). */
+/** Rango de gestión drástica con y sin corte o suspensión facturado en el mes: «con» sale de v_emd_dim; el universo del rango de gestión drástica, de la transición (destino). */
 export function profundaConSin(emd: EmdDim[], trans: CarteraTransicionDim[], periodo: string) {
   const con = corteSuspensionDetalle(emd, periodo).profunda;
   const universo = movimiento(trans.filter((f) => f.periodo === periodo && f.referencia === "anterior")).profundaDestino;

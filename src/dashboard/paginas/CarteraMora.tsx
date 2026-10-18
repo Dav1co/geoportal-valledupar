@@ -97,32 +97,32 @@ function MovimientoMora({ filas, periodo, uso, estrato, onLimpiar }: Props & { f
   };
   const evoPer = evo.map((e) => etiquetaCorta(e.periodo));
   const lectura: string[] = [
-    `En ${etiquetaPeriodo(periodo)}, ${fmtEntero(mv.profundaDestino)} contratos están en mora profunda (más de 8 facturas vencidas): ${dif === 0 ? "los mismos que" : `${fmtEntero(Math.abs(dif))} ${dif > 0 ? "más que" : "menos que"}`} en ${etiquetaPeriodo(mesAnt)} (${fmtEntero(mv.profundaOrigen)}). Entraron ${fmtEntero(mv.entradas)}, salieron ${fmtEntero(mv.salidas)} y ${fmtEntero(mv.permanencia)} permanecieron.`,
-    `${fmtEntero(mv.pasoSinDeuda)} contratos con deuda pasaron a «sin deuda» (${fmtEntero(mv.pasoSinDeudaDesdeProfunda)} desde la mora profunda); ${fmtEntero(mv.nuevos)} contratos son nuevos y ${fmtEntero(mv.yaNoEstan)} ya no figuran.`,
+    `En ${etiquetaPeriodo(periodo)}, ${fmtEntero(mv.profundaDestino)} contratos están en el rango de gestión drástica (más de 8 facturas vencidas): ${dif === 0 ? "los mismos que" : `${fmtEntero(Math.abs(dif))} ${dif > 0 ? "más que" : "menos que"}`} en ${etiquetaPeriodo(mesAnt)} (${fmtEntero(mv.profundaOrigen)}). Entraron ${fmtEntero(mv.entradas)}, salieron ${fmtEntero(mv.salidas)} y ${fmtEntero(mv.permanencia)} permanecieron.`,
+    `${fmtEntero(mv.pasoSinDeuda)} contratos con deuda pasaron a «sin deuda» (${fmtEntero(mv.pasoSinDeudaDesdeProfunda)} desde el rango de gestión drástica); ${fmtEntero(mv.nuevos)} contratos son nuevos y ${fmtEntero(mv.yaNoEstan)} ya no figuran.`,
   ];
   if (hayCohorte && coh.base > 0) {
-    lectura.push(`De los ${fmtEntero(coh.base)} contratos que estaban en mora profunda en ${etiquetaPeriodo(base!)}, ${fmtEntero(coh.siguen)} (${fmtPct((coh.siguen / coh.base) * 100)}) siguen en ella en ${etiquetaPeriodo(periodo)}; ${fmtEntero(coh.bajan)} bajaron a 8 facturas o menos con deuda y ${fmtEntero(coh.sinDeuda)} pasaron a «sin deuda».`);
+    lectura.push(`De los ${fmtEntero(coh.base)} contratos que estaban en el rango de gestión drástica en ${etiquetaPeriodo(base!)}, ${fmtEntero(coh.siguen)} (${fmtPct((coh.siguen / coh.base) * 100)}) siguen en ella en ${etiquetaPeriodo(periodo)}; ${fmtEntero(coh.bajan)} bajaron a 8 facturas o menos con deuda y ${fmtEntero(coh.sinDeuda)} pasaron a «sin deuda».`);
   }
   if (evo.length > 1) {
     const e = evo.map((x) => x.entradas), s = evo.map((x) => x.salidas);
-    lectura.push(`Entre ${etiquetaCorta(evo[0].periodo)} y ${etiquetaCorta(evo[evo.length - 1].periodo)}, las entradas a la mora profunda fueron de ${fmtEntero(Math.min(...e))} a ${fmtEntero(Math.max(...e))} contratos por mes y las salidas de ${fmtEntero(Math.min(...s))} a ${fmtEntero(Math.max(...s))}.`);
+    lectura.push(`Entre ${etiquetaCorta(evo[0].periodo)} y ${etiquetaCorta(evo[evo.length - 1].periodo)}, las entradas al rango de gestión drástica fueron de ${fmtEntero(Math.min(...e))} a ${fmtEntero(Math.max(...e))} contratos por mes y las salidas de ${fmtEntero(Math.min(...s))} a ${fmtEntero(Math.max(...s))}.`);
   }
 
   return (
     <>
       <div className="dash-sin-filtro-fila"><MarcaFiltro valores={{ uso, estrato }} onLimpiar={onLimpiar} /><SinCicloBarrio /></div>
       <div className="dash-aviso">
-        <b>Mora profunda</b> = más de 8 facturas vencidas (grupos «9-24» y «más de 24»). Las cifras comparan cada contrato entre {etiquetaPeriodo(mesAnt)} y {etiquetaPeriodo(periodo)}.
+        <b>Rango de gestión drástica</b> = más de 8 facturas vencidas (grupos «9-24» y «más de 24»). Las cifras comparan cada contrato entre {etiquetaPeriodo(mesAnt)} y {etiquetaPeriodo(periodo)}.
         Describen lo que pasó con los contratos, no por qué pasó.
       </div>
 
       <div className="dash-kpis">
-        <Ficha etiqueta="Contratos en mora profunda" valor={fmtEntero(mv.profundaDestino)} mal
+        <Ficha etiqueta="Contratos en el rango de gestión drástica" valor={fmtEntero(mv.profundaDestino)} mal
           sub={`${signo(dif)} frente a ${etiquetaPeriodo(mesAnt)} (${fmtEntero(mv.profundaOrigen)}) · saldo ${fmtMillonesUno(mv.saldoProfundaDestino)}`} />
-        <Ficha etiqueta="Entradas a la mora profunda" valor={fmtEntero(mv.entradas)} sub="venían con 8 facturas o menos y existían el mes anterior" />
-        <Ficha etiqueta="Salidas de la mora profunda" valor={fmtEntero(mv.salidas)} sub="venían de la mora profunda y quedan con 8 facturas o menos" />
-        <Ficha etiqueta="Permanencia" valor={fmtEntero(mv.permanencia)} sub={`${fmtPct(mv.profundaOrigen ? (mv.permanencia / mv.profundaOrigen) * 100 : null)} de los que estaban en la mora profunda`} />
-        <Ficha etiqueta="Paso a «sin deuda»" valor={fmtEntero(mv.pasoSinDeuda)} sub={`${fmtEntero(mv.pasoSinDeudaDesdeProfunda)} venían de la mora profunda`} />
+        <Ficha etiqueta="Entradas al rango de gestión drástica" valor={fmtEntero(mv.entradas)} sub="venían con 8 facturas o menos y existían el mes anterior" />
+        <Ficha etiqueta="Salidas del rango de gestión drástica" valor={fmtEntero(mv.salidas)} sub="venían del rango de gestión drástica y quedan con 8 facturas o menos" />
+        <Ficha etiqueta="Permanencia" valor={fmtEntero(mv.permanencia)} sub={`${fmtPct(mv.profundaOrigen ? (mv.permanencia / mv.profundaOrigen) * 100 : null)} de los que estaban en el rango de gestión drástica`} />
+        <Ficha etiqueta="Paso a «sin deuda»" valor={fmtEntero(mv.pasoSinDeuda)} sub={`${fmtEntero(mv.pasoSinDeudaDesdeProfunda)} venían del rango de gestión drástica`} />
         <Ficha etiqueta="Contratos nuevos" valor={fmtEntero(mv.nuevos)} sub="no estaban en el mes anterior" />
         <Ficha etiqueta="Contratos que ya no existen" valor={fmtEntero(mv.yaNoEstan)} sub="estaban el mes anterior y ya no figuran" />
       </div>
@@ -135,7 +135,7 @@ function MovimientoMora({ filas, periodo, uso, estrato, onLimpiar }: Props & { f
 
       <div className="dash-fila"><div className="dash-carta">
         <h3>De dónde vienen y a dónde van — {etiquetaPeriodo(mesAnt)} → {etiquetaPeriodo(periodo)}</h3>
-        <div className="dash-leer">Cómo leerlo: cada fila es el grupo de mora de los contratos en {etiquetaPeriodo(mesAnt)}; cada columna, su grupo en {etiquetaPeriodo(periodo)}. La diagonal son los que no cambiaron. Rojo = destino en mora profunda.</div>
+        <div className="dash-leer">Cómo leerlo: cada fila es el grupo de mora de los contratos en {etiquetaPeriodo(mesAnt)}; cada columna, su grupo en {etiquetaPeriodo(periodo)}. La diagonal son los que no cambiaron. Rojo = destino en el rango de gestión drástica.</div>
         <div className="dash-tabla-scroll">
           <table className="dash-tabla num dash-matriz">
             <thead><tr><th>Origen \ Destino</th>{mat.destinos.map((d) => <th key={d}>{ROTULO_GRUPO[d]}</th>)}<th>Total origen</th></tr></thead>
@@ -166,12 +166,12 @@ function MovimientoMora({ filas, periodo, uso, estrato, onLimpiar }: Props & { f
       <div className="dash-fila"><div className="dash-carta">
         <h3>Cohorte de {base ? etiquetaPeriodo(base) : "febrero"} en {etiquetaPeriodo(periodo)}</h3>
         {!hayCohorte || coh.base === 0 ? (
-          <div className="dash-nota">Para este período la referencia base ({base ? etiquetaPeriodo(base) : "el primer período"}) coincide con el mes anterior o no tiene contratos en mora profunda para esta combinación: la cohorte se ve en la matriz de arriba.</div>
+          <div className="dash-nota">Para este período la referencia base ({base ? etiquetaPeriodo(base) : "el primer período"}) coincide con el mes anterior o no tiene contratos en el rango de gestión drástica para esta combinación: la cohorte se ve en la matriz de arriba.</div>
         ) : (<>
-          <div className="dash-leer">Cómo leerlo: son los contratos que estaban en mora profunda en {etiquetaPeriodo(base!)} (referencia base) y dónde están hoy.</div>
+          <div className="dash-leer">Cómo leerlo: son los contratos que estaban en el rango de gestión drástica en {etiquetaPeriodo(base!)} (referencia base) y dónde están hoy.</div>
           <div className="dash-kpis">
-            <Ficha etiqueta={`En mora profunda en ${etiquetaCorta(base!)}`} valor={fmtEntero(coh.base)} sub={`saldo ${fmtMillonesUno(coh.saldoBase)}`} />
-            <Ficha etiqueta="Siguen en mora profunda" valor={fmtEntero(coh.siguen)} mal sub={`${fmtPct((coh.siguen / coh.base) * 100)} de la cohorte · saldo hoy ${fmtMillonesUno(coh.saldoDestino)}`} />
+            <Ficha etiqueta={`En el rango de gestión drástica en ${etiquetaCorta(base!)}`} valor={fmtEntero(coh.base)} sub={`saldo ${fmtMillonesUno(coh.saldoBase)}`} />
+            <Ficha etiqueta="Siguen en el rango de gestión drástica" valor={fmtEntero(coh.siguen)} mal sub={`${fmtPct((coh.siguen / coh.base) * 100)} de la cohorte · saldo hoy ${fmtMillonesUno(coh.saldoDestino)}`} />
             <Ficha etiqueta="Bajaron a 8 facturas o menos" valor={fmtEntero(coh.bajan)} sub={`${fmtPct((coh.bajan / coh.base) * 100)} de la cohorte`} />
             <Ficha etiqueta="Pasaron a «sin deuda»" valor={fmtEntero(coh.sinDeuda)} sub={`${fmtPct((coh.sinDeuda / coh.base) * 100)} de la cohorte`} />
             <Ficha etiqueta="Ya no existen" valor={fmtEntero(coh.yaNoEstan)} sub={coh.agrupados > 0 ? `y ${fmtEntero(coh.agrupados)} en celdas «agrupada»` : "—"} />
@@ -180,8 +180,8 @@ function MovimientoMora({ filas, periodo, uso, estrato, onLimpiar }: Props & { f
       </div></div>
 
       <div className="dash-fila"><div className="dash-carta">
-        <h3>Entradas y salidas de la mora profunda, mes a mes</h3>
-        <div className="dash-leer">Cómo leerlo: contratos que entran y que salen de la mora profunda en cada mes frente al mes anterior.</div>
+        <h3>Entradas y salidas del rango de gestión drástica, mes a mes</h3>
+        <div className="dash-leer">Cómo leerlo: contratos que entran y que salen del rango de gestión drástica en cada mes frente al mes anterior.</div>
         <LineasPorcentaje
           etiquetas={evoPer}
           series={[
@@ -192,7 +192,7 @@ function MovimientoMora({ filas, periodo, uso, estrato, onLimpiar }: Props & { f
         />
         <TablaPlegable titulo="Datos: movimiento por período">
           <table className="dash-tabla num">
-            <thead><tr><th>Período</th><th>En mora profunda</th><th>Entradas</th><th>Salidas</th><th>Permanencia</th><th>A «sin deuda»</th><th>Nuevos</th><th>Ya no existen</th></tr></thead>
+            <thead><tr><th>Período</th><th>En el rango de gestión drástica</th><th>Entradas</th><th>Salidas</th><th>Permanencia</th><th>A «sin deuda»</th><th>Nuevos</th><th>Ya no existen</th></tr></thead>
             <tbody>
               {evo.map((e) => (
                 <tr key={e.periodo}><td>{etiquetaCorta(e.periodo)}</td><td className="num">{fmtEntero(e.profundaDestino)}</td><td className="num">{fmtEntero(e.entradas)}</td><td className="num">{fmtEntero(e.salidas)}</td><td className="num">{fmtEntero(e.permanencia)}</td><td className="num">{fmtEntero(e.pasoSinDeuda)}</td><td className="num">{fmtEntero(e.nuevos)}</td><td className="num">{fmtEntero(e.yaNoEstan)}</td></tr>
@@ -210,7 +210,7 @@ function MovimientoMora({ filas, periodo, uso, estrato, onLimpiar }: Props & { f
           <li><b>Fuente.</b> El detalle por contrato de cartera de cada mes (<code>cartera_contrato</code>). Cada contrato se clasifica por sus facturas vencidas (máximo del contrato): sin deuda, al día con deuda, 1-2, 3-8, 9-24 y más de 24; «no estaba» si no existía en el mes de origen y «ya no está» si no existe en el de destino.</li>
           <li><b>Referencias.</b> «Mes anterior» compara con el período inmediatamente anterior de la fuente; «base» compara con el primer período de la fuente y permite la cohorte desde ese mes.</li>
           <li><b>Privacidad.</b> Solo agregados por uso y estrato, sin contrato, barrio ni ciclo. Las celdas con menos de 5 contratos se funden por pasos (estrato, uso, destino) en «agrupada» con las mismas sumas; si aun la última celda queda con menos de 5, se publica vacía y no entra en los totales. Esos contratos no se asignan a las fichas.</li>
-          <li><b>Es una descripción, no una causa.</b> Un contrato que sale de la mora profunda puede haber pagado, haber sido financiado, haber cambiado de estado o haber sido ajustado; la cifra no lo distingue.</li>
+          <li><b>Es una descripción, no una causa.</b> Un contrato que sale del rango de gestión drástica puede haber pagado, haber sido financiado, haber cambiado de estado o haber sido ajustado; la cifra no lo distingue.</li>
         </ul>
       </div></div>
     </>
@@ -228,14 +228,14 @@ export function ZonaSuspensionesCortes(props: Props) {
 function ProfundaConSin({ emd, periodo, uso, estrato }: { emd: EmdDim[]; periodo: string; uso: string; estrato: string }) {
   const est = useVista("v_cartera_transicion_dim", comoCarteraTransicionDim);
   return (
-    <Cargando estado={est} que="la mora profunda">
+    <Cargando estado={est} que="el rango de gestión drástica">
       {(trans) => {
         const r = profundaConSin(filtrarUsoEstrato(emd, uso, estrato), filtrarUsoEstrato(trans, uso, estrato), periodo);
         return (<>
           <div className="dash-kpis">
-            <Ficha etiqueta="En mora profunda" valor={fmtEntero(r.universo)} sub={`contratos en ${etiquetaPeriodo(periodo)}`} />
-            <Ficha etiqueta="Con corte o suspensión facturado" valor={fmtEntero(r.con)} mal sub={`${fmtPct(r.universo ? (r.con / r.universo) * 100 : null)} de la mora profunda`} />
-            <Ficha etiqueta="Sin corte ni suspensión facturado" valor={fmtEntero(r.sin)} sub={`${fmtPct(r.universo ? (r.sin / r.universo) * 100 : null)} de la mora profunda`} />
+            <Ficha etiqueta="En el rango de gestión drástica" valor={fmtEntero(r.universo)} sub={`contratos en ${etiquetaPeriodo(periodo)}`} />
+            <Ficha etiqueta="Con corte o suspensión facturado" valor={fmtEntero(r.con)} mal sub={`${fmtPct(r.universo ? (r.con / r.universo) * 100 : null)} del rango de gestión drástica`} />
+            <Ficha etiqueta="Sin corte ni suspensión facturado" valor={fmtEntero(r.sin)} sub={`${fmtPct(r.universo ? (r.sin / r.universo) * 100 : null)} del rango de gestión drástica`} />
           </div>
           <div className="dash-nota">«Con» cuenta pares contrato-código de 600, 602 y 605 facturados en el mes; un contrato con dos de esos códigos cuenta dos veces. Lo facturado no es la actividad física en terreno.</div>
         </>);
@@ -261,7 +261,7 @@ function SuspensionesCortes({ filas, periodo, uso, estrato, onLimpiar }: Props &
   if (mes && !mes.sinDatos) {
     lectura.push(`En ${etiquetaPeriodo(periodo)} se facturaron conceptos de corte o suspensión (600, 602 y 605) en ${fmtEntero(mes.corteSusp)} pares contrato-código y de reinstalación o reconexión (603 y 606) en ${fmtEntero(mes.reinstRecon)}; el valor facturado de los cinco conceptos fue ${fmtMillonesUno(mes.valorTotal)}.`);
     if (det.total > 0) lectura.push(`De los ${fmtEntero(det.total)} pares con corte o suspensión facturado, ${fmtEntero(det.activos)} (${fmtPct((det.activos / det.total) * 100)}) corresponden a productos en estado «Activo» según la cartera del mismo mes; el resto está en otros estados o en celdas agrupadas. El estado financiero («Conexión», «Suspensión total») no está en esta dimensión.`);
-    if (det.total > 0) lectura.push(`${fmtEntero(det.profunda)} de esos pares (${fmtPct((det.profunda / det.total) * 100)}) son de contratos en mora profunda.`);
+    if (det.total > 0) lectura.push(`${fmtEntero(det.profunda)} de esos pares (${fmtPct((det.profunda / det.total) * 100)}) son de contratos en el rango de gestión drástica.`);
   } else {
     lectura.push(`${etiquetaPeriodo(periodo)} no tiene datos de conceptos EMD: la fuente trae estos conceptos desde ${etiquetaPeriodo(PRIMER_PERIODO_EMD)}. «Sin datos» no significa «sin actividad».`);
   }
@@ -356,7 +356,7 @@ function SuspensionesCortes({ filas, periodo, uso, estrato, onLimpiar }: Props &
           </div>
         </div>
 
-        <Plegable id="cd-scrr-prof" diferido titulo="Mora profunda con y sin corte o suspensión facturado" abierto={abreProfunda} onCambio={setAbreProfunda}>
+        <Plegable id="cd-scrr-prof" diferido titulo="Rango de gestión drástica con y sin corte o suspensión facturado" abierto={abreProfunda} onCambio={setAbreProfunda}>
           <ProfundaConSin emd={filas} periodo={periodo} uso={uso} estrato={estrato} />
         </Plegable>
       </>)}

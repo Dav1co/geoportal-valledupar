@@ -2,7 +2,7 @@ import type { MapaCalorDim } from "./tipos";
 
 // Lógica pura del mapa de calor (sin React ni MapLibre): sumas, porcentajes, clases por cuantiles y cuadrados de 250 m.
 // Los NULL de las columnas de capa y de cartera son conteos suprimidos (1 a 4): se tratan como «desconocido», nunca como 0.
-// Las columnas «_cartera» cuentan los contratos que SE MANTIENEN con el interruptor: sin mora profunda (sin más de 8 facturas vencidas, o sin registro).
+// Las columnas «_cartera» cuentan los contratos que SE MANTIENEN con el interruptor: fuera del rango de gestión drástica (sin más de 8 facturas vencidas, o sin registro).
 
 export type CapaId = "sin_medidor_obs" | "consumo_bajo";
 export const CAPAS: { id: CapaId; nombre: string; ramp: string[] }[] = [

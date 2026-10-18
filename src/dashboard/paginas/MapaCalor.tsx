@@ -111,7 +111,7 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
           const t = (v: unknown) => (Number(v) < 0 ? MENOS_5 : fmtEntero(Number(v)));
           const lineas = [
             `<b>${p.capaNombre}</b>`,
-            `${p.conCartera ? "Contratos de la capa que se mantienen (sin mora profunda)" : "Contratos de la capa"}: ${t(p.cap)}`,
+            `${p.conCartera ? "Contratos de la capa que se mantienen (fuera del rango de gestión drástica)" : "Contratos de la capa"}: ${t(p.cap)}`,
             `Contratos de la celda: ${fmtEntero(Number(p.base))}`,
             `Porcentaje: ${Number(p.pct) < 0 ? MENOS_5 : `${fmtDecimal(Number(p.pct), 1)} %`}`,
           ];
@@ -204,7 +204,7 @@ const FUENTE_CAR = "bi.v_mapa_calor_cartera_dim (hechos.consumo_metodo y hechos.
 const fechaDe = (xs: { calculado_en: string }[]) => { const f = xs.map((x) => x.calculado_en).filter(Boolean).sort().pop(); return f ? new Date(f).toLocaleString("es-CO") : "—"; };
 const pesosM = (v: number | null) => (v == null ? MENOS_5 : fmtMillonesEnteros(v));
 const GRUPOS_CAR = [
-  { id: "mora_profunda", titulo: "Más de 8 facturas vencidas (mora profunda)" },
+  { id: "mora_profunda", titulo: "Más de 8 facturas vencidas (rango de gestión drástica)" },
   { id: "hasta_8", titulo: "8 facturas vencidas o menos" },
 ];
 function CarteraGrupos({ car, periodoTxt, calculado }: { car: MapaCalorCarteraDim[]; periodoTxt: string; calculado: string }) {
@@ -248,7 +248,7 @@ function CarteraGrupos({ car, periodoTxt, calculado }: { car: MapaCalorCarteraDi
       <div className="dash-nota">Fuente: {FUENTE_CAR}. Período: {periodoTxt}. Calculado: {calculado}.</div>
       <details><summary>ⓘ Cómo se calcula</summary><div className="dash-nota">
         Cartera = total_cartera = saldo_pendiente + saldo_financiado, sumada entre los productos (filas) de cada contrato; los vacíos cuentan 0 y no incluye saldos a favor.
-        Grupos: máximo de facturas vencidas del contrato en el período mayor que 8 (mora profunda), o con 8 facturas vencidas o menos, o sin registro de cartera. «De ello, financiado» = saldo_financiado.
+        Grupos: máximo de facturas vencidas del contrato en el período mayor que 8 (rango de gestión drástica), o con 8 facturas vencidas o menos, o sin registro de cartera. «De ello, financiado» = saldo_financiado.
         Capa y universo tienen la misma definición del mapa (la capa «Sin medidor o con observación» se mide sobre todos los contratos del período; «Consumo bajo», sobre los residenciales con medidor y lectura real).
         Se calcula sobre todos los contratos, sin depender de coordenadas ni de celdas del mapa. Los porcentajes son sobre el total de la capa o de su universo.
         2.343 contratos con cartera (cerca del 0,1 % de la cartera) quedan fuera del universo de consumo y no aparecen aquí. La fuente no desglosa si saldo_pendiente incluye intereses u otros cargos.
@@ -340,7 +340,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
 
       <Parte id="resumen" titulo={`Resumen — ${cap.nombre}`} abierta={!!abiertas.resumen} onCambio={(o) => cambiar("resumen", o)}>
         <div className="dash-kpis">
-          <Kpi eti={cartera ? "Contratos en la capa que se mantienen (sin mora profunda)" : "Contratos en la capa"} valor={fmtEntero(suma)}
+          <Kpi eti={cartera ? "Contratos en la capa que se mantienen (fuera del rango de gestión drástica)" : "Contratos en la capa"} valor={fmtEntero(suma)}
             sub={`suma de ${fmtEntero(celdasCapa.length)} celdas publicadas${supCapa ? `; ${fmtEntero(supCapa)} celdas con «${MENOS_5}» no suman` : ""}`} />
           <Kpi eti="Porcentaje del universo de la capa" valor={pct1(cob && cob.contratos_universo ? (suma / cob.contratos_universo) * 100 : null)}
             sub={`universo: ${fmtEntero(cob?.contratos_universo ?? null)} contratos`} />
@@ -354,9 +354,9 @@ export function MapaCalor({ periodo }: { periodo: string }) {
             <button className="dash-boton-indice" onClick={() => abrir("cartera")}>Ver cartera por grupo de mora</button>
           </div>
         </div>
-        <div className="dash-nota"><b>El filtro excluye los contratos con mora profunda, que con frecuencia corresponden a predios cortados o retirados; es una descripción, no indica causa.</b></div>
+        <div className="dash-nota"><b>El filtro excluye los contratos en el rango de gestión drástica, que con frecuencia corresponden a predios cortados o retirados; es una descripción, no indica causa.</b></div>
         <Pie periodo={periodoTxt} calculado={calculado}
-          formula={`Contratos en la capa = suma de contratos_capa (con el interruptor, de contratos_capa_cartera: los que se mantienen) de las celdas publicadas; los conteos suprimidos (1 a 4 contratos) no se suman, así que la cifra es un mínimo. Porcentaje del universo = esa suma ÷ contratos del universo de la capa. Cobertura = contratos con coordenadas ÷ universo. Los contratos con mora profunda (más de 8 facturas vencidas) y su cartera se calculan sobre todos los contratos de la capa, no sobre las celdas, en la parte «Cartera por grupo de mora».`} />
+          formula={`Contratos en la capa = suma de contratos_capa (con el interruptor, de contratos_capa_cartera: los que se mantienen) de las celdas publicadas; los conteos suprimidos (1 a 4 contratos) no se suman, así que la cifra es un mínimo. Porcentaje del universo = esa suma ÷ contratos del universo de la capa. Cobertura = contratos con coordenadas ÷ universo. Los contratos en el rango de gestión drástica (más de 8 facturas vencidas) y su cartera se calculan sobre todos los contratos de la capa, no sobre las celdas, en la parte «Cartera por grupo de mora».`} />
       </Parte>
 
       <Parte id="cartera" titulo={`Cartera de la capa por grupo de mora — ${cap.nombre}`} abierta={!!abiertas.cartera} onCambio={(o) => cambiar("cartera", o)}>
@@ -372,7 +372,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
       <Parte id="tabla" titulo="Tabla resumen del período" abierta={!!abiertas.tabla} onCambio={(o) => cambiar("tabla", o)}>
         <div className="dash-tabla-scroll">
           <table className="dash-tabla num">
-            <thead><tr><th>Capa</th><th>Universo</th><th>Con coordenadas</th><th>En celdas publicadas</th><th>En celdas suprimidas</th><th>Celdas publicadas</th><th>Contratos en la capa</th><th>Que se mantienen (sin mora profunda)</th></tr></thead>
+            <thead><tr><th>Capa</th><th>Universo</th><th>Con coordenadas</th><th>En celdas publicadas</th><th>En celdas suprimidas</th><th>Celdas publicadas</th><th>Contratos en la capa</th><th>Que se mantienen (fuera del rango de gestión drástica)</th></tr></thead>
             <tbody>
               {CAPAS.map((c) => {
                 const cb = datos.cob.find((x) => x.capa === c.id);
@@ -400,8 +400,8 @@ export function MapaCalor({ periodo }: { periodo: string }) {
           <ul className="dash-nota">
             <li><b>Sin medidor o con observación:</b> contrato sin medidor registrado, o con una observación de lectura distinta de la normal. No cuentan la observación vacía ni los códigos 99 (lectura normal) y 30, 10, 3 y 4 (conexión suspendida, cortada, predio demolido o lote). Códigos que sí cuentan: 1, 2, 5, 6, 7, 8, 11, 12, 13, 17, 21 y 22. Universo: todos los contratos del período.</li>
             <li><b>Consumo bajo (5 m³ o menos):</b> contratos residenciales con medidor y lectura real (observación 99 y función CALCCODL) con consumo cobrado de 0 a 5 m³, ceros incluidos. Universo: los residenciales con lectura real, con cualquier consumo.</li>
-            <li><b>Cartera por grupo de mora:</b> se calcula sobre todos los contratos de la capa y de su universo (no sobre las celdas): contratos y total_cartera (saldo_pendiente + saldo_financiado) sumado entre los productos de cada contrato, separados en más de 8 facturas vencidas (mora profunda) y 8 facturas vencidas o menos (o sin registro). No incluye saldos a favor.</li>
-            <li><b>Interruptor de cartera:</b> excluye los contratos con mora profunda, es decir, con más de 8 facturas vencidas (máximo de facturas vencidas del contrato en el período en hechos.cartera_contrato). Se mantienen los de 0 a 8 facturas vencidas y los que no tienen registro de cartera en el período. Se asume una factura por mes, así que 8 facturas equivalen a 8 meses de deuda.</li>
+            <li><b>Cartera por grupo de mora:</b> se calcula sobre todos los contratos de la capa y de su universo (no sobre las celdas): contratos y total_cartera (saldo_pendiente + saldo_financiado) sumado entre los productos de cada contrato, separados en más de 8 facturas vencidas (rango de gestión drástica) y 8 facturas vencidas o menos (o sin registro). No incluye saldos a favor.</li>
+            <li><b>Interruptor de cartera:</b> excluye los contratos en el rango de gestión drástica, es decir, con más de 8 facturas vencidas (máximo de facturas vencidas del contrato en el período en hechos.cartera_contrato). Se mantienen los de 0 a 8 facturas vencidas y los que no tienen registro de cartera en el período. Se asume una factura por mes, así que 8 facturas equivalen a 8 meses de deuda.</li>
           </ul>
           <div className="dash-nota"><b>Un consumo cero puede ser un predio desocupado, un corte o un medidor detenido:</b> el mapa no distingue entre ellos.</div>
         </Sub>
