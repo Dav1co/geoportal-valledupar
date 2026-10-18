@@ -748,6 +748,28 @@ export function comoEmdDim(r: Record<string, unknown>): EmdDim {
   };
 }
 
+// bi.v_cartera_concepto_dim (sql/49): valor en pesos por uso x estrato x tipo de concepto x tramo de edad. tramo: '0_330' (etiquetas mensuales), '360', '720', '1080',
+// '1440', '1800', '1801' o 'sin_edad' (financiada). Subsidios y descuentos son negativos. Sin contrato, barrio ni ciclo: describe la composición, no la causa.
+export type CarteraConceptoDim = {
+  periodo: string;
+  uso: string;
+  estrato: string;
+  tipo: string;
+  tramo: string;
+  valor: number;
+};
+
+export function comoCarteraConceptoDim(r: Record<string, unknown>): CarteraConceptoDim {
+  return {
+    periodo: String(r.periodo ?? ""),
+    uso: String(r.uso ?? ""),
+    estrato: String(r.estrato ?? ""),
+    tipo: String(r.tipo ?? ""),
+    tramo: String(r.tramo ?? ""),
+    valor: n(r.valor) ?? 0,
+  };
+}
+
 // bi.v_pqr_mes: serie mensual de reclamos y recursos. Un período sin
 // archivo NO genera fila (para poder dibujar hueco, no cero).
 export type PqrMes = {
