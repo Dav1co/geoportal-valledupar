@@ -44,22 +44,23 @@ alter table bi.v_cartera_concepto_dim disable row level security;
 -- Tipo de concepto a partir del codigo y del nombre del mapa (v_concepto_mapa). Si cambia, se recalcula la dimension.
 create or replace function bi.f_tipo_concepto(p_codigo text, p_nombre text)
 returns text language sql immutable as $$
-  case
-    when p_codigo = '6' then 'recargo_moratorio'
-    when p_codigo in ('1', '2') then 'capital_acueducto'
-    when p_codigo in ('3', '4', '21') then 'capital_alcantarillado'
-    when p_codigo in ('26', '27', '28', '29', '38', '39') then 'subsidios_descuentos'
-    when p_codigo in ('30', '31', '32', '33') then 'contribucion'
-    when p_codigo in ('600', '602', '603', '605', '606') then 'cargos_emd'
-    when p_codigo in ('20', '9990', '9991', '9992', '9996', '9997') or upper(coalesce(p_nombre, '')) like 'INTERES%' then 'interes_financiacion'
-    when p_codigo = '1006' then 'financiacion_recargo'
-    when p_codigo in ('1001', '1002', '1003', '1004', '1021', '1030', '1031', '1032', '1033') then 'financiacion_capital'
-    when p_codigo ~ '^1[0-9]{3}$' or upper(coalesce(p_nombre, '')) ~ '^(FINANCIACI|FINAN\.|FIN\.? )' then 'financiacion_otros'
-    when p_codigo in ('170', '172', '173') then 'conexion_obras'              -- cortes de acometida y de apique: obras, no cortes del servicio
-    when upper(coalesce(p_nombre, '')) ~ '(RECONEX|REINSTAL|SUSPENSI|CORTE)' then 'corte_susp_reconexion'
-    when upper(coalesce(p_nombre, '')) ~ '(MEDIDOR|ACCESORIO|CAJA|INSTALACI|MANO DE OBRA|AGUAS POR|CONEXI|ACOMETIDA|VENTA|AMB |RECUPERACI|LLAVE|REGISTRO|SUM INST|NORMALIZACI|REPOSICI)' then 'conexion_obras'
-    else 'otros'
-  end
+  select
+    case
+      when p_codigo = '6' then 'recargo_moratorio'
+      when p_codigo in ('1', '2') then 'capital_acueducto'
+      when p_codigo in ('3', '4', '21') then 'capital_alcantarillado'
+      when p_codigo in ('26', '27', '28', '29', '38', '39') then 'subsidios_descuentos'
+      when p_codigo in ('30', '31', '32', '33') then 'contribucion'
+      when p_codigo in ('600', '602', '603', '605', '606') then 'cargos_emd'
+      when p_codigo in ('20', '9990', '9991', '9992', '9996', '9997') or upper(coalesce(p_nombre, '')) like 'INTERES%' then 'interes_financiacion'
+      when p_codigo = '1006' then 'financiacion_recargo'
+      when p_codigo in ('1001', '1002', '1003', '1004', '1021', '1030', '1031', '1032', '1033') then 'financiacion_capital'
+      when p_codigo ~ '^1[0-9]{3}$' or upper(coalesce(p_nombre, '')) ~ '^(FINANCIACI|FINAN\.|FIN\.? )' then 'financiacion_otros'
+      when p_codigo in ('170', '172', '173') then 'conexion_obras'              -- cortes de acometida y de apique: obras, no cortes del servicio
+      when upper(coalesce(p_nombre, '')) ~ '(RECONEX|REINSTAL|SUSPENSI|CORTE)' then 'corte_susp_reconexion'
+      when upper(coalesce(p_nombre, '')) ~ '(MEDIDOR|ACCESORIO|CAJA|INSTALACI|MANO DE OBRA|AGUAS POR|CONEXI|ACOMETIDA|VENTA|AMB |RECUPERACI|LLAVE|REGISTRO|SUM INST|NORMALIZACI|REPOSICI)' then 'conexion_obras'
+      else 'otros'
+    end
 $$;
 revoke all on function bi.f_tipo_concepto(text, text) from public, anon, authenticated;
 
