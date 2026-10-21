@@ -710,6 +710,15 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  elsif p_vista = 'v_cartera_concepto_dim' then
+    -- Cartera por concepto: valor en pesos por uso x estrato x tipo de concepto x tramo de edad (sql/49). ~1.050 filas por periodo; solo agregados, sin contrato, barrio ni ciclo. Describe la composicion, no la causa.
+    select coalesce(jsonb_agg(to_jsonb(t) order by t.tipo, t.uso, t.estrato, t.tramo), '[]'::jsonb)
+      into resultado
+    from bi.v_cartera_concepto_dim t
+    where (p_filtros ->> 'periodo' is null or t.periodo =  p_filtros ->> 'periodo')
+      and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
+      and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -850,4 +859,10 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- ROLLBACK de las ramas v_cartera_transicion_dim y v_emd_dim (61 -> 63 ramas): volver a la version de este archivo con 61 ramas (hasta v_cartera_pago_dim,
 -- commit anterior a estas ramas) y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar las ramas, quitar las dos vistas de
 -- VISTAS_PERMITIDAS en geoportal-bi y redesplegar la Edge Function (v27). Despues, las dos tablas se retiran segun sql/47 y sql/48.
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de la rama v_cartera_concepto_dim (63 -> 64 ramas): volver a la version de este archivo con 63 ramas (hasta v_emd_dim, commit anterior a esta rama)
+-- y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar la rama, quitar la vista de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la
+-- Edge Function (v28). Despues, bi.v_cartera_concepto_dim se retira segun sql/49.
 -- =====================================================================
