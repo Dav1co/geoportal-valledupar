@@ -10,6 +10,7 @@ import { CENTRO_VALLEDUPAR, FUENTE_BASE_CALLES } from "../../lib/mapaBase";
 import { fmtDecimal, fmtEntero, fmtMillonesEnteros } from "../formato";
 import { FiltroMultiple } from "../FiltroMultiple";
 import "../carteraMapa.css";
+import { usePantallaCompleta } from "../usePantallaCompleta";
 import {
   COLORES_CALOR, DEGRADE_CALOR_CSS, FILTROS_VACIO, MEDIDAS, barriosVisibles, cajaCeldas, capasEfectivas, depurarBarrios, escalaVisible, hayFiltro, leerCatalogo, leerMapa,
   AYUDA_TRAMOS, intensidadBaseCalor, intensidadCalor, paramsCatalogo, paramsMapa, pesoCalor, pesosPorCuantil, radioCalor, rotuloBarrio, rotulosBandas, valorCelda,
@@ -20,13 +21,6 @@ const FUENTE = "bi_interno.cartera_mapa_contrato (hechos.cartera_contrato; coord
 const MENOS_5 = "menos de 5 contratos";
 const pesos = (v: number) => `$ ${fmtEntero(Math.round(v))}`;
 const pesosM = (v: number | null) => (v == null ? MENOS_5 : fmtMillonesEnteros(v));
-
-// Pantalla completa: la API del navegador (con prefijo webkit para Safari) sobre el contenedor de TODA la sección; sin ella (o si el navegador la niega),
-// un contenedor fijo (position: fixed; inset: 0) con la misma disposición. Modo: "normal" | "api" | "fijo".
-type ModoPantalla = "normal" | "api" | "fijo";
-type DocFS = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
-type ElFS = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
-const elementoEnPantallaCompleta = () => (document as DocFS).fullscreenElement ?? (document as DocFS).webkitFullscreenElement ?? null;
 
 export function ZonaMapaCartera({ periodo }: { periodo: string }) {
   const [cat, setCat] = useState<Catalogo | null>(null);
@@ -39,8 +33,6 @@ export function ZonaMapaCartera({ periodo }: { periodo: string }) {
   const [error, setError] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
   const [listo, setListo] = useState(false);              // el mapa ya cargó su estilo (para pintar datos que llegaron antes)
-  const [modo, setModo] = useState<ModoPantalla>("normal");
-  const [altoMapa, setAltoMapa] = useState<number | null>(null);   // solo en pantalla completa: el alto que dejan los controles
   const seccionRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const leyRef = useRef<HTMLDivElement>(null);
@@ -94,69 +86,8 @@ export function ZonaMapaCartera({ periodo }: { periodo: string }) {
     return () => { listoRef.current = false; setListo(false); map.remove(); mapaRef.current = null; };
   }, []);
 
-  // Pantalla completa ---------------------------------------------------------------------------------------------------------------------
-  // 1) El navegador avisa cuando entra o sale (también con Esc): el estado sigue al navegador.
-  useEffect(() => {
-    const alCambiar = () => {
-      if (elementoEnPantallaCompleta() === seccionRef.current) setModo("api");
-      else setModo((m) => (m === "api" ? "normal" : m));
-    };
-    document.addEventListener("fullscreenchange", alCambiar);
-    document.addEventListener("webkitfullscreenchange", alCambiar);
-    return () => { document.removeEventListener("fullscreenchange", alCambiar); document.removeEventListener("webkitfullscreenchange", alCambiar); };
-  }, []);
-  // 2) Con el contenedor fijo (respaldo) no hay Esc nativo: se atiende aquí.
-  useEffect(() => {
-    if (modo !== "fijo") return;
-    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") setModo("normal"); };
-    document.addEventListener("keydown", tecla);
-    return () => document.removeEventListener("keydown", tecla);
-  }, [modo]);
-  // 3) Si la sección se desmonta en pantalla completa, se sale (no deja el navegador en pantalla completa sin contenido).
-  useEffect(() => () => {
-    if (elementoEnPantallaCompleta() === seccionRef.current) { const d = document as DocFS; (d.exitFullscreen ?? d.webkitExitFullscreen)?.call(d); }
-  }, []);
-  async function alternarPantalla() {
-    if (modo !== "normal") {
-      if (modo === "api") { const d = document as DocFS; await (d.exitFullscreen ?? d.webkitExitFullscreen)?.call(d); }
-      else setModo("normal");
-      return;
-    }
-    const el = seccionRef.current as ElFS | null;
-    if (!el) return;
-    const pedir = el.requestFullscreen ?? el.webkitRequestFullscreen;
-    if (!pedir) { setModo("fijo"); return; }
-    try { await pedir.call(el); } catch { setModo("fijo"); }   // permiso negado o no disponible: contenedor fijo
-  }
-  // 4) En pantalla completa el mapa ocupa todo el alto que dejan los controles (y la leyenda); el resto de la sección se desplaza dentro de sí misma.
-  //    Se mide al entrar y cuando cambia el tamaño de la ventana o de la parte de arriba (controles que se reacomodan). No consulta nada.
-  useEffect(() => {
-    const r = seccionRef.current, m = cont.current;
-    if (modo === "normal" || !r || !m) { setAltoMapa(null); return; }
-    const medir = () => {
-      const y = m.getBoundingClientRect().top - r.getBoundingClientRect().top + r.scrollTop;
-      const ley = (leyRef.current?.offsetHeight ?? 0) + 6;
-      setAltoMapa(Math.max(300, Math.round(r.clientHeight - y - ley - 28)));
-    };
-    medir();
-    const ro = new ResizeObserver(medir);
-    ro.observe(r);
-    if (topRef.current) ro.observe(topRef.current);
-    if (leyRef.current) ro.observe(leyRef.current);
-    return () => ro.disconnect();
-  }, [modo]);
-  // 5) El mapa se reajusta a su contenedor siempre que este cambie de tamaño (entrar, salir, girar, cambiar la ventana): conserva centro, zoom y capas.
-  useEffect(() => {
-    const m = cont.current;
-    if (!m) return;
-    const ro = new ResizeObserver(() => mapaRef.current?.resize());
-    ro.observe(m);
-    return () => ro.disconnect();
-  }, []);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => requestAnimationFrame(() => mapaRef.current?.resize()));
-    return () => cancelAnimationFrame(id);
-  }, [modo, altoMapa]);
+  // Pantalla completa (hook común con el mapa de Pérdidas): modo, alto del mapa y alternar.
+  const { modo, altoMapa, alternar: alternarPantalla } = usePantallaCompleta({ seccion: seccionRef, cont, top: topRef, ley: leyRef, redimensionar: () => mapaRef.current?.resize() });
 
   // Pintado: la escala se recalcula por cuantiles sobre lo visible; la ventana emergente solo muestra agregados.
   const pintado = useMemo(() => {

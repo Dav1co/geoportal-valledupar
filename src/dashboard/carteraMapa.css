@@ -42,3 +42,9 @@
 /* Filtros de selección múltiple: sin el triángulo propio del navegador (la etiqueta ya trae su flecha ▾) */
 .dash-filtro-multiple > summary { list-style: none; }
 .dash-filtro-multiple > summary::-webkit-details-marker { display: none; }
+
+/* Controles que solo se muestran en pantalla completa (en el mapa de Pérdidas, la capa y el interruptor de cartera viven arriba de la tarjeta y se repiten aquí) */
+.cm-solo-completa { display: none; }
+.cm-completa .cm-solo-completa { display: contents; }
+.cm-solo-completa label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.cm-solo-completa select { font: inherit; font-size: 12.5px; color: var(--dash-texto, #22313f); background: var(--dash-carta, #fff); border: 1px solid var(--dash-linea, #dde5ea); border-radius: 6px; padding: 4px 8px; }

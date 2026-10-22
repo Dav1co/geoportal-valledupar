@@ -15,9 +15,12 @@ import {
 import { etiquetaPeriodo, fmtDecimal, fmtEntero, fmtMillonesEnteros } from "../formato";
 import { CENTRO_VALLEDUPAR, FUENTE_BASE_CALLES } from "../../lib/mapaBase";
 import {
-  CAPAS, COLOR_SUPRIMIDA, MIN_CONTRATOS, capaDe, claseDe, clasesPorCuantiles, colorClase, conteoCapa, cuadrado, intervalos, nClases, nSuprimidas,
+  CAPAS, COLOR_SUPRIMIDA, LADO_M, MIN_CONTRATOS, capaDe, claseDe, clasesPorCuantiles, colorClase, conteoCapa, cuadrado, intervalos, nClases, nSuprimidas,
   pctCelda, sumaCapa, type CapaId,
 } from "../mapaCalorComun";
+import { COLORES_CALOR, DEGRADE_CALOR_CSS, intensidadBaseCalor, intensidadCalor, pesoCalor, pesosPorCuantil, radioCalor, type CapasMapa } from "../mapaCalorCapas";
+import { usePantallaCompleta } from "../usePantallaCompleta";
+import "../carteraMapa.css";
 
 // Mapa de calor: contratos sin medidor, con observación y de consumo bajo (tablas bi.v_mapa_calor_dim y
 // bi.v_mapa_calor_cobertura_dim, sql/42). Solo agregados por celda de 250 m: nunca coordenadas exactas, contratos ni direcciones.
@@ -65,8 +68,21 @@ function Pie({ periodo, calculado, formula }: { periodo: string; calculado: stri
 type Datos = { celdas: MapaCalorDim[]; cob: MapaCalorCoberturaDim[]; car: MapaCalorCarteraDim[] };
 
 // ---------- mapa (MapLibre con importación estática, como el mapa del geoportal) ----------
-function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: string; todas: MapaCalorDim[]; celdas: MapaCalorDim[]; capaId: CapaId; cartera: boolean }) {
+// Medida del color y del calor: el porcentaje (una razón: solo se dibuja como celdas) o los contratos de la capa (un conteo aditivo: también sirve para el calor suave).
+type MedidaMapa = "porcentaje" | "conteo";
+const MEDIDAS_MAPA: { id: MedidaMapa; nombre: string }[] = [
+  { id: "porcentaje", nombre: "Porcentaje de la capa en la celda" },
+  { id: "conteo", nombre: "Contratos de la capa" },
+];
+
+function MapaCeldas({ periodo, todas, celdas, capaId, cartera, medida, onMedida, capas, onCapas, controlesCompleta }: {
+  periodo: string; todas: MapaCalorDim[]; celdas: MapaCalorDim[]; capaId: CapaId; cartera: boolean;
+  medida: MedidaMapa; onMedida: (m: MedidaMapa) => void; capas: CapasMapa; onCapas: (c: CapasMapa) => void; controlesCompleta: ReactNode;
+}) {
   const cont = useRef<HTMLDivElement>(null);
+  const seccionRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const leyRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapaRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,10 +91,17 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
   const [errMapa, setErrMapa] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
   const ramp = capaDe(capaId).ramp;
+  // Pantalla completa de la sección del mapa (hook común con Cartera): el mapa y sus controles a la altura de la ventana.
+  const { modo, enPantalla, altoMapa, alternar } = usePantallaCompleta({ seccion: seccionRef, cont, top: topRef, ley: leyRef, redimensionar: () => mapaRef.current?.resize(), reiniciar: intento });
+  // Calor suave solo con la medida de conteos: con el porcentaje (una razón) solo existe Celdas.
+  const ef: CapasMapa = medida === "porcentaje" ? { celdas: true, calor: false } : capas;
 
+  // Valor que se pinta: el porcentaje o el conteo de contratos de la capa (null = suprimido: 1 a 4 contratos).
+  const valorDe = (c: MapaCalorDim) => (medida === "conteo" ? conteoCapa(c, cartera) : pctCelda(c, cartera));
   const clases = useMemo(
-    () => clasesPorCuantiles(celdas.map((c) => pctCelda(c, cartera)).filter((p): p is number => p != null)),
-    [celdas, cartera],
+    () => clasesPorCuantiles(celdas.map(valorDe).filter((p): p is number => p != null)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [celdas, cartera, medida],
   );
 
   useEffect(() => {
@@ -102,9 +125,15 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
       const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, maxWidth: "260px" });
       popupRef.current = popup;
       map.on("load", () => {
+        // Calor suave (debajo): un punto por celda en su centro, peso por percentil del conteo; radio de 2,75 lados en metros. Sin bordes.
+        map.addSource("calor", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        map.addLayer({
+          id: "calor", type: "heatmap", source: "calor", layout: { visibility: "none" },
+          paint: { "heatmap-weight": ["get", "peso"], "heatmap-radius": radioCalor(LADO_M), "heatmap-intensity": intensidadCalor(1), "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], ...COLORES_CALOR], "heatmap-opacity": 0.78 } as never,
+        });
+        // Celdas (encima), SIN contorno: se quitó la capa de línea blanca.
         map.addSource("celdas", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
         map.addLayer({ id: "celdas-fill", type: "fill", source: "celdas", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.78 } });
-        map.addLayer({ id: "celdas-linea", type: "line", source: "celdas", paint: { "line-color": "#ffffff", "line-width": 0.5, "line-opacity": 0.6 } });
         const mostrar = (e: { features?: { properties?: Record<string, unknown> }[]; lngLat: { lng: number; lat: number } }) => {
           const p = e.features?.[0]?.properties;
           if (!p) return;
@@ -145,10 +174,11 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
     const features = celdas.map((c) => {
       const p = pctCelda(c, cartera);
       const v = conteoCapa(c, cartera);
+      const val = medida === "conteo" ? v : p;
       return {
         type: "Feature" as const,
         properties: {
-          color: p == null || !clases ? COLOR_SUPRIMIDA : colorClase(claseDe(p, clases), nClases(clases), ramp),
+          color: val == null || !clases ? COLOR_SUPRIMIDA : colorClase(claseDe(val, clases), nClases(clases), ramp),
           capaNombre: nombre, base: c.contratos_base, cap: v == null ? -1 : v, pct: p == null ? -1 : p,
           conCartera: cartera, capCart: c.contratos_capa_cartera == null ? -1 : c.contratos_capa_cartera,
         },
@@ -156,7 +186,26 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
       };
     });
     map.getSource("celdas")?.setData({ type: "FeatureCollection", features });
-  }, [lista, celdas, cartera, capaId, clases, ramp]);
+    // Calor suave: solo celdas con conteo publicado (las de 1 a 4 contratos, NULL, quedan fuera); peso por percentil del conteo; intensidad normalizada con los datos.
+    const conteos = medida === "conteo" ? celdas.flatMap((c) => { const n = conteoCapa(c, cartera); return n == null ? [] : [{ c, n }]; }) : [];
+    const pesos = pesosPorCuantil(conteos.map((x) => x.n));
+    map.getSource("calor")?.setData({
+      type: "FeatureCollection",
+      features: conteos.map((x, i) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [x.c.lon_centro, x.c.lat_centro] }, properties: { peso: pesoCalor(pesos[i]) } })),
+    });
+    map.setPaintProperty("calor", "heatmap-intensity", intensidadCalor(intensidadBaseCalor(conteos.map((x, i) => ({ cx: x.c.celda_x, cy: x.c.celda_y, peso: pesoCalor(pesos[i]) })), LADO_M)));
+  }, [lista, celdas, cartera, capaId, clases, ramp, medida]);
+
+  // Capas independientes. Con solo Calor suave la capa de celdas queda INVISIBLE (opacidad 0) pero activa: el cursor y el clic siguen mostrando la ventana de la celda.
+  // Con ambas, el calor va debajo y las celdas encima con transparencia. Sin ninguna, no hay capa que consultar.
+  useEffect(() => {
+    const map = mapaRef.current;
+    if (!lista || !map) return;
+    const algo = ef.celdas || ef.calor;
+    map.setLayoutProperty("calor", "visibility", ef.calor ? "visible" : "none");
+    map.setLayoutProperty("celdas-fill", "visibility", algo ? "visible" : "none");
+    map.setPaintProperty("celdas-fill", "fill-opacity", ef.celdas ? (ef.calor ? 0.5 : 0.78) : 0);
+  }, [lista, ef.celdas, ef.calor]);
 
   // Encuadre a las celdas del período (una vez por período, para no saltar al cambiar de capa o de interruptor)
   useEffect(() => {
@@ -170,19 +219,65 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
   const ints = clases ? intervalos(clases) : [];
   const grises = nSuprimidas(celdas, cartera);
   const avisoGris = cartera && celdas.length > 0 && grises / celdas.length > 0.5;
-  const rango = (d: number, h: number) => (d === h ? `${fmtDecimal(d, 1)} %` : `${fmtDecimal(d, 1)} % a ${fmtDecimal(h, 1)} %`);
+  const rango = (d: number, h: number) => medida === "conteo"
+    ? (d === h ? fmtEntero(d) : `${fmtEntero(d)} a ${fmtEntero(h)}`)
+    : (d === h ? `${fmtDecimal(d, 1)} %` : `${fmtDecimal(d, 1)} % a ${fmtDecimal(h, 1)} %`);
+  const fmtV = (v: number) => (medida === "conteo" ? fmtEntero(v) : `${fmtDecimal(v, 1)} %`);
+  const queMide = medida === "conteo"
+    ? (cartera ? "contratos de la capa que se mantienen (sin más de 8 facturas vencidas)" : "contratos de la capa")
+    : (cartera ? "contratos de la capa que se mantienen (sin más de 8 facturas vencidas)" : "contratos de la capa") + " ÷ contratos de la celda";
   return (
-    <>
+    <div ref={seccionRef} className={`cm-seccion${enPantalla ? " cm-completa" : ""}${modo === "fijo" ? " cm-fijo" : ""}`}>
+      <div className="cm-top" ref={topRef}>
+        <div className="cm-encabezado">
+          <b className="cm-titulo">Mapa de calor: contratos por celda de 250 m</b>
+          <span className="cm-ayuda">Esc para salir</span>
+          <button type="button" className="dash-boton cm-boton-fs" onClick={alternar} aria-pressed={enPantalla}>
+            {enPantalla ? "Salir de pantalla completa" : "Pantalla completa"}
+          </button>
+        </div>
+        <div className="cm-controles">
+          <span className="cm-solo-completa">{controlesCompleta}</span>
+          <label>Medida <select value={medida} onChange={(e) => onMedida(e.target.value as MedidaMapa)}>{MEDIDAS_MAPA.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></label>
+          <fieldset className="cm-capas">
+            <legend>Capas</legend>
+            <label><input type="checkbox" checked={ef.celdas} disabled={medida === "porcentaje"} onChange={(e) => onCapas({ ...capas, celdas: e.target.checked })} /> Celdas</label>
+            <label title={medida === "porcentaje" ? "El porcentaje es una razón: solo se dibuja con Celdas" : undefined}>
+              <input type="checkbox" checked={ef.calor} disabled={medida === "porcentaje"} onChange={(e) => onCapas({ ...capas, calor: e.target.checked })} /> Calor suave
+            </label>
+          </fieldset>
+        </div>
+        {medida === "porcentaje" ? <div className="dash-nota">«Calor suave» solo está disponible con la medida «Contratos de la capa»: el porcentaje es una razón y el calor suma el peso de las celdas vecinas, así que mezclaría porcentajes sin sentido. Con el porcentaje solo se dibuja la capa Celdas.</div> : null}
+        {!ef.celdas && !ef.calor ? <div className="dash-nota">Ninguna capa está encendida: enciende Celdas o Calor suave para ver el mapa.</div> : null}
+        {ef.calor && !ef.celdas ? <div className="dash-nota">Con solo Calor suave, pasa el cursor o haz clic sobre el mapa para ver la ventana de cada celda. Las celdas con «{MENOS_5}» no entran en el calor.</div> : null}
+      </div>
       {errMapa ? (
         <div className="dash-estado"><p>No se pudo cargar el mapa: {errMapa}</p><button className="dash-boton" onClick={() => setIntento((i) => i + 1)}>Reintentar</button></div>
       ) : (
-        <div ref={cont} style={{ height: "clamp(320px, 62vh, 520px)", width: "100%", borderRadius: 6, overflow: "hidden" }} aria-label="Mapa de calor de contratos por celda de 250 m" />
+        <div ref={cont} className="cm-mapa" style={{ height: enPantalla ? (altoMapa ?? "60vh") : "clamp(320px, 62vh, 520px)", minHeight: enPantalla ? 300 : undefined }} aria-label="Mapa de calor de contratos por celda de 250 m" />
       )}
-      <div className="dash-leyenda">
-        {ints.map((r, i) => (
-          <span key={i}><i style={{ background: colorClase(i, ints.length, ramp) }} /> {rango(r.desde, r.hasta)}</span>
-        ))}
-        <span><i style={{ background: COLOR_SUPRIMIDA }} /> {MENOS_5}</span>
+      <div ref={leyRef} className="cm-leyendas">
+        {ef.celdas ? (
+          <div className="dash-leyenda">
+            {ints.map((r, i) => (
+              <span key={i}><i style={{ background: colorClase(i, ints.length, ramp) }} /> {rango(r.desde, r.hasta)}</span>
+            ))}
+            <span><i style={{ background: COLOR_SUPRIMIDA }} /> {MENOS_5}</span>
+          </div>
+        ) : null}
+        {ef.calor ? (
+          <div className="cm-leyenda cm-leyenda-calor">
+            {clases ? (<>
+              <span className="cm-leyenda-extremo">menos</span>
+              <div className="cm-leyenda-calor-barra">
+                <div className="cm-leyenda-barra" style={{ background: DEGRADE_CALOR_CSS }} role="img" aria-label="Degradé del calor suave, de menos a más" />
+                <div className="cm-leyenda-cortes">{[clases.min, ...clases.cortes, clases.max].map((v, i) => <span key={i}>{fmtV(v)}</span>)}</div>
+              </div>
+              <span className="cm-leyenda-extremo">más</span>
+              <span>Calor suave: intensidad relativa, suavizada; debajo, los cortes por cuantiles de los contratos de la capa por celda.</span>
+            </>) : <span>Sin celdas que mostrar.</span>}
+          </div>
+        ) : null}
       </div>
       {avisoGris ? (
         <div className="dash-nota">
@@ -191,11 +286,12 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera }: { periodo: stri
         </div>
       ) : null}
       <div className="dash-nota">
-        Cada cuadrado es una celda de 250 m. Color: {cartera ? "contratos de la capa que se mantienen (sin más de 8 facturas vencidas)" : "contratos de la capa"} ÷ contratos de la celda,
+        Cada cuadrado es una celda de 250 m. Color: {queMide},
         en clases por cuantiles de las celdas de la capa en el período (las clases repetidas se funden; las celdas con 0 contratos en la capa van en el tono más claro).
-        Las celdas con menos de {MIN_CONTRATOS} contratos en total no se dibujan.
+        Las celdas con menos de {MIN_CONTRATOS} contratos en total no se dibujan. Con «Calor suave», cada celda con conteo publicado aporta un peso por percentil de sus contratos
+        de la capa; las celdas con «{MENOS_5}» no entran.
       </div>
-    </>
+    </div>
   );
 }
 
@@ -264,6 +360,12 @@ export function MapaCalor({ periodo }: { periodo: string }) {
   const [intento, setIntento] = useState(0);
   const [capaId, setCapaId] = useState<CapaId>("sin_medidor_obs");
   const [cartera, setCartera] = useState(false);
+  const [medidaMapa, setMedidaMapa] = useState<MedidaMapa>("porcentaje");           // por defecto, la medida de siempre
+  const [capasMapa, setCapasMapa] = useState<CapasMapa>({ celdas: true, calor: false });   // por defecto solo Celdas
+  function elegirMedida(m: MedidaMapa) {
+    setMedidaMapa(m);
+    if (m === "porcentaje") setCapasMapa({ celdas: true, calor: false });   // el porcentaje solo se dibuja como celdas
+  }
   const [abiertas, setAbiertas] = useEstadoSesion<Record<string, boolean>>(`${periodo}.mapa.partes`, PARTES_DEFECTO, normalizarBanderas(PARTES.map((x) => x.id), PARTES_DEFECTO));
   function cambiar(id: string, abierta: boolean) { setAbiertas((a) => (a[id] === abierta ? a : { ...a, [id]: abierta })); }
   function abrir(id: string) {
@@ -315,6 +417,14 @@ export function MapaCalor({ periodo }: { periodo: string }) {
   const suma = sumaCapa(celdasCapa, cartera);
   const supCapa = nSuprimidas(celdasCapa, cartera);
 
+  // La capa y el interruptor de cartera viven arriba de la tarjeta; en pantalla completa de la sección del mapa se repiten, con el mismo estado.
+  const controlesCompleta = (
+    <>
+      <label>Capa <select value={capaId} onChange={(e) => setCapaId(e.target.value as CapaId)}>{CAPAS.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
+      <label><input type="checkbox" checked={cartera} onChange={(e) => setCartera(e.target.checked)} /> Excluir contratos con más de 8 facturas vencidas</label>
+    </>
+  );
+
   return (
     <div className="dash-fila"><div className="dash-carta">
       <h3>{titulo} — {periodoTxt}</h3>
@@ -364,7 +474,7 @@ export function MapaCalor({ periodo }: { periodo: string }) {
       </Parte>
 
       <Parte id="mapa" titulo="Mapa" abierta={!!abiertas.mapa} onCambio={(o) => cambiar("mapa", o)}>
-        <MapaCeldas periodo={periodo} todas={datos.celdas} celdas={celdasCapa} capaId={capaId} cartera={cartera} />
+        <MapaCeldas periodo={periodo} todas={datos.celdas} celdas={celdasCapa} capaId={capaId} cartera={cartera} medida={medidaMapa} onMedida={elegirMedida} capas={capasMapa} onCapas={setCapasMapa} controlesCompleta={controlesCompleta} />
         <Pie periodo={periodoTxt} calculado={calculado}
           formula="Cada celda es un cuadrado de 250 m centrado en el punto publicado (±125 m). Porcentaje = contratos de la capa ÷ contratos de la celda (con el interruptor, solo los que se mantienen, es decir, sin más de 8 facturas vencidas, ÷ contratos de la celda). Cinco clases por cuantiles de las celdas de la capa en el período, con un solo tono por capa. Gris: conteo suprimido (menos de 5 contratos). Al pasar el cursor o tocar una celda se ven sus conteos. Los conteos de 1 a 4 contratos se suprimen en cada columna; restando una columna de otra puede deducirse un conteo pequeño dentro de una celda de 5 o más contratos, sin identificar contratos." />
       </Parte>
