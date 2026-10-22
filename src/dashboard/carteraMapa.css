@@ -1,0 +1,44 @@
+/* Mapa de calor de cartera (Cartera desagregada): encabezado, controles, leyenda y pantalla completa. Solo para este mapa; no toca el de Pérdidas.
+   Los colores salen de las variables de .dash (--dash-*), así que siguen cualquier tema que defina esas variables; los valores de respaldo son los del tema actual. */
+.cm-seccion { position: relative; box-sizing: border-box; }
+.cm-encabezado { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 4px; }
+.cm-encabezado .cm-titulo { display: none; font-family: "Archivo", sans-serif; font-size: 15px; color: var(--dash-tinta, #0a2540); }
+.cm-encabezado .cm-ayuda { display: none; font-size: 12px; color: var(--dash-texto-suave, #5d6e7e); }
+.cm-encabezado .cm-boton-fs { margin-left: auto; }
+.cm-top { position: relative; z-index: 5; }      /* los menús de los filtros flotan por encima del mapa */
+.cm-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 8px 0; }
+.cm-controles label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--dash-texto, #22313f); }
+.cm-controles select { font: inherit; font-size: 12.5px; color: var(--dash-texto, #22313f); background: var(--dash-carta, #fff); border: 1px solid var(--dash-linea, #dde5ea); border-radius: 6px; padding: 4px 8px; }
+.cm-mapa { width: 100%; border-radius: 6px; overflow: hidden; }
+.cm-leyenda { display: flex; align-items: center; gap: 10px; min-height: 28px; margin-top: 6px; font-size: 12px; color: var(--dash-texto-suave, #5d6e7e); }
+.cm-leyenda .cm-leyenda-barra { flex: 1; max-width: 360px; height: 10px; border-radius: 5px; border: 1px solid var(--dash-linea, #dde5ea); }
+
+/* Pantalla completa: la API del navegador (:fullscreen) o, si no está disponible, un contenedor fijo (.cm-fijo). Misma disposición que en modo normal. */
+.cm-seccion:fullscreen, .cm-seccion:-webkit-full-screen, .cm-seccion.cm-fijo {
+  background: var(--dash-papel, #f6f8f9); color: var(--dash-texto, #22313f);
+  padding: 14px 18px; overflow: auto; overscroll-behavior: contain;
+  font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 14px;
+}
+.cm-seccion.cm-fijo { position: fixed; inset: 0; z-index: 3000; width: auto; height: auto; }
+.cm-seccion:fullscreen::backdrop { background: var(--dash-papel, #f6f8f9); }
+.cm-seccion:-webkit-full-screen::backdrop { background: var(--dash-papel, #f6f8f9); }
+.cm-seccion.cm-completa .cm-titulo, .cm-seccion.cm-completa .cm-ayuda { display: inline; }
+.cm-seccion.cm-completa .dash-fila { margin-top: 8px; }
+
+/* Interruptores de capas (Celdas / Calor suave) */
+.cm-capas { display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 2px 10px 4px; border: 1px solid var(--dash-linea, #dde5ea); border-radius: 6px; }
+.cm-capas legend { font-size: 11px; color: var(--dash-texto-suave, #5d6e7e); padding: 0 4px; }
+.cm-capas label { font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.cm-capas label:has(input:disabled) { opacity: 0.6; cursor: not-allowed; }
+
+/* Leyendas: celdas y calor suave (degradé continuo con «menos» y «más» y los cortes por cuantiles) */
+.cm-leyendas { display: flex; flex-direction: column; gap: 4px; }
+.cm-leyenda-calor { align-items: flex-start; }
+.cm-leyenda-calor-barra { flex: 1; max-width: 420px; }
+.cm-leyenda-calor-barra .cm-leyenda-barra { width: 100%; max-width: none; }
+.cm-leyenda-cortes { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px; }
+.cm-leyenda-extremo { font-weight: 600; margin-top: -2px; }
+
+/* Filtros de selección múltiple: sin el triángulo propio del navegador (la etiqueta ya trae su flecha ▾) */
+.dash-filtro-multiple > summary { list-style: none; }
+.dash-filtro-multiple > summary::-webkit-details-marker { display: none; }

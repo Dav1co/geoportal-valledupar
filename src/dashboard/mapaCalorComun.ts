@@ -53,8 +53,8 @@ export function intervalos(k: Clases): { desde: number; hasta: number; ultima: b
 }
 
 // Cuadrado de 250 m centrado en la celda, en grados (anillo cerrado lon/lat).
-export function cuadrado(lon: number, lat: number): [number, number][] {
-  const dlat = (LADO_M / 2) / M_POR_GRADO;
-  const dlon = (LADO_M / 2) / (M_POR_GRADO * Math.cos((lat * Math.PI) / 180));
+export function cuadrado(lon: number, lat: number, lado: number = LADO_M): [number, number][] {
+  const dlat = (lado / 2) / M_POR_GRADO;
+  const dlon = (lado / 2) / (M_POR_GRADO * Math.cos((lat * Math.PI) / 180));
   return [[lon - dlon, lat - dlat], [lon + dlon, lat - dlat], [lon + dlon, lat + dlat], [lon - dlon, lat + dlat], [lon - dlon, lat - dlat]];
 }

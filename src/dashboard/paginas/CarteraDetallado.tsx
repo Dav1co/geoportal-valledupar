@@ -4,6 +4,7 @@ import { comoCarteraEdadDim, type CarteraEdadDim } from "../tipos";
 import { SinDatos } from "../SinDatos";
 import { PanelFiltros, TODOS, type DefFiltro } from "../PanelFiltros";
 import { MarcaFiltro, Plegable, usePlegables } from "../Plegable";
+import { ZonaMapaCartera } from "./CarteraMapa";
 import { normalizarFiltrosCartera, useEstadoSesion } from "../memoriaSesion";
 import { ESTRATOS_FILTRO, USOS_FILTRO, periodosDe } from "../edadCarteraCalculo";
 import { ROTULO } from "../rotulos";
@@ -26,7 +27,7 @@ export function CarteraDetallado(props: Props) {
   return <CarteraDetalladoPeriodo key={props.periodo} {...props} />;
 }
 
-const PLEGABLES = ["cd-antig", "cd-uso", "cd-mov", "cd-scrr", "cd-conc", "cd-ciclo", "cd-metod"];
+const PLEGABLES = ["cd-mapa", "cd-antig", "cd-uso", "cd-mov", "cd-scrr", "cd-conc", "cd-ciclo", "cd-metod"];
 const PLEGABLES_INICIAL = { "cd-antig": true };
 const FILTROS_VACIO = { uso: TODOS, subcategoria: TODOS };
 
@@ -85,6 +86,11 @@ function CarteraDetalladoPeriodo({ periodo, onIrAPeriodo }: Props) {
       <div className="dash-con-panel-cuerpo">
         <h2 className="dash-zona">Panorama de la cartera</h2>
         <PanoramaEdad filas={filas} periodo={periodo} uso={uso} estrato={estrato} onLimpiar={limpiar} />
+
+        <h2 className="dash-zona">Mapa de calor</h2>
+        <Plegable id="cd-mapa" diferido titulo="Mapa de calor de la cartera" marca={<span className="dash-sin-filtro">No depende de los filtros de uso y estrato</span>} abierto={!!pl.abiertos["cd-mapa"]} onCambio={(o) => pl.cambiar("cd-mapa", o)}>
+          <ZonaMapaCartera periodo={periodo} />
+        </Plegable>
 
         <h2 className="dash-zona">Edad de la cartera</h2>
         <Plegable id="cd-antig" titulo="Antigüedad (vejez): etiquetas de edad y evolución" marca={marca} abierto={!!pl.abiertos["cd-antig"]} onCambio={(o) => pl.cambiar("cd-antig", o)}>
