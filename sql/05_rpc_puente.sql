@@ -719,6 +719,37 @@ begin
       and (p_filtros ->> 'desde'   is null or t.periodo >= p_filtros ->> 'desde')
       and (p_filtros ->> 'hasta'   is null or t.periodo <= p_filtros ->> 'hasta');
 
+  elsif p_vista = 'v_cartera_mapa' then
+    -- Mapa de calor de cartera (sql/50): valida los filtros (texto de numeros separados por comas; el motor limita los contadores de repeticion de una expresion regular a 255, por eso barrios se valida con «*» mas un tope de 2500 caracteres y 500 elementos) y delega en funciones SQL sin SQL dinamico.
+    if coalesce(p_filtros ->> 'periodo', '') !~ '^\d{6}$' then
+      raise exception 'filtro_invalido: periodo' using errcode = 'P0001';
+    end if;
+    if coalesce(p_filtros ->> 'parte', 'mapa') not in ('mapa', 'catalogo') then
+      raise exception 'filtro_invalido: parte' using errcode = 'P0001';
+    end if;
+    if coalesce(p_filtros ->> 'parte', 'mapa') = 'catalogo' then
+      resultado := bi.f_mapa_cartera_catalogo(p_filtros ->> 'periodo');
+    else
+      if coalesce(p_filtros ->> 'medida', 'deuda') not in ('deuda', 'gt8', 'gt60', 'part60')
+         or coalesce(p_filtros ->> 'resolucion', 'auto') not in ('auto', '100', '250')
+         or coalesce(p_filtros ->> 'comunas', '0') !~ '^[0-6](,[0-6]){0,6}$'
+         or coalesce(p_filtros ->> 'ciclos', '0')  !~ '^\d{1,2}(,\d{1,2}){0,24}$'
+         or coalesce(p_filtros ->> 'bandas', '1')  !~ '^[1-5](,[1-5]){0,4}$'
+         or coalesce(p_filtros ->> 'tramos', '0')  !~ '^[0-5](,[0-5]){0,5}$'
+         or coalesce(p_filtros ->> 'barrios', '0') !~ '^[0-9]{1,4}(,[0-9]{1,4})*$'
+         or length(coalesce(p_filtros ->> 'barrios', '')) > 2500
+         or coalesce(cardinality(string_to_array(p_filtros ->> 'barrios', ',')), 0) > 500 then
+        raise exception 'filtro_invalido' using errcode = 'P0001';
+      end if;
+      resultado := bi.f_mapa_cartera(
+        p_filtros ->> 'periodo', coalesce(p_filtros ->> 'medida', 'deuda'), coalesce(p_filtros ->> 'resolucion', 'auto'),
+        case when p_filtros ? 'comunas' then string_to_array(p_filtros ->> 'comunas', ',')::smallint[] end,
+        case when p_filtros ? 'barrios' then string_to_array(p_filtros ->> 'barrios', ',')::integer[] end,
+        case when p_filtros ? 'ciclos'  then string_to_array(p_filtros ->> 'ciclos', ',')::smallint[] end,
+        case when p_filtros ? 'bandas'  then string_to_array(p_filtros ->> 'bandas', ',')::smallint[] end,
+        case when p_filtros ? 'tramos'  then string_to_array(p_filtros ->> 'tramos', ',')::smallint[] end);
+    end if;
+
   else
     raise exception 'vista_no_permitida: %', p_vista
       using errcode = 'P0001';
@@ -865,4 +896,11 @@ grant execute on function public.geoportal_bi_consulta(text, jsonb)
 -- ROLLBACK de la rama v_cartera_concepto_dim (63 -> 64 ramas): volver a la version de este archivo con 63 ramas (hasta v_emd_dim, commit anterior a esta rama)
 -- y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar la rama, quitar la vista de VISTAS_PERMITIDAS en geoportal-bi y redesplegar la
 -- Edge Function (v28). Despues, bi.v_cartera_concepto_dim se retira segun sql/49.
+-- =====================================================================
+
+-- =====================================================================
+-- ROLLBACK de la rama v_cartera_mapa (64 -> 65 ramas): volver a la version de este archivo con 64 ramas (hasta v_cartera_concepto_dim, commit anterior a esta
+-- rama) y volver a ejecutarlo (create or replace conserva el ACL). Antes de retirar la rama, quitar la vista de VISTAS_PERMITIDAS en geoportal-bi y
+-- redesplegar la Edge Function (v30). Despues, las tablas y funciones del mapa se retiran segun sql/50. La rama usa bi.f_mapa_cartera (8 argumentos) y
+-- bi.f_mapa_cartera_catalogo (sql/50): deben existir antes de ejecutar este archivo.
 -- =====================================================================
