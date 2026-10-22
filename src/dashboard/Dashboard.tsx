@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { biCache, limpiarCacheBi } from "./cacheBi";
 import { comoKpiAnio, comoKpiMes, type KpiAnio, type KpiMes } from "./tipos";
 import { etiquetaPeriodo } from "./formato";
@@ -19,6 +19,8 @@ import { RecaudoDiario } from "./paginas/RecaudoDiario";
 import { ProyeccionRecaudo } from "./paginas/ProyeccionRecaudo";
 import { Perdidas } from "./paginas/Perdidas";
 import { Consolidado } from "./paginas/Consolidado";
+import { Watermark } from "../components/Watermark";
+import { CorreoSesion } from "./correoSesion";
 import "./dashboard.css";
 
 // El tablero se estructura por FUENTE de datos: las pantallas "agrupado"
@@ -60,7 +62,8 @@ const PAGINAS_CON_COMPARACION: ReadonlySet<PaginaId> = new Set<PaginaId>([
 
 // Modo Dashboard del geoportal (Tablero Comercial).
 // Entrega 2: pantalla Resumen ejecutivo servida por bi.v_kpi_mes.
-export function Dashboard() {
+export function Dashboard({ email = "" }: { email?: string }) {
+  const raiz = useRef<HTMLDivElement>(null);   // área visible del Dashboard, a la que se ajusta la marca de agua
   const [filas, setFilas] = useState<KpiMes[] | null>(null);
   const [anios, setAnios] = useState<KpiAnio[]>([]);
   // Mapa de huecos: qué períodos tiene realmente cada fuente.
@@ -133,7 +136,8 @@ export function Dashboard() {
   }, [filas]);
 
   return (
-    <div className="dash">
+    <CorreoSesion.Provider value={email}>
+    <div className="dash" ref={raiz}>
       <div className="dash-tope">
         <div>
           <h2>{PAGINAS.find((p) => p.id === pagina)?.titulo}</h2>
@@ -233,6 +237,9 @@ export function Dashboard() {
       {!error && filas && filas.length > 0 && periodo && pagina === "consolidado" && (
         <Consolidado key={recarga} periodo={periodo} />
       )}
+      {/* Marca de agua tenue con el correo de la sesión, fija sobre el área visible; sin correo no se monta (una marca solo con la fecha no identificaría a nadie). */}
+      {email ? <Watermark email={email} variante="fija" area={raiz} /> : null}
     </div>
+    </CorreoSesion.Provider>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { biCache } from "../cacheBi";
@@ -20,6 +20,8 @@ import {
 } from "../mapaCalorComun";
 import { COLORES_CALOR, DEGRADE_CALOR_CSS, intensidadBaseCalor, intensidadCalor, pesoCalor, pesosPorCuantil, radioCalor, type CapasMapa } from "../mapaCalorCapas";
 import { usePantallaCompleta } from "../usePantallaCompleta";
+import { Watermark } from "../../components/Watermark";
+import { CorreoSesion } from "../correoSesion";
 import "../carteraMapa.css";
 
 // Mapa de calor: contratos sin medidor, con observación y de consumo bajo (tablas bi.v_mapa_calor_dim y
@@ -91,6 +93,7 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera, medida, onMedida,
   const [errMapa, setErrMapa] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
   const ramp = capaDe(capaId).ramp;
+  const correo = useContext(CorreoSesion);   // correo de la sesión (lo entrega Dashboard): marca de agua propia en pantalla completa
   // Pantalla completa de la sección del mapa (hook común con Cartera): el mapa y sus controles a la altura de la ventana.
   const { modo, enPantalla, altoMapa, alternar } = usePantallaCompleta({ seccion: seccionRef, cont, top: topRef, ley: leyRef, redimensionar: () => mapaRef.current?.resize(), reiniciar: intento });
   // Calor suave solo con la medida de conteos: con el porcentaje (una razón) solo existe Celdas.
@@ -228,6 +231,8 @@ function MapaCeldas({ periodo, todas, celdas, capaId, cartera, medida, onMedida,
     : (cartera ? "contratos de la capa que se mantienen (sin más de 8 facturas vencidas)" : "contratos de la capa") + " ÷ contratos de la celda";
   return (
     <div ref={seccionRef} className={`cm-seccion${enPantalla ? " cm-completa" : ""}${modo === "fijo" ? " cm-fijo" : ""}`}>
+      {/* En pantalla completa el elemento ampliado lleva su propia marca de agua (una capa fuera de él no se vería). */}
+      {enPantalla && correo ? <Watermark email={correo} variante="fija" /> : null}
       <div className="cm-top" ref={topRef}>
         <div className="cm-encabezado">
           <b className="cm-titulo">Mapa de calor: contratos por celda de 250 m</b>

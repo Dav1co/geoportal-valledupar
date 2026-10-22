@@ -726,3 +726,8 @@
 .dash-boton-indice:hover { background: var(--dash-agua-suave); }
 .dash-subparte { margin-top: 18px; }
 .dash-subparte:first-child { margin-top: 10px; }
+
+/* Marca de agua del Dashboard y de las secciones en pantalla completa: la misma capa tenue del visor (app.css: opacidad 0,10, azul #1e5aa8, filas giradas), pero FIJA
+   para que acompañe el desplazamiento, sin clics (pointer-events: none) y con z-index bajo: queda por encima de las cartas y del lienzo de los mapas, y por debajo de los
+   tooltips (z-index 10), los menús desplegables y los controles de los mapas. */
+.watermark.watermark-fija { position: fixed; inset: 0; z-index: 1; }

@@ -1317,7 +1317,7 @@ export default function App() {
           </aside>
 
           <main className="visor">
-            {modo === "dashboard" && puedeVerDashboard ? <Dashboard /> : <>
+            {modo === "dashboard" && puedeVerDashboard ? <Dashboard email={email} /> : <>
             {/* Una sola banda: la comercial (si aplica) absorbe el aviso de las redes. */}
             {((modo === "comercial" && !conteoCom.disponible) ||
               ((mostrarRedAcu || mostrarRedAlc) && zoomMapa < 15)) && (

@@ -1,7 +1,7 @@
 // Zona «Mapa de calor» de Cartera desagregada.
 // NO toca MapaCalor.tsx (mapa de Pérdidas). Reutiliza mapaCalorComun.ts (cuantiles, color, cuadrado con lado parametrizable) y lib/mapaBase.ts.
 // Solo agregados: nunca contratos, nombres, direcciones ni coordenadas individuales. Celdas de menos de 5 contratos no llegan del servidor.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { biCache } from "../cacheBi";
@@ -11,6 +11,8 @@ import { fmtDecimal, fmtEntero, fmtMillonesEnteros } from "../formato";
 import { FiltroMultiple } from "../FiltroMultiple";
 import "../carteraMapa.css";
 import { usePantallaCompleta } from "../usePantallaCompleta";
+import { Watermark } from "../../components/Watermark";
+import { CorreoSesion } from "../correoSesion";
 import {
   COLORES_CALOR, DEGRADE_CALOR_CSS, FILTROS_VACIO, MEDIDAS, barriosVisibles, cajaCeldas, capasEfectivas, depurarBarrios, escalaVisible, hayFiltro, leerCatalogo, leerMapa,
   AYUDA_TRAMOS, intensidadBaseCalor, intensidadCalor, paramsCatalogo, paramsMapa, pesoCalor, pesosPorCuantil, radioCalor, rotuloBarrio, rotulosBandas, valorCelda,
@@ -86,6 +88,7 @@ export function ZonaMapaCartera({ periodo }: { periodo: string }) {
     return () => { listoRef.current = false; setListo(false); map.remove(); mapaRef.current = null; };
   }, []);
 
+  const correo = useContext(CorreoSesion);   // correo de la sesión (lo entrega Dashboard): marca de agua propia en pantalla completa
   // Pantalla completa (hook común con el mapa de Pérdidas): modo, alto del mapa y alternar.
   const { modo, altoMapa, alternar: alternarPantalla } = usePantallaCompleta({ seccion: seccionRef, cont, top: topRef, ley: leyRef, redimensionar: () => mapaRef.current?.resize() });
 
@@ -186,6 +189,8 @@ export function ZonaMapaCartera({ periodo }: { periodo: string }) {
 
   return (
     <div ref={seccionRef} className={`cm-seccion${enPantalla ? " cm-completa" : ""}${modo === "fijo" ? " cm-fijo" : ""}`}>
+      {/* En pantalla completa el elemento ampliado lleva su propia marca de agua (una capa fuera de él no se vería). */}
+      {enPantalla && correo ? <Watermark email={correo} variante="fija" /> : null}
     <div className="dash-fila">
       <div className="dash-carta">
         <div className="cm-top" ref={topRef}>
