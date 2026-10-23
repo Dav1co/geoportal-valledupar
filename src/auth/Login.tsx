@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useMotivoRechazo } from "./useSession";
+import { clasificarErrorLogin, EsperaAgotada, ESPERA_LOGIN_MS, MENSAJES_LOGIN } from "./errorLogin";
 
 const DOMINIO = "@emdupar.gov.co";
 
@@ -41,13 +42,22 @@ export function Login() {
     }
 
     setEntrando(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: correo,
-      password: clave,
-    });
+    let fallo: unknown = null;
+    try {
+      let reloj: ReturnType<typeof setTimeout> | undefined;
+      const espera = new Promise<never>((_, rechazar) => { reloj = setTimeout(() => rechazar(new EsperaAgotada()), ESPERA_LOGIN_MS); });
+      try {
+        const { error } = await Promise.race([supabase.auth.signInWithPassword({ email: correo, password: clave }), espera]);
+        fallo = error;
+      } finally {
+        clearTimeout(reloj);
+      }
+    } catch (e) {
+      fallo = e;   // fetch lanzado, tiempo agotado u otra excepción: se clasifica igual
+    }
     setEntrando(false);
-    if (error) {
-      setError("Correo o contraseña incorrectos.");
+    if (fallo) {
+      setError(MENSAJES_LOGIN[clasificarErrorLogin(fallo)]);
       return;
     }
     // Si la sesión es válida pero el acceso está restringido (horario,
