@@ -105,6 +105,9 @@ export type UsuarioAdmin = {
   ver_dashboard: boolean;
   horario: string;
   dias: string;
+  // Fase 2 (paquete técnico): solo llegan si el paquete SQL ya se aplicó; Administración detecta su presencia y, si faltan, se comporta como siempre.
+  ver_registro_tecnico?: boolean;
+  ver_dashboard_tecnico?: boolean;
 };
 
 /** Respuesta de geoportal-admin?accion=perfil (la misma que valida la sesión en useSession). */
@@ -203,6 +206,8 @@ export const api = {
       dashboard: boolean;
       horario: string;
       dias: string;
+      registro_tecnico?: boolean;   // fase 2: si no se informa, el servidor deja el permiso como está
+      dashboard_tecnico?: boolean;
     }) =>
       callPost<{ guardado: boolean }>(
         "geoportal-admin",
@@ -215,6 +220,7 @@ export const api = {
       rol: string;
       activo: boolean;
       password?: string;
+      perfil_tecnico?: "operador" | "supervisor";   // fase 2: alta o conversión en una sola operación
     }) =>
       callPost<{ ok: boolean; auth: string }>(
         "geoportal-admin",

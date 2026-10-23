@@ -1,0 +1,20 @@
+/* Administración · área técnica (fase 2). Solo se usa cuando el servidor trae los permisos técnicos. */
+.adm-tag-perfil { margin-left: 6px; font-size: 11px; padding: 1px 7px; border-radius: 4px; background: #e3f4f2; color: #0f5a53; font-family: inherit; }
+.adm-etiqueta-tec { background: #e3f4f2; color: #0f5a53; }
+.adm-perfil-rapido { margin-top: 8px; }
+.adm-aviso-tec { margin: 8px 0 0; max-width: 280px; font-size: 11.5px; color: #5b6b7c; line-height: 1.35; }
+
+/* Bloques por área con interruptor general. */
+.adm-bloques { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.adm-bloque { min-width: 200px; max-width: 300px; padding: 10px 12px; border: 1px solid #d5dde5; border-radius: 8px; background: #fff; }
+.adm-bloque.on { border-color: #9db4c8; }
+.adm-bloque-tec.on { border-color: #7cc3bb; background: #f4fbfa; }
+.adm-bloque-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.adm-bloque-tit { font-weight: 600; font-size: 13px; }
+.adm-sw { width: 38px; height: 22px; border-radius: 11px; border: 0; padding: 2px; background: #b9c4cf; cursor: pointer; flex: none; transition: background .15s; }
+.adm-sw[aria-checked="true"] { background: #1f6fb2; }
+.adm-bloque-tec .adm-sw[aria-checked="true"] { background: #138a7e; }
+.adm-sw-bola { display: block; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.adm-sw[aria-checked="true"] .adm-sw-bola { transform: translateX(16px); }
+.adm-sw:focus-visible { outline: 2px solid #1f6fb2; outline-offset: 2px; }
+@media (max-width: 640px) { .adm-bloque { max-width: none; flex: 1 1 100%; } }

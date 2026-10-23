@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, type UsuarioAdmin, type EstadoPausa, type Accesos } from "../lib/api";
+import "./admin-tecnica.css";
 
 type Props = { onVolver: () => void };
 
@@ -11,6 +12,25 @@ const MODOS: [keyof UsuarioAdmin, string][] = [
   ["ver_dashboard", "Dashboard"],
 ];
 
+// Área técnica (fase 2). Todo lo técnico se muestra SOLO si el servidor ya trae esas columnas (paquete SQL aplicado); si no, Administración es idéntica a la de siempre.
+const MODOS_TECNICOS: [keyof UsuarioAdmin, string][] = [
+  ["ver_registro_tecnico", "Registro técnico"],
+  ["ver_dashboard_tecnico", "Dashboard técnica"],
+];
+type PerfilTecnico = "operador" | "supervisor";
+const PERFILES_TECNICOS: Record<PerfilTecnico, { nombre: string; registro: boolean; dashboard: boolean }> = {
+  operador: { nombre: "Operador técnico", registro: true, dashboard: false },
+  supervisor: { nombre: "Supervisor técnico", registro: true, dashboard: true },
+};
+const NOMBRES_PERFIL: Record<string, string> = { operador: "Operador técnico", supervisor: "Supervisor técnico" };
+
+/** Perfil técnico de un usuario no administrador: solo técnico (sin ningún modo comercial) con Registro técnico, con o sin Dashboard técnica. */
+function perfilTecnicoDe(u: UsuarioAdmin): PerfilTecnico | null {
+  if (u.rol === "admin" || u.ver_registro_tecnico !== true) return null;
+  if (MODOS.some(([c]) => u[c] === true)) return null;
+  return u.ver_dashboard_tecnico === true ? "supervisor" : "operador";
+}
+
 type Borrador = {
   explorar: boolean;
   focalizacion: boolean;
@@ -19,9 +39,11 @@ type Borrador = {
   dashboard: boolean;
   horario: string;
   dias: string;
+  registro_tecnico?: boolean;
+  dashboard_tecnico?: boolean;
 };
 
-function aBorrador(u: UsuarioAdmin): Borrador {
+function aBorrador(u: UsuarioAdmin, conTecnica: boolean): Borrador {
   return {
     explorar: u.ver_explorar === true,
     focalizacion: u.ver_focalizacion === true,
@@ -30,7 +52,48 @@ function aBorrador(u: UsuarioAdmin): Borrador {
     dashboard: u.ver_dashboard === true,
     horario: u.horario ?? "laboral",
     dias: u.dias ?? "habiles",
+    ...(conTecnica ? { registro_tecnico: u.ver_registro_tecnico === true, dashboard_tecnico: u.ver_dashboard_tecnico === true } : {}),
   };
+}
+
+const CAMPOS_COMERCIAL: [keyof Borrador, string][] = [
+  ["explorar", "Explorar"],
+  ["focalizacion", "Focalización"],
+  ["comercial", "Comercial"],
+  ["rutas", "Rutas"],
+  ["dashboard", "Dashboard"],
+];
+const CAMPOS_TECNICA: [keyof Borrador, string][] = [
+  ["registro_tecnico", "Registro técnico"],
+  ["dashboard_tecnico", "Dashboard técnica"],
+];
+
+/** Bloque de un área con interruptor general: encendido si algún modo del bloque lo está. Al apagarlo apaga todos los modos del bloque; al encenderlo enciende `alEncender`
+ *  (por defecto todos; en Comercial solo Explorar, el modo básico). */
+function BloquePermisos({ titulo, campos, borrador, onCambio, tecnico, alEncender, children }: {
+  titulo: string; campos: [keyof Borrador, string][]; borrador: Borrador; onCambio: (c: Partial<Borrador>) => void; tecnico?: boolean; alEncender?: (keyof Borrador)[]; children?: React.ReactNode;
+}) {
+  const activo = campos.some(([c]) => borrador[c] === true);
+  const todos = (v: boolean) => Object.fromEntries(campos.map(([c]) => [c, v && (!alEncender || alEncender.includes(c))])) as Partial<Borrador>;
+  return (
+    <section className={`adm-bloque${tecnico ? " adm-bloque-tec" : ""}${activo ? " on" : ""}`} aria-label={titulo}>
+      <div className="adm-bloque-cab">
+        <span className="adm-bloque-tit">{titulo}</span>
+        <button type="button" role="switch" aria-checked={activo} aria-label={`${titulo}: interruptor general`} className="adm-sw" onClick={() => onCambio(todos(!activo))}>
+          <span className="adm-sw-bola" />
+        </button>
+      </div>
+      <div className="adm-editor-checks">
+        {campos.map(([campo, et]) => (
+          <label key={String(campo)} className="adm-check">
+            <input type="checkbox" checked={borrador[campo] === true} onChange={(e) => onCambio({ [campo]: e.target.checked })} />
+            {et}
+          </label>
+        ))}
+      </div>
+      {children}
+    </section>
+  );
 }
 
 export function Admin({ onVolver }: Props) {
@@ -56,6 +119,8 @@ export function Admin({ onVolver }: Props) {
   const [pestana, setPestana] = useState<"usuarios" | "accesos">("usuarios");
   const [accesos, setAccesos] = useState<Accesos | null>(null);
   const [cargandoAcc, setCargandoAcc] = useState(false);
+  // ¿El servidor ya trae los permisos técnicos? Si no, no se muestra nada técnico.
+  const conTecnica = useMemo(() => usuarios.some((u) => typeof u.ver_registro_tecnico === "boolean"), [usuarios]);
 
   async function cargar() {
     setCargando(true);
@@ -113,6 +178,17 @@ export function Admin({ onVolver }: Props) {
     }
   }
 
+  // Defensa contra una publicación a medias: si la Edge o la base todavía no aplican los permisos técnicos, el servidor los ignoraría en silencio.
+  // Tras guardar se vuelve a leer el usuario y se comprueba que quedó como se pidió.
+  async function verificarTecnico(correo: string, registro: boolean, dashboard: boolean): Promise<boolean> {
+    const { usuarios: lista } = await api.admin.listar();
+    const u = lista.find((x) => x.email === correo.toLowerCase());
+    const ok = !!u && (u.ver_registro_tecnico === true) === registro && (u.ver_dashboard_tecnico === true) === dashboard;
+    if (!ok) setError("El servidor no aplicó los permisos técnicos de " + correo + ". Falta aplicar el paquete técnico (base y Edge) antes de usar esta opción.");
+    setUsuarios(lista);
+    return ok;
+  }
+
   async function agregar() {
     setMsg(null);
     if (!email.includes("@")) {
@@ -126,17 +202,22 @@ export function Admin({ onVolver }: Props) {
     setGuardando(true);
     setError(null);
     try {
+      const perfilTec = rol === "operador" || rol === "supervisor" ? (rol as PerfilTecnico) : undefined;
       const r = await api.admin.guardar({
         email,
         nombre: nombre || undefined,
-        rol,
+        rol: perfilTec ? "consulta" : rol,
         activo: true,
         password: clave,
+        ...(perfilTec ? { perfil_tecnico: perfilTec } : {}),
       });
+      if (perfilTec && !(await verificarTecnico(email, PERFILES_TECNICOS[perfilTec].registro, PERFILES_TECNICOS[perfilTec].dashboard))) return;
       setMsg(
-        r.auth === "creado"
-          ? `Usuario ${email} creado con su clave.`
-          : `Usuario ${email} actualizado (clave nueva).`,
+        perfilTec
+          ? `Usuario ${email} ${r.auth === "creado" ? "creado" : "actualizado"} como ${PERFILES_TECNICOS[perfilTec].nombre}: solo ${perfilTec === "operador" ? "Registro técnico" : "Registro técnico y Dashboard técnica"}, con los modos comerciales apagados.`
+          : r.auth === "creado"
+            ? `Usuario ${email} creado con su clave.`
+            : `Usuario ${email} actualizado (clave nueva).`,
       );
       setEmail("");
       setNombre("");
@@ -160,7 +241,7 @@ export function Admin({ onVolver }: Props) {
       return;
     }
     setEditando(u.email);
-    setBorrador(aBorrador(u));
+    setBorrador(aBorrador(u, conTecnica));
   }
 
   async function guardarPermisos(u: UsuarioAdmin) {
@@ -170,6 +251,7 @@ export function Admin({ onVolver }: Props) {
     setMsg(null);
     try {
       await api.admin.permisos({ email: u.email, ...borrador });
+      if (conTecnica && !(await verificarTecnico(u.email, borrador.registro_tecnico === true, borrador.dashboard_tecnico === true))) return;
       setMsg(`Permisos actualizados para ${u.email}.`);
       setEditando(null);
       setBorrador(null);
@@ -256,7 +338,7 @@ export function Admin({ onVolver }: Props) {
             {abierto ? "Cancelar" : "Nuevo usuario"}
           </button>
           <button className="btn-link" onClick={onVolver}>
-            Volver al mapa
+            Volver
           </button>
         </div>
       </div>
@@ -289,6 +371,8 @@ export function Admin({ onVolver }: Props) {
           >
             <option value="consulta">Consulta</option>
             <option value="admin">Administrador</option>
+            {conTecnica && <option value="operador">Operador técnico (solo Registro técnico)</option>}
+            {conTecnica && <option value="supervisor">Supervisor técnico (Registro técnico y Dashboard técnica)</option>}
           </select>
           <button className="btn-sm" onClick={agregar} disabled={guardando}>
             {guardando ? "…" : "Guardar"}
@@ -382,6 +466,8 @@ export function Admin({ onVolver }: Props) {
             {usuarios.map((u) => {
               const esAdmin = u.rol === "admin";
               const permitidos = MODOS.filter(([c]) => u[c] === true);
+              const tecnicos = MODOS_TECNICOS.filter(([c]) => u[c] === true);
+              const perfilTec = perfilTecnicoDe(u);
               return (
                 <tr key={u.email} className={u.activo ? "" : "adm-inactivo"}>
                   <td>
@@ -390,6 +476,7 @@ export function Admin({ onVolver }: Props) {
                         <div className="adm-nombre">
                           {u.nombre}
                           {esAdmin && <span className="adm-tag-admin">Admin</span>}
+                          {perfilTec && <span className="adm-tag-perfil">{NOMBRES_PERFIL[perfilTec]}</span>}
                         </div>
                         <div className="adm-correo">{u.email}</div>
                       </>
@@ -397,6 +484,7 @@ export function Admin({ onVolver }: Props) {
                       <div className="adm-correo adm-correo-solo">
                         {u.email}
                         {esAdmin && <span className="adm-tag-admin">Admin</span>}
+                        {perfilTec && <span className="adm-tag-perfil">{NOMBRES_PERFIL[perfilTec]}</span>}
                       </div>
                     )}
                     {!u.activo && <div className="adm-estado">Inactivo</div>}
@@ -404,12 +492,17 @@ export function Admin({ onVolver }: Props) {
                   <td>
                     {esAdmin ? (
                       <span className="adm-nota">Todos los modos</span>
-                    ) : permitidos.length === 0 ? (
+                    ) : permitidos.length === 0 && tecnicos.length === 0 ? (
                       <span className="adm-nota">Sin acceso</span>
                     ) : (
                       <div className="adm-etiquetas">
                         {permitidos.map(([c, et]) => (
                           <span key={String(c)} className="adm-etiqueta">
+                            {et}
+                          </span>
+                        ))}
+                        {tecnicos.map(([c, et]) => (
+                          <span key={String(c)} className="adm-etiqueta adm-etiqueta-tec">
                             {et}
                           </span>
                         ))}
@@ -465,31 +558,52 @@ export function Admin({ onVolver }: Props) {
             Editando <span className="mono">{editando}</span>
           </div>
           <div className="adm-editor-campos">
-            <div>
-              <div className="adm-editor-et">Modos</div>
-              <div className="adm-editor-checks">
-                {(
-                  [
-                    ["explorar", "Explorar"],
-                    ["focalizacion", "Focalización"],
-                    ["comercial", "Comercial"],
-                    ["rutas", "Rutas"],
-                    ["dashboard", "Dashboard"],
-                  ] as [keyof Borrador, string][]
-                ).map(([campo, et]) => (
-                  <label key={String(campo)} className="adm-check">
-                    <input
-                      type="checkbox"
-                      checked={borrador[campo] === true}
-                      onChange={(e) =>
-                        setBorrador({ ...borrador, [campo]: e.target.checked })
-                      }
-                    />
-                    {et}
-                  </label>
-                ))}
-              </div>
+            <div className="adm-bloques">
+              <BloquePermisos
+                titulo="Geoportal Comercial"
+                campos={CAMPOS_COMERCIAL}
+                alEncender={["explorar"]}
+                borrador={borrador}
+                onCambio={(c) => setBorrador({ ...borrador, ...c })}
+              />
+              {conTecnica && (
+                <BloquePermisos
+                  titulo="Geoportal Técnica"
+                  tecnico
+                  campos={CAMPOS_TECNICA}
+                  borrador={borrador}
+                  onCambio={(c) => setBorrador({ ...borrador, ...c })}
+                >
+                  <select
+                    className="adm-sel adm-perfil-rapido"
+                    value=""
+                    aria-label="Aplicar un perfil técnico"
+                    onChange={(e) => {
+                      const p = e.target.value as PerfilTecnico | "";
+                      if (!p) return;
+                      setBorrador({ explorar: false, focalizacion: false, comercial: false, rutas: false, dashboard: false, horario: "sin_restriccion", dias: "todos",
+                                    registro_tecnico: PERFILES_TECNICOS[p].registro, dashboard_tecnico: PERFILES_TECNICOS[p].dashboard });
+                    }}
+                  >
+                    <option value="">Aplicar perfil…</option>
+                    <option value="operador">Operador técnico</option>
+                    <option value="supervisor">Supervisor técnico</option>
+                  </select>
+                  {(borrador.registro_tecnico || borrador.dashboard_tecnico) && (
+                    <p className="adm-aviso-tec">
+                      {CAMPOS_COMERCIAL.some(([c]) => borrador[c] === true)
+                        ? "Con modos comerciales y técnicos verá las dos áreas y la ventana de entrada."
+                        : "Solo verá el área técnica: entra directo, sin mapa ni datos comerciales."}
+                      {(borrador.horario !== "sin_restriccion" || borrador.dias !== "todos") &&
+                        " El área técnica opera todos los días a cualquier hora: con este horario el acceso se corta fuera de él."}
+                    </p>
+                  )}
+                </BloquePermisos>
+              )}
             </div>
+            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : [])].some(([c]) => borrador[c] === true) && (
+              <p className="adm-aviso-tec">Sin ningún modo asignado: al ingresar verá «Sin módulos asignados».</p>
+            )}
             <div>
               <div className="adm-editor-et">Horario</div>
               <select
