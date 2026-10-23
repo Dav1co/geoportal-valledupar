@@ -142,6 +142,7 @@ export function IndicesAnualesSeccion({ anual }: { anual: IpufAnual[] }) {
           <LineasPorcentaje
             etiquetas={etiquetas}
             series={[{ nombre: "IANC (agua no contabilizada)", color: COLOR_ESTANDAR, valores: serie((a) => a.ianc) }]}
+            valoresVisibles
             alto={260}
           />
         </div>

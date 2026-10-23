@@ -170,6 +170,7 @@ export function LineasPorcentaje({
   tituloY,
   sinTope = false,
   paso = 5,
+  valoresVisibles = false,
 }: {
   etiquetas: string[];
   series: SerieLinea[];
@@ -182,10 +183,13 @@ export function LineasPorcentaje({
   tituloY?: string;
   sinTope?: boolean;
   paso?: number;
+  // Escribe el valor sobre cada punto (apagado por defecto). Con más de 12 puntos
+  // por serie solo rotula primero, último, máximo y mínimo.
+  valoresVisibles?: boolean;
 }) {
   const { ref, tip, mover, salir } = useTip();
   const ancho = 720;
-  const m = { izq: 44, der: 10, arr: tituloY ? 24 : 10, aba: 30 };
+  const m = { izq: 44, der: 10, arr: tituloY ? 24 : valoresVisibles ? 20 : 10, aba: 30 };
   const plotW = ancho - m.izq - m.der;
   const plotH = alto - m.arr - m.aba;
   const vals = series.flatMap((s) => s.valores.filter((v): v is number => v != null));
@@ -245,6 +249,40 @@ export function LineasPorcentaje({
             ),
           ),
         )}
+        {valoresVisibles
+          ? series.map((s) => {
+              const idx = s.valores.flatMap((v, i) => (v == null ? [] : [i]));
+              let claves = idx;
+              if (idx.length > 12) {
+                const vv = (i: number) => s.valores[i] as number;
+                const iMax = idx.reduce((p, q) => (vv(q) > vv(p) ? q : p));
+                const iMin = idx.reduce((p, q) => (vv(q) < vv(p) ? q : p));
+                claves = Array.from(new Set([idx[0], idx[idx.length - 1], iMax, iMin]));
+              }
+              return claves.map((i) => {
+                const v = s.valores[i] as number;
+                const borde = i === 0 ? "start" : i === etiquetas.length - 1 ? "end" : "middle";
+                const dx = borde === "start" ? -4 : borde === "end" ? 4 : 0;
+                return (
+                  <text
+                    key={`v-${s.nombre}-${i}`}
+                    x={escX(i) + dx}
+                    y={Math.max(escY(v) - 8, 11)}
+                    textAnchor={borde}
+                    fontSize={10}
+                    fontWeight={600}
+                    fill="#1F2D3A"
+                    stroke="#fff"
+                    strokeWidth={3}
+                    paintOrder="stroke"
+                    style={{ pointerEvents: "none" }}
+                  >
+                    {formatoValor(v)}
+                  </text>
+                );
+              });
+            })
+          : null}
       </svg>
       <CapaTip tip={tip} />
       <div className="dash-leyenda">
