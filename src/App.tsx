@@ -21,6 +21,12 @@ import { Buscador } from "./components/Buscador";
 import { PredioPanel } from "./components/PredioPanel";
 import { Watermark } from "./components/Watermark";
 import { Admin } from "./components/Admin";
+import { areasDisponibles, esDual as esDualAreas, pantallaInicial, pantallaValida, type Area, type Pantalla } from "./areas/areas";
+import { CabeceraApp } from "./areas/CabeceraApp";
+import { VentanaEntrada } from "./areas/VentanaEntrada";
+import { AreaTecnica } from "./areas/AreaTecnica";
+import { SinModulos } from "./areas/SinModulos";
+import { PerfilNoDisponible } from "./areas/PerfilNoDisponible";
 import { Dashboard } from "./dashboard/Dashboard";
 import { TrazadorRuta, type EstadoTrazo } from "./components/TrazadorRuta";
 import type { Capturado, PuntoRuta as PuntoTrazo } from "./lib/trazado";
@@ -121,8 +127,11 @@ function leerURL() {
 
 const URL0 = leerURL();
 
+// Permisos que se asumen mientras el perfil no trae `permisos` (los mismos valores iniciales de antes).
+const PERMISOS_BASE = { explorar: true, focalizacion: false, comercial: false, rutas: false, dashboard: false };
+
 export default function App() {
-  const { session, cargando } = useSession();
+  const { session, perfil, cargando, errorPerfil, reintentar } = useSession();
   const [predioId, setPredioId] = useState<number | null>(null);
   const [panelMovilAbierto, setPanelMovilAbierto] = useState(false);
   const [heatMetrica, setHeatMetrica] = useState<HeatMetrica | null>(null);
@@ -132,11 +141,9 @@ export default function App() {
   const [fPago, setFPago] = useState("todos");
   const [fCausal, setFCausal] = useState("todos");
   const [apilados, setApilados] = useState<PredioApilado[] | null>(null);
-  const [esAdmin, setEsAdmin] = useState(false);
-  const [permisos, setPermisos] = useState({
-    explorar: true, focalizacion: false, comercial: false, rutas: false,
-    dashboard: false,
-  });
+  // Derivados del perfil que ya entrega useSession (una sola petición). Antes eran estado con un efecto propio: quedaba un render con los valores por defecto.
+  const esAdmin = perfil?.es_admin ?? false;
+  const permisos = perfil?.permisos ?? PERMISOS_BASE;
   const [vista, setVista] = useState<"mapa" | "admin">("mapa");
   const [modo, setModo] = useState<Modo>("explorar");
   const [dibujando, setDibujando] = useState(false);
@@ -197,21 +204,23 @@ export default function App() {
   >(null);
   const [trazoFuera, setTrazoFuera] = useState<{ x: number; y: number }[] | null>(null);
 
+  // Áreas del usuario y pantalla en la que está. Mientras no haya perfil, `pantalla` es null y no se monta nada (ni mapa ni teselas).
+  // La pantalla se decide UNA vez al llegar el perfil (iniciar sesión o recargar: los duales siempre empiezan en la ventana de entrada, no se recuerda la última área);
+  // las revalidaciones posteriores del perfil no la tocan salvo que dejara de ser válida.
+  const areas = useMemo(() => areasDisponibles(perfil), [perfil]);
+  const esDual = esDualAreas(areas);
+  const [pantalla, setPantalla] = useState<Pantalla | null>(null);
+  const perfilListo = perfil !== null;
   useEffect(() => {
-    if (!session) {
-      setEsAdmin(false);
-      return;
-    }
-    api.admin
-      .perfil()
-      .then((r) => {
-        setEsAdmin(r.es_admin);
-        if (r.permisos) setPermisos(r.permisos);
-      })
-      .catch(() => {
-        setEsAdmin(false);
-      });
-  }, [session]);
+    setPantalla((actual) => {
+      if (!perfilListo) return null;
+      return actual && pantallaValida(actual, areas) ? actual : pantallaInicial(areas);
+    });
+  }, [perfilListo, areas]);
+  function irA(a: Area | "entrada") {
+    setVista("mapa");
+    setPantalla(a);
+  }
 
   // Cargar la lista de barrios la primera vez que se entra al modo Comercial.
   useEffect(() => {
@@ -282,8 +291,44 @@ export default function App() {
   }
   if (!session) return <Login />;
 
+  // Fallo pasajero al pedir el perfil: mensaje con «Reintentar» y regreso al inicio de sesión (antes: «Cargando…» sin fin o cierre de sesión con un mensaje técnico).
+  if (!perfilListo && errorPerfil) {
+    return <PerfilNoDisponible mensaje={errorPerfil} onReintentar={reintentar} onSalir={() => supabase.auth.signOut()} />;
+  }
+  // Sin perfil (o sin pantalla decidida) no se pinta nada: ni mapa ni teselas ni búsquedas.
+  if (!perfilListo || pantalla === null) {
+    return <div className="pantalla-carga">Cargando perfil…</div>;
+  }
 
   const email = session.user.email ?? "";
+
+  // Entrada, área Técnica y «sin módulos»: pantallas aparte, sin MapLibre. El área Comercial sigue con su cabecera y su cuerpo de siempre (más abajo).
+  if (pantalla !== "comercial") {
+    return (
+      <div className="app">
+        <CabeceraApp
+          correo={email}
+          esAdmin={esAdmin}
+          mostrarInicio={esDual && pantalla !== "entrada"}
+          enAdministracion={vista === "admin"}
+          onInicio={() => irA("entrada")}
+          onAdmin={() => setVista(vista === "admin" ? "mapa" : "admin")}
+          onSalir={() => supabase.auth.signOut()}
+        />
+        {vista === "admin" ? (
+          <div className="cuerpo" style={{ overflow: "auto", padding: 16 }}>
+            <Admin onVolver={() => setVista("mapa")} />
+          </div>
+        ) : pantalla === "entrada" ? (
+          <VentanaEntrada onElegir={irA} />
+        ) : pantalla === "tecnica" ? (
+          <AreaTecnica />
+        ) : (
+          <SinModulos />
+        )}
+      </div>
+    );
+  }
 
   function irAPredio(id: number, x: number, y: number) {
     setApilados(null);
@@ -519,6 +564,10 @@ export default function App() {
           <span>Geoportal Catastral</span>
           <span className="barra-ent">EMDUPAR</span>
         </div>
+
+        {esDual && (
+          <button type="button" className="btn-inicio" onClick={() => irA("entrada")}>⌂ Inicio</button>
+        )}
 
         <div className="barra-usuario">
           {esAdmin && (
