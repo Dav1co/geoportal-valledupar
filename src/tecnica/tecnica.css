@@ -1,0 +1,76 @@
+/* Área Técnica (Torre B): pantalla del operador, celular primero (390 px). Colores de la maqueta; objetivos táctiles de al menos 44 px; campos de 16 px (el celular no hace zoom). */
+.tec-pagina { flex: 1; overflow: auto; background: #f3f6f8; padding: 0 0 24px; color: #22313f; -webkit-text-size-adjust: 100%; }
+.tec-pagina > * { max-width: 520px; margin-left: auto; margin-right: auto; }
+.tec-sesion { background: #fff; border-bottom: 1px solid #dde5ea; padding: 10px 16px; font-size: 13px; color: #52626f; max-width: none !important; overflow-wrap: anywhere; }
+.tec-rotulo { font-size: 13px; font-weight: 600; color: #52626f; margin-bottom: 8px; }
+.tec-formularios { padding: 16px 16px 0; }
+.tec-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.tec-chip-form { min-height: 44px; padding: 0 14px; border-radius: 22px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; background: #fff; color: #0a2540; border: 1px solid #7b8b99; display: inline-flex; align-items: center; gap: 8px; }
+.tec-chip-form[aria-pressed="true"] { background: #0a2540; color: #fff; border-color: #0a2540; }
+.tec-chip-form:disabled { background: #eef2f5; color: #52626f; border-color: #c3ced6; cursor: not-allowed; }
+.tec-pronto { font-size: 11.5px; font-weight: 600; background: #fdf1e0; color: #8a4a06; padding: 2px 7px; border-radius: 10px; }
+.tec-supervision { padding: 12px 16px 0; }
+
+.tec-tarjeta { margin: 16px; background: #fff; border: 1px solid #dde5ea; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.tec-tarjeta h1 { margin: 0; font-size: 22px; color: #0a2540; }
+.tec-tarjeta h2 { margin: 0; font-size: 18px; color: #0a2540; }
+.tec-sub { margin: 4px 0 0; font-size: 14px; color: #52626f; }
+.tec-tarjeta > p { margin: 0; }
+
+.tec-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tec-campo label { font-size: 15px; font-weight: 600; }
+.tec-oblig { font-weight: 400; font-size: 13px; color: #52626f; }
+.tec-campo input[type="text"], .tec-campo input[type="time"] { height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; color: #22313f; background: #fff; width: 100%; min-width: 0; }
+.tec-campo input:focus-visible, .tec-boton:focus-visible, .tec-boton-sec:focus-visible, .tec-planta:focus-visible, .tec-chip-form:focus-visible, .tec-enlace:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.tec-campo input[aria-invalid="true"] { border-color: #b42318; border-width: 2px; }
+.tec-campo input:disabled { background: #eef2f5; }
+.tec-solo-lectura { background: #eef2f5 !important; }
+.tec-entrada { display: flex; align-items: stretch; }
+.tec-entrada input { border-right: none !important; border-radius: 8px 0 0 8px !important; flex: 1; }
+.tec-unidad { min-width: 64px; padding: 0 8px; display: flex; align-items: center; justify-content: center; background: #eef2f5; border: 1px solid #7b8b99; border-radius: 0 8px 8px 0; font-size: 14px; }
+.tec-ayuda { font-size: 13px; color: #52626f; margin: 0; }
+.tec-error { font-size: 13.5px; color: #b42318; font-weight: 600; }
+.tec-error-caja { margin: 0; background: #fdeceb; color: #b42318; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+
+.tec-bloque { border-top: 1px solid #dde5ea; padding-top: 16px; display: flex; flex-direction: column; gap: 14px; }
+.tec-bloque-tit { font-size: 16px; font-weight: 700; color: #0f766e; }
+.tec-bloque-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tec-plantas { display: flex; gap: 10px; }
+.tec-planta { flex: 1; min-height: 52px; border-radius: 10px; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; background: #fff; color: #0a2540; border: 2px solid #c3ced6; }
+.tec-planta[aria-pressed="true"] { background: #0f766e; color: #fff; border-color: #0f766e; }
+.tec-planta:disabled { opacity: 0.7; cursor: not-allowed; }
+.tec-comun { background: #e3f3f1; border: 1px solid #0f766e; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.tec-comun .tec-bloque-tit { color: #0a2540; }
+.tec-comun .tec-ayuda { color: #22313f; }
+.tec-chip { background: #0f766e; color: #fff; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 10px; }
+.tec-comun-plegado { background: #eef2f5; border-color: #c3ced6; }
+.tec-comun-plegado .tec-ayuda { color: #52626f; }
+
+.tec-boton { min-height: 52px; border: none; border-radius: 10px; background: #0f766e; color: #fff; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; padding: 0 16px; }
+.tec-boton:disabled { opacity: 0.65; cursor: not-allowed; }
+.tec-boton-sec { min-height: 48px; border-radius: 10px; background: #fff; color: #0f766e; border: 2px solid #0f766e; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.tec-boton-sec:disabled { color: #52626f; border-color: #c3ced6; background: #eef2f5; cursor: not-allowed; }
+.tec-boton-corto { min-height: 44px; flex-shrink: 0; }
+.tec-enlace { background: none; border: none; color: #0a2540; text-decoration: underline; font: inherit; cursor: pointer; padding: 10px 4px; min-height: 44px; }
+.tec-acciones { display: flex; flex-direction: column; gap: 10px; }
+
+.tec-aviso { border-radius: 10px; padding: 12px 14px; font-size: 14.5px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.tec-aviso-ok { background: #e5f5ec; color: #14532d; border: 1px solid #86c9a0; }
+.tec-aviso-error { background: #fdeceb; color: #8f1d14; border: 1px solid #f0a8a2; }
+.tec-aviso-info { background: #eaf2fb; color: #12395f; border: 1px solid #a9c8e8; }
+
+.tec-confirma { display: flex; flex-direction: column; gap: 12px; }
+.tec-lista-conf { list-style: none; margin: 0; padding: 0; border-top: 2px solid #0a2540; }
+.tec-lista-conf li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #dde5ea; font-size: 15px; }
+.tec-lista-conf strong { white-space: nowrap; text-align: right; }
+.tec-num { font-variant-numeric: tabular-nums; }
+
+.tec-resumen-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.tec-tabla { display: flex; flex-direction: column; font-size: 14px; }
+.tec-fila { display: grid; grid-template-columns: minmax(0, 1.7fr) 1fr 1fr 1fr; gap: 6px; padding: 10px 0; border-bottom: 1px solid #dde5ea; align-items: start; }
+.tec-fila-cab { font-weight: 700; border-bottom: 2px solid #0a2540; padding: 8px 0; }
+.tec-der { text-align: right; }
+.tec-unidad-chica { display: block; font-size: 12px; color: #52626f; }
+
+@media (max-width: 380px) { .tec-tarjeta { margin: 12px 8px; padding: 14px 12px; } .tec-fila { grid-template-columns: minmax(0, 1.5fr) 1fr 1fr 1fr; gap: 4px; font-size: 13.5px; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }

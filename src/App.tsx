@@ -24,7 +24,7 @@ import { Admin } from "./components/Admin";
 import { areasDisponibles, esDual as esDualAreas, pantallaInicial, pantallaValida, type Area, type Pantalla } from "./areas/areas";
 import { CabeceraApp } from "./areas/CabeceraApp";
 import { VentanaEntrada } from "./areas/VentanaEntrada";
-import { AreaTecnica } from "./areas/AreaTecnica";
+import { AreaTecnica } from "./tecnica/AreaTecnica";
 import { SinModulos } from "./areas/SinModulos";
 import { PerfilNoDisponible } from "./areas/PerfilNoDisponible";
 import { Dashboard } from "./dashboard/Dashboard";
@@ -322,7 +322,7 @@ export default function App() {
         ) : pantalla === "entrada" ? (
           <VentanaEntrada onElegir={irA} />
         ) : pantalla === "tecnica" ? (
-          <AreaTecnica />
+          <AreaTecnica uid={session.user.id} correo={email} />
         ) : (
           <SinModulos />
         )}

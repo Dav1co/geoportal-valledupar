@@ -23,7 +23,7 @@ export function VentanaEntrada({ onElegir }: { onElegir: (a: Area) => void }) {
             <span className="area-texto">
               <h2 className="area-titulo"><span>GEOPORTAL</span><strong>TÉCNICA</strong></h2>
               <p>Registro y gestión de datos de planta: puntos de muestra, mediciones y supervisión.</p>
-              <span className="area-etiqueta">En construcción · visible solo para administradores</span>
+              <span className="area-etiqueta">Disponible: formulario Entrada</span>
             </span>
             <PanelTecnico />
           </button>
