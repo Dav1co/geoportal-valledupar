@@ -65,7 +65,7 @@ async function token(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-async function pedir<T>(accion: string, opciones: { qs?: Record<string, string>; cuerpo?: unknown; timeoutMs?: number } = {}): Promise<T> {
+export async function pedir<T>(accion: string, opciones: { qs?: Record<string, string>; cuerpo?: unknown; timeoutMs?: number } = {}): Promise<T> {
   const url = new URL(`${FUNCTIONS_URL}/geoportal-tecnica`);
   url.searchParams.set("accion", accion);
   for (const [k, v] of Object.entries(opciones.qs ?? {})) url.searchParams.set(k, v);

@@ -3,6 +3,7 @@ import "./tecnica.css";
 import { apiTec, ErrorTec, type FormularioDef, type MisFormularios } from "./apiTecnica";
 import { FormularioCaptura, avisoDeError } from "./FormularioCaptura";
 import { ResumenUltimas24 } from "./ResumenUltimas24";
+import { Dashboard } from "./Dashboard";
 import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
@@ -18,6 +19,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [errorDef, setErrorDef] = useState<ErrorTec | null>(null);
   const [version, setVersion] = useState(0);        // sube con cada guardado: refresca el resumen y la definición (fecha y hora propuestas)
   const [intento, setIntento] = useState(0);
+  const [vista, setVista] = useState<"captura" | "dashboard">("captura");     // el Dashboard técnico es solo para supervisor y administrador (el servidor lo vuelve a verificar en cada ruta)
 
   useEffect(() => {
     let vivo = true;
@@ -64,6 +66,8 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const hayAlgunoAsignado = mis.formularios.length > 0;
   const puedeSupervisar = mis.perfil === "admin" || mis.perfil === "supervisor";
 
+  if (puedeSupervisar && vista === "dashboard") return <Dashboard correo={correo} rotuloPerfil={ROTULO_PERFIL[mis.perfil]} onVolver={() => setVista("captura")} />;
+
   return (
     <div className="tec-pagina">
       <div className="tec-sesion">Sesión de {correo} · {ROTULO_PERFIL[mis.perfil]}</div>
@@ -95,7 +99,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
 
       {puedeSupervisar ? (
         <div className="tec-supervision">
-          <button type="button" className="tec-boton-sec" disabled aria-disabled="true">Dashboard técnico <span className="tec-pronto">Próximamente</span></button>
+          <button type="button" className="tec-boton-sec" onClick={() => setVista("dashboard")}>Dashboard técnico</button>
         </div>
       ) : null}
 
