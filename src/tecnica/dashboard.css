@@ -81,7 +81,11 @@
 .td-casillas { border: 1px solid #dde5ea; border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; }
 .td-casillas legend { font-size: 13px; font-weight: 600; color: #52626f; padding: 0 6px; }
 
+.td-etiqueta-form { display: none; }
 @media (max-width: 700px) {
+  /* En pantallas angostas la columna «Formulario» se esconde y el nombre pasa a una etiqueta bajo la fecha de la muestra. */
+  .td-col-form { display: none; }
+  .td-etiqueta-form { display: block; width: fit-content; margin-top: 4px; padding: 2px 8px; border-radius: 10px; background: #eef2f5; border: 1px solid #c3ced6; color: #0a2540; font-size: 12px; font-weight: 600; white-space: normal; }
   .tdash-ancho, .tdash-cuerpo { padding-left: 12px; padding-right: 12px; }
   .td-solo-movil { display: inline-flex; align-items: center; margin-bottom: 8px; }
   .td-filtros:not(.abierto) .td-filtros-cuerpo { display: none; }

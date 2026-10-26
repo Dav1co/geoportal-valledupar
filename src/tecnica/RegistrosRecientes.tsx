@@ -175,12 +175,12 @@ export function RegistrosRecientes({ catalogo }: { catalogo: Catalogo }) {
       <div className="td-tabla-caja">
         <table className="td-tabla">
           <caption className="td-solo-lectores">Registros de Técnica</caption>
-          <thead><tr><th>Muestra</th><th>Registro (servidor)</th><th>Planta o punto</th><th>Variable</th><th className="td-der">Valor</th><th>Autor</th><th>Marcas</th><th>Acción</th></tr></thead>
+          <thead><tr><th>Muestra</th><th>Registro (servidor)</th><th className="td-col-form">Formulario</th><th>Planta o punto</th><th>Variable</th><th className="td-der">Valor</th><th>Autor</th><th>Marcas</th><th>Acción</th></tr></thead>
           <tbody>
             {filas.map((r) => (
-              <FilaRegistro key={r.registro_id} r={r} onAccion={(alcance) => { setAviso(null); setAccion({ alcance, accion: r.excluido ? "REINCLUIR" : "EXCLUIR", fila: r }); }} />
+              <FilaRegistro key={r.registro_id} r={r} formulario={nombreForm(r.formulario)} onAccion={(alcance) => { setAviso(null); setAccion({ alcance, accion: r.excluido ? "REINCLUIR" : "EXCLUIR", fila: r }); }} />
             ))}
-            {!cargando && filas.length === 0 && !error ? <tr><td colSpan={8} className="td-vacio">No hay registros con esos filtros.</td></tr> : null}
+            {!cargando && filas.length === 0 && !error ? <tr><td colSpan={9} className="td-vacio">No hay registros con esos filtros.</td></tr> : null}
           </tbody>
         </table>
       </div>
@@ -196,14 +196,16 @@ export function RegistrosRecientes({ catalogo }: { catalogo: Catalogo }) {
   );
 }
 
-function FilaRegistro({ r, onAccion }: { r: RegistroFila; onAccion: (a: "registro" | "lote") => void }) {
+/** Una fila de la tabla. `formulario` es el NOMBRE visible del formulario (sale del catálogo del servidor: si el catálogo no lo trae, se muestra la clave). */
+function FilaRegistro({ r, formulario, onAccion }: { r: RegistroFila; formulario: string; onAccion: (a: "registro" | "lote") => void }) {
   const marcas = marcasDe(r);
   const lugar = r.punto ? `${r.punto_nombre ?? r.punto}${r.zona ? ` · ${mayuscula(r.zona)}` : ""}` : (r.planta_nombre ?? "Ambas plantas");
   return (
     <>
       <tr className={r.excluido ? "td-excluida" : undefined}>
-        <td className="td-num">{fmtFecha(r.fecha_muestra)} {r.hora_muestra}</td>
+        <td className="td-num">{fmtFecha(r.fecha_muestra)} {r.hora_muestra}<span className="td-etiqueta-form" data-testid="etiqueta-formulario">{formulario}</span></td>
         <td className="td-num">{fmtInstante(r.registrado_en)}</td>
+        <td className="td-col-form" data-testid="col-formulario">{formulario}</td>
         <td>{lugar}{r.punto ? <span className="td-chico">{r.punto}</span> : null}</td>
         <td>{r.variable_nombre}</td>
         <td className="td-der td-valor">{fmtValor(r.valor, r.decimales)} <span className="td-unidad">{r.unidad}</span></td>
@@ -215,7 +217,7 @@ function FilaRegistro({ r, onAccion }: { r: RegistroFila; onAccion: (a: "registr
         </div></td>
       </tr>
       {r.excluido ? (
-        <tr className="td-excluida td-excluida-motivo"><td colSpan={8}>Excluido por {r.exclusion_autor?.split("@")[0] ?? "—"} el {fmtInstante(r.exclusion_en)} porque «{r.exclusion_motivo}».</td></tr>
+        <tr className="td-excluida td-excluida-motivo"><td colSpan={9}>Excluido por {r.exclusion_autor?.split("@")[0] ?? "—"} el {fmtInstante(r.exclusion_en)} porque «{r.exclusion_motivo}».</td></tr>
       ) : null}
     </>
   );
