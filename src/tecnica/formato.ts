@@ -30,3 +30,16 @@ export function periodoARango(p: Periodo, hoy: string, desde?: string, hasta?: s
 export const fmtValor = (v: number, decimales: number) => formatearNumero(v, decimales);
 export const mayuscula = (s: string | null | undefined) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
 export const fmtMiles = (n: number) => formatearNumero(n, 0);
+
+// ---------- Marcas de referencia (límites de tecnica.referencias) ----------
+/** Límite con los decimales que trae (1.500; 6,5; 0,3), en formato colombiano. */
+export const fmtLimite = (v: number): string => formatearNumero(v, (String(v).split(".")[1] ?? "").length);
+/** «Sobre el máximo» / «Bajo el mínimo» / «» según la marca que entrega el servidor. */
+export const etiquetaMarca = (m: string | null | undefined): string => (m === "alto" ? "Sobre el máximo" : m === "bajo" ? "Bajo el mínimo" : "");
+export const etiquetaOrigen = (o: string | null | undefined): string => (o === "norma" ? "Norma" : o === "criterio_planta" ? "Criterio de planta" : "");
+/** Referencia en una frase: «mín. 6,5 · máx. 9 pH · Norma · Res. 2115/2007, art. 4». Vacía si la variable no tiene referencia. */
+export function textoReferencia(r: { ref_min: number | null; ref_max: number | null; ref_origen: string | null; ref_fuente: string | null; unidad?: string }): string {
+  if (r.ref_min === null && r.ref_max === null) return "";
+  const lim = [r.ref_min !== null ? `mín. ${fmtLimite(r.ref_min)}` : "", r.ref_max !== null ? `máx. ${fmtLimite(r.ref_max)}` : ""].filter(Boolean).join(" · ");
+  return [lim + (r.unidad ? ` ${r.unidad}` : ""), etiquetaOrigen(r.ref_origen), r.ref_fuente ?? ""].filter(Boolean).join(" · ");
+}

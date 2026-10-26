@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiDash, textoError, type Catalogo, type FiltrosRegistros, type RegistroFila } from "./apiDashboard";
 import { DescargaCancelada, ejecutarDescarga, guardarArchivo, type Progreso } from "./ejecutarDescarga";
-import { fmtFecha, fmtInstante, fmtMiles, fmtValor, hoyBogota, mayuscula, periodoARango, type Periodo } from "./formato";
+import { etiquetaMarca, fmtFecha, fmtInstante, fmtMiles, fmtValor, hoyBogota, mayuscula, periodoARango, textoReferencia, type Periodo } from "./formato";
 import { supabase } from "../lib/supabase";
 
 // Dashboard técnico · «Registros recientes». Todo sale de datos del servidor (formularios, plantas, puntos, zonas, variables y unidades); nada escrito en el código.
@@ -15,9 +15,9 @@ const PERIODOS: { v: Periodo; t: string }[] = [{ v: "hoy", t: "Hoy" }, { v: "7d"
 type Accion = { alcance: "registro" | "lote"; accion: "EXCLUIR" | "REINCLUIR"; fila: RegistroFila };
 
 /** Marcas de una fila. Para sumar una marca nueva (p. ej. «durante servicio reducido») basta agregar una entrada aquí: la columna ya las pinta. */
-function marcasDe(f: RegistroFila): { clave: string; texto: string; tono: "alerta" | "info" | "gris" }[] {
-  const m: { clave: string; texto: string; tono: "alerta" | "info" | "gris" }[] = [];
-  if (f.fuera_de_rango) m.push({ clave: "rango", texto: `Fuera de rango · ${f.fuera_de_rango === "alto" ? "alto" : "bajo"}`, tono: "alerta" });
+function marcasDe(f: RegistroFila): { clave: string; texto: string; tono: "alerta" | "info" | "gris"; ayuda?: string }[] {
+  const m: { clave: string; texto: string; tono: "alerta" | "info" | "gris"; ayuda?: string }[] = [];
+  if (f.fuera_de_rango) m.push({ clave: "rango", texto: etiquetaMarca(f.fuera_de_rango), tono: "alerta", ayuda: textoReferencia({ ...f, unidad: f.unidad }) || undefined });
   if (f.fuente === "telemetria") m.push({ clave: "fuente", texto: "Telemetría", tono: "info" });
   if (f.excluido) m.push({ clave: "excluido", texto: "Excluido", tono: "gris" });
   return m;
@@ -208,7 +208,7 @@ function FilaRegistro({ r, onAccion }: { r: RegistroFila; onAccion: (a: "registr
         <td>{r.variable_nombre}</td>
         <td className="td-der td-valor">{fmtValor(r.valor, r.decimales)} <span className="td-unidad">{r.unidad}</span></td>
         <td title={r.autor}>{r.autor.split("@")[0]}</td>
-        <td><div className="td-marcas">{marcas.map((m) => <span key={m.clave} className={`td-marca td-marca-${m.tono}`}>{m.texto}</span>)}</div></td>
+        <td><div className="td-marcas">{marcas.map((m) => <span key={m.clave} className={`td-marca td-marca-${m.tono}`} title={m.ayuda}>{m.texto}</span>)}</div></td>
         <td><div className="td-acciones">
           <button type="button" className="td-enlace" onClick={() => onAccion("registro")}>{r.excluido ? "Reincluir valor…" : "Excluir valor…"}</button>
           <button type="button" className="td-enlace" onClick={() => onAccion("lote")}>{r.excluido ? "Reincluir envío…" : "Excluir envío…"}</button>

@@ -1,5 +1,5 @@
 import type { Celda } from "./xlsx";
-import { fmtFecha, mayuscula } from "./formato";
+import { etiquetaMarca, etiquetaOrigen, fmtFecha, mayuscula } from "./formato";
 
 // Armado de los archivos de descarga (CSV y Excel) a partir de las filas que entrega geoportal_tec_descarga_pagina. Lógica PURA (se prueba en Node).
 export type FilaDescarga = {
@@ -7,11 +7,13 @@ export type FilaDescarga = {
   planta: string | null; planta_nombre: string | null; punto: string | null; punto_nombre: string | null; zona: string | null;
   fecha_muestra: string; hora_muestra: string; registrado_local: string; autor: string; fuente: string; fuera_de_rango: string | null;
   excluido: boolean; exclusion_motivo: string | null; exclusion_autor: string | null; exclusion_local: string | null;
+  ref_min: number | null; ref_max: number | null; ref_origen: string | null; ref_fuente: string | null;
 };
 
 export const ENCABEZADOS = ["Formulario", "Código de la variable", "Variable", "Unidad", "Valor", "Planta", "Punto (código)", "Punto", "Zona", "Fecha de la muestra", "Hora de la muestra",
-  "Fecha y hora de registro (Bogotá)", "Autor", "Fuente", "Excluido", "Motivo de la exclusión", "Excluido por", "Fecha y hora de la exclusión (Bogotá)"];
-export const ANCHOS_XLSX = [18, 22, 30, 12, 14, 14, 14, 24, 9, 14, 11, 20, 32, 12, 10, 40, 32, 20];
+  "Fecha y hora de registro (Bogotá)", "Autor", "Fuente", "Excluido", "Motivo de la exclusión", "Excluido por", "Fecha y hora de la exclusión (Bogotá)",
+  "Marca de referencia", "Referencia mínima", "Referencia máxima", "Origen de la referencia", "Fuente de la referencia"];
+export const ANCHOS_XLSX = [18, 22, 30, 12, 14, 14, 14, 24, 9, 14, 11, 20, 32, 12, 10, 40, 32, 20, 18, 12, 12, 18, 44];
 
 const fuenteTexto = (f: string) => (f === "telemetria" ? "Telemetría" : "Manual");
 /** «2026-10-24T10:44:12» → «24/10/2026 10:44». */
@@ -36,7 +38,8 @@ export function filaCsv(f: FilaDescarga): string {
   return [
     f.formulario_nombre, f.variable, f.variable_nombre, f.unidad, numeroCsv(f.valor), f.planta_nombre ?? "", f.punto ?? "", f.punto_nombre ?? "", mayuscula(f.zona),
     fmtFecha(f.fecha_muestra), f.hora_muestra, fmtLocal(f.registrado_local), f.autor, fuenteTexto(f.fuente), f.excluido ? "Sí" : "No", f.exclusion_motivo ?? "", f.exclusion_autor ?? "", fmtLocal(f.exclusion_local),
-  ].map((x, i) => (i === 4 ? x : textoCsv(x))).join(";") + "\r\n";
+    etiquetaMarca(f.fuera_de_rango), f.ref_min === null ? "" : numeroCsv(f.ref_min), f.ref_max === null ? "" : numeroCsv(f.ref_max), etiquetaOrigen(f.ref_origen), f.ref_fuente ?? "",
+  ].map((x, i) => (i === 4 || i === 19 || i === 20 ? x : textoCsv(x))).join(";") + "\r\n";
 }
 export const cabeceraCsv = () => ENCABEZADOS.map(textoCsv).join(";") + "\r\n";
 
@@ -47,7 +50,8 @@ export function filaXlsx(f: FilaDescarga, serialExcel: (fecha: string, hora?: st
   const el = f.exclusion_local ? serialExcel(f.exclusion_local.slice(0, 10), f.exclusion_local.slice(11)) : null;
   return [f.formulario_nombre, f.variable, f.variable_nombre, f.unidad, f.valor, f.planta_nombre, f.punto, f.punto_nombre, mayuscula(f.zona) || null,
     sf === null ? null : { fecha: sf }, sh === null ? null : { hora: sh }, rl === null ? null : { fechaHora: rl }, f.autor, fuenteTexto(f.fuente), f.excluido ? "Sí" : "No",
-    f.exclusion_motivo, f.exclusion_autor, el === null ? null : { fechaHora: el }];
+    f.exclusion_motivo, f.exclusion_autor, el === null ? null : { fechaHora: el },
+    etiquetaMarca(f.fuera_de_rango) || null, f.ref_min, f.ref_max, etiquetaOrigen(f.ref_origen) || null, f.ref_fuente];
 }
 
 /** Hoja «Léame»: filtros aplicados, quién y cuándo descargó, número de filas y advertencias. */
@@ -58,6 +62,7 @@ export function hojaLeame(a: { generadoPor: string; generadoEn: string; filas: n
     ["Incluye registros excluidos", a.incluirExcluidos ? "Sí (columna «Excluido», con motivo y autor)" : "No"],
     ["Filtros aplicados", a.filtros.length ? a.filtros.join("\n") : "Ninguno (todos los registros)"],
     ["", ""],
+    ["Marca de referencia", "«Sobre el máximo» o «Bajo el mínimo» avisan, pero no impiden guardar ni ocultan el dato. Se calculan con la referencia VIGENTE al momento de descargar (no con la de cuando se registró). «Origen»: Norma (una resolución) o Criterio de planta (límite operativo de la empresa); la fuente trae la cita. Sin referencia, estas columnas quedan vacías."],
     ["Cómo leerlo", "«Valor» es el número tal como se guardó (no está redondeado). Las fechas y horas están en hora de Bogotá. La fecha de la muestra y la de registro pueden diferir (p. ej. resultados de laboratorio)."],
     ["Privacidad", "Este archivo contiene los correos de las personas que registraron y excluyeron datos. Es información interna de EMDUPAR: no lo comparta fuera de la empresa."],
   ];
