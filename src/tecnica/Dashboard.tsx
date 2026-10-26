@@ -3,15 +3,17 @@ import "./dashboard.css";
 import { apiDash, textoError, type Catalogo } from "./apiDashboard";
 import { RegistrosRecientes } from "./RegistrosRecientes";
 import { PersonalTecnico } from "./PersonalTecnico";
+import { Resumen } from "./Resumen";
+import { Eventos } from "./Eventos";
 import { supabase } from "../lib/supabase";
 
 // Dashboard técnico (supervisor y administrador). Las secciones salen de este registro: agregar «Estado del servicio» o «Eventos» cuando existan es registrar una sección
 // con su componente; el resto de la pantalla no cambia. Las que aún no existen se muestran deshabilitadas, sin datos de ejemplo.
 type Seccion = { clave: string; titulo: string; Componente?: (p: { catalogo: Catalogo }) => JSX.Element };
 const SECCIONES: Seccion[] = [
-  { clave: "resumen", titulo: "Resumen y eventos" },
+  { clave: "resumen", titulo: "Resumen", Componente: Resumen },
   { clave: "registros", titulo: "Registros", Componente: RegistrosRecientes },
-  { clave: "eventos", titulo: "Eventos" },
+  { clave: "eventos", titulo: "Eventos", Componente: Eventos },
   { clave: "quimicos", titulo: "Químicos" },
   { clave: "personal", titulo: "Personal técnico", Componente: PersonalTecnico },
   { clave: "puntos", titulo: "Puntos" },

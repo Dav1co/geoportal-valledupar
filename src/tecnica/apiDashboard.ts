@@ -34,6 +34,27 @@ export type CambioResp = { persona: string; formulario?: string; asignado?: bool
 export type DescargaIniciada = { descarga_id: number; total: number; max: number; formato: "csv" | "xlsx"; filtros: Record<string, string>; incluir_excluidos: boolean; generado_por: string; generado_en: string };
 export type DescargaPagina = { registros: FilaDescarga[]; devueltos: number; ultimo_id: number | null; hay_mas: boolean };
 
+// ---------- Corte 4: Resumen (avisos y gráficas) y Eventos (valores fuera de referencia con revisión) ----------
+export type EstadoRevision = "sin_revisar" | "revisado" | "reabierto";
+export type FueraFila = {
+  registro_id: number; lote_id: string; formulario: string; formulario_nombre: string; variable: string; variable_nombre: string; unidad: string; decimales: number; valor: number;
+  planta: string | null; planta_nombre: string | null; punto: string | null; punto_nombre: string | null; zona: string | null;
+  fecha_muestra: string; hora_muestra: string; registrado_en: string; autor: string; fuera_de_rango: "alto" | "bajo";
+  ref_min: number | null; ref_max: number | null; ref_origen: "norma" | "criterio_planta" | null; ref_fuente: string | null;
+  estado_revision: EstadoRevision; revision_id: number | null; revision_nota: string | null; revisado_por: string | null; revisado_en: string | null;
+};
+export type FiltrosFuera = { desde?: string; hasta?: string; planta?: string; formulario?: string; punto?: string; origen?: string; estado?: "todos" | "sin_revisar" | "revisados" };
+export type FueraResp = { desde: string; hasta: string; total: number; sin_revisar: number; revisados: number; devueltos: number; registros: FueraFila[] };
+export type RevisarResp = { revision_id: number; registro_id: number; estado_revision: "revisado" | "reabierto"; revisado_por: string; revisado_en: string; nota: string | null };
+export type RefSerie = { ref_min: number | null; ref_max: number | null; origen: "norma" | "criterio_planta"; fuente: string };
+export type PuntoSerie = { t: string; v: number; m: "alto" | "bajo" | null; id?: number };
+export type Serie = {
+  formulario: string; formulario_nombre: string; variable: string; variable_nombre: string; unidad: string; decimales: number;
+  planta: string | null; planta_nombre: string | null; punto: string | null; punto_nombre: string | null;
+  referencia: RefSerie | null; n: number; fuera: number; recortada: boolean; ultimo: PuntoSerie | null; puntos: PuntoSerie[];
+};
+export type SeriesResp = { desde: string; hasta: string; dias: number; max_puntos: number; series: Serie[] };
+
 const sinVacios = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== "")) as Partial<T>;
 
 export const apiDash = {
@@ -47,6 +68,10 @@ export const apiDash = {
   asignar: (persona: string, formulario: string, motivo: string) => pedir<CambioResp>("asignar", { cuerpo: { persona, formulario, ...(motivo ? { motivo } : {}) } }),
   quitar: (persona: string, formulario: string, motivo: string) => pedir<CambioResp>("quitar", { cuerpo: { persona, formulario, motivo } }),
   estado: (persona: string, activo: boolean, motivo: string) => pedir<CambioResp>("estado", { cuerpo: { persona, activo, ...(motivo ? { motivo } : {}) } }),
+  fueraReferencia: (f: FiltrosFuera, p: { despuesDe?: number | null; limite?: number } = {}) =>
+    pedir<FueraResp>("fuera_referencia", { cuerpo: { ...sinVacios(f), ...(p.despuesDe ? { despues_de: p.despuesDe } : {}), limite: p.limite ?? 50 } }),
+  revisar: (registroId: number, accion: "revisado" | "reabierto", nota: string) => pedir<RevisarResp>("revisar", { cuerpo: { registro_id: registroId, accion, ...(nota.trim() ? { nota: nota.trim() } : {}) } }),
+  series: (dias: number, planta: string, formulario: string) => pedir<SeriesResp>("series", { cuerpo: { dias, ...sinVacios({ planta, formulario }) }, timeoutMs: 40000 }),
   descargaIniciar: (filtros: FiltrosRegistros, formato: "csv" | "xlsx", incluirExcluidos: boolean) =>
     pedir<DescargaIniciada>("descarga_iniciar", { cuerpo: { filtros: sinVacios({ ...filtros, estado: undefined }), formato, incluir_excluidos: incluirExcluidos } }),
   descargaPagina: (id: number, despuesDe: number | null, limite: number) =>
