@@ -3,11 +3,13 @@ import { supabase, FUNCTIONS_URL } from "../lib/supabase";
 // Cliente de la Edge Function geoportal-tecnica (contrato: edge_contrato.md del Corte 1, Paso A). Aquí NO hay ningún nombre de variable ni de formulario.
 
 export type Planta = { codigo: string; nombre: string };
-export type PuntoDef = { codigo: string; nombre: string; tipo: string; planta: string | null };
+export type PuntoDef = { codigo: string; nombre: string; tipo: string; planta: string | null; zona?: string | null; orden?: number | null };
 export type VariableDef = {
   codigo: string; nombre: string; unidad: string; categoria: string; decimales: number;
-  orden: number; obligatoria: boolean; alcance: "por_planta" | "ambas_plantas";
+  orden: number; obligatoria: boolean; alcance: "por_planta" | "ambas_plantas" | "por_punto";
   punto: { codigo: string; nombre: string } | null;
+  tipo_punto?: string | null;        // solo en las «por_punto»: el tipo de punto que admite (tanque, distribucion, muestreo…)
+  puntos?: string[] | null;          // solo en las «por_punto»: CÓDIGOS de los puntos activos que admite, en el orden del servidor (los datos de cada punto están en FormularioDef.puntos)
 };
 export type FormularioDef = {
   formulario: { clave: string; nombre: string; descripcion: string };
@@ -22,6 +24,7 @@ export type MisFormularios = { perfil: "admin" | "supervisor" | "operador"; form
 export type FilaResumen = {
   variable: string; nombre: string; unidad: string; decimales: number;
   planta: string | null; planta_nombre: string | null;
+  punto?: string | null; punto_nombre?: string | null;      // filas «por punto» (cloro en tanques, caudal de distribución)
   promedio: number | null; minimo: number | null; maximo: number | null;
 };
 export type ResumenResp = { formulario: string; ventana_horas: number; filas: FilaResumen[] };

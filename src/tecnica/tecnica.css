@@ -72,5 +72,22 @@
 .tec-der { text-align: right; }
 .tec-unidad-chica { display: block; font-size: 12px; color: #52626f; }
 
+/* Tarjetas por lugar (Salida) */
+.tec-grupo { border: 1px solid #c3ced6; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 14px; background: #fff; }
+.tec-grupo h2.tec-bloque-tit { margin: 0; font-size: 16px; }
+.tec-lugares { display: flex; flex-wrap: wrap; gap: 10px; }
+.tec-lugar { flex: 1 1 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 10px; line-height: 1.25; }
+.tec-con-datos { font-size: 12px; font-weight: 600; text-decoration: underline; }
+.tec-campo select { height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 16px; color: #22313f; background: #fff; width: 100%; min-width: 0; }
+.tec-campo select:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.tec-estado { border-radius: 8px; padding: 10px 12px; font-size: 14.5px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.tec-estado-ok { background: #e5f5ec; color: #14532d; border: 1px solid #86c9a0; }
+.tec-estado-error { background: #fdeceb; color: #8f1d14; border: 1px solid #f0a8a2; }
+.tec-estado-pendiente { background: #fdf1e0; color: #6b3a05; border: 1px solid #e8c48f; }
+.tec-conf-lugar { font-size: 15px; font-weight: 700; color: #0f766e; margin: 6px 0 2px; }
+.tec-lugar-resumen { display: block; font-size: 13px; color: #22313f; }
+
 @media (max-width: 380px) { .tec-tarjeta { margin: 12px 8px; padding: 14px 12px; } .tec-fila { grid-template-columns: minmax(0, 1.5fr) 1fr 1fr 1fr; gap: 4px; font-size: 13.5px; } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+.tec-pista { flex: 1 1 100%; margin: 0; }
+.tec-elegir { margin: 0; padding: 10px 12px; background: #eef2f5; border: 1px dashed #7b8b99; border-radius: 8px; font-size: 14px; color: #22313f; }

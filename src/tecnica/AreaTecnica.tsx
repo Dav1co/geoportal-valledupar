@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import "./tecnica.css";
 import { apiTec, ErrorTec, type FormularioDef, type MisFormularios } from "./apiTecnica";
 import { FormularioCaptura, avisoDeError } from "./FormularioCaptura";
+import { FormularioPorLugar } from "./FormularioPorLugar";
 import { ResumenUltimas24 } from "./ResumenUltimas24";
 import { Dashboard } from "./Dashboard";
 import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
 // Formularios que ya tienen pantalla construida (el resto se muestra deshabilitado, «Próximamente»). Esta lista no contiene variables ni nombres de campos.
-const FORMULARIOS_CON_PANTALLA = new Set(["entrada"]);
+const FORMULARIOS_CON_PANTALLA = new Set(["entrada", "salida"]);
 const ROTULO_PERFIL: Record<MisFormularios["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor técnico", operador: "Operador técnico" };
 
 export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
@@ -112,7 +113,9 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
       {elegido && !def && !errorDef ? <p className="tec-sub" role="status">Cargando el formulario…</p> : null}
       {elegido && def ? (
         <>
-          <FormularioCaptura key={elegido} def={def} uid={uid} onGuardado={() => setVersion((v) => v + 1)} />
+          {def.variables.some((v) => v.alcance === "por_punto")
+            ? <FormularioPorLugar key={elegido} def={def} uid={uid} onGuardado={() => setVersion((v) => v + 1)} />      /* con variables «por punto»: tarjetas por lugar */
+            : <FormularioCaptura key={elegido} def={def} uid={uid} onGuardado={() => setVersion((v) => v + 1)} />}
           <ResumenUltimas24 formulario={elegido} version={version} />
         </>
       ) : null}
