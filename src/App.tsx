@@ -551,6 +551,21 @@ export default function App() {
     return `${fmt(conteoCom.total)} predios cumplen los filtros en pantalla`;
   }
 
+  // Cambia el modo de trabajo del mapa. Lo usan el selector del panel lateral y la barra de modos de arriba (quien tiene Formatos de campo).
+  function elegirModo(nuevoModo: Modo) {
+    setModo(nuevoModo);
+    if (nuevoModo === "comercial") {
+      // Los filtros y la selección solo operan desde zoom 15.
+      (window as unknown as { __geoZoomMin?: (z: number) => void }).__geoZoomMin?.(15);
+    }
+    if (nuevoModo !== "comercial") {
+      setHeatMetrica(null);
+      setDibujando(false);
+      setSeleccionLazo([]);
+      setResetLazo((v) => v + 1);
+    }
+  }
+
     function textoConteo() {
     if (!conteo.disponible) return "Acércate para contar los predios en pantalla.";
     const total = conteo.con + conteo.sin;
@@ -573,11 +588,6 @@ export default function App() {
         )}
 
         <div className="barra-usuario">
-          {areas.campo && (
-            <button className="btn-link" onClick={() => setVista(vista === "campo" ? "mapa" : "campo")}>
-              {vista === "campo" ? "Volver al mapa" : "Formatos de campo"}
-            </button>
-          )}
           {esAdmin && (
             <button
               className="btn-link"
@@ -592,6 +602,28 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* Barra de modos (solo con Formatos de campo): Formatos de campo es un modo más y la barra sigue visible para volver a cualquiera con un toque. Quien no tiene campo no la ve (usa el selector del panel). */}
+      {areas.campo && vista !== "admin" && (
+        <nav className="barra-modos" aria-label="Modos de trabajo">
+          {([
+            ["explorar", "Explorar", "Explorar", true],
+            ["focalizacion", "Focalización", "Focaliz.", puedeVerFocalizacion],
+            ["comercial", "Comercial", "Comercial", puedeVerComercial],
+            ["rutas", "Rutas de lectura", "Rutas", puedeVerRutas],
+            ["dashboard", "Dashboard", "Dashboard", puedeVerDashboard],
+          ] as [Modo, string, string, boolean][]).filter((m) => m[3]).map(([m, largo, corto]) => (
+            <button key={m} type="button" className={`modo-btn${vista === "mapa" && modo === m ? " activo" : ""}`} aria-current={vista === "mapa" && modo === m ? "page" : undefined}
+              aria-label={largo} onClick={() => { setVista("mapa"); elegirModo(m); }}>
+              <span className="modo-btn-largo">{largo}</span><span className="modo-btn-corto">{corto}</span>
+            </button>
+          ))}
+          <button type="button" className={`modo-btn modo-btn-campo${vista === "campo" ? " activo" : ""}`} aria-current={vista === "campo" ? "page" : undefined}
+            aria-label="Formatos de campo" onClick={() => setVista("campo")}>
+            <span className="modo-btn-largo">Formatos de campo</span><span className="modo-btn-corto">Campo</span>
+          </button>
+        </nav>
+      )}
 
       {vista === "admin" ? (
         <div className="cuerpo" style={{ overflow: "auto", padding: 16 }}>
@@ -630,21 +662,7 @@ export default function App() {
               <select
                 className="modo-sel"
                 value={modo}
-                onChange={(e) => {
-                  const nuevoModo = e.target.value as Modo;
-                  setModo(nuevoModo);
-                  if (nuevoModo === "comercial") {
-                    // Los filtros y la selección solo operan desde zoom 15.
-                    (window as unknown as { __geoZoomMin?: (z: number) => void })
-                      .__geoZoomMin?.(15);
-                  }
-                  if (nuevoModo !== "comercial") {
-                    setHeatMetrica(null);
-                    setDibujando(false);
-                    setSeleccionLazo([]);
-                    setResetLazo((v) => v + 1);
-                  }
-                }}
+                onChange={(e) => elegirModo(e.target.value as Modo)}
               >
                 <option value="explorar">Explorar</option>
                 {puedeVerFocalizacion && (

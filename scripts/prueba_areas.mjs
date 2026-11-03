@@ -18,7 +18,7 @@ const P = (m = {}) => {
 // Perfil por omisión de geoportal_mis_permisos para un correo fuera de la lista blanca o inactivo: rol consulta, explorar = true, todo lo demás falso, torres falsas.
 const POR_OMISION = { es_admin: false, permisos: { rol: "consulta", explorar: true, focalizacion: false, comercial: false, rutas: false, dashboard: false, registro_tecnico: false, dashboard_tecnico: false, campo: false, dashboard_campo: false, torre_a: false, torre_b: false } };
 const casos = [
-  // [nombre, perfil, pantalla inicial esperada, tarjetas de la ventana de entrada, ¿botón «Formatos de campo» en la cabecera de Comercial?]
+  // [nombre, perfil, pantalla inicial esperada, tarjetas de la ventana de entrada, ¿modo «Formatos de campo» en la barra de modos de Comercial?]
   ["PERFILES DE HOY (sin campo)", null],
   ["Administrador (sin campo asignado, pero admin lo tiene)", P({ admin: true }), "entrada", "comercial+tecnica", true],
   ["Solo comercial (Explorar)", P({ explorar: true }), "comercial", "comercial", false],
@@ -45,7 +45,7 @@ for (const [nombre, perfil, esperada, tarjetas, botonCampo] of casos) {
   const pant = pantallaInicial(a), tj = tarjetasEntrada(a).join("+"), boton = a.campo && a.comercial;
   const bien = pant === esperada && tj === tarjetas && boton === botonCampo;
   total++; if (!bien) fallas++;
-  filas.push(`${bien ? "OK    " : "FALLA "} ${nombre.padEnd(52)} → pantalla «${pant}»; tarjetas [${tj}]; botón «Formatos de campo» en Comercial: ${boton ? "sí" : "no"}`);
+  filas.push(`${bien ? "OK    " : "FALLA "} ${nombre.padEnd(52)} → pantalla «${pant}»; tarjetas [${tj}]; modo «Formatos de campo» en la barra de modos de Comercial: ${boton ? "sí" : "no"}`);
 }
 console.log(filas.join("\n"));
 // Reglas adicionales

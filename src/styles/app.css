@@ -951,3 +951,28 @@ body {
   color: #35485C; padding: 0;
 }
 .trazador-acciones button:hover { background: #EAF0F4; }
+
+/* ---------- barra de modos (Formatos de campo es un modo más) ---------- */
+.barra-modos { display: flex; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; gap: 6px; padding: 6px 10px; background: var(--surface-2); border-bottom: 1px solid var(--border, #d5dde5); overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex: none; }
+.barra-modos::-webkit-scrollbar { display: none; }
+.modo-btn { flex: 0 0 auto; min-height: 44px; padding: 0 14px; font: inherit; font-size: 14px; font-weight: 600; color: var(--azul); background: #fff; border: 1px solid var(--azul); border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.modo-btn:hover { background: var(--azul-suave); }
+.modo-btn.activo, .modo-btn.activo:hover { background: var(--azul); color: var(--accent-ink); }
+.modo-btn:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.modo-btn-campo { border-color: #c77700; color: #8a4b00; }
+.modo-btn-campo:hover { background: #fff1de; }
+.modo-btn-campo.activo, .modo-btn-campo.activo:hover { background: #c77700; color: #fff; }
+.modo-btn-corto { display: none; }
+/* En celular las etiquetas se acortan para que quepan TODOS los modos (el caso más largo: administrador, 6 modos) en 380 px sin desplazarse; si aun así no cupieran, la barra se desplaza con el dedo. */
+@media (max-width: 640px) {
+  .barra-modos { gap: 4px; padding: 6px 6px; }
+  .modo-btn { flex: 1 1 auto; padding: 0 6px; font-size: 13px; }
+  .modo-btn-largo { display: none; }
+  .modo-btn-corto { display: inline; }
+}
+/* Teléfonos estrechos (380 px o menos): letra y márgenes algo menores para que quepan los 6 modos del administrador en una sola fila; si aun así no cupieran (letra grande del sistema),
+   la barra se desplaza con el dedo (nunca ensancha la página). */
+@media (max-width: 420px) {
+  .barra-modos { gap: 3px; padding: 6px 4px; }
+  .modo-btn { padding: 0 3px; font-size: 12px; }
+}
