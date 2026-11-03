@@ -551,7 +551,7 @@ export default function App() {
     return `${fmt(conteoCom.total)} predios cumplen los filtros en pantalla`;
   }
 
-  // Cambia el modo de trabajo del mapa. Lo usan el selector del panel lateral y la barra de modos de arriba (quien tiene Formatos de campo).
+  // Cambia el modo de trabajo del mapa. Lo usa el selector «Modo de trabajo» (el del panel lateral y el que se muestra arriba cuando está abierto Formatos de campo).
   function elegirModo(nuevoModo: Modo) {
     setModo(nuevoModo);
     if (nuevoModo === "comercial") {
@@ -565,6 +565,28 @@ export default function App() {
       setResetLazo((v) => v + 1);
     }
   }
+
+  // Selector «Modo de trabajo»: una sola lista. «Formatos de campo» va al final y solo si la persona tiene campo; al elegirlo, el formulario reemplaza al mapa (vista «campo»).
+  // Cualquier otro modo devuelve el mapa con un toque.
+  function cambiarModoSelector(valor: string) {
+    if (valor === "campo") {
+      setPanelMovilAbierto(false);
+      setVista("campo");
+      return;
+    }
+    setVista("mapa");
+    elegirModo(valor as Modo);
+  }
+  const opcionesModo = (
+    <>
+      <option value="explorar">Explorar</option>
+      {puedeVerFocalizacion && <option value="focalizacion">Focalización</option>}
+      {puedeVerComercial && <option value="comercial">Comercial</option>}
+      {puedeVerRutas && <option value="rutas">Rutas de lectura</option>}
+      {puedeVerDashboard && <option value="dashboard">Dashboard</option>}
+      {areas.campo && <option value="campo">Formatos de campo</option>}
+    </>
+  );
 
     function textoConteo() {
     if (!conteo.disponible) return "Acércate para contar los predios en pantalla.";
@@ -603,35 +625,19 @@ export default function App() {
         </div>
       </header>
 
-      {/* Barra de modos (solo con Formatos de campo): Formatos de campo es un modo más y la barra sigue visible para volver a cualquiera con un toque. Quien no tiene campo no la ve (usa el selector del panel). */}
-      {areas.campo && vista !== "admin" && (
-        <nav className="barra-modos" aria-label="Modos de trabajo">
-          {([
-            ["explorar", "Explorar", "Explorar", true],
-            ["focalizacion", "Focalización", "Focaliz.", puedeVerFocalizacion],
-            ["comercial", "Comercial", "Comercial", puedeVerComercial],
-            ["rutas", "Rutas de lectura", "Rutas", puedeVerRutas],
-            ["dashboard", "Dashboard", "Dashboard", puedeVerDashboard],
-          ] as [Modo, string, string, boolean][]).filter((m) => m[3]).map(([m, largo, corto]) => (
-            <button key={m} type="button" className={`modo-btn${vista === "mapa" && modo === m ? " activo" : ""}`} aria-current={vista === "mapa" && modo === m ? "page" : undefined}
-              aria-label={largo} onClick={() => { setVista("mapa"); elegirModo(m); }}>
-              <span className="modo-btn-largo">{largo}</span><span className="modo-btn-corto">{corto}</span>
-            </button>
-          ))}
-          <button type="button" className={`modo-btn modo-btn-campo${vista === "campo" ? " activo" : ""}`} aria-current={vista === "campo" ? "page" : undefined}
-            aria-label="Formatos de campo" onClick={() => setVista("campo")}>
-            <span className="modo-btn-largo">Formatos de campo</span><span className="modo-btn-corto">Campo</span>
-          </button>
-        </nav>
-      )}
-
       {vista === "admin" ? (
         <div className="cuerpo" style={{ overflow: "auto", padding: 16 }}>
           <Admin onVolver={() => setVista("mapa")} />
         </div>
       ) : vista === "campo" ? (
-        <div className="cuerpo" style={{ overflow: "auto" }}>
-          <AreaCampo correo={email} />
+        <div className="cuerpo cuerpo-campo">
+          <div className="modo-wrap modo-wrap-campo">
+            <span className="modo-lbl">Modo de trabajo</span>
+            <select className="modo-sel" value="campo" onChange={(e) => cambiarModoSelector(e.target.value)} aria-label="Modo de trabajo">
+              {opcionesModo}
+            </select>
+          </div>
+          <div className="campo-contenedor"><AreaCampo correo={email} /></div>
         </div>
       ) : (
         <div className="cuerpo">
@@ -659,24 +665,8 @@ export default function App() {
             {/* Selector de modo */}
             <div className="modo-wrap">
               <span className="modo-lbl">Modo de trabajo</span>
-              <select
-                className="modo-sel"
-                value={modo}
-                onChange={(e) => elegirModo(e.target.value as Modo)}
-              >
-                <option value="explorar">Explorar</option>
-                {puedeVerFocalizacion && (
-                  <option value="focalizacion">Focalización</option>
-                )}
-                {puedeVerComercial && (
-                  <option value="comercial">Comercial</option>
-                )}
-                {puedeVerRutas && (
-                  <option value="rutas">Rutas de lectura</option>
-                )}
-                {puedeVerDashboard && (
-                  <option value="dashboard">Dashboard</option>
-                )}
+              <select className="modo-sel" value={modo} onChange={(e) => cambiarModoSelector(e.target.value)}>
+                {opcionesModo}
               </select>
               <div className="modo-desc">{DESC_MODO[modo]}</div>
             </div>
