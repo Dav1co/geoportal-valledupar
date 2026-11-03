@@ -15,6 +15,8 @@ const P = (m = {}) => {
   const comercial = b.explorar || b.focalizacion || b.comercial || b.rutas || b.dashboard;
   return { es_admin: !!m.admin, permisos: { ...b, torre_a: !!m.admin || comercial || b.campo || b.dashboard_campo, torre_b: !!m.admin || b.registro_tecnico || b.dashboard_tecnico } };
 };
+// Perfil por omisión de geoportal_mis_permisos para un correo fuera de la lista blanca o inactivo: rol consulta, explorar = true, todo lo demás falso, torres falsas.
+const POR_OMISION = { es_admin: false, permisos: { rol: "consulta", explorar: true, focalizacion: false, comercial: false, rutas: false, dashboard: false, registro_tecnico: false, dashboard_tecnico: false, campo: false, dashboard_campo: false, torre_a: false, torre_b: false } };
 const casos = [
   // [nombre, perfil, pantalla inicial esperada, tarjetas de la ventana de entrada, ¿botón «Formatos de campo» en la cabecera de Comercial?]
   ["PERFILES DE HOY (sin campo)", null],
@@ -25,6 +27,7 @@ const casos = [
   ["Operador técnico (solo técnica)", P({ registro_tecnico: true }), "tecnica", "tecnica", false],
   ["Supervisor técnico (solo técnica)", P({ registro_tecnico: true, dashboard_tecnico: true }), "tecnica", "tecnica", false],
   ["Sin módulos", P({}), "sin_modulos", "", false],
+  ["Perfil por omisión (fuera de la lista blanca o inactivo: explorar=true, torre_a=false)", POR_OMISION, "sin_modulos", "", false],
   ["CASOS NUEVOS (con campo)", null],
   ["Solo campo (reporta)", P({ campo: true }), "campo", "campo", false],
   ["Supervisor de reportes de campo, solo campo", P({ dashboard_campo: true }), "campo", "campo", false],
@@ -46,7 +49,11 @@ for (const [nombre, perfil, esperada, tarjetas, botonCampo] of casos) {
 }
 console.log(filas.join("\n"));
 // Reglas adicionales
+// Compatibilidad: sin torre_a declarada (servidor anterior) se sigue calculando de los modos, como antes.
+const sinTorres = { es_admin: false, permisos: { explorar: true, focalizacion: false, comercial: false, rutas: false, dashboard: false } };
 const ok = (n, c) => { total++; if (!c) { fallas++; console.log("FALLA  " + n); } };
+ok("servidor que no declara torre_a: comercial se calcula de los modos (como antes)", pantallaInicial(areasDisponibles(sinTorres)) === "comercial");
+ok("perfil por omisión: ningún área disponible", JSON.stringify(areasDisponibles(POR_OMISION)) === JSON.stringify({ comercial: false, tecnica: false, campo: false }));
 ok("sin perfil: nada disponible", JSON.stringify(areasDisponibles(null)) === JSON.stringify({ comercial: false, tecnica: false, campo: false }) && pantallaInicial(areasDisponibles(null)) === "sin_modulos");
 ok("solo campo NO tiene comercial aunque el servidor diga torre_a = true", areasDisponibles(P({ campo: true })).comercial === false);
 ok("pantalla «comercial» no es válida para quien solo tiene campo (no se monta el mapa)", pantallaValida("comercial", areasDisponibles(P({ campo: true }))) === false);

@@ -7,7 +7,7 @@ export type Pantalla = "entrada" | Area | "sin_modulos";
 export type AreasDisponibles = { comercial: boolean; tecnica: boolean; campo: boolean };
 
 // El perfil trae los permisos de cada módulo y las áreas ya calculadas en el servidor (torre_a y torre_b). OJO: desde el Paso A del módulo de campo, `torre_a` también es verdadera para quien
-// solo tiene permisos de campo (los formatos de campo viven en la Torre A), así que ya NO sirve para saber si hay modos comerciales: eso se calcula de los modos.
+// solo tiene permisos de campo (los formatos de campo viven en la Torre A), así que NO basta para saber si hay modos comerciales: se exigen los modos Y (si viene) torre_a.
 type PermisosPerfil = Partial<NonNullable<PerfilResp["permisos"]>> & {
   registro_tecnico?: boolean; dashboard_tecnico?: boolean; torre_a?: boolean; torre_b?: boolean;
 };
@@ -19,7 +19,10 @@ export function areasDisponibles(perfil: PerfilResp | null): AreasDisponibles {
   if (perfil.es_admin) return { comercial: true, tecnica: true, campo: true };
   const p = (perfil.permisos ?? {}) as PermisosPerfil;
   const tecnico = typeof p.torre_b === "boolean" ? p.torre_b : p.registro_tecnico === true || p.dashboard_tecnico === true;
-  const comercial = p.explorar === true || p.focalizacion === true || p.comercial === true || p.rutas === true || p.dashboard === true;
+  // Comercial = algún modo comercial real Y, si el servidor declara torre_a, que también sea verdadera. Dos casos lo exigen: «solo campo» tiene torre_a verdadera pero ningún modo
+  // (queda fuera por los modos), y el perfil por omisión de un correo que no está en la lista blanca o está inactivo trae explorar = true pero torre_a = false (queda fuera por torre_a).
+  const hayModoComercial = p.explorar === true || p.focalizacion === true || p.comercial === true || p.rutas === true || p.dashboard === true;
+  const comercial = hayModoComercial && (typeof p.torre_a !== "boolean" || p.torre_a === true);
   const campo = p.campo === true || p.dashboard_campo === true;
   return { comercial, tecnica: tecnico, campo };
 }
