@@ -25,6 +25,7 @@ import { areasDisponibles, esDual as esDualAreas, pantallaInicial, pantallaValid
 import { CabeceraApp } from "./areas/CabeceraApp";
 import { VentanaEntrada } from "./areas/VentanaEntrada";
 import { AreaTecnica } from "./tecnica/AreaTecnica";
+import { AreaCampo } from "./campo/AreaCampo";
 import { SinModulos } from "./areas/SinModulos";
 import { PerfilNoDisponible } from "./areas/PerfilNoDisponible";
 import { Dashboard } from "./dashboard/Dashboard";
@@ -144,7 +145,7 @@ export default function App() {
   // Derivados del perfil que ya entrega useSession (una sola petición). Antes eran estado con un efecto propio: quedaba un render con los valores por defecto.
   const esAdmin = perfil?.es_admin ?? false;
   const permisos = perfil?.permisos ?? PERMISOS_BASE;
-  const [vista, setVista] = useState<"mapa" | "admin">("mapa");
+  const [vista, setVista] = useState<"mapa" | "admin" | "campo">("mapa");       // «campo»: Formatos de campo dentro del área Comercial (los formatos viven en la Torre A)
   const [modo, setModo] = useState<Modo>("explorar");
   const [dibujando, setDibujando] = useState(false);
   const [seleccionLazo, setSeleccionLazo] = useState<number[]>([]);
@@ -320,9 +321,11 @@ export default function App() {
             <Admin onVolver={() => setVista("mapa")} />
           </div>
         ) : pantalla === "entrada" ? (
-          <VentanaEntrada onElegir={irA} />
+          <VentanaEntrada areas={areas} onElegir={irA} />
         ) : pantalla === "tecnica" ? (
           <AreaTecnica uid={session.user.id} correo={email} />
+        ) : pantalla === "campo" ? (
+          <AreaCampo correo={email} />
         ) : (
           <SinModulos />
         )}
@@ -548,6 +551,43 @@ export default function App() {
     return `${fmt(conteoCom.total)} predios cumplen los filtros en pantalla`;
   }
 
+  // Cambia el modo de trabajo del mapa. Lo usa el selector «Modo de trabajo» (el del panel lateral y el que se muestra arriba cuando está abierto Formatos de campo).
+  function elegirModo(nuevoModo: Modo) {
+    setModo(nuevoModo);
+    if (nuevoModo === "comercial") {
+      // Los filtros y la selección solo operan desde zoom 15.
+      (window as unknown as { __geoZoomMin?: (z: number) => void }).__geoZoomMin?.(15);
+    }
+    if (nuevoModo !== "comercial") {
+      setHeatMetrica(null);
+      setDibujando(false);
+      setSeleccionLazo([]);
+      setResetLazo((v) => v + 1);
+    }
+  }
+
+  // Selector «Modo de trabajo»: una sola lista. «Formatos de campo» va al final y solo si la persona tiene campo; al elegirlo, el formulario reemplaza al mapa (vista «campo»).
+  // Cualquier otro modo devuelve el mapa con un toque.
+  function cambiarModoSelector(valor: string) {
+    if (valor === "campo") {
+      setPanelMovilAbierto(false);
+      setVista("campo");
+      return;
+    }
+    setVista("mapa");
+    elegirModo(valor as Modo);
+  }
+  const opcionesModo = (
+    <>
+      <option value="explorar">Explorar</option>
+      {puedeVerFocalizacion && <option value="focalizacion">Focalización</option>}
+      {puedeVerComercial && <option value="comercial">Comercial</option>}
+      {puedeVerRutas && <option value="rutas">Rutas de lectura</option>}
+      {puedeVerDashboard && <option value="dashboard">Dashboard</option>}
+      {areas.campo && <option value="campo">Formatos de campo</option>}
+    </>
+  );
+
     function textoConteo() {
     if (!conteo.disponible) return "Acércate para contar los predios en pantalla.";
     const total = conteo.con + conteo.sin;
@@ -589,6 +629,16 @@ export default function App() {
         <div className="cuerpo" style={{ overflow: "auto", padding: 16 }}>
           <Admin onVolver={() => setVista("mapa")} />
         </div>
+      ) : vista === "campo" ? (
+        <div className="cuerpo cuerpo-campo">
+          <div className="modo-wrap modo-wrap-campo">
+            <span className="modo-lbl">Modo de trabajo</span>
+            <select className="modo-sel" value="campo" onChange={(e) => cambiarModoSelector(e.target.value)} aria-label="Modo de trabajo">
+              {opcionesModo}
+            </select>
+          </div>
+          <div className="campo-contenedor"><AreaCampo correo={email} /></div>
+        </div>
       ) : (
         <div className="cuerpo">
           <button
@@ -615,38 +665,8 @@ export default function App() {
             {/* Selector de modo */}
             <div className="modo-wrap">
               <span className="modo-lbl">Modo de trabajo</span>
-              <select
-                className="modo-sel"
-                value={modo}
-                onChange={(e) => {
-                  const nuevoModo = e.target.value as Modo;
-                  setModo(nuevoModo);
-                  if (nuevoModo === "comercial") {
-                    // Los filtros y la selección solo operan desde zoom 15.
-                    (window as unknown as { __geoZoomMin?: (z: number) => void })
-                      .__geoZoomMin?.(15);
-                  }
-                  if (nuevoModo !== "comercial") {
-                    setHeatMetrica(null);
-                    setDibujando(false);
-                    setSeleccionLazo([]);
-                    setResetLazo((v) => v + 1);
-                  }
-                }}
-              >
-                <option value="explorar">Explorar</option>
-                {puedeVerFocalizacion && (
-                  <option value="focalizacion">Focalización</option>
-                )}
-                {puedeVerComercial && (
-                  <option value="comercial">Comercial</option>
-                )}
-                {puedeVerRutas && (
-                  <option value="rutas">Rutas de lectura</option>
-                )}
-                {puedeVerDashboard && (
-                  <option value="dashboard">Dashboard</option>
-                )}
+              <select className="modo-sel" value={modo} onChange={(e) => cambiarModoSelector(e.target.value)}>
+                {opcionesModo}
               </select>
               <div className="modo-desc">{DESC_MODO[modo]}</div>
             </div>

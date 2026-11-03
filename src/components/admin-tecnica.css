@@ -18,3 +18,9 @@
 .adm-sw[aria-checked="true"] .adm-sw-bola { transform: translateX(16px); }
 .adm-sw:focus-visible { outline: 2px solid #1f6fb2; outline-offset: 2px; }
 @media (max-width: 640px) { .adm-bloque { max-width: none; flex: 1 1 100%; } }
+
+/* Formatos de campo (Paso B3). */
+.adm-etiqueta-campo { background: #fff1de; color: #8a4b00; }
+.adm-bloque-campo.on { border-color: #e0a85a; background: #fffaf2; }
+.adm-bloque-campo .adm-sw[aria-checked="true"] { background: #c77700; }
+.adm-aviso-horario { margin: 8px 0 0; max-width: 280px; font-size: 12px; line-height: 1.4; color: #7a3d00; background: #fff1de; border: 1px solid #e0a85a; border-radius: 6px; padding: 6px 8px; }

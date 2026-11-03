@@ -108,10 +108,20 @@ export type UsuarioAdmin = {
   // Fase 2 (paquete técnico): solo llegan si el paquete SQL ya se aplicó; Administración detecta su presencia y, si faltan, se comporta como siempre.
   ver_registro_tecnico?: boolean;
   ver_dashboard_tecnico?: boolean;
+  // Formatos de campo (Paso B): solo llegan si el Paso A ya está aplicado en la base; si faltan, Administración no muestra nada de campo.
+  ver_campo?: boolean;
+  ver_dashboard_campo?: boolean;
 };
 
 /** Respuesta de geoportal-admin?accion=perfil (la misma que valida la sesión en useSession). */
-export type PerfilResp = { es_admin: boolean; permisos?: { explorar: boolean; focalizacion: boolean; comercial: boolean; rutas: boolean; dashboard: boolean } };
+export type PerfilResp = {
+  es_admin: boolean;
+  permisos?: {
+    explorar: boolean; focalizacion: boolean; comercial: boolean; rutas: boolean; dashboard: boolean;
+    // Formatos de campo: `campo` = puede reportar (o supervisa, o es administrador); `dashboard_campo` = supervisor de reportes (o administrador).
+    campo?: boolean; dashboard_campo?: boolean;
+  };
+};
 
 export type RutaItem = { ruta: string; ciclo: string; predios: number };
 
@@ -208,6 +218,8 @@ export const api = {
       dias: string;
       registro_tecnico?: boolean;   // fase 2: si no se informa, el servidor deja el permiso como está
       dashboard_tecnico?: boolean;
+      campo?: boolean;              // Formatos de campo (Paso B3): igual, si no se informa el servidor no lo toca
+      dashboard_campo?: boolean;
     }) =>
       callPost<{ guardado: boolean }>(
         "geoportal-admin",

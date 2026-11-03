@@ -17,6 +17,11 @@ const MODOS_TECNICOS: [keyof UsuarioAdmin, string][] = [
   ["ver_registro_tecnico", "Registro técnico"],
   ["ver_dashboard_tecnico", "Dashboard técnica"],
 ];
+// Formatos de campo (Torre A, Paso B3). Se muestran SOLO si el servidor ya trae esas columnas (Paso A aplicado).
+const MODOS_CAMPO: [keyof UsuarioAdmin, string][] = [
+  ["ver_campo", "Formatos de campo"],
+  ["ver_dashboard_campo", "Supervisor de reportes de campo"],
+];
 type PerfilTecnico = "operador" | "supervisor";
 const PERFILES_TECNICOS: Record<PerfilTecnico, { nombre: string; registro: boolean; dashboard: boolean }> = {
   operador: { nombre: "Operador técnico", registro: true, dashboard: false },
@@ -41,9 +46,11 @@ type Borrador = {
   dias: string;
   registro_tecnico?: boolean;
   dashboard_tecnico?: boolean;
+  campo?: boolean;
+  dashboard_campo?: boolean;
 };
 
-function aBorrador(u: UsuarioAdmin, conTecnica: boolean): Borrador {
+function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean): Borrador {
   return {
     explorar: u.ver_explorar === true,
     focalizacion: u.ver_focalizacion === true,
@@ -53,6 +60,7 @@ function aBorrador(u: UsuarioAdmin, conTecnica: boolean): Borrador {
     horario: u.horario ?? "laboral",
     dias: u.dias ?? "habiles",
     ...(conTecnica ? { registro_tecnico: u.ver_registro_tecnico === true, dashboard_tecnico: u.ver_dashboard_tecnico === true } : {}),
+    ...(conCampo ? { campo: u.ver_campo === true, dashboard_campo: u.ver_dashboard_campo === true } : {}),
   };
 }
 
@@ -67,16 +75,30 @@ const CAMPOS_TECNICA: [keyof Borrador, string][] = [
   ["registro_tecnico", "Registro técnico"],
   ["dashboard_tecnico", "Dashboard técnica"],
 ];
+const CAMPOS_CAMPO: [keyof Borrador, string][] = [
+  ["campo", "Formatos de campo"],
+  ["dashboard_campo", "Supervisor de reportes de campo"],
+];
+
+/** Aviso (no cambia nada): quien tenga un horario laboral o días hábiles no podrá reportar de noche ni en fines de semana. El administrador no tiene restricción de horario. */
+function avisoHorarioCampo(b: Borrador): string | null {
+  if (b.campo !== true && b.dashboard_campo !== true) return null;
+  if (b.horario === "sin_restriccion" && b.dias === "todos") return null;
+  return "Esta persona no podrá reportar de noche ni en fines de semana: su horario actual es " +
+    (b.horario === "sin_restriccion" ? "sin restricción" : b.horario === "extendido" ? "extendido (7:00–22:00)" : "laboral (7:50–18:00)") + " y " +
+    (b.dias === "todos" ? "todos los días" : "solo de lunes a viernes") +
+    ". Si el trabajo de campo es nocturno o de fin de semana, cambie el horario a «Sin restricción horaria» y «Todos los días». El horario no se modifica automáticamente.";
+}
 
 /** Bloque de un área con interruptor general: encendido si algún modo del bloque lo está. Al apagarlo apaga todos los modos del bloque; al encenderlo enciende `alEncender`
  *  (por defecto todos; en Comercial solo Explorar, el modo básico). */
-function BloquePermisos({ titulo, campos, borrador, onCambio, tecnico, alEncender, children }: {
-  titulo: string; campos: [keyof Borrador, string][]; borrador: Borrador; onCambio: (c: Partial<Borrador>) => void; tecnico?: boolean; alEncender?: (keyof Borrador)[]; children?: React.ReactNode;
+function BloquePermisos({ titulo, campos, borrador, onCambio, tecnico, campo, alEncender, children }: {
+  titulo: string; campos: [keyof Borrador, string][]; borrador: Borrador; onCambio: (c: Partial<Borrador>) => void; tecnico?: boolean; campo?: boolean; alEncender?: (keyof Borrador)[]; children?: React.ReactNode;
 }) {
   const activo = campos.some(([c]) => borrador[c] === true);
   const todos = (v: boolean) => Object.fromEntries(campos.map(([c]) => [c, v && (!alEncender || alEncender.includes(c))])) as Partial<Borrador>;
   return (
-    <section className={`adm-bloque${tecnico ? " adm-bloque-tec" : ""}${activo ? " on" : ""}`} aria-label={titulo}>
+    <section className={`adm-bloque${tecnico ? " adm-bloque-tec" : ""}${campo ? " adm-bloque-campo" : ""}${activo ? " on" : ""}`} aria-label={titulo}>
       <div className="adm-bloque-cab">
         <span className="adm-bloque-tit">{titulo}</span>
         <button type="button" role="switch" aria-checked={activo} aria-label={`${titulo}: interruptor general`} className="adm-sw" onClick={() => onCambio(todos(!activo))}>
@@ -121,6 +143,8 @@ export function Admin({ onVolver }: Props) {
   const [cargandoAcc, setCargandoAcc] = useState(false);
   // ¿El servidor ya trae los permisos técnicos? Si no, no se muestra nada técnico.
   const conTecnica = useMemo(() => usuarios.some((u) => typeof u.ver_registro_tecnico === "boolean"), [usuarios]);
+  // ¿El servidor ya trae los permisos de campo (Paso A aplicado)? Si no, no se muestra nada de campo.
+  const conCampo = useMemo(() => usuarios.some((u) => typeof u.ver_campo === "boolean"), [usuarios]);
 
   async function cargar() {
     setCargando(true);
@@ -189,6 +213,16 @@ export function Admin({ onVolver }: Props) {
     return ok;
   }
 
+  // Igual para los permisos de campo: si la Edge o la base no los aplican, se volvería a leer el usuario y no coincidiría.
+  async function verificarCampo(correo: string, campo: boolean, dashboardCampo: boolean): Promise<boolean> {
+    const { usuarios: lista } = await api.admin.listar();
+    const u = lista.find((x) => x.email === correo.toLowerCase());
+    const ok = !!u && (u.ver_campo === true) === campo && (u.ver_dashboard_campo === true) === dashboardCampo;
+    if (!ok) setError("El servidor no aplicó los permisos de campo de " + correo + ". Falta desplegar la Edge geoportal-admin del Paso B o aplicar el Paso A en la base.");
+    setUsuarios(lista);
+    return ok;
+  }
+
   async function agregar() {
     setMsg(null);
     if (!email.includes("@")) {
@@ -241,7 +275,7 @@ export function Admin({ onVolver }: Props) {
       return;
     }
     setEditando(u.email);
-    setBorrador(aBorrador(u, conTecnica));
+    setBorrador(aBorrador(u, conTecnica, conCampo));
   }
 
   async function guardarPermisos(u: UsuarioAdmin) {
@@ -252,6 +286,7 @@ export function Admin({ onVolver }: Props) {
     try {
       await api.admin.permisos({ email: u.email, ...borrador });
       if (conTecnica && !(await verificarTecnico(u.email, borrador.registro_tecnico === true, borrador.dashboard_tecnico === true))) return;
+      if (conCampo && !(await verificarCampo(u.email, borrador.campo === true, borrador.dashboard_campo === true))) return;
       setMsg(`Permisos actualizados para ${u.email}.`);
       setEditando(null);
       setBorrador(null);
@@ -467,6 +502,7 @@ export function Admin({ onVolver }: Props) {
               const esAdmin = u.rol === "admin";
               const permitidos = MODOS.filter(([c]) => u[c] === true);
               const tecnicos = MODOS_TECNICOS.filter(([c]) => u[c] === true);
+              const deCampo = MODOS_CAMPO.filter(([c]) => u[c] === true);
               const perfilTec = perfilTecnicoDe(u);
               return (
                 <tr key={u.email} className={u.activo ? "" : "adm-inactivo"}>
@@ -492,7 +528,7 @@ export function Admin({ onVolver }: Props) {
                   <td>
                     {esAdmin ? (
                       <span className="adm-nota">Todos los modos</span>
-                    ) : permitidos.length === 0 && tecnicos.length === 0 ? (
+                    ) : permitidos.length === 0 && tecnicos.length === 0 && deCampo.length === 0 ? (
                       <span className="adm-nota">Sin acceso</span>
                     ) : (
                       <div className="adm-etiquetas">
@@ -503,6 +539,11 @@ export function Admin({ onVolver }: Props) {
                         ))}
                         {tecnicos.map(([c, et]) => (
                           <span key={String(c)} className="adm-etiqueta adm-etiqueta-tec">
+                            {et}
+                          </span>
+                        ))}
+                        {deCampo.map(([c, et]) => (
+                          <span key={String(c)} className="adm-etiqueta adm-etiqueta-campo">
                             {et}
                           </span>
                         ))}
@@ -582,7 +623,8 @@ export function Admin({ onVolver }: Props) {
                       const p = e.target.value as PerfilTecnico | "";
                       if (!p) return;
                       setBorrador({ explorar: false, focalizacion: false, comercial: false, rutas: false, dashboard: false, horario: "sin_restriccion", dias: "todos",
-                                    registro_tecnico: PERFILES_TECNICOS[p].registro, dashboard_tecnico: PERFILES_TECNICOS[p].dashboard });
+                                    registro_tecnico: PERFILES_TECNICOS[p].registro, dashboard_tecnico: PERFILES_TECNICOS[p].dashboard,
+                                    ...(borrador.campo !== undefined ? { campo: borrador.campo, dashboard_campo: borrador.dashboard_campo } : {}) });
                     }}
                   >
                     <option value="">Aplicar perfil…</option>
@@ -600,8 +642,22 @@ export function Admin({ onVolver }: Props) {
                   )}
                 </BloquePermisos>
               )}
+              {conCampo && (
+                <BloquePermisos
+                  titulo="Formatos de campo"
+                  campo
+                  campos={CAMPOS_CAMPO}
+                  borrador={borrador}
+                  onCambio={(c) => setBorrador({ ...borrador, ...c })}
+                >
+                  <p className="adm-aviso-tec">
+                    «Formatos de campo» permite reportar. «Supervisor de reportes de campo» permite ver, clasificar y ocultar los reportes. Solo con esto, la persona no ve el mapa ni datos comerciales.
+                  </p>
+                  {avisoHorarioCampo(borrador) && <p className="adm-aviso-horario" role="alert">{avisoHorarioCampo(borrador)}</p>}
+                </BloquePermisos>
+              )}
             </div>
-            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : [])].some(([c]) => borrador[c] === true) && (
+            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : []), ...(conCampo ? CAMPOS_CAMPO : [])].some(([c]) => borrador[c] === true) && (
               <p className="adm-aviso-tec">Sin ningún modo asignado: al ingresar verá «Sin módulos asignados».</p>
             )}
             <div>

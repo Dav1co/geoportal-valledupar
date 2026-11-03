@@ -36,3 +36,7 @@ header.barra.barra-areas .barra-usuario { margin-left: auto; min-width: 0; }
 /* Pantalla «No se pudo cargar su perfil» */
 .areas-pantalla-completa { min-height: 100vh; background: var(--surface); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
 .areas-acciones { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
+
+/* Formatos de campo en la ventana de entrada (Paso B4). */
+.area-tarjeta-campo:hover, .area-tarjeta-campo:focus-visible { border-color: #c77700; box-shadow: 0 8px 24px rgba(199, 119, 0, 0.2); }
+.area-tarjeta-campo .area-titulo { color: #8a4b00; }

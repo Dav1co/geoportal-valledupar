@@ -951,3 +951,9 @@ body {
   color: #35485C; padding: 0;
 }
 .trazador-acciones button:hover { background: #EAF0F4; }
+
+/* ---------- Formatos de campo dentro de Comercial: selector «Modo de trabajo» arriba y el formulario debajo ---------- */
+.cuerpo-campo { flex-direction: column; overflow: hidden; }
+.modo-wrap-campo { flex: none; background: var(--surface-2); }
+.campo-contenedor { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.modo-wrap-campo .modo-sel { min-height: 44px; font-size: 16px; }
