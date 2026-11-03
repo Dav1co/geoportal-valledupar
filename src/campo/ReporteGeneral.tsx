@@ -1,0 +1,339 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiCampo, avisoDeError, ErrorCampo, type Confirmacion, type FormularioCampo, type Preparacion } from "./apiCampo";
+import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara } from "./camara";
+import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "./ubicacion";
+import { decimal, fechaHora, fechaHoraSello, megas, metros } from "./formato";
+
+// Formulario del reporte general de campo. Pensado para el celular (380 px), una mano, buen contraste.
+// - Las etiquetas de grupos, tipos y subtipos salen del catálogo que entrega el servidor (nada escrito aquí).
+// - Fotos: SOLO con la cámara del formulario, SOLO en memoria. No hay selector de archivos ni galería, y nada se guarda en el dispositivo.
+// - Envío: preparar_subida (una vez) → subida directa de cada foto a su URL firmada → crear con el mismo reporte_id. Si algo falla, todo queda en pantalla y «Reintentar» reutiliza el mismo reporte_id.
+// - Quien reporta solo ve la confirmación; nunca una lista de reportes.
+const MAX_DESCRIPCION = 1000;      // el mismo tope de la base (geoportal_campo_crear_reporte); el servidor aún no lo informa en `formulario`: ver decisiones del Paso B
+
+type FotoLocal = { blob: Blob; url: string; subida: boolean };
+type Fase = "editando" | "enviando" | "error" | "guardado";
+
+export function ReporteGeneral({ def, correo, onVolver, onOtro }: { def: FormularioCampo; correo: string; onVolver: () => void; onOtro: () => void }) {
+  const [grupo, setGrupo] = useState("");
+  const [tipo, setTipo] = useState("");
+  const [subtipo, setSubtipo] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [contrato, setContrato] = useState("");
+  const [riesgo, setRiesgo] = useState(false);
+  const [fotos, setFotos] = useState<(FotoLocal | null)[]>(() => Array.from({ length: Math.max(1, def.limites.max_fotos) }, () => null));
+  const [camaraEn, setCamaraEn] = useState<number | null>(null);
+  const [fase, setFase] = useState<Fase>("editando");
+  const [errorEnvio, setErrorEnvio] = useState<ErrorCampo | null>(null);
+  const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
+  const [preparada, setPreparada] = useState(false);          // ya se reservó el reporte_id: las fotos quedan fijas hasta enviar
+  const [ahora, setAhora] = useState(() => new Date());
+  const ubic = useUbicacion();
+  const prep = useRef<Preparacion | null>(null);
+  const enviando = useRef(false);
+  const fotosRef = useRef(fotos);
+  fotosRef.current = fotos;
+
+  useEffect(() => { const r = window.setInterval(() => setAhora(new Date()), 15000); return () => window.clearInterval(r); }, []);
+  // Al salir de la pantalla se sueltan las fotos de la memoria.
+  useEffect(() => () => { fotosRef.current.forEach((f) => f && URL.revokeObjectURL(f.url)); }, []);
+  // Aviso del navegador si intenta cerrar la pestaña con fotos sin enviar (las fotos NO se guardan: se perderían).
+  useEffect(() => {
+    const hayFotos = fotos.some((f) => f) && fase !== "guardado";
+    if (!hayFotos) return;
+    const f = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", f);
+    return () => window.removeEventListener("beforeunload", f);
+  }, [fotos, fase]);
+
+  const grupos = useMemo(() => def.grupos.filter((g) => g.activo && g.tipos.some((t) => t.activo)), [def]);
+  const tiposDelGrupo = useMemo(() => grupos.find((g) => g.codigo === grupo)?.tipos.filter((t) => t.activo) ?? [], [grupos, grupo]);
+  const tipoDef = tiposDelGrupo.find((t) => t.codigo === tipo) ?? null;
+  const subtipos = tipoDef?.subtipos.filter((s) => s.activo) ?? [];
+
+  const nFotos = fotos.filter(Boolean).length;
+  const fix: Fix | null = ubic.fix;
+  const bloqueado = fase === "enviando" || fase === "guardado";
+  const fotosFijas = bloqueado || preparada;
+
+  // ----- validación -----
+  const faltas: string[] = [];
+  if (!tipoDef) faltas.push("Elija el tipo de reporte.");
+  if (tipoDef?.exige_texto && descripcion.trim().length < 3) faltas.push("Este tipo exige que describa lo que encontró.");
+  if (tipoDef?.exige_subtipo && !subtipo) faltas.push("Elija el subtipo.");
+  if (!fotos[0]) faltas.push("Tome la foto 1.");
+  if (!fix) faltas.push(ubic.estado === "buscando" ? "Esperando la ubicación del celular…" : "Sin ubicación no se puede enviar.");
+  const sinSenal = typeof navigator !== "undefined" && navigator.onLine === false;
+
+  function elegirGrupo(g: string) { setGrupo(g); setTipo(""); setSubtipo(""); }
+  function elegirTipo(t: string) { setTipo(t); setSubtipo(""); }
+
+  function ponerFoto(i: number, f: { blob: Blob }) {
+    setFotos((prev) => {
+      const sig = [...prev];
+      if (sig[i]) URL.revokeObjectURL(sig[i]!.url);
+      sig[i] = { blob: f.blob, url: URL.createObjectURL(f.blob), subida: false };
+      return sig;
+    });
+  }
+  function quitarFoto(i: number) {
+    setFotos((prev) => {
+      const sig = [...prev];
+      if (sig[i]) URL.revokeObjectURL(sig[i]!.url);
+      sig[i] = null;
+      return sig;
+    });
+  }
+
+  const lineasSello = useCallback((): string[] => {
+    const f = fix;
+    return [
+      `${fechaHoraSello(new Date())} · hora del celular`,
+      f ? `${f.lat.toFixed(5)}, ${f.lon.toFixed(5)} · ${metros(f.precision_m)}` : "ubicación no disponible",
+    ];
+  }, [fix]);
+
+  async function enviar() {
+    if (enviando.current || faltas.length > 0 || !tipoDef || !fix) return;       // sin doble pulsación
+    enviando.current = true;
+    setFase("enviando");
+    setErrorEnvio(null);
+    try {
+      const lista = fotosRef.current.map((f, i) => ({ f, orden: i + 1 })).filter((x): x is { f: FotoLocal; orden: number } => x.f !== null);
+      // 1. Preparar (una sola vez; si ya existe, se reutiliza el mismo reporte_id)
+      let p = prep.current;
+      if (!p) {
+        p = await apiCampo.prepararSubida(lista.length, "campo");
+        prep.current = p;
+        setPreparada(true);
+      }
+      // 2. Subir las fotos que falten (las ya subidas no se repiten)
+      for (const { f, orden } of lista) {
+        if (f.subida) continue;
+        const destino = p.fotos.find((x) => x.orden === orden);
+        if (!destino) throw new ErrorCampo("servidor", "El servidor no preparó todas las fotos.", 500);
+        await apiCampo.subirFoto(destino.ruta, destino.token, f.blob);
+        f.subida = true;
+      }
+      // 3. Crear con el mismo reporte_id
+      const rutas = lista.map(({ orden }) => ({ orden, ruta: p!.fotos.find((x) => x.orden === orden)!.ruta }));
+      const conf = await apiCampo.crear({
+        reporte_id: p.reporte_id, tipo: tipoDef.codigo, subtipo: subtipo || null, descripcion: descripcion.trim() || null, contrato: contrato || null,
+        lat: Number(fix.lat.toFixed(6)), lon: Number(fix.lon.toFixed(6)), precision_m: Math.round(fix.precision_m * 10) / 10, riesgo_inmediato: riesgo, origen: "campo", fotos: rutas,
+      });
+      fotosRef.current.forEach((f) => f && URL.revokeObjectURL(f.url));
+      setFotos(Array.from({ length: fotos.length }, () => null));
+      setConfirmacion(conf);
+      setFase("guardado");
+    } catch (e) {
+      const err = e instanceof ErrorCampo ? e : new ErrorCampo("red", "No se pudo completar el envío.", 0);
+      if (err.tipo === "subida_vencida") {
+        // La URL de subida venció: la próxima vez se pide una preparación nueva y se suben todas las fotos de nuevo.
+        prep.current = null;
+        setPreparada(false);
+        fotosRef.current.forEach((f) => { if (f) f.subida = false; });
+      }
+      setErrorEnvio(err);
+      setFase("error");
+    } finally {
+      enviando.current = false;
+    }
+  }
+
+  // ===================== Confirmación =====================
+  if (fase === "guardado" && confirmacion) {
+    return (
+      <div className="tec-pagina campo-pagina">
+        <section className="tec-tarjeta campo-confirmacion" role="status" aria-live="polite">
+          <h1>Reporte guardado</h1>
+          <p className="campo-hora">Registrado el {fechaHora(confirmacion.registrado_en)}</p>
+          {confirmacion.contrato_verificado === false && (
+            <p className="campo-nota" role="note">El número de contrato no se encontró; verifique que esté bien digitado.</p>
+          )}
+          {confirmacion.aviso_zona && (
+            <p className="campo-nota" role="note">La ubicación está fuera de la zona de operación; el reporte se guardó y el supervisor lo revisará.</p>
+          )}
+          <button type="button" className="tec-boton" onClick={onOtro}>Hacer otro reporte</button>
+        </section>
+      </div>
+    );
+  }
+
+  const aviso = errorEnvio ? avisoDeError(errorEnvio) : null;
+  const precisionMala = !!fix && fix.precision_m > UMBRAL_PRECISION_MALA_M;
+
+  return (
+    <div className="tec-pagina campo-pagina">
+      <section className="tec-tarjeta">
+        <div className="campo-cab">
+          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={onVolver} disabled={bloqueado}>← Formatos</button>
+          <h1>Reporte general</h1>
+        </div>
+
+        {/* 1. Tipo */}
+        <div className="tec-campo">
+          <label htmlFor="campo-grupo">Tipo de reporte</label>
+          <select id="campo-grupo" value={grupo} onChange={(e) => elegirGrupo(e.target.value)} disabled={bloqueado}>
+            <option value="">Elija el grupo…</option>
+            {grupos.map((g) => <option key={g.codigo} value={g.codigo}>{g.nombre}</option>)}
+          </select>
+          <select id="campo-tipo" aria-label="Tipo" value={tipo} onChange={(e) => elegirTipo(e.target.value)} disabled={bloqueado || !grupo}>
+            <option value="">{grupo ? "Elija el tipo…" : "Primero elija el grupo"}</option>
+            {tiposDelGrupo.map((t) => <option key={t.codigo} value={t.codigo}>{t.nombre}</option>)}
+          </select>
+        </div>
+        {tipoDef && subtipos.length > 0 && (
+          <div className="tec-campo">
+            <label htmlFor="campo-subtipo">Subtipo{tipoDef.exige_subtipo ? "" : " (opcional)"}</label>
+            <select id="campo-subtipo" value={subtipo} onChange={(e) => setSubtipo(e.target.value)} disabled={bloqueado}>
+              <option value="">{tipoDef.exige_subtipo ? "Elija el subtipo…" : "Sin subtipo"}</option>
+              {subtipos.map((s) => <option key={s.codigo} value={s.codigo}>{s.nombre}</option>)}
+            </select>
+          </div>
+        )}
+
+        {/* 2. Qué encontró */}
+        <div className="tec-campo">
+          <label htmlFor="campo-desc">¿Qué encontró?{tipoDef?.exige_texto ? " (obligatorio)" : " (opcional)"}</label>
+          <textarea id="campo-desc" className="campo-texto" rows={4} maxLength={MAX_DESCRIPCION} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={bloqueado} aria-invalid={!!tipoDef?.exige_texto && descripcion.trim().length < 3 && descripcion.length > 0} />
+          <span className="campo-contador">{descripcion.length.toLocaleString("es-CO")} de {MAX_DESCRIPCION.toLocaleString("es-CO")}</span>
+        </div>
+
+        {/* 3. Fotos */}
+        <div className="tec-campo">
+          <span className="campo-etiqueta">Fotos <small>(la 1 es obligatoria; hasta {def.limites.max_fotos}; máximo {megas(def.limites.max_bytes_foto)} cada una)</small></span>
+          {!camaraDisponible() && (
+            <p className="campo-error" role="alert">Este navegador no permite usar la cámara desde la página, y sin la foto 1 no se puede enviar. Use Safari en iPhone o Chrome en Android, actualizado, y abra el geoportal desde su dirección oficial (https).</p>
+          )}
+          <div className="campo-fotos">
+            {fotos.map((f, i) => (
+              <div key={i} className="campo-foto">
+                <span className="campo-foto-n">Foto {i + 1}{i === 0 ? " (obligatoria)" : " (opcional)"}</span>
+                {f ? (
+                  <>
+                    <img src={f.url} alt={`Foto ${i + 1} tomada`} className="campo-foto-img" />
+                    {!fotosFijas && (
+                      <div className="campo-foto-acc">
+                        <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => setCamaraEn(i)}>Repetir</button>
+                        {i > 0 && <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => quitarFoto(i)}>Quitar</button>}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <button type="button" className="tec-boton campo-boton-foto" onClick={() => setCamaraEn(i)} disabled={fotosFijas || !camaraDisponible() || (i > 0 && !fotos[0])}>
+                    📷 Tomar foto {i + 1}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          {preparada && fase !== "guardado" && <p className="campo-sub">Las fotos ya están reservadas para este envío; no se pueden cambiar hasta enviarlo.</p>}
+          <p className="campo-sub">Las fotos se toman con la cámara y quedan solo en la memoria de esta pantalla: no se guardan en el celular ni en la galería.</p>
+        </div>
+
+        {/* 4. Contrato */}
+        <div className="tec-campo">
+          <label htmlFor="campo-contrato">Número de contrato (opcional)</label>
+          <input id="campo-contrato" type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" maxLength={20} value={contrato} onChange={(e) => setContrato(e.target.value.replace(/\D/g, ""))} disabled={bloqueado} />
+        </div>
+
+        {/* 5. Riesgo inmediato */}
+        <label className="campo-check">
+          <input type="checkbox" checked={riesgo} onChange={(e) => setRiesgo(e.target.checked)} disabled={bloqueado} />
+          <span><strong>Hay riesgo inmediato</strong> para personas o bienes<small>Queda marcado en el reporte para quien lo revise. Si es una emergencia, avise también a su supervisor.</small></span>
+        </label>
+
+        {/* 6. Automáticos */}
+        <dl className="campo-auto">
+          <div>
+            <dt>Ubicación</dt>
+            <dd>
+              {fix ? `${decimal(fix.lat, 5)}, ${decimal(fix.lon, 5)} (${metros(fix.precision_m)})` : ubic.estado === "buscando" ? "Buscando…" : "No disponible"}
+              <button type="button" className="campo-enlace" onClick={ubic.actualizar} disabled={bloqueado}>Actualizar ubicación</button>
+            </dd>
+          </div>
+          <div><dt>Fecha y hora</dt><dd>{fechaHora(ahora)} <small>(la oficial será la del servidor)</small></dd></div>
+          <div><dt>Usuario</dt><dd>{correo}</dd></div>
+        </dl>
+        {ubic.mensaje && <p className="campo-error" role="alert">{ubic.mensaje}</p>}
+        {precisionMala && (
+          <p className="campo-nota" role="note">La ubicación es poco precisa (más de {UMBRAL_PRECISION_MALA_M} m). Espere unos segundos o salga a cielo abierto y pulse «Actualizar ubicación». Puede enviar el reporte igualmente.</p>
+        )}
+
+        {/* Errores y envío */}
+        {faltas.length > 0 && fase === "editando" && (nFotos > 0 || tipo) && <ul className="campo-faltas">{faltas.map((m) => <li key={m}>{m}</li>)}</ul>}
+        {sinSenal && <p className="campo-error" role="alert">No hay señal en este momento. Sus datos y fotos siguen aquí; envíe cuando recupere la conexión.</p>}
+        {fase === "error" && aviso && <p className="campo-error" role="alert">{aviso.texto}</p>}
+        {fase === "error" && errorEnvio?.tipo === "sesion" ? null : (
+          <button type="button" className="tec-boton campo-enviar" onClick={() => void enviar()} disabled={fase === "enviando" || faltas.length > 0 || (fase === "error" && aviso !== null && !aviso.reintentable)}>
+            {fase === "enviando" ? "Enviando…" : fase === "error" ? "Reintentar" : "Enviar reporte"}
+          </button>
+        )}
+      </section>
+
+      {camaraEn !== null && (
+        <PanelCamara
+          rotulo={`Foto ${camaraEn + 1}`}
+          maxBytes={def.limites.max_bytes_foto}
+          sello={lineasSello}
+          onFoto={(f) => { ponerFoto(camaraEn, f); setCamaraEn(null); }}
+          onCerrar={() => setCamaraEn(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============ Cámara dentro del formulario ============
+function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar }: {
+  rotulo: string; maxBytes: number; sello: () => string[]; onFoto: (f: { blob: Blob }) => void; onCerrar: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const flujo = useRef<MediaStream | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lista, setLista] = useState(false);
+  const [procesando, setProcesando] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    abrirCamara()
+      .then((f) => {
+        if (!vivo) { cerrarCamara(f); return; }
+        flujo.current = f;
+        const v = videoRef.current;
+        if (v) { v.srcObject = f; void v.play().catch(() => {}); }
+      })
+      .catch((e) => { if (vivo) setError(e instanceof ErrorCamara ? e.message : "No se pudo abrir la cámara."); });
+    return () => { vivo = false; cerrarCamara(flujo.current); flujo.current = null; };
+  }, []);
+
+  async function capturar() {
+    const v = videoRef.current;
+    if (!v || procesando) return;
+    setProcesando(true);
+    try {
+      const f = await capturarFoto(v, sello(), maxBytes);
+      if (!f) { setError(`La foto pesa más de ${megas(maxBytes)} aun reducida. Acérquese al objeto o mejore la luz e intente de nuevo.`); return; }
+      onFoto(f);
+    } catch (e) {
+      setError(e instanceof ErrorCamara ? e.message : "No se pudo tomar la foto.");
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  return (
+    <div className="campo-camara" role="dialog" aria-modal="true" aria-label={`Cámara · ${rotulo}`}>
+      <div className="campo-camara-cab">{rotulo}</div>
+      {error ? (
+        <div className="campo-camara-error"><p role="alert">{error}</p></div>
+      ) : (
+        <video ref={videoRef} className="campo-video" autoPlay playsInline muted onLoadedMetadata={() => setLista(true)} />
+      )}
+      <div className="campo-camara-acc">
+        <button type="button" className="tec-boton-sec" onClick={onCerrar}>Cancelar</button>
+        {!error && <button type="button" className="tec-boton campo-capturar" onClick={() => void capturar()} disabled={!lista || procesando}>{procesando ? "Procesando…" : "Tomar foto"}</button>}
+      </div>
+    </div>
+  );
+}

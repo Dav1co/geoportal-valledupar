@@ -25,6 +25,7 @@ import { areasDisponibles, esDual as esDualAreas, pantallaInicial, pantallaValid
 import { CabeceraApp } from "./areas/CabeceraApp";
 import { VentanaEntrada } from "./areas/VentanaEntrada";
 import { AreaTecnica } from "./tecnica/AreaTecnica";
+import { AreaCampo } from "./campo/AreaCampo";
 import { SinModulos } from "./areas/SinModulos";
 import { PerfilNoDisponible } from "./areas/PerfilNoDisponible";
 import { Dashboard } from "./dashboard/Dashboard";
@@ -144,7 +145,7 @@ export default function App() {
   // Derivados del perfil que ya entrega useSession (una sola petición). Antes eran estado con un efecto propio: quedaba un render con los valores por defecto.
   const esAdmin = perfil?.es_admin ?? false;
   const permisos = perfil?.permisos ?? PERMISOS_BASE;
-  const [vista, setVista] = useState<"mapa" | "admin">("mapa");
+  const [vista, setVista] = useState<"mapa" | "admin" | "campo">("mapa");       // «campo»: Formatos de campo dentro del área Comercial (los formatos viven en la Torre A)
   const [modo, setModo] = useState<Modo>("explorar");
   const [dibujando, setDibujando] = useState(false);
   const [seleccionLazo, setSeleccionLazo] = useState<number[]>([]);
@@ -320,9 +321,11 @@ export default function App() {
             <Admin onVolver={() => setVista("mapa")} />
           </div>
         ) : pantalla === "entrada" ? (
-          <VentanaEntrada onElegir={irA} />
+          <VentanaEntrada areas={areas} onElegir={irA} />
         ) : pantalla === "tecnica" ? (
           <AreaTecnica uid={session.user.id} correo={email} />
+        ) : pantalla === "campo" ? (
+          <AreaCampo correo={email} />
         ) : (
           <SinModulos />
         )}
@@ -570,6 +573,11 @@ export default function App() {
         )}
 
         <div className="barra-usuario">
+          {areas.campo && (
+            <button className="btn-link" onClick={() => setVista(vista === "campo" ? "mapa" : "campo")}>
+              {vista === "campo" ? "Volver al mapa" : "Formatos de campo"}
+            </button>
+          )}
           {esAdmin && (
             <button
               className="btn-link"
@@ -588,6 +596,10 @@ export default function App() {
       {vista === "admin" ? (
         <div className="cuerpo" style={{ overflow: "auto", padding: 16 }}>
           <Admin onVolver={() => setVista("mapa")} />
+        </div>
+      ) : vista === "campo" ? (
+        <div className="cuerpo" style={{ overflow: "auto" }}>
+          <AreaCampo correo={email} />
         </div>
       ) : (
         <div className="cuerpo">
