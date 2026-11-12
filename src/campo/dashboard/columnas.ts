@@ -113,8 +113,10 @@ export function paresDeDatos(datos: Record<string, unknown> | undefined, campos:
 }
 
 /** Columnas de la TABLA: las base de la lista (con `conPasoD` según los datos), más las propias del tipo solo cuando hay un filtro de tipo activo. */
+export const MAX_PROPIAS_TABLA = 10;
 export function columnasTabla(base: Columna[], propias: Columna[], conFiltroTipo: boolean): Columna[] {
-  return [...base.filter((c) => c.porOmision), ...(conFiltroTipo ? propias : [])];
+  // Con formatos de ~60 campos (acta de revisión o instalación) la tabla muestra solo las primeras MAX_PROPIAS_TABLA propias; el detalle y las descargas traen todas.
+  return [...base.filter((c) => c.porOmision), ...(conFiltroTipo ? propias.slice(0, MAX_PROPIAS_TABLA) : [])];
 }
 
 /** Columnas de la DESCARGA: base marcadas `enDescarga` (el autor solo si se pidió y el servidor lo envía) y, con un tipo filtrado, sus columnas propias. */

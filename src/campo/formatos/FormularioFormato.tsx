@@ -6,8 +6,8 @@ import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara 
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "../ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
 import { apiFormatos } from "./apiFormatos";
-import { aplanarDatos, contadorFotos, fotosParaCrear, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
-import { camposActivos, etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
+import { agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
+import { etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
 
 // Formulario de UN formato del Paso D (campos propios, fotos con etiqueta, resultado y causal, consecutivo). Pensado para el celular (380 px) y una mano.
 // - Todo (campos, fotos mínimas y máximas, causales) sale del catálogo que entrega el servidor; aquí no hay nombres de formatos.
@@ -23,8 +23,10 @@ type Destino = { tipo: "etiqueta"; codigo: string; nombre: string } | { tipo: "a
 
 export type EnvioPendiente = { tipo: string; resultado: Resultado | null; causal: string | null; datos: Record<string, unknown> | null; reporte_id: string | null };
 
-export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFallarRed }: {
+export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFallarRed, puedeActa = false, onAbrirActa }: {
   def: FormularioCampo; tipo: TipoFormato; correo: string; onVolver: () => void; onOtro: () => void; alFallarRed?: (envio: EnvioPendiente) => void;
+  /** Permiso `acta` (lo decide el servidor): solo con él se ofrece abrir el acta de inspección técnica. `onAbrirActa` recibe el contrato para precargarlo. */
+  puedeActa?: boolean; onAbrirActa?: (contrato: string) => void;
 }) {
   const [resultado, setResultado] = useState<Resultado | "">("");
   const [causal, setCausal] = useState("");
@@ -38,6 +40,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const [fase, setFase] = useState<Fase>("editando");
   const [errorEnvio, setErrorEnvio] = useState<ErrorCampo | null>(null);
   const [confirmacion, setConfirmacion] = useState<ConfirmacionFormato | null>(null);
+  const [invitarActa, setInvitarActa] = useState<{ contrato: string } | null>(null);   // se fija al guardar: irregularidad marcada y contrato con que se guardó
+  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({});              // secciones abiertas o cerradas por la persona; sin tocar, solo la primera está abierta
   const [preparada, setPreparada] = useState(false);
   const [ahora, setAhora] = useState(() => new Date());
   const ubic = useUbicacion();
@@ -47,7 +51,6 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const refAdic = useRef(adicionales); refAdic.current = adicionales;
 
   const etiquetas = useMemo(() => etiquetasActivas(tipo), [tipo]);
-  const campos = useMemo(() => camposActivos(tipo), [tipo]);
   const subtipos = tipo.subtipos.filter((s) => s.activo);
   const usaEtiquetas = etiquetas.length > 0;
   const fix: Fix | null = ubic.fix;
@@ -77,6 +80,10 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
     adicionales: adicionales.length, tieneUbicacion: !!fix, tienePrecision: !!fix && Number.isFinite(fix.precision_m), topeGeneral: tope,
   });
   const { errores } = aplanarDatos(tipo, valores);
+  const visibles = useMemo(() => camposVisibles(tipo, valores), [tipo, valores]);
+  const secciones = useMemo(() => agruparSecciones(visibles), [visibles]);
+  const conSecciones = secciones.some((x) => x.titulo !== null);
+  const marcoIrr = marcoIrregularidad(tipo, valores);
   const sinSenal = typeof navigator !== "undefined" && navigator.onLine === false;
 
   function ponerValor(codigo: string, v: string | string[]) { setValores((p) => ({ ...p, [codigo]: v })); }
@@ -132,6 +139,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         datos, resultado: tipo.genera_resultado ? (resultado || null) : null, causal: inefectivo ? causal : null,
       });
       soltarTodo();
+      setInvitarActa(marcoIrr && puedeActa && onAbrirActa && tipo.requiere_contrato !== "no" && contrato ? { contrato } : null);
       setPorEtiqueta({});
       setAdicionales([]);
       setConfirmacion(conf);
@@ -169,6 +177,12 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
           <p className="campo-hora">Registrado el {fechaHora(confirmacion.registrado_en)}</p>
           {confirmacion.contrato_verificado === false && <p className="campo-nota" role="note">El número de contrato no se encontró; verifique que esté bien digitado.</p>}
           {confirmacion.aviso_zona && <p className="campo-nota" role="note">La ubicación está fuera de la zona de operación; el reporte se guardó y el supervisor lo revisará.</p>}
+          {invitarActa && (
+            <div className="campo-nota" role="note">
+              <p>Marcó que se encontró una irregularidad. Este formato no reemplaza el acta de inspección técnica: ábrala ahora sobre el contrato {invitarActa.contrato}.</p>
+              <button type="button" className="tec-boton" onClick={() => onAbrirActa?.(invitarActa.contrato)}>Abrir el acta de inspección técnica</button>
+            </div>
+          )}
           <button type="button" className="tec-boton" onClick={onOtro}>Hacer otro reporte</button>
           <button type="button" className="tec-boton-sec" onClick={onVolver}>Volver a los formatos</button>
         </section>
@@ -231,7 +245,22 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         )}
 
         {/* Campos propios del formato */}
-        {campos.map((c) => <CampoPropio key={c.codigo} c={c} valor={valores[c.codigo]} error={errores[c.codigo]} obligatorio={c.obligatorio && !inefectivo} deshabilitado={bloqueado} onCambio={(v) => ponerValor(c.codigo, v)} />)}
+        {!conSecciones && visibles.map((c) => <CampoPropio key={c.codigo} c={c} valor={valores[c.codigo]} error={errores[c.codigo]} obligatorio={c.obligatorio && !inefectivo} deshabilitado={bloqueado} onCambio={(v) => ponerValor(c.codigo, v)} />)}
+        {conSecciones && secciones.map((sec, i) => {
+          const clave = sec.titulo ?? `sin-titulo-${i}`;
+          const av = avanceSeccion(sec.campos, valores, inefectivo);
+          const abierta = abiertas[clave] ?? i === 0;
+          return (
+            <details key={clave} className="campo-seccion" open={abierta} onToggle={(e) => { const a = (e.currentTarget as HTMLDetailsElement).open; if (a !== abierta) setAbiertas((p) => ({ ...p, [clave]: a })); }}>
+              <summary>
+                <span className="campo-seccion-titulo">{sec.titulo ?? "Otros datos"}</span>
+                <span className={`campo-seccion-estado${av.faltan > 0 ? " campo-seccion-falta" : ""}`}>{av.faltan > 0 ? `faltan ${av.faltan}` : `${av.respondidos} de ${av.total}`}</span>
+              </summary>
+              {sec.campos.map((c) => <CampoPropio key={c.codigo} c={c} valor={valores[c.codigo]} error={errores[c.codigo]} obligatorio={c.obligatorio && !inefectivo} deshabilitado={bloqueado} onCambio={(v) => ponerValor(c.codigo, v)} />)}
+            </details>
+          );
+        })}
+        {marcoIrr && <p className="campo-nota" role="note">{puedeActa && tipo.requiere_contrato !== "no" ? "Marcó una irregularidad: al guardar el reporte podrá abrir el acta de inspección técnica sobre el mismo contrato (este formato no la reemplaza)." : "Marcó una irregularidad: avise a su supervisor para que se levante el acta de inspección técnica (este formato no la reemplaza)."}</p>}
 
         <div className="tec-campo">
           <label htmlFor="fp-desc">Observaciones{tipo.exige_texto ? " (obligatorio)" : " (opcional)"}</label>
