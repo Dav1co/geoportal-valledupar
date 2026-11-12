@@ -325,7 +325,7 @@ export default function App() {
         ) : pantalla === "tecnica" ? (
           <AreaTecnica uid={session.user.id} correo={email} />
         ) : pantalla === "campo" ? (
-          <AreaCampo correo={email} acta={perfil?.permisos?.acta === true} />
+          <AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} />
         ) : (
           <SinModulos />
         )}
@@ -637,7 +637,7 @@ export default function App() {
               {opcionesModo}
             </select>
           </div>
-          <div className="campo-contenedor"><AreaCampo correo={email} acta={perfil?.permisos?.acta === true} /></div>
+          <div className="campo-contenedor"><AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} /></div>
         </div>
       ) : (
         <div className="cuerpo">
