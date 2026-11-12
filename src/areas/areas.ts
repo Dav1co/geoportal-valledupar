@@ -13,7 +13,7 @@ type PermisosPerfil = Partial<NonNullable<PerfilResp["permisos"]>> & {
 };
 
 /** «Acceso solo con módulo asignado» (decisión de David): se entra a Comercial solo con algún modo comercial, a Técnica solo con algún permiso técnico y a Formatos de campo solo con algún
- *  permiso de campo. El administrador tiene las tres. Sin ninguna: «Sin módulos asignados». Si el servidor declara `torre_b`, se respeta para Técnica. */
+ *  permiso de campo o de acta. El administrador tiene las tres. Sin ninguna: «Sin módulos asignados». Si el servidor declara `torre_b`, se respeta para Técnica. */
 export function areasDisponibles(perfil: PerfilResp | null): AreasDisponibles {
   if (!perfil) return { comercial: false, tecnica: false, campo: false };
   if (perfil.es_admin) return { comercial: true, tecnica: true, campo: true };
@@ -23,7 +23,8 @@ export function areasDisponibles(perfil: PerfilResp | null): AreasDisponibles {
   // (queda fuera por los modos), y el perfil por omisión de un correo que no está en la lista blanca o está inactivo trae explorar = true pero torre_a = false (queda fuera por torre_a).
   const hayModoComercial = p.explorar === true || p.focalizacion === true || p.comercial === true || p.rutas === true || p.dashboard === true;
   const comercial = hayModoComercial && (typeof p.torre_a !== "boolean" || p.torre_a === true);
-  const campo = p.campo === true || p.dashboard_campo === true;
+  // Campo se abre también con un permiso de acta (el acta vive en la Torre A): `acta` (captura; el supervisor de actas también la tiene) o `dashboard_acta` (reconocido; su pantalla aún no existe).
+  const campo = p.campo === true || p.dashboard_campo === true || p.acta === true || p.dashboard_acta === true;
   return { comercial, tecnica: tecnico, campo };
 }
 

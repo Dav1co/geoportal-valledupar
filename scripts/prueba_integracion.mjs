@@ -49,7 +49,7 @@ ok("entradas: orden reporte general, formatos de actividad, acta", igual(ids({ p
 ok("entradas: sin formatos activos no aparece «Formatos de actividad» (los formatos nacen inactivos)", igual(ids({ puedeReportar: true, hayFormatos: false, puedeActa: false }), ["reporte_general"]));
 ok("entradas: solo permiso de acta y sin formatos: reporte general y acta", igual(ids({ puedeReportar: true, hayFormatos: false, puedeActa: true }), ["reporte_general", "acta"]));
 const act = E.entradasDeCampo({ puedeReportar: true, hayFormatos: false, puedeActa: true }).find((e) => e.id === "acta");
-ok("entradas: la del acta es un MARCADOR (pendiente, no se puede abrir)", act.pendiente === true && act.habilitada === false);
+ok("entradas: la del acta ya se puede abrir (hay pantalla): habilitada y sin marca de pendiente", act.habilitada === true && !act.pendiente);
 ok("entradas: el reporte general se deshabilita si el servidor no deja reportar", E.entradasDeCampo({ puedeReportar: false, hayFormatos: true, puedeActa: false }).every((e) => e.habilitada === false));
 ok("entradas: reporte general y formatos se habilitan si puede reportar", E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: false }).every((e) => e.habilitada === true));
 ok("entradas: cada entrada tiene título y descripción en español", E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: true }).every((e) => e.titulo.length > 3 && e.descripcion.length > 10));
@@ -57,7 +57,7 @@ ok("entradas: cada entrada tiene título y descripción en español", E.entradas
 ok("entradas (Paso C): sin puedeSupervisar no hay «Revisión de reportes»", !ids({ puedeReportar: true, hayFormatos: true, puedeActa: false }).includes("revision") && !ids({ puedeReportar: true, hayFormatos: true, puedeActa: false, puedeSupervisar: false }).includes("revision"));
 ok("entradas (Paso C): con puedeSupervisar aparece, habilitada, al final", (() => { const l = E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeSupervisar: true }); const r = l.at(-1); return r.id === "revision" && r.habilitada === true && !r.pendiente && r.titulo === "Revisión de reportes"; })());
 ok("entradas (Paso C): el supervisor sin permiso de reportar igual ve la revisión", ids({ puedeReportar: false, hayFormatos: false, puedeActa: false, puedeSupervisar: true }).includes("revision"));
-ok("entradas (Paso C): AreaCampo carga la revisión de forma diferida (React.lazy) y solo con puede.supervisar", /lazy\(\(\) => import\("\.\/dashboard\/Revision"\)\)/.test(leer("src/campo/AreaCampo.tsx")) && /abierta === "revision" && def\.puede\.supervisar/.test(leer("src/campo/AreaCampo.tsx")));
+ok("entradas (Paso C): AreaCampo carga la revisión de forma diferida (React.lazy) y solo con puede.supervisar (con def?. porque quien solo tiene acta no pide el formulario)", /lazy\(\(\) => import\("\.\/dashboard\/Revision"\)\)/.test(leer("src/campo/AreaCampo.tsx")) && /abierta === "revision" && def\?\.puede\.supervisar/.test(leer("src/campo/AreaCampo.tsx")));
 ok("App.tsx (Paso C): MapView y el Dashboard comercial se cargan de forma diferida (MapLibre no viaja con la página principal)", /const MapView = lazy\(/.test(leer("src/App.tsx")) && /const Dashboard = lazy\(/.test(leer("src/App.tsx")) && !/^import \{[^}]*\bMapView\b[^}]*\} from/m.test(leer("src/App.tsx")));
 ok("max_descripcion (Paso C): una sola fuente; ningún 1000 escrito en los formularios ni en la Edge", !/maxLength=\{1000\}|MAX_DESCRIPCION = 1000/.test(leer("src/campo/ReporteGeneral.tsx") + leer("src/campo/formatos/FormularioFormato.tsx")));
 const ac = leer("src/campo/AreaCampo.tsx");
@@ -82,8 +82,29 @@ ok("api.ts: el perfil trae las claves acta y dashboard_acta (opcionales)", /acta
 
 // ---- 4. El permiso de acta llega a AreaCampo (App.tsx) ----
 const app = leer("src/App.tsx");
-ok("App.tsx: las dos pantallas de campo reciben acta={perfil?.permisos?.acta === true} (lo decide el servidor)", (app.match(/<AreaCampo correo=\{email\} acta=\{perfil\?\.permisos\?\.acta === true\} \/>/g) ?? []).length === 2);
+ok("App.tsx: las dos pantallas de campo reciben acta={perfil?.permisos?.acta === true} (lo decide el servidor)", (app.match(/<AreaCampo correo=\{email\} acta=\{perfil\?\.permisos\?\.acta === true\}/g) ?? []).length === 2);
 ok("App.tsx: no queda ningún AreaCampo sin el permiso", (app.match(/<AreaCampo /g) ?? []).length === 2);
 
+// ---- 5. Quien solo tiene acta: ve únicamente el acta y AreaCampo no pide el formulario de campo ----
+ok("entradas: solo acta (sin campo) ve ÚNICAMENTE la entrada del acta", igual(ids({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false }), ["acta"]));
+ok("entradas: solo acta no ve reporte general ni formatos aunque el catálogo tenga formatos", igual(ids({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeCampo: false }), ["acta"]));
+ok("entradas: campo + acta ve las dos entradas", igual(ids({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeCampo: true }), ["reporte_general", "formatos", "acta"]));
+ok("entradas: sin campo y sin acta no hay ninguna entrada", igual(ids({ puedeReportar: false, hayFormatos: false, puedeActa: false, puedeCampo: false }), []));
+ok("entradas: sin la opción puedeCampo se comporta como antes (compatibilidad)", igual(ids({ puedeReportar: true, hayFormatos: true, puedeActa: false }), ["reporte_general", "formatos"]));
+ok("entradas: el supervisor de actas ve el marcador de su tablero (sin pantalla)", (() => { const e = E.entradasDeCampo({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false, puedeSupervisarActas: true }).find((x) => x.id === "acta_supervision"); return !!e && e.pendiente === true && e.habilitada === false; })());
+ok("entradas: sin permiso de supervisión no aparece el marcador del tablero", !ids({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeCampo: true }).includes("acta_supervision"));
+const ac2 = leer("src/campo/AreaCampo.tsx");
+ok("AreaCampo.tsx: sin permiso de campo NO pide el formulario de campo (if (!campo) return)", /if \(!campo\) return;/.test(ac2));
+ok("AreaCampo.tsx: con campo falso no muestra el error de «Sin acceso a Formatos de campo»", /if \(campo && error\)/.test(ac2) && /if \(campo && !def\)/.test(ac2));
+ok("AreaCampo.tsx: los «Próximamente» generales solo se ven con campo", /campo && PROXIMAMENTE\.map/.test(ac2));
+const app2 = leer("src/App.tsx");
+ok("App.tsx: las dos pantallas de campo reciben acta, dashboardActa y campo calculados del perfil", (app2.match(/dashboardActa=\{perfil\?\.permisos\?\.dashboard_acta === true\} campo=\{esAdmin \|\| perfil\?\.permisos\?\.campo === true \|\| perfil\?\.permisos\?\.dashboard_campo === true\}/g) ?? []).length === 2);
+const ar = leer("src/areas/areas.ts");
+ok("areas.ts: el área de campo cuenta acta y dashboard_acta", /p\.acta === true \|\| p\.dashboard_acta === true/.test(ar));
+
+// ---- 6. La entrada del acta abre la pantalla del acta ----
+const ac3 = leer("src/campo/AreaCampo.tsx");
+ok("AreaCampo.tsx: la entrada del acta monta PantallaActa solo con el permiso de acta", /abierta === "acta" && acta\) \{\s*return <PantallaActa correo=\{correo\}/.test(ac3) && /import \{ PantallaActa \} from "\.\/acta\/PantallaActa";/.test(ac3));
+ok("AreaCampo.tsx: el supervisor de actas sigue siendo un marcador (sin pantalla)", E.entradasDeCampo({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false, puedeSupervisarActas: true }).find((x) => x.id === "acta_supervision")?.pendiente === true);
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);

@@ -11,9 +11,9 @@ const { areasDisponibles, pantallaInicial, tarjetasEntrada, esDual, pantallaVali
 
 // Permisos tal como los entrega geoportal_mis_permisos (incluye torre_a/torre_b calculadas por el servidor, con la regla nueva donde un permiso de campo abre la Torre A)
 const P = (m = {}) => {
-  const b = { explorar: false, focalizacion: false, comercial: false, rutas: false, dashboard: false, registro_tecnico: false, dashboard_tecnico: false, campo: false, dashboard_campo: false, ...m };
+  const b = { explorar: false, focalizacion: false, comercial: false, rutas: false, dashboard: false, registro_tecnico: false, dashboard_tecnico: false, campo: false, dashboard_campo: false, acta: false, dashboard_acta: false, ...m };
   const comercial = b.explorar || b.focalizacion || b.comercial || b.rutas || b.dashboard;
-  return { es_admin: !!m.admin, permisos: { ...b, torre_a: !!m.admin || comercial || b.campo || b.dashboard_campo, torre_b: !!m.admin || b.registro_tecnico || b.dashboard_tecnico } };
+  return { es_admin: !!m.admin, permisos: { ...b, torre_a: !!m.admin || comercial || b.campo || b.dashboard_campo || b.acta || b.dashboard_acta, torre_b: !!m.admin || b.registro_tecnico || b.dashboard_tecnico } };
 };
 // Perfil por omisión de geoportal_mis_permisos para un correo fuera de la lista blanca o inactivo: rol consulta, explorar = true, todo lo demás falso, torres falsas.
 const POR_OMISION = { es_admin: false, permisos: { rol: "consulta", explorar: true, focalizacion: false, comercial: false, rutas: false, dashboard: false, registro_tecnico: false, dashboard_tecnico: false, campo: false, dashboard_campo: false, torre_a: false, torre_b: false } };
@@ -36,6 +36,14 @@ const casos = [
   ["Comercial + técnica + campo", P({ comercial: true, registro_tecnico: true, campo: true }), "entrada", "comercial+tecnica", true],
   ["Técnica + campo (sin comercial)", P({ registro_tecnico: true, campo: true }), "entrada", "tecnica+campo", false],
   ["Técnica supervisora + supervisor de campo", P({ registro_tecnico: true, dashboard_tecnico: true, dashboard_campo: true }), "entrada", "tecnica+campo", false],
+  ["CASOS NUEVOS (con acta de inspección)", null],
+  ["Solo acta (captura)", P({ acta: true }), "campo", "campo", false],
+  ["Solo supervisor de actas (reconocido, sin pantalla propia aún)", P({ dashboard_acta: true }), "campo", "campo", false],
+  ["Acta + supervisor de actas, solo acta", P({ acta: true, dashboard_acta: true }), "campo", "campo", false],
+  ["Campo + acta", P({ campo: true, acta: true }), "campo", "campo", false],
+  ["Comercial + acta (el acta vive en el área de campo, dentro de Comercial)", P({ explorar: true, acta: true }), "comercial", "comercial", true],
+  ["Técnica + acta (sin comercial)", P({ registro_tecnico: true, acta: true }), "entrada", "tecnica+campo", false],
+  ["Comercial + técnica + acta", P({ comercial: true, registro_tecnico: true, acta: true }), "entrada", "comercial+tecnica", true],
 ];
 let total = 0, fallas = 0;
 const filas = [];
@@ -60,5 +68,14 @@ ok("pantalla «comercial» no es válida para quien solo tiene campo (no se mont
 ok("pantalla «campo» es válida para solo campo y la ventana de entrada no", pantallaValida("campo", areasDisponibles(P({ campo: true }))) && !pantallaValida("entrada", areasDisponibles(P({ campo: true }))));
 ok("un comercial al que le quitan campo no queda en pantalla «campo»", pantallaValida("campo", areasDisponibles(P({ explorar: true }))) === false);
 ok("esDual: comercial+campo no es dual (campo va en la cabecera), técnica+campo sí", !esDual(areasDisponibles(P({ explorar: true, campo: true }))) && esDual(areasDisponibles(P({ registro_tecnico: true, campo: true }))));
+ok("solo acta entra al área de campo y no tiene comercial ni técnica", JSON.stringify(areasDisponibles(P({ acta: true }))) === JSON.stringify({ comercial: false, tecnica: false, campo: true }));
+ok("solo dashboard_acta: área de campo reconocida", areasDisponibles(P({ dashboard_acta: true })).campo === true);
+ok("sin ningún permiso (ni acta): «Sin módulos asignados»", pantallaInicial(areasDisponibles(P({}))) === "sin_modulos");
+ok("acta = false y dashboard_acta = false explícitos no abren campo", areasDisponibles(P({ acta: false, dashboard_acta: false })).campo === false);
+ok("el perfil por omisión (acta no declarada) sigue sin áreas", JSON.stringify(areasDisponibles(POR_OMISION)) === JSON.stringify({ comercial: false, tecnica: false, campo: false }));
+ok("servidor anterior (sin las claves acta): los perfiles de siempre no cambian", areasDisponibles({ es_admin: false, permisos: { explorar: true, focalizacion: false, comercial: false, rutas: false, dashboard: false, campo: true, dashboard_campo: false } }).campo === true
+  && areasDisponibles({ es_admin: false, permisos: { explorar: false, focalizacion: false, comercial: false, rutas: false, dashboard: false } }).campo === false);
+ok("pantalla «campo» es válida para solo acta y deja de serlo si le quitan el permiso", pantallaValida("campo", areasDisponibles(P({ acta: true }))) && !pantallaValida("campo", areasDisponibles(P({}))));
+ok("el administrador sigue viendo las tres áreas", JSON.stringify(areasDisponibles(P({ admin: true }))) === JSON.stringify({ comercial: true, tecnica: true, campo: true }));
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);
