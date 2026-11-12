@@ -59,5 +59,19 @@ ok("AreaCampo.tsx pasa el permiso de acta a la lista (puedeActa: acta)", /puedeA
 ok("AreaCampo.tsx ya no lista «Acta de inspección» como «Próximamente» para todos", !/PROXIMAMENTE = \[[^\]]*Acta de inspección/.test(ac));
 ok("AreaCampo.tsx monta FormatosCampo con la definición del servidor", /<FormatosCampo def=\{def\} correo=\{correo\}/.test(ac));
 
+// ---- 3. Administración: casillas del acta (comprobaciones sobre el código fuente; el proyecto no tiene ejecutor de pruebas de componentes) ----
+const ad = leer("src/components/Admin.tsx"), api = leer("src/lib/api.ts");
+ok("Admin: casilla «Acta de inspección técnica» (clave acta)", /\["acta", "Acta de inspección técnica"\]/.test(ad));
+ok("Admin: casilla «Supervisor de actas» (clave dashboard_acta)", /\["dashboard_acta", "Supervisor de actas"\]/.test(ad));
+ok("Admin: las casillas del acta solo se muestran si el servidor trae ver_acta (conActa)", /const conActa = useMemo\(\(\) => usuarios\.some\(\(u\) => typeof u\.ver_acta === "boolean"\)/.test(ad) && /\{conActa && \(\s*<BloquePermisos/.test(ad));
+ok("Admin: el aviso de horario del acta existe y reutiliza el mismo texto que Campo", /avisoHorarioActa\(borrador\)/.test(ad) && /const avisoHorarioCampo = \(b: Borrador\) => avisoHorario\(b, \["campo", "dashboard_campo"\]/.test(ad));
+ok("Admin: tras guardar se verifica que el servidor aplicó los permisos de acta", /conActa && !\(await verificarActa\(/.test(ad));
+ok("Admin: el perfil técnico conserva los permisos de acta del borrador", /borrador\.acta !== undefined \? \{ acta: borrador\.acta, dashboard_acta: borrador\.dashboard_acta \}/.test(ad));
+ok("Admin: la lista muestra las etiquetas de acta y «Sin acceso» las tiene en cuenta", /deActa\.map/.test(ad) && /deCampo\.length === 0 && deActa\.length === 0/.test(ad));
+ok("Admin: «Sin ningún modo asignado» cuenta los modos de acta", /\.\.\.\(conActa \? CAMPOS_ACTA : \[\]\)/.test(ad));
+ok("api.ts: UsuarioAdmin trae ver_acta y ver_dashboard_acta (opcionales)", /ver_acta\?: boolean;\s*ver_dashboard_acta\?: boolean;/.test(api));
+ok("api.ts: permisos() acepta acta y dashboard_acta (opcionales)", /acta\?: boolean;[^\n]*\n\s*dashboard_acta\?: boolean;\s*\}\) =>/.test(api));
+ok("api.ts: el perfil trae las claves acta y dashboard_acta (opcionales)", /acta\?: boolean; dashboard_acta\?: boolean;/.test(api));
+
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);

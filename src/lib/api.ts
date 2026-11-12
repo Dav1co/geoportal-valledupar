@@ -111,6 +111,9 @@ export type UsuarioAdmin = {
   // Formatos de campo (Paso B): solo llegan si el Paso A ya está aplicado en la base; si faltan, Administración no muestra nada de campo.
   ver_campo?: boolean;
   ver_dashboard_campo?: boolean;
+  // Acta de inspección técnica (integración Torre A): solo llegan si el SQL del acta ya está aplicado; si faltan, Administración no muestra las casillas del acta.
+  ver_acta?: boolean;
+  ver_dashboard_acta?: boolean;
 };
 
 /** Respuesta de geoportal-admin?accion=perfil (la misma que valida la sesión en useSession). */
@@ -120,6 +123,8 @@ export type PerfilResp = {
     explorar: boolean; focalizacion: boolean; comercial: boolean; rutas: boolean; dashboard: boolean;
     // Formatos de campo: `campo` = puede reportar (o supervisa, o es administrador); `dashboard_campo` = supervisor de reportes (o administrador).
     campo?: boolean; dashboard_campo?: boolean;
+    // Acta de inspección: `acta` = puede capturar (o supervisa, o es administrador); `dashboard_acta` = supervisor de actas (o administrador).
+    acta?: boolean; dashboard_acta?: boolean;
   };
 };
 
@@ -220,6 +225,8 @@ export const api = {
       dashboard_tecnico?: boolean;
       campo?: boolean;              // Formatos de campo (Paso B3): igual, si no se informa el servidor no lo toca
       dashboard_campo?: boolean;
+      acta?: boolean;               // Acta de inspección: igual, si no se informa el servidor no lo toca
+      dashboard_acta?: boolean;
     }) =>
       callPost<{ guardado: boolean }>(
         "geoportal-admin",
