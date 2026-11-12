@@ -1,0 +1,438 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./formatos.css";
+import { avisoDeError, apiCampo, ErrorCampo, type FormularioCampo, type Preparacion } from "../apiCampo";
+import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara } from "../camara";
+import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "../ubicacion";
+import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
+import { apiFormatos } from "./apiFormatos";
+import { aplanarDatos, contadorFotos, fotosParaCrear, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
+import { camposActivos, etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
+
+// Formulario de UN formato del Paso D (campos propios, fotos con etiqueta, resultado y causal, consecutivo). Pensado para el celular (380 px) y una mano.
+// - Todo (campos, fotos mínimas y máximas, causales) sale del catálogo que entrega el servidor; aquí no hay nombres de formatos.
+// - Fotos: SOLO con la cámara del formulario (1600 px, JPEG 0,72, sello, tope de bytes del servidor), SOLO en memoria. Sin galería ni selector de archivos.
+// - Envío: preparar_subida (con el tipo) → subida directa de cada foto → crear con el mismo reporte_id. «Reintentar» reutiliza el reporte_id: no duplica ni gasta otro consecutivo.
+// - Visita inefectiva: no se exigen campos ni fotos obligatorias; se pide la causal, la foto de fachada o predio (soporte) y la precisión de la ubicación.
+// - MALA SEÑAL: no hay modo sin conexión todavía. Si el envío falla por red, todo queda en pantalla para reintentar. GANCHO: `alFallarRed` recibe el cuerpo sin fotos cuando el
+//   fallo es de red; un modo sin conexión futuro podría encolarlo. Guardar fotos en el dispositivo está prohibido por ahora (solo memoria).
+
+type FotoLocal = { blob: Blob; url: string; subida: boolean };
+type Fase = "editando" | "enviando" | "error" | "guardado";
+type Destino = { tipo: "etiqueta"; codigo: string; nombre: string } | { tipo: "adicional"; indice: number | null; nombre: string };
+
+export type EnvioPendiente = { tipo: string; resultado: Resultado | null; causal: string | null; datos: Record<string, unknown> | null; reporte_id: string | null };
+
+export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFallarRed }: {
+  def: FormularioCampo; tipo: TipoFormato; correo: string; onVolver: () => void; onOtro: () => void; alFallarRed?: (envio: EnvioPendiente) => void;
+}) {
+  const [resultado, setResultado] = useState<Resultado | "">("");
+  const [causal, setCausal] = useState("");
+  const [subtipo, setSubtipo] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [contrato, setContrato] = useState("");
+  const [valores, setValores] = useState<ValoresCampos>({});
+  const [porEtiqueta, setPorEtiqueta] = useState<Record<string, FotoLocal | null>>({});
+  const [adicionales, setAdicionales] = useState<FotoLocal[]>([]);
+  const [camaraEn, setCamaraEn] = useState<Destino | null>(null);
+  const [fase, setFase] = useState<Fase>("editando");
+  const [errorEnvio, setErrorEnvio] = useState<ErrorCampo | null>(null);
+  const [confirmacion, setConfirmacion] = useState<ConfirmacionFormato | null>(null);
+  const [preparada, setPreparada] = useState(false);
+  const [ahora, setAhora] = useState(() => new Date());
+  const ubic = useUbicacion();
+  const prep = useRef<Preparacion | null>(null);
+  const enviando = useRef(false);
+  const refEtq = useRef(porEtiqueta); refEtq.current = porEtiqueta;
+  const refAdic = useRef(adicionales); refAdic.current = adicionales;
+
+  const etiquetas = useMemo(() => etiquetasActivas(tipo), [tipo]);
+  const campos = useMemo(() => camposActivos(tipo), [tipo]);
+  const subtipos = tipo.subtipos.filter((s) => s.activo);
+  const usaEtiquetas = etiquetas.length > 0;
+  const fix: Fix | null = ubic.fix;
+  const bloqueado = fase === "enviando" || fase === "guardado";
+  const fotosFijas = bloqueado || preparada;
+  const inefectivo = resultado === "inefectivo";
+
+  useEffect(() => { const r = window.setInterval(() => setAhora(new Date()), 15000); return () => window.clearInterval(r); }, []);
+  const soltarTodo = () => { Object.values(refEtq.current).forEach((f) => f && URL.revokeObjectURL(f.url)); refAdic.current.forEach((f) => URL.revokeObjectURL(f.url)); };
+  useEffect(() => soltarTodo, []);
+  const nFotos = Object.values(porEtiqueta).filter(Boolean).length + adicionales.length;
+  useEffect(() => {
+    if (nFotos === 0 || fase === "guardado") return;
+    const f = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", f);
+    return () => window.removeEventListener("beforeunload", f);
+  }, [nFotos, fase]);
+
+  const tope = def.limites.max_fotos;
+  const minimo = minimoFotos(tipo, resultado);
+  const maximo = maximoFotos(tipo, tope);
+  const faltas = validarFormato(tipo, {
+    resultado, causal, subtipo, descripcion, contrato, valores,
+    etiquetasConFoto: etiquetas.filter((e) => porEtiqueta[e.codigo]).map((e) => e.codigo),
+    // Sin etiquetas en el catálogo, todas las fotos van en «adicionales» (sin etiqueta): cuentan igual.
+    adicionales: adicionales.length, tieneUbicacion: !!fix, tienePrecision: !!fix && Number.isFinite(fix.precision_m), topeGeneral: tope,
+  });
+  const { errores } = aplanarDatos(tipo, valores);
+  const sinSenal = typeof navigator !== "undefined" && navigator.onLine === false;
+
+  function ponerValor(codigo: string, v: string | string[]) { setValores((p) => ({ ...p, [codigo]: v })); }
+
+  function guardarFoto(d: Destino, blob: Blob) {
+    const nueva: FotoLocal = { blob, url: URL.createObjectURL(blob), subida: false };
+    if (d.tipo === "etiqueta") {
+      setPorEtiqueta((p) => { if (p[d.codigo]) URL.revokeObjectURL(p[d.codigo]!.url); return { ...p, [d.codigo]: nueva }; });
+    } else {
+      setAdicionales((p) => {
+        const sig = [...p];
+        if (d.indice !== null && sig[d.indice]) { URL.revokeObjectURL(sig[d.indice].url); sig[d.indice] = nueva; } else sig.push(nueva);
+        return sig;
+      });
+    }
+  }
+  function quitarEtiqueta(codigo: string) { setPorEtiqueta((p) => { if (p[codigo]) URL.revokeObjectURL(p[codigo]!.url); return { ...p, [codigo]: null }; }); }
+  function quitarAdicional(i: number) { setAdicionales((p) => { URL.revokeObjectURL(p[i].url); return p.filter((_, j) => j !== i); }); }
+
+  const lineasSello = useCallback((): string[] => [
+    `${fechaHoraSello(new Date())} · hora del celular`,
+    fix ? `${fix.lat.toFixed(5)}, ${fix.lon.toFixed(5)} · ${metros(fix.precision_m)}` : "ubicación no disponible",
+  ], [fix]);
+
+  async function enviar() {
+    if (enviando.current || faltas.length > 0 || !fix) return;                  // sin doble pulsación
+    enviando.current = true;
+    setFase("enviando");
+    setErrorEnvio(null);
+    const { datos } = aplanarDatos(tipo, valores);
+    try {
+      const ordenadas = ordenarFotos<FotoLocal>(tipo, refEtq.current, refAdic.current);
+      let p = prep.current;
+      if (!p) {
+        p = await apiFormatos.prepararSubida(ordenadas.length, tipo.codigo);
+        prep.current = p;
+        setPreparada(true);
+      }
+      const rutas = new Map<number, string>();
+      for (const o of ordenadas) {
+        const destino = p.fotos.find((x) => x.orden === o.orden);
+        if (!destino) throw new ErrorCampo("servidor", "El servidor no preparó todas las fotos.", 500);
+        rutas.set(o.orden, destino.ruta);
+        if (o.foto.subida) continue;                                              // las ya subidas no se repiten
+        await apiCampo.subirFoto(destino.ruta, destino.token, o.foto.blob);
+        o.foto.subida = true;
+      }
+      const conf = await apiFormatos.crear({
+        reporte_id: p.reporte_id, tipo: tipo.codigo, subtipo: subtipo || null, descripcion: descripcion.trim() || null,
+        contrato: tipo.requiere_contrato === "no" ? null : contrato || null,
+        lat: Number(fix.lat.toFixed(6)), lon: Number(fix.lon.toFixed(6)), precision_m: Math.round(fix.precision_m * 10) / 10, riesgo_inmediato: false, origen: "campo",
+        fotos: fotosParaCrear(ordenadas, rutas),
+        datos, resultado: tipo.genera_resultado ? (resultado || null) : null, causal: inefectivo ? causal : null,
+      });
+      soltarTodo();
+      setPorEtiqueta({});
+      setAdicionales([]);
+      setConfirmacion(conf);
+      setFase("guardado");
+    } catch (e) {
+      const err = e instanceof ErrorCampo ? e : new ErrorCampo("red", "No se pudo completar el envío.", 0);
+      if (err.tipo === "subida_vencida") {
+        prep.current = null;                                                      // se pide una preparación nueva y se suben todas las fotos de nuevo
+        setPreparada(false);
+        Object.values(refEtq.current).forEach((f) => { if (f) f.subida = false; });
+        refAdic.current.forEach((f) => { f.subida = false; });
+      }
+      if (err.tipo === "red") alFallarRed?.({ tipo: tipo.codigo, resultado: resultado || null, causal: causal || null, datos, reporte_id: prep.current?.reporte_id ?? null });
+      setErrorEnvio(err);
+      setFase("error");
+    } finally {
+      enviando.current = false;
+    }
+  }
+
+  // ===================== Confirmación =====================
+  if (fase === "guardado" && confirmacion) {
+    return (
+      <div className="tec-pagina campo-pagina">
+        <section className="tec-tarjeta campo-confirmacion" role="status" aria-live="polite">
+          <h1>Reporte guardado</h1>
+          <p className="campo-sub">{tipo.nombre}</p>
+          {confirmacion.consecutivo && (
+            <div>
+              <p className="campo-sub">Consecutivo</p>
+              <p className="campo-consecutivo">{confirmacion.consecutivo}</p>
+            </div>
+          )}
+          {confirmacion.repetido && <p className="campo-nota" role="note">Este reporte ya estaba guardado; no se duplicó.</p>}
+          <p className="campo-hora">Registrado el {fechaHora(confirmacion.registrado_en)}</p>
+          {confirmacion.contrato_verificado === false && <p className="campo-nota" role="note">El número de contrato no se encontró; verifique que esté bien digitado.</p>}
+          {confirmacion.aviso_zona && <p className="campo-nota" role="note">La ubicación está fuera de la zona de operación; el reporte se guardó y el supervisor lo revisará.</p>}
+          <button type="button" className="tec-boton" onClick={onOtro}>Hacer otro reporte</button>
+          <button type="button" className="tec-boton-sec" onClick={onVolver}>Volver a los formatos</button>
+        </section>
+      </div>
+    );
+  }
+
+  const aviso = errorEnvio ? avisoDeError(errorEnvio) : null;
+  const precisionMala = !!fix && fix.precision_m > UMBRAL_PRECISION_MALA_M;
+  const contador = contadorFotos(nFotos, minimo, maximo);
+  const contadorOk = nFotos >= minimo && nFotos <= maximo;
+  const puedeMas = !fotosFijas && nFotos < maximo;
+  const hayInterac = nFotos > 0 || resultado !== "" || Object.keys(valores).length > 0;
+
+  return (
+    <div className="tec-pagina campo-pagina">
+      <section className="tec-tarjeta">
+        <div className="campo-cab">
+          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={onVolver} disabled={bloqueado}>← Formatos</button>
+          <h1>{tipo.nombre}</h1>
+        </div>
+        {tipo.usa_consecutivo && <p className="campo-sub">Al enviar se le asignará un número consecutivo.</p>}
+
+        {/* Resultado */}
+        {tipo.genera_resultado && (
+          <div className="tec-campo">
+            <span className="campo-etiqueta" id="fp-res-rot">Resultado de la visita</span>
+            <div className="campo-res" role="radiogroup" aria-labelledby="fp-res-rot">
+              <label><input type="radio" name="fp-res" value="efectivo" checked={resultado === "efectivo"} onChange={() => { setResultado("efectivo"); setCausal(""); }} disabled={bloqueado || preparada} />Efectiva</label>
+              <label className="campo-res-no"><input type="radio" name="fp-res" value="inefectivo" checked={resultado === "inefectivo"} onChange={() => setResultado("inefectivo")} disabled={bloqueado || preparada} />Inefectiva</label>
+            </div>
+            {inefectivo && (
+              <>
+                <label htmlFor="fp-causal">Causal de la visita inefectiva</label>
+                <select id="fp-causal" value={causal} onChange={(e) => setCausal(e.target.value)} disabled={bloqueado}>
+                  <option value="">Elija la causal…</option>
+                  {(tipo.causales ?? []).map((c) => <option key={c.codigo} value={c.codigo}>{c.nombre}</option>)}
+                </select>
+                <p className="campo-nota" role="note">Visita inefectiva: no se exigen los campos ni las fotos obligatorias. Tome la foto de la fachada o del predio y espere a que la ubicación muestre su precisión.</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {tipo.subtipos.length > 0 && subtipos.length > 0 && (
+          <div className="tec-campo">
+            <label htmlFor="fp-subtipo">Subtipo{tipo.exige_subtipo ? "" : " (opcional)"}</label>
+            <select id="fp-subtipo" value={subtipo} onChange={(e) => setSubtipo(e.target.value)} disabled={bloqueado}>
+              <option value="">{tipo.exige_subtipo ? "Elija el subtipo…" : "Sin subtipo"}</option>
+              {subtipos.map((s) => <option key={s.codigo} value={s.codigo}>{s.nombre}</option>)}
+            </select>
+          </div>
+        )}
+
+        {tipo.requiere_contrato !== "no" && (
+          <div className="tec-campo">
+            <label htmlFor="fp-contrato">Número de contrato{tipo.requiere_contrato === "si" ? " (obligatorio)" : " (opcional)"}</label>
+            <input id="fp-contrato" type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" maxLength={20} value={contrato} onChange={(e) => setContrato(e.target.value.replace(/\D/g, ""))} disabled={bloqueado} />
+          </div>
+        )}
+
+        {/* Campos propios del formato */}
+        {campos.map((c) => <CampoPropio key={c.codigo} c={c} valor={valores[c.codigo]} error={errores[c.codigo]} obligatorio={c.obligatorio && !inefectivo} deshabilitado={bloqueado} onCambio={(v) => ponerValor(c.codigo, v)} />)}
+
+        <div className="tec-campo">
+          <label htmlFor="fp-desc">Observaciones{tipo.exige_texto ? " (obligatorio)" : " (opcional)"}</label>
+          <textarea id="fp-desc" className="campo-texto" rows={3} maxLength={1000} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={bloqueado} />
+          <span className="campo-contador">{descripcion.length.toLocaleString("es-CO")} de 1.000</span>
+        </div>
+
+        {/* Fotos */}
+        <div className="tec-campo">
+          <span className="campo-etiqueta">Fotos <small>(máximo {megas(def.limites.max_bytes_foto)} cada una)</small></span>
+          <span className={`campo-contador-fotos${contadorOk ? " campo-contador-ok" : ""}`} aria-live="polite">Fotos: {contador}</span>
+          {!camaraDisponible() && <p className="campo-error" role="alert">Este navegador no permite usar la cámara desde la página, y sin las fotos no se puede enviar. Use Safari en iPhone o Chrome en Android, actualizado, y abra el geoportal desde su dirección oficial (https).</p>}
+          <div className="campo-fotos">
+            {etiquetas.map((e) => {
+              const f = porEtiqueta[e.codigo] ?? null;
+              const requerida = inefectivo ? e.soporte_inefectiva && !etiquetas.some((x) => x.soporte_inefectiva && porEtiqueta[x.codigo]) : e.obligatoria;
+              return (
+                <div key={e.codigo} className={`campo-foto${inefectivo && e.soporte_inefectiva ? " campo-foto-soporte" : ""}`}>
+                  <span className="campo-foto-n">{e.nombre}{requerida ? " (obligatoria)" : " (opcional)"}{inefectivo && e.soporte_inefectiva ? " · soporte de la visita inefectiva" : ""}</span>
+                  {f ? (
+                    <>
+                      <img src={f.url} alt={`Foto: ${e.nombre}`} className="campo-foto-img" />
+                      {!fotosFijas && (
+                        <div className="campo-foto-acc">
+                          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => setCamaraEn({ tipo: "etiqueta", codigo: e.codigo, nombre: e.nombre })}>Repetir</button>
+                          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => quitarEtiqueta(e.codigo)}>Quitar</button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <button type="button" className="tec-boton campo-boton-foto" onClick={() => setCamaraEn({ tipo: "etiqueta", codigo: e.codigo, nombre: e.nombre })} disabled={fotosFijas || !camaraDisponible() || nFotos >= maximo}>📷 Tomar foto</button>
+                  )}
+                </div>
+              );
+            })}
+            {adicionales.map((f, i) => (
+              <div key={f.url} className="campo-foto">
+                <span className="campo-foto-n">{usaEtiquetas ? `Foto adicional ${i + 1}` : `Foto ${i + 1}`}</span>
+                <img src={f.url} alt={`Foto adicional ${i + 1}`} className="campo-foto-img" />
+                {!fotosFijas && (
+                  <div className="campo-foto-acc">
+                    <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => setCamaraEn({ tipo: "adicional", indice: i, nombre: `Foto adicional ${i + 1}` })}>Repetir</button>
+                    <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => quitarAdicional(i)}>Quitar</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {(usaEtiquetas || adicionales.length === 0) && (
+            <button type="button" className="tec-boton-sec" onClick={() => setCamaraEn({ tipo: "adicional", indice: null, nombre: usaEtiquetas ? "Foto adicional" : `Foto ${adicionales.length + 1}` })} disabled={!puedeMas || !camaraDisponible()}>
+              {usaEtiquetas ? "📷 Agregar foto adicional" : "📷 Tomar foto"}
+            </button>
+          )}
+          {!usaEtiquetas && adicionales.length > 0 && (
+            <button type="button" className="tec-boton-sec" onClick={() => setCamaraEn({ tipo: "adicional", indice: null, nombre: `Foto ${adicionales.length + 1}` })} disabled={!puedeMas || !camaraDisponible()}>📷 Agregar otra foto</button>
+          )}
+          {preparada && fase !== "guardado" && <p className="campo-sub">Las fotos y el resultado ya están reservados para este envío; no se pueden cambiar hasta enviarlo.</p>}
+          <p className="campo-sub">Las fotos se toman con la cámara y quedan solo en la memoria de esta pantalla: no se guardan en el celular ni en la galería.</p>
+        </div>
+
+        {/* Automáticos */}
+        <dl className="campo-auto">
+          <div>
+            <dt>Ubicación</dt>
+            <dd>
+              {fix ? `${decimal(fix.lat, 5)}, ${decimal(fix.lon, 5)} (${metros(fix.precision_m)})` : ubic.estado === "buscando" ? "Buscando…" : "No disponible"}
+              <button type="button" className="campo-enlace" onClick={ubic.actualizar} disabled={bloqueado}>Actualizar ubicación</button>
+            </dd>
+          </div>
+          <div><dt>Fecha y hora</dt><dd>{fechaHora(ahora)} <small>(la oficial será la del servidor)</small></dd></div>
+          <div><dt>Usuario</dt><dd>{correo}</dd></div>
+        </dl>
+        {ubic.mensaje && <p className="campo-error" role="alert">{ubic.mensaje}</p>}
+        {precisionMala && <p className="campo-nota" role="note">La ubicación es poco precisa (más de {UMBRAL_PRECISION_MALA_M} m). Espere unos segundos o salga a cielo abierto y pulse «Actualizar ubicación».{inefectivo ? " En una visita inefectiva la precisión queda registrada como prueba." : " Puede enviar igualmente."}</p>}
+
+        {faltas.length > 0 && fase === "editando" && hayInterac && <ul className="campo-faltas">{faltas.map((m) => <li key={m}>{m}</li>)}</ul>}
+        {sinSenal && <p className="campo-error" role="alert">No hay señal en este momento. Sus datos y fotos siguen aquí; envíe cuando recupere la conexión.</p>}
+        {fase === "error" && aviso && <p className="campo-error" role="alert">{aviso.texto}</p>}
+        {fase === "error" && errorEnvio?.tipo === "sesion" ? null : (
+          <button type="button" className="tec-boton campo-enviar" onClick={() => void enviar()} disabled={fase === "enviando" || faltas.length > 0 || (fase === "error" && aviso !== null && !aviso.reintentable)}>
+            {fase === "enviando" ? "Enviando…" : fase === "error" ? "Reintentar" : "Enviar reporte"}
+          </button>
+        )}
+      </section>
+
+      {camaraEn !== null && (
+        <PanelCamara rotulo={camaraEn.nombre} maxBytes={def.limites.max_bytes_foto} sello={lineasSello}
+          onFoto={(f) => { guardarFoto(camaraEn, f.blob); setCamaraEn(null); }} onCerrar={() => setCamaraEn(null)} />
+      )}
+    </div>
+  );
+}
+
+// ============ Un campo propio, según su tipo de dato ============
+function CampoPropio({ c, valor, error, obligatorio, deshabilitado, onCambio }: {
+  c: CampoDef; valor: string | string[] | undefined; error?: string; obligatorio: boolean; deshabilitado: boolean; onCambio: (v: string | string[]) => void;
+}) {
+  const id = `fp-${c.codigo}`;
+  const texto = typeof valor === "string" ? valor : "";
+  const arreglo = Array.isArray(valor) ? valor : [];
+  const opciones = (c.opciones ?? []).filter((o) => o.activo !== false);
+  const rango = c.minimo !== undefined && c.maximo !== undefined ? `de ${c.minimo.toLocaleString("es-CO")} a ${c.maximo.toLocaleString("es-CO")}` : c.minimo !== undefined ? `mínimo ${c.minimo.toLocaleString("es-CO")}` : c.maximo !== undefined && (c.tipo_dato === "entero" || c.tipo_dato === "decimal") ? `máximo ${c.maximo.toLocaleString("es-CO")}` : "";
+  const nota = [c.unidad ? `Unidad: ${c.unidad}` : "", rango, c.ayuda ?? ""].filter(Boolean).join(" · ");
+  const rotulo = (
+    <>{c.nombre}{c.unidad && (c.tipo_dato === "entero" || c.tipo_dato === "decimal") ? ` (${c.unidad})` : ""}{obligatorio ? " (obligatorio)" : " (opcional)"}
+      {c.sensible && <span className="campo-sensible">dato sensible</span>}</>
+  );
+  const invalido = !!error;
+  let control: JSX.Element;
+  switch (c.tipo_dato) {
+    case "si_no":
+      control = (
+        <select id={id} value={texto} onChange={(e) => onCambio(e.target.value)} disabled={deshabilitado} aria-invalid={invalido}>
+          <option value="">Sin responder</option><option value="si">Sí</option><option value="no">No</option>
+        </select>
+      );
+      break;
+    case "opcion":
+      control = (
+        <select id={id} value={texto} onChange={(e) => onCambio(e.target.value)} disabled={deshabilitado} aria-invalid={invalido}>
+          <option value="">Elija…</option>
+          {opciones.map((o) => <option key={o.codigo} value={o.codigo}>{o.nombre}</option>)}
+        </select>
+      );
+      break;
+    case "opciones":
+      control = (
+        <div className="campo-opciones" role="group" aria-labelledby={`${id}-rot`}>
+          {opciones.map((o) => (
+            <label key={o.codigo}>
+              <input type="checkbox" checked={arreglo.includes(o.codigo)} disabled={deshabilitado}
+                onChange={(e) => onCambio(e.target.checked ? [...arreglo, o.codigo] : arreglo.filter((x) => x !== o.codigo))} />{o.nombre}
+            </label>
+          ))}
+        </div>
+      );
+      break;
+    case "dia_hora":
+      control = <input id={id} type="datetime-local" value={texto} onChange={(e) => onCambio(e.target.value)} disabled={deshabilitado} aria-invalid={invalido} />;
+      break;
+    case "entero":
+    case "decimal":
+      control = <input id={id} type="text" inputMode={c.tipo_dato === "entero" ? "numeric" : "decimal"} autoComplete="off" value={texto} onChange={(e) => onCambio(e.target.value)} disabled={deshabilitado} aria-invalid={invalido} />;
+      break;
+    default:
+      control = <input id={id} type="text" autoComplete="off" maxLength={c.maximo ?? 300} value={texto} onChange={(e) => onCambio(e.target.value)} disabled={deshabilitado} aria-invalid={invalido} />;
+  }
+  return (
+    <div className="tec-campo campo-propio">
+      {c.tipo_dato === "opciones" ? <span className="campo-etiqueta" id={`${id}-rot`}>{rotulo}</span> : <label htmlFor={id}>{rotulo}</label>}
+      {control}
+      {nota && <span className="campo-unidad">{nota}</span>}
+      {error && (texto !== "" || arreglo.length > 0) ? <span className="campo-error" role="alert">{error}</span> : null}
+    </div>
+  );
+}
+
+// ============ Cámara dentro del formulario (misma de ReporteGeneral; allí no se exporta y ese archivo no se toca) ============
+function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar }: {
+  rotulo: string; maxBytes: number; sello: () => string[]; onFoto: (f: { blob: Blob }) => void; onCerrar: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const flujo = useRef<MediaStream | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lista, setLista] = useState(false);
+  const [procesando, setProcesando] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    abrirCamara()
+      .then((f) => {
+        if (!vivo) { cerrarCamara(f); return; }
+        flujo.current = f;
+        const v = videoRef.current;
+        if (v) { v.srcObject = f; void v.play().catch(() => {}); }
+      })
+      .catch((e) => { if (vivo) setError(e instanceof ErrorCamara ? e.message : "No se pudo abrir la cámara."); });
+    return () => { vivo = false; cerrarCamara(flujo.current); flujo.current = null; };
+  }, []);
+
+  async function capturar() {
+    const v = videoRef.current;
+    if (!v || procesando) return;
+    setProcesando(true);
+    try {
+      const f = await capturarFoto(v, sello(), maxBytes);
+      if (!f) { setError(`La foto pesa más de ${megas(maxBytes)} aun reducida. Acérquese al objeto o mejore la luz e intente de nuevo.`); return; }
+      onFoto(f);
+    } catch (e) {
+      setError(e instanceof ErrorCamara ? e.message : "No se pudo tomar la foto.");
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  return (
+    <div className="campo-camara" role="dialog" aria-modal="true" aria-label={`Cámara · ${rotulo}`}>
+      <div className="campo-camara-cab">{rotulo}</div>
+      {error ? <div className="campo-camara-error"><p role="alert">{error}</p></div> : <video ref={videoRef} className="campo-video" autoPlay playsInline muted onLoadedMetadata={() => setLista(true)} />}
+      <div className="campo-camara-acc">
+        <button type="button" className="tec-boton-sec" onClick={onCerrar}>Cancelar</button>
+        {!error && <button type="button" className="tec-boton campo-capturar" onClick={() => void capturar()} disabled={!lista || procesando}>{procesando ? "Procesando…" : "Tomar foto"}</button>}
+      </div>
+    </div>
+  );
+}
