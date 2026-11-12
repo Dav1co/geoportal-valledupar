@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiCampo, avisoDeError, ErrorCampo, type Confirmacion, type FormularioCampo, type Preparacion } from "./apiCampo";
+import { maxDescripcion } from "./limites";
 import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara } from "./camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "./ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "./formato";
@@ -10,7 +11,6 @@ import { sinFormatosD } from "./formatos/tipos";
 // - Fotos: SOLO con la cámara del formulario, SOLO en memoria. No hay selector de archivos ni galería, y nada se guarda en el dispositivo.
 // - Envío: preparar_subida (una vez) → subida directa de cada foto a su URL firmada → crear con el mismo reporte_id. Si algo falla, todo queda en pantalla y «Reintentar» reutiliza el mismo reporte_id.
 // - Quien reporta solo ve la confirmación; nunca una lista de reportes.
-const MAX_DESCRIPCION = 1000;      // el mismo tope de la base (geoportal_campo_crear_reporte); el servidor aún no lo informa en `formulario`: ver decisiones del Paso B
 
 type FotoLocal = { blob: Blob; url: string; subida: boolean };
 type Fase = "editando" | "enviando" | "error" | "guardado";
@@ -22,6 +22,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro }: { def: Formula
   const [descripcion, setDescripcion] = useState("");
   const [contrato, setContrato] = useState("");
   const [riesgo, setRiesgo] = useState(false);
+  const maxDesc = maxDescripcion(def.limites);   // un solo tope: el de la base (limites.max_descripcion)
   const [fotos, setFotos] = useState<(FotoLocal | null)[]>(() => Array.from({ length: Math.max(1, def.limites.max_fotos) }, () => null));
   const [camaraEn, setCamaraEn] = useState<number | null>(null);
   const [fase, setFase] = useState<Fase>("editando");
@@ -197,8 +198,8 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro }: { def: Formula
         {/* 2. Qué encontró */}
         <div className="tec-campo">
           <label htmlFor="campo-desc">¿Qué encontró?{tipoDef?.exige_texto ? " (obligatorio)" : " (opcional)"}</label>
-          <textarea id="campo-desc" className="campo-texto" rows={4} maxLength={MAX_DESCRIPCION} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={bloqueado} aria-invalid={!!tipoDef?.exige_texto && descripcion.trim().length < 3 && descripcion.length > 0} />
-          <span className="campo-contador">{descripcion.length.toLocaleString("es-CO")} de {MAX_DESCRIPCION.toLocaleString("es-CO")}</span>
+          <textarea id="campo-desc" className="campo-texto" rows={4} maxLength={maxDesc} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={bloqueado} aria-invalid={!!tipoDef?.exige_texto && descripcion.trim().length < 3 && descripcion.length > 0} />
+          <span className="campo-contador">{descripcion.length.toLocaleString("es-CO")} de {maxDesc.toLocaleString("es-CO")}</span>
         </div>
 
         {/* 3. Fotos */}

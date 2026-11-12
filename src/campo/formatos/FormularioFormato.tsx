@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./formatos.css";
 import { avisoDeError, apiCampo, ErrorCampo, type FormularioCampo, type Preparacion } from "../apiCampo";
+import { maxDescripcion } from "../limites";
 import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara } from "../camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "../ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
@@ -66,6 +67,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   }, [nFotos, fase]);
 
   const tope = def.limites.max_fotos;
+  const maxDesc = maxDescripcion(def.limites);   // un solo tope: el de la base (limites.max_descripcion)
   const minimo = minimoFotos(tipo, resultado);
   const maximo = maximoFotos(tipo, tope);
   const faltas = validarFormato(tipo, {
@@ -233,8 +235,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
 
         <div className="tec-campo">
           <label htmlFor="fp-desc">Observaciones{tipo.exige_texto ? " (obligatorio)" : " (opcional)"}</label>
-          <textarea id="fp-desc" className="campo-texto" rows={3} maxLength={1000} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={bloqueado} />
-          <span className="campo-contador">{descripcion.length.toLocaleString("es-CO")} de 1.000</span>
+          <textarea id="fp-desc" className="campo-texto" rows={3} maxLength={maxDesc} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={bloqueado} />
+          <span className="campo-contador">{descripcion.length.toLocaleString("es-CO")} de {maxDesc.toLocaleString("es-CO")}</span>
         </div>
 
         {/* Fotos */}

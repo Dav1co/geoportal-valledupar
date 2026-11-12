@@ -8,7 +8,7 @@ export type Grupo = { codigo: string; nombre: string; orden: number; activo: boo
 export type FormularioCampo = {
   perfil: "admin" | "supervisor" | "reportante";
   puede: { reportar: boolean; crear_desde_escritorio: boolean; supervisar: boolean; administrar_catalogo: boolean };
-  limites: { max_fotos: number; min_fotos_campo: number; max_bytes_foto: number; tipo_mime: string };
+  limites: { max_fotos: number; min_fotos_campo: number; max_bytes_foto: number; tipo_mime: string; max_descripcion?: number };
   zona: { lat_min: number; lat_max: number; lon_min: number; lon_max: number };
   grupos: Grupo[];
 };
@@ -56,7 +56,7 @@ async function token(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-async function pedir<T>(accion: string, opciones: { qs?: Record<string, string>; cuerpo?: unknown; timeoutMs?: number } = {}): Promise<T> {
+export async function pedir<T>(accion: string, opciones: { qs?: Record<string, string>; cuerpo?: unknown; timeoutMs?: number } = {}): Promise<T> {
   const url = new URL(`${FUNCTIONS_URL}/geoportal-campo`);
   url.searchParams.set("accion", accion);
   for (const [k, v] of Object.entries(opciones.qs ?? {})) url.searchParams.set(k, v);

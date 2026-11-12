@@ -53,6 +53,13 @@ ok("entradas: la del acta es un MARCADOR (pendiente, no se puede abrir)", act.pe
 ok("entradas: el reporte general se deshabilita si el servidor no deja reportar", E.entradasDeCampo({ puedeReportar: false, hayFormatos: true, puedeActa: false }).every((e) => e.habilitada === false));
 ok("entradas: reporte general y formatos se habilitan si puede reportar", E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: false }).every((e) => e.habilitada === true));
 ok("entradas: cada entrada tiene título y descripción en español", E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: true }).every((e) => e.titulo.length > 3 && e.descripcion.length > 10));
+// Paso C: «Revisión de reportes» solo con el permiso de supervisión (def.puede.supervisar); quien solo reporta nunca la ve
+ok("entradas (Paso C): sin puedeSupervisar no hay «Revisión de reportes»", !ids({ puedeReportar: true, hayFormatos: true, puedeActa: false }).includes("revision") && !ids({ puedeReportar: true, hayFormatos: true, puedeActa: false, puedeSupervisar: false }).includes("revision"));
+ok("entradas (Paso C): con puedeSupervisar aparece, habilitada, al final", (() => { const l = E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeSupervisar: true }); const r = l.at(-1); return r.id === "revision" && r.habilitada === true && !r.pendiente && r.titulo === "Revisión de reportes"; })());
+ok("entradas (Paso C): el supervisor sin permiso de reportar igual ve la revisión", ids({ puedeReportar: false, hayFormatos: false, puedeActa: false, puedeSupervisar: true }).includes("revision"));
+ok("entradas (Paso C): AreaCampo carga la revisión de forma diferida (React.lazy) y solo con puede.supervisar", /lazy\(\(\) => import\("\.\/dashboard\/Revision"\)\)/.test(leer("src/campo/AreaCampo.tsx")) && /abierta === "revision" && def\.puede\.supervisar/.test(leer("src/campo/AreaCampo.tsx")));
+ok("App.tsx (Paso C): MapView y el Dashboard comercial se cargan de forma diferida (MapLibre no viaja con la página principal)", /const MapView = lazy\(/.test(leer("src/App.tsx")) && /const Dashboard = lazy\(/.test(leer("src/App.tsx")) && !/^import \{[^}]*\bMapView\b[^}]*\} from/m.test(leer("src/App.tsx")));
+ok("max_descripcion (Paso C): una sola fuente; ningún 1000 escrito en los formularios ni en la Edge", !/maxLength=\{1000\}|MAX_DESCRIPCION = 1000/.test(leer("src/campo/ReporteGeneral.tsx") + leer("src/campo/formatos/FormularioFormato.tsx")));
 const ac = leer("src/campo/AreaCampo.tsx");
 ok("AreaCampo.tsx usa la lista de entradas y no deja el estado suelto abiertoFormatos", /entradasDeCampo\(/.test(ac) && !/abiertoFormatos/.test(ac));
 ok("AreaCampo.tsx pasa el permiso de acta a la lista (puedeActa: acta)", /puedeActa: acta/.test(ac));

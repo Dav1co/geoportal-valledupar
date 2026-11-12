@@ -1,7 +1,7 @@
 // Entradas del área «Formatos de campo» (Torre A). Cada pantalla es UNA entrada de esta lista; agregar una nueva pantalla = agregar una entrada aquí y un caso en AreaCampo.
 // Lógica pura (sin React): se prueba sola en scripts/prueba_integracion.mjs.
 
-export type EntradaId = "reporte_general" | "formatos" | "acta";
+export type EntradaId = "reporte_general" | "formatos" | "acta" | "revision";
 
 export type EntradaCampo = {
   id: EntradaId;
@@ -20,6 +20,8 @@ export type CondicionesEntradas = {
   hayFormatos: boolean;
   /** Permiso `ver_acta` (clave `acta` del perfil): puede capturar actas. Lo decide el servidor; el supervisor de actas también lo tiene. */
   puedeActa: boolean;
+  /** El servidor dice que la persona puede supervisar (def.puede.supervisar: supervisor o administrador). Es el permiso `ver_dashboard_campo`; quien reporta nunca ve la lista. */
+  puedeSupervisar?: boolean;
 };
 
 /** Entradas visibles, en orden. «Reporte general» siempre; «Formatos de actividad» solo si hay formatos activos; «Acta de inspección» SOLO con el permiso de acta. */
@@ -35,6 +37,11 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
   if (c.puedeActa) e.push({
     id: "acta", titulo: "Acta de inspección",
     descripcion: "Registro digital que acompaña al acta física firmada.", habilitada: false, pendiente: true,
+  });
+  // Paso C: «Revisión de reportes» (lista, mapa, indicadores; y catálogo y parámetros para el administrador) solo con el permiso de supervisión
+  if (c.puedeSupervisar) e.push({
+    id: "revision", titulo: "Revisión de reportes",
+    descripcion: "Lista, mapa e indicadores de los reportes de campo; estados, duplicados y descargas.", habilitada: true,
   });
   return e;
 }

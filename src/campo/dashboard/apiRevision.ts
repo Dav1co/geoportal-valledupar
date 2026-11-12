@@ -1,0 +1,98 @@
+import { pedir, ErrorCampo } from "../apiCampo";
+
+// Cliente de las rutas de supervisión de geoportal-campo para la pantalla «Revisión de reportes» (Paso C). Usa el `pedir` de apiCampo (renueva la sesión una vez ante un 401,
+// distingue «sin respuesta», traduce 429). Aquí NO hay etiquetas de tipos, grupos, estados ni campos propios: todo llega del catálogo del servidor.
+
+export type Par = { codigo: string; nombre: string };
+export type Resultado = "efectivo" | "inefectivo";
+/** Una fila de «reportes». Las claves del Paso D (consecutivo, resultado, causal, datos…) son opcionales: un servidor sin el Paso D no las entrega. */
+export type FilaReporte = {
+  id: string; seq: number; tipo: Par; grupo: Par; subtipo: Par | null; descripcion: string | null; contrato: string | null; contrato_verificado: boolean | null;
+  lat: number; lon: number; precision_m: number | null; riesgo_inmediato: boolean; origen: string; fuera_de_zona: boolean; autor?: string; registrado_en: string;
+  estado: string; estado_desde: string | null; oculto: boolean; reporte_original_id: string | null; grupo_duplicados: string | null; tamano_grupo: number | null; n_fotos: number;
+  consecutivo?: string | null; resultado?: Resultado | null; causal?: Par | null; orden_trabajo_id?: string | null; datos?: Record<string, unknown>; tiene_datos_sensibles?: boolean;
+  /** Solo en filas de descarga: hora de pared de Bogotá «AAAA-MM-DDTHH:MM:SS». */
+  registrado_local?: string;
+};
+export type ListaResp = { reportes: FilaReporte[]; total: number; siguiente: number | null; distancia_duplicados_m: number };
+export type FiltrosServidor = {
+  tipo?: string; grupo?: string; estado?: string; desde?: string; hasta?: string; riesgo_inmediato?: boolean; ocultos?: "no" | "si" | "todos";
+  resultado?: Resultado; causal?: string; consecutivo?: string; cursor?: number; limite?: number;
+};
+
+export type TipoDato = "texto" | "entero" | "decimal" | "si_no" | "opcion" | "opciones" | "dia_hora";
+export type OpcionDef = { codigo: string; nombre: string; activo?: boolean };
+export type CampoDef = { codigo: string; nombre: string; tipo_dato: TipoDato | string; unidad?: string; opciones?: OpcionDef[]; sensible?: boolean; activo?: boolean; orden?: number };
+export type FotoDefRev = { codigo: string; nombre: string; activo?: boolean };
+export type EstadoDef = { codigo: string; nombre: string; orden: number; activo: boolean; exige_motivo: boolean; cambio_manual: boolean };
+export type ParametroDef = { clave: string; valor: number; unidad: string; descripcion: string; minimo: number | null; maximo: number | null; actualizado_en?: string | null; actualizado_por?: string | null };
+export type SubtipoCat = { codigo: string; nombre: string; orden: number; activo: boolean };
+export type TipoCat = { codigo: string; nombre: string; orden: number; activo: boolean; subtipos: SubtipoCat[]; campos?: CampoDef[] };
+export type GrupoCat = { codigo: string; nombre: string; orden: number; activo: boolean; tipos: TipoCat[] };
+/** Lo que entrega `formulario` al supervisor y, con incluir_inactivos, al administrador. */
+export type FormularioRev = {
+  perfil: "admin" | "supervisor" | "reportante";
+  puede: { reportar: boolean; crear_desde_escritorio: boolean; supervisar: boolean; administrar_catalogo: boolean };
+  limites: { max_fotos: number; max_descripcion?: number };
+  zona: { lat_min: number; lat_max: number; lon_min: number; lon_max: number };
+  grupos: GrupoCat[]; estados: EstadoDef[] | null; parametros: ParametroDef[] | null;
+  definiciones?: { tipo: string; campos: CampoDef[]; fotos: FotoDefRev[] }[] | null;
+};
+
+export type EventoRep = { id: number; tipo_evento: string; estado_nuevo: string | null; reporte_original_id: string | null; motivo: string | null; autor: string; creado_en: string };
+export type FotoRep = { orden: number; tamano_bytes: number; tipo_mime: string; registrada_en: string; etiqueta?: string | null; etiqueta_nombre?: string | null };
+export type Cercano = { id: string; distancia_m: number; registrado_en: string; estado: string };
+export type DetalleResp = { reporte: FilaReporte; campos: CampoDef[]; fotos: FotoRep[]; eventos: EventoRep[]; cercanos: Cercano[]; distancia_duplicados_m: number };
+export type SensiblesResp = { reporte_id: string; datos: Record<string, unknown>; campos: CampoDef[] };
+
+export type IndicadoresResp = {
+  total: number; visibles: number; ocultos: number; corte: string; filtros: FiltrosServidor; serie_recortada: boolean;
+  por_dia: { dia: string; n: number }[]; por_tipo: { tipo: Par; grupo: Par; n: number }[]; por_estado: { estado: string; nombre: string; n: number }[];
+  revision: { revisados: number; sin_revisar: number; mediana_segundos: number | null; promedio_segundos: number | null; p90_segundos: number | null };
+};
+export type DescargaIniciada = { descarga_id: number; total: number; formato: "csv" | "xlsx"; filtros: FiltrosServidor; incluir_autor: boolean; hasta_seq: number; generado_por: string; generado_en: string };
+/** Fila de la RPC de descarga (plana; el correo del autor solo viene si el administrador lo pidió). Sin rutas de Storage, URLs ni claves. */
+export type FilaDescarga = {
+  seq: number; id: string; registrado_local: string; tipo_codigo: string; tipo_nombre: string; grupo_nombre: string; subtipo_nombre: string | null; consecutivo: string | null; resultado: Resultado | null;
+  causal_nombre: string | null; estado: string; estado_nombre: string | null; oculto: boolean; riesgo_inmediato: boolean; fuera_de_zona: boolean; contrato: string | null; contrato_verificado: boolean | null;
+  descripcion: string | null; lat: number; lon: number; precision_m: number | null; origen: string; n_fotos: number; grupo_duplicados: string | null; tamano_grupo: number | null;
+  reporte_original_id: string | null; orden_trabajo_id: string | null; datos: Record<string, unknown>; autor?: string;
+};
+export type DescargaPagina = { registros: FilaDescarga[]; devueltos: number; ultimo_seq: number | null; hay_mas: boolean };
+export type CambioParametro = { clave: string; antes: number; despues: number };
+
+const sinVacios = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== "" && v !== null)) as Partial<T>;
+
+export const apiRev = {
+  formulario: (incluirInactivos = false) => pedir<FormularioRev>("formulario", incluirInactivos ? { qs: { incluir_inactivos: "1" } } : {}),
+  reportes: (f: FiltrosServidor) => pedir<ListaResp>("reportes", { cuerpo: sinVacios(f), timeoutMs: 60000 }),
+  reporte: (id: string) => pedir<DetalleResp>("reporte", { qs: { id } }),
+  foto: (id: string, orden: number) => pedir<{ url: string; expira_en: string }>("foto", { qs: { id, orden: String(orden) } }),
+  sensibles: (id: string) => pedir<SensiblesResp>("datos_sensibles", { qs: { id } }),
+  estado: (id: string, estado: string, motivo: string) => pedir<{ id: string; estado: string; estado_anterior: string }>("estado", { cuerpo: { id, estado, motivo } }),
+  ocultar: (id: string, motivo: string) => pedir<{ id: string; oculto: boolean }>("ocultar", { cuerpo: { id, motivo } }),
+  reincluir: (id: string, motivo: string) => pedir<{ id: string; oculto: boolean }>("reincluir", { cuerpo: { id, motivo } }),
+  duplicado: (id: string, originalId: string, motivo: string) => pedir<{ id: string; estado: string; reporte_original_id: string }>("duplicado", { cuerpo: { id, original_id: originalId, motivo } }),
+  indicadores: (f: FiltrosServidor) => pedir<IndicadoresResp>("indicadores", { cuerpo: sinVacios(f), timeoutMs: 60000 }),
+  descargaIniciar: (filtros: FiltrosServidor, formato: "csv" | "xlsx", incluirAutor: boolean) =>
+    pedir<DescargaIniciada>("descarga_iniciar", { cuerpo: { filtros: sinVacios(filtros), formato, incluir_autor: incluirAutor }, timeoutMs: 60000 }),
+  descargaPagina: (id: number, despuesDe: number | null, limite: number) => pedir<DescargaPagina>("descarga_pagina", { cuerpo: { descarga_id: id, despues_de: despuesDe, limite }, timeoutMs: 90000 }),
+  descargaCerrar: (id: number, filas: number, resultado: "completa" | "cancelada" | "error") => pedir<{ cerrada: boolean }>("descarga_cerrar", { cuerpo: { descarga_id: id, filas, resultado } }),
+  parametro: (cambios: { clave: string; valor: number }[], motivo: string) => pedir<{ cambios: CambioParametro[] }>("parametro", { cuerpo: { cambios, motivo } }),
+  catalogo: (entidad: string, accion: string, datos: Record<string, unknown>) => pedir<{ entidad: string; accion: string; antes: unknown; despues: unknown }>("catalogo", { cuerpo: { entidad, accion, datos } }),
+};
+
+/** Texto para la persona a partir de un fallo del servidor (los mensajes de validación de la base ya vienen en español). */
+export function textoError(e: unknown): { texto: string; sesion: boolean } {
+  if (!(e instanceof ErrorCampo)) return { texto: "Ocurrió un error inesperado. Intente de nuevo.", sesion: false };
+  switch (e.tipo) {
+    case "red": return { texto: `${e.message} Revise su conexión e intente de nuevo.`, sesion: false };
+    case "sesion": return { texto: "Su sesión venció. Inicie sesión de nuevo.", sesion: true };
+    case "horario": return { texto: `${e.message} Su cuenta no tiene habilitado el servicio en este momento.`, sesion: false };
+    case "denegado": return { texto: "Su cuenta ya no está autorizada en el geoportal.", sesion: false };
+    case "permiso": return { texto: "No tiene permiso para esta acción.", sesion: false };
+    case "servidor": return { texto: "El servidor no pudo completar la operación. Intente de nuevo en unos minutos.", sesion: false };
+    case "limite": return { texto: e.message, sesion: false };
+    default: return { texto: e.message, sesion: false };
+  }
+}

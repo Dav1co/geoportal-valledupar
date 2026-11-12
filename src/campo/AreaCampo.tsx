@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import "../tecnica/tecnica.css";
 import "./campo.css";
 import { apiCampo, avisoDeError, ErrorCampo, type FormularioCampo } from "./apiCampo";
@@ -7,6 +7,9 @@ import { FormatosCampo } from "./formatos/FormatosCampo";
 import { formatosDisponibles } from "./formatos/tipos";
 import { entradasDeCampo, type EntradaId } from "./entradas";
 import { supabase } from "../lib/supabase";
+
+// Revisión de reportes (Paso C): carga diferida. Quien no tiene el permiso de supervisión no descarga este código (ni MapLibre, que viene dentro del mapa).
+const Revision = lazy(() => import("./dashboard/Revision"));
 
 // Sección «Formatos de campo» de la Torre A. Qué puede hacer la persona lo decide el SERVIDOR (ruta formulario); aquí solo se dibuja.
 // Se usa como pantalla completa para quien solo tiene campo (sin mapa ni datos comerciales) y como vista dentro del área Comercial para quien tiene las dos cosas.
@@ -55,7 +58,11 @@ export function AreaCampo({ correo, acta = false }: { correo: string; acta?: boo
     return <FormatosCampo def={def} correo={correo} onVolver={() => setAbierta(null)} />;
   }
 
-  const entradas = entradasDeCampo({ puedeReportar: def.puede.reportar, hayFormatos: formatosDisponibles(def.grupos).length > 0, puedeActa: acta });
+  if (abierta === "revision" && def.puede.supervisar) {
+    return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando la revisión…</p></section></div>}><Revision correo={correo} onVolver={() => setAbierta(null)} /></Suspense>;
+  }
+
+  const entradas = entradasDeCampo({ puedeReportar: def.puede.reportar, hayFormatos: formatosDisponibles(def.grupos).length > 0, puedeActa: acta, puedeSupervisar: def.puede.supervisar });
 
   return (
     <div className="tec-pagina campo-pagina">
@@ -81,7 +88,6 @@ export function AreaCampo({ correo, acta = false }: { correo: string; acta?: boo
             </div>
           ))}
         </div>
-        {def.puede.supervisar && <p className="campo-sub">La revisión de los reportes (lista, mapa y estados) estará disponible próximamente.</p>}
       </section>
     </div>
   );
