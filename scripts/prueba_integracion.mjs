@@ -40,5 +40,24 @@ ok("ReporteGeneral.tsx importa sinFormatosD de ./formatos/tipos", /import \{ sin
 ok("ReporteGeneral.tsx filtra los grupos con sinFormatosD(def.grupos)", /const grupos = useMemo\(\(\) => sinFormatosD\(def\.grupos\)\.filter\(/.test(rg));
 ok("ReporteGeneral.tsx ya no usa def.grupos sin filtrar", (rg.match(/def\.grupos/g) ?? []).length === 1);
 
+// ---- 2. Entradas del área de campo y la entrada del acta (solo con el permiso `acta`) ----
+const E = await import(aUrl(compilar("src/campo/entradas.ts")));
+const ids = (c) => E.entradasDeCampo(c).map((e) => e.id);
+ok("entradas: sin permiso de acta NO aparece la entrada del acta", !ids({ puedeReportar: true, hayFormatos: true, puedeActa: false }).includes("acta"));
+ok("entradas: con permiso de acta SÍ aparece", ids({ puedeReportar: true, hayFormatos: true, puedeActa: true }).includes("acta"));
+ok("entradas: orden reporte general, formatos de actividad, acta", igual(ids({ puedeReportar: true, hayFormatos: true, puedeActa: true }), ["reporte_general", "formatos", "acta"]));
+ok("entradas: sin formatos activos no aparece «Formatos de actividad» (los formatos nacen inactivos)", igual(ids({ puedeReportar: true, hayFormatos: false, puedeActa: false }), ["reporte_general"]));
+ok("entradas: solo permiso de acta y sin formatos: reporte general y acta", igual(ids({ puedeReportar: true, hayFormatos: false, puedeActa: true }), ["reporte_general", "acta"]));
+const act = E.entradasDeCampo({ puedeReportar: true, hayFormatos: false, puedeActa: true }).find((e) => e.id === "acta");
+ok("entradas: la del acta es un MARCADOR (pendiente, no se puede abrir)", act.pendiente === true && act.habilitada === false);
+ok("entradas: el reporte general se deshabilita si el servidor no deja reportar", E.entradasDeCampo({ puedeReportar: false, hayFormatos: true, puedeActa: false }).every((e) => e.habilitada === false));
+ok("entradas: reporte general y formatos se habilitan si puede reportar", E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: false }).every((e) => e.habilitada === true));
+ok("entradas: cada entrada tiene título y descripción en español", E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: true }).every((e) => e.titulo.length > 3 && e.descripcion.length > 10));
+const ac = leer("src/campo/AreaCampo.tsx");
+ok("AreaCampo.tsx usa la lista de entradas y no deja el estado suelto abiertoFormatos", /entradasDeCampo\(/.test(ac) && !/abiertoFormatos/.test(ac));
+ok("AreaCampo.tsx pasa el permiso de acta a la lista (puedeActa: acta)", /puedeActa: acta/.test(ac));
+ok("AreaCampo.tsx ya no lista «Acta de inspección» como «Próximamente» para todos", !/PROXIMAMENTE = \[[^\]]*Acta de inspección/.test(ac));
+ok("AreaCampo.tsx monta FormatosCampo con la definición del servidor", /<FormatosCampo def=\{def\} correo=\{correo\}/.test(ac));
+
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);
