@@ -9,7 +9,7 @@ export type EntradaCampo = {
   descripcion: string;
   /** ¿Se puede abrir ya? Una entrada pendiente se dibuja como «Próximamente» y no hace nada. */
   habilitada: boolean;
-  /** MARCADOR: la pantalla de esta entrada aún no existe (acta de inspección, Paso B de la pantalla). Se quita cuando se construya. */
+  /** MARCADOR: la pantalla de esta entrada aún no existe (hoy solo el tablero del supervisor de actas). Se quita cuando se construya. */
   pendiente?: boolean;
 };
 
@@ -40,7 +40,7 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
   });
   if (c.puedeActa) e.push({
     id: "acta", titulo: "Acta de inspección",
-    descripcion: "Registro digital que acompaña al acta física firmada.", habilitada: false, pendiente: true,
+    descripcion: "Registro digital que acompaña al acta física firmada.", habilitada: true,
   });
   if (c.puedeSupervisarActas) e.push({
     id: "acta_supervision", titulo: "Supervisión de actas",

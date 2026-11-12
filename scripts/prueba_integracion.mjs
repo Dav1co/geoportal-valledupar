@@ -49,7 +49,7 @@ ok("entradas: orden reporte general, formatos de actividad, acta", igual(ids({ p
 ok("entradas: sin formatos activos no aparece «Formatos de actividad» (los formatos nacen inactivos)", igual(ids({ puedeReportar: true, hayFormatos: false, puedeActa: false }), ["reporte_general"]));
 ok("entradas: solo permiso de acta y sin formatos: reporte general y acta", igual(ids({ puedeReportar: true, hayFormatos: false, puedeActa: true }), ["reporte_general", "acta"]));
 const act = E.entradasDeCampo({ puedeReportar: true, hayFormatos: false, puedeActa: true }).find((e) => e.id === "acta");
-ok("entradas: la del acta es un MARCADOR (pendiente, no se puede abrir)", act.pendiente === true && act.habilitada === false);
+ok("entradas: la del acta ya se puede abrir (hay pantalla): habilitada y sin marca de pendiente", act.habilitada === true && !act.pendiente);
 ok("entradas: el reporte general se deshabilita si el servidor no deja reportar", E.entradasDeCampo({ puedeReportar: false, hayFormatos: true, puedeActa: false }).every((e) => e.habilitada === false));
 ok("entradas: reporte general y formatos se habilitan si puede reportar", E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: false }).every((e) => e.habilitada === true));
 ok("entradas: cada entrada tiene título y descripción en español", E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: true }).every((e) => e.titulo.length > 3 && e.descripcion.length > 10));
@@ -95,5 +95,9 @@ ok("App.tsx: las dos pantallas de campo reciben acta, dashboardActa y campo calc
 const ar = leer("src/areas/areas.ts");
 ok("areas.ts: el área de campo cuenta acta y dashboard_acta", /p\.acta === true \|\| p\.dashboard_acta === true/.test(ar));
 
+// ---- 6. La entrada del acta abre la pantalla del acta ----
+const ac3 = leer("src/campo/AreaCampo.tsx");
+ok("AreaCampo.tsx: la entrada del acta monta PantallaActa solo con el permiso de acta", /abierta === "acta" && acta\) \{\s*return <PantallaActa correo=\{correo\}/.test(ac3) && /import \{ PantallaActa \} from "\.\/acta\/PantallaActa";/.test(ac3));
+ok("AreaCampo.tsx: el supervisor de actas sigue siendo un marcador (sin pantalla)", E.entradasDeCampo({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false, puedeSupervisarActas: true }).find((x) => x.id === "acta_supervision")?.pendiente === true);
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);

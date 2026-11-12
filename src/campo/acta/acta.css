@@ -1,0 +1,28 @@
+/* Pantalla del acta de inspección. Se apoya en campo.css y tecnica.css; aquí solo lo propio. Toques de al menos 44 px; nada depende de pasar el cursor. */
+.acta-form { gap: 20px; }
+.acta-seccion { display: flex; flex-direction: column; gap: 14px; border-top: 2px solid #dde5ea; padding-top: 16px; }
+.acta-titulo { margin: 0; font-size: 18px; color: #0a2540; }
+.acta-sub { margin: 6px 0 0; font-size: 16px; }
+.acta-campo { display: flex; flex-direction: column; gap: 6px; }
+.acta-input { width: 100%; box-sizing: border-box; min-height: 48px; font: inherit; font-size: 16px; padding: 8px 12px; border: 1px solid #7b8b99; border-radius: 8px; background: #fff; color: #0a2540; }
+.acta-input:focus-visible, .acta-radio input:focus-visible, .acta-chip:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.acta-input[aria-invalid="true"] { border-color: #b42318; border-width: 2px; }
+.acta-fila { display: flex; gap: 10px; align-items: stretch; }
+.acta-fila .acta-input { flex: 1; min-width: 0; }
+.acta-fila .tec-boton { min-height: 48px; flex: none; }
+.acta-sino { border: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.acta-sino legend { padding: 0; margin-bottom: 6px; }
+.acta-radio { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 6px; font-size: 16px; cursor: pointer; }
+.acta-radio input { width: 24px; height: 24px; accent-color: #0f766e; margin: 0; }
+.acta-consecutivo { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: .5px; color: #0a2540; word-break: break-all; }
+.acta-consecutivo-chico { margin: 0; font-size: 18px; word-break: break-all; }
+.acta-chips { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.acta-chip { min-height: 48px; padding: 8px 14px; }
+.acta-contador { margin: 0; font-size: 15px; }
+.acta-resumen { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 15px; line-height: 1.4; }
+.acta-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.acta-lista-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.acta-tarjeta { display: flex; flex-direction: column; gap: 8px; border: 1px solid #c3ced6; border-radius: 10px; padding: 14px; background: #fff; }
+.acta-tarjeta .tec-boton { min-height: 48px; align-self: flex-start; }
+.acta-ubicacion p { margin: 4px 0; }
+.acta-predio { display: flex; flex-direction: column; gap: 12px; }

@@ -6,6 +6,7 @@ import { ReporteGeneral } from "./ReporteGeneral";
 import { FormatosCampo } from "./formatos/FormatosCampo";
 import { formatosDisponibles } from "./formatos/tipos";
 import { entradasDeCampo, type EntradaId } from "./entradas";
+import { PantallaActa } from "./acta/PantallaActa";
 import { supabase } from "../lib/supabase";
 
 // Sección «Formatos de campo» de la Torre A. Qué puede hacer la persona lo decide el SERVIDOR (ruta formulario); aquí solo se dibuja.
@@ -50,6 +51,9 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   }
   if (campo && !def) return <div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando…</p></section></div>;
 
+  if (abierta === "acta" && acta) {
+    return <PantallaActa correo={correo} onVolver={() => setAbierta(null)} />;
+  }
   if (def && abierta === "reporte_general") {
     return <ReporteGeneral key={version} def={def} correo={correo} onVolver={() => setAbierta(null)} onOtro={() => { setAbierta("reporte_general"); setVersion((v) => v + 1); }} />;
   }
