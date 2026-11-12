@@ -1,20 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "./auth/useSession";
 import { Login } from "./auth/Login";
-import {
-  MapView,
-  type PredioApilado,
-  type FiltroContrato,
-  type FiltroEstado,
-  type Conteo,
-  type BaseMapa,
-  type TerrenoInfo,
-  type ModoMapa,
-  type ConteoComercial,
-  type StatsComercial,
-  type PuntoRutaMap,
-  type FiltroCatastroRuta,
-  type HeatMetrica,
+import type {
+  PredioApilado,
+  FiltroContrato,
+  FiltroEstado,
+  Conteo,
+  BaseMapa,
+  TerrenoInfo,
+  ModoMapa,
+  ConteoComercial,
+  StatsComercial,
+  PuntoRutaMap,
+  FiltroCatastroRuta,
+  HeatMetrica,
 } from "./components/MapView";
 import { PanelIndicadores } from "./components/PanelIndicadores";
 import { Buscador } from "./components/Buscador";
@@ -28,7 +27,9 @@ import { AreaTecnica } from "./tecnica/AreaTecnica";
 import { AreaCampo } from "./campo/AreaCampo";
 import { SinModulos } from "./areas/SinModulos";
 import { PerfilNoDisponible } from "./areas/PerfilNoDisponible";
-import { Dashboard } from "./dashboard/Dashboard";
+// Carga diferida (Paso C): MapLibre pesa unos 217 KB comprimidos y solo lo necesitan el mapa comercial y el Dashboard comercial; quien solo usa Técnica o Formatos de campo no lo descarga.
+const MapView = lazy(() => import("./components/MapView").then((m) => ({ default: m.MapView })));
+const Dashboard = lazy(() => import("./dashboard/Dashboard").then((m) => ({ default: m.Dashboard })));
 import { TrazadorRuta, type EstadoTrazo } from "./components/TrazadorRuta";
 import type { Capturado, PuntoRuta as PuntoTrazo } from "./lib/trazado";
 import { supabase } from "./lib/supabase";
@@ -1386,7 +1387,7 @@ export default function App() {
           </aside>
 
           <main className="visor">
-            {modo === "dashboard" && puedeVerDashboard ? <Dashboard email={email} /> : <>
+            {modo === "dashboard" && puedeVerDashboard ? <Suspense fallback={<div className="pantalla-carga">Cargando…</div>}><Dashboard email={email} /></Suspense> : <>
             {/* Una sola banda: la comercial (si aplica) absorbe el aviso de las redes. */}
             {((modo === "comercial" && !conteoCom.disponible) ||
               ((mostrarRedAcu || mostrarRedAlc) && zoomMapa < 15)) && (
@@ -1410,6 +1411,7 @@ export default function App() {
                 </button>
               </div>
             )}
+            <Suspense fallback={<div className="pantalla-carga">Cargando mapa…</div>}>
             <MapView
               accessToken={session.access_token}
               inicial={URL0?.inicial ?? null}
@@ -1450,6 +1452,7 @@ export default function App() {
               onTrazoCerrar={() => setTrazoEstado("cerrado")}
               getVisiblesRef={getVisiblesRef}
             />
+            </Suspense>
             <Watermark email={email} />
             {modo === "comercial" && (
               <PanelIndicadores
