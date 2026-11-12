@@ -325,7 +325,7 @@ export default function App() {
         ) : pantalla === "tecnica" ? (
           <AreaTecnica uid={session.user.id} correo={email} />
         ) : pantalla === "campo" ? (
-          <AreaCampo correo={email} />
+          <AreaCampo correo={email} acta={perfil?.permisos?.acta === true} />
         ) : (
           <SinModulos />
         )}
@@ -637,7 +637,7 @@ export default function App() {
               {opcionesModo}
             </select>
           </div>
-          <div className="campo-contenedor"><AreaCampo correo={email} /></div>
+          <div className="campo-contenedor"><AreaCampo correo={email} acta={perfil?.permisos?.acta === true} /></div>
         </div>
       ) : (
         <div className="cuerpo">

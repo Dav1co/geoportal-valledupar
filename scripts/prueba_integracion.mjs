@@ -73,5 +73,10 @@ ok("api.ts: UsuarioAdmin trae ver_acta y ver_dashboard_acta (opcionales)", /ver_
 ok("api.ts: permisos() acepta acta y dashboard_acta (opcionales)", /acta\?: boolean;[^\n]*\n\s*dashboard_acta\?: boolean;\s*\}\) =>/.test(api));
 ok("api.ts: el perfil trae las claves acta y dashboard_acta (opcionales)", /acta\?: boolean; dashboard_acta\?: boolean;/.test(api));
 
+// ---- 4. El permiso de acta llega a AreaCampo (App.tsx) ----
+const app = leer("src/App.tsx");
+ok("App.tsx: las dos pantallas de campo reciben acta={perfil?.permisos?.acta === true} (lo decide el servidor)", (app.match(/<AreaCampo correo=\{email\} acta=\{perfil\?\.permisos\?\.acta === true\} \/>/g) ?? []).length === 2);
+ok("App.tsx: no queda ningún AreaCampo sin el permiso", (app.match(/<AreaCampo /g) ?? []).length === 2);
+
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);
