@@ -28,12 +28,18 @@ export type FilaResumen = {
   promedio: number | null; minimo: number | null; maximo: number | null;
 };
 export type ResumenResp = { formulario: string; ventana_horas: number; filas: FilaResumen[] };
+/** Sección opcional «Dosis de coagulante usado» (Entrada). `ppm` es un número (> 0); `otro_nombre` solo con «Otro». */
+export type DosisCuerpo = { coagulante: string; otro_nombre?: string; ppm: number };
 export type RegistrarCuerpo = {
   formulario: string; planta: string | null; hora: string;
   valores: { variable: string; valor: number }[];
   punto?: string | null; clave_envio: string;
+  dosis?: DosisCuerpo;
 };
-export type RegistrarResp = { lote_id: string; formulario: string; fecha_muestra?: string; hora_muestra?: string; guardados: number; duplicado: boolean };
+export type RegistrarResp = { lote_id: string; formulario: string; fecha_muestra?: string; hora_muestra?: string; guardados: number; duplicado: boolean; dosis_guardada?: boolean };
+/** Opciones de la sección de dosis que entrega el servidor (el catálogo manda: aquí no hay nombres de químicos). Lista vacía = el formulario no tiene la sección. */
+export type OpcionQuimico = { codigo: string; nombre: string; pide_nombre: boolean; predeterminado: boolean };
+export type QuimicosResp = { formulario: string; max_ppm: number; max_nombre: number; opciones: OpcionQuimico[] };
 
 /** Cómo debe reaccionar la pantalla. «red»: sin respuesta (el envío puede o no haber llegado: reintentar con la MISMA clave es seguro). «sesion»: el token venció.
  *  «horario»: autorizar() rechazó por horario, día o pausa global. «denegado»: usuario no autorizado. «permiso»: la RPC lo negó (texto fijo). «validacion»: 4xx con mensaje para la persona. «servidor»: 5xx. */
@@ -115,6 +121,7 @@ export const apiTec = {
   misFormularios: () => pedir<MisFormularios>("mis_formularios"),
   formulario: (clave: string) => pedir<FormularioDef>("formulario", { qs: { formulario: clave } }),
   resumen: (clave: string) => pedir<ResumenResp>("resumen", { qs: { formulario: clave } }),
+  quimicos: (clave: string) => pedir<QuimicosResp>("quimicos", { qs: { formulario: clave } }),
   // 30 s: un envío lento en señal débil no debe cortarse antes de tiempo; si se corta, el reintento con la misma clave es seguro.
   registrar: (cuerpo: RegistrarCuerpo) => pedir<RegistrarResp>("registrar", { cuerpo, timeoutMs: 30000 }),
 };

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiDash, textoError, type Catalogo, type FiltrosRegistros, type RegistroFila } from "./apiDashboard";
 import { DescargaCancelada, ejecutarDescarga, guardarArchivo, type Progreso } from "./ejecutarDescarga";
 import { etiquetaMarca, fmtFecha, fmtInstante, fmtMiles, fmtValor, hoyBogota, mayuscula, periodoARango, textoReferencia, type Periodo } from "./formato";
+import { DosisCoagulante, dosisAplica } from "./DosisCoagulante";
 import { supabase } from "../lib/supabase";
 
 // Dashboard técnico · «Registros recientes». Todo sale de datos del servidor (formularios, plantas, puntos, zonas, variables y unidades); nada escrito en el código.
@@ -39,6 +40,7 @@ export function RegistrosRecientes({ catalogo }: { catalogo: Catalogo }) {
   const [progreso, setProgreso] = useState<Progreso | null>(null);
   const [descMsg, setDescMsg] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const cancelar = useRef<AbortController | null>(null);
+  const [recargas, setRecargas] = useState(0);   // cuenta las veces que la lista se refrescó: la tarjeta de dosis se recarga con ella (una exclusión no cambia ni el total ni el último registro)
   const version = useRef(0);                 // descarta respuestas de consultas viejas cuando cambian los filtros
 
   const filtrosServidor = useMemo<FiltrosRegistros>(() => {
@@ -54,7 +56,7 @@ export function RegistrosRecientes({ catalogo }: { catalogo: Catalogo }) {
     try {
       const r = await apiDash.registros(filtrosServidor, { limite: PAGINA });
       if (v !== version.current) return;
-      setFilas(r.registros); setTotal(r.total); setHayNuevos(false); setError(null);
+      setFilas(r.registros); setTotal(r.total); setHayNuevos(false); setError(null); setRecargas((x) => x + 1);
     } catch (e) { if (v === version.current && !silencioso) setError(textoError(e)); }
     finally { if (v === version.current) setCargando(false); }
   }, [filtrosServidor, rangoInvalido]);
@@ -67,7 +69,7 @@ export function RegistrosRecientes({ catalogo }: { catalogo: Catalogo }) {
       if (document.visibilityState === "hidden") return;
       try {
         const r = await apiDash.registros(filtrosServidor, { limite: PAGINA });
-        if (filas.length <= PAGINA) { setFilas(r.registros); setTotal(r.total); setHayNuevos(false); }
+        if (filas.length <= PAGINA) { setFilas(r.registros); setTotal(r.total); setHayNuevos(false); setRecargas((x) => x + 1); }
         else { setTotal(r.total); setHayNuevos((r.registros[0]?.registro_id ?? 0) > (filas[0]?.registro_id ?? 0)); }
       } catch { /* una consulta periódica fallida no molesta: la siguiente lo reintenta */ }
     }, REFRESCO_MS);
@@ -185,7 +187,8 @@ export function RegistrosRecientes({ catalogo }: { catalogo: Catalogo }) {
         </table>
       </div>
       {filas.length < total ? <div className="td-mas"><button type="button" className="td-boton-sec" onClick={cargarMas} disabled={cargandoMas}>{cargandoMas ? "Cargando…" : `Cargar más (${fmtMiles(total - filas.length)} restantes)`}</button></div> : null}
-      <p className="td-pie">Excluir un registro lo saca de las gráficas y del procesamiento, pero no lo borra. Queda quién lo excluyó, cuándo y por qué, y se puede reincluir.</p>
+      {dosisAplica(filtrosServidor) ? <DosisCoagulante filtros={filtrosServidor} senal={String(recargas)} /> : null}
+      <p className="td-pie">Excluir un registro lo saca de las gráficas y del procesamiento, pero no lo borra. Queda quién lo excluyó, cuándo y por qué, y se puede reincluir. Excluir un envío de Entrada excluye también su dosis de coagulante.</p>
 
       {accion ? (
         <DialogoExclusion accion={accion} catalogo={catalogo} filasVisibles={filas.filter((x) => x.lote_id === accion.fila.lote_id).length} nombreForm={nombreForm}

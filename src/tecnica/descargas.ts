@@ -3,7 +3,7 @@ import { etiquetaMarca, etiquetaOrigen, fmtFecha, mayuscula } from "./formato";
 
 // Armado de los archivos de descarga (CSV y Excel) a partir de las filas que entrega geoportal_tec_descarga_pagina. Lógica PURA (se prueba en Node).
 export type FilaDescarga = {
-  registro_id: number; lote_id: string; formulario: string; formulario_nombre: string; variable: string; variable_nombre: string; unidad: string; decimales: number; valor: number;
+  registro_id: number | null; uso_id?: number; lote_id: string; formulario: string; formulario_nombre: string; variable: string; variable_nombre: string; unidad: string; decimales: number; valor: number;
   planta: string | null; planta_nombre: string | null; punto: string | null; punto_nombre: string | null; zona: string | null;
   fecha_muestra: string; hora_muestra: string; registrado_local: string; autor: string; fuente: string; fuera_de_rango: string | null;
   excluido: boolean; exclusion_motivo: string | null; exclusion_autor: string | null; exclusion_local: string | null;
@@ -58,9 +58,10 @@ export function filaXlsx(f: FilaDescarga, serialExcel: (fecha: string, hora?: st
 export function hojaLeame(a: { generadoPor: string; generadoEn: string; filas: number; formato: string; incluirExcluidos: boolean; filtros: string[] }): string[][] {
   return [
     ["Registros de Técnica · Geoportal EMDUPAR", ""],
-    ["Descargado por", a.generadoPor], ["Fecha y hora de la descarga (Bogotá)", a.generadoEn], ["Filas (un valor por fila)", String(a.filas).replace(/\B(?=(\d{3})+(?!\d))/g, ".")], ["Formato", a.formato === "xlsx" ? "Excel (.xlsx)" : "CSV"],
+    ["Descargado por", a.generadoPor], ["Fecha y hora de la descarga (Bogotá)", a.generadoEn], ["Filas de registros (un valor por fila)", String(a.filas).replace(/\B(?=(\d{3})+(?!\d))/g, ".")], ["Formato", a.formato === "xlsx" ? "Excel (.xlsx)" : "CSV"],
     ["Incluye registros excluidos", a.incluirExcluidos ? "Sí (columna «Excluido», con motivo y autor)" : "No"],
     ["Filtros aplicados", a.filtros.length ? a.filtros.join("\n") : "Ninguno (todos los registros)"],
+    ["Dosis de coagulante", "Al final de la hoja van las filas «Dosis de coagulante · …» (formulario Entrada, unidad ppm): una por envío y planta, con la misma fecha y hora del envío. No se cuentan en «Filas de registros». Sus columnas de marca y referencia quedan vacías. Si el envío de Entrada está excluido, su dosis también (columna «Excluido»)."],
     ["", ""],
     ["Marca de referencia", "«Sobre el máximo» o «Bajo el mínimo» avisan, pero no impiden guardar ni ocultan el dato. Se calculan con la referencia VIGENTE al momento de descargar (no con la de cuando se registró). «Origen»: Norma (una resolución) o Criterio de planta (límite operativo de la empresa); la fuente trae la cita. Sin referencia, estas columnas quedan vacías."],
     ["Cómo leerlo", "«Valor» es el número tal como se guardó (no está redondeado). Las fechas y horas están en hora de Bogotá. La fecha de la muestra y la de registro pueden diferir (p. ej. resultados de laboratorio)."],

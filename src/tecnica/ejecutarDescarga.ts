@@ -1,7 +1,7 @@
 import { apiDash, type FiltrosRegistros } from "./apiDashboard";
 import { ANCHOS_XLSX, BOM, ENCABEZADOS, cabeceraCsv, filaCsv, filaXlsx, hojaLeame, nombreArchivo } from "./descargas";
 
-// Orquesta una descarga AUDITADA: iniciar (deja la auditoría y fija los filtros en el servidor) → páginas de 5.000 → armar el archivo en el navegador → cerrar (segunda auditoría).
+// Orquesta una descarga AUDITADA: iniciar (deja la auditoría y fija los filtros en el servidor) → páginas de 5.000 (y luego las de dosis de coagulante) → armar el archivo en el navegador → cerrar (segunda auditoría).
 // El archivo nunca se arma con más filas que el tope que el servidor declara (50.000). Excel se carga bajo demanda (import dinámico).
 export class DescargaCancelada extends Error { constructor() { super("Descarga cancelada."); this.name = "DescargaCancelada"; } }
 export type Progreso = { fase: "preparando" | "descargando" | "armando"; hecho: number; total: number };
@@ -31,8 +31,20 @@ export async function ejecutarDescarga(a: {
       a.onProgreso({ fase: "descargando", hecho: hechas, total: ini.total });
       if (!pag.hay_mas) break;
     }
+    // Después de los registros, las dosis de coagulante de esos mismos envíos (mismo descarga_id y mismos filtros guardados en el servidor): filas con las mismas columnas, al final.
+    let cursorDosis: number | null = null;
+    for (;;) {
+      if (a.senal.aborted) throw new DescargaCancelada();
+      const pag = await apiDash.descargaDosisPagina(ini.descarga_id, cursorDosis, a.tamanoPagina ?? 5000);
+      if (pag.registros.length === 0) break;
+      if (libro && xlsx) await libro.agregarFilas(pag.registros.map((f) => filaXlsx(f, xlsx.serialExcel, xlsx.serialHora)));
+      else for (const f of pag.registros) partes.push(filaCsv(f));
+      hechas += pag.registros.length; cursorDosis = pag.ultimo_id;
+      a.onProgreso({ fase: "descargando", hecho: Math.min(hechas, ini.total), total: ini.total });
+      if (!pag.hay_mas) break;
+    }
     if (a.senal.aborted) throw new DescargaCancelada();
-    a.onProgreso({ fase: "armando", hecho: hechas, total: ini.total });
+    a.onProgreso({ fase: "armando", hecho: Math.min(hechas, ini.total), total: ini.total });
     const blob = libro ? await libro.finalizar() : new Blob(partes, { type: "text/csv;charset=utf-8" });
     await cerrar("completa");
     return { nombre: nombreArchivo(ini.generado_en, a.formato), filas: hechas, blob };

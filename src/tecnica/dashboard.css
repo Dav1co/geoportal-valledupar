@@ -142,3 +142,8 @@
 .te-marca { color: #8f1d14; font-weight: 600; }
 .te-nota { font-style: italic; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 700px) { .tr-aviso .td-boton { width: 100%; } .tg-fig { padding: 10px; } }
+
+/* Tarjeta «Dosis de coagulante» dentro de Registros */
+.td-dosis { margin-top: 16px; border: 1px solid var(--td-borde, #c3ced6); border-radius: 10px; background: #fff; padding: 0 12px 12px; }
+.td-dosis > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 700; color: #0a2540; }
+.td-dosis > summary:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; border-radius: 8px; }

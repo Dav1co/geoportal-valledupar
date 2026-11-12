@@ -32,6 +32,13 @@ export type HistorialResp = { total: number; devueltos: number; eventos: EventoP
 export type CambioResp = { persona: string; formulario?: string; asignado?: boolean; activo?: boolean; cambio: boolean };
 
 export type DescargaIniciada = { descarga_id: number; total: number; max: number; formato: "csv" | "xlsx"; filtros: Record<string, string>; incluir_excluidos: boolean; generado_por: string; generado_en: string };
+/** Dosis de coagulante registrada desde Entrada (una por envío y planta). */
+export type DosisFila = {
+  uso_id: number; lote_id: string; formulario: string; tipo_uso: string; quimico: string; quimico_nombre: string; otro_nombre: string | null; nombre_mostrar: string;
+  dosis: number; unidad: string; planta: string; planta_nombre: string; fecha_muestra: string; hora_muestra: string; registrado_en: string; autor: string;
+  excluido: boolean; exclusion_motivo: string | null; exclusion_autor: string | null; exclusion_en: string | null;
+};
+export type DosisResp = { total: number; devueltos: number; dosis: DosisFila[] };
 export type DescargaPagina = { registros: FilaDescarga[]; devueltos: number; ultimo_id: number | null; hay_mas: boolean };
 
 // ---------- Corte 4: Resumen (avisos y gráficas) y Eventos (valores fuera de referencia con revisión) ----------
@@ -76,6 +83,10 @@ export const apiDash = {
     pedir<DescargaIniciada>("descarga_iniciar", { cuerpo: { filtros: sinVacios({ ...filtros, estado: undefined }), formato, incluir_excluidos: incluirExcluidos } }),
   descargaPagina: (id: number, despuesDe: number | null, limite: number) =>
     pedir<DescargaPagina>("descarga_pagina", { cuerpo: { descarga_id: id, despues_de: despuesDe, limite }, timeoutMs: 60000 }),
+  dosis: (f: FiltrosRegistros, p: { despuesDe?: number | null; limite?: number } = {}) =>
+    pedir<DosisResp>("dosis", { cuerpo: { ...sinVacios(f), ...(p.despuesDe ? { despues_de: p.despuesDe } : {}), limite: p.limite ?? 50 } }),
+  descargaDosisPagina: (id: number, despuesDe: number | null, limite: number) =>
+    pedir<DescargaPagina>("descarga_dosis_pagina", { cuerpo: { descarga_id: id, despues_de: despuesDe, limite }, timeoutMs: 60000 }),
   descargaCerrar: (id: number, filas: number, resultado: "completa" | "cancelada" | "error") => pedir<{ cerrada: boolean }>("descarga_cerrar", { cuerpo: { descarga_id: id, filas, resultado } }),
 };
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { apiTec, ErrorTec, type FormularioDef, type VariableDef } from "./apiTecnica";
+import { apiTec, ErrorTec, type DosisCuerpo, type FormularioDef, type QuimicosResp, type VariableDef } from "./apiTecnica";
 import { comunVigente, guardarBorrador, leerBorrador, nuevaClaveEnvio, type MarcaEnviada } from "./borrador";
 import { decimalesAMostrar, formatearNumero, interpretarNumero } from "./numeros";
 
@@ -21,6 +21,8 @@ const TEXTOS_POR_FORMULARIO: Record<string, TextosBloques> = {
 };
 
 const claveCampo = (v: VariableDef, planta: string | null) => (v.alcance === "por_planta" ? `${v.codigo}@${planta ?? ""}` : v.codigo);
+// Claves del borrador para la dosis de coagulante (por planta). Llevan punto: ningún código de variable puede coincidir (los códigos son [a-z0-9_]).
+const kDosis = (campo: "ppm" | "cod" | "nom", planta: string | null) => `dosis.${campo}@${planta ?? ""}`;
 const dmy = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
 
 type Aviso = { tipo: "ok" | "error" | "info"; texto: string; detalle?: string; accion?: { rotulo: string; hacer: () => void } };
@@ -44,6 +46,15 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
   const [fase, setFase] = useState<"editando" | "confirmando" | "enviando">("editando");
   const [aviso, setAviso] = useState<Aviso | null>(inicial ? { tipo: "info", texto: "Se recuperó lo que había escrito antes en este equipo. Revíselo antes de guardar." } : null);
   const [lineas, setLineas] = useState<Linea[]>([]);
+  // Sección opcional «Dosis de coagulante usado»: las opciones las entrega el servidor; si no llegan, la sección no aparece y el envío normal no se afecta.
+  const [quim, setQuim] = useState<QuimicosResp | null>(null);
+  const [dosisAbierta, setDosisAbierta] = useState<boolean>(() => Object.entries(inicial?.textos ?? {}).some(([k, t]) => k.startsWith("dosis.") && String(t).trim() !== ""));
+  useEffect(() => {
+    let vivo = true;
+    if (porPlanta.length === 0) return;
+    apiTec.quimicos(clave).then((q) => { if (vivo && q.opciones.length > 0) setQuim(q); }).catch(() => { /* sin sección: no estorba al envío */ });
+    return () => { vivo = false; };
+  }, [clave, porPlanta.length]);
 
   const intento = useRef<{ clave: string; huella: string }>({ clave: inicial?.claveEnvio ?? nuevaClaveEnvio(), huella: "" });
   const enviando = useRef(false);
@@ -86,6 +97,16 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
     if (aviso && aviso.tipo !== "info") setAviso(null);
   };
 
+  /** Estado de la dosis para la planta elegida: opción elegida (PAC por omisión), texto de ppm y nombre. «activa» = la persona escribió algo. */
+  const dosisDe = (pl: string | null) => {
+    const opciones = quim?.opciones ?? [];
+    const cod = textos[kDosis("cod", pl)] ?? opciones.find((o) => o.predeterminado)?.codigo ?? "";
+    const op = opciones.find((o) => o.codigo === cod) ?? null;
+    const ppmTxt = textos[kDosis("ppm", pl)] ?? "";
+    const nombre = (textos[kDosis("nom", pl)] ?? "").trim();
+    return { cod, op, ppmTxt, nombre, activa: !!quim && !!op && (ppmTxt.trim() !== "" || (op.pide_nombre && nombre !== "")) };
+  };
+
   /** Revisa lo escrito. Devuelve los errores por campo y las líneas que se confirmarán. Ningún valor se rechaza por su magnitud. */
   function revisar() {
     const err: Record<string, string> = {};
@@ -99,6 +120,18 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
       if (r.tipo === "error") { err[k] = r.motivo; continue; }
       const dec = decimalesAMostrar(v.decimales, r.decimales);
       out.push({ clave: k, etiqueta: v.alcance === "por_planta" ? `${v.nombre} ${nombrePlanta(planta)}` : v.nombre, unidad: v.unidad, texto: formatearNumero(r.valor, dec) });
+    }
+    const d = dosisDe(planta);
+    if (d.activa && d.op && quim) {
+      const kp = kDosis("ppm", planta);
+      const r = interpretarNumero(d.ppmTxt);
+      if (r.tipo === "vacio") err[kp] = "Escriba la cantidad en ppm.";
+      else if (r.tipo === "error") err[kp] = r.motivo;
+      else if (r.valor <= 0) err[kp] = "La cantidad debe ser mayor que cero.";
+      else if (r.valor > quim.max_ppm) err[kp] = `La cantidad no puede pasar de ${formatearNumero(quim.max_ppm, 0)} ppm. Revise el número.`;
+      if (d.op.pide_nombre && d.nombre === "") err[kDosis("nom", planta)] = "Escriba el nombre del otro coagulante.";
+      if (r.tipo === "ok" && !err[kp]) out.push({ clave: "dosis", etiqueta: `Dosis de coagulante · ${d.op.pide_nombre ? `Otro: ${d.nombre}` : d.op.nombre} · ${nombrePlanta(planta)}`, unidad: "ppm", texto: formatearNumero(r.valor, decimalesAMostrar(0, r.decimales)) });
+      if (err[kp] || err[kDosis("nom", planta)]) setDosisAbierta(true);
     }
     if (Object.keys(err).length === 0 && out.length === 0) err["__general"] = "Escriba al menos un valor.";
     return { err, out };
@@ -130,8 +163,14 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
       const r = interpretarNumero(textos[claveCampo(v, planta)] ?? "");
       if (r.tipo === "ok") valores.push({ variable: v.codigo, valor: r.valor });
     }
-    const llevaPlanta = valores.some((x) => porPlanta.some((v) => v.codigo === x.variable));
-    return { formulario: clave, planta: llevaPlanta ? planta : null, hora, valores };
+    const d = dosisDe(planta);
+    let dosis: DosisCuerpo | undefined;
+    if (d.activa && d.op) {
+      const r = interpretarNumero(d.ppmTxt);
+      if (r.tipo === "ok") dosis = { coagulante: d.op.codigo, ...(d.op.pide_nombre ? { otro_nombre: d.nombre } : {}), ppm: r.valor };
+    }
+    const llevaPlanta = dosis !== undefined || valores.some((x) => porPlanta.some((v) => v.codigo === x.variable));      // la dosis es por planta: siempre viaja con ella
+    return { formulario: clave, planta: llevaPlanta ? planta : null, hora, valores, ...(dosis ? { dosis } : {}) };
   }
 
   async function enviar() {
@@ -152,6 +191,7 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
           if (v.alcance === "por_planta") { if (base.planta) delete n[claveCampo(v, base.planta)]; }
           else if (incluyoComun) delete n[v.codigo];
         }
+        if (base.dosis) for (const c of ["ppm", "cod", "nom"] as const) delete n[kDosis(c, base.planta)];
         return n;
       });
       if (incluyoComun) setComunEnviada({ hora: base.hora, ts: Date.now() });
@@ -161,7 +201,7 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
       setAviso({
         tipo: "ok",
         texto: r.duplicado ? "Este registro ya estaba guardado; no se duplicó." : "Registro guardado.",
-        detalle: `${r.guardados} ${r.guardados === 1 ? "valor guardado" : "valores guardados"} · muestra de las ${base.hora}.${otraFecha}`,
+        detalle: `${r.guardados} ${r.guardados === 1 ? "valor guardado" : "valores guardados"}${r.dosis_guardada ? " y la dosis de coagulante" : ""} · muestra de las ${base.hora}.${otraFecha}`,
       });
       setErrores({});
       onGuardado();
@@ -192,6 +232,53 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
         </div>
         {err ? <span id={`tec-e-${k}`} className="tec-error">{err}</span> : null}
       </div>
+    );
+  };
+
+  /** Sección plegable «Dosis de coagulante usado» (opcional, por planta). Opciones del servidor; el coagulante por omisión es el que el servidor marca como predeterminado (PAC). El rótulo del botón es la sigla del catálogo (su código en mayúsculas); «Otro» usa su nombre. */
+  const seccionDosis = () => {
+    if (!quim) return null;
+    const d = dosisDe(planta);
+    const kp = kDosis("ppm", planta), kn = kDosis("nom", planta);
+    const errP = errores[kp], errN = errores[kn];
+    return (
+      <details className="tec-dosis" open={dosisAbierta} onToggle={(e) => setDosisAbierta((e.currentTarget as HTMLDetailsElement).open)}>
+        <summary>
+          <span className="tec-dosis-tit">Dosis de coagulante usado</span>
+          <span className="tec-oblig"> (opcional){d.activa && d.ppmTxt.trim() !== "" ? ` · ${d.ppmTxt.trim()} ppm` : ""}</span>
+        </summary>
+        <div className="tec-dosis-cuerpo">
+          <p className="tec-ayuda">Para {nombrePlanta(planta) || "la planta elegida"}. Déjela vacía si no la va a registrar ahora.</p>
+          <div className="tec-campo">
+            <span className="tec-etiqueta" id="tec-dosis-coag">Coagulante</span>
+            <div className="tec-plantas" role="group" aria-labelledby="tec-dosis-coag">
+              {quim.opciones.map((o) => (
+                <button key={o.codigo} type="button" className="tec-planta" aria-pressed={d.cod === o.codigo} disabled={bloqueado}
+                  onClick={() => cambiar(kDosis("cod", planta), o.codigo)}>{o.pide_nombre ? o.nombre : o.codigo.toUpperCase()}</button>
+              ))}
+            </div>
+            {d.op && !d.op.pide_nombre ? <span className="tec-ayuda">{d.op.nombre}</span> : null}
+          </div>
+          {d.op?.pide_nombre ? (
+            <div className="tec-campo">
+              <label htmlFor={`tec-c-${kn}`}>Nombre del otro coagulante<span className="tec-oblig"> (obligatorio)</span></label>
+              <input id={`tec-c-${kn}`} type="text" autoComplete="off" spellCheck={false} maxLength={quim.max_nombre} value={textos[kn] ?? ""} disabled={bloqueado}
+                aria-invalid={errN ? true : undefined} aria-describedby={errN ? `tec-e-${kn}` : undefined} onChange={(e) => cambiar(kn, e.target.value)} />
+              {errN ? <span id={`tec-e-${kn}`} className="tec-error">{errN}</span> : null}
+            </div>
+          ) : null}
+          <div className="tec-campo">
+            <label htmlFor={`tec-c-${kp}`}>Cantidad</label>
+            <div className="tec-entrada">
+              <input id={`tec-c-${kp}`} type="text" inputMode="decimal" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={12} placeholder="0"
+                value={textos[kp] ?? ""} disabled={bloqueado} aria-invalid={errP ? true : undefined} aria-describedby={errP ? `tec-e-${kp}` : undefined}
+                onChange={(e) => cambiar(kp, e.target.value)} />
+              <span className="tec-unidad">ppm</span>
+            </div>
+            {errP ? <span id={`tec-e-${kp}`} className="tec-error">{errP}</span> : null}
+          </div>
+        </div>
+      </details>
     );
   };
 
@@ -248,6 +335,7 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
                 ))}
               </div>
               {porPlanta.map(campo)}
+              {quim ? seccionDosis() : null}
             </div>
           )}
 

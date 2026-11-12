@@ -91,3 +91,13 @@
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 .tec-pista { flex: 1 1 100%; margin: 0; }
 .tec-elegir { margin: 0; padding: 10px 12px; background: #eef2f5; border: 1px dashed #7b8b99; border-radius: 8px; font-size: 14px; color: #22313f; }
+
+/* Dosis de coagulante usado (Entrada): sección plegable y opcional */
+.tec-dosis { border: 1px solid #c3ced6; border-radius: 10px; background: #fff; }
+.tec-dosis > summary { min-height: 48px; padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; cursor: pointer; font-size: 16px; font-weight: 700; color: #0a2540; list-style: none; }
+.tec-dosis > summary::-webkit-details-marker { display: none; }
+.tec-dosis > summary::before { content: "▸"; font-size: 14px; color: #0f766e; margin-right: 4px; }
+.tec-dosis[open] > summary::before { content: "▾"; }
+.tec-dosis > summary:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; border-radius: 10px; }
+.tec-dosis-cuerpo { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 14px; }
+.tec-etiqueta { font-size: 15px; font-weight: 600; }
