@@ -16,7 +16,8 @@ const Revision = lazy(() => import("./dashboard/Revision"));
 // Se usa como pantalla completa para quien solo tiene campo (sin mapa ni datos comerciales) y como vista dentro del área Comercial para quien tiene las dos cosas.
 // Las pantallas son ENTRADAS de una lista (entradas.ts): reporte general, formatos de actividad (Paso D) y acta de inspección (solo con el permiso `acta`; su pantalla aún no existe).
 // Los formatos «Próximamente» no tienen acción. Esta lista de formatos es de interfaz (no es el catálogo de tipos de reporte, que viene del servidor).
-const PROXIMAMENTE = ["Daños", "Instalación de medidor", "Revisión previa", "SCRR"];
+// «Daños» ya no está: son tipos del Reporte general (daño de red de acueducto y de alcantarillado, tapa de manhole, rejilla de sumidero, daño de obra de terceros); no habrá un formulario aparte.
+const PROXIMAMENTE = ["Instalación de medidor", "Revisión previa", "SCRR"];
 const ROTULO_PERFIL: Record<FormularioCampo["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor de reportes de campo", reportante: "Reporte de campo" };
 
 /** Permisos que decide el servidor (App los toma del perfil). `acta`: puede capturar actas (si no se informa, la entrada del acta no aparece). `campo`: tiene permiso de campo; por omisión sí (como antes).

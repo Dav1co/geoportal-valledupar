@@ -96,6 +96,7 @@ ok("entradas: sin permiso de supervisión no aparece el marcador del tablero", !
 const ac2 = leer("src/campo/AreaCampo.tsx");
 ok("AreaCampo.tsx: sin permiso de campo NO pide el formulario de campo (if (!campo) return)", /if \(!campo\) return;/.test(ac2));
 ok("AreaCampo.tsx: con campo falso no muestra el error de «Sin acceso a Formatos de campo»", /if \(campo && error\)/.test(ac2) && /if \(campo && !def\)/.test(ac2));
+ok("AreaCampo.tsx: «Daños» ya no figura como «Próximamente» (son tipos del Reporte general)", !/PROXIMAMENTE = \[[^\]]*Daños/.test(ac2));
 ok("AreaCampo.tsx: los «Próximamente» generales solo se ven con campo", /campo && PROXIMAMENTE\.map/.test(ac2));
 const app2 = leer("src/App.tsx");
 ok("App.tsx: las dos pantallas de campo reciben acta, dashboardActa y campo calculados del perfil", (app2.match(/dashboardActa=\{perfil\?\.permisos\?\.dashboard_acta === true\} campo=\{esAdmin \|\| perfil\?\.permisos\?\.campo === true \|\| perfil\?\.permisos\?\.dashboard_campo === true\}/g) ?? []).length === 2);
