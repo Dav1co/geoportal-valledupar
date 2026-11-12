@@ -3,6 +3,7 @@ import { apiCampo, avisoDeError, ErrorCampo, type Confirmacion, type FormularioC
 import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara } from "./camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "./ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "./formato";
+import { sinFormatosD } from "./formatos/tipos";
 
 // Formulario del reporte general de campo. Pensado para el celular (380 px), una mano, buen contraste.
 // - Las etiquetas de grupos, tipos y subtipos salen del catálogo que entrega el servidor (nada escrito aquí).
@@ -46,7 +47,8 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro }: { def: Formula
     return () => window.removeEventListener("beforeunload", f);
   }, [fotos, fase]);
 
-  const grupos = useMemo(() => def.grupos.filter((g) => g.activo && g.tipos.some((t) => t.activo)), [def]);
+  // Los formatos del Paso D (campos propios, resultado, consecutivo) los envía «Formatos de actividad», no este formulario: aquí no se ofrecen, aunque el servidor los traiga activos.
+  const grupos = useMemo(() => sinFormatosD(def.grupos).filter((g) => g.activo && g.tipos.some((t) => t.activo)), [def]);
   const tiposDelGrupo = useMemo(() => grupos.find((g) => g.codigo === grupo)?.tipos.filter((t) => t.activo) ?? [], [grupos, grupo]);
   const tipoDef = tiposDelGrupo.find((t) => t.codigo === tipo) ?? null;
   const subtipos = tipoDef?.subtipos.filter((s) => s.activo) ?? [];
