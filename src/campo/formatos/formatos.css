@@ -19,3 +19,10 @@
 .campo-contador-fotos { font-size: 15px; font-weight: 700; }
 .campo-contador-fotos.campo-contador-ok { color: #0f766e; }
 .campo-consecutivo { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: .5px; color: #0a2540; word-break: break-all; }
+
+/* Secciones del formulario (formatos con campos agrupados por «seccion») */
+.campo-seccion { border: 1px solid #c3ced6; border-radius: 8px; margin: 10px 0; padding: 0 12px 8px; }
+.campo-seccion > summary { cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; list-style: none; }
+.campo-seccion > summary::-webkit-details-marker { display: none; }
+.campo-seccion-estado { font-weight: 400; font-size: 0.85em; opacity: 0.8; }
+.campo-seccion-falta { color: #b42318; opacity: 1; font-weight: 600; }

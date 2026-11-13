@@ -145,5 +145,57 @@ ok("formato que no genera resultado no pide efectiva ni inefectiva", L.validarFo
   ok("fotosParaCrear sin etiquetas: la clave etiqueta no aparece", !("etiqueta" in L.fotosParaCrear(sinEtq, new Map([[1, "a"], [2, "b"]]))[0]));
 }
 
+// ===== Acta de revisión o instalación: secciones y campos condicionales (solo pantalla) =====
+{
+  const S1 = "1. Datos básicos", S3 = "3. Estado del medidor", S8 = "8. Irregularidades";
+  const rev = {
+    codigo: "revision_previa", nombre: "Revisión previa", orden: 1, activo: true, exige_texto: false, exige_subtipo: false, tiene_subtipos: false, subtipos: [],
+    fotos_min: 2, fotos_max: 6, requiere_contrato: "si", genera_resultado: true, usa_consecutivo: true, causales: [{ codigo: "nadie_atiende", nombre: "No hay quien atienda" }],
+    campos: [
+      { codigo: "serie_acta", nombre: "Serie del acta física", tipo_dato: "texto", obligatorio: true, maximo: 20, seccion: S1, orden: 101, activo: true },
+      { codigo: "habitantes", nombre: "Habitantes", tipo_dato: "entero", obligatorio: false, minimo: 0, maximo: 99, seccion: S1, orden: 102, activo: true },
+      { codigo: "calib_realizada", nombre: "¿Se realizó la calibración?", tipo_dato: "si_no", obligatorio: false, seccion: S3, orden: 305, activo: true },
+      { codigo: "calib_vol_patron", nombre: "Volumen del patrón", tipo_dato: "decimal", obligatorio: false, minimo: 0, maximo: 100000, unidad: "L", seccion: S3, visible_si: { campo: "calib_realizada", es: true }, orden: 306, activo: true },
+      { codigo: "irr_hay", nombre: "¿Irregularidad?", tipo_dato: "si_no", obligatorio: true, seccion: S8, orden: 801, activo: true },
+      { codigo: "irr_tipos", nombre: "Tipos de irregularidad", tipo_dato: "opciones", obligatorio: false, opciones: [{ codigo: "a", nombre: "A" }, { codigo: "b", nombre: "B" }], seccion: S8, visible_si: { campo: "irr_hay", es: true }, orden: 802, activo: true },
+      { codigo: "tipo_srv", nombre: "Tipo de servicio", tipo_dato: "opcion", obligatorio: false, opciones: [{ codigo: "res", nombre: "Residencial" }, { codigo: "com", nombre: "Comercial" }], seccion: S1, orden: 103, activo: true },
+      { codigo: "detalle_com", nombre: "Detalle comercial", tipo_dato: "texto", obligatorio: false, maximo: 20, seccion: S1, visible_si: { campo: "tipo_srv", es: "com" }, orden: 104, activo: true },
+      { codigo: "viejo", nombre: "Campo apagado", tipo_dato: "texto", obligatorio: true, seccion: S1, orden: 105, activo: false },
+    ],
+    fotos: [{ codigo: "fachada_predio", nombre: "Fachada o predio", obligatoria: true, soporte_inefectiva: true, orden: 1, activo: true }, { codigo: "acta_fisica", nombre: "Acta física firmada", obligatoria: true, soporte_inefectiva: false, orden: 9, activo: true }],
+  };
+  const campo = (c) => rev.campos.find((x) => x.codigo === c);
+  ok("esVisible: sin condición siempre se muestra", L.esVisible(campo("serie_acta"), {}));
+  ok("esVisible: condición sí/no oculta mientras el padre está sin responder", !L.esVisible(campo("calib_vol_patron"), {}) && !L.esVisible(campo("calib_vol_patron"), { calib_realizada: "" }));
+  ok("esVisible: se muestra con «sí» y se oculta con «no»", L.esVisible(campo("calib_vol_patron"), { calib_realizada: "si" }) && !L.esVisible(campo("calib_vol_patron"), { calib_realizada: "no" }));
+  ok("esVisible: condición por código de opción", L.esVisible(campo("detalle_com"), { tipo_srv: "com" }) && !L.esVisible(campo("detalle_com"), { tipo_srv: "res" }));
+  ok("esVisible: condición sobre una lista de opciones", L.esVisible({ ...campo("detalle_com"), visible_si: { campo: "irr_tipos", es: "a" } }, { irr_tipos: ["b", "a"] }) && !L.esVisible({ ...campo("detalle_com"), visible_si: { campo: "irr_tipos", es: "a" } }, { irr_tipos: ["b"] }));
+  ok("camposVisibles: excluye el campo apagado y los ocultos por condición", igual(L.camposVisibles(rev, {}).map((c) => c.codigo), ["serie_acta", "habitantes", "calib_realizada", "irr_hay", "tipo_srv"].sort((a, b) => rev.campos.findIndex((x) => x.codigo === a) - rev.campos.findIndex((x) => x.codigo === b))));
+  const secs = L.agruparSecciones(L.camposVisibles(rev, { calib_realizada: "si", irr_hay: "si", tipo_srv: "com" }));
+  ok("agruparSecciones: consecutivos con el mismo título forman una sección (aquí la 1 se parte porque los campos no son consecutivos en el catálogo)", secs.length >= 3 && secs[0].titulo === S1);
+  const catalogoOrdenado = [...rev.campos].filter((c) => c.activo).sort((a, b) => a.orden - b.orden);
+  const porSec = L.agruparSecciones(catalogoOrdenado);
+  ok("agruparSecciones: con el catálogo en su orden salen 3 secciones, cada una una sola vez", porSec.length === 3 && igual(porSec.map((x) => x.titulo), [S1, S3, S8]) && porSec[0].campos.length === 4);
+  ok("agruparSecciones: sin títulos, una sola sección sin título (formulario plano de siempre)", (() => { const r = L.agruparSecciones(sus.campos); return r.length === 1 && r[0].titulo === null && r[0].campos.length === sus.campos.length; })());
+  ok("agruparSecciones: lista vacía", L.agruparSecciones([]).length === 0);
+  const a1 = L.avanceSeccion(porSec[0].campos, { serie_acta: "A1" }, false);
+  ok("avanceSeccion: respondidos, total y obligatorios que faltan", a1.respondidos === 1 && a1.total === 4 && a1.faltan === 0);
+  ok("avanceSeccion: falta el obligatorio sin responder, y en visita inefectiva no cuenta", L.avanceSeccion(porSec[0].campos, {}, false).faltan === 1 && L.avanceSeccion(porSec[0].campos, {}, true).faltan === 0);
+  const ag = L.aplanarDatos(rev, { serie_acta: "A1", calib_vol_patron: "10,5", calib_realizada: "no", irr_hay: "no", irr_tipos: ["a"] });
+  ok("aplanarDatos: lo digitado en un campo que quedó oculto NO se envía (calibración con «no», tipos de irregularidad con «no»)", igual(ag.datos, { serie_acta: "A1", calib_realizada: false, irr_hay: false }));
+  const ag2 = L.aplanarDatos(rev, { serie_acta: "A1", calib_realizada: "si", calib_vol_patron: "10,5", irr_hay: "si", irr_tipos: ["a", "b"] });
+  ok("aplanarDatos: con la condición cumplida el campo viaja (decimal con coma colombiana)", ag2.datos.calib_vol_patron === 10.5 && igual(ag2.datos.irr_tipos, ["a", "b"]));
+  ok("aplanarDatos: un campo oculto con un valor inválido no produce error", Object.keys(L.aplanarDatos(rev, { calib_realizada: "no", calib_vol_patron: "abc" }).errores).length === 0);
+  ok("aplanarDatos: el mismo valor inválido, ya visible, sí produce error", "calib_vol_patron" in L.aplanarDatos(rev, { calib_realizada: "si", calib_vol_patron: "abc" }).errores);
+  const est = { resultado: "efectivo", causal: "", subtipo: "", descripcion: "", contrato: "123", valores: { serie_acta: "A1", irr_hay: "no" }, etiquetasConFoto: ["fachada_predio", "acta_fisica"], adicionales: 0, tieneUbicacion: true, tienePrecision: true, topeGeneral: 2 };
+  ok("validarFormato: con lo obligatorio y las fotos del papel, no falta nada", L.validarFormato(rev, est).length === 0);
+  ok("validarFormato: sin la foto del acta física falta esa foto", L.validarFormato(rev, { ...est, etiquetasConFoto: ["fachada_predio"] }).some((m) => m.includes("Acta física firmada")));
+  ok("validarFormato: un obligatorio oculto por condición no se exige", L.validarFormato({ ...rev, campos: [...rev.campos, { codigo: "extra", nombre: "Extra", tipo_dato: "texto", obligatorio: true, visible_si: { campo: "irr_hay", es: true }, orden: 900, activo: true }] }, est).length === 0);
+  ok("validarFormato: visita inefectiva con solo la fachada: no se exigen campos ni el papel", L.validarFormato(rev, { ...est, resultado: "inefectivo", causal: "nadie_atiende", valores: {}, etiquetasConFoto: ["fachada_predio"] }).length === 0);
+  ok("marcoIrregularidad: solo con irr_hay = «sí»", L.marcoIrregularidad(rev, { irr_hay: "si" }) && !L.marcoIrregularidad(rev, { irr_hay: "no" }) && !L.marcoIrregularidad(rev, {}));
+  ok("marcoIrregularidad: un formato sin ese campo nunca invita a abrir el acta", !L.marcoIrregularidad(sus, { irr_hay: "si" }));
+  ok("un formato del Paso D sin secciones ni condiciones se comporta igual que antes (mismos campos visibles)", L.camposVisibles(sus, {}).length === T.camposActivos(sus).length);
+}
+
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);

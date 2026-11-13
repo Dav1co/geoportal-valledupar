@@ -17,10 +17,11 @@ import type { ConfirmacionActa, FilaMisActas, FormularioActa as Catalogo, MisAct
 
 type Vista = { v: "lista" } | { v: "identificar" } | { v: "formulario"; id: string } | { v: "papel"; fila: FilaMisActas } | { v: "confirmado"; conf: ConfirmacionActa; papelPendiente: boolean };
 
-export function PantallaActa({ correo, onVolver }: { correo: string; onVolver: () => void }) {
+/** `contratoInicial`: contrato que llega desde un formato de actividad (revisión con irregularidad). Si viene, se abre directo «Nueva acta» con el contrato escrito; la persona sigue pulsando «Verificar». */
+export function PantallaActa({ correo, onVolver, contratoInicial = "" }: { correo: string; onVolver: () => void; contratoInicial?: string }) {
   almacenActa.alAcceder(correo);
   const { entradas } = useAlmacenActa();
-  const [vista, setVista] = useState<Vista>({ v: "lista" });
+  const [vista, setVista] = useState<Vista>(contratoInicial ? { v: "identificar" } : { v: "lista" });
   const [cat, setCat] = useState<Catalogo | null>(null);
   const [lista, setLista] = useState<MisActas | null>(null);
   const [error, setError] = useState<ErrorCampo | null>(null);
@@ -55,7 +56,7 @@ export function PantallaActa({ correo, onVolver }: { correo: string; onVolver: (
   if (cargando && (!cat || !lista)) return <div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando…</p></section></div>;
   if (!cat || !lista) return null;
 
-  if (vista.v === "identificar") return <Identificar cat={cat} correo={correo} onCancelar={aLista} onAbierta={(id) => setVista({ v: "formulario", id })} onRevisar={aLista} />;
+  if (vista.v === "identificar") return <Identificar cat={cat} correo={correo} contratoInicial={contratoInicial} onCancelar={aLista} onAbierta={(id) => setVista({ v: "formulario", id })} onRevisar={aLista} />;
   if (vista.v === "formulario") {
     return <FormularioActa cat={cat} actaId={vista.id} correo={correo} onVolver={aLista}
       onRegistrado={(conf) => { const pend = almacenActa.obtener(vista.id)?.borrador.papelPendiente ?? false; almacenActa.quitar(vista.id); setVista({ v: "confirmado", conf, papelPendiente: pend }); }} />;
@@ -108,9 +109,9 @@ export function PantallaActa({ correo, onVolver }: { correo: string; onVolver: (
 }
 
 // ======================= Paso 1: identificar el predio y abrir =======================
-function Identificar({ cat, correo, onCancelar, onAbierta, onRevisar }: { cat: Catalogo; correo: string; onCancelar: () => void; onAbierta: (id: string) => void; onRevisar: () => void }) {
+function Identificar({ cat, correo, contratoInicial = "", onCancelar, onAbierta, onRevisar }: { cat: Catalogo; correo: string; contratoInicial?: string; onCancelar: () => void; onAbierta: (id: string) => void; onRevisar: () => void }) {
   const [modo, setModo] = useState<"con_contrato" | "sin_contrato">("con_contrato");
-  const [contrato, setContrato] = useState("");
+  const [contrato, setContrato] = useState(contratoInicial);
   const [precarga, setPrecarga] = useState<Precarga | null>(null);
   const [verificado, setVerificado] = useState<string | null>(null);
   const [abriendo, setAbriendo] = useState(false);

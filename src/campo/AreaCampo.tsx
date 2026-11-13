@@ -17,7 +17,7 @@ const Revision = lazy(() => import("./dashboard/Revision"));
 // Las pantallas son ENTRADAS de una lista (entradas.ts): reporte general, formatos de actividad (Paso D) y acta de inspección (solo con el permiso `acta`; su pantalla aún no existe).
 // Los formatos «Próximamente» no tienen acción. Esta lista de formatos es de interfaz (no es el catálogo de tipos de reporte, que viene del servidor).
 // «Daños» ya no está: son tipos del Reporte general (daño de red de acueducto y de alcantarillado, tapa de manhole, rejilla de sumidero, daño de obra de terceros); no habrá un formulario aparte.
-const PROXIMAMENTE = ["Instalación de medidor", "Revisión previa", "SCRR"];
+const PROXIMAMENTE = ["SCRR"];   // «Instalación de medidor» y «Revisión previa» ya son formatos de actividad (Acta de revisión o instalación); se quitaron de aquí
 const ROTULO_PERFIL: Record<FormularioCampo["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor de reportes de campo", reportante: "Reporte de campo" };
 
 /** Permisos que decide el servidor (App los toma del perfil). `acta`: puede capturar actas (si no se informa, la entrada del acta no aparece). `campo`: tiene permiso de campo; por omisión sí (como antes).
@@ -27,6 +27,7 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   const [error, setError] = useState<ErrorCampo | null>(null);
   const [intento, setIntento] = useState(0);
   const [abierta, setAbierta] = useState<EntradaId | null>(null);   // pantalla abierta (null = la lista de entradas)
+  const [contratoActa, setContratoActa] = useState("");   // contrato con que se abre el acta de inspección desde un formato (vacío = abrir sin precargar)
   const [version, setVersion] = useState(0);        // sube con cada «Hacer otro reporte»: el formulario nace limpio y se vuelve a leer la definición
 
   useEffect(() => {
@@ -56,13 +57,13 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   if (campo && !def) return <div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando…</p></section></div>;
 
   if (abierta === "acta" && acta) {
-    return <PantallaActa correo={correo} onVolver={() => setAbierta(null)} />;
+    return <PantallaActa correo={correo} contratoInicial={contratoActa} onVolver={() => { setContratoActa(""); setAbierta(null); }} />;
   }
   if (def && abierta === "reporte_general") {
     return <ReporteGeneral key={version} def={def} correo={correo} onVolver={() => setAbierta(null)} onOtro={() => { setAbierta("reporte_general"); setVersion((v) => v + 1); }} />;
   }
   if (def && abierta === "formatos") {
-    return <FormatosCampo def={def} correo={correo} onVolver={() => setAbierta(null)} />;
+    return <FormatosCampo def={def} correo={correo} onVolver={() => setAbierta(null)} puedeActa={acta} onAbrirActa={(c) => { setContratoActa(c); setAbierta("acta"); }} />;
   }
 
   if (abierta === "revision" && def?.puede.supervisar) {

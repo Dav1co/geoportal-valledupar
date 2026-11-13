@@ -5,9 +5,13 @@ import type { Grupo, Tipo } from "../apiCampo";
 
 export type TipoDato = "texto" | "entero" | "decimal" | "si_no" | "opcion" | "opciones" | "dia_hora";
 export type OpcionCampo = { codigo: string; nombre: string; activo?: boolean };
+/** Condición de pantalla: el campo se muestra solo si el campo `campo` (del mismo formato) vale `es` (true/false para sí-no; un código para una opción). La base NO la verifica. */
+export type VisibleSi = { campo: string; es: boolean | string };
 export type CampoDef = {
   codigo: string; nombre: string; tipo_dato: TipoDato; obligatorio: boolean; opciones?: OpcionCampo[];
   minimo?: number; maximo?: number; unidad?: string; ayuda?: string; sensible?: boolean; orden?: number; activo?: boolean;
+  /** Título de la sección en pantalla (los campos consecutivos con el mismo título forman una sección). Ausente = sin sección (el formulario se pinta plano, como siempre). */
+  seccion?: string; visible_si?: VisibleSi;
 };
 export type FotoDef = { codigo: string; nombre: string; obligatoria: boolean; soporte_inefectiva: boolean; orden: number; activo: boolean };
 export type Causal = { codigo: string; nombre: string };

@@ -1,5 +1,8 @@
 import { camposActivos, ETIQUETA_ADICIONAL, etiquetasActivas, type CampoDef, type Resultado, type TipoFormato } from "./tipos";
 
+// Campo del catálogo que dispara la invitación a abrir el acta de inspección técnica («¿se encontró irregularidad?»). Convención del formato «Acta de revisión o instalación».
+export const CAMPO_ENLACE_ACTA = "irr_hay";
+
 // Lógica PURA del formulario de formatos (sin React, sin red): se prueba sola con scripts/prueba_formatos.mjs.
 // Espeja las reglas de la base (campo.f_validar_datos y geoportal_campo_crear_reporte) para avisar ANTES de enviar; la base vuelve a validar todo y manda.
 
@@ -62,11 +65,46 @@ export function leerCampo(c: CampoDef, v: string | string[] | undefined): Lectur
   }
 }
 
+/** ¿Se muestra el campo con lo digitado hasta ahora? Sin condición, siempre. Un campo cuyo «padre» está sin responder se oculta. */
+export function esVisible(c: CampoDef, valores: ValoresCampos): boolean {
+  const cond = c.visible_si;
+  if (!cond) return true;
+  const padre = valores[cond.campo];
+  if (typeof cond.es === "boolean") return padre === (cond.es ? "si" : "no");
+  return Array.isArray(padre) ? padre.includes(cond.es) : padre === cond.es;
+}
+/** Campos activos que se muestran (y por tanto se validan y se envían). Los ocultos por condición se ignoran por completo: no se envían aunque tengan algo digitado. */
+export const camposVisibles = (t: TipoFormato, valores: ValoresCampos): CampoDef[] => camposActivos(t).filter((c) => esVisible(c, valores));
+
+export type SeccionCampos = { titulo: string | null; campos: CampoDef[] };
+/** Agrupa los campos (ya en el orden del catálogo) en secciones: los consecutivos con el mismo título forman una. Sin títulos: una sola sección sin título (formulario plano, como siempre). */
+export function agruparSecciones(campos: CampoDef[]): SeccionCampos[] {
+  const salida: SeccionCampos[] = [];
+  for (const c of campos) {
+    const t = c.seccion?.trim() || null;
+    const ult = salida[salida.length - 1];
+    if (ult && ult.titulo === t) ult.campos.push(c); else salida.push({ titulo: t, campos: [c] });
+  }
+  return salida;
+}
+/** Avance de una sección: campos visibles con respuesta, total y obligatorios que faltan (la visita inefectiva no exige obligatorios). */
+export function avanceSeccion(campos: CampoDef[], valores: ValoresCampos, inefectivo: boolean): { respondidos: number; total: number; faltan: number } {
+  let respondidos = 0, faltan = 0;
+  for (const c of campos) {
+    const r = leerCampo(c, valores[c.codigo]);
+    const lleno = !("error" in r) && !r.vacio;
+    if (lleno) respondidos++; else if (c.obligatorio && !inefectivo) faltan++;
+  }
+  return { respondidos, total: campos.length, faltan };
+}
+/** ¿Marcó irregularidad? (invita a abrir el acta de inspección técnica sobre el mismo contrato). */
+export const marcoIrregularidad = (t: TipoFormato, valores: ValoresCampos): boolean => camposActivos(t).some((c) => c.codigo === CAMPO_ENLACE_ACTA) && valores[CAMPO_ENLACE_ACTA] === "si";
+
 /** Aplana lo digitado al objeto `datos` que recibe la Edge: solo los campos con valor (los vacíos no se envían), con la clave `codigo`. Errores por campo. */
 export function aplanarDatos(t: TipoFormato, valores: ValoresCampos): { datos: Record<string, unknown> | null; errores: Record<string, string> } {
   const datos: Record<string, unknown> = {};
   const errores: Record<string, string> = {};
-  for (const c of camposActivos(t)) {
+  for (const c of camposVisibles(t, valores)) {
     const r = leerCampo(c, valores[c.codigo]);
     if ("error" in r) errores[c.codigo] = r.error;
     else if (!r.vacio) datos[c.codigo] = r.valor;
@@ -110,7 +148,7 @@ export function validarFormato(t: TipoFormato, e: EstadoFormato): string[] {
   if (t.requiere_contrato === "si" && !e.contrato.trim()) f.push("Este formato necesita el número de contrato.");
 
   // Campos propios: lo digitado siempre se valida; los obligatorios solo se exigen si la visita NO es inefectiva.
-  for (const c of camposActivos(t)) {
+  for (const c of camposVisibles(t, e.valores)) {
     const r = leerCampo(c, e.valores[c.codigo]);
     if ("error" in r) f.push(r.error);
     else if (r.vacio && c.obligatorio && !inefectivo) f.push(`Falta «${c.nombre}».`);

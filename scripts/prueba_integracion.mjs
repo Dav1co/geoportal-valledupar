@@ -107,5 +107,12 @@ ok("areas.ts: el área de campo cuenta acta y dashboard_acta", /p\.acta === true
 const ac3 = leer("src/campo/AreaCampo.tsx");
 ok("AreaCampo.tsx: la entrada del acta monta PantallaActa solo con el permiso de acta", /abierta === "acta" && acta\) \{\s*return <PantallaActa correo=\{correo\}/.test(ac3) && /import \{ PantallaActa \} from "\.\/acta\/PantallaActa";/.test(ac3));
 ok("AreaCampo.tsx: el supervisor de actas sigue siendo un marcador (sin pantalla)", E.entradasDeCampo({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false, puedeSupervisarActas: true }).find((x) => x.id === "acta_supervision")?.pendiente === true);
+// ===== Acta de revisión o instalación: lista «Próximamente» y enlace al acta de inspección =====
+const ac4 = leer("src/campo/AreaCampo.tsx"), pa4 = leer("src/campo/acta/PantallaActa.tsx"), ff4 = leer("src/campo/formatos/FormularioFormato.tsx"), fc4 = leer("src/campo/formatos/FormatosCampo.tsx");
+ok("«Próximamente» solo conserva SCRR (Instalación de medidor y Revisión previa ya son formatos de actividad)", /const PROXIMAMENTE = \["SCRR"\];/.test(ac4) && !/PROXIMAMENTE = \[[^\]]*(Instalación de medidor|Revisión previa)/.test(ac4));
+ok("el enlace al acta pasa el permiso de acta y el contrato: AreaCampo → FormatosCampo → FormularioFormato", /puedeActa=\{acta\} onAbrirActa=/.test(ac4) && /puedeActa=\{puedeActa\} onAbrirActa=\{onAbrirActa\}/.test(fc4) && /puedeActa = false, onAbrirActa/.test(ff4));
+ok("AreaCampo abre el acta con el contrato precargado (contratoInicial) y lo limpia al volver", /contratoInicial=\{contratoActa\}/.test(ac4) && /setContratoActa\(""\)/.test(ac4));
+ok("PantallaActa acepta contratoInicial: abre «Nueva acta» con el contrato escrito y NO verifica sola (sigue el botón Verificar)", /contratoInicial\?: string/.test(pa4) && /useState\(contratoInicial\)/.test(pa4) && !/verificar\(\)[^\n]*contratoInicial/.test(pa4));
+ok("el enlace aparece solo después de guardar (en la confirmación) y solo con irregularidad, permiso de acta y contrato: las fotos viven en memoria y no se pierden", /setInvitarActa\(marcoIrr && puedeActa && onAbrirActa/.test(ff4) && /\{invitarActa && \(/.test(ff4));
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);

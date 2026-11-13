@@ -47,7 +47,7 @@ export async function ejecutarDescarga(a: {
     let cursor: number | null = null;
     for (;;) {
       if (a.senal.aborted) throw new DescargaCancelada();
-      const pag = await apiRev.descargaPagina(ini.descarga_id, cursor, a.tamanoPagina ?? 5000);
+      const pag = await apiRev.descargaPagina(ini.descarga_id, cursor, a.tamanoPagina ?? 1000);
       if (pag.registros.length === 0) break;
       const filas = pag.registros.map(filaDeDescarga);
       if (libro) {
