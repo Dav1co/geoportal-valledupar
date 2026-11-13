@@ -28,12 +28,14 @@ export type TipoFormato = Tipo & {
 export const ETIQUETA_ADICIONAL = "adicional";
 
 /** Respuesta de «crear» con el consecutivo del Paso D (nulo en los tipos que no lo llevan). */
-export type ConfirmacionFormato = { id: string; registrado_en: string; repetido: boolean; contrato_verificado: boolean | null; aviso_zona: boolean; consecutivo: string | null };
+export type ConfirmacionFormato = { id: string; registrado_en: string; repetido: boolean; contrato_verificado: boolean | null; aviso_zona: boolean; consecutivo: string | null; constancia?: string };
 export type CuerpoCrearFormato = {
   reporte_id: string; tipo: string; subtipo?: string | null; descripcion?: string | null; contrato?: string | null;
   lat: number; lon: number; precision_m?: number | null; riesgo_inmediato: boolean; origen: "campo" | "escritorio";
   fotos: { orden: number; ruta: string; etiqueta?: string }[];
   datos?: Record<string, unknown> | null; resultado?: Resultado | null; causal?: string | null; orden_trabajo_id?: string | null;
+  /** Constancia por correo (opcional; solo en los 4 formatos del acta de revisión o instalación). */
+  constancia?: import("../constancia/logica").BloqueConstancia;
 };
 
 const lista = <T,>(v: T[] | undefined): T[] => (Array.isArray(v) ? v : []);

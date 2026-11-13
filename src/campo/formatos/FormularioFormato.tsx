@@ -7,6 +7,8 @@ import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara 
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "../ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
 import { apiFormatos } from "./apiFormatos";
+import { SeccionConstancia } from "../constancia/SeccionConstancia";
+import { useConstancia } from "../constancia/useConstancia";
 import { agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
 import { etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
 
@@ -51,6 +53,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const ubic = useUbicacion();
   const prep = useRef<Preparacion | null>(null);
   const enviando = useRef(false);
+  const cons = useConstancia(tipo.codigo);     // «Constancia por correo»: solo en los 4 formatos del acta de revisión o instalación y si el documento está habilitado
   const refEtq = useRef(porEtiqueta); refEtq.current = porEtiqueta;
   const refAdic = useRef(adicionales); refAdic.current = adicionales;
 
@@ -77,12 +80,13 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const maxDesc = maxDescripcion(def.limites);   // un solo tope: el de la base (limites.max_descripcion)
   const minimo = minimoFotos(tipo, resultado);
   const maximo = maximoFotos(tipo, tope);
-  const faltas = validarFormato(tipo, {
+  const faltasFormato = validarFormato(tipo, {
     resultado, causal, subtipo, descripcion, contrato, valores,
     etiquetasConFoto: etiquetas.filter((e) => porEtiqueta[e.codigo]).map((e) => e.codigo),
     // Sin etiquetas en el catálogo, todas las fotos van en «adicionales» (sin etiqueta): cuentan igual.
     adicionales: adicionales.length, tieneUbicacion: !!fix, tienePrecision: !!fix && Number.isFinite(fix.precision_m), topeGeneral: tope,
   });
+  const faltas = [...faltasFormato, ...cons.faltas];
   const { errores } = aplanarDatos(tipo, valores);
   const visibles = useMemo(() => camposVisibles(tipo, valores), [tipo, valores]);
   const secciones = useMemo(() => agruparSecciones(visibles), [visibles]);
@@ -141,6 +145,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         lat: Number(fix.lat.toFixed(6)), lon: Number(fix.lon.toFixed(6)), precision_m: Math.round(fix.precision_m * 10) / 10, riesgo_inmediato: false, origen: "campo",
         fotos: fotosParaCrear(ordenadas, rutas),
         datos, resultado: tipo.genera_resultado ? (resultado || null) : null, causal: inefectivo ? causal : null,
+        ...(cons.bloque ? { constancia: cons.bloque } : {}),
       });
       soltarTodo();
       setInvitarActa(marcoIrr && puedeActa && onAbrirActa && tipo.requiere_contrato !== "no" && contrato ? { contrato } : null);
@@ -335,6 +340,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
           <p className="campo-sub">Las fotos se toman con la cámara y quedan solo en la memoria de esta pantalla: no se guardan en el celular ni en la galería.</p>
         </div>
 
+        <SeccionConstancia config={cons.config} valor={cons.valor} onCambio={cons.setValor} bloqueado={bloqueado} />
+
         {/* Automáticos */}
         <dl className="campo-auto">
           <div>
@@ -350,7 +357,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         {ubic.mensaje && <p className="campo-error" role="alert">{ubic.mensaje}</p>}
         {precisionMala && <p className="campo-nota" role="note">La ubicación es poco precisa (más de {UMBRAL_PRECISION_MALA_M} m). Espere unos segundos o salga a cielo abierto y pulse «Actualizar ubicación».{inefectivo ? " En una visita inefectiva la precisión queda registrada como prueba." : " Puede enviar igualmente."}</p>}
 
-        {faltas.length > 0 && fase === "editando" && hayInterac && <ul className="campo-faltas">{faltas.map((m) => <li key={m}>{m}</li>)}</ul>}
+        {faltasFormato.length > 0 && fase === "editando" && hayInterac && <ul className="campo-faltas">{faltasFormato.map((m) => <li key={m}>{m}</li>)}</ul>}
+        {cons.faltas.length > 0 && fase === "editando" && <ul className="campo-faltas">{cons.faltas.map((m) => <li key={m}>{m}</li>)}</ul>}
         {sinSenal && <p className="campo-error" role="alert">No hay señal en este momento. Sus datos y fotos siguen aquí; envíe cuando recupere la conexión.</p>}
         {fase === "error" && aviso && <p className="campo-error" role="alert">{aviso.texto}</p>}
         {fase === "error" && errorEnvio?.tipo === "sesion" ? null : (

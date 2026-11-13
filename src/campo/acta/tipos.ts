@@ -32,7 +32,7 @@ export type Apertura = { acta_id: string; consecutivo: string; abierto_en: strin
 
 export type FotoPreparadaActa = { orden: number; tipo: string; url_subida: string; token: string };
 export type PreparacionActa = { acta_id: string; fotos: FotoPreparadaActa[] };
-export type ConfirmacionActa = { acta_id: string; consecutivo: string; version: number; registrado_en: string; repetido: boolean; aviso_zona: boolean };
+export type ConfirmacionActa = { acta_id: string; consecutivo: string; version: number; registrado_en: string; repetido: boolean; aviso_zona: boolean; constancia?: string };
 
 export type SituacionActa = "abierta_en_curso" | "abierta_vencida" | "registrada";
 /** Una fila de «mis actas»: SOLO las que abrió quien consulta. Sin rutas, coordenadas ni nombres. */
