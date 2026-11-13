@@ -1,5 +1,6 @@
 import { supabase, FUNCTIONS_URL } from "../../lib/supabase";
 import { clasificar, ErrorCampo } from "../apiCampo";
+import type { BloqueConstancia } from "../constancia/logica";
 import type { Apertura, ConfirmacionActa, FormularioActa, MisActas, PrediosCercanos, PreparacionActa, Precarga } from "./tipos";
 
 // Cliente de la Edge `geoportal-acta` para la pantalla del acta (mismo estilo que apiFormatos.ts; reutiliza ErrorCampo y clasificar de apiCampo.ts, que no se tocan).
@@ -64,7 +65,7 @@ export const apiActa = {
   /** Rutas firmadas de subida: órdenes contiguos, una sola llamada con todas las fotos. La ruta no llega al navegador. */
   prepararSubida: (acta_id: string, fotos: { orden: number; tipo: string }[]) => pedir<PreparacionActa>("preparar_subida", { metodo: "POST", cuerpo: { acta_id, fotos } }),
   /** Registra (una transacción). Repetir con el mismo acta_id devuelve `repetido: true` con el mismo consecutivo. */
-  registrar: (acta_id: string, contenido: Record<string, unknown>) => pedir<ConfirmacionActa>("registrar", { metodo: "POST", cuerpo: { acta_id, contenido }, timeoutMs: 60000 }),
+  registrar: (acta_id: string, contenido: Record<string, unknown>, constancia?: BloqueConstancia) => pedir<ConfirmacionActa>("registrar", { metodo: "POST", cuerpo: { acta_id, contenido, ...(constancia ? { constancia } : {}) }, timeoutMs: 60000 }),
   /** Foto del papel DESPUÉS del registro (`papel_pendiente`): la foto ya debe estar subida a la ruta preparada. Solo el autor; repetida → 409 «ya existe». */
   fotoPapel: (acta_id: string, orden: number) => pedir<{ acta_id: string; orden: number }>("foto_papel", { metodo: "POST", cuerpo: { acta_id, orden }, timeoutMs: 60000 }),
   /** SOLO las actas que abrió quien consulta (retomar una apertura, adjuntar el papel). */

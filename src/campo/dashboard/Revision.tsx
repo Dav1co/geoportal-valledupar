@@ -5,6 +5,7 @@ import { Reportes } from "./Reportes";
 import { Indicadores } from "./Indicadores";
 import { Parametros } from "./Parametros";
 import { Catalogo } from "./Catalogo";
+import { ConstanciasAdmin } from "../constancia/ConstanciasAdmin";
 import { supabase } from "../../lib/supabase";
 
 // «Revisión de reportes» (Paso C): pantalla del supervisor y del administrador de Formatos de campo. Se carga bajo demanda (React.lazy desde AreaCampo): quien no tiene el permiso no descarga este código.
@@ -54,7 +55,7 @@ export default function Revision({ correo, onVolver }: { correo: string; onVolve
           : !supervisa ? <div className="rv-aviso rv-aviso-error" role="alert">Su cuenta no tiene permiso para revisar reportes.</div>
           : seccion === "reportes" ? <Reportes def={def} />
           : seccion === "indicadores" ? <Indicadores def={def} />
-          : seccion === "catalogo" && admin ? <Catalogo alCambiar={() => void cargar(false)} />
+          : seccion === "catalogo" && admin ? <><Catalogo alCambiar={() => void cargar(false)} /><ConstanciasAdmin /></>
           : seccion === "parametros" && admin ? <Parametros def={def} alCambiar={() => void cargar(false)} />
           : null}
       </div>
