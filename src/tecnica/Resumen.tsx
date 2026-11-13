@@ -3,6 +3,7 @@ import { apiDash, textoError, type Catalogo, type FueraFila, type FueraResp, typ
 import { GraficaSerie, lugarDeSerie, textoRef } from "./GraficaSerie";
 import { etiquetaMarca, fmtFecha, fmtMiles, fmtValor, hoyBogota, periodoARango, textoReferencia } from "./formato";
 import { supabase } from "../lib/supabase";
+import { AvisoTurbiedad, ConfigAvisoTurbiedad } from "./AvisoTurbiedad";
 
 // Dashboard técnico · «Resumen»: AVISOS (valores vigentes fuera de referencia, sin revisar, de los últimos 7 días) y GRÁFICAS de las variables de Entrada y Salida (una por variable y lugar).
 // Todo sale de datos del servidor; ningún nombre de variable, planta o punto está escrito en el código. Solo supervisor y administrador (el servidor lo verifica en cada ruta).
@@ -32,6 +33,7 @@ export function Resumen({ catalogo }: { catalogo: Catalogo }) {
   const [revisando, setRevisando] = useState<number | null>(null);
   const [msg, setMsg] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const v = useRef(0);
+  const [versionAviso, setVersionAviso] = useState(0);
 
   const cargarAvisos = useCallback(async () => {
     try {
@@ -85,6 +87,10 @@ export function Resumen({ catalogo }: { catalogo: Catalogo }) {
           <button type="button" className="td-boton-sec td-corto" onClick={() => void cargar()} disabled={cargando}>{cargando ? "Cargando…" : "Actualizar ahora"}</button>
         </div>
       </div>
+
+      {/* ---------- Aviso de turbiedad alta (solo supervisor; apagado mientras no haya umbral) y su configuración ---------- */}
+      <AvisoTurbiedad version={versionAviso} />
+      <ConfigAvisoTurbiedad onCambio={() => setVersionAviso((x) => x + 1)} />
 
       {/* ---------- Avisos ---------- */}
       <section className="tr-avisos" aria-labelledby="tr-avisos-tit">
