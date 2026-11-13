@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prueba:mapa": "node scripts/prueba_mapa_chrome.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
