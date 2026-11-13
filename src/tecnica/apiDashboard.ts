@@ -62,6 +62,16 @@ export type Serie = {
 };
 export type SeriesResp = { desde: string; hasta: string; dias: number; max_puntos: number; series: Serie[] };
 
+// ---------- Aviso de turbiedad alta (solo supervisor y administrador) ----------
+export type AvisoTurbiedadFila = {
+  planta: string; planta_nombre: string; variable: string; valor: number; umbral: number; unidad: string; decimales: number; fecha_muestra: string; hora_muestra: string; muestra: string;
+};
+export type AvisosTurbiedadResp = { umbrales_activos: number; vigencia_horas: number; avisos: AvisoTurbiedadFila[] };
+export type UmbralPlanta = { planta: string; planta_nombre: string; umbral: number | null; activo: boolean; desde: string | null; fijado_por: string | null; motivo: string | null; tope: number };
+export type UmbralHistorial = { planta: string; planta_nombre: string; umbral: number; activo: boolean; creado_en: string; creado_por: string; motivo: string | null; desactivado_en: string | null; desactivado_por: string | null; motivo_cierre: string | null };
+export type UmbralesResp = { variable: string; unidad: string; plantas: UmbralPlanta[]; historial: UmbralHistorial[] };
+export type FijarUmbralResp = { planta: string; umbral: number | null; activo: boolean; id: number | null };
+
 const sinVacios = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== "")) as Partial<T>;
 
 export const apiDash = {
@@ -87,6 +97,9 @@ export const apiDash = {
     pedir<DosisResp>("dosis", { cuerpo: { ...sinVacios(f), ...(p.despuesDe ? { despues_de: p.despuesDe } : {}), limite: p.limite ?? 50 } }),
   descargaDosisPagina: (id: number, despuesDe: number | null, limite: number) =>
     pedir<DescargaPagina>("descarga_dosis_pagina", { cuerpo: { descarga_id: id, despues_de: despuesDe, limite }, timeoutMs: 60000 }),
+  avisosTurbiedad: () => pedir<AvisosTurbiedadResp>("avisos_turbiedad"),
+  umbralesAviso: () => pedir<UmbralesResp>("umbrales_aviso"),
+  fijarUmbralAviso: (planta: string, umbral: number | null, motivo: string) => pedir<FijarUmbralResp>("fijar_umbral_aviso", { cuerpo: { planta, umbral, ...(motivo.trim() ? { motivo: motivo.trim() } : {}) } }),
   descargaCerrar: (id: number, filas: number, resultado: "completa" | "cancelada" | "error") => pedir<{ cerrada: boolean }>("descarga_cerrar", { cuerpo: { descarga_id: id, filas, resultado } }),
 };
 
