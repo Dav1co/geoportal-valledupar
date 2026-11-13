@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { apiAseo, avisoDeError, ErrorAseo } from "./apiAseo";
 import { abrirCamara, capturarFoto, cerrarCamara, ErrorCamara } from "../campo/camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M } from "../campo/ubicacion";
-import { aplanarDatos, contadorFotos, criteriosActivos, erroresDeEnvio, fotosNecesarias, textoFechaHora, type Valores } from "./logica";
+import { aplanarDatos, contadorFotos, criteriosActivos, cuerpoFirmas, erroresDeEnvio, erroresDeFirmas, fotosNecesarias, textoFechaHora, type Valores } from "./logica";
+import { FirmasActa, FIRMAS_VACIAS, type FirmasLocal } from "./FirmasActa";
 import type { Actividad, Confirmacion, Criterio, FormularioAseo, Modalidad, Preparacion, RutaPlan, SeRealizo } from "./tipos";
 
 // Formulario de la auditoría. Se dibuja del catálogo del servidor (preguntas, fotos, causales): aquí no hay ninguna pregunta escrita. Flujo decidido: ¿Se realizó? Sí / No / Parcial → fotos de la ruta → SST (con foto
@@ -12,7 +13,7 @@ import type { Actividad, Confirmacion, Criterio, FormularioAseo, Modalidad, Prep
 export type FotoLocal = { id: string; etiqueta: string; blob: Blob; url: string };
 export type ResultadoAuditoria = {
   conf: Confirmacion; actividad: Actividad; modalidad: Modalidad; ruta: RutaPlan; seRealizo: SeRealizo; causal: string | null; respuestas: { pregunta: string; respuesta: string }[]; observaciones: string | null;
-  fotos: FotoLocal[]; posicion: { inicio: { lat: number; lon: number } | null; fin: { lat: number; lon: number; precision: number } };
+  fotos: FotoLocal[]; firmas: FirmasLocal; posicion: { inicio: { lat: number; lon: number } | null; fin: { lat: number; lon: number; precision: number } };
 };
 
 const coma = (n: number) => n.toFixed(5).replace(".", ",");
@@ -36,6 +37,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
   const [valores, setValores] = useState<Valores>({});
   const [observaciones, setObservaciones] = useState("");
   const [fotos, setFotos] = useState<FotoLocal[]>([]);
+  const [firmas, setFirmas] = useState<FirmasLocal>(FIRMAS_VACIAS);
   const [camara, setCamara] = useState<{ etiqueta: string; nombre: string } | null>(null);
   const [fase, setFase] = useState<"editando" | "enviando">("editando");
   const [progreso, setProgreso] = useState("");
@@ -52,7 +54,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
   const { datos, fotosExigidas } = useMemo(() => aplanarDatos(actividad, valores, seRealizo), [actividad, valores, seRealizo]);
   const necesarias = useMemo(() => fotosNecesarias(actividad, seRealizo, fotosExigidas), [actividad, seRealizo, fotosExigidas]);
   const cuenta = useMemo(() => { const c: Record<string, number> = {}; for (const f of fotos) c[f.etiqueta] = (c[f.etiqueta] ?? 0) + 1; return c; }, [fotos]);
-  const errores = erroresDeEnvio(actividad, { seRealizo, causal, valores, fotosPorEtiqueta: cuenta });
+  const errores = [...erroresDeEnvio(actividad, { seRealizo, causal, valores, fotosPorEtiqueta: cuenta }), ...(seRealizo ? erroresDeFirmas({ auditor: firmas.auditor?.b64 ?? null, representante: { estado: firmas.representante.estado, nombre: firmas.representante.nombre, imagen: firmas.representante.imagen?.b64 ?? null } }) : [])];
   const causales = (actividad.causales ?? []).filter((c) => c.activo !== false);
   const secciones = useMemo(() => { const m = new Map<string, Criterio[]>(); for (const c of criterios) { const k = c.seccion ?? ""; m.set(k, [...(m.get(k) ?? []), c]); } return [...m.entries()]; }, [criterios]);
   const sinCriterios = criterios.length === 0;
@@ -82,11 +84,12 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
         auditoria_id: p.auditoria_id, actividad: actividad.codigo, modalidad: modalidad.codigo, ruta: ruta.codigo, se_realizo: seRealizo, causal: seRealizo === "si" ? null : causal, datos,
         observaciones: observaciones.trim() || null, lat: fin.lat, lon: fin.lon, precision_m: fin.precision_m, lat_inicio: inicio.current?.lat ?? null, lon_inicio: inicio.current?.lon ?? null, precision_inicio_m: null,
         fotos: ordenadas.map((f, i) => ({ orden: i + 1, ruta: p.fotos[i].ruta, etiqueta: f.etiqueta })),
+        firmas: cuerpoFirmas({ auditor: firmas.auditor?.b64 ?? null, representante: { estado: firmas.representante.estado, nombre: firmas.representante.nombre, imagen: firmas.representante.imagen?.b64 ?? null } }),
       });
       const respuestas = criterios.filter((c) => c.codigo in datos).map((c) => ({ pregunta: c.nombre, respuesta: textoRespuesta(c, datos[c.codigo]) }));
       setFotos((l) => l.filter((f) => !ordenadas.includes(f)));      // las fotos pasan al acta (la pantalla siguiente las libera)
       onListo({ conf, actividad, modalidad, ruta, seRealizo, causal: seRealizo === "si" ? null : causales.find((c) => c.codigo === causal)?.nombre ?? causal, respuestas, observaciones: observaciones.trim() || null,
-        fotos: ordenadas, posicion: { inicio: inicio.current, fin: { lat: fin.lat, lon: fin.lon, precision: fin.precision_m } } });
+        fotos: ordenadas, firmas, posicion: { inicio: inicio.current, fin: { lat: fin.lat, lon: fin.lon, precision: fin.precision_m } } });
     } catch (e) {
       const err = e instanceof ErrorAseo ? e : new ErrorAseo("servidor", "No se pudo completar el envío.", 0);
       if (err.tipo === "subida_vencida") prep.current = null;                // se pedirá un permiso nuevo y se subirá todo de nuevo
@@ -136,6 +139,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
           <fieldset className="campo-fieldset" disabled={dis}>
             <legend className="campo-etiqueta">Fotos</legend>
             <p className="campo-sub">Solo con la cámara del formulario. Las fotos no se guardan en el teléfono.</p>
+            <p className="aseo-nota-rostro" role="note">Evite fotografiar el rostro de las personas.</p>
             <div className="campo-fotos">{necesarias.map((n) => {
               const mias = fotos.filter((f) => f.etiqueta === n.etiqueta);
               return (
@@ -154,6 +158,8 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
           <div className="campo-campo"><label className="campo-etiqueta" htmlFor="aseo-obs">Observaciones <small>(opcional)</small></label>
             <textarea id="aseo-obs" className="campo-texto" value={observaciones} maxLength={1000} onChange={(e) => setObservaciones(e.target.value)} disabled={dis} /></div>
         ) : null}
+
+        {seRealizo ? <FirmasActa valor={firmas} onCambio={setFirmas} deshabilitado={dis} /> : null}
 
         {errores.length > 0 && seRealizo ? <ul className="aseo-faltan" aria-label="Lo que falta"><li><strong>Falta para registrar:</strong></li>{errores.map((e) => <li key={e}>{e}</li>)}</ul> : null}
         {error ? <div className="campo-error" role="alert"><p>{error.texto}</p></div> : null}
@@ -210,7 +216,7 @@ function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar }: { rotulo: st
   }
   return (
     <div className="campo-camara" role="dialog" aria-modal="true" aria-label={`Cámara · ${rotulo}`}>
-      <div className="campo-camara-cab">{rotulo}</div>
+      <div className="campo-camara-cab">{rotulo}<small className="aseo-camara-nota"> · Evite fotografiar el rostro de las personas.</small></div>
       {error ? <div className="campo-camara-error"><p role="alert">{error}</p></div> : <video ref={videoRef} className="campo-video" autoPlay playsInline muted onLoadedMetadata={() => setLista(true)} />}
       <div className="campo-camara-acc">
         <button type="button" className="tec-boton-sec" onClick={onCerrar}>Cancelar</button>

@@ -129,3 +129,34 @@ export function textoFechaHora(iso: string): string {
   const ampm = hh >= 12 ? "p. m." : "a. m."; const h12 = hh % 12 === 0 ? 12 : hh % 12;
   return `${d}/${m}/${a} ${h12}:${mm} ${ampm}`;
 }
+
+
+/** Hora de Bogotá («AAAA-MM-DDTHH:MM:SS») de un instante del servidor (timestamptz ISO). Bogotá no tiene horario de verano: UTC−5 fijo. */
+export function bogotaDeInstante(iso: string): string { return new Date(new Date(iso).getTime() - 5 * 3600000).toISOString().slice(0, 19); }
+
+/** Nombre del PDF del acta: AAAAMMDDHHMMSS-SIGLA-NNNNNN.pdf (fecha y hora del registro en Bogotá, sigla de la actividad = prefijo del consecutivo, 6 últimos dígitos del código de la ruta). Igual para el auditor y el supervisor. */
+export function nombreArchivoActa(registradoEn: string, consecutivo: string, rutaCodigo: string): string {
+  const sello = bogotaDeInstante(registradoEn).replace(/[-:T]/g, "");
+  const sigla = consecutivo.split("-")[0].replace(/[^A-Z]/g, "");
+  return `${sello}-${sigla}-${rutaCodigo.replace(/\D/g, "").slice(-6).padStart(6, "0")}.pdf`;
+}
+
+/** Estados de la firma del representante del operador (nunca bloquea el registro). */
+export type EstadoRepresentante = "firmo" | "se_nego" | "sin_representante";
+export const ROTULO_REPRESENTANTE: Record<EstadoRepresentante, string> = { firmo: "Firmó", se_nego: "Se negó a firmar", sin_representante: "No había representante" };
+export type FirmasCaptura = { auditor: string | null; representante: { estado: EstadoRepresentante; nombre: string; imagen: string | null } };
+/** Qué falta de las firmas para poder registrar (solo el auditor es obligatorio; si el representante firma, necesita nombre y trazo). */
+export function erroresDeFirmas(f: FirmasCaptura): string[] {
+  const out: string[] = [];
+  if (!f.auditor) out.push("Falta la firma del auditor.");
+  if (f.representante.estado === "firmo") {
+    if (!f.representante.nombre.trim()) out.push("Escriba el nombre del representante que firma.");
+    if (!f.representante.imagen) out.push("Falta la firma del representante.");
+  }
+  return out;
+}
+/** Cuerpo de «firmas» del envío (base64 sin el prefijo «data:»). Quien no firma no lleva imagen. */
+export function cuerpoFirmas(f: FirmasCaptura): { auditor: { imagen_b64: string }; representante: { estado: EstadoRepresentante; nombre?: string; imagen_b64?: string } } {
+  const nombre = f.representante.nombre.trim();
+  return { auditor: { imagen_b64: f.auditor ?? "" }, representante: { estado: f.representante.estado, ...(f.representante.estado !== "sin_representante" && nombre ? { nombre } : {}), ...(f.representante.estado === "firmo" && f.representante.imagen ? { imagen_b64: f.representante.imagen } : {}) } };
+}

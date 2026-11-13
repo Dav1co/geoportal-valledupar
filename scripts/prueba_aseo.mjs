@@ -9,12 +9,12 @@ import { spawnSync } from "node:child_process";
 const aqui = dirname(fileURLToPath(import.meta.url));
 const ts = createRequire(import.meta.url)("typescript");
 const salida = mkdtempSync(join(tmpdir(), "aseo_front_"));
-for (const f of ["tipos", "logica", "cargador", "xlsx", "pdf", "membrete"]) {
+for (const f of ["tipos", "logica", "cargador", "xlsx", "pdf", "membrete", "firmas"]) {
   const js = ts.transpileModule(readFileSync(join(aqui, "../src/aseo", f + ".ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/from\s+["']\.\/(\w+)["']/g, 'from "./$1.mjs"');
   writeFileSync(join(salida, f + ".mjs"), js);
 }
 const imp = (f) => import(pathToFileURL(join(salida, f + ".mjs")).href);
-const L = await imp("logica"), C = await imp("cargador"), X = await imp("xlsx"), P = await imp("pdf"), M = await imp("membrete");
+const FI = await imp("firmas"), L = await imp("logica"), C = await imp("cargador"), X = await imp("xlsx"), P = await imp("pdf"), M = await imp("membrete");
 let total = 0, fallas = 0;
 const ok = (n, c, d = "") => { total++; if (!c) { fallas++; console.log(`FALLA  ${n} ${d}`); } };
 const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -117,7 +117,7 @@ const jpg = (o) => ({ bytes: Uint8Array.from(Buffer.from(o.b64, "base64")), anch
 const membrete = { logo: jpg(M.LOGO), banda: jpg(M.BANDA) };
 const info = P.infoJpeg(membrete.logo.bytes);
 ok("infoJpeg lee el tamaño del membrete", info.ancho === 530 && info.alto === 188 && info.componentes === 3);
-const datos = { consecutivo: "BAR-000123", registradoEn: "12/11/2026 7:05 a. m.", fechaServicio: "2026-11-12", auditor: { nombre: "Auditor de Prueba Ñandú", correo: "auditor@emdupar.gov.co" }, actividad: "Barrido", modalidad: "Manual", servicio: "12 · Barrido Manual",
+const datos = { consecutivo: "BAR-000123", registradoEn: "12/11/2026 7:05 a. m.", fechaServicio: "2026-11-12", auditor: { nombre: "Auditor de Prueba Ñandú", correo: "auditor@emdupar.gov.co", cargo: "Profesional de interventoría" }, firmas: { auditor: membrete.logo, representante: { estado: "firmo", nombre: "Maria Representante", imagen: membrete.logo } }, actividad: "Barrido", modalidad: "Manual", servicio: "12 · Barrido Manual",
   ruta: { codigo: "2010011207003", sectores: "Centro, El Carmen - C19A a 17 de K9 a 6 " + "(tramo largo) ".repeat(12), turno: "Día", horario: "06:00 a 14:00", frecuencia: "L-M-Mi-J-V-S-D", km: 3.92 }, seRealizo: "Parcial", causal: "Condiciones climáticas",
   respuestas: [{ pregunta: "¿Cuenta con las herramientas?", respuesta: "No" }, { pregunta: "¿Usa los EPP?", respuesta: "Sí" }], observaciones: "Lluvia fuerte desde las 9:00 «sin paso» – tramo parcial; 100 % del tramo A.",
   posicion: { inicio: "10,47078, -73,24365", fin: "10,47400, -73,24301", precision: "8 m al enviar" }, marcas: ["Fuera de horario"], fotos: Array.from({ length: 5 }, (_, i) => ({ ...membrete.logo, etiqueta: i < 3 ? "Fotos de la ruta" : "Evidencia" })), sello: "ab12".repeat(16) };
@@ -132,14 +132,29 @@ ok("el PDF lleva los tipos de letra estándar con WinAnsi (tildes y ñ)", /\/Bas
 ok("las fotos van incrustadas como JPEG sin recodificar (DCTDecode)", (texto.match(/DCTDecode/g) ?? []).length >= 7);
 ok("con 5 fotos el acta ocupa varias páginas", /\/Count [2-9]/.test(texto));
 const dir = mkdtempSync(join(tmpdir(), "acta_pdf_")); const ruta1 = join(dir, "acta.pdf"); writeFileSync(ruta1, pdf);
-const py = spawnSync("python3", ["-I", "-c", `import sys; from pypdf import PdfReader; r=PdfReader(sys.argv[1]); t=' '.join(p.extract_text() for p in r.pages); print(len(r.pages)); print('OK' if all(s in t for s in ['ACTA DE AUDITOR','BAR-000123','Auditor de Prueba','2010011207003','Parcial','Condiciones clim','Firma del auditor','ab12ab12']) else 'FALTA: '+t[:400])`, ruta1], { encoding: "utf8" });
+const py = spawnSync("python3", ["-I", "-c", `import sys; from pypdf import PdfReader; r=PdfReader(sys.argv[1]); t=' '.join(p.extract_text() for p in r.pages); print(len(r.pages)); print('OK' if all(s in t for s in ['ACTA DE SUPERVISI','INCIDENCIA','Profesional de interventor','Maria Representante','Firma electr','BAR-000123','Auditor de Prueba','2010011207003','Parcial','Condiciones clim','quien realiz','ab12ab12']) else 'FALTA: '+t[:400])`, ruta1], { encoding: "utf8" });
 if (py.status === 0) { const [n, estado] = py.stdout.trim().split("\n"); ok("un lector de PDF independiente (pypdf) abre el acta, cuenta sus páginas y encuentra su texto con tildes", Number(n) >= 2 && estado === "OK", py.stdout + py.stderr); if (process.env.GUARDAR_ACTA) { writeFileSync(process.env.GUARDAR_ACTA, pdf); } }
 else console.log("(sin python3/pypdf: se omite la lectura independiente del PDF)");
 const corto = P.generarActaPdf({ ...datos, fotos: [], respuestas: [], observaciones: null, causal: null, seRealizo: "Sí", ruta: { ...datos.ruta, sectores: "Mayales" } }, membrete);
-ok("un acta corta cabe en una página", /\/Count 1/.test(Buffer.from(corto).toString("latin1")), String(Buffer.from(corto).toString("latin1").match(/\/Count \d+/)));
+ok("un acta corta (con la sección de firmas) cabe en dos páginas como máximo", /\/Count [12]\b/.test(Buffer.from(corto).toString("latin1")), String(Buffer.from(corto).toString("latin1").match(/\/Count \d+/)));
 if (process.env.GUARDAR_ACTA) writeFileSync(process.env.GUARDAR_ACTA.replace(".pdf", "_corta.pdf"), corto);
 ok("partirLineas respeta el ancho y las palabras largas", P.partirLineas("a ".repeat(100), 100, 10).every((l) => P.anchoTexto(l, 10) <= 100) && P.partirLineas("x".repeat(300), 100, 10).every((l) => P.anchoTexto(l, 10) <= 100));
 ok("winAnsi: tildes, ñ, comillas angulares y rayas", igual(P.winAnsi("áéíóúñ«»¿¡"), [225, 233, 237, 243, 250, 241, 171, 187, 191, 161]) && P.winAnsi("–")[0] === 0x96);
+
+
+// ---------- Firmas y nombre del archivo del acta (Torre C, supervisión) ----------
+ok("nombre del PDF: AAAAMMDDHHMMSS-SIGLA-NNNNNN.pdf con la hora de Bogotá y los 6 últimos dígitos de la ruta", L.nombreArchivoActa("2026-11-13T15:30:15.123+00:00", "BAR-000123", "2010011207004") === "20261113103015-BAR-207004.pdf");
+ok("nombre del PDF: pasada la medianoche UTC sigue el día de Bogotá", L.nombreArchivoActa("2026-11-14T02:05:09+00:00", "CSC-000001", "2010011207004") === "20261113210509-CSC-207004.pdf");
+const okf = { auditor: "AAAA", representante: { estado: "sin_representante", nombre: "", imagen: null } };
+ok("firmas: sin firma del auditor no se registra; el representante nunca bloquea", L.erroresDeFirmas({ ...okf, auditor: null }).length === 1 && L.erroresDeFirmas(okf).length === 0 && L.erroresDeFirmas({ ...okf, representante: { estado: "se_nego", nombre: "", imagen: null } }).length === 0);
+ok("firmas: si el representante firma necesita nombre y trazo", L.erroresDeFirmas({ ...okf, representante: { estado: "firmo", nombre: " ", imagen: null } }).length === 2 && L.erroresDeFirmas({ ...okf, representante: { estado: "firmo", nombre: "Ana", imagen: "BBBB" } }).length === 0);
+ok("cuerpo de firmas: quien no firma no lleva imagen; se negó con nombre sí lo lleva; sin representante no lleva nombre", JSON.stringify(L.cuerpoFirmas({ ...okf, representante: { estado: "se_nego", nombre: " Pedro ", imagen: "ZZ" } })) === '{"auditor":{"imagen_b64":"AAAA"},"representante":{"estado":"se_nego","nombre":"Pedro"}}'
+   && JSON.stringify(L.cuerpoFirmas({ ...okf, representante: { estado: "sin_representante", nombre: "x", imagen: null } })) === '{"auditor":{"imagen_b64":"AAAA"},"representante":{"estado":"sin_representante"}}'
+   && L.cuerpoFirmas({ ...okf, representante: { estado: "firmo", nombre: "Ana", imagen: "BBBB" } }).representante.imagen_b64 === "BBBB");
+const raya = (n) => [Array.from({ length: n }, (_, i) => ({ x: i * 10, y: i % 2 ? 30 : 10 }))];
+ok("firma válida: un lienzo vacío, un toque o una raya mínima se rechazan; un trazo normal se acepta", !FI.firmaValida([]) && !FI.firmaValida([[{ x: 5, y: 5 }]]) && !FI.firmaValida(raya(3)) && FI.firmaValida(raya(12)));
+ok("firma: largo, caja y escala de salida (cabe en 560 x 200 sin deformar)", Math.round(FI.largoTrazos([[{ x: 0, y: 0 }, { x: 3, y: 4 }]])) === 5 && FI.cajaDe(raya(4)).w === 30 && (() => { const s = FI.escalaSalida(400, 100); return s.ancho <= 560 && s.alto <= 200 && Math.abs(s.ancho / s.alto - 4) < 0.6; })());
+ok("firma: tope de 40 kB y bytes de un base64", FI.MAX_BYTES_FIRMA === 40960 && FI.bytesDeBase64("QUJD") === 3 && FI.bytesDeBase64("QUI=") === 2);
 
 console.log(fallas === 0 ? `RESULTADO: ${total} de ${total} pruebas correctas — SIN FALLAS` : `RESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas} FALLA(S)`);
 process.exit(fallas === 0 ? 0 : 1);
