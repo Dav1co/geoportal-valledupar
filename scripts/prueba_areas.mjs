@@ -20,7 +20,7 @@ const POR_OMISION = { es_admin: false, permisos: { rol: "consulta", explorar: tr
 const casos = [
   // [nombre, perfil, pantalla inicial esperada, tarjetas de la ventana de entrada, ¿opción «Formatos de campo» en el selector «Modo de trabajo» de Comercial?]
   ["PERFILES DE HOY (sin campo)", null],
-  ["Administrador (sin campo asignado, pero admin lo tiene)", P({ admin: true }), "entrada", "comercial+tecnica", true],
+  ["Administrador (sin campo asignado, pero admin lo tiene)", P({ admin: true }), "entrada", "comercial+tecnica+aseo", true],
   ["Solo comercial (Explorar)", P({ explorar: true }), "comercial", "comercial", false],
   ["Comercial con Rutas y Dashboard", P({ explorar: true, rutas: true, dashboard: true }), "comercial", "comercial", false],
   ["Dual (comercial + técnica)", P({ comercial: true, registro_tecnico: true }), "entrada", "comercial+tecnica", false],
@@ -61,21 +61,30 @@ console.log(filas.join("\n"));
 const sinTorres = { es_admin: false, permisos: { explorar: true, focalizacion: false, comercial: false, rutas: false, dashboard: false } };
 const ok = (n, c) => { total++; if (!c) { fallas++; console.log("FALLA  " + n); } };
 ok("servidor que no declara torre_a: comercial se calcula de los modos (como antes)", pantallaInicial(areasDisponibles(sinTorres)) === "comercial");
-ok("perfil por omisión: ningún área disponible", JSON.stringify(areasDisponibles(POR_OMISION)) === JSON.stringify({ comercial: false, tecnica: false, campo: false }));
-ok("sin perfil: nada disponible", JSON.stringify(areasDisponibles(null)) === JSON.stringify({ comercial: false, tecnica: false, campo: false }) && pantallaInicial(areasDisponibles(null)) === "sin_modulos");
+ok("perfil por omisión: ningún área disponible", JSON.stringify(areasDisponibles(POR_OMISION)) === JSON.stringify({ comercial: false, tecnica: false, campo: false, aseo: false }));
+ok("sin perfil: nada disponible", JSON.stringify(areasDisponibles(null)) === JSON.stringify({ comercial: false, tecnica: false, campo: false, aseo: false }) && pantallaInicial(areasDisponibles(null)) === "sin_modulos");
 ok("solo campo NO tiene comercial aunque el servidor diga torre_a = true", areasDisponibles(P({ campo: true })).comercial === false);
 ok("pantalla «comercial» no es válida para quien solo tiene campo (no se monta el mapa)", pantallaValida("comercial", areasDisponibles(P({ campo: true }))) === false);
 ok("pantalla «campo» es válida para solo campo y la ventana de entrada no", pantallaValida("campo", areasDisponibles(P({ campo: true }))) && !pantallaValida("entrada", areasDisponibles(P({ campo: true }))));
 ok("un comercial al que le quitan campo no queda en pantalla «campo»", pantallaValida("campo", areasDisponibles(P({ explorar: true }))) === false);
 ok("esDual: comercial+campo no es dual (campo va en la cabecera), técnica+campo sí", !esDual(areasDisponibles(P({ explorar: true, campo: true }))) && esDual(areasDisponibles(P({ registro_tecnico: true, campo: true }))));
-ok("solo acta entra al área de campo y no tiene comercial ni técnica", JSON.stringify(areasDisponibles(P({ acta: true }))) === JSON.stringify({ comercial: false, tecnica: false, campo: true }));
+ok("solo acta entra al área de campo y no tiene comercial ni técnica", JSON.stringify(areasDisponibles(P({ acta: true }))) === JSON.stringify({ comercial: false, tecnica: false, campo: true, aseo: false }));
 ok("solo dashboard_acta: área de campo reconocida", areasDisponibles(P({ dashboard_acta: true })).campo === true);
 ok("sin ningún permiso (ni acta): «Sin módulos asignados»", pantallaInicial(areasDisponibles(P({}))) === "sin_modulos");
 ok("acta = false y dashboard_acta = false explícitos no abren campo", areasDisponibles(P({ acta: false, dashboard_acta: false })).campo === false);
-ok("el perfil por omisión (acta no declarada) sigue sin áreas", JSON.stringify(areasDisponibles(POR_OMISION)) === JSON.stringify({ comercial: false, tecnica: false, campo: false }));
+ok("el perfil por omisión (acta no declarada) sigue sin áreas", JSON.stringify(areasDisponibles(POR_OMISION)) === JSON.stringify({ comercial: false, tecnica: false, campo: false, aseo: false }));
 ok("servidor anterior (sin las claves acta): los perfiles de siempre no cambian", areasDisponibles({ es_admin: false, permisos: { explorar: true, focalizacion: false, comercial: false, rutas: false, dashboard: false, campo: true, dashboard_campo: false } }).campo === true
   && areasDisponibles({ es_admin: false, permisos: { explorar: false, focalizacion: false, comercial: false, rutas: false, dashboard: false } }).campo === false);
 ok("pantalla «campo» es válida para solo acta y deja de serlo si le quitan el permiso", pantallaValida("campo", areasDisponibles(P({ acta: true }))) && !pantallaValida("campo", areasDisponibles(P({}))));
-ok("el administrador sigue viendo las tres áreas", JSON.stringify(areasDisponibles(P({ admin: true }))) === JSON.stringify({ comercial: true, tecnica: true, campo: true }));
+ok("el administrador ve las cuatro áreas (comercial, técnica, campo y aseo)", JSON.stringify(areasDisponibles(P({ admin: true }))) === JSON.stringify({ comercial: true, tecnica: true, campo: true, aseo: true }));
+// Interventoría de Aseo (Torre C): permisos `aseo` y `dashboard_aseo`, y `torre_c` calculada por el servidor
+const PA = (m = {}) => { const x = P(m); return { ...x, permisos: { ...x.permisos, aseo: !!m.aseo || !!m.dashboard_aseo, dashboard_aseo: !!m.dashboard_aseo, torre_c: !!m.admin || !!m.aseo || !!m.dashboard_aseo } }; };
+ok("solo aseo (captura) entra directo al área de Aseo: sin comercial, técnica ni campo", JSON.stringify(areasDisponibles(PA({ aseo: true }))) === JSON.stringify({ comercial: false, tecnica: false, campo: false, aseo: true }) && pantallaInicial(areasDisponibles(PA({ aseo: true }))) === "aseo");
+ok("solo el supervisor de aseo también entra directo a Aseo", pantallaInicial(areasDisponibles(PA({ dashboard_aseo: true }))) === "aseo" && tarjetasEntrada(areasDisponibles(PA({ dashboard_aseo: true }))).join() === "aseo");
+ok("comercial + aseo: ventana de entrada con las dos tarjetas", pantallaInicial(areasDisponibles(PA({ explorar: true, aseo: true }))) === "entrada" && tarjetasEntrada(areasDisponibles(PA({ explorar: true, aseo: true }))).join() === "comercial,aseo");
+ok("técnica + aseo: ventana de entrada; campo + aseo: también (campo es tarjeta propia sin comercial)", tarjetasEntrada(areasDisponibles(PA({ registro_tecnico: true, aseo: true }))).join() === "tecnica,aseo" && tarjetasEntrada(areasDisponibles(PA({ campo: true, aseo: true }))).join() === "campo,aseo");
+ok("aseo NO abre la Torre A (torre_a falsa) ni la técnica", areasDisponibles(PA({ aseo: true })).comercial === false && areasDisponibles(PA({ aseo: true })).tecnica === false);
+ok("sin permiso de aseo, la pantalla «aseo» no es válida; con él sí", !pantallaValida("aseo", areasDisponibles(PA({ campo: true }))) && pantallaValida("aseo", areasDisponibles(PA({ aseo: true }))));
+ok("servidor anterior (sin las claves de aseo): nadie ve Aseo salvo el administrador", areasDisponibles(P({ explorar: true })).aseo === false && areasDisponibles(P({ admin: true })).aseo === true);
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);
