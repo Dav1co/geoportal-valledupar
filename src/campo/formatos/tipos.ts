@@ -5,8 +5,8 @@ import type { Grupo, Tipo } from "../apiCampo";
 
 export type TipoDato = "texto" | "entero" | "decimal" | "si_no" | "opcion" | "opciones" | "dia_hora";
 export type OpcionCampo = { codigo: string; nombre: string; activo?: boolean };
-/** Condición de pantalla: el campo se muestra solo si el campo `campo` (del mismo formato) vale `es` (true/false para sí-no; un código para una opción). La base NO la verifica. */
-export type VisibleSi = { campo: string; es: boolean | string };
+/** Condición de pantalla: el campo se muestra solo si el campo `campo` (del mismo formato) vale `es` (true/false para sí-no; un código para una opción) o, con `no_es`, si ya fue respondido y su valor es distinto del código. La base NO la verifica. */
+export type VisibleSi = { campo: string; es: boolean | string; no_es?: undefined } | { campo: string; no_es: string; es?: undefined };
 export type CampoDef = {
   codigo: string; nombre: string; tipo_dato: TipoDato; obligatorio: boolean; opciones?: OpcionCampo[];
   minimo?: number; maximo?: number; unidad?: string; ayuda?: string; sensible?: boolean; orden?: number; activo?: boolean;

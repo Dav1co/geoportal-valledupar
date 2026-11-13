@@ -65,16 +65,28 @@ export function leerCampo(c: CampoDef, v: string | string[] | undefined): Lectur
   }
 }
 
-/** ¿Se muestra el campo con lo digitado hasta ahora? Sin condición, siempre. Un campo cuyo «padre» está sin responder se oculta. */
+/** ¿Se muestra el campo con lo digitado hasta ahora? Sin condición, siempre. Un campo cuyo «padre» está sin responder se oculta (también con `no_es`: sin respuesta no se sabe si «no es»). */
 export function esVisible(c: CampoDef, valores: ValoresCampos): boolean {
   const cond = c.visible_si;
   if (!cond) return true;
   const padre = valores[cond.campo];
+  if (typeof cond.no_es === "string") {
+    if (padre === undefined || padre === "" || (Array.isArray(padre) && padre.length === 0)) return false;
+    return Array.isArray(padre) ? !padre.includes(cond.no_es) : padre !== cond.no_es;
+  }
   if (typeof cond.es === "boolean") return padre === (cond.es ? "si" : "no");
-  return Array.isArray(padre) ? padre.includes(cond.es) : padre === cond.es;
+  return Array.isArray(padre) ? padre.includes(cond.es as string) : padre === cond.es;
 }
-/** Campos activos que se muestran (y por tanto se validan y se envían). Los ocultos por condición se ignoran por completo: no se envían aunque tengan algo digitado. */
-export const camposVisibles = (t: TipoFormato, valores: ValoresCampos): CampoDef[] => camposActivos(t).filter((c) => esVisible(c, valores));
+/** Campos activos que se muestran (y por tanto se validan y se envían). Los ocultos por condición se ignoran por completo: no se envían aunque tengan algo digitado.
+ *  Si el «padre» de un campo está a su vez oculto, el campo también se oculta (el padre va antes en el orden del catálogo), aunque conserve un valor viejo. */
+export const camposVisibles = (t: TipoFormato, valores: ValoresCampos): CampoDef[] => {
+  const ocultos = new Set<string>();
+  const sal: CampoDef[] = [];
+  for (const c of camposActivos(t)) {
+    if ((c.visible_si && ocultos.has(c.visible_si.campo)) || !esVisible(c, valores)) ocultos.add(c.codigo); else sal.push(c);
+  }
+  return sal;
+};
 
 export type SeccionCampos = { titulo: string | null; campos: CampoDef[] };
 /** Agrupa los campos (ya en el orden del catálogo) en secciones: los consecutivos con el mismo título forman una. Sin títulos: una sola sección sin título (formulario plano, como siempre). */
