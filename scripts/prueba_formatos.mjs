@@ -195,6 +195,24 @@ ok("formato que no genera resultado no pide efectiva ni inefectiva", L.validarFo
   ok("marcoIrregularidad: solo con irr_hay = «sí»", L.marcoIrregularidad(rev, { irr_hay: "si" }) && !L.marcoIrregularidad(rev, { irr_hay: "no" }) && !L.marcoIrregularidad(rev, {}));
   ok("marcoIrregularidad: un formato sin ese campo nunca invita a abrir el acta", !L.marcoIrregularidad(sus, { irr_hay: "si" }));
   ok("un formato del Paso D sin secciones ni condiciones se comporta igual que antes (mismos campos visibles)", L.camposVisibles(sus, {}).length === T.camposActivos(sus).length);
+  // «Quién atendió» (visible_si con «no_es»)
+  const qa = [
+    { codigo: "firma_atendio", nombre: "Firma", tipo_dato: "opcion", obligatorio: true, opciones: [{ codigo: "atendio_firmo", nombre: "Atendió y firmó" }, { codigo: "nadie_atendio", nombre: "Nadie atendió" }], seccion: S1, orden: 901, activo: true },
+    { codigo: "atendio_nombre", nombre: "Nombre de quien atendió", tipo_dato: "texto", obligatorio: false, maximo: 60, sensible: true, seccion: "10. Quién atendió", visible_si: { campo: "firma_atendio", no_es: "nadie_atendio" }, orden: 910, activo: true },
+    { codigo: "atendio_relacion", nombre: "Relación con el predio", tipo_dato: "opcion", obligatorio: false, opciones: [{ codigo: "propietario", nombre: "Propietario" }, { codigo: "otro", nombre: "Otro (¿cuál?)" }], seccion: "10. Quién atendió", visible_si: { campo: "firma_atendio", no_es: "nadie_atendio" }, orden: 911, activo: true },
+    { codigo: "atendio_relacion_otra", nombre: "¿Cuál otra relación?", tipo_dato: "texto", obligatorio: false, maximo: 40, seccion: "10. Quién atendió", visible_si: { campo: "atendio_relacion", es: "otro" }, orden: 912, activo: true },
+  ];
+  const fq = { ...rev, campos: qa };
+  const nom = (v) => L.camposVisibles(fq, v).map((c) => c.codigo).join(",");
+  ok("no_es: sin responder la firma, nombre y relación no se muestran", nom({}) === "firma_atendio" && nom({ firma_atendio: "" }) === "firma_atendio");
+  ok("no_es: «Nadie atendió» los oculta", nom({ firma_atendio: "nadie_atendio" }) === "firma_atendio");
+  ok("no_es: con «Atendió y firmó» se muestran nombre y relación", nom({ firma_atendio: "atendio_firmo" }) === "firma_atendio,atendio_nombre,atendio_relacion");
+  ok("no_es: «Otro» muestra «¿Cuál otra relación?»", nom({ firma_atendio: "atendio_firmo", atendio_relacion: "otro" }).endsWith("atendio_relacion_otra"));
+  ok("no_es: «¿Cuál?» con valor viejo se oculta si su padre está oculto", nom({ firma_atendio: "nadie_atendio", atendio_relacion: "otro", atendio_relacion_otra: "x" }) === "firma_atendio");
+  ok("no_es: no se envía el nombre cuando nadie atendió", !("atendio_nombre" in L.aplanarDatos(fq, { firma_atendio: "nadie_atendio", atendio_nombre: "Juan" }).datos));
+  ok("no_es: el nombre viaja cuando alguien atendió", L.aplanarDatos(fq, { firma_atendio: "atendio_firmo", atendio_nombre: " Juan Pérez " }).datos.atendio_nombre === "Juan Pérez");
+  ok("no_es: nombre y relación vacíos no bloquean (son opcionales)", L.validarFormato({ ...rev, campos: [...rev.campos.filter((c) => c.codigo !== "firma_atendio"), ...qa] }, { ...est, valores: { ...est.valores, firma_atendio: "atendio_firmo" } }).length === 0);
+  ok("no_es: una lista de opciones se evalúa por inclusión", L.esVisible(qa[1], { firma_atendio: ["atendio_firmo"] }) && !L.esVisible(qa[1], { firma_atendio: ["nadie_atendio"] }));
 }
 
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
