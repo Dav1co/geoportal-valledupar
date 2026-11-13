@@ -105,7 +105,7 @@ body {
 
 /* ---------- visor / mapa ---------- */
 .visor { position: relative; flex: 1; min-width: 0; }
-.mapa { position: absolute; inset: 0; }
+.mapa, .mapa.maplibregl-map { position: absolute; inset: 0; }
 
 /* ---------- marca de agua ---------- */
 .watermark {
