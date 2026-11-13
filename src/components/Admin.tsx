@@ -27,6 +27,11 @@ const MODOS_ACTA: [keyof UsuarioAdmin, string][] = [
   ["ver_acta", "Acta de inspección técnica"],
   ["ver_dashboard_acta", "Supervisor de actas"],
 ];
+// Interventoría de Aseo (Torre C). Se muestran SOLO si el servidor ya trae esas columnas (SQL de aseo aplicado).
+const MODOS_ASEO: [keyof UsuarioAdmin, string][] = [
+  ["ver_aseo", "Interventoría de aseo"],
+  ["ver_dashboard_aseo", "Supervisor de aseo"],
+];
 type PerfilTecnico = "operador" | "supervisor";
 const PERFILES_TECNICOS: Record<PerfilTecnico, { nombre: string; registro: boolean; dashboard: boolean }> = {
   operador: { nombre: "Operador técnico", registro: true, dashboard: false },
@@ -55,9 +60,11 @@ type Borrador = {
   dashboard_campo?: boolean;
   acta?: boolean;
   dashboard_acta?: boolean;
+  aseo?: boolean;
+  dashboard_aseo?: boolean;
 };
 
-function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conActa: boolean): Borrador {
+function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conActa: boolean, conAseo: boolean): Borrador {
   return {
     explorar: u.ver_explorar === true,
     focalizacion: u.ver_focalizacion === true,
@@ -69,6 +76,7 @@ function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conA
     ...(conTecnica ? { registro_tecnico: u.ver_registro_tecnico === true, dashboard_tecnico: u.ver_dashboard_tecnico === true } : {}),
     ...(conCampo ? { campo: u.ver_campo === true, dashboard_campo: u.ver_dashboard_campo === true } : {}),
     ...(conActa ? { acta: u.ver_acta === true, dashboard_acta: u.ver_dashboard_acta === true } : {}),
+    ...(conAseo ? { aseo: u.ver_aseo === true, dashboard_aseo: u.ver_dashboard_aseo === true } : {}),
   };
 }
 
@@ -91,6 +99,10 @@ const CAMPOS_ACTA: [keyof Borrador, string][] = [
   ["acta", "Acta de inspección técnica"],
   ["dashboard_acta", "Supervisor de actas"],
 ];
+const CAMPOS_ASEO: [keyof Borrador, string][] = [
+  ["aseo", "Interventoría de aseo"],
+  ["dashboard_aseo", "Supervisor de aseo"],
+];
 
 /** Aviso (no cambia nada): quien tenga un horario laboral o días hábiles no podrá reportar de noche ni en fines de semana. El administrador no tiene restricción de horario.
  *  Lo usan Campo y Acta (para acta se recomienda «Sin restricción horaria» y «Todos los días»). */
@@ -104,6 +116,8 @@ function avisoHorario(b: Borrador, claves: (keyof Borrador)[], trabajo: string):
 }
 const avisoHorarioCampo = (b: Borrador) => avisoHorario(b, ["campo", "dashboard_campo"], "el trabajo de campo");
 const avisoHorarioActa = (b: Borrador) => avisoHorario(b, ["acta", "dashboard_acta"], "el trabajo de inspección");
+// Aseo: hay turnos de madrugada y de noche (22:00 a 06:00): se recomienda «Sin restricción horaria» y «Todos los días».
+const avisoHorarioAseo = (b: Borrador) => avisoHorario(b, ["aseo", "dashboard_aseo"], "la auditoría de aseo (hay turnos de madrugada y de noche)");
 
 /** Bloque de un área con interruptor general: encendido si algún modo del bloque lo está. Al apagarlo apaga todos los modos del bloque; al encenderlo enciende `alEncender`
  *  (por defecto todos; en Comercial solo Explorar, el modo básico). */
@@ -162,6 +176,8 @@ export function Admin({ onVolver }: Props) {
   const conCampo = useMemo(() => usuarios.some((u) => typeof u.ver_campo === "boolean"), [usuarios]);
   // ¿El servidor ya trae los permisos de acta (SQL del acta aplicado)? Si no, no se muestra nada de acta.
   const conActa = useMemo(() => usuarios.some((u) => typeof u.ver_acta === "boolean"), [usuarios]);
+  // Igual para la interventoría de aseo (SQL de aseo aplicado).
+  const conAseo = useMemo(() => usuarios.some((u) => typeof u.ver_aseo === "boolean"), [usuarios]);
 
   async function cargar() {
     setCargando(true);
@@ -250,6 +266,16 @@ export function Admin({ onVolver }: Props) {
     return ok;
   }
 
+  // Igual para los permisos de aseo.
+  async function verificarAseo(correo: string, aseo: boolean, dashboardAseo: boolean): Promise<boolean> {
+    const { usuarios: lista } = await api.admin.listar();
+    const u = lista.find((x) => x.email === correo.toLowerCase());
+    const ok = !!u && (u.ver_aseo === true) === aseo && (u.ver_dashboard_aseo === true) === dashboardAseo;
+    if (!ok) setError("El servidor no aplicó los permisos de aseo de " + correo + ". Falta desplegar la Edge geoportal-admin o aplicar el SQL de aseo en la base.");
+    setUsuarios(lista);
+    return ok;
+  }
+
   async function agregar() {
     setMsg(null);
     if (!email.includes("@")) {
@@ -302,7 +328,7 @@ export function Admin({ onVolver }: Props) {
       return;
     }
     setEditando(u.email);
-    setBorrador(aBorrador(u, conTecnica, conCampo, conActa));
+    setBorrador(aBorrador(u, conTecnica, conCampo, conActa, conAseo));
   }
 
   async function guardarPermisos(u: UsuarioAdmin) {
@@ -315,6 +341,7 @@ export function Admin({ onVolver }: Props) {
       if (conTecnica && !(await verificarTecnico(u.email, borrador.registro_tecnico === true, borrador.dashboard_tecnico === true))) return;
       if (conCampo && !(await verificarCampo(u.email, borrador.campo === true, borrador.dashboard_campo === true))) return;
       if (conActa && !(await verificarActa(u.email, borrador.acta === true, borrador.dashboard_acta === true))) return;
+      if (conAseo && !(await verificarAseo(u.email, borrador.aseo === true, borrador.dashboard_aseo === true))) return;
       setMsg(`Permisos actualizados para ${u.email}.`);
       setEditando(null);
       setBorrador(null);
@@ -532,6 +559,7 @@ export function Admin({ onVolver }: Props) {
               const tecnicos = MODOS_TECNICOS.filter(([c]) => u[c] === true);
               const deCampo = MODOS_CAMPO.filter(([c]) => u[c] === true);
               const deActa = MODOS_ACTA.filter(([c]) => u[c] === true);
+              const deAseo = MODOS_ASEO.filter(([c]) => u[c] === true);
               const perfilTec = perfilTecnicoDe(u);
               return (
                 <tr key={u.email} className={u.activo ? "" : "adm-inactivo"}>
@@ -557,7 +585,7 @@ export function Admin({ onVolver }: Props) {
                   <td>
                     {esAdmin ? (
                       <span className="adm-nota">Todos los modos</span>
-                    ) : permitidos.length === 0 && tecnicos.length === 0 && deCampo.length === 0 && deActa.length === 0 ? (
+                    ) : permitidos.length === 0 && tecnicos.length === 0 && deCampo.length === 0 && deActa.length === 0 && deAseo.length === 0 ? (
                       <span className="adm-nota">Sin acceso</span>
                     ) : (
                       <div className="adm-etiquetas">
@@ -577,6 +605,11 @@ export function Admin({ onVolver }: Props) {
                           </span>
                         ))}
                         {deActa.map(([c, et]) => (
+                          <span key={String(c)} className="adm-etiqueta adm-etiqueta-campo">
+                            {et}
+                          </span>
+                        ))}
+                        {deAseo.map(([c, et]) => (
                           <span key={String(c)} className="adm-etiqueta adm-etiqueta-campo">
                             {et}
                           </span>
@@ -659,7 +692,8 @@ export function Admin({ onVolver }: Props) {
                       setBorrador({ explorar: false, focalizacion: false, comercial: false, rutas: false, dashboard: false, horario: "sin_restriccion", dias: "todos",
                                     registro_tecnico: PERFILES_TECNICOS[p].registro, dashboard_tecnico: PERFILES_TECNICOS[p].dashboard,
                                     ...(borrador.campo !== undefined ? { campo: borrador.campo, dashboard_campo: borrador.dashboard_campo } : {}),
-                                    ...(borrador.acta !== undefined ? { acta: borrador.acta, dashboard_acta: borrador.dashboard_acta } : {}) });
+                                    ...(borrador.acta !== undefined ? { acta: borrador.acta, dashboard_acta: borrador.dashboard_acta } : {}),
+                                    ...(borrador.aseo !== undefined ? { aseo: borrador.aseo, dashboard_aseo: borrador.dashboard_aseo } : {}) });
                     }}
                   >
                     <option value="">Aplicar perfil…</option>
@@ -705,8 +739,22 @@ export function Admin({ onVolver }: Props) {
                   {avisoHorarioActa(borrador) && <p className="adm-aviso-horario" role="alert">{avisoHorarioActa(borrador)}</p>}
                 </BloquePermisos>
               )}
+              {conAseo && (
+                <BloquePermisos
+                  titulo="Interventoría de aseo"
+                  campo
+                  campos={CAMPOS_ASEO}
+                  borrador={borrador}
+                  onCambio={(c) => setBorrador({ ...borrador, ...c })}
+                >
+                  <p className="adm-aviso-tec">
+                    «Interventoría de aseo» permite auditar rutas y registrar la auditoría con fotos. «Supervisor de aseo» permite revisarlas y ocultarlas con motivo. Solo con esto, la persona no ve el mapa comercial ni datos de suscriptores.
+                  </p>
+                  {avisoHorarioAseo(borrador) && <p className="adm-aviso-horario" role="alert">{avisoHorarioAseo(borrador)}</p>}
+                </BloquePermisos>
+              )}
             </div>
-            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : []), ...(conCampo ? CAMPOS_CAMPO : []), ...(conActa ? CAMPOS_ACTA : [])].some(([c]) => borrador[c] === true) && (
+            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : []), ...(conCampo ? CAMPOS_CAMPO : []), ...(conActa ? CAMPOS_ACTA : []), ...(conAseo ? CAMPOS_ASEO : [])].some(([c]) => borrador[c] === true) && (
               <p className="adm-aviso-tec">Sin ningún modo asignado: al ingresar verá «Sin módulos asignados».</p>
             )}
             <div>

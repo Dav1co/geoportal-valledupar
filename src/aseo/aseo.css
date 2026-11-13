@@ -1,0 +1,51 @@
+/* Interventoría de Aseo (Torre C). Hereda las clases tec-* de tecnica.css y campo-* de campo.css; aquí solo lo propio: selector de ruta, mapa, opciones, acta y administración. Pensado para celular. */
+.aseo-entrada { width: 100%; box-sizing: border-box; min-height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 16px; background: #fff; }
+.aseo-entrada:focus-visible, .aseo-ruta:focus-visible, .aseo-opcion:focus-within, .aseo-pestana:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.aseo-ancho { width: 100%; min-height: 52px; }
+.aseo-corto { min-height: 44px; padding: 6px 12px; font-size: 14px; }
+.aseo-selector { display: flex; flex-direction: column; gap: 12px; }
+.aseo-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.aseo-ruta { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; border: 2px solid #c3ced6; border-radius: 10px; background: #fff; padding: 12px; font: inherit; cursor: pointer; min-height: 64px; }
+.aseo-ruta:active { background: #eef6ff; }
+.aseo-ruta-cab { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 15px; }
+.aseo-ruta-cab em { margin-left: auto; font-style: normal; font-weight: 700; color: #0b5cab; }
+.aseo-ruta-sec { font-size: 14px; color: #1f2d38; line-height: 1.35; word-break: break-word; }
+.aseo-ruta-pie { font-size: 13px; color: #3d4d5a; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.aseo-marca { font-weight: 600; font-size: 12px; padding: 2px 8px; border-radius: 99px; background: #e7eef5; color: #1f3b55; }
+.aseo-marca-ok { background: #dcf3e4; color: #14532d; } .aseo-marca-no { background: #fdf1d6; color: #7a4a00; }
+.aseo-mapa-caja { position: relative; border: 1px solid #c3ced6; border-radius: 10px; overflow: hidden; }
+.aseo-mapa { height: min(58vh, 460px); min-height: 280px; width: 100%; }
+.aseo-mapa-ctl { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.aseo-aviso { margin: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #e0b84c; background: #fff8e1; color: #5c4400; font-size: 14px; line-height: 1.4; }
+.aseo-mal { color: #7a1a10; font-weight: 600; }
+.aseo-opciones { display: flex; gap: 8px; flex-wrap: wrap; }
+.aseo-opcion { flex: 1 1 90px; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border: 2px solid #c3ced6; border-radius: 10px; font-size: 18px; font-weight: 600; cursor: pointer; background: #fff; }
+.aseo-opcion input { width: 22px; height: 22px; accent-color: #0b5cab; }
+.aseo-opcion-on { border-color: #0b5cab; background: #e8f1fc; }
+.campo-fieldset { border: 1px solid #dde5ea; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 12px; margin: 0; min-width: 0; }
+.campo-fieldset legend { padding: 0 6px; }
+.aseo-miniaturas { display: flex; flex-wrap: wrap; gap: 8px; }
+.aseo-mini { display: flex; flex-direction: column; gap: 4px; align-items: center; max-width: 110px; font-size: 12px; text-align: center; }
+.aseo-mini img { width: 100px; height: 76px; object-fit: cover; border-radius: 6px; background: #0b1620; }
+.aseo-quitar { min-height: 36px; padding: 2px 10px; font-size: 13px; }
+.aseo-faltan { margin: 0; padding: 10px 12px 10px 28px; border-radius: 8px; background: #eef2f5; font-size: 14px; line-height: 1.45; }
+.aseo-faltan li:first-child { list-style: none; margin-left: -16px; }
+.aseo-acta-membrete { display: flex; justify-content: flex-end; }
+.aseo-consecutivo { font-size: 26px; font-weight: 800; letter-spacing: .02em; margin: 0; }
+.aseo-sello { font-size: 12px; word-break: break-all; }
+.aseo-acciones { display: flex; flex-direction: column; gap: 8px; }
+.aseo-firma-imprimir { display: none; }
+.aseo-pestanas { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 2px solid #dde5ea; }
+.aseo-pestana { min-height: 44px; padding: 8px 14px; border: none; background: none; font: inherit; font-weight: 600; cursor: pointer; color: #3d4d5a; border-bottom: 3px solid transparent; }
+.aseo-pestana-on { color: #0b5cab; border-bottom-color: #0b5cab; }
+.aseo-admin { display: flex; flex-direction: column; gap: 12px; }
+.aseo-previa, .aseo-resultado { display: flex; flex-direction: column; gap: 10px; border: 1px solid #dde5ea; border-radius: 10px; padding: 12px; background: #fafcfd; }
+.aseo-previa ul, .aseo-resultado ul { margin: 0; padding-left: 20px; line-height: 1.5; font-size: 14px; }
+.aseo-barrio { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; border: 1px solid #dde5ea; border-radius: 8px; padding: 8px 10px; }
+@media print {
+  .barra, .barra-areas, .aseo-acciones, .tec-boton, .tec-boton-sec { display: none !important; }
+  .aseo-firma-imprimir { display: block; margin-top: 40px; }
+  .tec-tarjeta { box-shadow: none; border: none; }
+  .aseo-acta { max-width: none; }
+}
+@media (min-width: 700px) { .aseo-acciones { flex-direction: row; flex-wrap: wrap; } }

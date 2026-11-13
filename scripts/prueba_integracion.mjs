@@ -77,7 +77,7 @@ ok("Admin: el perfil técnico conserva los permisos de acta del borrador", /borr
 ok("Admin: la lista muestra las etiquetas de acta y «Sin acceso» las tiene en cuenta", /deActa\.map/.test(ad) && /deCampo\.length === 0 && deActa\.length === 0/.test(ad));
 ok("Admin: «Sin ningún modo asignado» cuenta los modos de acta", /\.\.\.\(conActa \? CAMPOS_ACTA : \[\]\)/.test(ad));
 ok("api.ts: UsuarioAdmin trae ver_acta y ver_dashboard_acta (opcionales)", /ver_acta\?: boolean;\s*ver_dashboard_acta\?: boolean;/.test(api));
-ok("api.ts: permisos() acepta acta y dashboard_acta (opcionales)", /acta\?: boolean;[^\n]*\n\s*dashboard_acta\?: boolean;\s*\}\) =>/.test(api));
+ok("api.ts: permisos() acepta acta y dashboard_acta (opcionales)", /acta\?: boolean;[^\n]*\n\s*dashboard_acta\?: boolean;(\s*\n\s*aseo\?: boolean;[^\n]*\n\s*dashboard_aseo\?: boolean;)?\s*\}\) =>/.test(api));
 ok("api.ts: el perfil trae las claves acta y dashboard_acta (opcionales)", /acta\?: boolean; dashboard_acta\?: boolean;/.test(api));
 
 // ---- 4. El permiso de acta llega a AreaCampo (App.tsx) ----

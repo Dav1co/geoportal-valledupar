@@ -114,6 +114,9 @@ export type UsuarioAdmin = {
   // Acta de inspección técnica (integración Torre A): solo llegan si el SQL del acta ya está aplicado; si faltan, Administración no muestra las casillas del acta.
   ver_acta?: boolean;
   ver_dashboard_acta?: boolean;
+  // Interventoría de Aseo (Torre C): solo llegan si el SQL de aseo ya está aplicado; si faltan, Administración no muestra las casillas de aseo.
+  ver_aseo?: boolean;
+  ver_dashboard_aseo?: boolean;
 };
 
 /** Respuesta de geoportal-admin?accion=perfil (la misma que valida la sesión en useSession). */
@@ -125,6 +128,8 @@ export type PerfilResp = {
     campo?: boolean; dashboard_campo?: boolean;
     // Acta de inspección: `acta` = puede capturar (o supervisa, o es administrador); `dashboard_acta` = supervisor de actas (o administrador).
     acta?: boolean; dashboard_acta?: boolean;
+    // Interventoría de Aseo: `aseo` = puede auditar (o supervisa, o es administrador); `dashboard_aseo` = supervisor de aseo (o administrador); `torre_c` = alguna de las dos.
+    aseo?: boolean; dashboard_aseo?: boolean; torre_c?: boolean;
   };
 };
 
@@ -227,6 +232,8 @@ export const api = {
       dashboard_campo?: boolean;
       acta?: boolean;               // Acta de inspección: igual, si no se informa el servidor no lo toca
       dashboard_acta?: boolean;
+      aseo?: boolean;               // Interventoría de Aseo: igual, si no se informa el servidor no lo toca
+      dashboard_aseo?: boolean;
     }) =>
       callPost<{ guardado: boolean }>(
         "geoportal-admin",

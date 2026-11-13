@@ -25,6 +25,8 @@ import { CabeceraApp } from "./areas/CabeceraApp";
 import { VentanaEntrada } from "./areas/VentanaEntrada";
 import { AreaTecnica } from "./tecnica/AreaTecnica";
 import { AreaCampo } from "./campo/AreaCampo";
+// Interventoría de Aseo (Torre C): carga diferida; MapLibre solo entra cuando se abre el mapa de rutas.
+const AreaAseo = lazy(() => import("./aseo/AreaAseo").then((m) => ({ default: m.AreaAseo })));
 import { SinModulos } from "./areas/SinModulos";
 import { PerfilNoDisponible } from "./areas/PerfilNoDisponible";
 // Carga diferida (Paso C): MapLibre pesa unos 217 KB comprimidos y solo lo necesitan el mapa comercial y el Dashboard comercial; quien solo usa Técnica o Formatos de campo no lo descarga.
@@ -327,6 +329,8 @@ export default function App() {
           <AreaTecnica uid={session.user.id} correo={email} />
         ) : pantalla === "campo" ? (
           <AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} />
+        ) : pantalla === "aseo" ? (
+          <Suspense fallback={<div className="pantalla-carga">Cargando Aseo…</div>}><AreaAseo correo={email} /></Suspense>
         ) : (
           <SinModulos />
         )}

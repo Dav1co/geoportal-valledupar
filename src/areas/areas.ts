@@ -2,21 +2,21 @@
 // Ocultar un área en la interfaz es solo experiencia de usuario: NO sustituye ningún control del servidor (las Edge Functions y la base siguen decidiendo qué se entrega).
 import type { PerfilResp } from "../lib/api";
 
-export type Area = "comercial" | "tecnica" | "campo";
+export type Area = "comercial" | "tecnica" | "campo" | "aseo";
 export type Pantalla = "entrada" | Area | "sin_modulos";
-export type AreasDisponibles = { comercial: boolean; tecnica: boolean; campo: boolean };
+export type AreasDisponibles = { comercial: boolean; tecnica: boolean; campo: boolean; aseo: boolean };
 
 // El perfil trae los permisos de cada módulo y las áreas ya calculadas en el servidor (torre_a y torre_b). OJO: desde el Paso A del módulo de campo, `torre_a` también es verdadera para quien
 // solo tiene permisos de campo (los formatos de campo viven en la Torre A), así que NO basta para saber si hay modos comerciales: se exigen los modos Y (si viene) torre_a.
 type PermisosPerfil = Partial<NonNullable<PerfilResp["permisos"]>> & {
-  registro_tecnico?: boolean; dashboard_tecnico?: boolean; torre_a?: boolean; torre_b?: boolean;
+  registro_tecnico?: boolean; dashboard_tecnico?: boolean; torre_a?: boolean; torre_b?: boolean; torre_c?: boolean; aseo?: boolean; dashboard_aseo?: boolean;
 };
 
-/** «Acceso solo con módulo asignado» (decisión de David): se entra a Comercial solo con algún modo comercial, a Técnica solo con algún permiso técnico y a Formatos de campo solo con algún
- *  permiso de campo o de acta. El administrador tiene las tres. Sin ninguna: «Sin módulos asignados». Si el servidor declara `torre_b`, se respeta para Técnica. */
+/** «Acceso solo con módulo asignado» (decisión de David): se entra a Comercial solo con algún modo comercial, a Técnica solo con algún permiso técnico, a Formatos de campo solo con algún
+ *  permiso de campo o de acta y a la Interventoría de Aseo solo con algún permiso de aseo. El administrador tiene las cuatro. Sin ninguna: «Sin módulos asignados». Si el servidor declara `torre_b`, se respeta para Técnica. */
 export function areasDisponibles(perfil: PerfilResp | null): AreasDisponibles {
-  if (!perfil) return { comercial: false, tecnica: false, campo: false };
-  if (perfil.es_admin) return { comercial: true, tecnica: true, campo: true };
+  if (!perfil) return { comercial: false, tecnica: false, campo: false, aseo: false };
+  if (perfil.es_admin) return { comercial: true, tecnica: true, campo: true, aseo: true };
   const p = (perfil.permisos ?? {}) as PermisosPerfil;
   const tecnico = typeof p.torre_b === "boolean" ? p.torre_b : p.registro_tecnico === true || p.dashboard_tecnico === true;
   // Comercial = algún modo comercial real Y, si el servidor declara torre_a, que también sea verdadera. Dos casos lo exigen: «solo campo» tiene torre_a verdadera pero ningún modo
@@ -25,7 +25,9 @@ export function areasDisponibles(perfil: PerfilResp | null): AreasDisponibles {
   const comercial = hayModoComercial && (typeof p.torre_a !== "boolean" || p.torre_a === true);
   // Campo se abre también con un permiso de acta (el acta vive en la Torre A): `acta` (captura; el supervisor de actas también la tiene) o `dashboard_acta` (reconocido; su pantalla aún no existe).
   const campo = p.campo === true || p.dashboard_campo === true || p.acta === true || p.dashboard_acta === true;
-  return { comercial, tecnica: tecnico, campo };
+  // Aseo (Torre C): `aseo` (captura; el supervisor de aseo también la tiene) o `dashboard_aseo`; si el servidor declara `torre_c`, se respeta.
+  const aseo = typeof p.torre_c === "boolean" ? p.torre_c : p.aseo === true || p.dashboard_aseo === true;
+  return { comercial, tecnica: tecnico, campo, aseo };
 }
 
 /** Tarjetas de la ventana de entrada. «Formatos de campo» solo es una tarjeta aparte cuando NO hay Comercial: con Comercial se llega desde su cabecera (botón «Formatos de campo»),
@@ -35,6 +37,7 @@ export function tarjetasEntrada(a: AreasDisponibles): Area[] {
   if (a.comercial) t.push("comercial");
   if (a.tecnica) t.push("tecnica");
   if (a.campo && !a.comercial) t.push("campo");
+  if (a.aseo) t.push("aseo");
   return t;
 }
 

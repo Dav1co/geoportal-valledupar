@@ -42,6 +42,15 @@ export function VentanaEntrada({ areas, onElegir }: { areas: AreasDisponibles; o
               </span>
             </button>
           )}
+          {tarjetas.includes("aseo") && (
+            <button type="button" className="area-tarjeta area-tarjeta-campo" onClick={() => onElegir("aseo")}>
+              <span className="area-texto">
+                <h2 className="area-titulo"><span>GEOPORTAL</span><strong>INTERVENTORÍA DE ASEO</strong></h2>
+                <p>Auditoría de la prestación del servicio de aseo: elija la ruta, registre con fotos y obtenga el acta.</p>
+                <span className="area-etiqueta">Torre C · Disponible: Barrido</span>
+              </span>
+            </button>
+          )}
         </div>
         <p className="areas-pie">Esta ventana solo aparece para cuentas con acceso a más de un área.</p>
       </div>
