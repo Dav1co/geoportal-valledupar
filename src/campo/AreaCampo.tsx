@@ -7,6 +7,8 @@ import { FormatosCampo } from "./formatos/FormatosCampo";
 import { formatosDisponibles } from "./formatos/tipos";
 import { entradasDeCampo, type EntradaId } from "./entradas";
 import { PantallaActa } from "./acta/PantallaActa";
+import { AperturasSinRegistrar } from "./acta/AperturasSinRegistrar";
+import type { Destino } from "../components/ConfirmarCancelar";
 import { supabase } from "../lib/supabase";
 
 // Revisión de reportes (Paso C): carga diferida. Quien no tiene el permiso de supervisión no descarga este código (ni MapLibre, que viene dentro del mapa).
@@ -27,7 +29,7 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   const [error, setError] = useState<ErrorCampo | null>(null);
   const [intento, setIntento] = useState(0);
   const [abierta, setAbierta] = useState<EntradaId | null>(null);   // pantalla abierta (null = la lista de entradas)
-  const [contratoActa, setContratoActa] = useState("");   // contrato con que se abre el acta de inspección desde un formato (vacío = abrir sin precargar)
+  const [contratoPuente, setContratoPuente] = useState("");   // contrato que pasa de un formulario a otro (formato con irregularidad → acta; «me equivoqué de formulario» al cancelar); vacío = nada que precargar
   const [version, setVersion] = useState(0);        // sube con cada «Hacer otro reporte»: el formulario nace limpio y se vuelve a leer la definición
 
   useEffect(() => {
@@ -56,14 +58,27 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   }
   if (campo && !def) return <div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando…</p></section></div>;
 
+  // «Me equivoqué de formulario» (Cancelar): a qué otros formularios se puede pasar desde `desde`, llevando solo el contrato.
+  const destinosDesde = (desde: EntradaId): Destino[] => [
+    ...(campo && def?.puede.reportar && desde !== "reporte_general" ? [{ id: "reporte_general", rotulo: "Reporte general" }] : []),
+    ...(campo && def?.puede.reportar && desde !== "formatos" && formatosDisponibles(def.grupos).length > 0 ? [{ id: "formatos", rotulo: "Formatos de actividad" }] : []),
+    ...(acta && desde !== "acta" ? [{ id: "acta", rotulo: "Acta de inspección" }] : []),
+  ];
+  const irA = (destino: string, contrato: string) => { setContratoPuente(contrato); setVersion((v) => v + 1); setAbierta(destino as EntradaId); };
+
   if (abierta === "acta" && acta) {
-    return <PantallaActa correo={correo} contratoInicial={contratoActa} onVolver={() => { setContratoActa(""); setAbierta(null); }} />;
+    return <PantallaActa correo={correo} contratoInicial={contratoPuente} destinos={destinosDesde("acta")} onIrA={irA} onVolver={() => { setContratoPuente(""); setAbierta(null); }} />;
   }
   if (def && abierta === "reporte_general") {
-    return <ReporteGeneral key={version} def={def} correo={correo} onVolver={() => setAbierta(null)} onOtro={() => { setAbierta("reporte_general"); setVersion((v) => v + 1); }} />;
+    return <ReporteGeneral key={version} def={def} correo={correo} contratoInicial={contratoPuente} destinos={destinosDesde("reporte_general")} onIrA={irA}
+      onVolver={() => { setContratoPuente(""); setAbierta(null); }} onOtro={() => { setContratoPuente(""); setAbierta("reporte_general"); setVersion((v) => v + 1); }} />;
   }
   if (def && abierta === "formatos") {
-    return <FormatosCampo def={def} correo={correo} onVolver={() => setAbierta(null)} puedeActa={acta} onAbrirActa={(c) => { setContratoActa(c); setAbierta("acta"); }} />;
+    return <FormatosCampo key={version} def={def} correo={correo} contratoInicial={contratoPuente} destinos={destinosDesde("formatos")} onIrA={irA}
+      onVolver={() => { setContratoPuente(""); setAbierta(null); }} puedeActa={acta} onAbrirActa={(c) => { setContratoPuente(c); setAbierta("acta"); }} />;
+  }
+  if (abierta === "acta_supervision" && dashboardActa) {
+    return <AperturasSinRegistrar onVolver={() => setAbierta(null)} />;
   }
 
   if (abierta === "revision" && def?.puede.supervisar) {

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiTec, ErrorTec, type FormularioDef } from "./apiTecnica";
 import { avisoDeError } from "./FormularioCaptura";
-import { guardarBorrador, leerBorrador, nuevaClaveEnvio } from "./borrador";
+import { borrarBorrador, guardarBorrador, leerBorrador, nuevaClaveEnvio } from "./borrador";
+import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
 import { agrupar, claveEnvioTarjeta, claveIntento, claveTexto, conDatos, cuerpoTarjeta, etiquetaCampo, lugarInicial, modoSelector, nombreLugar, textoElegirLugar, tieneLugar, type Tarjeta } from "./lugares";
 import { decimalesAMostrar, formatearNumero, interpretarNumero } from "./numeros";
 
@@ -43,12 +44,23 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
   const [lugares, setLugares] = useState<Record<string, string>>(() => Object.fromEntries(tarjetas.map((t) => [t.id, lugarInicial(t, inicial?.textos ?? {}, extra.lugares[t.id] ?? (t.clase === "planta" ? inicial?.planta : null))])));
   const [estados, setEstados] = useState<Record<string, Estado>>({});          // por claveIntento(tarjeta, lugar)
   const [errores, setErrores] = useState<Record<string, string>>({});
+  const [descartando, setDescartando] = useState(false);       // panel «¿Descartar lo escrito?»
   const [fase, setFase] = useState<"editando" | "confirmando" | "enviando">("editando");
   const [conf, setConf] = useState<Conf[]>([]);
   const [aviso, setAviso] = useState<Aviso | null>(inicial ? { tipo: "info", texto: "Se recuperó lo que había escrito antes en este equipo. Revíselo antes de guardar." } : null);
 
   const intentos = useRef<Record<string, Intento>>(extra.intentos);
   const enviando = useRef(false);
+  const hayTexto = Object.values(textos).some((x) => typeof x === "string" && x.trim() !== "");
+  // «Descartar borrador»: no hay consecutivo ni nada nuevo en el servidor. Las tarjetas que YA se guardaron no se tocan (el aviso lo dice). Se conserva la planta elegida.
+  function descartar() {
+    const guardadas = Object.values(estados).filter((e) => e.tipo === "ok").length;
+    setTextos({}); setErrores({}); setEstados({}); setHora(def.hora_propuesta); setDescartando(false);
+    setLugares((l) => Object.fromEntries(tarjetas.map((x) => [x.id, x.clase === "planta" ? l[x.id] ?? "" : lugarInicial(x, {}, null)])));
+    intentos.current = {};
+    borrarBorrador(clave);
+    setAviso({ tipo: "info", texto: "Se descartó lo escrito en este equipo.", detalle: guardadas > 0 ? `${guardadas === 1 ? "Una tarjeta ya estaba guardada y no se afecta" : `${guardadas} tarjetas ya estaban guardadas y no se afectan`}.` : "Lo ya guardado en el servidor no se tocó." });
+  }
   const reponerHora = useRef(false);
   const refTitulo = useRef<HTMLHeadingElement>(null);
   const refConfirmacion = useRef<HTMLHeadingElement>(null);
@@ -281,6 +293,12 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
           ) : null}
 
           <button type="button" className="tec-boton" onClick={guardar} disabled={bloqueado} aria-busy={bloqueado}>{bloqueado ? "Guardando…" : "Guardar registro"}</button>
+          {hayTexto && !descartando ? <button type="button" className="btn-cancelar" onClick={() => setDescartando(true)} disabled={bloqueado}>Descartar borrador</button> : null}
+          {descartando ? (
+            <ConfirmarCancelar titulo="¿Descartar lo escrito?" rotuloConfirmar="Sí, descartar"
+              mensaje="Se borra lo escrito en este equipo (el borrador). Lo que ya guardó en el servidor no se toca."
+              onConfirmar={descartar} onSeguir={() => setDescartando(false)} />
+          ) : null}
           <p className="tec-ayuda">Todos los campos son opcionales: se guarda un registro por cada tarjeta con datos. Los valores se guardan tal como los escribe. Si algo quedó mal registrado, avise a su supervisor.</p>
         </>
       )}

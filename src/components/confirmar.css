@@ -1,0 +1,19 @@
+/* Panel de «Cancelar» (ConfirmarCancelar.tsx). Hereda tec-boton / tec-boton-sec; 380 px, toques de 48 px. */
+.conf-canc { display: flex; flex-direction: column; gap: 10px; border: 2px solid #b42318; background: #fdf1ef; border-radius: 12px; padding: 14px; }
+.conf-canc h2 { margin: 0; font-size: 18px; color: #7a1a10; }
+.conf-canc h2:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.conf-canc-msg { margin: 0; font-size: 15px; line-height: 1.4; color: #22313f; }
+.conf-canc-etq { font-size: 15px; font-weight: 600; }
+.conf-canc-entrada { width: 100%; box-sizing: border-box; min-height: 48px; font: inherit; font-size: 16px; padding: 8px 12px; border: 1px solid #7b8b99; border-radius: 8px; background: #fff; color: #22313f; }
+.conf-canc-area { min-height: 90px; resize: vertical; }
+.conf-canc-entrada:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.conf-canc-error { margin: 0; font-size: 15px; font-weight: 600; color: #b42318; }
+.conf-canc-destinos { display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed #b42318; padding-top: 10px; }
+.conf-canc-acciones { display: flex; flex-direction: column; gap: 8px; }
+.conf-canc-boton { min-height: 48px; width: 100%; }
+.conf-canc-peligro { background: #b42318; border-color: #b42318; color: #fff; }
+.conf-canc-peligro:disabled { background: #d9a09a; border-color: #d9a09a; color: #fff; cursor: not-allowed; }
+.conf-canc-fila { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-cancelar { min-height: 48px; border-radius: 10px; background: #fff; color: #b42318; border: 2px solid #b42318; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; padding: 0 14px; }
+.btn-cancelar:disabled { color: #8a6560; border-color: #d9a09a; background: #f4ecea; cursor: not-allowed; }
+.btn-cancelar:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }

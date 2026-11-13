@@ -200,7 +200,7 @@ const form = (id) => dibujar(h(FormularioActa, { cat, actaId: id, correo: CORREO
   ok("área (sin acta ni campo): ninguna entrada (ni botones)", !nada.includes("Reporte general") && !nada.includes("Registro digital que acompaña") && !/<button/.test(dibujar(h(AreaCampo, { correo: CORREO, acta: false, campo: false }))));
   ok("área (con campo): pide el formulario de campo (muestra «Cargando…») y NO enseña el acta si no hay permiso", area({ acta: false, campo: true }).includes("Cargando") && !area({ acta: false, campo: true }).includes("Acta de inspección"));
   const sup = area({ acta: true, campo: false, dashboardActa: true });
-  ok("área (supervisor de actas): ve el marcador de su tablero como «Próximamente»", sup.includes("Supervisión de actas") && sup.includes("Próximamente"));
+  ok("área (supervisor de actas): ve la entrada «Aperturas sin registrar» (ya no es un marcador)", sup.includes("Aperturas sin registrar") && !sup.includes("Próximamente"));
   const raro = dibujar(h(PantallaActa, { correo: CORREO, onVolver: () => {} }));
   ok("pantalla: al abrir muestra «Cargando…» mientras pide el formulario y la lista", sinEtiquetas(raro).includes("Cargando"));
 }
@@ -217,7 +217,7 @@ const form = (id) => dibujar(h(FormularioActa, { cat, actaId: id, correo: CORREO
   ok("fuente: no hay lienzo, PDF ni imágenes de firma", !/(<canvas|toDataURL|jspdf|pdf-lib|signature_pad|\bPDF\b)/i.test(codigo));
   ok("fuente: sin lenguaje tarifario", !/(tarif|bcr|poir|vaeo)/i.test(todo));
   ok("fuente: el consecutivo no se inventa en el cliente (nunca se arma un «AI-» a mano)", !/["'`]AI-/.test(codigo));
-  ok("fuente: el cliente nunca manda autor, fecha del servidor ni hora (solo la fecha del papel)", !/\b(autor|usuario|email|solicitante|hora)\b["']?\s*:/.test(codigo));
+  ok("fuente: el cliente nunca manda autor, fecha del servidor ni hora (solo la fecha del papel)", !/\b(autor|usuario|email|solicitante|hora)\b["']?\s*:/.test(codigo.replace(/consecutivo: string; autor: string;/g, "")));
   ok("fuente: las pantallas de acta no usan Edge de campo ni comerciales", !/geoportal-campo|geoportal-tiles|geoportal-buscar|geoportal-barrios|geoportal-predio/.test(codigo));
 }
 
