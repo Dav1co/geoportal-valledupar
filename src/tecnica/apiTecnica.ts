@@ -1,4 +1,5 @@
 import { supabase, FUNCTIONS_URL } from "../lib/supabase";
+import { esNoAplicado } from "../campo/apiCampo";
 
 // Cliente de la Edge Function geoportal-tecnica (contrato: edge_contrato.md del Corte 1, Paso A). Aquí NO hay ningún nombre de variable ni de formulario.
 
@@ -43,7 +44,7 @@ export type QuimicosResp = { formulario: string; max_ppm: number; max_nombre: nu
 
 /** Cómo debe reaccionar la pantalla. «red»: sin respuesta (el envío puede o no haber llegado: reintentar con la MISMA clave es seguro). «sesion»: el token venció.
  *  «horario»: autorizar() rechazó por horario, día o pausa global. «denegado»: usuario no autorizado. «permiso»: la RPC lo negó (texto fijo). «validacion»: 4xx con mensaje para la persona. «servidor»: 5xx. */
-export type TipoError = "red" | "sesion" | "horario" | "denegado" | "permiso" | "validacion" | "servidor";
+export type TipoError = "red" | "sesion" | "horario" | "denegado" | "permiso" | "validacion" | "servidor" | "no_aplicado";
 export class ErrorTec extends Error {
   tipo: TipoError;
   status: number;
@@ -59,6 +60,7 @@ const TEXTO_SIN_PERMISO = "No tiene permiso para esta acción.";
 const TEXTO_DENEGADO = "Usuario no autorizado en el geoportal.";
 
 export function clasificar(status: number, mensaje: string): TipoError {
+  if (esNoAplicado(status, mensaje)) return "no_aplicado";
   if (status === 401) return "sesion";
   if (status === 403) {
     if (mensaje === TEXTO_SIN_PERMISO) return "permiso";

@@ -246,10 +246,10 @@ ok("faltas: un borrador vacío trae faltas (nada se envía sin completar)", falt
   ok("api: foto_papel manda {acta_id, orden}", igual(JSON.parse(llamadas[0].init.body), { acta_id: "id1", orden: 4 }));
   sim({ s: 200, cuerpo: {} }); await A.apiActa.prediosCercanos(10.4, -73.2); sim({ s: 200, cuerpo: {} }); await A.apiActa.formulario();
   ok("api: predios_cercanos (POST) y formulario (GET)", llamadas[0].url.endsWith("accion=formulario") && llamadas[0].init.method === "GET");
-  const usadas = new Set(["mis_actas", "precargar", "abrir", "preparar_subida", "registrar", "foto_papel", "predios_cercanos", "formulario"]);
+  const usadas = new Set(["mis_actas", "precargar", "abrir", "preparar_subida", "registrar", "foto_papel", "predios_cercanos", "formulario", "motivos_cancelacion", "cancelar", "aperturas_sin_registrar"]);
   const fuente = readFileSync(join(aqui, "../src/campo/acta/apiActa.ts"), "utf8");
   const rutasEnCodigo = [...fuente.matchAll(/(?:pedir<[^>]*>\()"([a-z_]+)"/g)].map((m) => m[1]);
-  ok("api: solo se usan las 8 rutas de la pantalla; no hay vincular_reporte, actas_de_reporte ni rutas de supervisión", rutasEnCodigo.length === 8 && rutasEnCodigo.every((r) => usadas.has(r)) && !/pedir<[^>]*>\("(vincular_reporte|vincular_contrato|actas_de_reporte|actas|acta|foto|estado|ocultar|reincluir|custodia|corregir|conciliacion|cercanas|catalogo)"/.test(fuente));
+  ok("api: solo se usan las 8 rutas de captura y las 3 de cancelar; no hay vincular_reporte, actas_de_reporte ni las rutas del tablero de supervisión", rutasEnCodigo.length === 11 && rutasEnCodigo.every((r) => usadas.has(r)) && !/pedir<[^>]*>\("(vincular_reporte|vincular_contrato|actas_de_reporte|actas|acta|foto|estado|ocultar|reincluir|custodia|corregir|conciliacion|cercanas|catalogo)"/.test(fuente));
   // errores
   sim({ s: 403, cuerpo: { error: "No tiene permiso para esta acción." } });
   let x = await intenta(() => A.apiActa.misActas());

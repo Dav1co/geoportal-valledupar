@@ -1,6 +1,7 @@
 import { supabase, FUNCTIONS_URL } from "../../lib/supabase";
 import { clasificar, ErrorCampo } from "../apiCampo";
-import type { Apertura, ConfirmacionActa, FormularioActa, MisActas, PrediosCercanos, PreparacionActa, Precarga } from "./tipos";
+import type { BloqueConstancia } from "../constancia/logica";
+import type { Apertura, AperturasSinRegistrar, CancelacionActa, ConfirmacionActa, FormularioActa, MisActas, MotivoCancelacionActa, PrediosCercanos, PreparacionActa, Precarga } from "./tipos";
 
 // Cliente de la Edge `geoportal-acta` para la pantalla del acta (mismo estilo que apiFormatos.ts; reutiliza ErrorCampo y clasificar de apiCampo.ts, que no se tocan).
 // Rutas que USA la pantalla: formulario, precargar, predios_cercanos, abrir, preparar_subida, registrar, foto_papel y mis_actas.
@@ -64,11 +65,18 @@ export const apiActa = {
   /** Rutas firmadas de subida: órdenes contiguos, una sola llamada con todas las fotos. La ruta no llega al navegador. */
   prepararSubida: (acta_id: string, fotos: { orden: number; tipo: string }[]) => pedir<PreparacionActa>("preparar_subida", { metodo: "POST", cuerpo: { acta_id, fotos } }),
   /** Registra (una transacción). Repetir con el mismo acta_id devuelve `repetido: true` con el mismo consecutivo. */
-  registrar: (acta_id: string, contenido: Record<string, unknown>) => pedir<ConfirmacionActa>("registrar", { metodo: "POST", cuerpo: { acta_id, contenido }, timeoutMs: 60000 }),
+  registrar: (acta_id: string, contenido: Record<string, unknown>, constancia?: BloqueConstancia) => pedir<ConfirmacionActa>("registrar", { metodo: "POST", cuerpo: { acta_id, contenido, ...(constancia ? { constancia } : {}) }, timeoutMs: 60000 }),
   /** Foto del papel DESPUÉS del registro (`papel_pendiente`): la foto ya debe estar subida a la ruta preparada. Solo el autor; repetida → 409 «ya existe». */
   fotoPapel: (acta_id: string, orden: number) => pedir<{ acta_id: string; orden: number }>("foto_papel", { metodo: "POST", cuerpo: { acta_id, orden }, timeoutMs: 60000 }),
   /** SOLO las actas que abrió quien consulta (retomar una apertura, adjuntar el papel). */
   misActas: () => pedir<MisActas>("mis_actas"),
+  /** Motivos para cancelar una apertura (catálogo del servidor). */
+  motivosCancelacion: () => pedir<{ motivos: MotivoCancelacionActa[] }>("motivos_cancelacion"),
+  /** Cancela una apertura SIN registrar (el autor la suya; supervisor y administrador, cualquiera). Evento de solo inserción; el consecutivo queda justificado. Repetir devuelve `repetido`. Lo registrado → 409. */
+  cancelar: (acta_id: string, motivo_codigo: string, motivo_texto: string) =>
+    pedir<CancelacionActa>("cancelar", { metodo: "POST", cuerpo: { acta_id, motivo_codigo, ...(motivo_texto.trim() ? { motivo_texto: motivo_texto.trim() } : {}) } }),
+  /** SUPERVISIÓN: aperturas en curso, vencidas y (si se pide) canceladas con su motivo. */
+  aperturasSinRegistrar: (incluirCanceladas: boolean) => pedir<AperturasSinRegistrar>("aperturas_sin_registrar", { metodo: "POST", cuerpo: { incluir_canceladas: incluirCanceladas, limite: 200 } }),
 
   /** Sube UNA foto a la URL firmada (PUT directo, sin el SDK de Supabase). Una foto que ya estaba (409) cuenta como subida.
    *  PENDIENTE de verificar con una subida real: el formato del cuerpo (FormData con el archivo, como lo manda el SDK) y los códigos de respuesta de Storage. */

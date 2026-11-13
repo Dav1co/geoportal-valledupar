@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./formatos.css";
+import { ConfirmarCancelar, type Destino as DestinoCancelar } from "../../components/ConfirmarCancelar";
 import { avisoDeError, apiCampo, ErrorCampo, type FormularioCampo, type Preparacion } from "../apiCampo";
 import { maxDescripcion } from "../limites";
 import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara } from "../camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "../ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
 import { apiFormatos } from "./apiFormatos";
+import { SeccionConstancia } from "../constancia/SeccionConstancia";
+import { useConstancia } from "../constancia/useConstancia";
 import { agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
 import { etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
 
@@ -23,16 +26,19 @@ type Destino = { tipo: "etiqueta"; codigo: string; nombre: string } | { tipo: "a
 
 export type EnvioPendiente = { tipo: string; resultado: Resultado | null; causal: string | null; datos: Record<string, unknown> | null; reporte_id: string | null };
 
-export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFallarRed, puedeActa = false, onAbrirActa }: {
+export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFallarRed, puedeActa = false, onAbrirActa, contratoInicial = "", destinos, onIrA }: {
   def: FormularioCampo; tipo: TipoFormato; correo: string; onVolver: () => void; onOtro: () => void; alFallarRed?: (envio: EnvioPendiente) => void;
   /** Permiso `acta` (lo decide el servidor): solo con él se ofrece abrir el acta de inspección técnica. `onAbrirActa` recibe el contrato para precargarlo. */
   puedeActa?: boolean; onAbrirActa?: (contrato: string) => void;
+  /** Cancelar: contrato que llega de otro formulario y a qué otros se puede pasar llevando solo el contrato («me equivoqué de formulario»). */
+  contratoInicial?: string; destinos?: DestinoCancelar[]; onIrA?: (destino: string, contrato: string) => void;
 }) {
   const [resultado, setResultado] = useState<Resultado | "">("");
   const [causal, setCausal] = useState("");
   const [subtipo, setSubtipo] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [contrato, setContrato] = useState("");
+  const [contrato, setContrato] = useState(contratoInicial);
+  const [cancelando, setCancelando] = useState(false);
   const [valores, setValores] = useState<ValoresCampos>({});
   const [porEtiqueta, setPorEtiqueta] = useState<Record<string, FotoLocal | null>>({});
   const [adicionales, setAdicionales] = useState<FotoLocal[]>([]);
@@ -47,6 +53,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const ubic = useUbicacion();
   const prep = useRef<Preparacion | null>(null);
   const enviando = useRef(false);
+  const cons = useConstancia(tipo.codigo);     // «Constancia por correo»: solo en los 4 formatos del acta de revisión o instalación y si el documento está habilitado
   const refEtq = useRef(porEtiqueta); refEtq.current = porEtiqueta;
   const refAdic = useRef(adicionales); refAdic.current = adicionales;
 
@@ -73,12 +80,13 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const maxDesc = maxDescripcion(def.limites);   // un solo tope: el de la base (limites.max_descripcion)
   const minimo = minimoFotos(tipo, resultado);
   const maximo = maximoFotos(tipo, tope);
-  const faltas = validarFormato(tipo, {
+  const faltasFormato = validarFormato(tipo, {
     resultado, causal, subtipo, descripcion, contrato, valores,
     etiquetasConFoto: etiquetas.filter((e) => porEtiqueta[e.codigo]).map((e) => e.codigo),
     // Sin etiquetas en el catálogo, todas las fotos van en «adicionales» (sin etiqueta): cuentan igual.
     adicionales: adicionales.length, tieneUbicacion: !!fix, tienePrecision: !!fix && Number.isFinite(fix.precision_m), topeGeneral: tope,
   });
+  const faltas = [...faltasFormato, ...cons.faltas];
   const { errores } = aplanarDatos(tipo, valores);
   const visibles = useMemo(() => camposVisibles(tipo, valores), [tipo, valores]);
   const secciones = useMemo(() => agruparSecciones(visibles), [visibles]);
@@ -137,6 +145,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         lat: Number(fix.lat.toFixed(6)), lon: Number(fix.lon.toFixed(6)), precision_m: Math.round(fix.precision_m * 10) / 10, riesgo_inmediato: false, origen: "campo",
         fotos: fotosParaCrear(ordenadas, rutas),
         datos, resultado: tipo.genera_resultado ? (resultado || null) : null, causal: inefectivo ? causal : null,
+        ...(cons.bloque ? { constancia: cons.bloque } : {}),
       });
       soltarTodo();
       setInvitarActa(marcoIrr && puedeActa && onAbrirActa && tipo.requiere_contrato !== "no" && contrato ? { contrato } : null);
@@ -196,14 +205,24 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const contadorOk = nFotos >= minimo && nFotos <= maximo;
   const puedeMas = !fotosFijas && nFotos < maximo;
   const hayInterac = nFotos > 0 || resultado !== "" || Object.keys(valores).length > 0;
+  // «Cancelar»: el consecutivo se toma al REGISTRAR (no antes), así que solo se descarta lo del teléfono. Sin nada escrito sale directo; con algo, pide confirmación.
+  const hayDatos = hayInterac || causal !== "" || subtipo !== "" || descripcion.trim() !== "" || contrato !== contratoInicial || preparada;
+  const pedirCancelar = () => { if (hayDatos) setCancelando(true); else onVolver(); };
 
   return (
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
         <div className="campo-cab">
-          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={onVolver} disabled={bloqueado}>← Formatos</button>
+          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={pedirCancelar} disabled={bloqueado}>← Formatos</button>
           <h1>{tipo.nombre}</h1>
+          <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={bloqueado}>Cancelar</button>
         </div>
+        {cancelando && (
+          <ConfirmarCancelar titulo="¿Cancelar este registro?"
+            mensaje={`Se descarta lo escrito${nFotos > 0 ? ` y ${nFotos === 1 ? "la foto tomada" : `las ${nFotos} fotos tomadas`}` : ""}. No se guarda nada ni se gasta ningún consecutivo${preparada ? "; las fotos ya reservadas quedan sin usar" : ""}.`}
+            destinos={destinos} onIrA={onIrA ? (d) => onIrA(d, contrato) : undefined}
+            onConfirmar={() => onVolver()} onSeguir={() => setCancelando(false)} />
+        )}
         {tipo.usa_consecutivo && <p className="campo-sub">Al enviar se le asignará un número consecutivo.</p>}
 
         {/* Resultado */}
@@ -321,6 +340,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
           <p className="campo-sub">Las fotos se toman con la cámara y quedan solo en la memoria de esta pantalla: no se guardan en el celular ni en la galería.</p>
         </div>
 
+        <SeccionConstancia config={cons.config} valor={cons.valor} onCambio={cons.setValor} bloqueado={bloqueado} />
+
         {/* Automáticos */}
         <dl className="campo-auto">
           <div>
@@ -336,7 +357,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         {ubic.mensaje && <p className="campo-error" role="alert">{ubic.mensaje}</p>}
         {precisionMala && <p className="campo-nota" role="note">La ubicación es poco precisa (más de {UMBRAL_PRECISION_MALA_M} m). Espere unos segundos o salga a cielo abierto y pulse «Actualizar ubicación».{inefectivo ? " En una visita inefectiva la precisión queda registrada como prueba." : " Puede enviar igualmente."}</p>}
 
-        {faltas.length > 0 && fase === "editando" && hayInterac && <ul className="campo-faltas">{faltas.map((m) => <li key={m}>{m}</li>)}</ul>}
+        {faltasFormato.length > 0 && fase === "editando" && hayInterac && <ul className="campo-faltas">{faltasFormato.map((m) => <li key={m}>{m}</li>)}</ul>}
+        {cons.faltas.length > 0 && fase === "editando" && <ul className="campo-faltas">{cons.faltas.map((m) => <li key={m}>{m}</li>)}</ul>}
         {sinSenal && <p className="campo-error" role="alert">No hay señal en este momento. Sus datos y fotos siguen aquí; envíe cuando recupere la conexión.</p>}
         {fase === "error" && aviso && <p className="campo-error" role="alert">{aviso.texto}</p>}
         {fase === "error" && errorEnvio?.tipo === "sesion" ? null : (
@@ -344,6 +366,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
             {fase === "enviando" ? "Enviando…" : fase === "error" ? "Reintentar" : "Enviar reporte"}
           </button>
         )}
+        <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={fase === "enviando"}>Cancelar</button>
       </section>
 
       {camaraEn !== null && (

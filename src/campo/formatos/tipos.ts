@@ -5,8 +5,8 @@ import type { Grupo, Tipo } from "../apiCampo";
 
 export type TipoDato = "texto" | "entero" | "decimal" | "si_no" | "opcion" | "opciones" | "dia_hora";
 export type OpcionCampo = { codigo: string; nombre: string; activo?: boolean };
-/** Condición de pantalla: el campo se muestra solo si el campo `campo` (del mismo formato) vale `es` (true/false para sí-no; un código para una opción). La base NO la verifica. */
-export type VisibleSi = { campo: string; es: boolean | string };
+/** Condición de pantalla: el campo se muestra solo si el campo `campo` (del mismo formato) vale `es` (true/false para sí-no; un código para una opción) o, con `no_es`, si ya fue respondido y su valor es distinto del código. La base NO la verifica. */
+export type VisibleSi = { campo: string; es: boolean | string; no_es?: undefined } | { campo: string; no_es: string; es?: undefined };
 export type CampoDef = {
   codigo: string; nombre: string; tipo_dato: TipoDato; obligatorio: boolean; opciones?: OpcionCampo[];
   minimo?: number; maximo?: number; unidad?: string; ayuda?: string; sensible?: boolean; orden?: number; activo?: boolean;
@@ -28,12 +28,14 @@ export type TipoFormato = Tipo & {
 export const ETIQUETA_ADICIONAL = "adicional";
 
 /** Respuesta de «crear» con el consecutivo del Paso D (nulo en los tipos que no lo llevan). */
-export type ConfirmacionFormato = { id: string; registrado_en: string; repetido: boolean; contrato_verificado: boolean | null; aviso_zona: boolean; consecutivo: string | null };
+export type ConfirmacionFormato = { id: string; registrado_en: string; repetido: boolean; contrato_verificado: boolean | null; aviso_zona: boolean; consecutivo: string | null; constancia?: string };
 export type CuerpoCrearFormato = {
   reporte_id: string; tipo: string; subtipo?: string | null; descripcion?: string | null; contrato?: string | null;
   lat: number; lon: number; precision_m?: number | null; riesgo_inmediato: boolean; origen: "campo" | "escritorio";
   fotos: { orden: number; ruta: string; etiqueta?: string }[];
   datos?: Record<string, unknown> | null; resultado?: Resultado | null; causal?: string | null; orden_trabajo_id?: string | null;
+  /** Constancia por correo (opcional; solo en los 4 formatos del acta de revisión o instalación). */
+  constancia?: import("../constancia/logica").BloqueConstancia;
 };
 
 const lista = <T,>(v: T[] | undefined): T[] => (Array.isArray(v) ? v : []);

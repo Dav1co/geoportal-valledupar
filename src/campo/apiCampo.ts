@@ -24,7 +24,7 @@ export type CuerpoCrear = {
 /** Cómo debe reaccionar la pantalla. «red»: sin respuesta (el envío puede o no haber llegado; reintentar con el MISMO reporte_id es seguro). «sesion»: el token venció.
  *  «horario»: autorizar() rechazó por horario, día o pausa. «denegado»: usuario no autorizado. «permiso»: la RPC lo negó. «limite»: límite de ritmo (HTTP 429).
  *  «subida_vencida»: la URL firmada de subida ya no sirve (hay que pedir una nueva preparación). «validacion»: 4xx con mensaje para la persona. «servidor»: 5xx. */
-export type TipoError = "red" | "sesion" | "horario" | "denegado" | "permiso" | "limite" | "subida_vencida" | "validacion" | "servidor";
+export type TipoError = "red" | "sesion" | "horario" | "denegado" | "permiso" | "limite" | "subida_vencida" | "validacion" | "servidor" | "no_aplicado";
 export class ErrorCampo extends Error {
   tipo: TipoError;
   status: number;
@@ -39,7 +39,16 @@ export class ErrorCampo extends Error {
 const TEXTO_SIN_PERMISO = "No tiene permiso para esta acción.";
 const TEXTO_DENEGADO = "Usuario no autorizado en el geoportal.";
 
+/** Aviso para lo que depende de SQL o de una Edge que aún no está aplicada en el servidor. */
+export const TEXTO_NO_APLICADO = "Esta función necesita la actualización del servidor (SQL/Edge) que aún no está aplicada.";
+/** ¿El fallo es «la ruta o la función no existe»? Edge vieja («Acción no soportada.» / «ruta desconocida»), pasarela 404 sin mensaje propio, o la base (42883 / PGRST202). */
+export function esNoAplicado(status: number, mensaje: string): boolean {
+  if (status === 404 && mensaje === "No se pudo completar la operación.") return true;
+  return /^acci[oó]n no soportada|^ruta desconocida|funci[oó]n .*no existe|42883|PGRST202/i.test(mensaje) && (status === 400 || status === 404 || status === 500 || status === 501);
+}
+
 export function clasificar(status: number, mensaje: string): TipoError {
+  if (esNoAplicado(status, mensaje)) return "no_aplicado";
   if (status === 401) return "sesion";
   if (status === 403) {
     if (mensaje === TEXTO_SIN_PERMISO) return "permiso";
@@ -139,6 +148,7 @@ export function avisoDeError(e: ErrorCampo): { texto: string; reintentable: bool
     case "horario": return { texto: e.message, reintentable: false };
     case "denegado": return { texto: "Su cuenta no está autorizada en el geoportal.", reintentable: false };
     case "permiso": return { texto: "Su cuenta no tiene permiso para enviar reportes de campo. Solicítelo a un administrador.", reintentable: false };
+    case "no_aplicado": return { texto: TEXTO_NO_APLICADO, reintentable: false };
     default: return { texto: e.message, reintentable: true };
   }
 }

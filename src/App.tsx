@@ -328,7 +328,7 @@ export default function App() {
         ) : pantalla === "tecnica" ? (
           <AreaTecnica uid={session.user.id} correo={email} />
         ) : pantalla === "campo" ? (
-          <AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} />
+          <AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true || esAdmin} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} />
         ) : pantalla === "aseo" ? (
           <Suspense fallback={<div className="pantalla-carga">Cargando Aseo…</div>}><AreaAseo correo={email} /></Suspense>
         ) : (
@@ -642,7 +642,7 @@ export default function App() {
               {opcionesModo}
             </select>
           </div>
-          <div className="campo-contenedor"><AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} /></div>
+          <div className="campo-contenedor"><AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true || esAdmin} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} /></div>
         </div>
       ) : (
         <div className="cuerpo">

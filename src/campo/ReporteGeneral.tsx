@@ -5,6 +5,7 @@ import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara 
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "./ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "./formato";
 import { sinFormatosD } from "./formatos/tipos";
+import { ConfirmarCancelar, type Destino } from "../components/ConfirmarCancelar";
 
 // Formulario del reporte general de campo. Pensado para el celular (380 px), una mano, buen contraste.
 // - Las etiquetas de grupos, tipos y subtipos salen del catálogo que entrega el servidor (nada escrito aquí).
@@ -15,12 +16,16 @@ import { sinFormatosD } from "./formatos/tipos";
 type FotoLocal = { blob: Blob; url: string; subida: boolean };
 type Fase = "editando" | "enviando" | "error" | "guardado";
 
-export function ReporteGeneral({ def, correo, onVolver, onOtro }: { def: FormularioCampo; correo: string; onVolver: () => void; onOtro: () => void }) {
+/** `contratoInicial`: contrato que llega de otro formulario («me equivoqué de formulario»). `destinos`/`onIrA`: a qué otros formularios se puede pasar llevando solo el contrato. */
+export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial = "", destinos, onIrA }: {
+  def: FormularioCampo; correo: string; onVolver: () => void; onOtro: () => void; contratoInicial?: string; destinos?: Destino[]; onIrA?: (destino: string, contrato: string) => void;
+}) {
   const [grupo, setGrupo] = useState("");
   const [tipo, setTipo] = useState("");
   const [subtipo, setSubtipo] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [contrato, setContrato] = useState("");
+  const [contrato, setContrato] = useState(contratoInicial);
+  const [cancelando, setCancelando] = useState(false);          // panel «¿Cancelar este registro?»
   const [riesgo, setRiesgo] = useState(false);
   const maxDesc = maxDescripcion(def.limites);   // un solo tope: el de la base (limites.max_descripcion)
   const [fotos, setFotos] = useState<(FotoLocal | null)[]>(() => Array.from({ length: Math.max(1, def.limites.max_fotos) }, () => null));
@@ -58,6 +63,9 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro }: { def: Formula
   const fix: Fix | null = ubic.fix;
   const bloqueado = fase === "enviando" || fase === "guardado";
   const fotosFijas = bloqueado || preparada;
+  // «Cancelar»: sin consecutivo ni nada en el servidor, así que solo se descarta lo del teléfono. Sin nada escrito sale directo; con algo, pide confirmación.
+  const hayDatos = grupo !== "" || tipo !== "" || descripcion.trim() !== "" || contrato !== contratoInicial || riesgo || nFotos > 0 || preparada;
+  const pedirCancelar = () => { if (hayDatos) setCancelando(true); else onVolver(); };
 
   // ----- validación -----
   const faltas: string[] = [];
@@ -169,9 +177,16 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro }: { def: Formula
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
         <div className="campo-cab">
-          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={onVolver} disabled={bloqueado}>← Formatos</button>
+          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={pedirCancelar} disabled={bloqueado}>← Formatos</button>
           <h1>Reporte general</h1>
+          <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={bloqueado}>Cancelar</button>
         </div>
+        {cancelando && (
+          <ConfirmarCancelar titulo="¿Cancelar este registro?"
+            mensaje={`Se descarta lo escrito${nFotos > 0 ? ` y ${nFotos === 1 ? "la foto tomada" : `las ${nFotos} fotos tomadas`}` : ""}. No se guarda nada en el servidor${preparada ? "; las fotos ya reservadas quedan sin usar" : ""}.`}
+            destinos={destinos} onIrA={onIrA ? (d) => onIrA(d, contrato) : undefined}
+            onConfirmar={() => onVolver()} onSeguir={() => setCancelando(false)} />
+        )}
 
         {/* 1. Tipo */}
         <div className="tec-campo">
@@ -272,6 +287,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro }: { def: Formula
             {fase === "enviando" ? "Enviando…" : fase === "error" ? "Reintentar" : "Enviar reporte"}
           </button>
         )}
+        <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={fase === "enviando"}>Cancelar</button>
       </section>
 
       {camaraEn !== null && (

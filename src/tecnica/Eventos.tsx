@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiDash, textoError, type Catalogo, type EstadoRevision, type FiltrosFuera, type FueraFila } from "./apiDashboard";
 import { etiquetaMarca, etiquetaOrigen, fmtFecha, fmtInstante, fmtMiles, fmtValor, hoyBogota, periodoARango, textoReferencia, type Periodo } from "./formato";
 import { ErrorCaja, lugarTexto } from "./Resumen";
+import { AvisoTurbiedad } from "./AvisoTurbiedad";
 
 // Dashboard técnico · «Eventos». En este corte, «Eventos» = valores fuera de referencia con su historial de revisión (los eventos de daños, mantenimiento y cambios de servicio vienen después).
 // Marcar revisado (nota opcional, hasta 500) y Reabrir (motivo obligatorio, 10 a 500). Solo supervisor y administrador. Nada se borra: cada cambio es un evento con quién, cuándo y la nota.
@@ -65,6 +66,7 @@ export function Eventos({ catalogo }: { catalogo: Catalogo }) {
           <p className="td-sub">Valores fuera de referencia y su revisión. Nada se borra: cada revisión o reapertura queda con quién, cuándo y la nota.</p>
         </div>
       </div>
+      <AvisoTurbiedad />
       {aviso ? <div className="td-aviso td-aviso-ok" role="status">{aviso}</div> : null}
       {error ? <ErrorCaja error={error} onReintentar={() => void cargarPrimera()} /> : null}
 

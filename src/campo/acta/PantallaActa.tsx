@@ -8,6 +8,8 @@ import { almacenActa, useAlmacenActa } from "./almacenActa";
 import { CamaraActa } from "./CamaraActa";
 import { FormularioActa } from "./FormularioActa";
 import { IdentificarPredio } from "./IdentificarPredio";
+import { PanelCancelarActa } from "./PanelCancelarActa";
+import type { Destino, MotivoCancelacion } from "../../components/ConfirmarCancelar";
 import * as L from "./logica";
 import type { ConfirmacionActa, FilaMisActas, FormularioActa as Catalogo, MisActas, Precarga } from "./tipos";
 
@@ -18,21 +20,24 @@ import type { ConfirmacionActa, FilaMisActas, FormularioActa as Catalogo, MisAct
 type Vista = { v: "lista" } | { v: "identificar" } | { v: "formulario"; id: string } | { v: "papel"; fila: FilaMisActas } | { v: "confirmado"; conf: ConfirmacionActa; papelPendiente: boolean };
 
 /** `contratoInicial`: contrato que llega desde un formato de actividad (revisión con irregularidad). Si viene, se abre directo «Nueva acta» con el contrato escrito; la persona sigue pulsando «Verificar». */
-export function PantallaActa({ correo, onVolver, contratoInicial = "" }: { correo: string; onVolver: () => void; contratoInicial?: string }) {
+/** `destinos`/`onIrA`: «me equivoqué de formulario» al cancelar: a qué otros formularios se puede pasar llevando solo el contrato. */
+export function PantallaActa({ correo, onVolver, contratoInicial = "", destinos, onIrA }: { correo: string; onVolver: () => void; contratoInicial?: string; destinos?: Destino[]; onIrA?: (destino: string, contrato: string) => void }) {
   almacenActa.alAcceder(correo);
   const { entradas } = useAlmacenActa();
   const [vista, setVista] = useState<Vista>(contratoInicial ? { v: "identificar" } : { v: "lista" });
   const [cat, setCat] = useState<Catalogo | null>(null);
   const [lista, setLista] = useState<MisActas | null>(null);
   const [error, setError] = useState<ErrorCampo | null>(null);
+  const [motivos, setMotivos] = useState<MotivoCancelacion[] | null>(null);   // motivos para cancelar (si no cargan, el panel lo dice y no deja cancelar)
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null);        // tarjeta de «Mis actas» con el panel de cancelar abierto
   const [cargando, setCargando] = useState(true);
   const [intento, setIntento] = useState(0);
 
   useEffect(() => {
     let vivo = true;
     setCargando(true); setError(null);
-    Promise.all([apiActa.formulario(), apiActa.misActas()])
-      .then(([c, m]) => { if (vivo) { setCat(c); setLista(m); } })
+    Promise.all([apiActa.formulario(), apiActa.misActas(), apiActa.motivosCancelacion().then((r) => r.motivos, () => null)])
+      .then(([c, m, mo]) => { if (vivo) { setCat(c); setLista(m); setMotivos(mo); } })
       .catch((e) => { if (vivo) setError(e instanceof ErrorCampo ? e : new ErrorCampo("servidor", "No se pudo cargar.", 0)); })
       .finally(() => { if (vivo) setCargando(false); });
     return () => { vivo = false; };
@@ -58,7 +63,7 @@ export function PantallaActa({ correo, onVolver, contratoInicial = "" }: { corre
 
   if (vista.v === "identificar") return <Identificar cat={cat} correo={correo} contratoInicial={contratoInicial} onCancelar={aLista} onAbierta={(id) => setVista({ v: "formulario", id })} onRevisar={aLista} />;
   if (vista.v === "formulario") {
-    return <FormularioActa cat={cat} actaId={vista.id} correo={correo} onVolver={aLista}
+    return <FormularioActa cat={cat} actaId={vista.id} correo={correo} onVolver={aLista} motivos={motivos} destinos={destinos} onIrA={onIrA}
       onRegistrado={(conf) => { const pend = almacenActa.obtener(vista.id)?.borrador.papelPendiente ?? false; almacenActa.quitar(vista.id); setVista({ v: "confirmado", conf, papelPendiente: pend }); }} />;
   }
   if (vista.v === "papel") return <AdjuntarPapel cat={cat} fila={vista.fila} onListo={aLista} onVolver={aLista} />;
@@ -95,6 +100,11 @@ export function PantallaActa({ correo, onVolver, contratoInicial = "" }: { corre
                     almacenActa.retomar(f, { ...L.borradorVacio("con_contrato"), fechaFisica: L.hoyBogota() });
                     setVista({ v: "formulario", id: f.acta_id });
                   }}>{conBorrador ? "Continuar (borrador en pantalla)" : "Retomar y completar"}</button>
+                )}
+                {f.puede_cancelar && cancelandoId !== f.acta_id && <button type="button" className="btn-cancelar" onClick={() => setCancelandoId(f.acta_id)}>Cancelar</button>}
+                {f.puede_cancelar && cancelandoId === f.acta_id && (
+                  <PanelCancelarActa actaId={f.acta_id} consecutivo={f.consecutivo} contrato={f.contrato ?? (entradas[f.acta_id]?.borrador.modo === "con_contrato" ? entradas[f.acta_id]?.borrador.contrato : "") ?? ""} motivos={motivos} destinos={destinos} onIrA={onIrA}
+                    onHecho={() => { setCancelandoId(null); recargar(); }} onSeguir={() => setCancelandoId(null)} />
                 )}
                 {accion === "adjuntar_papel" && <button type="button" className="tec-boton" onClick={() => setVista({ v: "papel", fila: f })}>Adjuntar la foto del acta física</button>}
                 {f.situacion === "registrada" && f.papel_pendiente && !f.puede_adjuntar_papel && !f.tiene_foto_papel && <p className="campo-sub">La supervisión corrigió este registro: la foto del papel la gestiona ella.</p>}

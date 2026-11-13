@@ -9,7 +9,7 @@ export type EntradaCampo = {
   descripcion: string;
   /** ¿Se puede abrir ya? Una entrada pendiente se dibuja como «Próximamente» y no hace nada. */
   habilitada: boolean;
-  /** MARCADOR: la pantalla de esta entrada aún no existe (hoy solo el tablero del supervisor de actas). Se quita cuando se construya. */
+  /** MARCADOR: la pantalla de esta entrada aún no existe (hoy ninguna entrada lo usa). */
   pendiente?: boolean;
 };
 
@@ -22,7 +22,7 @@ export type CondicionesEntradas = {
   puedeActa: boolean;
   /** Permiso de campo (reportar o supervisar). Por omisión verdadero (como antes). Quien solo tiene acta NO ve «Reporte general» ni «Formatos de actividad». */
   puedeCampo?: boolean;
-  /** Permiso `ver_dashboard_acta` (supervisor de actas): reconocido, pero su pantalla aún no existe (marcador). */
+  /** Permiso `ver_dashboard_acta` (supervisor de actas) o administrador: abre «Aperturas sin registrar» (pantalla mínima; el tablero completo de actas sigue pendiente). */
   puedeSupervisarActas?: boolean;
   /** El servidor dice que la persona puede supervisar (def.puede.supervisar: supervisor o administrador). Es el permiso `ver_dashboard_campo`; quien reporta nunca ve la lista. */
   puedeSupervisar?: boolean;
@@ -45,8 +45,8 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
     descripcion: "Registro digital que acompaña al acta física firmada.", habilitada: true,
   });
   if (c.puedeSupervisarActas) e.push({
-    id: "acta_supervision", titulo: "Supervisión de actas",
-    descripcion: "Revisión, estados y corrección de las actas registradas.", habilitada: false, pendiente: true,
+    id: "acta_supervision", titulo: "Aperturas sin registrar",
+    descripcion: "Consecutivos del acta de inspección entregados que no se registraron: cancélelos con motivo y vea los cancelados.", habilitada: true,
   });
   // Paso C: «Revisión de reportes» (lista, mapa, indicadores; y catálogo y parámetros para el administrador) solo con el permiso de supervisión
   if (c.puedeSupervisar) e.push({
