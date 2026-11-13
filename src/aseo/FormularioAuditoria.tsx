@@ -4,6 +4,7 @@ import { abrirCamara, capturarFoto, cerrarCamara, ErrorCamara } from "../campo/c
 import { useUbicacion, UMBRAL_PRECISION_MALA_M } from "../campo/ubicacion";
 import { aplanarDatos, contadorFotos, criteriosActivos, cuerpoFirmas, erroresDeEnvio, erroresDeFirmas, fotosNecesarias, textoFechaHora, type Valores } from "./logica";
 import { FirmasActa, FIRMAS_VACIAS, type FirmasLocal } from "./FirmasActa";
+import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
 import type { Actividad, Confirmacion, Criterio, FormularioAseo, Modalidad, Preparacion, RutaPlan, SeRealizo } from "./tipos";
 
 // Formulario de la auditoría. Se dibuja del catálogo del servidor (preguntas, fotos, causales): aquí no hay ninguna pregunta escrita. Flujo decidido: ¿Se realizó? Sí / No / Parcial → fotos de la ruta → SST (con foto
@@ -40,6 +41,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
   const [firmas, setFirmas] = useState<FirmasLocal>(FIRMAS_VACIAS);
   const [camara, setCamara] = useState<{ etiqueta: string; nombre: string } | null>(null);
   const [fase, setFase] = useState<"editando" | "enviando">("editando");
+  const [cancelando, setCancelando] = useState(false);                // panel «¿Cancelar este registro?»
   const [progreso, setProgreso] = useState("");
   const [error, setError] = useState<{ texto: string; reintentable: boolean } | null>(null);
   const ubic = useUbicacion();
@@ -102,10 +104,20 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
 
   const precisionMala = ubic.fix && ubic.fix.precision_m > def.limites.precision_aviso_m;
   const dis = fase === "enviando";
+  // «Cancelar»: el consecutivo de Aseo se toma al REGISTRAR (al final de la transacción), así que solo se descarta lo del teléfono. Sin nada escrito sale directo; con algo, pide confirmación.
+  // (La firma —cuando exista— tiene su propio «Cancelar» dentro de su cuadro: este es del formulario completo.)
+  const hayDatos = seRealizo !== "" || causal !== "" || observaciones.trim() !== "" || Object.keys(valores).length > 0 || fotos.length > 0 || prep.current !== null;
+  const pedirCancelar = () => { if (hayDatos) setCancelando(true); else onVolver(); };
   return (
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
-        <div className="campo-cab"><button type="button" className="tec-boton-sec" onClick={onVolver} disabled={dis}>‹ Rutas</button><h1>{actividad.nombre} · {modalidad.nombre}</h1></div>
+        <div className="campo-cab"><button type="button" className="tec-boton-sec" onClick={pedirCancelar} disabled={dis}>‹ Rutas</button><h1>{actividad.nombre} · {modalidad.nombre}</h1>
+          <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={dis}>Cancelar</button></div>
+        {cancelando ? (
+          <ConfirmarCancelar titulo="¿Cancelar este registro?"
+            mensaje={`Se descarta lo escrito${fotos.length > 0 ? ` y ${fotos.length === 1 ? "la foto tomada" : `las ${fotos.length} fotos tomadas`}` : ""}. No se guarda nada ni se gasta ningún consecutivo.`}
+            onConfirmar={() => onVolver()} onSeguir={() => setCancelando(false)} />
+        ) : null}
         <dl className="campo-auto">
           <div><dt>Ruta</dt><dd><strong className="mono">{ruta.codigo}</strong> · {ruta.servicio.nombre}<br /><small>{ruta.sectores ?? "Sin sectores"}</small></dd></div>
           <div><dt>Fecha y hora</dt><dd>{textoFechaHora(hora)}<br /><small>La fija el servidor al registrar; la del teléfono no cuenta.</small></dd></div>
@@ -165,6 +177,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
         {error ? <div className="campo-error" role="alert"><p>{error.texto}</p></div> : null}
         {dis ? <p className="campo-sub" role="status">{progreso} No cierre esta pantalla.</p> : null}
         <button type="button" className="tec-boton campo-boton-foto" onClick={() => void enviar()} disabled={dis || errores.length > 0 || !seRealizo || !ubic.fix}>{dis ? "Enviando…" : error?.reintentable ? "Reintentar" : "Registrar"}</button>
+        <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={dis}>Cancelar</button>
       </section>
     </div>
   );

@@ -64,7 +64,7 @@ const ac = leer("src/campo/AreaCampo.tsx");
 ok("AreaCampo.tsx usa la lista de entradas y no deja el estado suelto abiertoFormatos", /entradasDeCampo\(/.test(ac) && !/abiertoFormatos/.test(ac));
 ok("AreaCampo.tsx pasa el permiso de acta a la lista (puedeActa: acta)", /puedeActa: acta/.test(ac));
 ok("AreaCampo.tsx ya no lista «Acta de inspección» como «Próximamente» para todos", !/PROXIMAMENTE = \[[^\]]*Acta de inspección/.test(ac));
-ok("AreaCampo.tsx monta FormatosCampo con la definición del servidor", /<FormatosCampo def=\{def\} correo=\{correo\}/.test(ac));
+ok("AreaCampo.tsx monta FormatosCampo con la definición del servidor", /<FormatosCampo key=\{version\} def=\{def\} correo=\{correo\}/.test(ac));
 
 // ---- 3. Administración: casillas del acta (comprobaciones sobre el código fuente; el proyecto no tiene ejecutor de pruebas de componentes) ----
 const ad = leer("src/components/Admin.tsx"), api = leer("src/lib/api.ts");
@@ -91,7 +91,7 @@ ok("entradas: solo acta no ve reporte general ni formatos aunque el catálogo te
 ok("entradas: campo + acta ve las dos entradas", igual(ids({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeCampo: true }), ["reporte_general", "formatos", "acta"]));
 ok("entradas: sin campo y sin acta no hay ninguna entrada", igual(ids({ puedeReportar: false, hayFormatos: false, puedeActa: false, puedeCampo: false }), []));
 ok("entradas: sin la opción puedeCampo se comporta como antes (compatibilidad)", igual(ids({ puedeReportar: true, hayFormatos: true, puedeActa: false }), ["reporte_general", "formatos"]));
-ok("entradas: el supervisor de actas ve el marcador de su tablero (sin pantalla)", (() => { const e = E.entradasDeCampo({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false, puedeSupervisarActas: true }).find((x) => x.id === "acta_supervision"); return !!e && e.pendiente === true && e.habilitada === false; })());
+ok("entradas: el supervisor de actas ve «Aperturas sin registrar» (pantalla mínima, habilitada)", (() => { const e = E.entradasDeCampo({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false, puedeSupervisarActas: true }).find((x) => x.id === "acta_supervision"); return !!e && e.titulo === "Aperturas sin registrar" && !e.pendiente && e.habilitada === true; })());
 ok("entradas: sin permiso de supervisión no aparece el marcador del tablero", !ids({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeCampo: true }).includes("acta_supervision"));
 const ac2 = leer("src/campo/AreaCampo.tsx");
 ok("AreaCampo.tsx: sin permiso de campo NO pide el formulario de campo (if (!campo) return)", /if \(!campo\) return;/.test(ac2));
@@ -99,19 +99,19 @@ ok("AreaCampo.tsx: con campo falso no muestra el error de «Sin acceso a Formato
 ok("AreaCampo.tsx: «Daños» ya no figura como «Próximamente» (son tipos del Reporte general)", !/PROXIMAMENTE = \[[^\]]*Daños/.test(ac2));
 ok("AreaCampo.tsx: los «Próximamente» generales solo se ven con campo", /campo && PROXIMAMENTE\.map/.test(ac2));
 const app2 = leer("src/App.tsx");
-ok("App.tsx: las dos pantallas de campo reciben acta, dashboardActa y campo calculados del perfil", (app2.match(/dashboardActa=\{perfil\?\.permisos\?\.dashboard_acta === true\} campo=\{esAdmin \|\| perfil\?\.permisos\?\.campo === true \|\| perfil\?\.permisos\?\.dashboard_campo === true\}/g) ?? []).length === 2);
+ok("App.tsx: las dos pantallas de campo reciben acta, dashboardActa y campo calculados del perfil", (app2.match(/dashboardActa=\{perfil\?\.permisos\?\.dashboard_acta === true \|\| esAdmin\} campo=\{esAdmin \|\| perfil\?\.permisos\?\.campo === true \|\| perfil\?\.permisos\?\.dashboard_campo === true\}/g) ?? []).length === 2);
 const ar = leer("src/areas/areas.ts");
 ok("areas.ts: el área de campo cuenta acta y dashboard_acta", /p\.acta === true \|\| p\.dashboard_acta === true/.test(ar));
 
 // ---- 6. La entrada del acta abre la pantalla del acta ----
 const ac3 = leer("src/campo/AreaCampo.tsx");
 ok("AreaCampo.tsx: la entrada del acta monta PantallaActa solo con el permiso de acta", /abierta === "acta" && acta\) \{\s*return <PantallaActa correo=\{correo\}/.test(ac3) && /import \{ PantallaActa \} from "\.\/acta\/PantallaActa";/.test(ac3));
-ok("AreaCampo.tsx: el supervisor de actas sigue siendo un marcador (sin pantalla)", E.entradasDeCampo({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false, puedeSupervisarActas: true }).find((x) => x.id === "acta_supervision")?.pendiente === true);
+ok("AreaCampo.tsx: la entrada del supervisor abre AperturasSinRegistrar (solo con dashboardActa)", /abierta === "acta_supervision" && dashboardActa/.test(ac) && /<AperturasSinRegistrar/.test(ac));
 // ===== Acta de revisión o instalación: lista «Próximamente» y enlace al acta de inspección =====
 const ac4 = leer("src/campo/AreaCampo.tsx"), pa4 = leer("src/campo/acta/PantallaActa.tsx"), ff4 = leer("src/campo/formatos/FormularioFormato.tsx"), fc4 = leer("src/campo/formatos/FormatosCampo.tsx");
 ok("«Próximamente» solo conserva SCRR (Instalación de medidor y Revisión previa ya son formatos de actividad)", /const PROXIMAMENTE = \["SCRR"\];/.test(ac4) && !/PROXIMAMENTE = \[[^\]]*(Instalación de medidor|Revisión previa)/.test(ac4));
 ok("el enlace al acta pasa el permiso de acta y el contrato: AreaCampo → FormatosCampo → FormularioFormato", /puedeActa=\{acta\} onAbrirActa=/.test(ac4) && /puedeActa=\{puedeActa\} onAbrirActa=\{onAbrirActa\}/.test(fc4) && /puedeActa = false, onAbrirActa/.test(ff4));
-ok("AreaCampo abre el acta con el contrato precargado (contratoInicial) y lo limpia al volver", /contratoInicial=\{contratoActa\}/.test(ac4) && /setContratoActa\(""\)/.test(ac4));
+ok("AreaCampo abre el acta con el contrato precargado (contratoInicial) y lo limpia al volver", /contratoInicial=\{contratoPuente\}/.test(ac4) && /setContratoPuente\(""\)/.test(ac4));
 ok("PantallaActa acepta contratoInicial: abre «Nueva acta» con el contrato escrito y NO verifica sola (sigue el botón Verificar)", /contratoInicial\?: string/.test(pa4) && /useState\(contratoInicial\)/.test(pa4) && !/verificar\(\)[^\n]*contratoInicial/.test(pa4));
 ok("el enlace aparece solo después de guardar (en la confirmación) y solo con irregularidad, permiso de acta y contrato: las fotos viven en memoria y no se pierden", /setInvitarActa\(marcoIrr && puedeActa && onAbrirActa/.test(ff4) && /\{invitarActa && \(/.test(ff4));
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);

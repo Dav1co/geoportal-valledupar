@@ -40,6 +40,8 @@ export type FilaMisActas = {
   acta_id: string; consecutivo: string; situacion: SituacionActa; abierto_en: string; vence_en: string; registrado_en: string | null;
   estado: string | null; estado_nombre: string | null; modo_identificacion: "con_contrato" | "sin_contrato" | null; contrato: string | null;
   papel_pendiente: boolean; fotos_papel: number; tiene_foto_papel: boolean; max_fotos_papel: number; puede_adjuntar_papel: boolean; siguiente_orden_foto: number | null;
+  /** Apertura sin registrar (en curso o caducada): se puede cancelar. Las canceladas no se listan. */
+  puede_cancelar: boolean;
 };
 export type MisActas = { filas: FilaMisActas[]; hay_mas: boolean; max_filas: number };
 
@@ -60,3 +62,13 @@ export type BorradorActa = {
 
 /** De cada foto solo importa su tipo para las reglas (el archivo vive en memoria en la pantalla). */
 export type FotoBasica = { tipo: string };
+
+/** Cancelar una apertura (con consecutivo entregado). Motivos del catálogo del servidor; el texto solo se exige si el motivo lo pide («Otro»). */
+export type MotivoCancelacionActa = { codigo: string; nombre: string; exige_texto: boolean };
+export type CancelacionActa = { acta_id: string; consecutivo: string; cancelada: boolean; repetido: boolean; cancelada_en: string };
+/** Una fila de «Aperturas sin registrar» (supervisor y administrador). */
+export type FilaApertura = {
+  acta_id: string; consecutivo: string; autor: string; abierto_en: string; vence_en: string; situacion: "abierta_en_curso" | "abierta_vencida_sin_registrar" | "cancelada";
+  cancelada_en: string | null; cancelada_por: string | null; motivo_cancelacion: string | null; motivo_nombre: string | null; motivo_texto: string | null;
+};
+export type AperturasSinRegistrar = { resumen: { en_curso: number; vencidas: number; canceladas: number }; filas: FilaApertura[]; max_filas: number };

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { apiTec, ErrorTec, type DosisCuerpo, type FormularioDef, type QuimicosResp, type VariableDef } from "./apiTecnica";
-import { comunVigente, guardarBorrador, leerBorrador, nuevaClaveEnvio, type MarcaEnviada } from "./borrador";
+import { borrarBorrador, comunVigente, guardarBorrador, leerBorrador, nuevaClaveEnvio, type MarcaEnviada } from "./borrador";
+import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
 import { decimalesAMostrar, formatearNumero, interpretarNumero } from "./numeros";
 
 // Formulario de captura de Técnica. Se dibuja SOLO con la definición que entrega el servidor (variables, unidades, orden, obligatoriedad, alcance, plantas):
@@ -43,6 +44,7 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
   const [textos, setTextos] = useState<Record<string, string>>(inicial?.textos ?? {});
   const [comunEnviada, setComunEnviada] = useState<MarcaEnviada | null>(inicial?.comunEnviada ?? null);
   const [errores, setErrores] = useState<Record<string, string>>({});
+  const [descartando, setDescartando] = useState(false);       // panel «¿Descartar lo escrito?»
   const [fase, setFase] = useState<"editando" | "confirmando" | "enviando">("editando");
   const [aviso, setAviso] = useState<Aviso | null>(inicial ? { tipo: "info", texto: "Se recuperó lo que había escrito antes en este equipo. Revíselo antes de guardar." } : null);
   const [lineas, setLineas] = useState<Linea[]>([]);
@@ -56,7 +58,15 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
     return () => { vivo = false; };
   }, [clave, porPlanta.length]);
 
+  // «Descartar borrador»: no hay consecutivo ni nada en el servidor, solo el borrador de este equipo. Conserva la marca «ya enviada» del bloque común (algo que SÍ está guardado: borrarla invitaría a duplicarlo).
+  const hayTexto = Object.values(textos).some((x) => typeof x === "string" && x.trim() !== "");
   const intento = useRef<{ clave: string; huella: string }>({ clave: inicial?.claveEnvio ?? nuevaClaveEnvio(), huella: "" });
+  function descartar() {
+    setTextos({}); setErrores({}); setDosisAbierta(false); setHora(def.hora_propuesta); setDescartando(false);
+    intento.current = { clave: nuevaClaveEnvio(), huella: "" };
+    if (!comunVigente(comunEnviada)) borrarBorrador(clave);          // con la marca vigente, el guardado automático deja solo la marca
+    setAviso({ tipo: "info", texto: "Se descartó lo escrito en este equipo. Lo ya guardado en el servidor no se tocó." });
+  }
   const enviando = useRef(false);
   const reponerHora = useRef(false);
   const refTitulo = useRef<HTMLHeadingElement>(null);
@@ -367,6 +377,12 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
 
           <button type="button" className="tec-boton" onClick={guardar} disabled={bloqueado} aria-busy={bloqueado}>{bloqueado ? "Guardando…" : "Guardar registro"}</button>
           <p className="tec-ayuda">Los valores se guardan tal como los escribe. Si algo quedó mal registrado, avise a su supervisor.</p>
+          {hayTexto && !descartando ? <button type="button" className="btn-cancelar" onClick={() => setDescartando(true)} disabled={bloqueado}>Descartar borrador</button> : null}
+          {descartando ? (
+            <ConfirmarCancelar titulo="¿Descartar lo escrito?" rotuloConfirmar="Sí, descartar"
+              mensaje={`Se borra lo escrito en este equipo (el borrador). Lo que ya guardó en el servidor no se toca.${comunVigente(comunEnviada) ? " El bloque «Para las dos plantas» enviado hace poco sigue marcado como enviado." : ""}`}
+              onConfirmar={descartar} onSeguir={() => setDescartando(false)} />
+          ) : null}
         </>
       )}
       {fase === "enviando" && <div className="tec-aviso tec-aviso-info" role="status">Guardando… no cierre esta pantalla.</div>}

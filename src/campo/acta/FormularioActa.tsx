@@ -7,6 +7,8 @@ import { apiActa } from "./apiActa";
 import { almacenActa, useAlmacenActa, type Entrada, type FotoLocal } from "./almacenActa";
 import { CamaraActa } from "./CamaraActa";
 import { IdentificarPredio } from "./IdentificarPredio";
+import { PanelCancelarActa } from "./PanelCancelarActa";
+import type { Destino, MotivoCancelacion } from "../../components/ConfirmarCancelar";
 import * as L from "./logica";
 import type { BorradorActa, ConfirmacionActa, FormularioActa as Catalogo } from "./tipos";
 
@@ -17,10 +19,12 @@ import type { BorradorActa, ConfirmacionActa, FormularioActa as Catalogo } from 
 // (y en el almacén en memoria) para reintentar. GANCHO: aquí se enchufaría el borrador local cifrado cuando se decida el modo sin conexión.
 
 type Fase = "editando" | "confirmando" | "enviando" | "error" | "guardado";
-type Destino = { tipo: string; papel: boolean } | null;
+type DestinoFoto = { tipo: string; papel: boolean } | null;
 
-export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado }: {
+export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, motivos = null, destinos, onIrA }: {
   cat: Catalogo; actaId: string; correo: string; onVolver: () => void; onRegistrado: (c: ConfirmacionActa) => void;
+  /** Cancelar la apertura: motivos del catálogo y destinos de «me equivoqué de formulario». */
+  motivos?: MotivoCancelacion[] | null; destinos?: Destino[]; onIrA?: (destino: string, contrato: string) => void;
 }) {
   const { entradas } = useAlmacenActa();
   const entrada: Entrada | undefined = entradas[actaId];
@@ -28,7 +32,8 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado }: 
   const fix = ubic.fix;
   const [fase, setFase] = useState<Fase>("editando");
   const [errorEnvio, setErrorEnvio] = useState<ErrorCampo | null>(null);
-  const [camaraEn, setCamaraEn] = useState<Destino>(null);
+  const [camaraEn, setCamaraEn] = useState<DestinoFoto>(null);
+  const [cancelando, setCancelando] = useState(false);
   const [ahora, setAhora] = useState(() => new Date());
   const enviando = useRef(false);
 
@@ -61,7 +66,7 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado }: 
   const aviso = errorEnvio ? avisoDeError(errorEnvio) : null;
   const vencido = new Date(entrada.vence_en).getTime() < ahora.getTime();
 
-  function guardarFoto(d: NonNullable<Destino>, blob: Blob) {
+  function guardarFoto(d: NonNullable<DestinoFoto>, blob: Blob) {
     const nueva: FotoLocal = { id: Math.random().toString(36).slice(2), tipo: d.tipo, blob, url: URL.createObjectURL(blob), subida: false };
     almacenActa.parchar(actaId, (x) => ({ ...x, fotos: [...x.fotos, nueva] }));
   }
@@ -138,6 +143,11 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado }: 
             {fase === "enviando" ? "Registrando…" : fase === "error" ? "Reintentar" : "Confirmar y registrar"}
           </button>
           {fase !== "enviando" && <button type="button" className="tec-boton-sec" onClick={() => { setErrorEnvio(null); setFase("editando"); }}>Volver a editar</button>}
+          {fase !== "enviando" && <button type="button" className="btn-cancelar" onClick={() => setCancelando(true)}>Cancelar</button>}
+          {cancelando && (
+            <PanelCancelarActa actaId={actaId} consecutivo={entrada.consecutivo} contrato={b.modo === "con_contrato" ? b.contrato : ""} motivos={motivos} destinos={destinos} onIrA={onIrA}
+              onHecho={onVolver} onSeguir={() => setCancelando(false)} />
+          )}
         </section>
       </div>
     );
@@ -150,7 +160,12 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado }: 
         <div className="campo-cab">
           <h1>Acta de inspección</h1>
           <button type="button" className="tec-boton-sec" onClick={onVolver}>Mis actas</button>
+          <button type="button" className="btn-cancelar" onClick={() => setCancelando(true)} disabled={bloqueado}>Cancelar</button>
         </div>
+        {cancelando && (
+          <PanelCancelarActa actaId={actaId} consecutivo={entrada.consecutivo} contrato={b.modo === "con_contrato" ? b.contrato : ""} motivos={motivos} destinos={destinos} onIrA={onIrA}
+            onHecho={onVolver} onSeguir={() => setCancelando(false)} />
+        )}
         <p className="acta-consecutivo" aria-label="Consecutivo del registro">{entrada.consecutivo}</p>
         <p className="campo-nota" role="note"><strong>Escriba este consecutivo en el acta física.</strong> {L.TEXTO_PAPEL}</p>
         <p className="campo-sub">{cat.aviso_registro}</p>
@@ -298,6 +313,7 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado }: 
           </div>
         )}
         <button type="button" className="tec-boton campo-enviar" disabled={faltas.length > 0 || vencido || bloqueado} onClick={() => setFase("confirmando")}>Revisar y registrar</button>
+        <button type="button" className="btn-cancelar" onClick={() => setCancelando(true)} disabled={bloqueado}>Cancelar</button>
         <p className="campo-sub">Sesión de {correo}.</p>
       </section>
 
