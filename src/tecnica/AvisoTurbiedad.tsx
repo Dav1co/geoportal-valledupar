@@ -80,7 +80,7 @@ export function ConfigAvisoTurbiedad({ onCambio }: { onCambio: () => void }) {
 
   return (
     <details className="tav-config" data-testid="config-aviso-turbiedad">
-      <summary>Avisos de turbiedad de ingreso <span className="tav-estado">{datos ? (datos.plantas.some((p) => p.activo) ? "activo" : "apagado") : "…"}</span></summary>
+      <summary>Avisos de turbiedad de ingreso <span className="tav-estado">{datos ? (datos.plantas.some((p) => p.activo) ? "activo" : "apagado") : error ? "no disponible" : "…"}</span></summary>
       <div className="tav-cuerpo">
         <p className="td-sub">Cuando la lectura vigente más reciente de turbiedad de ingreso de una planta (de menos de 24 horas) supera su umbral, el Resumen y Eventos muestran un aviso. Sin umbral, la planta no avisa. No es el máximo de referencia y no entra a la revisión.</p>
         {error ? <div className="td-aviso td-aviso-error" role="alert">{error.texto} {!error.sesion ? <button type="button" className="td-enlace" onClick={() => void cargar()}>Reintentar</button> : null}</div> : null}

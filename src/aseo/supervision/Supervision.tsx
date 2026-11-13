@@ -30,7 +30,7 @@ export function Supervision({ def, correo, onVolver }: { def: FormularioAseo; co
           {SECCIONES.map((s) => <button key={s.clave} type="button" className="tdash-tab" aria-current={activa === s.clave ? "page" : undefined} onClick={() => { setActiva(s.clave); setAbrir(null); }}>{s.titulo}</button>)}
         </nav></div></div>
       <div className="tdash-cuerpo">
-        {error ? <ErrorCaja error={error} onReintentar={() => setIntento((x) => x + 1)} /> : null}
+        {error && activa !== "resumen" && activa !== "personal" ? <ErrorCaja error={error} onReintentar={() => setIntento((x) => x + 1)} /> : null}
         {activa === "resumen" ? <Resumen onAbrir={(id) => { setAbrir(id); setActiva("nc"); }} onDatos={datos} /> : null}
         {activa === "auditorias" ? <Auditorias def={def} cat={cat} modo="todas" /> : null}
         {activa === "nc" ? <Auditorias key={abrir ?? "nc"} def={def} cat={cat} modo="nc" inicial={abrir ?? undefined} /> : null}

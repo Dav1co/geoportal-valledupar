@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiAseo, avisoDeError, ErrorAseo } from "./apiAseo";
+import { TEXTO_NO_APLICADO } from "../campo/apiCampo";
 import { abrirCamara, capturarFoto, cerrarCamara, ErrorCamara } from "../campo/camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M } from "../campo/ubicacion";
 import { aplanarDatos, contadorFotos, criteriosActivos, cuerpoFirmas, erroresDeEnvio, erroresDeFirmas, fotosNecesarias, textoFechaHora, type Valores } from "./logica";
@@ -93,7 +94,9 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
       onListo({ conf, actividad, modalidad, ruta, seRealizo, causal: seRealizo === "si" ? null : causales.find((c) => c.codigo === causal)?.nombre ?? causal, respuestas, observaciones: observaciones.trim() || null,
         fotos: ordenadas, firmas, posicion: { inicio: inicio.current, fin: { lat: fin.lat, lon: fin.lon, precision: fin.precision_m } } });
     } catch (e) {
-      const err = e instanceof ErrorAseo ? e : new ErrorAseo("servidor", "No se pudo completar el envío.", 0);
+      let err = e instanceof ErrorAseo ? e : new ErrorAseo("servidor", "No se pudo completar el envío.", 0);
+      // Una Edge anterior a las firmas rechaza el cuerpo (413: pasa de 16 kB). Es «falta la actualización del servidor», no un fallo de señal: lo escrito y las fotos siguen aquí.
+      if (err.status === 413) err = new ErrorAseo("no_aplicado", TEXTO_NO_APLICADO, 413);
       if (err.tipo === "subida_vencida") prep.current = null;                // se pedirá un permiso nuevo y se subirá todo de nuevo
       setError(avisoDeError(err)); setFase("editando"); setProgreso("");
     }

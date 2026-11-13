@@ -1,4 +1,4 @@
-import { pedir, ErrorCampo } from "../apiCampo";
+import { pedir, ErrorCampo, TEXTO_NO_APLICADO } from "../apiCampo";
 
 // Cliente de las rutas de supervisión de geoportal-campo para la pantalla «Revisión de reportes» (Paso C). Usa el `pedir` de apiCampo (renueva la sesión una vez ante un 401,
 // distingue «sin respuesta», traduce 429). Aquí NO hay etiquetas de tipos, grupos, estados ni campos propios: todo llega del catálogo del servidor.
@@ -93,6 +93,7 @@ export function textoError(e: unknown): { texto: string; sesion: boolean } {
     case "permiso": return { texto: "No tiene permiso para esta acción.", sesion: false };
     case "servidor": return { texto: "El servidor no pudo completar la operación. Intente de nuevo en unos minutos.", sesion: false };
     case "limite": return { texto: e.message, sesion: false };
+    case "no_aplicado": return { texto: TEXTO_NO_APLICADO, sesion: false };
     default: return { texto: e.message, sesion: false };
   }
 }

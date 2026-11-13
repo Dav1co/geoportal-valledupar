@@ -39,7 +39,7 @@ export function ConfirmarCancelar({ titulo, mensaje, motivos, rotuloConfirmar = 
       <p id="conf-canc-msg" className="conf-canc-msg">{mensaje}</p>
       {conMotivo ? (
         motivos === null || motivos.length === 0 ? (
-          <p className="conf-canc-error" role="alert">No se pudo cargar la lista de motivos. Cierre este aviso y vuelva a intentarlo.</p>
+          <p className="conf-canc-error" role="alert">No se pudo cargar la lista de motivos: cancelar este registro necesita la actualización del servidor (SQL/Edge), que aún no está aplicada, o falló la conexión. Cierre este aviso y vuelva a intentarlo.</p>
         ) : (
           <>
             <label className="conf-canc-etq" htmlFor="conf-canc-motivo">Motivo</label>

@@ -1,4 +1,5 @@
 import { pedir, ErrorTec } from "./apiTecnica";
+import { TEXTO_NO_APLICADO } from "../campo/apiCampo";
 import type { FilaDescarga } from "./descargas";
 
 // Cliente de las rutas del Dashboard técnico de la Edge geoportal-tecnica (supervisor y administrador). Aquí NO hay nombres de formularios, variables, plantas ni puntos: todo viene del servidor.
@@ -112,6 +113,7 @@ export function textoError(e: unknown): { texto: string; sesion: boolean } {
     case "horario": return { texto: `${e.message} Su cuenta no tiene habilitado el servicio en este momento.`, sesion: false };
     case "denegado": return { texto: "Su cuenta ya no está autorizada en el geoportal.", sesion: false };
     case "permiso": return { texto: e.message, sesion: false };
+    case "no_aplicado": return { texto: TEXTO_NO_APLICADO, sesion: false };
     case "servidor": return { texto: "El servidor no pudo completar la operación. Intente de nuevo en unos minutos.", sesion: false };
     default: return { texto: e.message, sesion: false };
   }

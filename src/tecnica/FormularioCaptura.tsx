@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { TEXTO_NO_APLICADO } from "../campo/apiCampo";
 import { apiTec, ErrorTec, type DosisCuerpo, type FormularioDef, type QuimicosResp, type VariableDef } from "./apiTecnica";
 import { borrarBorrador, comunVigente, guardarBorrador, leerBorrador, nuevaClaveEnvio, type MarcaEnviada } from "./borrador";
 import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
@@ -405,6 +406,8 @@ export function avisoDeError(e: unknown, reintentar?: () => void): Aviso {
       return { tipo: "error", texto: "Su cuenta ya no está autorizada en el geoportal.", detalle: `${conserva} Hable con el administrador.` };
     case "permiso":
       return { tipo: "error", texto: e.message, detalle: `${conserva} Si debería tener este formulario, avise a su supervisor.` };
+    case "no_aplicado":
+      return { tipo: "error", texto: TEXTO_NO_APLICADO, detalle: `${conserva} Avise al administrador: falta aplicar una actualización en el servidor.` };
     case "servidor":
       return { tipo: "error", texto: "El servidor no pudo completar la operación.", detalle: `${conserva} Intente de nuevo en unos minutos.` };
     default:
