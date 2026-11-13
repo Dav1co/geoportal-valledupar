@@ -6,8 +6,8 @@ export { ErrorCampo as ErrorAseo, avisoDeError } from "../campo/apiCampo";
 // Cliente de la Edge geoportal-aseo. Misma disciplina que el de campo: renueva la sesión una vez ante un 401, distingue «sin respuesta» (reintentar con el mismo auditoria_id es seguro) del resto, nunca registra cuerpos.
 // Los errores son los de campo (ErrorCampo / clasificar / avisoDeError): mismos tipos y mismos avisos.
 
-type Opc = { qs?: Record<string, string>; cuerpo?: unknown; timeoutMs?: number };
-async function pedir<T>(accion: string, o: Opc = {}): Promise<T> {
+export type Opc = { qs?: Record<string, string>; cuerpo?: unknown; timeoutMs?: number };
+export async function pedir<T>(accion: string, o: Opc = {}): Promise<T> {
   const url = new URL(`${FUNCTIONS_URL}/geoportal-aseo`);
   url.searchParams.set("accion", accion);
   for (const [k, v] of Object.entries(o.qs ?? {})) url.searchParams.set(k, v);

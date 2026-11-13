@@ -1,11 +1,15 @@
-// Escritor de PDF propio (PURO, sin librerías) para el ACTA de la auditoría con el membrete de EMDUPAR. Se genera en el navegador, a partir de lo que ya está en memoria (las fotos recién tomadas):
-// NO se guarda en el servidor y no lleva firma digital (sí un espacio para firma manuscrita al imprimir). Texto en Helvetica/Courier estándar (codificación WinAnsi: tildes y ñ), fotos JPEG incrustadas
+// Escritor de PDF propio (PURO, sin librerías) para el ACTA DE SUPERVISIÓN de la prestación del servicio de aseo con el membrete de EMDUPAR. Se genera en el navegador, a partir de lo que ya está en memoria (las fotos recién tomadas):
+// NO se guarda en el servidor. Lleva las firmas ELECTRÓNICAS simples (imágenes JPEG del trazo) del auditor y, si la hay, del representante del operador; no es firma digital certificada. Texto en Helvetica/Courier estándar (codificación WinAnsi: tildes y ñ), fotos JPEG incrustadas
 // tal cual (DCTDecode, sin recodificar) y el membrete reducido (ver membrete.ts). Hoja Carta, como la plantilla.
 
 export type ImagenJpeg = { bytes: Uint8Array; ancho: number; alto: number };
 export type FotoActa = ImagenJpeg & { etiqueta: string };
+export type FirmaRepresentanteActa = { estado: "firmo" | "se_nego" | "sin_representante"; nombre: string | null; imagen: ImagenJpeg | null };
+export type FirmasActa = { auditor: ImagenJpeg | null; representante: FirmaRepresentanteActa };
+/** Texto de la firma electrónica del acta. BORRADOR, PENDIENTE de revisión de jurídica (David): no cambiar la redacción hasta tener su visto bueno. */
+export const TEXTO_FIRMA_ELECTRONICA = "Firma electrónica simple (Ley 527 de 1999 y Decreto 2364 de 2012); no es firma digital certificada.";
 export type DatosActa = {
-  consecutivo: string; registradoEn: string; fechaServicio: string; auditor: { nombre: string; correo: string };
+  consecutivo: string; registradoEn: string; fechaServicio: string; auditor: { nombre: string; correo: string; cargo: string | null }; firmas: FirmasActa;
   actividad: string; modalidad: string; servicio: string;
   ruta: { codigo: string; sectores: string | null; turno: string | null; horario: string | null; frecuencia: string | null; km: number | null };
   seRealizo: "Sí" | "No" | "Parcial"; causal: string | null; respuestas: { pregunta: string; respuesta: string }[]; observaciones: string | null;
@@ -120,18 +124,18 @@ export function generarActaPdf(d: DatosActa, m: Membrete): Uint8Array {
   const seccion = (t: string, siguiente = 0) => { asegurar(34 + siguiente); y -= 8; texto(t.toUpperCase(), MARGEN_X, y, 10, "F2"); y -= 4; linea(MARGEN_X, y, PAG_W - MARGEN_X, y); y -= 14; };
 
   nuevaPagina();
-  parrafo("ACTA DE AUDITORÍA DE LA PRESTACIÓN DEL SERVICIO DE ASEO", 13, true);
+  parrafo("ACTA DE SUPERVISIÓN DE LA PRESTACIÓN DEL SERVICIO DE ASEO", 13, true);
   y -= 2;
   texto(`Consecutivo ${d.consecutivo}`, MARGEN_X, y, 11, "F2"); y -= 16;
   seccion("Registro");
   campo("Fecha y hora", d.registradoEn + " (hora oficial del servidor)"); campo("Fecha de servicio", d.fechaServicio);
-  campo("Auditor", d.auditor.nombre); campo("Correo", d.auditor.correo);
+  campo("Realizó la supervisión (auditor de la interventoría)", d.auditor.nombre); campo("Correo", d.auditor.correo); campo("Cargo", d.auditor.cargo ?? "Cargo no registrado");
   seccion("Actividad y ruta");
   campo("Actividad", d.actividad); campo("Modalidad", d.modalidad); campo("Servicio", d.servicio);
   campo("Código de ruta", d.ruta.codigo); campo("Sectores atendidos", d.ruta.sectores ?? "—");
   campo("Turno y horario", [d.ruta.turno, d.ruta.horario].filter(Boolean).join(" · ") || "—"); campo("Frecuencia", d.ruta.frecuencia ?? "—");
   if (d.ruta.km != null) campo("Kilómetros de la ruta", d.ruta.km.toLocaleString("es-CO"));
-  seccion("Resultado");
+  seccion("Incidencia");
   campo("¿Se realizó?", d.seRealizo); if (d.causal) campo("Causal", d.causal);
   for (const r of d.respuestas) campo(r.pregunta, r.respuesta);
   if (d.observaciones) campo("Observaciones", d.observaciones);
@@ -152,13 +156,28 @@ export function generarActaPdf(d: DatosActa, m: Membrete): Uint8Array {
       y -= caja.h + 22;
     }
   }
-  seccion("Integridad y firma", 100);
-  parrafo("Registro digital. Sello de integridad (SHA-256 del contenido registrado en el servidor):", 8.5);
+  seccion("Integridad", 60);
+  parrafo("Registro digital. Sello de integridad (SHA-256 del contenido registrado en el servidor, que incluye las firmas):", 8.5);
   for (const l of [d.sello.slice(0, 32), d.sello.slice(32)]) { asegurar(12); texto(l, MARGEN_X, y, 9, "F3"); y -= 12; }
-  asegurar(70); y -= 22;
-  linea(MARGEN_X, y, MARGEN_X + 200, y, 0.2); linea(PAG_W - MARGEN_X - 200, y, PAG_W - MARGEN_X, y, 0.2); y -= 11;
-  texto("Firma del auditor", MARGEN_X, y, 8.5, "F1", 0.35); texto("Recibe (operador del servicio)", PAG_W - MARGEN_X - 200, y, 8.5, "F1", 0.35); y -= 12;
-  texto("Este documento no lleva firma digital; la firma manuscrita es opcional al imprimir.", MARGEN_X, y, 8, "F1", 0.45);
+  // Firmas: dos columnas con el trazo, el nombre, el cargo y la fecha y hora del servidor
+  const colW = (PAG_W - 2 * MARGEN_X - 24) / 2, firmaH = 56;
+  seccion("Firmas", firmaH + 96);
+  const dibujarFirma = (x: number, rotulo: string, img: ImagenJpeg | null, sinImagen: string | null, lineas: string[]) => {
+    texto(rotulo, x, y, 8.5, "F2", 0.35);
+    const top = y - 6;
+    if (img) {
+      const info = infoJpeg(img.bytes), k = Math.min(colW / info.ancho, firmaH / info.alto), w = info.ancho * k, h = info.alto * k, n = incrustar({ ...img, ancho: info.ancho, alto: info.alto });
+      pg.cont.push(`q ${num(w)} 0 0 ${num(h)} ${num(x)} ${num(top - h)} cm ${nombreImg(n)} Do Q`); pg.imgs.push(n);
+    } else if (sinImagen) texto(sinImagen, x, top - 30, 10, "F2");
+    linea(x, top - firmaH - 2, x + colW, top - firmaH - 2, 0.2);
+    let yy = top - firmaH - 13;
+    for (const l of lineas) for (const s of partirLineas(l, colW, 9)) { texto(s, x, yy, 9); yy -= 11; }
+  };
+  const fr = d.firmas.representante;
+  dibujarFirma(MARGEN_X, "Auditor de la interventoría (quien realizó la supervisión)", d.firmas.auditor, d.firmas.auditor ? null : "Sin firma registrada", [d.auditor.nombre, d.auditor.cargo ?? "Cargo no registrado", d.registradoEn + " (hora oficial del servidor)"]);
+  dibujarFirma(MARGEN_X + colW + 24, "Representante del operador del servicio", fr.imagen, fr.estado === "se_nego" ? "Se negó a firmar" : fr.estado === "sin_representante" ? "No había representante" : null, [fr.nombre ?? "—"]);
+  y -= firmaH + 88;
+  asegurar(24); texto(TEXTO_FIRMA_ELECTRONICA, MARGEN_X, y, 8, "F1", 0.45); y -= 10;
 
   // Páginas y contenido
   const ids: number[] = [];
@@ -172,7 +191,7 @@ export function generarActaPdf(d: DatosActa, m: Membrete): Uint8Array {
   });
   poner(arbol, `<< /Type /Pages /Kids [${ids.map((n) => `${n} 0 R`).join(" ")}] /Count ${ids.length} >>`);
   poner(raiz, `<< /Type /Catalog /Pages ${arbol} 0 R >>`);
-  const info = nuevo(); poner(info, `<< /Title (${esc("Acta de auditoría " + d.consecutivo)}) /Producer (Geoportal EMDUPAR) >>`);
+  const info = nuevo(); poner(info, `<< /Title (${esc("Acta de supervisión " + d.consecutivo)}) /Producer (Geoportal EMDUPAR) >>`);
 
   // Serialización con tabla de referencias cruzadas
   const partes: Uint8Array[] = [bytesDe("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n")]; let pos = partes[0].length; const offs: number[] = [];

@@ -41,8 +41,9 @@ export type FotoEnvio = { orden: number; ruta: string; etiqueta: string };
 export type CuerpoCrear = {
   auditoria_id: string; actividad: string; modalidad: string; ruta: string; se_realizo: SeRealizo; causal?: string | null; datos: Record<string, unknown>; observaciones?: string | null;
   lat: number; lon: number; precision_m?: number | null; lat_inicio?: number | null; lon_inicio?: number | null; precision_inicio_m?: number | null; fotos: FotoEnvio[];
+  firmas: { auditor: { imagen_b64: string }; representante: { estado: "firmo" | "se_nego" | "sin_representante"; nombre?: string; imagen_b64?: string } };
 };
 export type Confirmacion = {
   id: string; consecutivo: string; registrado_en: string; fecha_servicio: string; repetido: boolean; lejos_de_ruta: boolean; fuera_de_zona: boolean; fuera_de_horario: boolean;
-  no_programada_hoy: boolean; sin_trazado: boolean; sello: string;
+  no_programada_hoy: boolean; sin_trazado: boolean; sello: string; auditor: { nombre: string; correo: string; cargo: string | null };
 };
