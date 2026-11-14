@@ -8,7 +8,7 @@ import { Catalogo } from "./Catalogo";
 import { ConstanciasAdmin } from "../constancia/ConstanciasAdmin";
 import { supabase } from "../../lib/supabase";
 
-// «Revisión de reportes» (Paso C): pantalla del supervisor y del administrador de Formatos de campo. Se carga bajo demanda (React.lazy desde AreaCampo): quien no tiene el permiso no descarga este código.
+// «Supervisión y dashboard» (antes «Revisión de reportes», Paso C): pantalla del supervisor y del administrador de Formatos de campo. Se carga bajo demanda (React.lazy desde AreaCampo): quien no tiene el permiso no descarga este código.
 // Qué se muestra lo decide el SERVIDOR (`puede` y `perfil` de «formulario»); aquí nunca hay listas de correos. Catálogo y Parámetros solo aparecen para el administrador.
 type Seccion = "reportes" | "indicadores" | "catalogo" | "parametros";
 
@@ -35,7 +35,7 @@ export default function Revision({ correo, onVolver }: { correo: string; onVolve
       <div className="rv-cab">
         <div className="rv-ancho">
           <div className="rv-fila">
-            <h1>Revisión de reportes</h1>
+            <h1>Supervisión y dashboard</h1>
             <button type="button" className="rv-boton-claro" onClick={onVolver}>← Volver a Formatos de campo</button>
           </div>
           <div className="rv-sesion">{correo} · {def?.perfil === "admin" ? "Administrador" : "Supervisor de reportes de campo"}</div>

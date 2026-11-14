@@ -178,7 +178,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
       <section className="tec-tarjeta">
         <div className="campo-cab">
           <button type="button" className="tec-boton-sec tec-boton-corto" onClick={pedirCancelar} disabled={bloqueado}>← Formatos</button>
-          <h1>Reporte general</h1>
+          <h1>Reportar anomalía</h1>
           <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={bloqueado}>Cancelar</button>
         </div>
         {cancelando && (

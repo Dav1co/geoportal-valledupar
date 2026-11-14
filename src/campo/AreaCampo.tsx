@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useState } from "react";
 import "../tecnica/tecnica.css";
 import "./campo.css";
 import { apiCampo, avisoDeError, ErrorCampo, type FormularioCampo } from "./apiCampo";
@@ -11,7 +11,7 @@ import { AperturasSinRegistrar } from "./acta/AperturasSinRegistrar";
 import type { Destino } from "../components/ConfirmarCancelar";
 import { supabase } from "../lib/supabase";
 
-// Revisión de reportes (Paso C): carga diferida. Quien no tiene el permiso de supervisión no descarga este código (ni MapLibre, que viene dentro del mapa).
+// «Supervisión y dashboard» (antes «Revisión de reportes», Paso C): carga diferida. Quien no tiene el permiso de supervisión no descarga este código (ni MapLibre, que viene dentro del mapa).
 const Revision = lazy(() => import("./dashboard/Revision"));
 
 // Sección «Formatos de campo» de la Torre A. Qué puede hacer la persona lo decide el SERVIDOR (ruta formulario); aquí solo se dibuja.
@@ -19,7 +19,7 @@ const Revision = lazy(() => import("./dashboard/Revision"));
 // Las pantallas son ENTRADAS de una lista (entradas.ts): reporte general, formatos de actividad (Paso D) y acta de inspección (solo con el permiso `acta`; su pantalla aún no existe).
 // Los formatos «Próximamente» no tienen acción. Esta lista de formatos es de interfaz (no es el catálogo de tipos de reporte, que viene del servidor).
 // «Daños» ya no está: son tipos del Reporte general (daño de red de acueducto y de alcantarillado, tapa de manhole, rejilla de sumidero, daño de obra de terceros); no habrá un formulario aparte.
-const PROXIMAMENTE = ["SCRR"];   // «Instalación de medidor» y «Revisión previa» ya son formatos de actividad (Acta de revisión o instalación); se quitaron de aquí
+// «SCRR — Próximamente» pasó a ser la entrada «Análisis de contrato» (pendiente) de entradas.ts; «Instalación de medidor» y «Revisión previa» ya son formatos de actividad.
 const ROTULO_PERFIL: Record<FormularioCampo["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor de reportes de campo", reportante: "Reporte de campo" };
 
 /** Permisos que decide el servidor (App los toma del perfil). `acta`: puede capturar actas (si no se informa, la entrada del acta no aparece). `campo`: tiene permiso de campo; por omisión sí (como antes).
@@ -60,9 +60,9 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
 
   // «Me equivoqué de formulario» (Cancelar): a qué otros formularios se puede pasar desde `desde`, llevando solo el contrato.
   const destinosDesde = (desde: EntradaId): Destino[] => [
-    ...(campo && def?.puede.reportar && desde !== "reporte_general" ? [{ id: "reporte_general", rotulo: "Reporte general" }] : []),
+    ...(campo && def?.puede.reportar && desde !== "reporte_general" ? [{ id: "reporte_general", rotulo: "Reportar anomalía" }] : []),
     ...(campo && def?.puede.reportar && desde !== "formatos" && formatosDisponibles(def.grupos).length > 0 ? [{ id: "formatos", rotulo: "Formatos de actividad" }] : []),
-    ...(acta && desde !== "acta" ? [{ id: "acta", rotulo: "Acta de inspección" }] : []),
+    ...(acta && desde !== "acta" ? [{ id: "acta", rotulo: "Reportar posible pérdida" }] : []),
   ];
   const irA = (destino: string, contrato: string) => { setContratoPuente(contrato); setVersion((v) => v + 1); setAbierta(destino as EntradaId); };
 
@@ -82,7 +82,7 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   }
 
   if (abierta === "revision" && def?.puede.supervisar) {
-    return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando la revisión…</p></section></div>}><Revision correo={correo} onVolver={() => setAbierta(null)} /></Suspense>;
+    return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando Supervisión y dashboard…</p></section></div>}><Revision correo={correo} onVolver={() => setAbierta(null)} /></Suspense>;
   }
 
   const entradas = entradasDeCampo({
@@ -93,26 +93,30 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   return (
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
-        <h1>{campo ? "Formatos de campo" : "Acta de inspección"}</h1>
+        <h1>{campo ? "Formatos de campo" : "Reportar posible pérdida"}</h1>
         <p className="campo-sub">{def ? ROTULO_PERFIL[def.perfil] : "Registro digital de actas"}</p>
         <div className="campo-formatos">
-          {entradas.map((e) => e.pendiente ? (
-            <div key={e.id} className="campo-formato campo-formato-proximo" aria-disabled="true">
-              <strong>{e.titulo}</strong>
-              <span>Próximamente. {e.descripcion}</span>
-            </div>
-          ) : (
-            <button key={e.id} type="button" className="campo-formato campo-formato-activo" onClick={() => setAbierta(e.id)} disabled={!e.habilitada}>
-              <strong>{e.titulo}</strong>
-              <span>{e.descripcion}</span>
-            </button>
-          ))}
-          {campo && PROXIMAMENTE.map((n) => (
-            <div key={n} className="campo-formato campo-formato-proximo" aria-disabled="true">
-              <strong>{n}</strong>
-              <span>Próximamente</span>
-            </div>
-          ))}
+          {entradas.map((e, i) => {
+            const separar = i > 0 && entradas[i - 1].seccion !== e.seccion;
+            const clase = `campo-formato${e.gestion ? " campo-formato-gestion" : ""}${e.abreMas ? " campo-formato-mas" : ""}`;
+            return (
+              <Fragment key={e.id}>
+                {separar ? <hr className="campo-separador" aria-hidden="true" /> : null}
+                {e.pendiente ? (
+                  <div className={`${clase} campo-formato-proximo`} aria-disabled="true">
+                    <strong>{e.titulo}</strong>
+                    <span>Próximamente. {e.descripcion}</span>
+                  </div>
+                ) : (
+                  <button type="button" className={`${clase} campo-formato-activo`} onClick={() => setAbierta(e.id)} disabled={!e.habilitada}>
+                    <strong>{e.titulo}</strong>
+                    {e.descripcion ? <span>{e.descripcion}</span> : null}
+                    {e.abreMas ? <span className="campo-formato-flecha" aria-hidden="true">›</span> : null}
+                  </button>
+                )}
+              </Fragment>
+            );
+          })}
         </div>
       </section>
     </div>

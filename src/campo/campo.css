@@ -53,6 +53,14 @@
 .campo-formato-activo { border: 2px solid #0f766e; background: #f2fbf9; color: #0a2540; cursor: pointer; }
 .campo-formato-activo:disabled { opacity: .6; cursor: not-allowed; }
 .campo-formato-proximo { border: 1px dashed #aab7c2; background: #f6f8fa; color: #52626f; }
+/* Entradas de gestión (supervisión, administración): azul institucional del proyecto (--azul / --azul-suave), para distinguirlas de las actividades de campo (verde). Igual en Aseo y en Comercial. */
+.campo-formato-activo.campo-formato-gestion { border-color: var(--azul, #1e5aa8); background: var(--azul-suave, #e8f1fb); min-height: 52px; justify-content: center; }
+.campo-formato-gestion strong { color: var(--azul, #1e5aa8); }
+/* Entrada que abre más opciones: flecha a la derecha */
+.campo-formato-mas { position: relative; padding-right: 40px; }
+.campo-formato-flecha { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 30px; line-height: 1; font-weight: 700; color: #0f766e; }
+/* Separación visual entre bloques de entradas */
+.campo-separador { border: 0; border-top: 1px solid #d5dde6; margin: 4px 0; width: 100%; }
 
 /* Cámara a pantalla completa dentro del formulario */
 .campo-camara { position: fixed; inset: 0; z-index: 1000; background: #000; display: flex; flex-direction: column; }

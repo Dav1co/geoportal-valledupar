@@ -50,8 +50,8 @@ export function PantallaActa({ correo, onVolver, contratoInicial = "", destinos,
     return (
       <div className="tec-pagina campo-pagina">
         <section className="tec-tarjeta" role="alert">
-          <h1>{sinAcceso ? "Sin acceso al acta de inspección" : "No se pudo abrir el acta de inspección"}</h1>
-          <p>{sinAcceso ? "Su cuenta no tiene acceso al acta de inspección. Solicítelo a un administrador." : avisoDeError(error).texto}</p>
+          <h1>{sinAcceso ? "Sin acceso a «Reportar posible pérdida»" : "No se pudo abrir «Reportar posible pérdida»"}</h1>
+          <p>{sinAcceso ? "Su cuenta no tiene acceso a «Reportar posible pérdida». Solicítelo a un administrador." : avisoDeError(error).texto}</p>
           {!sinAcceso && error.tipo !== "sesion" && <button type="button" className="tec-boton" onClick={recargar}>Reintentar</button>}
           <button type="button" className="tec-boton-sec" onClick={onVolver}>Volver</button>
         </section>
@@ -73,9 +73,10 @@ export function PantallaActa({ correo, onVolver, contratoInicial = "", destinos,
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
         <div className="campo-cab">
-          <h1>Mis actas</h1>
+          <h1>Reportar posible pérdida</h1>
           <button type="button" className="tec-boton-sec" onClick={onVolver}>Volver</button>
         </div>
+        <h2 className="campo-grupo-titulo">Mis actas</h2>
         <p className="campo-nota" role="note">{L.TEXTO_PAPEL}</p>
         <p className="campo-sub">{cat.aviso_registro}</p>
         <button type="button" className="tec-boton campo-enviar" onClick={() => setVista({ v: "identificar" })}>Nueva acta</button>
@@ -270,6 +271,7 @@ function Confirmado({ conf, papelPendiente, onVolver }: { conf: ConfirmacionActa
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta campo-confirmacion" role="status">
         <h1>{conf.repetido ? "Este registro ya estaba guardado" : "Registro guardado"}</h1>
+        <p className="campo-sub">Reportar posible pérdida</p>
         <p className="acta-consecutivo" aria-label="Consecutivo">{conf.consecutivo}</p>
         <p className="campo-hora">Registrado el {fechaHora(conf.registrado_en)} (hora del servidor).</p>
         <p className="campo-nota" role="note"><strong>Verifique que este consecutivo esté escrito en el acta física.</strong> {L.TEXTO_PAPEL}</p>

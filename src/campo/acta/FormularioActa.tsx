@@ -162,7 +162,7 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta acta-form">
         <div className="campo-cab">
-          <h1>Acta de inspección</h1>
+          <h1>Reportar posible pérdida</h1>
           <button type="button" className="tec-boton-sec" onClick={onVolver}>Mis actas</button>
           <button type="button" className="btn-cancelar" onClick={() => setCancelando(true)} disabled={bloqueado}>Cancelar</button>
         </div>

@@ -189,7 +189,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
           {invitarActa && (
             <div className="campo-nota" role="note">
               <p>Marcó que se encontró una irregularidad. Este formato no reemplaza el acta de inspección técnica: ábrala ahora sobre el contrato {invitarActa.contrato}.</p>
-              <button type="button" className="tec-boton" onClick={() => onAbrirActa?.(invitarActa.contrato)}>Abrir el acta de inspección técnica</button>
+              <button type="button" className="tec-boton" onClick={() => onAbrirActa?.(invitarActa.contrato)}>Ir a «Reportar posible pérdida»</button>
             </div>
           )}
           <button type="button" className="tec-boton" onClick={onOtro}>Hacer otro reporte</button>
