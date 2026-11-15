@@ -20,7 +20,7 @@
 .tec-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .tec-campo label { font-size: 15px; font-weight: 600; }
 .tec-oblig { font-weight: 400; font-size: 13px; color: #52626f; }
-.tec-campo input[type="text"], .tec-campo input[type="time"] { height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; color: #22313f; background: #fff; width: 100%; min-width: 0; }
+.tec-campo input[type="text"], .tec-campo input[type="time"], .tec-campo input[type="date"] { height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; color: #22313f; background: #fff; width: 100%; min-width: 0; }
 .tec-campo input:focus-visible, .tec-boton:focus-visible, .tec-boton-sec:focus-visible, .tec-planta:focus-visible, .tec-chip-form:focus-visible, .tec-enlace:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
 .tec-campo input[aria-invalid="true"] { border-color: #b42318; border-width: 2px; }
 .tec-campo input:disabled { background: #eef2f5; }

@@ -13,6 +13,7 @@ export type Borrador = {
   claveEnvio: string;
   comunEnviada: MarcaEnviada | null;       // el bloque «Para las dos plantas» ya se envió; se pliega solo mientras la marca esté vigente
   inicio?: string | null;                  // hora de INICIO (ISO, reloj del celular) de este formulario abierto: sobrevive a una recarga. Opcional: borradores viejos no la traen
+  fecha?: string | null;                   // fecha de la muestra ELEGIDA (AAAA-MM-DD), solo en formularios que la admiten (Muestreo). Opcional: los demás no la guardan
 };
 
 const PREFIJO = "geoportal.tec.borrador.v2.";

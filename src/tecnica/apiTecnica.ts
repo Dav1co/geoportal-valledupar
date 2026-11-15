@@ -16,6 +16,8 @@ export type FormularioDef = {
   formulario: { clave: string; nombre: string; descripcion: string };
   fecha_hoy: string;            // AAAA-MM-DD, día de Bogotá según el servidor
   hora_propuesta: string;       // HH:MM
+  dias_atras_max?: number;      // > 0 (Muestreo, 7): la persona elige la fecha de la muestra entre fecha_minima y fecha_hoy. 0 o ausente: la fecha es la de hoy, de solo lectura (Entrada, Salida)
+  fecha_minima?: string;        // AAAA-MM-DD = fecha_hoy − dias_atras_max
   plantas: Planta[];
   puntos: PuntoDef[];
   variables: VariableDef[];
@@ -38,6 +40,7 @@ export type RegistrarCuerpo = {
   punto?: string | null; clave_envio: string;
   dosis?: DosisCuerpo;
   inicio_dispositivo?: string;     // ISO con zona: hora del celular al abrir el formulario (contrato común de inicio). Fuera de «valores»; no lleva «fecha» ni «hora» en el nombre
+  fecha_muestra?: string;          // AAAA-MM-DD. SOLO en formularios con dias_atras_max > 0 (Muestreo, Corte 0b): la Edge la rechaza en cualquier otro
 };
 export type RegistrarResp = { lote_id: string; formulario: string; fecha_muestra?: string; hora_muestra?: string; guardados: number; duplicado: boolean; dosis_guardada?: boolean };
 /** Opciones de la sección de dosis que entrega el servidor (el catálogo manda: aquí no hay nombres de químicos). Lista vacía = el formulario no tiene la sección. */

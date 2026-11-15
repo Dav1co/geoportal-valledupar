@@ -11,6 +11,28 @@ import { decimalesAMostrar, formatearNumero, interpretarNumero } from "./numeros
 // Reutiliza de Entrada: números (numeros.ts), borrador local (borrador.ts), clave de envío, errores del servidor (avisoDeError) y estilos.
 
 const dmy = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
+const ISO_DIA = /^\d{4}-\d{2}-\d{2}$/;
+/** Días entre dos fechas AAAA-MM-DD (b − a). */
+const diasEntre = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+
+/** Fecha de la muestra (Corte 0b). Solo si el servidor dice que el formulario la admite (dias_atras_max > 0 y fecha_minima válida: hoy, Muestreo). Si no, la fecha es la de hoy,
+ *  de solo lectura, y el cuerpo NO lleva «fecha_muestra» (Entrada y Salida, exactamente como antes). */
+export function rangoFecha(def: FormularioDef): { min: string; max: string; dias: number } | null {
+  const dias = typeof def.dias_atras_max === "number" && Number.isInteger(def.dias_atras_max) ? def.dias_atras_max : 0;
+  if (dias <= 0 || typeof def.fecha_minima !== "string" || !ISO_DIA.test(def.fecha_minima) || !ISO_DIA.test(def.fecha_hoy) || def.fecha_minima > def.fecha_hoy) return null;
+  return { min: def.fecha_minima, max: def.fecha_hoy, dias };
+}
+/** La fecha inicial: la del borrador si sigue dentro del rango; si no, hoy. */
+export function fechaInicial(guardada: string | null | undefined, r: { min: string; max: string } | null, hoy: string): string {
+  return r && typeof guardada === "string" && ISO_DIA.test(guardada) && guardada >= r.min && guardada <= r.max ? guardada : hoy;
+}
+/** Texto de la fecha para la confirmación y los avisos: «hoy, 15/11/2026», «ayer, 14/11/2026» o «el 12/11/2026 (hace 3 días)». */
+export function textoFecha(fecha: string, hoy: string): string {
+  const n = diasEntre(fecha, hoy);
+  if (n === 0) return `hoy, ${dmy(fecha)}`;
+  if (n === 1) return `ayer, ${dmy(fecha)}`;
+  return `el ${dmy(fecha)} (hace ${n} días)`;
+}
 
 type Estado = { tipo: "ok" | "error" | "pendiente"; texto: string; detalle?: string };
 type Aviso = { tipo: "ok" | "error" | "info"; texto: string; detalle?: string; accion?: { rotulo: string; hacer: () => void } };
@@ -39,6 +61,9 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
   const inicial = useMemo(() => leerBorrador(clave, uid, def.fecha_hoy), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [textos, setTextos] = useState<Record<string, string>>(inicial?.textos ?? {});
   const [hora, setHora] = useState<string>(inicial?.hora ?? def.hora_propuesta);
+  const rango = useMemo(() => rangoFecha(def), [def]);
+  // Fecha de la muestra elegida (solo con rango). Se conserva tras guardar (un lote de resultados del laboratorio suele ser del mismo día); «Descartar borrador» la vuelve a hoy.
+  const [fecha, setFecha] = useState<string>(() => fechaInicial(inicial?.fecha, rango, def.fecha_hoy));
   // Hora de inicio del formulario abierto: TODAS sus tarjetas la heredan (decisión 12). Cambia solo cuando se guardan todas con éxito o al descartar.
   const [inicio, setInicio] = useState<string>(() => inicioAlAbrir(inicial?.inicio));
   const extra = useMemo(() => leerExtra(inicial?.claveEnvio), []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -57,7 +82,7 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
   // «Descartar borrador»: no hay consecutivo ni nada nuevo en el servidor. Las tarjetas que YA se guardaron no se tocan (el aviso lo dice). Se conserva la planta elegida.
   function descartar() {
     const guardadas = Object.values(estados).filter((e) => e.tipo === "ok").length;
-    setTextos({}); setErrores({}); setEstados({}); setHora(def.hora_propuesta); setDescartando(false);
+    setTextos({}); setErrores({}); setEstados({}); setHora(def.hora_propuesta); setFecha(def.fecha_hoy); setDescartando(false);
     setLugares((l) => Object.fromEntries(tarjetas.map((x) => [x.id, x.clase === "planta" ? l[x.id] ?? "" : lugarInicial(x, {}, null)])));
     intentos.current = {};
     setInicio(nuevoInicio());
@@ -69,16 +94,18 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
   const refConfirmacion = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => { if (reponerHora.current) { setHora(def.hora_propuesta); reponerHora.current = false; } }, [def.hora_propuesta, def.fecha_hoy]);
+  // Si la definición se recarga con otro rango (cambió el día), una fecha que quedó fuera vuelve a hoy.
+  useEffect(() => { setFecha((f) => fechaInicial(f, rango, def.fecha_hoy)); }, [rango, def.fecha_hoy]);
   useEffect(() => { if (fase === "confirmando") refConfirmacion.current?.focus(); }, [fase]);
 
   // Borrador local (misma mecánica que Entrada). Clave de los textos = «codigo@lugar»: cambiar de lugar no pierde lo escrito en el otro.
   useEffect(() => {
     const t = setTimeout(() => {
       const planta = tarjetas.find((x) => x.clase === "planta");
-      guardarBorrador(clave, { uid, dia: def.fecha_hoy, planta: planta ? lugares[planta.id] ?? null : null, hora, textos, claveEnvio: JSON.stringify({ ...intentos.current, __lugares: Object.fromEntries(tarjetas.filter((x) => x.clase !== "ambas").map((x) => [x.id, lugares[x.id] ?? ""])) }), comunEnviada: null, inicio });
+      guardarBorrador(clave, { uid, dia: def.fecha_hoy, planta: planta ? lugares[planta.id] ?? null : null, hora, textos, claveEnvio: JSON.stringify({ ...intentos.current, __lugares: Object.fromEntries(tarjetas.filter((x) => x.clase !== "ambas").map((x) => [x.id, lugares[x.id] ?? ""])) }), comunEnviada: null, inicio, ...(rango ? { fecha } : {}) });
     }, 400);
     return () => clearTimeout(t);
-  }, [clave, uid, def.fecha_hoy, tarjetas, lugares, hora, textos, inicio]);
+  }, [clave, uid, def.fecha_hoy, tarjetas, lugares, hora, textos, inicio, rango, fecha]);
 
   const lugarDe = (t: Tarjeta) => lugares[t.id] ?? "";
 
@@ -93,6 +120,11 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
   function revisar() {
     const err: Record<string, string> = {}; const out: Conf[] = []; let otros = "";
     if (!/^\d{2}:\d{2}$/.test(hora)) err["__hora"] = "Escriba la hora de la muestra.";
+    if (rango) {
+      if (!ISO_DIA.test(fecha)) err["__fecha"] = "Elija la fecha de la muestra.";
+      else if (fecha > rango.max) err["__fecha"] = "La fecha de la muestra no puede ser futura.";
+      else if (fecha < rango.min) err["__fecha"] = `La fecha de la muestra puede ser hasta ${rango.dias} días atrás (desde el ${dmy(rango.min)}).`;
+    }
     for (const t of tarjetas) {
       const lugar = lugarDe(t);
       // Datos escritos para OTRO lugar de la misma tarjeta: no se envían hasta elegirlo (se avisa).
@@ -117,8 +149,8 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
     setErrores(err);
     if (Object.keys(err).length > 0) {
       setAviso({ tipo: "error", texto: err["__general"] ?? "Revise los campos marcados antes de guardar." });
-      const primero = Object.keys(err).find((k) => !k.startsWith("__")) ?? (err["__hora"] ? "__hora" : null);
-      if (primero) setTimeout(() => document.getElementById(primero === "__hora" ? "tec-hora" : `tec-c-${primero}`)?.focus(), 0);
+      const primero = err["__fecha"] ? "__fecha" : err["__hora"] ? "__hora" : Object.keys(err).find((k) => !k.startsWith("__")) ?? null;
+      if (primero) setTimeout(() => document.getElementById(primero === "__fecha" ? "tec-fecha" : primero === "__hora" ? "tec-hora" : `tec-c-${primero}`)?.focus(), 0);
       return;
     }
     setAviso(otros ? { tipo: "info", texto: `También hay datos escritos para otro lugar (${otros}). No se envían hasta que lo elija.` } : null);
@@ -139,7 +171,8 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
     for (const { tarjeta: t, lugar } of lista) {
       const ci = claveIntento(t, lugar);
       if (corte) { setEstados((s) => ({ ...s, [ci]: { tipo: "pendiente", texto: "No se envió.", detalle: "Se detuvo el envío por el problema anterior. Lo escrito se conserva; reintente." } })); fallas++; continue; }
-      const base = cuerpoTarjeta(def, t, lugar, textos, hora);
+      // Con rango (Muestreo) la fecha viaja SIEMPRE, también si es hoy: lo guardado es lo que la persona vio en la confirmación. Va en la huella: cambiar la fecha = clave nueva.
+      const base = { ...cuerpoTarjeta(def, t, lugar, textos, hora), ...(rango ? { fecha_muestra: fecha } : {}) };
       const huella = JSON.stringify(base);
       const previo = intentos.current[ci];
       // Mismo contenido = misma clave (reintento seguro); si la persona cambió algo, clave nueva para que el servidor no devuelva el envío anterior.
@@ -149,7 +182,7 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
         setTextos((x) => { const n = { ...x }; for (const v of t.variables) delete n[claveTexto(v, lugar)]; return n; });
         delete intentos.current[ci];
         hechos.push(`${t.clase === "ambas" ? t.titulo : nombreLugar(t, lugar)}: ${r.guardados} ${r.guardados === 1 ? "valor" : "valores"}${r.duplicado ? " (ya estaba guardado)" : ""}`);
-        setEstados((s) => ({ ...s, [ci]: { tipo: "ok", texto: r.duplicado ? "Ya estaba guardado; no se duplicó." : "Guardado.", detalle: `${r.guardados} ${r.guardados === 1 ? "valor guardado" : "valores guardados"} · muestra de las ${base.hora}.` } }));
+        setEstados((s) => ({ ...s, [ci]: { tipo: "ok", texto: r.duplicado ? "Ya estaba guardado; no se duplicó." : "Guardado.", detalle: `${r.guardados} ${r.guardados === 1 ? "valor guardado" : "valores guardados"} · muestra ${rango ? `tomada ${textoFecha(r.fecha_muestra ?? fecha, def.fecha_hoy)}, a las ${base.hora}` : `de las ${base.hora}`}.` } }));
       } catch (e) {
         fallas++;
         const a = avisoDeError(e);
@@ -257,7 +290,11 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
       {fase === "confirmando" ? (
         <div className="tec-confirma" role="group" aria-labelledby="tec-confirma-tit">
           <h2 id="tec-confirma-tit" ref={refConfirmacion} tabIndex={-1}>Va a guardar {conf.length === 1 ? "1 registro" : `${conf.length} registros`}</h2>
-          <p className="tec-sub">Muestra de hoy, {dmy(def.fecha_hoy)}, a las {hora}. Se guarda un registro por cada lugar.</p>
+          {rango ? (
+            <p className="tec-sub" data-testid="conf-fecha">Muestra tomada <strong>{textoFecha(fecha, def.fecha_hoy)}</strong>, a las {hora}. Se registra hoy, {dmy(def.fecha_hoy)}. Se guarda un registro por cada lugar.</p>
+          ) : (
+            <p className="tec-sub">Muestra de hoy, {dmy(def.fecha_hoy)}, a las {hora}. Se guarda un registro por cada lugar.</p>
+          )}
           {conf.map((c) => (
             <div key={claveIntento(c.tarjeta, c.lugar)}>
               <div className="tec-conf-lugar">{c.tarjeta.titulo}{c.tarjeta.clase === "ambas" ? "" : ` · ${nombreLugar(c.tarjeta, c.lugar)}`}</div>
@@ -275,11 +312,23 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
         </div>
       ) : (
         <>
-          <div className="tec-campo">
-            <label htmlFor="tec-fecha">Fecha de la muestra</label>
-            <input id="tec-fecha" type="text" readOnly value={`Hoy · ${dmy(def.fecha_hoy)}`} className="tec-solo-lectura" />
-            <span className="tec-ayuda">Solo se puede registrar el día de hoy.</span>
-          </div>
+          {rango ? (
+            <div className="tec-campo">
+              <label htmlFor="tec-fecha">Fecha de la muestra</label>
+              <input id="tec-fecha" type="date" value={fecha} min={rango.min} max={rango.max} required disabled={bloqueado}
+                aria-invalid={errores["__fecha"] ? true : undefined} aria-describedby="tec-fecha-ayuda"
+                onChange={(e) => { setFecha(e.target.value); if (errores["__fecha"]) setErrores((x) => { const n = { ...x }; delete n["__fecha"]; return n; }); }} />
+              <span id="tec-fecha-ayuda" className="tec-ayuda">El día en que se tomó la muestra: hoy o hasta {rango.dias} días atrás (desde el {dmy(rango.min)}), porque los resultados del laboratorio llegan después. No puede ser futura.</span>
+              {fecha !== def.fecha_hoy && ISO_DIA.test(fecha) && !errores["__fecha"] ? <span className="tec-ayuda tec-pista" data-testid="fecha-pasada">Muestra tomada {textoFecha(fecha, def.fecha_hoy)}.</span> : null}
+              {errores["__fecha"] ? <span className="tec-error">{errores["__fecha"]}</span> : null}
+            </div>
+          ) : (
+            <div className="tec-campo">
+              <label htmlFor="tec-fecha">Fecha de la muestra</label>
+              <input id="tec-fecha" type="text" readOnly value={`Hoy · ${dmy(def.fecha_hoy)}`} className="tec-solo-lectura" />
+              <span className="tec-ayuda">Solo se puede registrar el día de hoy.</span>
+            </div>
+          )}
           <div className="tec-campo">
             <label htmlFor="tec-hora">Hora de la muestra</label>
             <input id="tec-hora" type="time" value={hora} disabled={bloqueado} aria-invalid={errores["__hora"] ? true : undefined}
