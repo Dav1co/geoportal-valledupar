@@ -1,5 +1,8 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 2 · 70 — PRUEBAS «N de N» (PROPUESTA). Se corre DESPUÉS de 10, 20, 25, 30 y 40, en la misma transacción.
+-- Se corre DESPUÉS de la carga real del 1a (orden de despliegue): por eso los códigos de la red de prueba NO son fijos (RED-000001 ya es un tubo
+-- real); se toman por su llave (ID 99100xx, LABEL ZT2-…) después de publicarla. Al publicarla, lo real de esas capas queda «retirado» dentro de
+-- la transacción, que se deshace al final.
 -- No deja rastro: crea sus usuarios (prueba.redes2.*), una red de prueba con el motor del 1a (llaves ZT-… e IDs 99100xx), fotos de
 -- prueba en storage.objects y termina con un ERROR a propósito que deshace todo y trae el informe en el mensaje.
 --   Resultado esperado:  ERROR: PRUEBAS DE REDES · CORTE 2 … RESULTADO: N de N pruebas correctas — SIN FALLAS
@@ -28,7 +31,7 @@ create function pg_temp.foto(p_ruta text, p_bytes integer default 300000, p_mime
   insert into storage.objects (bucket_id, name, metadata) values ('redes-evidencias', p_ruta, jsonb_build_object('size', p_bytes, 'mimetype', p_mime)) $$;
 -- datos base de un daño válido (se cambian claves en cada prueba)
 create function pg_temp.datos(p_ruta text, p_extra jsonb default '{}'::jsonb) returns jsonb language sql as $$
-  select jsonb_build_object('clase', 'dano', 'tipo', 'fuga', 'sistema', 'acueducto', 'activo', 'RED-000001', 'lat', 10.47, 'lon', -73.2395, 'precision_m', 6, 'ubicacion_origen', 'gps',
+  select jsonb_build_object('clase', 'dano', 'tipo', 'fuga', 'sistema', 'acueducto', 'activo', current_setting('zt.red1'), 'lat', 10.47, 'lon', -73.2395, 'precision_m', 6, 'ubicacion_origen', 'gps',
          't_detectado', to_char(clock_timestamp() - interval '2 hours', 'YYYY-MM-DD"T"HH24:MI:SSOF'), 'tipo_rotura', 'parcial', 'largo_afectado_m', 2, 'riesgo', 'medio',
          'marcas', jsonb_build_array('via'), 'causa_clase', 'propia', 'causa', 'desgaste', 'descripcion', 'Fuga de prueba',
          'fotos', jsonb_build_array(jsonb_build_object('n', 1, 'momento', 'dano', 'ruta', p_ruta))) || p_extra $$;
@@ -42,6 +45,7 @@ do $prueba$
 declare
   a text := 'prueba.redes2.adm@emdupar.gov.co'; sv text := 'prueba.redes2.sup@emdupar.gov.co'; op text := 'prueba.redes2.op@emdupar.gov.co';
   sf text := 'prueba.redes2.sinform@emdupar.gov.co'; na text := 'prueba.redes2.nada@emdupar.gov.co';
+  v_red1 text; v_red2 text; v_val text; v_acc text; v_tor text; v_poz1 text; v_poz2 text; v_col text;
   v_c bigint; v_r jsonb; v_x jsonb; v_p jsonb; v_id uuid; v_id2 uuid; v_id3 uuid; v_ruta text; v_rep uuid; v_rep2 uuid; v_rep3 uuid; v_t integer[]; v_s text;
   v_total integer; v_bien integer; v_fallas text;
   w1 text := 'LINESTRING(' || pg_temp.p(0, 0) || ',' || pg_temp.p(100, 0) || ')';
@@ -68,8 +72,20 @@ begin
   perform public.geoportal_redes_carga_lote(a, v_c, jsonb_build_array(jsonb_build_object('orden', 1, 'wkt', 'LINESTRING(' || pg_temp.p(0, 300) || ',' || pg_temp.p(100, 300) || ')',
     'atributos', jsonb_build_object('LABEL', 'ZT2-PA-PB', 'PZ_INICIAL', 'ZT2-PA', 'PZ_FINAL', 'ZT2-PB', 'MATERIAL', 'PVC', 'DIAMETRO', 200, 'ESTADO', 'Existente'))));
   perform public.geoportal_redes_carga_publicar(a, v_c, 'Conducto de prueba del Corte 2');
-  perform pg_temp.reg('00.01 red de prueba: RED-000001..2, VAL, ACC, TOR, POZ-000001..2 y COL-000001',
-     (select count(*) from redes.activo_vigente_mat where codigo in ('RED-000001', 'RED-000002', 'VAL-000001', 'ACC-000001', 'TOR-000001', 'POZ-000001', 'POZ-000002', 'COL-000001')) = 8);
+  -- códigos de la red de prueba, por su llave (no se suponen: con la carga real, RED-000001 es otro tubo)
+  select codigo into v_red1 from redes.v_activo_vigente where capa_codigo = 'acueducto' and llave_capa = '9910001';
+  select codigo into v_red2 from redes.v_activo_vigente where capa_codigo = 'acueducto' and llave_capa = '9910002';
+  select codigo into v_val from redes.v_activo_vigente where capa_codigo = 'acueducto_nodos' and llave_capa = '99101';
+  select codigo into v_acc from redes.v_activo_vigente where capa_codigo = 'acueducto_nodos' and llave_capa = '99102';
+  select codigo into v_tor from redes.v_activo_vigente where capa_codigo = 'acueducto_nodos' and llave_capa = '99103';
+  select codigo into v_poz1 from redes.v_activo_vigente where capa_codigo = 'alc_pozos' and llave_capa = 'ZT2-PA';
+  select codigo into v_poz2 from redes.v_activo_vigente where capa_codigo = 'alc_pozos' and llave_capa = 'ZT2-PB';
+  select codigo into v_col from redes.v_activo_vigente where capa_codigo = 'alc_conductos' and llave_capa = 'ZT2-PA-PB';
+  perform set_config('zt.red1', v_red1, true);
+  perform pg_temp.reg('00.01 red de prueba: 2 RED, VAL, ACC, TOR, 2 POZ y COL, encontrados por su llave',
+     v_red1 like 'RED-%' and v_red2 like 'RED-%' and v_val like 'VAL-%' and v_acc like 'ACC-%' and v_tor like 'TOR-%' and v_poz1 like 'POZ-%' and v_poz2 like 'POZ-%' and v_col like 'COL-%'
+     and (select count(*) from redes.activo_vigente_mat where codigo in (v_red1, v_red2, v_val, v_acc, v_tor, v_poz1, v_poz2, v_col) and not retirado) = 8,
+     concat_ws(' ', v_red1, v_red2, v_val, v_acc, v_tor, v_poz1, v_poz2, v_col));
 
   -- ---------- 01 Catálogos, bucket y reglas ----------
   perform pg_temp.reg('01.01 13 tipos (7 daños y 6 fallas), 4 roturas, 6 causas, 6 terceros y 4 marcas',
@@ -119,7 +135,7 @@ begin
   perform pg_temp.err('05.03 tipo que no existe', format($$select public.geoportal_redes_crear_dano(%L, %L, %L)$$, op, v_id, pg_temp.datos(v_ruta, '{"tipo": "inventado"}')), '22023', 'qué pasó');
   perform pg_temp.err('05.04 clase que no es la del tipo', format($$select public.geoportal_redes_crear_dano(%L, %L, %L)$$, op, v_id, pg_temp.datos(v_ruta, '{"clase": "falla"}')), '22023', 'daño o falla');
   perform pg_temp.err('05.05 tipo que no aplica al sistema (rebose en acueducto)', format($$select public.geoportal_redes_crear_dano(%L, %L, %L)$$, op, v_id, pg_temp.datos(v_ruta, '{"tipo": "rebose", "tipo_rotura": null}')), '22023', 'no aplica');
-  perform pg_temp.err('05.06 activo de otro sistema', format($$select public.geoportal_redes_crear_dano(%L, %L, %L)$$, op, v_id, pg_temp.datos(v_ruta, '{"activo": "POZ-000001"}')), '22023', 'no es de ese sistema');
+  perform pg_temp.err('05.06 activo de otro sistema', format($$select public.geoportal_redes_crear_dano(%L, %L, %L)$$, op, v_id, pg_temp.datos(v_ruta, jsonb_build_object('activo', v_poz1))), '22023', 'no es de ese sistema');
   perform pg_temp.err('05.07 sin activo ni «qué es»', format($$select public.geoportal_redes_crear_dano(%L, %L, %L)$$, op, v_id, pg_temp.datos(v_ruta, '{"activo": null}')), '22023', 'diga qué es');
   perform pg_temp.err('05.08 hora de detección en el futuro', format($$select public.geoportal_redes_crear_dano(%L, %L, %L)$$, op, v_id, pg_temp.datos(v_ruta, jsonb_build_object('t_detectado', pg_temp.iso('10 minutes')))), '22023', 'futuro');
   perform pg_temp.err('05.09 detección de hace más de 7 días', format($$select public.geoportal_redes_crear_dano(%L, %L, %L)$$, op, v_id, pg_temp.datos(v_ruta, jsonb_build_object('t_detectado', pg_temp.iso('-8 days')))), '22023', '7 días');
@@ -151,7 +167,7 @@ begin
   -- ---------- 06 Crear: los buenos ----------
   v_r := public.geoportal_redes_crear_dano(op, v_id, pg_temp.datos(v_ruta, jsonb_build_object('causa_clase', 'terceros', 'causa', null, 'tercero_tipo', 'vehiculo', 'tercero_nombre', 'Placa ZTX123',
             'inicio_dispositivo', pg_temp.iso('-20 minutes'), 'presion_mca', 25)), '10.0.0.1');
-  perform pg_temp.reg('06.01 se guarda DAN-000001, reportado, sobre RED-000001', v_r ->> 'codigo' = 'DAN-000001' and v_r ->> 'estado' = 'reportado' and v_r ->> 'activo' = 'RED-000001'
+  perform pg_temp.reg('06.01 se guarda DAN-000001, reportado, sobre el primer tramo de prueba', v_r ->> 'codigo' = 'DAN-000001' and v_r ->> 'estado' = 'reportado' and v_r ->> 'activo' = v_red1
      and not (v_r ->> 'repetido')::boolean and v_r ->> 'perdida_estado' = 'sin_tabla', v_r::text);
   perform pg_temp.reg('06.02 la placa del tercero va SOLO a dano_datos_sensibles (ni en el daño ni en la auditoría)',
      (select tercero_nombre from redes.dano_datos_sensibles where dano_id = v_id) = 'Placa ZTX123'
@@ -174,15 +190,15 @@ begin
      and (v_r ->> 'fuera_de_zona')::boolean and v_r ->> 'estado' = 'en_atencion', v_r::text);
 
   -- ---------- 07 Epicrisis y ficha ----------
-  v_r := public.geoportal_redes_epicrisis(op, 'RED-000001');
-  perform pg_temp.reg('07.01 la epicrisis de RED-000001 trae los 2 daños como «hecho», del más reciente al más antiguo', (select count(*) from jsonb_array_elements(v_r -> 'items') i where i ->> 'grupo' = 'hecho') = 2
+  v_r := public.geoportal_redes_epicrisis(op, v_red1);
+  perform pg_temp.reg('07.01 la epicrisis del tramo de prueba trae los 2 daños como «hecho», del más reciente al más antiguo', (select count(*) from jsonb_array_elements(v_r -> 'items') i where i ->> 'grupo' = 'hecho') = 2
      and exists (select 1 from jsonb_array_elements(v_r -> 'items') i where i ->> 'clase' = 'dano' and i ->> 'resumen' like 'DAN-000001 · Fuga o tubería rota · Rotura parcial · riesgo medio · causa de terceros%' and i ->> 'estado' = 'Reportado')
      and exists (select 1 from jsonb_array_elements(v_r -> 'items') i where i ->> 'resumen' like 'DAN-000002 %duración 5 h 00 min%' and i ->> 'estado' = 'Atendido'), v_r::text);
   perform pg_temp.reg('07.02 la epicrisis nunca trae la placa del tercero; el operador no ve autores', v_r::text not like '%ZTX123%' and not exists (select 1 from jsonb_array_elements(v_r -> 'items') i where i ? 'autor'));
-  v_r := public.geoportal_redes_activo(op, 'RED-000001');
+  v_r := public.geoportal_redes_activo(op, v_red1);
   perform pg_temp.reg('07.03 la ficha cuenta 2 hechos y 2 daños en 12 meses', (v_r -> 'epicrisis' ->> 'hechos')::integer = 2 and (v_r -> 'epicrisis' ->> 'danos_12_meses')::integer = 2, (v_r -> 'epicrisis')::text);
   perform pg_temp.reg('07.04 el daño no identificado no está en ninguna epicrisis', not exists (select 1 from redes.v_epicrisis where ref_id = 3 and clase = 'dano'));
-  perform pg_temp.reg('07.05 la epicrisis sigue con lo del 1a (las altas)', exists (select 1 from redes.v_epicrisis e join redes.activos x on x.id = e.activo_id where x.codigo = 'RED-000001' and e.clase = 'alta'));
+  perform pg_temp.reg('07.05 la epicrisis sigue con lo del 1a (las altas)', exists (select 1 from redes.v_epicrisis e join redes.activos x on x.id = e.activo_id where x.codigo = v_red1 and e.clase = 'alta'));
 
   -- ---------- 08 Pérdida estimada ----------
   insert into redes.caudales_fuga (diametro_min_mm, diametro_max_mm, tipo_rotura, caudal_lps, fuente, autor) values (50, 100, 'parcial', 2.5, 'Prueba (no es la tabla de Técnica)', a);
@@ -192,23 +208,25 @@ begin
   perform pg_temp.reg('08.02 la fila sin rango de presión vale para cualquier presión (25 m.c.a.); abierto, la pérdida corre con el total', v_r ->> 'perdida_estado' = 'calculada' and (v_r ->> 'perdida_m3')::numeric > 0 and (v_r ->> 'total_corre')::boolean, v_r::text);
   insert into redes.caudales_fuga (diametro_min_mm, diametro_max_mm, tipo_rotura, presion_min_mca, presion_max_mca, caudal_lps, fuente, autor) values (200, 300, 'total', 10, 20, 9, 'Prueba', a);
   insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, activo_id, lat, lon, ubicacion_origen, t_detectado, tipo_rotura, riesgo, causa_clase, autor)
-  select '00000000-0000-4000-8000-0000000000aa', 'DAN-900001', 'dano', 'fuga', 'acueducto', id, 10.47, -73.24, 'gps', now() - interval '1 hour', 'total', 'bajo', 'desconocida', a from redes.activos where codigo = 'RED-000002';
+  select '00000000-0000-4000-8000-0000000000aa', 'DAN-900001', 'dano', 'fuga', 'acueducto', id, 10.47, -73.24, 'gps', now() - interval '1 hour', 'total', 'bajo', 'desconocida', a from redes.activos where codigo = v_red2;
   perform pg_temp.reg('08.02b rotura total en 76 mm: no hay fila para ese diámetro y rotura → «sin_fila» y pérdida nula (no se inventa)',
      exists (select 1 from redes.v_dano where codigo = 'DAN-900001' and perdida_estado = 'sin_fila' and perdida_m3 is null));
   select row_to_json(x)::jsonb into v_r from redes.v_dano x where id = v_id3;
   perform pg_temp.reg('08.03 sin rotura (rebose): la pérdida «no aplica»', v_r ->> 'perdida_estado' = 'no_aplica');
 
   -- ---------- 09 Minimapa ----------
-  v_r := public.geoportal_redes_activo_buscar(op, 'red-00', 'acueducto');
-  perform pg_temp.reg('09.01 buscar «red-00» en acueducto: RED-000001 y RED-000002, con lat y lon', jsonb_array_length(v_r -> 'activos') = 2 and v_r -> 'activos' -> 0 ->> 'codigo' = 'RED-000001' and (v_r -> 'activos' -> 0 ->> 'lat') is not null, v_r::text);
-  perform pg_temp.reg('09.02 buscar por el código de la capa (V991) y por el pozo en alcantarillado', public.geoportal_redes_activo_buscar(op, 'v991') -> 'activos' -> 0 ->> 'codigo' = 'VAL-000001'
-     and (select array_agg(x ->> 'codigo' order by x ->> 'codigo') from jsonb_array_elements(public.geoportal_redes_activo_buscar(op, 'ZT2-P', 'alcantarillado') -> 'activos') x) = array['COL-000001', 'POZ-000001', 'POZ-000002']);
+  v_r := public.geoportal_redes_activo_buscar(op, lower(v_red1), 'acueducto');
+  perform pg_temp.reg('09.01 buscar el código del tramo de prueba (en minúsculas): lo trae primero, con lat y lon', v_r -> 'activos' -> 0 ->> 'codigo' = v_red1 and (v_r -> 'activos' -> 0 ->> 'lat') is not null, v_r::text);
+  perform pg_temp.reg('09.02 buscar por el código de la capa (V991, Distribucion-ZT2) y por el pozo en alcantarillado', public.geoportal_redes_activo_buscar(op, 'v991') -> 'activos' -> 0 ->> 'codigo' = v_val
+     and public.geoportal_redes_activo_buscar(op, 'Distribucion-ZT2', 'acueducto') -> 'activos' -> 0 ->> 'codigo' = v_red1
+     and (select array_agg(x ->> 'codigo' order by x ->> 'codigo') from jsonb_array_elements(public.geoportal_redes_activo_buscar(op, 'ZT2-P', 'alcantarillado') -> 'activos') x)
+         = (select array_agg(c order by c) from unnest(array[v_col, v_poz1, v_poz2]) c));
   perform pg_temp.err('09.03 buscar con 1 letra', format($$select public.geoportal_redes_activo_buscar(%L, 'r')$$, op), '22023');
-  v_r := public.geoportal_redes_tramo_nodos(op, 'RED-000001');
-  perform pg_temp.reg('09.04 nodos del tramo RED-000001: desde V991 (VAL-000001) hasta Tee-991 (ACC-000001), con posición', jsonb_array_length(v_r -> 'nodos') = 2
-     and v_r -> 'nodos' -> 0 ->> 'rol' = 'inicio' and v_r -> 'nodos' -> 0 ->> 'nombre' = 'V991' and v_r -> 'nodos' -> 0 -> 'activo' ->> 'codigo' = 'VAL-000001'
-     and v_r -> 'nodos' -> 1 -> 'activo' ->> 'codigo' = 'ACC-000001' and (v_r -> 'nodos' -> 1 ->> 'lat') is not null, v_r::text);
-  perform pg_temp.err('09.05 nodos de algo que no es un tramo', format($$select public.geoportal_redes_tramo_nodos(%L, 'VAL-000001')$$, op), '22023', 'no es un tramo');
+  v_r := public.geoportal_redes_tramo_nodos(op, v_red1);
+  perform pg_temp.reg('09.04 nodos del tramo de prueba: desde V991 (su válvula) hasta Tee-991 (su accesorio), con posición', jsonb_array_length(v_r -> 'nodos') = 2
+     and v_r -> 'nodos' -> 0 ->> 'rol' = 'inicio' and v_r -> 'nodos' -> 0 ->> 'nombre' = 'V991' and v_r -> 'nodos' -> 0 -> 'activo' ->> 'codigo' = v_val
+     and v_r -> 'nodos' -> 1 -> 'activo' ->> 'codigo' = v_acc and (v_r -> 'nodos' -> 1 ->> 'lat') is not null, v_r::text);
+  perform pg_temp.err('09.05 nodos de algo que no es un tramo', format($$select public.geoportal_redes_tramo_nodos(%L, %L)$$, op, v_val), '22023', 'no es un tramo');
   v_t := pg_temp.tesela(17, -73.2395, 10.4700);
   v_s := public.geoportal_redes_mvt(op, v_t[1], v_t[2], v_t[3], 'acueducto');
   perform pg_temp.reg('09.06 tesela z17 de acueducto sobre la red de prueba: trae datos (MVT en base64)', length(v_s) > 50 and length(decode(v_s, 'base64')) > 30, length(v_s)::text);
@@ -236,7 +254,7 @@ begin
   perform pg_temp.reg('10.03 la tabla de reportes no tiene columnas de nombre ni de teléfono', not exists (select 1 from information_schema.columns where table_schema = 'redes' and table_name = 'reportes_externos'
      and column_name ~ '(nombre|telefono|celular|cedula|correo|email)'));
   perform pg_temp.err('10.04 el operador no convierte reportes', format($$select public.geoportal_redes_reporte_convertir(%L, %L, '{"clase": "dano", "tipo": "fuga", "sistema": "acueducto", "riesgo": "medio"}')$$, op, v_rep), '42501');
-  v_r := public.geoportal_redes_reporte_convertir(sv, v_rep, '{"clase": "dano", "tipo": "fuga", "sistema": "acueducto", "activo": "RED-000001", "riesgo": "alto"}');
+  v_r := public.geoportal_redes_reporte_convertir(sv, v_rep, jsonb_build_object('clase', 'dano', 'tipo', 'fuga', 'sistema', 'acueducto', 'activo', v_red1, 'riesgo', 'alto'));
   perform pg_temp.reg('10.05 el supervisor lo convierte: DAN-000004 enlazado al radicado, origen bot, en atención para el bot', v_r ->> 'dano_codigo' = 'DAN-000004' and v_r ->> 'estado_bot' = 'en_atencion'
      and exists (select 1 from redes.v_dano where codigo = 'DAN-000004' and origen = 'bot' and reporte_externo_id = v_rep and ubicacion_origen = 'bot' and autor = sv and descripcion like 'Reporte del bot ZT-0001%')
      and (select estado_bot from redes.v_reporte_externo where id = v_rep) = 'en_atencion', v_r::text);
@@ -245,22 +263,23 @@ begin
   perform pg_temp.reg('10.07 cuando el daño queda atendido, el bot recibe «atendido»', (select estado_bot from redes.v_reporte_externo where id = v_rep) = 'atendido');
   v_rep2 := redes.f_reporte_externo_recibir('{"radicado": "ZT-0002", "canal": "whatsapp", "tipo": "Alcantarilla", "direccion": "Calle 1 # 2-3"}');
   perform pg_temp.err('10.08 un reporte sin ubicación y sin activo no se puede convertir', format($$select public.geoportal_redes_reporte_convertir(%L, %L, '{"clase": "dano", "tipo": "rebose", "sistema": "alcantarillado", "riesgo": "bajo"}')$$, sv, v_rep2), '22023', 'ubicación');
-  v_r := public.geoportal_redes_reporte_convertir(a, v_rep2, '{"clase": "dano", "tipo": "rebose", "sistema": "alcantarillado", "activo": "POZ-000002", "riesgo": "bajo"}');
+  v_r := public.geoportal_redes_reporte_convertir(a, v_rep2, jsonb_build_object('clase', 'dano', 'tipo', 'rebose', 'sistema', 'alcantarillado', 'activo', v_poz2, 'riesgo', 'bajo'));
   perform pg_temp.reg('10.09 sin ubicación, con el activo: el daño toma la posición del pozo', exists (select 1 from redes.danos d where d.codigo = v_r ->> 'dano_codigo' and d.ubicacion_origen = 'activo'
-     and ST_DWithin(d.geom::geography, (select geom from redes.activo_vigente_mat where codigo = 'POZ-000002')::geography, 0.2)));
+     and ST_DWithin(d.geom::geography, (select geom from redes.activo_vigente_mat where codigo = v_poz2)::geography, 0.2)));
   v_rep3 := redes.f_reporte_externo_recibir('{"radicado": "ZT-0003", "canal": "telegram", "tipo": "Otro", "lat": 10.47, "lon": -73.2396}');
   perform pg_temp.err('10.10 descartar sin motivo suficiente', format($$select public.geoportal_redes_reporte_descartar(%L, %L, 'no')$$, sv, v_rep3), '22023', 'motivo');
   v_r := public.geoportal_redes_reporte_descartar(sv, v_rep3, 'Es un reporte repetido de la misma fuga');
   perform pg_temp.reg('10.11 descartar con motivo: el bot recibe «descartado»; no se puede convertir después', v_r ->> 'estado_bot' = 'descartado' and (select estado_bot from redes.v_reporte_externo where id = v_rep3) = 'descartado');
-  perform pg_temp.err('10.12 convertir un descartado', format($$select public.geoportal_redes_reporte_convertir(%L, %L, '{"clase": "dano", "tipo": "fuga", "sistema": "acueducto", "riesgo": "medio", "activo": "RED-000001"}')$$, sv, v_rep3), '22023', 'descartado');
+  perform pg_temp.err('10.12 convertir un descartado', format($$select public.geoportal_redes_reporte_convertir(%L, %L, %L)$$, sv, v_rep3,
+     jsonb_build_object('clase', 'dano', 'tipo', 'fuga', 'sistema', 'acueducto', 'riesgo', 'medio', 'activo', v_red1)), '22023', 'descartado');
 
   -- ---------- 11 Hechos de solo inserción ----------
   perform pg_temp.err('11.01 un daño no se cambia', $$update redes.danos set riesgo = 'bajo'$$, '42501');
   perform pg_temp.err('11.02 una foto no se borra', $$delete from redes.dano_fotos$$, '42501');
   perform pg_temp.err('11.03 los datos sensibles no se vacían', $$truncate redes.dano_datos_sensibles$$, '42501');
   perform pg_temp.err('11.04 los eventos del bot no se cambian', $$update redes.reporte_externo_eventos set tipo = 'recibido'$$, '42501');
-  perform pg_temp.err('11.05 el tipo de daño debe aplicar al sistema también por la regla de la tabla', $$insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, activo_id, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, autor)
-       select gen_random_uuid(), 'DAN-999999', 'dano', 'rebose', 'acueducto', id, 10.47, -73.24, 'gps', now(), 'bajo', 'desconocida', 'x' from redes.activos where codigo = 'RED-000001'$$, '23514');
+  perform pg_temp.err('11.05 el tipo de daño debe aplicar al sistema también por la regla de la tabla', format($$insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, activo_id, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, autor)
+       select gen_random_uuid(), 'DAN-999999', 'dano', 'rebose', 'acueducto', id, 10.47, -73.24, 'gps', now(), 'bajo', 'desconocida', 'x' from redes.activos where codigo = %L$$, v_red1), '23514');
 
   -- ---------- Resultado ----------
   select count(*), count(*) filter (where ok), coalesce(string_agg('  FALLA ' || nombre || ' → ' || coalesce(detalle, ''), E'\n' order by _r.n) filter (where not ok), '') into v_total, v_bien, v_fallas from _r;

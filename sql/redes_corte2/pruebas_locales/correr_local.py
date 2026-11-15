@@ -51,6 +51,18 @@ rc, out, seg = archivo(ED('ensayo_en_transaccion_redes_corte2_editor.sql'))
 m = re.search(r'RESULTADO: (\d+) de (\d+) pruebas correctas — (.*)', out)
 reg('02 ensayo: ERROR con «N de N … SIN FALLAS»', rc != 0 and m and m.group(1) == m.group(2) and m.group(3).startswith('SIN FALLAS'), (m.group(0) if m else out[-500:]) + f' ({seg:.1f} s)')
 reg('03 el ensayo no deja rastro (ni tablas, ni bucket, ni funciones)', q("select to_regclass('redes.danos') is null") == 't' and q("select count(*) from storage.buckets where id = 'redes-evidencias'") == '0' and q(CONJ) == md5_1a)
+# Como en el despliegue: el ensayo del Corte 2 corre DESPUÉS de la carga real (y en Supabase hay predios cerca de la red de prueba).
+GEN = os.path.join(C1A, 'carga', 'generado')
+rc1, _, s1 = archivo('carga_inicial_todo.sql', ['-v', f'solicitante={ADMIN}'], cwd=GEN)
+rc2, _, s2 = archivo('publicar.sql', ['-v', f'solicitante={ADMIN}'], cwd=GEN)
+q("insert into public.catastro_valledupar (cod_usuario, geom) select (7800000 + g)::text, ST_SetSRID(ST_MakePoint(-73.2400 + (3 * g) * 0.0000091, 10.4700 + (case when g % 2 = 0 then 8 else -8 end) * 0.0000090), 4326) from generate_series(1, 33) g")
+q("insert into public.catastro_valledupar (cod_usuario, geom) select (7900000 + g)::text, ST_SetSRID(ST_MakePoint(-73.30 + random() * 0.10, 10.42 + random() * 0.08), 4326) from generate_series(1, 111950) g")
+reg('03b carga real publicada (35.781 activos) y 111.983 predios, 33 de ellos a menos de 30 m de la red de prueba', rc1 == 0 and rc2 == 0 and q('select count(*) from redes.activo_vigente_mat') == '35781',
+    f'maestro {s1:.1f} s, publicar {s2:.1f} s')
+rc, out, seg = archivo(ED('ensayo_en_transaccion_redes_corte2_editor.sql'))
+m3 = re.search(r'RESULTADO: (\d+) de (\d+) pruebas correctas — (.*)', out)
+reg('03c ensayo DESPUÉS de la carga real (el orden del despliegue): sin fallas y sin rastro', rc != 0 and m3 and m3.group(1) == m3.group(2) and m3.group(3).startswith('SIN FALLAS')
+    and q("select to_regclass('redes.danos') is null") == 't' and q('select count(*) from redes.activo_vigente_mat where retirado') == '0', (m3.group(0) if m3 else out[-500:]) + f' ({seg:.1f} s)')
 rc, out, seg = archivo(ED('migracion_redes_corte2_editor.sql'))
 reg('04 migración _editor', rc == 0, f'{seg:.1f} s' if rc == 0 else out[-300:])
 rc, out, _ = archivo(ED('verificacion_redes_corte2_editor.sql'))
@@ -68,11 +80,8 @@ reg('10 una segunda reversa se niega', rc != 0 and 'No hay nada que revertir' in
 rc, out, _ = archivo(ED('migracion_redes_corte2_editor.sql'))
 reg('11 volver a migrar después de la reversa', rc == 0)
 
-# carga real del 1a con el Corte 2 ya aplicado
-GEN = os.path.join(C1A, 'carga', 'generado')
-rc1, _, s1 = archivo('carga_inicial_todo.sql', ['-v', f'solicitante={ADMIN}'], cwd=GEN)
-rc2, _, s2 = archivo('publicar.sql', ['-v', f'solicitante={ADMIN}'], cwd=GEN)
-reg('12 la carga real del 1a con el Corte 2 aplicado: 35.781 activos', rc1 == 0 and rc2 == 0 and q('select count(*) from redes.activo_vigente_mat') == '35781', f'maestro {s1:.1f} s, publicar {s2:.1f} s')
+# la carga real (publicada antes del Corte 2) sigue intacta tras migrar, revertir y volver a migrar
+reg('12 la carga real sigue con 35.781 activos y ninguno retirado con el Corte 2 aplicado', q('select count(*) from redes.activo_vigente_mat') == '35781' and q('select count(*) from redes.activo_vigente_mat where retirado') == '0')
 rc, out, _ = archivo(os.path.join(C1A, 'consulta_pozos_eliminar_sin_dato_editor.sql'))
 open(os.path.join(RAIZ, 'resultados', 'pozos_por_eliminar_sin_dato.txt'), 'w', encoding='utf-8').write(out)
 reg('13 consulta para Técnica: los 35 pozos con EST_POZO «0», «por eliminar» y «Sin dato»', rc == 0 and '(35 filas)' in out, out.strip().splitlines()[-1] if out.strip() else '')
