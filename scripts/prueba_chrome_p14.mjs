@@ -11,6 +11,8 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
 
+// Opciones de R como quedaron en la base viva (14/11): 6 campos me_r y mi_r.
+const R_OPCIONES = [["r80", "R80"], ["r160", "R160"], ["r200", "R200"], ["r315", "R315"], ["r400", "R400 (o superior)"], ["no_legible", "No legible"]].map(([codigo, nombre]) => ({ codigo, nombre, activo: true }));
 const aqui = dirname(fileURLToPath(import.meta.url)), raiz = join(aqui, "..");
 const CHROME = process.argv[2], PUP = process.argv[3], CAP = resolve(process.argv[4] || join(tmpdir(), "capturas_p14"));
 if (!CHROME || !PUP) { console.error("Uso: node scripts/prueba_chrome_p14.mjs <chrome> <puppeteer-core> [capturas]"); process.exit(2); }
@@ -37,8 +39,8 @@ const TIPO_INST = { codigo: "instalacion_medidor", nombre: "Instalación de medi
     campo("hora_inicio", "Hora de inicio", "dia_hora", { obligatorio: true, seccion: "1. Datos básicos" }),
     campo("hora_final", "Hora final", "dia_hora", { obligatorio: true, seccion: "1. Datos básicos" }),
     campo("me_lectura", "Medidor retirado · Lectura", "decimal", { obligatorio: true, seccion: "2. Medidor retirado", visible_si: { campo: "inst_modalidad", es: "cambio" }, minimo: 0, maximo: 99999999 }),
-    campo("me_r", "Medidor retirado · R del medidor", "opcion", { obligatorio: true, seccion: "2. Medidor retirado", visible_si: { campo: "inst_modalidad", es: "cambio" }, opciones: [{ codigo: "r80", nombre: "R80", activo: true }, { codigo: "r160", nombre: "R160", activo: true }] }),
-    campo("mi_r", "Medidor instalado · R del medidor", "opcion", { obligatorio: true, seccion: "7. Instalaciones y adecuaciones", opciones: [{ codigo: "r80", nombre: "R80", activo: true }, { codigo: "r160", nombre: "R160", activo: true }] }),
+    campo("me_r", "Medidor retirado · R del medidor", "opcion", { obligatorio: true, seccion: "2. Medidor retirado", visible_si: { campo: "inst_modalidad", es: "cambio" }, opciones: R_OPCIONES }),
+    campo("mi_r", "Medidor instalado · R del medidor", "opcion", { obligatorio: true, seccion: "7. Instalaciones y adecuaciones", opciones: R_OPCIONES }),
     campo("inst_lectura_remota", "Lectura remota", "opciones", { seccion: "7. Instalaciones y adecuaciones", opciones: [{ codigo: "remota", nombre: "Se instaló lectura remota", activo: true }, { codigo: "remota_pila", nombre: "Se instaló lectura remota con pila", activo: true }] }),
   ] };
 const DEF = { perfil: "reportante", puede: { reportar: true, crear_desde_escritorio: false, supervisar: false, administrar_catalogo: false },
@@ -85,7 +87,7 @@ const PERSONAS = [{ email: "ana@emdupar.gov.co", nombre: "Ana Prueba", perfil: "
                   { email: "beto.con.un.correo.bastante.largo@emdupar.gov.co", nombre: null, perfil: "operario", permisos: { campo: true, dashboard_campo: false, acta: false, dashboard_acta: false }, cargo: null, formularios: [], sin_asignacion: true, ultimo_cambio: null },
                   { email: "sup@emdupar.gov.co", nombre: "Sofía Supervisora", perfil: "supervisor", permisos: { campo: false, dashboard_campo: true, acta: false, dashboard_acta: false }, cargo: null, formularios: [], sin_asignacion: true, ultimo_cambio: null }];
 const FORMS = [{ clave: "reporte_general", nombre: "Reportar anomalía", grupo: "Reportar anomalía" }, { clave: "tipo:instalacion_medidor", nombre: "Instalación de medidor", grupo: "Pérdidas" },
-               { clave: "tipo:revision_previa", nombre: "Revisión previa", grupo: "Facturación" }, { clave: "acta", nombre: "Reportar posible pérdida", grupo: "Reportar posible pérdida" }];
+               { clave: "tipo:revision_previa", nombre: "Revisiones generales", grupo: "Facturación" }, { clave: "acta", nombre: "Reportar posible pérdida", grupo: "Reportar posible pérdida" }];
 const peticiones = []; let rechazarHora = 0;
 const cab = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Content-Type": "application/json" };
 const srv = http.createServer((q, r) => {

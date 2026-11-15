@@ -149,7 +149,7 @@ ok("formato que no genera resultado no pide efectiva ni inefectiva", L.validarFo
 {
   const S1 = "1. Datos básicos", S3 = "3. Estado del medidor", S8 = "8. Irregularidades";
   const rev = {
-    codigo: "revision_previa", nombre: "Revisión previa", orden: 1, activo: true, exige_texto: false, exige_subtipo: false, tiene_subtipos: false, subtipos: [],
+    codigo: "revision_previa", nombre: "Revisiones generales", orden: 1, activo: true, exige_texto: false, exige_subtipo: false, tiene_subtipos: false, subtipos: [],
     fotos_min: 2, fotos_max: 6, requiere_contrato: "si", genera_resultado: true, usa_consecutivo: true, causales: [{ codigo: "nadie_atiende", nombre: "No hay quien atienda" }],
     campos: [
       { codigo: "serie_acta", nombre: "Serie del acta física", tipo_dato: "texto", obligatorio: true, maximo: 20, seccion: S1, orden: 101, activo: true },
