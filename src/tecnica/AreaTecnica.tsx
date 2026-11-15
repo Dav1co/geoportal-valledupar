@@ -5,6 +5,7 @@ import { FormularioCaptura, avisoDeError } from "./FormularioCaptura";
 import { FormularioPorLugar } from "./FormularioPorLugar";
 import { ResumenUltimas24 } from "./ResumenUltimas24";
 import { Dashboard } from "./Dashboard";
+import { ActivosRedes } from "./ActivosRedes";
 import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
@@ -20,7 +21,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [errorDef, setErrorDef] = useState<ErrorTec | null>(null);
   const [version, setVersion] = useState(0);        // sube con cada guardado: refresca el resumen y la definición (fecha y hora propuestas)
   const [intento, setIntento] = useState(0);
-  const [vista, setVista] = useState<"captura" | "dashboard">("captura");     // el Dashboard PTAP es solo para supervisor y administrador (el servidor lo vuelve a verificar en cada ruta)
+  const [vista, setVista] = useState<"captura" | "dashboard" | "activos">("captura");     // el Dashboard PTAP y la ficha de activos (Corte 1b) son solo para supervisor y administrador en esta pantalla (el servidor lo vuelve a verificar en cada ruta)
 
   useEffect(() => {
     let vivo = true;
@@ -68,6 +69,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const puedeSupervisar = mis.perfil === "admin" || mis.perfil === "supervisor";
 
   if (puedeSupervisar && vista === "dashboard") return <Dashboard correo={correo} rotuloPerfil={ROTULO_PERFIL[mis.perfil]} onVolver={() => setVista("captura")} />;
+  if (puedeSupervisar && vista === "activos") return <ActivosRedes onVolver={() => setVista("captura")} />;
 
   return (
     <div className="tec-pagina">
@@ -101,6 +103,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
       {puedeSupervisar ? (
         <div className="tec-supervision">
           <button type="button" className="tec-boton-sec" onClick={() => setVista("dashboard")}>Dashboard PTAP</button>
+          <button type="button" className="tec-boton-sec" onClick={() => setVista("activos")}>Ficha de activos (redes)</button>
         </div>
       ) : null}
 

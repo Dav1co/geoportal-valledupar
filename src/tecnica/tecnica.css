@@ -9,7 +9,7 @@
 .tec-chip-form[aria-pressed="true"] { background: #0a2540; color: #fff; border-color: #0a2540; }
 .tec-chip-form:disabled { background: #eef2f5; color: #52626f; border-color: #c3ced6; cursor: not-allowed; }
 .tec-pronto { font-size: 11.5px; font-weight: 600; background: #fdf1e0; color: #8a4a06; padding: 2px 7px; border-radius: 10px; }
-.tec-supervision { padding: 12px 16px 0; }
+.tec-supervision { padding: 12px 16px 0; display: flex; flex-wrap: wrap; gap: 10px; }
 
 .tec-tarjeta { margin: 16px; background: #fff; border: 1px solid #dde5ea; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 .tec-tarjeta h1 { margin: 0; font-size: 22px; color: #0a2540; }

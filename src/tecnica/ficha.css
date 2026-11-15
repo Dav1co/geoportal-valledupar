@@ -1,0 +1,63 @@
+/* Ficha del activo (Técnica · distribución, Corte 1b). Colores de la maqueta Ficha.dc.html; celular primero (390 px); objetivos táctiles de 44 px o más. */
+.red-ficha { flex: 1; overflow: auto; background: #f4f5f2; color: #1b1f1d; padding-bottom: 28px; -webkit-text-size-adjust: 100%; }
+.red-cabeza { background: #1f5fa8; color: #fff; padding: 12px max(16px, calc((100% - 720px) / 2)) 20px; display: flex; flex-direction: column; gap: 8px; }
+.red-cuerpo { max-width: 752px; width: 100%; margin-left: auto; margin-right: auto; box-sizing: border-box; }
+.red-volver { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; background: none; border: none; color: #fff; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; padding: 0; align-self: flex-start; }
+.red-volver:focus-visible, .red-fila:focus-visible, .red-plegable summary:focus-visible, .red-registro summary:focus-visible { outline: 3px solid #f2c94c; outline-offset: 2px; }
+.red-ceja { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #d6e4f5; }
+.red-codigo { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 0.01em; overflow-wrap: anywhere; }
+.red-titulo { font-size: 26px; }
+.red-tipo { font-size: 16px; overflow-wrap: anywhere; }
+.red-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.red-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 2px 10px; border-radius: 999px; background: #fff; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.red-chip-suave { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.red-estado-ok { color: #1e6b47; }
+.red-estado-aviso { color: #9a5b00; }
+.red-estado-retirado { color: #8c2f1b; }
+.red-cuerpo { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.red-aviso { margin: 0; }
+.red-seccion { background: #fff; border: 1px solid #daddd6; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.red-seccion h2 { margin: 0; font-size: 16px; font-weight: 700; color: #1b1f1d; }
+.red-sub { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: #3f4541; }
+.red-tit-fila { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.red-cuenta { font-size: 13px; color: #5b625d; }
+.red-rejilla { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.red-dato { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.red-dato-rot { font-size: 12px; color: #5b625d; overflow-wrap: anywhere; }
+.red-dato-val { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.red-sin-dato { color: #6f756f; font-weight: 600; }
+.red-nota { margin: 0; font-size: 12.5px; color: #5b625d; overflow-wrap: anywhere; }
+.red-texto { margin: 0; font-size: 14px; color: #3f4541; overflow-wrap: anywhere; }
+.red-vacio { margin: 0; font-size: 14px; color: #3f4541; background: #f4f5f2; border: 1px dashed #b9beb6; border-radius: 10px; padding: 12px; }
+.red-cargando { padding: 16px; }
+.red-lista { display: flex; flex-direction: column; }
+.red-fila { display: flex; align-items: center; gap: 12px; min-height: 52px; border: none; border-top: 1px solid #eceee9; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; padding: 6px 0; width: 100%; }
+.red-fila-fija { cursor: default; }
+.red-fila-txt { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.red-fila-cod { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.red-fila-sub { font-size: 13px; color: #5b625d; overflow-wrap: anywhere; }
+.red-fila-estado { font-size: 13px; font-weight: 600; flex-shrink: 0; max-width: 40%; text-align: right; }
+.red-dist { color: #1f5fa8; }
+.red-icono { width: 10px; height: 10px; flex-shrink: 0; border-radius: 50%; border: 2px solid #1f5fa8; }
+.red-icono-linea { width: 14px; height: 0; border-radius: 0; border: none; border-top: 3px solid #1f5fa8; }
+.red-icono-nodo { border-color: #9aa19b; }
+.red-opcion { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #daddd6; font-size: 13px; color: #5b625d; }
+.red-opcion-sel { background: #1f5fa8; border-color: #1f5fa8; color: #fff; font-weight: 600; }
+.red-plegable summary, .red-registro summary { cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; list-style: none; }
+.red-plegable summary::-webkit-details-marker, .red-registro summary::-webkit-details-marker { display: none; }
+.red-plegable summary::after, .red-registro summary::after { content: "▾"; color: #5b625d; }
+.red-plegable[open] summary::after, .red-registro[open] summary::after { content: "▴"; }
+.red-registro { border-top: 1px solid #eceee9; padding-top: 4px; display: flex; flex-direction: column; gap: 10px; }
+.red-registro summary { font-size: 14px; font-weight: 600; color: #1f5fa8; }
+.red-linea { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.red-evento { display: flex; gap: 12px; padding-bottom: 12px; }
+.red-evento-punto { width: 12px; height: 12px; border-radius: 50%; background: #1f5fa8; flex-shrink: 0; margin-top: 3px; }
+.red-evento-revertido .red-evento-punto { background: #b9beb6; }
+.red-evento-revertido .red-evento-tit { text-decoration: line-through; color: #6f756f; }
+.red-evento-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.red-evento-tit { font-size: 15px; font-weight: 600; }
+.red-pie { text-align: center; }
+@media (min-width: 900px) {
+  .red-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .red-cuerpo > .red-aviso, .red-cuerpo > .red-pie { grid-column: 1 / -1; }
+}
