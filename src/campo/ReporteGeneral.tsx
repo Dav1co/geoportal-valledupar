@@ -6,6 +6,7 @@ import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "./ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "./formato";
 import { sinFormatosD } from "./formatos/tipos";
 import { ConfirmarCancelar, type Destino } from "../components/ConfirmarCancelar";
+import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "./inicio";
 
 // Formulario del reporte general de campo. Pensado para el celular (380 px), una mano, buen contraste.
 // - Las etiquetas de grupos, tipos y subtipos salen del catálogo que entrega el servidor (nada escrito aquí).
@@ -38,6 +39,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
   const ubic = useUbicacion();
   const prep = useRef<Preparacion | null>(null);
   const enviando = useRef(false);
+  const inicio = useRef<RelojInicio>(abrirReloj());   // pasada 14/11: hora del celular al abrir (el formulario nace de nuevo con cada reporte)
   const fotosRef = useRef(fotos);
   fotosRef.current = fotos;
 
@@ -131,6 +133,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
       const conf = await apiCampo.crear({
         reporte_id: p.reporte_id, tipo: tipoDef.codigo, subtipo: subtipo || null, descripcion: descripcion.trim() || null, contrato: contrato || null,
         lat: Number(fix.lat.toFixed(6)), lon: Number(fix.lon.toFixed(6)), precision_m: Math.round(fix.precision_m * 10) / 10, riesgo_inmediato: riesgo, origen: "campo", fotos: rutas,
+        inicio_dispositivo: inicio.current.iso,
       });
       fotosRef.current.forEach((f) => f && URL.revokeObjectURL(f.url));
       setFotos(Array.from({ length: fotos.length }, () => null));
@@ -138,6 +141,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
       setFase("guardado");
     } catch (e) {
       const err = e instanceof ErrorCampo ? e : new ErrorCampo("red", "No se pudo completar el envío.", 0);
+      if (esRechazoPorHora(err.message)) inicio.current = recalcularReloj(inicio.current);   // la persona corrige la hora del celular y vuelve a enviar
       if (err.tipo === "subida_vencida") {
         // La URL de subida venció: la próxima vez se pide una preparación nueva y se suben todas las fotos de nuevo.
         prep.current = null;

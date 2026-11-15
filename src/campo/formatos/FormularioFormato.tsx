@@ -9,7 +9,8 @@ import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
 import { apiFormatos } from "./apiFormatos";
 import { SeccionConstancia } from "../constancia/SeccionConstancia";
 import { useConstancia } from "../constancia/useConstancia";
-import { agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
+import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "../inicio";
+import { prellenarHoraInicio, agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
 import { etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
 
 // Formulario de UN formato del Paso D (campos propios, fotos con etiqueta, resultado y causal, consecutivo). Pensado para el celular (380 px) y una mano.
@@ -39,7 +40,9 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const [descripcion, setDescripcion] = useState("");
   const [contrato, setContrato] = useState(contratoInicial);
   const [cancelando, setCancelando] = useState(false);
-  const [valores, setValores] = useState<ValoresCampos>({});
+  const inicio = useRef<RelojInicio>(abrirReloj());   // pasada 14/11: hora del celular al abrir este formato
+  // Decisión 10: «Hora de inicio» (la del papel) nace con la hora de apertura; la persona la puede cambiar
+  const [valores, setValores] = useState<ValoresCampos>(() => prellenarHoraInicio(tipo, inicio.current.iso));
   const [porEtiqueta, setPorEtiqueta] = useState<Record<string, FotoLocal | null>>({});
   const [adicionales, setAdicionales] = useState<FotoLocal[]>([]);
   const [camaraEn, setCamaraEn] = useState<Destino | null>(null);
@@ -146,6 +149,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         fotos: fotosParaCrear(ordenadas, rutas),
         datos, resultado: tipo.genera_resultado ? (resultado || null) : null, causal: inefectivo ? causal : null,
         ...(cons.bloque ? { constancia: cons.bloque } : {}),
+        inicio_dispositivo: inicio.current.iso,
       });
       soltarTodo();
       setInvitarActa(marcoIrr && puedeActa && onAbrirActa && tipo.requiere_contrato !== "no" && contrato ? { contrato } : null);
@@ -155,6 +159,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
       setFase("guardado");
     } catch (e) {
       const err = e instanceof ErrorCampo ? e : new ErrorCampo("red", "No se pudo completar el envío.", 0);
+      if (esRechazoPorHora(err.message)) inicio.current = recalcularReloj(inicio.current);   // la persona corrige la hora del celular y vuelve a enviar
       if (err.tipo === "subida_vencida") {
         prep.current = null;                                                      // se pide una preparación nueva y se suben todas las fotos de nuevo
         setPreparada(false);

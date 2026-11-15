@@ -36,6 +36,8 @@ export type CuerpoCrearFormato = {
   datos?: Record<string, unknown> | null; resultado?: Resultado | null; causal?: string | null; orden_trabajo_id?: string | null;
   /** Constancia por correo (opcional; solo en los 4 formatos del acta de revisión o instalación). */
   constancia?: import("../constancia/logica").BloqueConstancia;
+  /** Pasada 14/11: hora del celular al abrir el formulario (ISO con zona). */
+  inicio_dispositivo?: string;
 };
 
 const lista = <T,>(v: T[] | undefined): T[] => (Array.isArray(v) ? v : []);

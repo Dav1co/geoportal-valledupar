@@ -37,7 +37,17 @@ const fila = (o = {}) => ({ id: "11111111-2222-4333-8444-555555555555", seq: 10,
   grupo_duplicados: null, tamano_grupo: null, n_fotos: 2, ...o });
 const ctx = { estados: new Map([["reportado", "Reportado"], ["en_revision", "En revisión"]]) };
 const base = C.columnasBase(false), baseD = C.columnasBase(true);
-ok("las columnas base son las 23 del contrato (clave única)", base.length === 23 && new Set(base.map((c) => c.clave)).size === 23);
+ok("las columnas base son las 26 (23 del contrato + inicio, duración y origen del inicio de la pasada 14/11), con clave única", base.length === 26 && new Set(base.map((c) => c.clave)).size === 26);
+{ // Pasada 14/11: inicio y duración
+  const ctx0 = { estados: new Map() };
+  const f0 = { registrado_en: "2026-11-14T15:30:00Z", inicio_en: "2026-11-14T15:00:00Z", inicio_origen: "dispositivo" };
+  const ci = base.find((c) => c.clave === "inicio"), cd = base.find((c) => c.clave === "duracion"), co = base.find((c) => c.clave === "inicio_origen");
+  ok("inicio: hora de Bogotá con la marca «(celular)»", ci.texto(f0, ctx0) === "14/11/2026 10:00 (celular)", ci.texto(f0, ctx0));
+  ok("duración: 30 min (valor numérico en minutos para el Excel)", cd.texto(f0, ctx0) === "30 min" && cd.valor(f0) === 30, cd.texto(f0, ctx0));
+  ok("inicio y duración vacíos en reportes de antes (sin inicio)", ci.texto({ registrado_en: "2026-11-14T15:30:00Z" }, ctx0) === "" && cd.valor({ registrado_en: "2026-11-14T15:30:00Z" }) === null);
+  ok("descarga: usa inicio_local y duracion_min de la base", ci.texto({ inicio_local: "2026-11-14T10:00:00", inicio_origen: "dispositivo", duracion_min: 12.5 }, ctx0) === "14/11/2026 10:00 (celular)" && cd.valor({ duracion_min: 12.5 }) === 12.5);
+  ok("origen del inicio: Celular / Servidor / vacío", co.texto(f0, ctx0) === "Celular" && co.texto({ inicio_origen: "servidor" }, ctx0) === "Servidor" && co.texto({}, ctx0) === "");
+}
 ok("sin datos del Paso D no se muestran por omisión consecutivo, resultado ni causal; con ellos sí", !base.filter((c) => ["consecutivo", "resultado", "causal"].includes(c.clave)).some((c) => c.porOmision) && baseD.filter((c) => ["consecutivo", "resultado", "causal"].includes(c.clave)).every((c) => c.porOmision));
 ok("hay columnas por omisión de fecha, tipo, grupo, subtipo, estado, riesgo, oculto, fuera de zona, contrato, fotos, duplicados, origen, autor y descripción", ["registrado_en", "tipo", "grupo", "subtipo", "estado", "riesgo_inmediato", "oculto", "fuera_de_zona", "contrato", "n_fotos", "grupo_duplicados", "origen", "autor", "descripcion"].every((k) => base.find((c) => c.clave === k)?.porOmision));
 ok("el autor NO va en las descargas por omisión y las coordenadas y el identificador sí", !base.find((c) => c.clave === "autor").enDescarga && base.find((c) => c.clave === "lat").enDescarga && base.find((c) => c.clave === "id").enDescarga);

@@ -13,6 +13,10 @@ export type FilaReporte = {
   consecutivo?: string | null; resultado?: Resultado | null; causal?: Par | null; orden_trabajo_id?: string | null; datos?: Record<string, unknown>; tiene_datos_sensibles?: boolean;
   /** Solo en filas de descarga: hora de pared de Bogotá «AAAA-MM-DDTHH:MM:SS». */
   registrado_local?: string;
+  /** Pasada 14/11: hora en que se abrió el formulario (del celular: origen «dispositivo»). Fin = registrado_en. Nulos en los reportes de antes. */
+  inicio_en?: string | null; inicio_origen?: "dispositivo" | "servidor" | null;
+  /** Solo en filas de descarga (pasada 14/11): inicio en hora de pared de Bogotá y duración en minutos calculada por la base. */
+  inicio_local?: string | null; duracion_min?: number | null;
 };
 export type ListaResp = { reportes: FilaReporte[]; total: number; siguiente: number | null; distancia_duplicados_m: number };
 export type FiltrosServidor = {
@@ -57,9 +61,29 @@ export type FilaDescarga = {
   causal_nombre: string | null; estado: string; estado_nombre: string | null; oculto: boolean; riesgo_inmediato: boolean; fuera_de_zona: boolean; contrato: string | null; contrato_verificado: boolean | null;
   descripcion: string | null; lat: number; lon: number; precision_m: number | null; origen: string; n_fotos: number; grupo_duplicados: string | null; tamano_grupo: number | null;
   reporte_original_id: string | null; orden_trabajo_id: string | null; datos: Record<string, unknown>; autor?: string;
+  inicio_local?: string | null; inicio_origen?: string | null; duracion_min?: number | null;   // pasada 14/11
 };
 export type DescargaPagina = { registros: FilaDescarga[]; devueltos: number; ultimo_seq: number | null; hay_mas: boolean };
 export type CambioParametro = { clave: string; antes: number; despues: number };
+
+/** Pasada 14/11 · lectura completa del supervisor (y del administrador): catálogo con inactivos, parámetros y estado de constancias. No escribe nada. */
+export type EstadoConstanciaLectura = { texto: { version: number; borrador: boolean; texto: string } | null; documentos: { documento: string; habilitado: boolean; copias_internas: string[] }[]; cola: Record<string, number>; fallos_ultimos_30_dias: number };
+export type CatalogoLectura = FormularioRev & { solo_lectura: boolean; constancias: EstadoConstanciaLectura };
+
+/** Pasada 14/11 · Personal de Comercial. */
+export type FormularioPersonal = { clave: string; nombre: string; grupo: string };
+export type PersonaCampo = {
+  email: string; nombre: string | null; perfil: "operario" | "supervisor";
+  permisos: { campo: boolean; dashboard_campo: boolean; acta: boolean; dashboard_acta: boolean };
+  cargo: string | null; formularios: string[]; sin_asignacion: boolean; ultimo_cambio: string | null;
+};
+export type PersonalResp = { puede_editar: boolean; formularios: FormularioPersonal[]; personas: PersonaCampo[] };
+export type TipoCambioPersonal = "fijar_cargo" | "asignar_formulario" | "quitar_formulario";
+export type EventoPersonal = {
+  id: number; persona: string; nombre: string | null; tipo_evento: TipoCambioPersonal; formulario: string | null; formulario_nombre: string | null;
+  cargo: string | null; motivo: string | null; autor: string; creado_en: string; vigente: boolean;
+};
+export type HistorialPersonalResp = { eventos: EventoPersonal[]; siguiente: number | null };
 
 const sinVacios = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== "" && v !== null)) as Partial<T>;
 
@@ -79,6 +103,11 @@ export const apiRev = {
   descargaPagina: (id: number, despuesDe: number | null, limite: number) => pedir<DescargaPagina>("descarga_pagina", { cuerpo: { descarga_id: id, despues_de: despuesDe, limite }, timeoutMs: 90000 }),
   descargaCerrar: (id: number, filas: number, resultado: "completa" | "cancelada" | "error") => pedir<{ cerrada: boolean }>("descarga_cerrar", { cuerpo: { descarga_id: id, filas, resultado } }),
   parametro: (cambios: { clave: string; valor: number }[], motivo: string) => pedir<{ cambios: CambioParametro[] }>("parametro", { cuerpo: { cambios, motivo } }),
+  catalogoLectura: () => pedir<CatalogoLectura>("catalogo_lectura"),
+  personal: (buscar = "") => pedir<PersonalResp>("personal", { cuerpo: buscar.trim() ? { buscar: buscar.trim() } : {} }),
+  personalCambiar: (c: { persona: string; tipo: TipoCambioPersonal; formulario?: string | null; cargo?: string | null; motivo?: string | null }) =>
+    pedir<{ id: number; cambio: boolean }>("personal_cambiar", { cuerpo: sinVacios(c) }),
+  historialPersonal: (f: { persona?: string; despues_de?: number; limite?: number }) => pedir<HistorialPersonalResp>("historial_personal", { cuerpo: sinVacios(f) }),
   catalogo: (entidad: string, accion: string, datos: Record<string, unknown>) => pedir<{ entidad: string; accion: string; antes: unknown; despues: unknown }>("catalogo", { cuerpo: { entidad, accion, datos } }),
 };
 

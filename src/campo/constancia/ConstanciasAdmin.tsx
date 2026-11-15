@@ -6,11 +6,13 @@ import "./constancia.css";
 
 /** Administración de la «Constancia por correo» (solo administrador): habilitar por documento, copias internas del supervisor, texto de autorización y estado de la cola.
  *  Todo nace APAGADO y las copias vacías. Mientras el texto sea un borrador no se puede habilitar ningún documento (lo exige la base). Cada cambio queda auditado. No se ven correos de titulares. */
-export function ConstanciasAdmin() {
-  const [est, setEst] = useState<EstadoConstancia | null>(null);
+/** `lectura` (pasada 14/11): estado de SOLO LECTURA para el supervisor (viene de «catalogo_lectura»): sin campos editables ni botones; las rutas de administración siguen siendo del administrador. */
+export function ConstanciasAdmin({ lectura }: { lectura?: EstadoConstancia } = {}) {
+  const soloLectura = !!lectura;
+  const [est, setEst] = useState<EstadoConstancia | null>(lectura ?? null);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
-  const cargar = useCallback(async () => { try { setEst(await apiConstancia.estado()); setError(null); } catch (e) { setError(textoError(e).texto); } }, []);
+  const cargar = useCallback(async () => { if (soloLectura) return; try { setEst(await apiConstancia.estado()); setError(null); } catch (e) { setError(textoError(e).texto); } }, [soloLectura]);
   useEffect(() => { void cargar(); }, [cargar]);
   const aviso = (m: string) => { setOk(m); setError(null); void cargar(); };
 
@@ -20,7 +22,7 @@ export function ConstanciasAdmin() {
         <p className="rv-sub">El geoportal solo recoge el correo y la autorización; el envío lo hace el Dell. La <strong>copia interna</strong> va al supervisor en todo registro de un documento habilitado; al titular solo si autoriza. Todo nace apagado.</p></div>
       {error && <div className="rv-aviso rv-aviso-error" role="alert">{error}</div>}
       {ok && <div className="rv-aviso" role="status">{ok}</div>}
-      {!est ? <p className="rv-sub" role="status">Cargando…</p> : (
+      {soloLectura && est ? <LecturaConstancias est={est} /> : !est ? <p className="rv-sub" role="status">Cargando…</p> : (
         <>
           <Texto est={est} onListo={aviso} onError={setError} />
           {DOCUMENTOS.map((d) => <Documento key={d.codigo} d={d} fila={est.documentos.find((x) => x.documento === d.codigo)} onListo={aviso} onError={setError} />)}
@@ -98,5 +100,30 @@ function Cola({ est, onListo, onError }: { est: EstadoConstancia; onListo: (m: s
       <button type="button" className="rv-boton-sec" disabled={env} onClick={() => void depurar(true)}>Ver cuántos se depurarían</button>{" "}
       <button type="button" className="rv-boton-sec" disabled={env} onClick={() => void depurar(false)}>Depurar ahora</button>
     </div>
+  );
+}
+
+/** Pasada 14/11: lo mismo que ve el administrador, sin poder cambiarlo. */
+function LecturaConstancias({ est }: { est: EstadoConstancia }) {
+  const estados = Object.entries(est.cola);
+  return (
+    <>
+      <div className="rv-aviso rv-aviso-info" role="note">Solo el administrador puede cambiar las constancias. Aquí ve su estado.</div>
+      <div className="constancia-doc">
+        <h3>Texto de autorización · versión {est.texto?.version ?? "—"} {est.texto?.borrador ? "· BORRADOR" : "· aprobado"}</h3>
+        <p className="constancia-texto-lectura">{est.texto?.texto ?? "Sin texto."}</p>
+      </div>
+      {DOCUMENTOS.map((d) => { const f = est.documentos.find((x) => x.documento === d.codigo); return (
+        <div key={d.codigo} className="constancia-doc">
+          <h3>{d.nombre}</h3>
+          <p>{f?.habilitado ? "Envía constancia (habilitado)" : "Apagado"}</p>
+          <p className="rv-sub">Copia interna: {f && f.copias_internas.length ? f.copias_internas.join(", ") : "ninguna"}</p>
+        </div>); })}
+      <div className="constancia-doc">
+        <h3>Cola de envíos</h3>
+        <p>{estados.length === 0 ? "Sin envíos todavía." : estados.map(([k, n]) => `${k}: ${n}`).join(" · ")}</p>
+        {est.fallos_ultimos_30_dias > 0 && <p className="campo-error" role="alert">{est.fallos_ultimos_30_dias} fallos al encolar en los últimos 30 días.</p>}
+      </div>
+    </>
   );
 }

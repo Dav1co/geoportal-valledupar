@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRev, textoError, type Cercano, type DetalleResp, type EventoRep, type FilaReporte, type FormularioRev, type SensiblesResp } from "./apiRevision";
-import { columnasBase, paresDeDatos, textoDeDato, type Contexto } from "./columnas";
+import { columnasBase, paresDeDatos, textoDeDato, textoInicio, textoDuracion, type Contexto } from "./columnas";
 import { fmtInstante, fmtNumero } from "./formatoRevision";
 import { ErrorCampo } from "../apiCampo";
 
@@ -56,7 +56,9 @@ export function Detalle({ id, def, ctx, onCerrar, onCambio, onAbrir }: {
 
           <h3 className="rv-h3">Datos del reporte</h3>
           <dl className="rv-dl">
-            <dt>Registrado</dt><dd>{fmtInstante(r.registrado_en)} (hora de Bogotá)</dd>
+            <dt>Inicio</dt><dd>{textoInicio(r) || "—"}</dd>
+            <dt>Registrado (fin)</dt><dd>{fmtInstante(r.registrado_en)} (hora de Bogotá)</dd>
+            <dt>Duración</dt><dd>{textoDuracion(r) || "—"}</dd>
             <dt>Grupo y tipo</dt><dd>{r.grupo.nombre} · {r.tipo.nombre}{r.subtipo ? ` · ${r.subtipo.nombre}` : ""}</dd>
             {r.resultado ? <><dt>Resultado</dt><dd>{val("resultado")}{r.causal ? ` · ${r.causal.nombre}` : ""}</dd></> : null}
             <dt>Estado</dt><dd>{val("estado")}{r.estado_desde ? ` (desde ${fmtInstante(r.estado_desde)})` : ""}</dd>
