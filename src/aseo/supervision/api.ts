@@ -4,11 +4,14 @@ import { ErrorCampo, avisoDeError } from "../../campo/apiCampo";
 // Cliente de las rutas de SUPERVISIÓN de la Edge geoportal-aseo (supervisor y administrador). Aquí no hay nombres de actividades, preguntas, causales ni barrios: todo viene del servidor.
 export type TipoNc = "sst" | "no_realizada" | "parcial" | "forma_indebida";
 export type EstadoNc = "sin_revisar" | "revisada" | "reabierta";
+export type OrigenInicio = "dispositivo" | "servidor";
 export type Motivo = { tipo: TipoNc; criterio: string | null; pregunta: string | null; respuesta: string | null };
 export type FilaAuditoria = {
   id: string; seq: number; consecutivo: string; registrado_en: string; fecha_servicio: string; ruta_codigo: string; actividad: string; actividad_nombre: string; modalidad_nombre: string; servicio: string; servicio_nombre: string;
   turno_nombre: string | null; barrios: string | null; se_realizo: "si" | "no" | "parcial"; causal_nombre: string | null; autor: string; lejos_de_ruta: boolean; fuera_de_zona: boolean; fuera_de_horario: boolean;
   no_programada_hoy: boolean; sin_trazado: boolean; oculta: boolean; n_fotos: number; nc_tipos: TipoNc[]; nc_estado: EstadoNc | null;
+  /** Hora de inicio (pasada 14/11): ausentes mientras el servidor no tenga la actualización; nulas en lo registrado antes. */
+  inicio_en?: string | null; inicio_origen?: OrigenInicio | null; duracion_s?: number | null;
 };
 export type FilaResumen = { id: string; seq: number; consecutivo: string; registrado_en: string; fecha_servicio: string; ruta_codigo: string; actividad_nombre: string; modalidad_nombre: string; se_realizo: "si" | "no" | "parcial"; causal_nombre: string | null; autor: string; nc_tipos: TipoNc[]; nc_motivos: Motivo[]; nc_estado: EstadoNc };
 export type Resumen = { pendientes: number; revisadas: number; turnos: { codigo: number; nombre: string }[]; auditores: { email: string; nombre: string | null }[]; registros: FilaResumen[] };
@@ -20,6 +23,7 @@ export type Detalle = {
   respuestas: { codigo: string; pregunta: string; texto: string | null }[]; fotos: { orden: number; etiqueta: string; nombre: string }[]; firmas: { rol: string; estado: string; nombre: string | null; cargo: string | null }[];
   nc_estado: EstadoNc | null; nc_motivos: Motivo[]; revisiones: { id: number; tipo_evento: "revisar" | "reabrir"; nota: string | null; autor: string; creado_en: string }[];
   eventos_visibilidad: { tipo_evento: "ocultar" | "reincluir"; motivo: string; autor: string; creado_en: string }[];
+  inicio_en?: string | null; inicio_origen?: OrigenInicio | null; duracion_s?: number | null;
 };
 export type Indicadores = {
   auditorias: number; rutas_auditadas: number; rutas_plan: number; incidencia: { si: number; no: number; parcial: number };
@@ -32,6 +36,7 @@ export type ActaDatos = {
   respuestas: { pregunta: string; respuesta: string | null }[]; lat: number; lon: number; precision_m: number | null; lat_inicio: number | null; lon_inicio: number | null;
   marcas: Detalle["marcas"]; auditor: { nombre: string | null; correo: string; cargo: string | null; imagen_b64: string | null };
   representante: { estado: "firmo" | "se_nego" | "sin_representante"; nombre: string | null; imagen_b64: string | null }; fotos: { orden: number; etiqueta: string }[];
+  inicio_en?: string | null; inicio_origen?: OrigenInicio | null; duracion_s?: number | null;
 };
 export type Persona = { email: string; nombre: string | null; perfil: "auditor" | "supervisor"; cargo: string | null; actividades: string[]; activo_aseo: boolean; ultimo_cambio: string | null };
 export type TipoCambio = "fijar_cargo" | "asignar_actividad" | "quitar_actividad" | "activar_aseo" | "desactivar_aseo";
@@ -42,6 +47,7 @@ export type FilaDescarga = {
   barrios: string | null; autor: string; auditor_nombre: string | null; auditor_cargo: string | null; representante_estado: "firmo" | "se_nego" | "sin_representante"; representante_nombre: string | null;
   incidencia: "si" | "no" | "parcial"; causal_nombre: string | null; observaciones: string | null; marcas: string[]; nc_tipos: TipoNc[]; nc_estado: EstadoNc | null; oculta: boolean; oculta_motivo: string | null;
   n_fotos: number; lat: number; lon: number; sello: string; respuestas: Record<string, string | null>;
+  inicio_local?: string | null; inicio_origen?: OrigenInicio | null; duracion_min?: number | null;
 };
 export type DescargaPagina = { registros: FilaDescarga[]; devueltos: number; ultimo_id: number | null; hay_mas: boolean };
 

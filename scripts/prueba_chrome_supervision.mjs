@@ -1,6 +1,8 @@
 // Prueba en CHROME REAL (puppeteer-core + el Chrome instalado) de las pantallas de Aseo tocadas por la Torre C · supervisión y firmas, contra un servidor SIMULADO en 127.0.0.1 (ninguna petición llega a Supabase).
 // Cubre: auditor (formulario con texto de rostros, firmas con el pad a pantalla completa, registro, acta en PDF con nombre AAAAMMDDHHMMSS-SIGLA-NNNNNN) y supervisor (entrada sin «Gestión de personal», Resumen en rojo y revisión,
 // Auditorías con filtros y detalle, acta regenerada con y sin CORS en las fotos, No conformidades, Indicadores, Personal, descargas CSV y Excel).
+// Hora de inicio (pasada 14/11): el cuerpo de «crear» lleva inicio_dispositivo del momento de ABRIR (380 px y escritorio), igual en el reintento y recalculado tras corregir el reloj;
+// la supervisión muestra Inicio «(celular)», Fin y Duración en lista y detalle (380 px y escritorio) y las descargas traen las columnas. Capturas en CAPTURAS_DIR si se define.
 // Uso:  PUPPETEER_DIR=<carpeta con node_modules/puppeteer-core> node scripts/prueba_chrome_supervision.mjs   (compila una copia del frontend contra la URL simulada)
 import http from "node:http";
 import { createRequire } from "node:module";
@@ -14,6 +16,8 @@ const PP = process.env.PUPPETEER_DIR; if (!PP) { console.error("Defina PUPPETEER
 const puppeteer = createRequire(join(PP, "package.json"))("puppeteer-core");
 const CHROME = process.env.CHROME_BIN || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const PUERTO_MOCK = 54998;
+const CAPTURAS = process.env.CAPTURAS_DIR || null;
+const captura = async (p, n) => { if (CAPTURAS) await p.screenshot({ path: join(CAPTURAS, n), fullPage: true }); };
 
 // ---------- Compilación contra el servidor simulado ----------
 const dist = mkdtempSync(join(tmpdir(), "aseo_dist_"));
@@ -36,10 +40,11 @@ const CATALOGO = (perfil) => ({ perfil, correo: "aud@emdupar.gov.co", nombre: "A
             { codigo: "evidencia", nombre: "Evidencia de que no se realizó", cantidad_min: 1, cantidad_max: 1, condicional: false, soporte_no_realizada: true, activo: true, orden: 40 }],
     causales: [{ codigo: "clima", nombre: "Clima", activo: true }] }] });
 const RUTA = { id: 1, codigo: "2010011207003", servicio: { codigo: "12", nombre: "Barrido Manual" }, turno: 1, turno_nombre: "Día", frecuencia: "07", frecuencia_nombre: "L-D", dias: [1, 2, 3, 4, 5, 6, 7], hora_inicio: "00:00", hora_fin: "23:59", sectores: "Centro, El Carmen - C19A a 17 de K9 a 6", caracterizacion: "Comercial", km_ruta: 3.9, barrios: ["Centro"], geometria: null };
-const E = { cors: false, perfil: "auditor", crear: null, llamadas: [], estados: { [UUID(1)]: "sin_revisar", [UUID(2)]: "sin_revisar", [UUID(3)]: "revisada" }, ocultas: new Set(),
+const E = { cors: false, perfil: "auditor", crear: null, cuerpos: [], colaCrear: [], llamadas: [], estados: { [UUID(1)]: "sin_revisar", [UUID(2)]: "sin_revisar", [UUID(3)]: "revisada" }, ocultas: new Set(),
   personas: [{ email: "aud@emdupar.gov.co", nombre: "Auditor Prueba", perfil: "auditor", cargo: null, actividades: [], activo_aseo: true, ultimo_cambio: null }], eventos: [], regFiltros: [] };
 const fila = (n, o = {}) => ({ id: UUID(n), seq: n, consecutivo: `BAR-00000${n}`, registrado_en: "2026-11-13T15:30:15+00:00", fecha_servicio: "2026-11-13", ruta_codigo: "2010011207003", actividad: "barrido", actividad_nombre: "Barrido", modalidad_nombre: "Manual", servicio: "12", servicio_nombre: "Barrido Manual",
   turno_nombre: "Día", barrios: "Centro", se_realizo: n === 2 ? "parcial" : "si", causal_nombre: n === 2 ? "Clima" : null, autor: "aud@emdupar.gov.co", lejos_de_ruta: n === 1, fuera_de_zona: false, fuera_de_horario: false, no_programada_hoy: false, sin_trazado: false, oculta: E.ocultas.has(n), n_fotos: 2,
+  ...(n === 1 ? { inicio_en: "2026-11-13T15:05:00+00:00", inicio_origen: "dispositivo", duracion_s: 1515 } : n === 3 ? { inicio_en: "2026-11-13T14:20:00+00:00", inicio_origen: "dispositivo", duracion_s: 4215 } : { inicio_en: null, inicio_origen: null, duracion_s: null }),
   nc_tipos: n === 2 ? ["parcial"] : ["sst"], nc_estado: E.estados[UUID(n)], nc_motivos: n === 2 ? [{ tipo: "parcial", criterio: null, pregunta: null, respuesta: null }] : [{ tipo: "sst", criterio: "sst_epp", pregunta: "¿Usa los EPP?", respuesta: "No" }], ...o });
 const DET = (n) => ({ ...fila(n), lat: 10.47, lon: -73.24, lat_inicio: null, lon_inicio: null, precision_m: 8, distancia_ruta_m: 12, observaciones: null, frecuencia_nombre: "L-D", marcas: { lejos_de_ruta: n === 1, fuera_de_zona: false, fuera_de_horario: false, no_programada_hoy: false, sin_trazado: false }, oculta_motivo: null, sello: "cd".repeat(32),
   respuestas: [{ codigo: "sst_epp", pregunta: "¿Usa los EPP?", texto: "No" }], fotos: [{ orden: 1, etiqueta: "ruta", nombre: "Fotos de la ruta" }, { orden: 2, etiqueta: "ruta", nombre: "Fotos de la ruta" }], firmas: [{ rol: "auditor", estado: "firmo", nombre: "Auditor Prueba", cargo: "Profesional de interventoría" }, { rol: "representante", estado: "sin_representante", nombre: null, cargo: null }],
@@ -48,7 +53,8 @@ const ACTA = { consecutivo: "BAR-000001", registrado_en: "2026-11-13T15:30:15+00
   se_realizo: "parcial", causal_nombre: "Clima", observaciones: null, respuestas: [{ pregunta: "¿Usa los EPP?", respuesta: "No" }], lat: 10.47, lon: -73.24, precision_m: 8, lat_inicio: null, lon_inicio: null, marcas: { lejos_de_ruta: true, fuera_de_zona: false, fuera_de_horario: false, no_programada_hoy: false, sin_trazado: false },
   auditor: { nombre: "Auditor Prueba", correo: "aud@emdupar.gov.co", cargo: null, imagen_b64: LOGO_B64 }, representante: { estado: "firmo", nombre: "Maria Representante", imagen_b64: LOGO_B64 }, fotos: [{ orden: 1, etiqueta: "Fotos de la ruta" }, { orden: 2, etiqueta: "Fotos de la ruta" }] };
 const DFILA = { id: UUID(1), seq: 1, consecutivo: "BAR-000001", registrado_local: "2026-11-13T10:30:15", fecha_servicio: "2026-11-13", actividad_nombre: "Barrido", modalidad_nombre: "Manual", servicio: "12", servicio_nombre: "Barrido Manual", ruta_codigo: "2010011207003", turno_nombre: "Día", frecuencia_nombre: "L-D", barrios: "Centro", autor: "aud@emdupar.gov.co", auditor_nombre: "Auditor Prueba", auditor_cargo: null,
-  representante_estado: "firmo", representante_nombre: "Maria Representante", incidencia: "parcial", causal_nombre: "Clima", observaciones: null, marcas: ["Lejos de la ruta"], nc_tipos: ["sst"], nc_estado: "sin_revisar", oculta: false, oculta_motivo: null, n_fotos: 2, lat: 10.47, lon: -73.24, sello: "cd".repeat(32), respuestas: { sst_epp: "No" } };
+  representante_estado: "firmo", representante_nombre: "Maria Representante", incidencia: "parcial", causal_nombre: "Clima", observaciones: null, marcas: ["Lejos de la ruta"], nc_tipos: ["sst"], nc_estado: "sin_revisar", oculta: false, oculta_motivo: null, n_fotos: 2, lat: 10.47, lon: -73.24, sello: "cd".repeat(32), respuestas: { sst_epp: "No" },
+  inicio_local: "2026-11-13T10:05:00", inicio_origen: "dispositivo", duracion_min: 25.3 };
 
 const CAB = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type, apikey, x-client-info, x-upsert, cache-control", "access-control-allow-methods": "GET, POST, PUT, OPTIONS" };
 const USER = { id: "00000000-0000-0000-0000-000000000001", email: "aud@emdupar.gov.co", aud: "authenticated", role: "authenticated", app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00Z" };
@@ -71,7 +77,8 @@ const mock = http.createServer(async (q, r) => {
     case "formulario": return json(CATALOGO(E.perfil));
     case "plan": return json({ etag: "e1", ahora: "2026-11-13T10:30:00", rutas: [RUTA] });
     case "preparar_subida": return json({ auditoria_id: UUID(77), max_bytes_foto: 1572864, tipo_mime: "image/jpeg", ahora: "2026-11-13T10:30:00", fotos: Array.from({ length: cuerpo.cantidad }, (_, i) => ({ orden: i + 1, ruta: `auditorias/2026-11/${UUID(77)}/${i + 1}.jpg`, url_subida: `http://127.0.0.1:${PUERTO_MOCK}/storage/v1/object/upload/sign/aseo-fotos/x`, token: "TOKEN" })) });
-    case "crear": E.crear = cuerpo; return json({ id: UUID(77), consecutivo: "BAR-000077", registrado_en: "2026-11-13T15:30:15+00:00", fecha_servicio: "2026-11-13", repetido: false, lejos_de_ruta: false, fuera_de_zona: false, fuera_de_horario: false, no_programada_hoy: false, sin_trazado: true, sello: "ef".repeat(32), auditor: { nombre: "Auditor Prueba", correo: "aud@emdupar.gov.co", cargo: "Profesional de interventoría" } });
+    case "crear": { E.cuerpos.push(cuerpo); const r0 = E.colaCrear.shift(); if (r0) return json(r0.body, r0.status); }
+      E.crear = cuerpo; return json({ id: UUID(77), consecutivo: "BAR-000077", registrado_en: "2026-11-13T15:30:15+00:00", fecha_servicio: "2026-11-13", repetido: false, lejos_de_ruta: false, fuera_de_zona: false, fuera_de_horario: false, no_programada_hoy: false, sin_trazado: true, sello: "ef".repeat(32), auditor: { nombre: "Auditor Prueba", correo: "aud@emdupar.gov.co", cargo: "Profesional de interventoría" }, inicio_en: cuerpo.inicio_dispositivo ?? null });
     case "resumen": { const p = [1, 2].filter((n) => ["sin_revisar", "reabierta"].includes(E.estados[UUID(n)]) && !E.ocultas.has(n)); return json({ pendientes: p.length, revisadas: 1, turnos: [{ codigo: 1, nombre: "Día" }, { codigo: 2, nombre: "Tarde" }], auditores: [{ email: "aud@emdupar.gov.co", nombre: "Auditor Prueba" }], registros: p.map((n) => fila(n)) }); }
     case "registros": { E.regFiltros.push(cuerpo); const nc = cuerpo.nc; let l = [1, 2, 3].map((n) => fila(n)).filter((x) => !(cuerpo.ocultos === "no" || !cuerpo.ocultos ? x.oculta : false));
       if (nc === "pendientes") l = l.filter((x) => ["sin_revisar", "reabierta"].includes(x.nc_estado)); if (nc === "revisadas") l = l.filter((x) => x.nc_estado === "revisada");
@@ -132,8 +139,8 @@ const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth
   ok("auditor: no ve «Supervisión y dashboard» ni «Gestión de personal»", !/Supervisión y dashboard|Gestión de personal/.test(t), t.slice(0, 200));
   await clic(p, ".campo-formato-activo", "Barrido"); await esperar(p, () => /Manual/.test(document.body.innerText));
   await clic(p, ".campo-formato-activo", "Manual"); await p.waitForSelector("#aseo-q"); await p.type("#aseo-q", "2010011207003");
-  await p.waitForSelector(".aseo-ruta"); await clic(p, ".aseo-ruta");
-  await p.waitForSelector("input[name=se_realizo]");
+  await p.waitForSelector(".aseo-ruta"); const tAbrir0 = await p.evaluate(() => Date.now()); await clic(p, ".aseo-ruta");
+  await p.waitForSelector("input[name=se_realizo]"); const tAbrir1 = await p.evaluate(() => Date.now());
   await clic(p, "label.aseo-opcion", "Sí");
   for (const n of ["sst_herramientas", "sst_epp"]) await p.evaluate((nm) => { const l = [...document.querySelectorAll(`input[name="aseo-c-${nm}"]`)].find((i) => i.value === "si"); l.click(); }, n);
   t = await T(p);
@@ -169,6 +176,7 @@ const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth
   await clic(p, "button", "Registrar"); await esperar(p, () => /BAR-000077/.test(document.body.innerText), 20000);
   const c = E.crear;
   ok("crear: envía firmas JPEG (base64 «/9j/») ≤ 56.000 caracteres y el estado del representante", c?.firmas?.auditor?.imagen_b64?.startsWith("/9j/") && c.firmas.auditor.imagen_b64.length < 56000 && c.firmas.representante.estado === "firmo" && c.firmas.representante.nombre === "Maria Representante" && c.firmas.representante.imagen_b64.startsWith("/9j/"), c && Object.keys(c));
+  ok("crear (412 px): lleva inicio_dispositivo ISO del momento de abrir el formulario", typeof c?.inicio_dispositivo === "string" && /Z$/.test(c.inicio_dispositivo) && Date.parse(c.inicio_dispositivo) >= tAbrir0 && Date.parse(c.inicio_dispositivo) <= tAbrir1, { ini: c?.inicio_dispositivo, tAbrir0, tAbrir1 });
   ok("crear: no manda nombre, cargo ni hora (los pone el servidor) y lleva 3 fotos", !("nombre" in (c?.firmas?.auditor ?? {})) && c?.fotos?.length === 3 && !JSON.stringify(c).includes("registrado"));
   t = await T(p);
   ok("acta en pantalla: consecutivo, cargo copiado y firmas", /BAR-000077/.test(t) && /Profesional de interventoría/.test(t) && await p.evaluate(() => document.querySelectorAll(".aseo-miniaturas img[alt^=Firma]").length === 2));
@@ -199,6 +207,9 @@ const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth
   // Auditorías
   await clic(p, ".tdash-tab", "Auditorías"); await p.waitForSelector("table.td-tabla tbody tr[data-auditoria]");
   t = await T(p);
+  { const v = await p.evaluate(() => { const th = [...document.querySelectorAll("table.td-tabla thead th")].map((e) => e.textContent.trim()); const f = (n) => [...document.querySelectorAll(`table.td-tabla tbody tr[data-auditoria] td[data-col=${n}]`)].map((e) => e.innerText.replace(/\s+/g, " ").trim()); return { th, ini: f("inicio"), fin: f("fin"), dur: f("duracion") }; });
+    ok("escritorio · lista: columnas Inicio, Fin y Duración; Inicio en Bogotá con «(celular)»; «25 min» y «1 h 10 min»; sin inicio «—»", ["Inicio", "Fin", "Duración"].every((x) => v.th.includes(x)) && v.ini[0] === "13/11/2026 10:05 (celular)" && v.fin[0] === "13/11/2026 10:30" && v.dur[0] === "25 min" && v.ini[1] === "—" && v.dur[1] === "—" && v.dur[2] === "1 h 10 min", v);
+    await captura(p, "supervision_lista_escritorio.png"); }
   ok("auditorías: columna «Incidencia» (no «Resultado») y filtros de periodo, actividad, modalidad, servicio, turno, barrio, auditor, incidencia", /Incidencia/.test(t) && !/Resultado/.test(t) && ["Periodo", "Actividad", "Modalidad", "Servicio", "Turno", "Barrio", "Auditor"].every((x) => t.includes(x)));
   await p.select("#todas-act", "barrido"); await p.select("#todas-inc", "parcial"); await p.type("#todas-bar", "Centro"); await esp(400);
   const ult = E.regFiltros.at(-1);
@@ -207,6 +218,9 @@ const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth
   await p.evaluate(() => document.querySelector("table.td-tabla tbody tr[data-auditoria] button").click()); await p.waitForSelector(".as-detalle");
   await esperar(p, () => document.querySelectorAll(".as-foto img").length === 2);
   t = await T(p);
+  { const dd = await p.evaluate(() => Object.fromEntries(["inicio", "fin", "duracion"].map((k) => [k, document.querySelector(`.as-dl dd[data-campo=${k}]`)?.textContent ?? null])));
+    ok("escritorio · detalle: Inicio «13/11/2026 10:05 (celular)», Fin y Duración «25 min»", dd.inicio === "13/11/2026 10:05 (celular)" && dd.fin === "13/11/2026 10:30" && dd.duracion === "25 min", dd);
+    await captura(p, "supervision_detalle_escritorio.png"); }
   ok("detalle: incidencia, respuestas, 2 fotos con URL firmada, firmas sin imagen y sello", /Incidencia/.test(t) && /¿Usa los EPP\?/.test(t) && /Profesional de interventoría/.test(t) && /cdcdcd/.test(t) && !(await hay(p, ".as-dl img")));
   E.cors = false; E.llamadas.length = 0; let antes = new Set(readdirSync(DESCARGAS)); await clic(p, "button", "Descargar acta (PDF)"); let f = await archivoNuevo(antes);
   ok("acta regenerada SIN CORS en el Storage: usa la vía de respaldo (foto_base64) y descarga el PDF", E.llamadas.filter((l) => l.accion === "foto_base64").length === 2 && f === "20261113103015-BAR-207003.pdf", { f, llamadas: E.llamadas.map((l) => l.accion) });
@@ -228,7 +242,8 @@ const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth
   await p.select("#todas-ocu", "todos");
   antes = new Set(readdirSync(DESCARGAS)); await clic(p, "button", "Descargar CSV"); f = await archivoNuevo(antes);
   ok("descarga CSV por actividad: nombre sin datos personales", f === "auditorias_barrido_20261113_1044.csv", f);
-  if (f) { const csv = readFileSync(join(DESCARGAS, f), "utf8"); ok("CSV: BOM, «Incidencia», pregunta del catálogo, representante sin imagen, cargo no registrado", csv.startsWith("﻿") && /;Incidencia;/.test(csv) && /;¿Usa los EPP\?\r\n/.test(csv) && /Firmó;Maria Representante/.test(csv) && /Cargo no registrado/.test(csv) && !/imagen|b64/i.test(csv), csv.slice(0, 300)); }
+  if (f) { const csv = readFileSync(join(DESCARGAS, f), "utf8"); ok("CSV: BOM, «Incidencia», pregunta del catálogo, representante sin imagen, cargo no registrado", csv.startsWith("﻿") && /;Incidencia;/.test(csv) && /;¿Usa los EPP\?\r\n/.test(csv) && /Firmó;Maria Representante/.test(csv) && /Cargo no registrado/.test(csv) && !/imagen|b64/i.test(csv), csv.slice(0, 300));
+    ok("CSV: columnas Inicio (Bogotá), Duración (min) y Origen del inicio con sus valores", /^\uFEFFConsecutivo;Inicio \(Bogotá\);Fecha y hora de registro \(Bogotá\);Duración \(min\);Origen del inicio;/.test(csv) && /\r\nBAR-000001;13\/11\/2026 10:05;13\/11\/2026 10:30;25,3;Celular;/.test(csv), csv.slice(0, 400)); }
   antes = new Set(readdirSync(DESCARGAS)); await clic(p, "button", "Descargar Excel"); f = await archivoNuevo(antes);
   ok("descarga Excel por actividad (.xlsx, archivo zip válido)", f === "auditorias_barrido_20261113_1044.xlsx" && readFileSync(join(DESCARGAS, f)).subarray(0, 2).toString() === "PK", f);
   ok("las descargas dejaron auditoría (iniciar y cerrar) en el servidor simulado", E.llamadas.filter((l) => l.accion === "descarga_iniciar").length === 2 && E.llamadas.filter((l) => l.accion === "descarga_cerrar").length === 2);
@@ -262,6 +277,66 @@ const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth
   await esperar(p, () => /Aseo/.test(document.body.innerText), 15000); if (await hay(p, ".area-tarjeta", "Aseo")) await clic(p, ".area-tarjeta", "Aseo");
   await esperar(p, () => /Supervisión y dashboard/.test(document.body.innerText)); await clic(p, "button.campo-formato-activo", "Supervisión y dashboard"); await p.waitForSelector(".tdash");
   for (const tab of ["Resumen", "Auditorías", "Indicadores", "Personal"]) { await clic(p, ".tdash-tab", tab); await esp(500); ok(`celular: la pestaña ${tab} no desborda el ancho de la página`, await sinDesborde(p)); }
+  await p.close();
+}
+// =====================================================================  4) SUPERVISOR a 380 px: Inicio, Fin y Duración
+{
+  E.ocultas.clear();                                   // el bloque 2 ocultó la auditoría 1: vuelve a la lista
+  const p = await sesion("supervisor", { width: 380, height: 820, isMobile: true, hasTouch: true });
+  await esperar(p, () => /Aseo/.test(document.body.innerText), 15000); if (await hay(p, ".area-tarjeta", "Aseo")) await clic(p, ".area-tarjeta", "Aseo");
+  await esperar(p, () => /Supervisión y dashboard/.test(document.body.innerText)); await clic(p, "button.campo-formato-activo", "Supervisión y dashboard"); await p.waitForSelector(".tdash");
+  await clic(p, ".tdash-tab", "Auditorías"); await p.waitForSelector("table.td-tabla tbody tr[data-auditoria]"); await esp(300);
+  const v = await p.evaluate(() => ({ th: [...document.querySelectorAll("table.td-tabla thead th")].map((e) => e.textContent.trim()), ini: document.querySelector("td[data-col=inicio]")?.innerText.replace(/\s+/g, " ").trim(), dur: document.querySelector("td[data-col=duracion]")?.innerText.trim() }));
+  ok("380 px · lista: Inicio «(celular)», Fin y Duración, sin desbordar la página", ["Inicio", "Fin", "Duración"].every((x) => v.th.includes(x)) && v.ini === "13/11/2026 10:05 (celular)" && v.dur === "25 min" && await sinDesborde(p), v);
+  await captura(p, "supervision_lista_380.png");
+  await p.evaluate(() => document.querySelector("table.td-tabla tbody tr[data-auditoria] button").click()); await p.waitForSelector(".as-detalle"); await esp(300);
+  const dd = await p.evaluate(() => Object.fromEntries(["inicio", "fin", "duracion"].map((k) => [k, document.querySelector(`.as-dl dd[data-campo=${k}]`)?.textContent ?? null])));
+  ok("380 px · detalle: Inicio «(celular)», Fin y Duración «25 min», sin desbordar", dd.inicio === "13/11/2026 10:05 (celular)" && dd.fin === "13/11/2026 10:30" && dd.duracion === "25 min" && await sinDesborde(p), dd);
+  await captura(p, "supervision_detalle_380.png");
+  await clic(p, "button", "Cerrar detalle"); await p.waitForSelector("table.td-tabla tbody tr[data-auditoria]");
+  await p.evaluate(() => document.querySelectorAll("table.td-tabla tbody tr[data-auditoria] button")[1].click()); await p.waitForSelector(".as-detalle"); await esp(300);
+  ok("380 px · detalle de una auditoría anterior: «No registrado» y Duración «—»", await p.evaluate(() => /No registrado/.test(document.querySelector(".as-dl dd[data-campo=inicio]").textContent) && document.querySelector(".as-dl dd[data-campo=duracion]").textContent === "—"));
+  await p.close();
+}
+// =====================================================================  5) AUDITOR a 380 px y en escritorio: inicio_dispositivo del momento de abrir
+async function hastaFormulario(p) {
+  await esperar(p, () => /Barrido|Aseo/.test(document.body.innerText), 15000); if (await hay(p, ".area-tarjeta", "Aseo")) await clic(p, ".area-tarjeta", "Aseo");
+  await esperar(p, () => /Interventoría de Aseo/.test(document.body.innerText));
+  await clic(p, ".campo-formato-activo", "Barrido"); await esperar(p, () => /Manual/.test(document.body.innerText));
+  await clic(p, ".campo-formato-activo", "Manual"); await p.waitForSelector("#aseo-q"); await p.type("#aseo-q", "2010011207003"); await p.waitForSelector(".aseo-ruta");
+  const t0 = await p.evaluate(() => Date.now()); await clic(p, ".aseo-ruta"); await p.waitForSelector("input[name=se_realizo]"); const t1 = await p.evaluate(() => Date.now());
+  return { t0, t1 };
+}
+async function llenarFormulario(p) {
+  await clic(p, "label.aseo-opcion", "Sí");
+  for (const n of ["sst_herramientas", "sst_epp"]) await p.evaluate((nm) => [...document.querySelectorAll(`input[name="aseo-c-${nm}"]`)].find((i) => i.value === "si").click(), n);
+  for (let i = 0; i < 3; i++) { await clic(p, "button", "Tomar foto"); await p.waitForSelector(".campo-camara"); await esperar(p, () => !document.querySelector(".campo-capturar")?.disabled, 10000); await p.click(".campo-capturar"); await esperar(p, () => !document.querySelector(".campo-camara"), 10000); }
+  await clic(p, "button", "Agregar firma"); await p.waitForSelector(".aseo-firma-capa"); await esp(300); await dibujar(p); await clic(p, ".aseo-firma-acc button", "OK"); await esperar(p, () => !document.querySelector(".aseo-firma-capa"));
+  await p.evaluate(() => [...document.querySelectorAll("input[name=rep_estado]")].find((i) => i.value === "sin_representante").click());
+  await esperar(p, () => !/Falta/.test(document.body.innerText));
+}
+const botonEnviar = (p) => p.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => /^(Registrar|Reintentar)$/.test(x.textContent.trim())); b?.click(); return b?.textContent.trim() ?? null; });
+const MSG_ADEL = "La hora de su celular está adelantada. Corríjala y vuelva a enviar: lo escrito y las fotos no se pierden.";
+for (const [nombre, vp] of [["380 px", { width: 380, height: 820, isMobile: true, hasTouch: true }], ["escritorio", { width: 1280, height: 850 }]]) {
+  const p = await sesion("auditor", vp); E.cuerpos.length = 0; E.colaCrear.length = 0;
+  const { t0, t1 } = await hastaFormulario(p);
+  if (nombre === "380 px") await captura(p, "auditor_formulario_380.png");
+  await esp(1500); await llenarFormulario(p);
+  // 1.º envío: el servidor falla (500) → «Reintentar»; 2.º: la base rechaza la hora (adelantada); se corrige el reloj (−10 min) y 3.º: registra
+  E.colaCrear.push({ status: 500, body: { error: "El servidor no pudo atender" } }, { status: 400, body: { error: MSG_ADEL } });
+  const tEnviar = await p.evaluate(() => Date.now());
+  await botonEnviar(p); await esperar(p, () => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Reintentar"), 15000);
+  const b1 = E.cuerpos[0];
+  ok(`auditor ${nombre}: el cuerpo de crear lleva inicio_dispositivo (ISO con zona) del momento de ABRIR, no del de enviar`, typeof b1?.inicio_dispositivo === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(b1.inicio_dispositivo) && Date.parse(b1.inicio_dispositivo) >= t0 && Date.parse(b1.inicio_dispositivo) <= t1 && Date.parse(b1.inicio_dispositivo) < tEnviar - 1000, { ini: b1?.inicio_dispositivo, t0, t1, tEnviar });
+  ok(`auditor ${nombre}: inicio_dispositivo va fuera de «datos» y sin claves con «fecha» u «hora»`, !("inicio_dispositivo" in (b1?.datos ?? {})) && !Object.keys(b1 ?? {}).some((k) => /fecha|hora/i.test(k)));
+  await esp(400); await botonEnviar(p); await esperar(p, (m) => document.body.innerText.includes(m), 15000, MSG_ADEL);
+  ok(`auditor ${nombre}: el reintento manda EXACTAMENTE el mismo inicio_dispositivo`, E.cuerpos.length === 2 && E.cuerpos[1].inicio_dispositivo === b1.inicio_dispositivo && E.cuerpos[1].auditoria_id === b1.auditoria_id);
+  ok(`auditor ${nombre}: el rechazo por la hora del celular se muestra con el texto exacto y lo escrito sigue (3 fotos)`, (await T(p)).includes(MSG_ADEL) && await p.evaluate(() => document.querySelectorAll(".aseo-mini img").length === 3));
+  await p.evaluate(() => { const o = Date.now.bind(Date); Date.now = () => o() - 600000; });      // la persona corrige el reloj: estaba 10 min adelantado
+  await botonEnviar(p); await esperar(p, () => /BAR-000077/.test(document.body.innerText), 20000);
+  const b3 = E.cuerpos[2], d = b3 ? Date.parse(b1.inicio_dispositivo) - Date.parse(b3.inicio_dispositivo) : NaN;
+  ok(`auditor ${nombre}: tras corregir el reloj, el inicio se recalcula UNA vez (hora corregida − tiempo desde que se abrió) y registra`, E.cuerpos.length === 3 && Math.abs(d - 600000) < 2000 && /BAR-000077/.test(await T(p)), { d, b3: b3?.inicio_dispositivo });
+  ok(`auditor ${nombre}: sin desborde horizontal`, await sinDesborde(p));
   await p.close();
 }
 ok("ninguna pantalla produjo errores de JavaScript ni de consola", errores.length === 0, errores);
