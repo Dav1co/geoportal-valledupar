@@ -1,7 +1,7 @@
 // Análisis de contrato · prueba en CHROME REAL (puppeteer-core + el Chrome instalado) de la pantalla nueva, con los componentes reales (AreaCampo, AnalisisContrato, FormatosCampo,
 // FormularioFormato, Admin) contra un servidor SIMULADO en 127.0.0.1: nada llega a Supabase y las teselas de OpenStreetMap se bloquean. Datos INVENTADOS («NOMBRE DE PRUEBA», 3000000001).
 // A 390×844 y a 1280×900: respuesta completa (marcas, teléfonos tel: con «dato personal», gráfica con el hueco de 202606 y barras huecas, tabla, secciones, mapa y Google Maps),
-// no encontrado, comodín, ficha sin calcular, mensajes 429/400/403, usuario solo comercial, atajos (submedición → Instalación de medidor con «Cambio»), sin desborde,
+// no encontrado, comodín, ficha sin calcular, mensajes 400/403 (sin cupo ni 429 en la consulta de contratos), cercanía con su cupo y 429, «Buscar el predio», usuario solo comercial, atajos (submedición → Instalación de medidor con «Cambio»), sin desborde,
 // nada personal en localStorage/sessionStorage ni en la consola, y la casilla de Administración solo cuando el servidor trae el booleano.
 //   node scripts/prueba_chrome_analisis.mjs <ruta_chrome> <ruta_puppeteer-core> [carpeta_capturas]
 // No prueba: la Edge ni la base reales, ni un celular físico, ni la llamada real (tel:) ni Google Maps.
@@ -60,10 +60,9 @@ writeFileSync(join(dir, "index.html"), `<!doctype html><html lang="es"><head><me
 
 // ---------- 2. Respuestas simuladas (todo inventado) ----------
 const NOMBRE = "NOMBRE DE PRUEBA", TEL1 = "3000000001", TEL2 = "5700001";
-const cupo = (restantes, extra = {}) => ({ limite: 60, usadas: 60 - restantes, restantes, sin_limite: false, cobrada: true, ...extra });
 const mes = (periodo, m3, extra = {}) => ({ periodo, sin_dato: false, m3, metodo: "lectura", lectura_real: true, causal: "99 LECTURA NORMAL", ...extra });
 const prom = (grupo, vals) => ({ grupo, meses: vals.map(([periodo, media]) => ({ periodo, media, contratos: media === null ? 12 : 900 })) });
-const COMPLETO = { encontrado: true, comodin: false, contrato: "1000001", cupo: cupo(57),
+const COMPLETO = { encontrado: true, comodin: false, contrato: "1000001",
   suscriptor: { nombre: NOMBRE, telefonos: [TEL1, TEL2], telefono_fuente: "censo", corte: "20261114" },
   comercial: { estado: "ACTIVO", categoria: "1 Residencial", subcategoria: "2 Estrato 2", ciclo: "7", ruta: "0701", barrio: "BARRIO DE PRUEBA", direccion: "CRA 0 00 00",
     deuda_total: 412300, saldo_pendiente: 98000, facturas_pendientes: 5, saldo_financiado: 0, valor_reclamo: 0, saldo_a_favor: 0, tramo_mora: "media", estado_predio: "HABITADO", facturas_vencidas: 4, corte: "20261114" },
@@ -83,16 +82,15 @@ const COMPLETO = { encontrado: true, comodin: false, contrato: "1000001", cupo: 
     pendientes: [{ consecutivo: "RPV-000007", tipo_nombre: "Revisiones generales", fecha: "2026-11-01T08:00:00-05:00", sugiere: "cambio_medidor" }] },
   ubicacion: { predios_total: 2, predios: [{ direccion: "CRA 0 00 00", barrio: "BARRIO DE PRUEBA", lat: 10.4631, lon: -73.2532 }, { direccion: "CL 0 00 00", barrio: "BARRIO DE PRUEBA", lat: 10.4641, lon: -73.2522 }] },
   fotos: [], cortes: { cartera: "20261114", consumo: "202610", ficha: "2026-11-14T22:10:00-05:00" }, ficha_disponible: true };
-const SIN_FICHA = { ...COMPLETO, contrato: "1000003", cupo: cupo(56), suscriptor: { ...COMPLETO.suscriptor, telefono_fuente: "cartera" },
+const SIN_FICHA = { ...COMPLETO, contrato: "1000003", suscriptor: { ...COMPLETO.suscriptor, telefono_fuente: "cartera" },
   medidor: { serial: "A00003", diametro: null, fecha_instalacion: null, fecha_estado: null, anios: null, cambio: null }, consumo: null, promedios: null, submedicion: null, pago: null,
   gestiones: { ...COMPLETO.gestiones, emd_facturados: null, pqr: null, pendientes: [] }, ubicacion: { predios_total: 1, predios: [{ direccion: "CRA 0 00 00", barrio: "BARRIO DE PRUEBA", lat: null, lon: null }] },
   cortes: { cartera: "20261114", consumo: null, ficha: null }, ficha_disponible: false };
 const RESP = {
   "1000001": [200, COMPLETO],
-  "1000002": [200, { encontrado: false, contrato: "1000002", cupo: cupo(55) }],
-  "99999999": [200, { encontrado: true, comodin: true, contrato: "99999999", cupo: cupo(54) }],
+  "1000002": [200, { encontrado: false, contrato: "1000002" }],
+  "99999999": [200, { encontrado: true, comodin: true, contrato: "99999999" }],
   "1000003": [200, SIN_FICHA],
-  "1000429": [429, { error: "Llegó al límite de 60 consultas de hoy. Vuelve a tener cupo a las 14:05." }],
   "1000400": [400, { error: "Escriba solo los números del contrato (hasta 12 dígitos)." }],
   "1000403": [403, { error: "No tiene permiso para esta acción." }],
 };
@@ -101,7 +99,7 @@ const usuario = (conAnalisis) => ({ email: "persona@emdupar.gov.co", nombre: "Pe
   ver_campo: false, ver_dashboard_campo: false, ver_acta: false, ver_dashboard_acta: false, ...(conAnalisis ? { ver_analisis_contrato: false } : {}) });
 const USUARIOS = { admc: usuario(true), adms: usuario(false) };
 
-const peticiones = [];
+const peticiones = []; let modoCercanos = "lista";
 const cab = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Content-Type": "application/json", "Cache-Control": "no-store" };
 const srv = http.createServer((q, r) => {
   if (q.method === "OPTIONS") { r.writeHead(204, cab); return r.end(); }
@@ -124,7 +122,14 @@ const srv = http.createServer((q, r) => {
     switch (accion) {
       case "formulario": return u === "com" ? no(403, "No tiene permiso para esta acción.") : ok(DEF(u !== "sinform"));
       case "config_constancia": return ok({ habilitado: false });
-      case "analisis_contrato": { const x = RESP[url.searchParams.get("contrato")] ?? [200, { encontrado: false, contrato: url.searchParams.get("contrato"), cupo: cupo(50) }]; r.writeHead(x[0], cab); return r.end(JSON.stringify(x[1])); }
+      case "analisis_cercanos": {
+        if (modoCercanos === "429") return no(429, "Llegó al límite de 30 búsquedas de contratos cercanos de hoy. Vuelve a tener cupo a las 14:05.");
+        if (modoCercanos === "400") return no(400, "La ubicación no viene en la forma esperada.");
+        const lista = modoCercanos === "vacia" ? [] : [["1000001", "CRA 0 00 00", 42], ["1000005", "CL 1 00 00", 88], ["1000006", "CL 2 00 00 APTO 301 TORRE B CONJUNTO RESIDENCIAL DE PRUEBA", 140], ["1000007", null, 215], ["1000008", "CRA 9 00 00", 298]]
+          .map(([contrato, direccion, distancia_m]) => ({ contrato, direccion, distancia_m }));
+        return ok({ radio_m: 300, contratos: lista, cupo: { limite: 30, usadas: 3, restantes: 27, sin_limite: false } });
+      }
+      case "analisis_contrato": { const x = RESP[url.searchParams.get("contrato")] ?? [200, { encontrado: false, contrato: url.searchParams.get("contrato") }]; r.writeHead(x[0], cab); return r.end(JSON.stringify(x[1])); }
       default: return no(404, "Acción no soportada.");
     }
   });
@@ -140,8 +145,13 @@ const nav = await puppeteer.launch({ executablePath: CHROME, headless: "new", ar
 const ORIGEN = `http://127.0.0.1:${PUERTO + 1}`;
 const consola = []; const bloqueadas = [];
 let ANCHO = 390, ALTO = 844;
-async function abrir(qs) {
-  const pg = await nav.newPage();
+// Posición simulada por omisión: 0,001° al sur del predio 1 (≈ 111 m). `ctx` permite un contexto sin permiso de ubicación; `antes` corre en cada documento nuevo (dobles).
+const GPS0 = { latitude: 10.4621, longitude: -73.2532, accuracy: 8 };
+await nav.defaultBrowserContext().overridePermissions(`http://127.0.0.1:${PUERTO + 1}`, ["geolocation", "accelerometer", "gyroscope", "magnetometer"]);
+async function abrir(qs, { ctx = null, gps = GPS0, antes = null } = {}) {
+  const pg = await (ctx ?? nav).newPage();
+  if (antes) await pg.evaluateOnNewDocument(antes);
+  if (gps) await pg.setGeolocation(gps);
   await pg.setViewport({ width: ANCHO, height: ALTO, deviceScaleFactor: ANCHO < 500 ? 2 : 1, isMobile: ANCHO < 500, hasTouch: ANCHO < 500 });
   await pg.setRequestInterception(true);
   pg.on("request", (q) => { const u = q.url(); if (u.startsWith("http://127.0.0.1:") || u.startsWith("data:") || u.startsWith("blob:")) q.continue(); else { bloqueadas.push(u); q.abort(); } });   // nada sale de la máquina (ni OSM ni Supabase)
@@ -162,6 +172,140 @@ async function consultar(pg, contrato) {
 const almacen = (pg) => pg.evaluate(() => { let s = ""; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); s += k + "=" + localStorage.getItem(k); } for (let i = 0; i < sessionStorage.length; i++) { const k = sessionStorage.key(i); s += k + "=" + sessionStorage.getItem(k); } } catch { /* sin almacenamiento */ } return s; });
 const personal = (s) => s.includes(NOMBRE) || s.includes(TEL1) || s.includes(TEL2) || s.includes("300 000 0001");
 
+// ---------- Cercanía (agregado §1 y §2) y «Buscar el predio» (§4) ----------
+const DOBLES = () => {
+  window.__vib = []; window.__clearWatch = 0; window.__quitados = []; window.__agregados = [];
+  navigator.vibrate = (p) => { window.__vib.push(p); return true; };
+  const g = navigator.geolocation, cw = g.clearWatch.bind(g); g.clearWatch = (id) => { window.__clearWatch++; return cw(id); };
+  const ae = window.addEventListener.bind(window), re = window.removeEventListener.bind(window);
+  window.addEventListener = (t, f, o) => { if (/^deviceorientation/.test(t)) window.__agregados.push(t); return ae(t, f, o); };
+  window.removeEventListener = (t, f, o) => { if (/^deviceorientation/.test(t)) window.__quitados.push(t); return re(t, f, o); };
+};
+const rumboEsperado = (a, b) => { const r = (x) => x * Math.PI / 180; const y = Math.sin(r(b.lon - a.lon)) * Math.cos(r(b.lat)); const x = Math.cos(r(a.lat)) * Math.sin(r(b.lat)) - Math.sin(r(a.lat)) * Math.cos(r(b.lat)) * Math.cos(r(b.lon - a.lon)); return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360; };
+const difAng = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); return Math.min(d, 360 - d); };
+const PREDIO = { lat: 10.4631, lon: -73.2532 };
+async function pruebasCercania(T) {
+  // ---- §1 distancia en la tarjeta ----
+  let pg = await abrir("u=op"); await consultar(pg, "1000001");
+  await pg.waitForSelector("[data-testid=distancia-valor]", { timeout: 8000 });
+  ok(`${T} cercanía: la posición NO se envió al servidor para medir la distancia`, !peticiones.some((p) => JSON.stringify(p.cuerpo ?? {}).includes("10.4621") || JSON.stringify(p.qs).includes("10.4621")));
+  await pg.evaluate(() => document.querySelector(".ac-pagina").scrollTo(0, 0));
+  await pg.screenshot({ path: join(CAP, "analisis_390_distancia.png") });
+  await pg.setGeolocation({ latitude: 10.4531, longitude: -73.2532, accuracy: 8 });
+  await clicTexto(pg, "[data-testid=distancia] button", "Actualizar"); await esp(900);
+  ok(`${T} «Actualizar» vuelve a medir: 0,01° al sur ≈ 1112 m → «A 1,1 km»`, (await pg.$eval("[data-testid=distancia-valor]", (e) => e.textContent)) === "A 1,1 km");
+  await pg.setGeolocation({ latitude: 10.4621, longitude: -73.2532, accuracy: 120 });
+  await clicTexto(pg, "[data-testid=distancia] button", "Actualizar"); await esp(900);
+  ok(`${T} precisión 120 m: «Precisión del GPS baja (± 120 m): la distancia es aproximada.»`, (await texto(pg)).includes("Precisión del GPS baja (± 120 m): la distancia es aproximada."));
+  ok(`${T} nada de la posición en localStorage/sessionStorage`, !/10\.46|73\.25/.test(await almacen(pg)));
+  await pg.close();
+  // ---- §2 contratos cerca de mí ----
+  modoCercanos = "lista";
+  pg = await abrir("u=op"); await clicTexto(pg, "button.campo-formato", "Análisis de contrato"); await pg.waitForSelector("#ac-contrato");
+  let antes = peticiones.length;
+  await clicTexto(pg, "button.ac-boton-cerca", "Contratos cerca de mí"); await esp(1000);
+  const pc = peticiones.slice(antes).find((p) => p.accion === "analisis_cercanos");
+  ok(`${T} «Contratos cerca de mí»: POST con lat, lon y precision_m de la posición`, pc?.metodo === "POST" && pc.cuerpo?.lat === 10.4621 && pc.cuerpo?.lon === -73.2532 && pc.cuerpo?.precision_m === 8, JSON.stringify(pc?.cuerpo));
+  const filas = await pg.evaluate(() => [...document.querySelectorAll(".ac-cercano")].map((b) => b.innerText.replace(/\s+/g, " ").trim()));
+  const zona = await pg.$eval("[data-testid=cercanos]", (e) => e.innerText);
+  ok(`${T} lista: 5 filas con contrato, dirección y distancia; «radio 300 m» y su cupo de búsquedas cercanas (sin texto de cupo de consultas)`, filas.length === 5 && filas[0].includes("1000001") && filas[0].includes("CRA 0 00 00") && filas[0].includes("42 m") && filas[3].includes("Sin dirección")
+    && zona.includes("radio 300 m") && zona.includes("Le quedan 27 búsquedas cercanas hoy.") && !/cupo diario|consultas hoy/.test(zona), JSON.stringify(filas));
+  ok(`${T} lista: sin nombre ni teléfono`, !personal(zona));
+  ok(`${T} lista sin desborde a 390 (dirección larga incluida)`, await sinDesborde(pg));
+  await pg.screenshot({ path: join(CAP, "analisis_390_cercanos.png") });
+  antes = peticiones.length;
+  await clicTexto(pg, ".ac-cercano", "1000001"); await esp(1000);
+  const pa = peticiones.slice(antes).find((p) => p.accion === "analisis_contrato");
+  ok(`${T} tocar una fila abre ese contrato con la llamada normal (analisis_contrato) y lo deja escrito`, pa?.qs.contrato === "1000001" && (await texto(pg)).includes("Contrato 1000001 · Activo") && (await pg.$eval("#ac-contrato", (i) => i.value)) === "1000001");
+  modoCercanos = "vacia";
+  await clicTexto(pg, "button.ac-boton-cerca", "Contratos cerca de mí"); await esp(1000);
+  ok(`${T} lista vacía: «No hay predios con contrato a menos de 300 m.»`, (await texto(pg)).includes("No hay predios con contrato a menos de 300 m."));
+  modoCercanos = "429";
+  await clicTexto(pg, "button.ac-boton-cerca", "Contratos cerca de mí"); await esp(1000);
+  ok(`${T} 429 de cercanos: el mensaje del servidor en un aviso`, await pg.evaluate(() => [...document.querySelectorAll("[role=alert]")].some((a) => a.textContent.includes("Llegó al límite de 30 búsquedas de contratos cercanos de hoy. Vuelve a tener cupo a las 14:05."))));
+  modoCercanos = "400";
+  await clicTexto(pg, "button.ac-boton-cerca", "Contratos cerca de mí"); await esp(1000);
+  ok(`${T} 400 de cercanos: «La ubicación no viene en la forma esperada.»`, (await texto(pg)).includes("La ubicación no viene en la forma esperada."));
+  ok(`${T} cercanía sin desborde a 390`, await sinDesborde(pg));
+  modoCercanos = "lista";
+  await pg.close();
+  // ---- sin permiso de ubicación ----
+  const ctx = await nav.createBrowserContext();
+  await ctx.overridePermissions(ORIGEN, []);
+  pg = await abrir("u=op", { ctx, gps: null }); await consultar(pg, "1000001"); await esp(800);
+  ok(`${T} sin permiso de ubicación: la tarjeta explica cómo activarlo y el análisis se ve completo`, (await pg.$eval("[data-testid=distancia] [data-testid=gps-ayuda]", (e) => e.textContent).catch(() => "")).includes("No tenemos permiso para usar su ubicación") && (await texto(pg)).includes("Posible submedición"));
+  antes = peticiones.length;
+  await clicTexto(pg, "button.ac-boton-cerca", "Contratos cerca de mí"); await esp(800);
+  ok(`${T} sin permiso: «Contratos cerca de mí» explica cómo activarlo y no llama al servidor`, (await pg.$eval("[data-testid=cercanos] [data-testid=gps-ayuda]", (e) => e.textContent).catch(() => "")).includes("Ajustes") && !peticiones.slice(antes).some((p) => p.accion === "analisis_cercanos"));
+  await pg.evaluate(() => document.querySelector(".ac-pagina").scrollTo(0, 0));
+  await pg.screenshot({ path: join(CAP, "analisis_390_sin_gps.png") });
+  await consultar(pg, "1000002");
+  ok(`${T} sin permiso: la pantalla sigue funcionando (otra consulta)`, (await texto(pg)).includes("No encontramos ese contrato."));
+  ok(`${T} sin permiso sin desborde`, await sinDesborde(pg));
+  await pg.close();
+  // ---- §4 «Buscar el predio» ----
+  const sur = (dLat, accuracy = 8) => ({ latitude: PREDIO.lat - dLat, longitude: PREDIO.lon, accuracy });
+  pg = await abrir("u=op", { antes: DOBLES, gps: sur(0.0009) }); await consultar(pg, "1000001");
+  await pg.waitForSelector("[data-testid=distancia-valor]", { timeout: 8000 });
+  await pg.click("button.ac-boton-buscar"); await pg.waitForSelector("[data-testid=bp-distancia]", { timeout: 8000 }); await esp(400);
+  const leer = () => pg.evaluate(() => ({ d: document.querySelector("[data-testid=bp-distancia]")?.textContent, banda: document.querySelector("[data-testid=buscar-predio]")?.dataset.banda, giro: Number(document.querySelector("[data-testid=flecha]")?.dataset.giro),
+    fondo: getComputedStyle(document.querySelector("[data-testid=buscar-predio]")).backgroundColor, texto: document.querySelector("[data-testid=buscar-predio]")?.innerText ?? "", vib: window.__vib.length }));
+  const metros = (x) => Number(String(x).replace(/[^\d]/g, ""));
+  let b = await leer();
+  ok(`${T} Buscar: pantalla completa con «Cerrar», 100 m en gris (lejos)`, b.d === "A 100 m" && b.banda === "lejos" && b.texto.includes("Cerrar") && await pg.evaluate(() => { const r = document.querySelector("[data-testid=buscar-predio]").getBoundingClientRect(); return r.width === innerWidth && r.height === innerHeight; }), JSON.stringify(b));
+  ok(`${T} Buscar: «Precisión ± 8 m» siempre visible`, b.texto.includes("Precisión ± 8 m"));
+  ok(`${T} sin brújula: aviso «sin brújula», marca N y la flecha apunta al rumbo respecto al norte (≈ 0°, «hacia el norte»)`, b.texto.includes("sin brújula") && !!(await pg.$("[data-testid=marca-norte]")) && difAng(b.giro, rumboEsperado({ lat: PREDIO.lat - 0.0009, lon: PREDIO.lon }, PREDIO)) < 1 && b.texto.includes("hacia el norte (0°)"));
+  ok(`${T} Google Maps a pie`, (await pg.$eval("[data-testid=buscar-predio] a", (a) => a.getAttribute("href"))) === "https://www.google.com/maps/dir/?api=1&destination=10.4631,-73.2532&travelmode=walking" && (await pg.$eval("[data-testid=buscar-predio] a", (a) => a.target)) === "_blank");
+  const fondoLejos = b.fondo;
+  // un poco al oeste para que el rumbo no sea 0
+  const pos2 = { latitude: PREDIO.lat - 0.0003, longitude: PREDIO.lon - 0.0002, accuracy: 8 };
+  await pg.setGeolocation(pos2); await esp(900);
+  b = await leer();
+  const rumbo2 = rumboEsperado({ lat: pos2.latitude, lon: pos2.longitude }, PREDIO);
+  ok(`${T} acercarse: la distancia baja y el color pasa a amarillo (cerca, < 50 m)`, metros(b.d) < 100 && b.banda === "cerca" && b.fondo !== fondoLejos, JSON.stringify(b));
+  await pg.evaluate(() => { const e = new Event("deviceorientation"); Object.defineProperty(e, "webkitCompassHeading", { value: 90 }); window.dispatchEvent(e); }); await esp(300);
+  b = await leer();
+  ok(`${T} brújula de iPhone (webkitCompassHeading 90°): flecha = rumbo − rumbo del celular (±1°) y sin el aviso «sin brújula»`, difAng(b.giro, rumbo2 - 90) < 1 && !b.texto.includes("sin brújula") && !(await pg.$("[data-testid=marca-norte]")), `${b.giro} vs ${(rumbo2 - 90 + 360) % 360}`);
+  await pg.evaluate(() => window.dispatchEvent(new DeviceOrientationEvent("deviceorientationabsolute", { alpha: 30, beta: 0, gamma: 0, absolute: true }))); await esp(300);
+  const giroAntes = b.giro; b = await leer();
+  ok(`${T} brújula absoluta (alpha 30° → rumbo 330°): la flecha gira al cambiar la orientación (±1°)`, difAng(b.giro, rumbo2 - 330) < 1 && difAng(b.giro, giroAntes) > 30, `${b.giro} vs ${(rumbo2 - 330 + 360) % 360}`);
+  await pg.screenshot({ path: join(CAP, "analisis_390_buscar_predio.png") });
+  await pg.setGeolocation({ ...pos2, accuracy: 60 }); await esp(900);
+  ok(`${T} precisión (60 m) peor que la distancia restante: «La señal no alcanza para afinar; busque la dirección»`, (await leer()).texto.includes("La señal no alcanza para afinar; busque la dirección"));
+  await pg.setGeolocation(sur(0.0001)); await esp(900);
+  b = await leer();
+  ok(`${T} llegar (< 15 m): verde, «Llegó: el predio debería estar a la vista» y vibra una vez`, b.banda === "llego" && b.texto.includes("Llegó: el predio debería estar a la vista") && b.vib === 1, JSON.stringify(b));
+  for (const x of [0.00012, 0.00016, 0.0001]) { await pg.setGeolocation(sur(x)); await esp(700); }
+  ok(`${T} temblor del GPS (13 m → 18 m → 11 m): no vuelve a vibrar`, (await leer()).vib === 1);
+  await pg.setGeolocation(sur(0.0003)); await esp(800); await pg.setGeolocation(sur(0.0001)); await esp(800);
+  b = await leer();
+  ok(`${T} alejarse a más de 20 m y volver: vibra otra vez ([200, 100, 200])`, b.vib === 2 && JSON.stringify(await pg.evaluate(() => window.__vib[1])) === "[200,100,200]");
+  ok(`${T} anuncio para lectores de pantalla (aria-live) con distancia y banda`, await pg.evaluate(() => { const a = document.querySelector("[data-testid=bp-anuncio]"); return a.getAttribute("aria-live") === "polite" && /^A \d+ m\./.test(a.textContent); }));
+  ok(`${T} Buscar sin desborde`, await sinDesborde(pg));
+  const cw0 = await pg.evaluate(() => window.__clearWatch);
+  await clicTexto(pg, "[data-testid=buscar-predio] button", "Cerrar"); await esp(400);
+  const tras = await pg.evaluate(() => ({ cw: window.__clearWatch, quitados: window.__quitados, agregados: window.__agregados, abierta: !!document.querySelector("[data-testid=buscar-predio]") }));
+  ok(`${T} «Cerrar»: apaga el GPS (clearWatch) y la brújula (quita los dos oyentes) y vuelve al análisis`, tras.cw === cw0 + 1 && !tras.abierta && ["deviceorientationabsolute", "deviceorientation"].every((t) => tras.quitados.includes(t)) && (await texto(pg)).includes("Contrato 1000001"), JSON.stringify(tras));
+  ok(`${T} Buscar no llamó al servidor ni guardó la posición`, !peticiones.some((p) => JSON.stringify(p.cuerpo ?? {}).includes("10.463")) && !/10\.46|73\.25/.test(await almacen(pg)));
+  await pg.close();
+  // ---- permiso de brújula negado (iPhone) ----
+  pg = await abrir("u=op", { antes: () => { window.DeviceOrientationEvent.requestPermission = () => Promise.resolve("denied"); window.__agregados = []; const ae = window.addEventListener.bind(window); window.addEventListener = (t, f, o) => { if (/^deviceorientation/.test(t)) window.__agregados.push(t); return ae(t, f, o); }; }, gps: sur(0.0003) });
+  await consultar(pg, "1000001"); await pg.waitForSelector("[data-testid=distancia-valor]", { timeout: 8000 });
+  await pg.click("button.ac-boton-buscar"); await pg.waitForSelector("[data-testid=bp-distancia]", { timeout: 8000 }); await esp(400);
+  await pg.evaluate(() => { const e = new Event("deviceorientation"); Object.defineProperty(e, "webkitCompassHeading", { value: 90 }); window.dispatchEvent(e); }); await esp(300);
+  ok(`${T} brújula negada (iPhone): sigue con distancia y flecha al norte, aviso «sin brújula», sin oyentes de orientación`, (await texto(pg)).includes("sin brújula") && (await pg.evaluate(() => window.__agregados.length)) === 0 && (await pg.$eval("[data-testid=bp-distancia]", (e) => e.textContent)) === "A 33 m");
+  await pg.close();
+}
+async function escritorioCercania(T) {
+  modoCercanos = "lista";
+  const pg = await abrir("u=op"); await consultar(pg, "1000001");
+  await clicTexto(pg, "button.ac-boton-cerca", "Contratos cerca de mí"); await esp(1000);
+  ok(`${T} escritorio: «Contratos cerca de mí» lista 5 filas sin desborde`, (await pg.$$(".ac-cercano")).length === 5 && await sinDesborde(pg));
+  await pg.click("button.ac-boton-buscar"); await esp(800);
+  ok(`${T} escritorio: «Buscar» abre la pantalla completa con la distancia`, (await pg.$eval("[data-testid=bp-distancia]", (e) => e.textContent).catch(() => null)) === "A 111 m");
+  await pg.close();
+}
+
 try {
   for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
     ANCHO = ancho; ALTO = alto; const T = `[${ancho}]`;
@@ -177,7 +321,12 @@ try {
     const antesN = peticiones.filter((p) => p.accion === "analisis_contrato").length;
     t = await texto(pg);
     ok(`${T} Enter consulta: GET analisis_contrato con el contrato`, peticiones.filter((p) => p.accion === "analisis_contrato").at(-1)?.qs.contrato === "1000001" && peticiones.filter((p) => p.accion === "analisis_contrato").at(-1)?.metodo === "GET");
-    ok(`${T} cupo: «Le quedan 57 consultas hoy.»`, t.includes("Le quedan 57 consultas hoy."));
+    const sinCupo = (x) => !/consultas? hoy|cupo diario|l[ií]mite de \d+ consultas/i.test(x);
+    ok(`${T} sin límite diario de consultas: la pantalla no muestra ningún texto de cupo de consultas`, sinCupo(t));
+    await pg.waitForSelector("[data-testid=distancia-valor]", { timeout: 8000 }).catch(() => null);
+    ok(`${T} distancia en la tarjeta con el GPS simulado (0,001° al sur ≈ 111 m): «A 111 m» y botón «Buscar»`, (await pg.$eval("[data-testid=distancia-valor]", (e) => e.textContent).catch(() => null)) === "A 111 m"
+      && await pg.evaluate(() => [...document.querySelectorAll("[data-testid=tarjeta] button")].some((b) => b.textContent.trim() === "Buscar")));
+    t = await texto(pg);
     ok(`${T} tarjeta: contrato, estado, nombre con «dato personal»`, t.includes("Contrato 1000001 · Activo") && await pg.evaluate((n) => { const p = document.querySelector(".ac-nombre"); return p.textContent.includes(n) && !!p.querySelector(".ac-tag-personal") && p.querySelector(".ac-tag-personal").textContent === "dato personal"; }, NOMBRE));
     ok(`${T} teléfonos como enlaces tel: con formato (300 000 0001 · 570 0001), celular primero, «dato personal» y «censo nov-2025»`, await pg.evaluate(() => { const a = [...document.querySelectorAll("a.ac-tel")]; const p = document.querySelector(".ac-tels"); return a.length === 2 && a[0].getAttribute("href") === "tel:3000000001" && a[0].textContent.includes("300 000 0001") && a[1].getAttribute("href") === "tel:5700001" && a[1].textContent.includes("570 0001") && p.textContent.includes("dato personal") && p.textContent.includes("censo nov-2025"); }));
     ok(`${T} tarjeta: dirección · barrio, uso · estrato · ciclo, deuda con facturas y tramo, cortes visibles`, t.includes("CRA 0 00 00 · Barrio BARRIO DE PRUEBA") && t.includes("Residencial · Estrato 2 · Ciclo 7") && /Deuda \$ 412\.300 · 5 facturas · mora media/i.test(t) && t.includes("cartera al 14/11/2026"));
@@ -233,7 +382,7 @@ try {
     ok(`${T} repetir la consulta vuelve a ir al servidor (la respuesta no se guarda)`, peticiones.filter((p) => p.accion === "analisis_contrato").length === antesN + 1);
     // estados
     await consultar(pg, "1000002"); t = await texto(pg);
-    ok(`${T} no encontrado: «No encontramos ese contrato.» y nada del anterior`, t.includes("No encontramos ese contrato.") && !personal(t) && t.includes("Le quedan 55 consultas hoy."));
+    ok(`${T} no encontrado: «No encontramos ese contrato.» y nada del anterior`, t.includes("No encontramos ese contrato.") && !personal(t) && sinCupo(t));
     if (ancho === 390) await pg.screenshot({ path: join(CAP, "analisis_390_no_encontrado.png") });
     await consultar(pg, "99999999"); t = await texto(pg);
     ok(`${T} comodín: «Contrato corporativo: no tiene análisis.»`, t.includes("Contrato corporativo: no tiene análisis."));
@@ -244,11 +393,9 @@ try {
     ok(`${T} ficha sin calcular: «Sin coordenadas en el catastro.» y sin enlace a Google Maps`, t.includes("Sin coordenadas en el catastro.") && !t.includes("Abrir en Google Maps") && t.includes("El consumo sale del análisis mensual"));
     ok(`${T} ficha sin calcular sin desborde`, await sinDesborde(pg));
     if (ancho === 390) await pg.screenshot({ path: join(CAP, "analisis_390_sin_ficha.png") });
-    await consultar(pg, "1000429"); t = await texto(pg);
-    ok(`${T} 429: el mensaje del servidor con la hora en un aviso (role=alert)`, await pg.evaluate(() => [...document.querySelectorAll("[role=alert]")].some((a) => a.textContent.includes("Llegó al límite de 60 consultas de hoy. Vuelve a tener cupo a las 14:05."))) && !personal(t));
-    if (ancho === 390) await pg.screenshot({ path: join(CAP, "analisis_390_limite.png") });
     await consultar(pg, "1000400");
     ok(`${T} 400: el mensaje del servidor en un aviso`, await pg.evaluate(() => [...document.querySelectorAll("[role=alert]")].some((a) => a.textContent.includes("Escriba solo los números del contrato (hasta 12 dígitos)."))));
+    if (ancho === 390) await pg.screenshot({ path: join(CAP, "analisis_390_error_servidor.png") });
     await consultar(pg, "1000403");
     ok(`${T} 403: el mensaje del servidor en un aviso`, await pg.evaluate(() => [...document.querySelectorAll("[role=alert]")].some((a) => a.textContent.includes("No tiene permiso para esta acción."))));
     ok(`${T} nada personal en localStorage ni sessionStorage`, !personal(await almacen(pg)));
@@ -288,6 +435,8 @@ try {
     pg = await abrir("u=sinform"); await consultar(pg, "1000001");
     ok(`${T} con Instalación de medidor inactiva no aparece «Instalación de medidor → Cambio» (la marca sí)`, !(await pg.$("button.ac-boton-cambio")) && (await texto(pg)).includes("Posible submedición"));
     await pg.close();
+
+    if (ancho === 390) await pruebasCercania(T); else await escritorioCercania(T);
 
     // ===== Usuario solo comercial =====
     const desde = Date.now();

@@ -1,16 +1,18 @@
-import { lazy, Suspense, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import "./analisis.css";
 import { apiCampo, ErrorCampo, TEXTO_NO_APLICADO } from "../apiCampo";
 import type { Destino } from "../../components/ConfirmarCancelar";
-import type { AnalisisCompleto, Cupo, RespuestaAnalisis } from "./tipos";
+import type { AnalisisCompleto, Predio, RespuestaAnalisis, RespuestaCercanos } from "./tipos";
+import { ErrorGps, pedirPosicion, TEXTO_FALLO_GPS } from "./gps";
+import { BuscarPredio, pedirPermisoBrujula, type PermisoBrujula } from "./BuscarPredio";
 import { GraficaConsumo } from "./GraficaConsumo";
 import {
-  anios, contratoValido, etiquetaMes, fechaCorta, fechaCorte, filasGrafica, formatoTelefono, haceDias, haceMeses, hrefTelefono, limpiarContrato, m3, marcasDe,
+  anios, avisoPrecision, contratoValido, distanciaCorta, distanciaTexto, predioMasCercano, textoCupoCercanos, etiquetaMes, fechaCorta, fechaCorte, filasGrafica, formatoTelefono, haceDias, haceMeses, hrefTelefono, limpiarContrato, m3, marcasDe,
   MAX_DIGITOS_CONTRATO, metodoTexto, periodoReferencia, pesos, plural, primerPredioConPunto, sinCodigo, telefonosVisibles, tramoTexto, urlGoogleMaps,
 } from "./logica";
 
 // «Análisis de contrato» (solo lectura): se escribe un contrato y se ve cartera, consumo, medidor, gestiones y ubicación. Lo decide y lo limita el SERVIDOR (permiso
-// `analisis_contrato`, cupo diario); aquí solo se dibuja. Tarjeta fija con lo esencial y secciones plegables (<details>, sin librerías).
+// `analisis_contrato`; cada consulta queda en su bitácora, sin límite diario); aquí solo se dibuja. Tarjeta fija con lo esencial y secciones plegables (<details>, sin librerías).
 // DATO PERSONAL (nombre y teléfonos): solo en pantalla. La respuesta vive en el estado de este componente y se descarta al salir: no se guarda en localStorage/sessionStorage,
 // no se escribe en la consola, no se reutiliza entre consultas y no sale en ninguna descarga.
 const MapaPunto = lazy(() => import("./MapaPunto"));
@@ -30,7 +32,7 @@ function textoError(e: unknown): { texto: string; sesion?: boolean } {
     case "red": return { texto: "No hay conexión con el servidor. Revise su señal e intente de nuevo." };
     case "servidor": return { texto: "El servidor no pudo responder en este momento. Intente de nuevo en un momento." };
     case "no_aplicado": return { texto: TEXTO_NO_APLICADO };
-    default: return { texto: e.message };          // 400, 403 y 429: el texto del servidor (contrato mal escrito, sin permiso, límite con la hora en que vuelve el cupo)
+    default: return { texto: e.message };          // 400, 403 (y el 429 de «Contratos cerca de mí»): el texto del servidor
   }
 }
 
@@ -45,20 +47,21 @@ export default function AnalisisContrato({ onVolver, destinos = [], onIrA, puede
 }) {
   const [texto, setTexto] = useState("");
   const [estado, setEstado] = useState<Estado>({ fase: "inicio" });
-  const [cupo, setCupo] = useState<Cupo | null>(null);
   const turno = useRef(0);
 
-  async function consultar(e?: FormEvent) {
+  // `directo`: contrato tocado en «Contratos cerca de mí»; se consulta exactamente igual que si se hubiera escrito.
+  async function consultar(e?: FormEvent, directo?: string) {
     e?.preventDefault();
-    const c = limpiarContrato(texto);
+    const c = limpiarContrato(directo ?? texto);
+    if (directo !== undefined) setTexto(c);
     if (!contratoValido(c)) { setEstado({ fase: "error", texto: "Escriba solo los números del contrato (hasta 12 dígitos)." }); return; }
     const mio = ++turno.current;
     setEstado({ fase: "cargando", contrato: c });
     try {
       const r = await apiCampo.analisisContrato(c);
       if (mio !== turno.current) return;
-      if (r.cupo) setCupo(r.cupo);
       setEstado({ fase: "listo", r });
+      if (directo !== undefined) requestAnimationFrame(() => document.querySelector("[data-ancla=resultado]")?.scrollIntoView({ block: "start" }));
     } catch (err) {
       if (mio !== turno.current) return;
       setEstado({ fase: "error", ...textoError(err) });
@@ -77,22 +80,18 @@ export default function AnalisisContrato({ onVolver, destinos = [], onIrA, puede
           <label htmlFor="ac-contrato" className="campo-etiqueta">Número de contrato</label>
           <div className="ac-buscar-fila">
             <input id="ac-contrato" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={MAX_DIGITOS_CONTRATO} autoComplete="off" spellCheck={false}
-              value={texto} onChange={(ev) => setTexto(limpiarContrato(ev.target.value))} aria-describedby="ac-cupo" />
+              value={texto} onChange={(ev) => setTexto(limpiarContrato(ev.target.value))} />
             <button type="submit" className="tec-boton" disabled={cargando || texto === ""}>Consultar</button>
           </div>
-          <p id="ac-cupo" className="campo-sub ac-cupo" aria-live="polite">{textoCupo(cupo)}</p>
         </form>
+        <Cercanos onAbrir={(c) => void consultar(undefined, c)} ocupado={cargando} />
         {estado.fase === "error" ? <p className="campo-error" role="alert">{estado.texto}</p> : null}
         {cargando ? <p className="campo-sub" role="status">Consultando el contrato {estado.contrato}…</p> : null}
       </section>
-      {estado.fase === "listo" ? <Resultado r={estado.r} destinos={destinos} onIrA={onIrA} puedeCambioMedidor={puedeCambioMedidor} onCambioMedidor={onCambioMedidor} /> : null}
+      <div data-ancla="resultado" aria-hidden="true" />
+      {estado.fase === "listo" ? <Resultado key={estado.r.contrato} r={estado.r} destinos={destinos} onIrA={onIrA} puedeCambioMedidor={puedeCambioMedidor} onCambioMedidor={onCambioMedidor} /> : null}
     </div>
   );
-}
-
-function textoCupo(c: Cupo | null): string {
-  if (!c || c.sin_limite || c.restantes === null || c.restantes === undefined) return "";
-  return c.restantes === 1 ? "Le queda 1 consulta hoy." : `Le quedan ${c.restantes.toLocaleString("es-CO")} consultas hoy.`;
 }
 
 function Resultado({ r, destinos, onIrA, puedeCambioMedidor, onCambioMedidor }: { r: RespuestaAnalisis; destinos: Destino[]; onIrA?: (d: string, c: string) => void; puedeCambioMedidor: boolean; onCambioMedidor?: (c: string) => void }) {
@@ -126,6 +125,7 @@ function Ficha({ r, destinos, onIrA, puedeCambioMedidor, onCambioMedidor }: { r:
       {/* ===== Tarjeta fija ===== */}
       <section className="tec-tarjeta ac-tarjeta" aria-label="Resumen del contrato" data-testid="tarjeta">
         <h2 className="ac-titulo">Contrato {r.contrato}{c?.estado ? ` · ${capital(c.estado)}` : ""}</h2>
+        <Distancia predios={r.ubicacion?.predios ?? []} />
         {sinFicha ? <p className="ac-nota" role="note">El análisis mensual aún no se ha calculado: faltan consumo, medidor, pago y PQR.</p> : null}
         <div className="ac-personal">
           <p className="ac-nombre"><strong>{s?.nombre ?? "Sin nombre registrado"}</strong> <span className="ac-tag-personal">dato personal</span></p>
@@ -320,6 +320,107 @@ function Ficha({ r, destinos, onIrA, puedeCambioMedidor, onCambioMedidor }: { r:
           </section>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+// ---------------- Cercanía (agregado del 14/11) ----------------
+
+/** «A 120 m» del predio: se mide en el celular (haversine) al mostrar el análisis y con «Actualizar». La posición no sale del teléfono ni se guarda: solo queda la distancia. */
+function Distancia({ predios }: { predios: Predio[] }) {
+  type E = { fase: "midiendo" } | { fase: "ok"; m: number; precision: number } | { fase: "error"; texto: string };
+  const [e, setE] = useState<E>({ fase: "midiendo" });
+  const [buscando, setBuscando] = useState<Promise<PermisoBrujula> | null>(null);   // «Buscar»: pantalla abierta, con el permiso de brújula pedido en el mismo toque
+  const turno = useRef(0);
+  const hayPunto = predios.some((p) => p.lat !== null && p.lon !== null);
+  const varios = predios.filter((p) => p.lat !== null && p.lon !== null).length > 1;
+  const medir = useCallback(() => {
+    const t = ++turno.current;
+    setE({ fase: "midiendo" });
+    pedirPosicion().then((pos) => {
+      if (t !== turno.current) return;
+      const c = predioMasCercano(pos, predios);
+      setE(c ? { fase: "ok", m: c.distancia_m, precision: pos.precision_m } : { fase: "error", texto: "Sin coordenadas para medir la distancia." });
+    }, (err) => { if (t === turno.current) setE({ fase: "error", texto: err instanceof ErrorGps ? err.message : TEXTO_FALLO_GPS.no_disponible }); });
+  }, [predios]);
+  useEffect(() => { if (hayPunto) medir(); return () => { turno.current++; }; }, [hayPunto, medir]);
+  const cerrarBuscar = useCallback(() => setBuscando(null), []);
+
+  if (!hayPunto) return <p className="campo-sub ac-distancia" data-testid="distancia">Sin coordenadas para medir la distancia.</p>;
+  const aviso = e.fase === "ok" ? avisoPrecision(e.precision) : null;
+  return (
+    <div className="ac-distancia" data-testid="distancia" aria-live="polite">
+      <div className="ac-distancia-fila">
+        <p className="ac-distancia-valor">
+          {e.fase === "ok" ? <><strong data-testid="distancia-valor">{distanciaTexto(e.m)}</strong> <span className="ac-corte">{varios ? "del predio más cercano" : "del predio"} · según su GPS</span></>
+            : e.fase === "midiendo" ? <span className="campo-sub">Midiendo la distancia con su GPS…</span> : <span className="campo-sub">Distancia no disponible.</span>}
+        </p>
+        <div className="ac-distancia-botones">
+          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={medir} disabled={e.fase === "midiendo"}>Actualizar</button>
+          <button type="button" className="tec-boton tec-boton-corto ac-boton-buscar" onClick={() => setBuscando(pedirPermisoBrujula())}>Buscar</button>
+        </div>
+      </div>
+      {buscando ? <BuscarPredio predios={predios} permiso={buscando} onCerrar={cerrarBuscar} /> : null}
+      {aviso ? <p className="ac-nota" role="note">{aviso}</p> : null}
+      {e.fase === "error" ? <p className="ac-gps-ayuda" data-testid="gps-ayuda">{e.texto}</p> : null}
+    </div>
+  );
+}
+
+/** «Contratos cerca de mí»: hasta 5 predios con contrato dentro del radio del servidor (300 m). La lista NO muestra nombre ni teléfono (la respuesta no los trae). */
+function Cercanos({ onAbrir, ocupado }: { onAbrir: (contrato: string) => void; ocupado: boolean }) {
+  type E = { fase: "inicio" } | { fase: "ubicando" } | { fase: "buscando" } | { fase: "listo"; r: RespuestaCercanos; precision: number } | { fase: "gps"; texto: string } | { fase: "error"; texto: string };
+  const [e, setE] = useState<E>({ fase: "inicio" });
+  const [cupo, setCupo] = useState<RespuestaCercanos["cupo"]>(null);
+  const [elegido, setElegido] = useState<string | null>(null);
+  const turno = useRef(0);
+  useEffect(() => () => { turno.current++; }, []);
+
+  async function buscar() {
+    const t = ++turno.current;
+    setE({ fase: "ubicando" }); setElegido(null);
+    let lat: number, lon: number, precision: number;
+    try { ({ lat, lon, precision_m: precision } = await pedirPosicion()); }
+    catch (err) { if (t === turno.current) setE({ fase: "gps", texto: err instanceof ErrorGps ? err.message : TEXTO_FALLO_GPS.no_disponible }); return; }
+    if (t !== turno.current) return;
+    setE({ fase: "buscando" });
+    try {
+      const r = await apiCampo.analisisCercanos(lat, lon, precision);
+      if (t !== turno.current) return;
+      if (r.cupo) setCupo(r.cupo);
+      setE({ fase: "listo", r, precision });
+    } catch (err) {
+      if (t === turno.current) setE({ fase: "error", texto: textoError(err).texto });
+    }
+  }
+
+  const trabajando = e.fase === "ubicando" || e.fase === "buscando";
+  return (
+    <div className="ac-cerca" data-testid="cercanos">
+      <button type="button" className="tec-boton-sec ac-boton-cerca" onClick={() => void buscar()} disabled={trabajando}>Contratos cerca de mí</button>
+      {textoCupoCercanos(cupo) ? <p className="campo-sub ac-cupo">{textoCupoCercanos(cupo)}</p> : null}
+      {trabajando ? <p className="campo-sub" role="status">{e.fase === "ubicando" ? "Obteniendo su ubicación…" : "Buscando contratos cercanos…"}</p> : null}
+      {e.fase === "gps" ? <p className="ac-gps-ayuda" data-testid="gps-ayuda" role="status">{e.texto}</p> : null}
+      {e.fase === "error" ? <p className="campo-error" role="alert">{e.texto}</p> : null}
+      {e.fase === "listo" ? (
+        e.r.contratos.length === 0 ? <p className="ac-aviso-suave" role="status">No hay predios con contrato a menos de {e.r.radio_m.toLocaleString("es-CO")} m.</p> : (
+          <div className="ac-cercanos">
+            <p className="ac-cercanos-tit">Más cercanos <span className="ac-corte">radio {e.r.radio_m.toLocaleString("es-CO")} m</span></p>
+            {avisoPrecision(e.precision) ? <p className="ac-nota" role="note">{avisoPrecision(e.precision)}</p> : null}
+            <ul>
+              {e.r.contratos.slice(0, 5).map((c) => (
+                <li key={c.contrato}>
+                  <button type="button" className="ac-cercano" onClick={() => { setElegido(c.contrato); onAbrir(c.contrato); }} disabled={ocupado} aria-current={elegido === c.contrato ? "true" : undefined}>
+                    <strong>{c.contrato}</strong>
+                    <span className="ac-cercano-dir">{c.direccion ?? "Sin dirección"}</span>
+                    <span className="ac-cercano-dist">{distanciaCorta(c.distancia_m)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      ) : null}
     </div>
   );
 }

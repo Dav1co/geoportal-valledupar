@@ -1,7 +1,7 @@
 // Respuesta de GET geoportal-campo?accion=analisis_contrato&contrato=… (contrato_respuesta.md del paquete del análisis de contrato).
 // DATO PERSONAL: `suscriptor` (nombre y teléfonos) solo se muestra en pantalla. Nunca se guarda (ni en localStorage/sessionStorage), ni se escribe en la consola, ni sale en descargas.
 
-export type Cupo = { limite: number | null; usadas: number; restantes: number | null; sin_limite: boolean; cobrada: boolean };
+// Cambio de David (14/11): la consulta de un contrato NO tiene límite diario ni `cupo` (cada consulta queda en la bitácora del servidor). Solo «Contratos cerca de mí» lleva cupo.
 
 export type Suscriptor = {
   nombre: string | null;
@@ -78,7 +78,7 @@ export type Cortes = { cartera: string | null; consumo: string | null; ficha: st
 
 /** Contrato encontrado (no comodín). Con `ficha_disponible=false`: consumo, medidor (salvo el serial diario), submedición, pago, pqr y emd vienen null. */
 export type AnalisisCompleto = {
-  encontrado: true; comodin: false; contrato: string; cupo: Cupo;
+  encontrado: true; comodin: false; contrato: string;
   suscriptor: Suscriptor | null;
   comercial: Comercial | null;
   medidor: Medidor | null;
@@ -92,6 +92,13 @@ export type AnalisisCompleto = {
   cortes: Cortes | null;
   ficha_disponible: boolean;
 };
-export type AnalisisNoEncontrado = { encontrado: false; contrato: string; cupo: Cupo };
-export type AnalisisComodin = { encontrado: true; comodin: true; contrato: string; cupo: Cupo };
+export type AnalisisNoEncontrado = { encontrado: false; contrato: string };
+export type AnalisisComodin = { encontrado: true; comodin: true; contrato: string };
 export type RespuestaAnalisis = AnalisisCompleto | AnalisisNoEncontrado | AnalisisComodin;
+
+// ---------------- Agregado: cercanía (POST geoportal-campo?accion=analisis_cercanos) ----------------
+export type CuerpoCercanos = { lat: number; lon: number; precision_m?: number };
+/** SIN nombre ni teléfono: solo contrato, dirección y distancia en metros enteros. Máximo 5, del más cercano al más lejano, todos dentro del radio. */
+export type ContratoCercano = { contrato: string; direccion: string | null; distancia_m: number };
+export type CupoCercanos = { limite: number; usadas: number; restantes: number; sin_limite: boolean };
+export type RespuestaCercanos = { radio_m: number; contratos: ContratoCercano[]; cupo: CupoCercanos | null };

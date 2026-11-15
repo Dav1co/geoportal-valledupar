@@ -69,7 +69,7 @@ ok("escala Y: consumos grandes (230 m³) → tope 300 (pasos de 75); pequeños (
 ok("líneas: se cortan donde falta el mes", igual(L.tramosLinea([8.1, null, 8.3, 8.2]).map((t) => t.map((p) => p.i)), [[0], [2, 3]]) && L.tramosLinea([null, null]).length === 0);
 
 // ---- Marcas ----
-const BASE = { encontrado: true, comodin: false, contrato: "1000001", cupo: { limite: 60, usadas: 1, restantes: 59, sin_limite: false, cobrada: true },
+const BASE = { encontrado: true, comodin: false, contrato: "1000001",
   consumo: CONSUMO, cortes: { cartera: "20261114", consumo: "202610", ficha: "2026-11-14T22:10:00-05:00" }, ficha_disponible: true,
   submedicion: { marca: true, periodo: "202610", consumo: 6, referencia: 14.2, n_nuevos: 1800, estrato: "Estrato 2", anios: 12, motivo: null },
   gestiones: { emd_facturados: [{ codigo: "600", concepto: "600- EMD CORTE DEL SERVICIO", periodo: "202608" }, { codigo: "610", concepto: "610- EMD RECONEXION", periodo: "202609" }], terreno: [],
@@ -104,6 +104,33 @@ ok("valores iniciales: una opción inexistente o inactiva se ignora", igual(F.ap
 ok("valores iniciales: campos que el formato no tiene o están inactivos se ignoran", igual(F.aplicarValoresIniciales(INST, {}, { no_existe: "x", apagado: "y" }), {}));
 ok("valores iniciales: sí/no y números se convierten al formato del formulario", igual(F.aplicarValoresIniciales(INST, {}, { calib: true, lect: 12.5 }), { calib: "si", lect: "12.5" }));
 ok("valores iniciales: solo prellenan; el valor sigue siendo válido para el formato (validación del tipo)", F.validarFormato(INST, { resultado: "", causal: "", subtipo: "", descripcion: "", contrato: "", valores: F.aplicarValoresIniciales(INST, base, { inst_modalidad: "cambio" }), etiquetasConFoto: [], adicionales: 0, topeGeneral: 10 }).every((x) => !x.includes("Instalación o cambio")));
+
+// ---- Cercanía (agregado): haversine, distancia y precisión ----
+const P0 = { lat: 10.4631, lon: -73.2532 };
+const d111 = L.haversineM(P0, { lat: 10.4641, lon: -73.2532 });
+ok("haversine: 0,001° de latitud ≈ 111,2 m", Math.abs(d111 - 111.19) < 0.1, String(d111));
+ok("haversine: 1° de latitud en el ecuador ≈ 111,195 km; distancia cero; simétrica", Math.abs(L.haversineM({ lat: 0, lon: 0 }, { lat: 1, lon: 0 }) - 111195) < 5 && L.haversineM(P0, P0) === 0 && Math.abs(L.haversineM(P0, { lat: 10.47, lon: -73.26 }) - L.haversineM({ lat: 10.47, lon: -73.26 }, P0)) < 1e-6);
+ok("haversine: 0,001° de longitud a 10,46° de latitud ≈ 109,4 m (se acorta con el coseno)", Math.abs(L.haversineM(P0, { lat: 10.4631, lon: -73.2522 }) - 109.35) < 0.3);
+ok("distancia: «A 120 m», «A 999 m», «A 1,0 km», «A 1,2 km»", L.distanciaTexto(120.4) === "A 120 m" && L.distanciaTexto(999.4) === "A 999 m" && L.distanciaTexto(1000) === "A 1,0 km" && L.distanciaTexto(1234) === "A 1,2 km" && L.distanciaCorta(42) === "42 m");
+ok("precisión: hasta 50 m sin aviso; 120 m con el texto del contrato", L.avisoPrecision(50) === null && L.avisoPrecision(8) === null && L.avisoPrecision(null) === null && L.avisoPrecision(120) === "Precisión del GPS baja (± 120 m): la distancia es aproximada.");
+ok("predio más cercano: ignora los que no tienen coordenadas y elige el menor", (() => { const r = L.predioMasCercano({ lat: 10.4621, lon: -73.2532 }, [{ lat: null, lon: null }, { lat: 10.4641, lon: -73.2522 }, { lat: 10.4631, lon: -73.2532 }]); return r && r.predio.lat === 10.4631 && Math.round(r.distancia_m) === 111; })() && L.predioMasCercano(P0, [{ lat: null, lon: null }]) === null);
+ok("cupo de búsquedas cercanas: «Le quedan 27 búsquedas cercanas hoy.»; nada sin límite", L.textoCupoCercanos({ restantes: 27, sin_limite: false }) === "Le quedan 27 búsquedas cercanas hoy." && L.textoCupoCercanos({ restantes: 1, sin_limite: false }) === "Le queda 1 búsqueda cercana hoy." && L.textoCupoCercanos({ restantes: 99, sin_limite: true }) === "");
+
+// ---- «Buscar el predio»: rumbo, flecha, bandas y vibración ----
+ok("ángulos: normalizar a [0, 360)", L.normalizarGrados(-90) === 270 && L.normalizarGrados(360) === 0 && L.normalizarGrados(725) === 5 && L.normalizarGrados(-720) === 0);
+ok("rumbo: al norte 0°, al este 90°, al sur 180°, al oeste 270°", Math.round(L.rumboGrados(P0, { lat: 10.47, lon: -73.2532 })) === 0 && Math.round(L.rumboGrados(P0, { lat: 10.4631, lon: -73.24 })) === 90 && Math.round(L.rumboGrados(P0, { lat: 10.45, lon: -73.2532 })) === 180 && Math.round(L.rumboGrados(P0, { lat: 10.4631, lon: -73.27 })) === 270);
+ok("rumbo: hacia el noreste ≈ 45° (misma distancia en metros)", Math.abs(L.rumboGrados(P0, { lat: 10.4641, lon: -73.2532 + 0.001 / Math.cos(10.4631 * Math.PI / 180) }) - 45) < 0.5);
+ok("flecha: rumbo − rumbo del celular, normalizado; sin brújula, respecto al norte", L.giroFlecha(45, 90) === 315 && L.giroFlecha(10, 350) === 20 && L.giroFlecha(45, null) === 45);
+ok("puntos cardinales en español", L.nombreCardinal(0) === "norte" && L.nombreCardinal(44) === "noreste" && L.nombreCardinal(91) === "este" && L.nombreCardinal(135) === "sureste" && L.nombreCardinal(180) === "sur" && L.nombreCardinal(225) === "suroeste" && L.nombreCardinal(270) === "oeste" && L.nombreCardinal(315) === "noroeste" && L.nombreCardinal(350) === "norte" && L.nombreCardinal(-45) === "noroeste");
+ok("texto del rumbo: «hacia el noreste (45°)»; 359,6° → «hacia el norte (0°)»", L.textoRumbo(45) === "hacia el noreste (45°)" && L.textoRumbo(359.6) === "hacia el norte (0°)");
+ok("brújula: webkitCompassHeading (iPhone) tal cual; absoluta → 360 − alpha; relativa sin dato → null", L.rumboDeOrientacion({ webkitCompassHeading: 90 }) === 90 && L.rumboDeOrientacion({ alpha: 30, absolute: true }) === 330 && L.rumboDeOrientacion({ alpha: 0, absolute: true }) === 0 && L.rumboDeOrientacion({ alpha: 30, absolute: false }) === null && L.rumboDeOrientacion({}) === null);
+ok("bandas del addendum: gris ≥ 50 m, amarillo < 50 m, verde < 15 m", L.bandaCercania(50) === "lejos" && L.bandaCercania(49.9) === "cerca" && L.bandaCercania(15) === "cerca" && L.bandaCercania(14.9) === "llego" && L.TEXTO_BANDA.llego === "Llegó: el predio debería estar a la vista");
+ok("vibración: una vez al llegar; el temblor bajo 20 m no la repite; al alejarse a 20 m o más se rearma", (() => {
+  let a = true, n = 0; for (const d of [80, 40, 12, 9, 14, 16, 19.9, 10]) { const p = L.pasoVibracion(a, d); a = p.armada; if (p.vibrar) n++; }
+  const uno = n === 1; for (const d of [20, 12]) { const p = L.pasoVibracion(a, d); a = p.armada; if (p.vibrar) n++; } return uno && n === 2; })());
+ok("precisión peor que la distancia restante", L.precisionInsuficiente(10, 25) && !L.precisionInsuficiente(40, 25) && !L.precisionInsuficiente(10, null));
+ok("anuncio: al cambiar de banda o cada 5 s", L.anunciarAhora(0, 1000, true) && !L.anunciarAhora(1000, 5999, false) && L.anunciarAhora(1000, 6000, false));
+ok("Google Maps a pie", L.urlGoogleMapsAPie(10.4631, -73.2532) === "https://www.google.com/maps/dir/?api=1&destination=10.4631,-73.2532&travelmode=walking");
 
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);

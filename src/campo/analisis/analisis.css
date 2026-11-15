@@ -75,6 +75,52 @@
 .ac-pie { font-size: 12.5px; margin-top: 8px; }
 .ac-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
+/* Cercanía */
+.ac-distancia { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px; background: var(--azul-suave, #e8f1fb); margin: 0; }
+.ac-distancia-fila { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.ac-distancia-valor { margin: 0; font-size: 15px; min-width: 0; }
+.ac-distancia-valor strong { font-size: 19px; color: var(--azul, #1e5aa8); }
+.ac-distancia-valor .ac-corte { margin-left: 2px; }
+.ac-gps-ayuda { margin: 0; padding: 8px 10px; border-radius: 8px; background: #f6f8fa; border: 1px solid #c3ced6; color: #22313f; font-size: 13.5px; line-height: 1.4; }
+.ac-cerca { display: flex; flex-direction: column; gap: 6px; }
+.ac-boton-cerca { align-self: flex-start; }
+.ac-aviso-suave { margin: 0; font-size: 15px; font-weight: 600; color: #3d4d5a; }
+.ac-cercanos-tit { margin: 0; font-size: 15px; font-weight: 700; }
+.ac-cercanos ul { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.ac-cercano { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; min-height: 48px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid #c3ced6; background: #fff; font: inherit; font-size: 14.5px; color: #22313f; text-align: left; cursor: pointer; box-sizing: border-box; }
+.ac-cercano:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.ac-cercano[aria-current="true"] { border: 2px solid var(--azul, #1e5aa8); background: var(--azul-suave, #e8f1fb); }
+.ac-cercano strong { color: var(--azul, #1e5aa8); }
+.ac-cercano-dir { overflow-wrap: anywhere; min-width: 0; }
+.ac-cercano-dist { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ac-cercanos-pie { display: block; margin: 6px 0 0; }
+
+.ac-distancia-botones { display: flex; gap: 8px; }
+.ac-boton-buscar { min-height: 44px; font-size: 16px; }
+
+/* «Buscar el predio» (pantalla completa) */
+.ac-bp { position: fixed; inset: 0; z-index: 2000; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px; box-sizing: border-box;
+  background: #eef2f5; color: #22313f; --bp-color: #5d6e7e; transition: background-color .3s; }
+.ac-bp > * { width: 100%; max-width: 480px; }
+.ac-bp-lejos { background: #eef2f5; --bp-color: #5d6e7e; }
+.ac-bp-cerca { background: #fff4cc; --bp-color: #9a6b00; }
+.ac-bp-llego { background: #def5e4; --bp-color: #16753a; }
+.ac-bp-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ac-bp-cab h2 { margin: 0; font-size: 20px; }
+.ac-bp-dir { margin: 0; font-size: 15px; color: #3d4d5a; overflow-wrap: anywhere; }
+.ac-bp-espera { margin: 24px 0; font-size: 16px; text-align: center; }
+.ac-bp-brujula { display: flex; justify-content: center; }
+.ac-bp-svg { width: min(68vw, 260px); height: auto; }
+.ac-bp-aro { fill: #fff; stroke: var(--bp-color); stroke-width: 4; }
+.ac-bp-flecha { fill: var(--bp-color); }
+.ac-bp-n { font-size: 22px; font-weight: 700; fill: #b42318; }
+.ac-bp-dist { margin: 0; text-align: center; font-size: 52px; font-weight: 800; line-height: 1.05; color: var(--bp-color); font-variant-numeric: tabular-nums; }
+.ac-bp-banda { margin: 0; text-align: center; font-size: 18px; font-weight: 700; color: var(--bp-color); }
+.ac-bp-precision { margin: 0; text-align: center; font-size: 14px; color: #3d4d5a; }
+.ac-bp-sinbrujula { margin: 0; font-size: 14px; line-height: 1.4; }
+.ac-bp-gmaps { text-decoration: none; margin-top: 4px; }
+
 /* Mapa */
 .ac-mapa { width: 100%; height: 220px; border-radius: 10px; overflow: hidden; border: 1px solid #dde5ea; background: #eef2f5; }
 .ac-gmaps { margin-top: 10px; text-decoration: none; }

@@ -192,3 +192,82 @@ export function primerPredioConPunto(r: Pick<AnalisisCompleto, "ubicacion">): { 
   return p ? { lat: p.lat as number, lon: p.lon as number } : null;
 }
 export const urlGoogleMaps = (lat: number, lon: number): string => `https://www.google.com/maps?q=${lat},${lon}`;
+
+// ---------------- Cercanía (agregado del 14/11): todo se calcula en el celular ----------------
+const RADIO_TIERRA_M = 6371008.8;
+/** Distancia en metros entre dos puntos (fórmula de haversine, Tierra esférica de radio medio). */
+export function haversineM(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const rad = (g: number) => (g * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * RADIO_TIERRA_M * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+/** «120 m» por debajo de 1000 m (redondeado al metro); desde 1000 m, «1,2 km» (un decimal). */
+export function distanciaCorta(m: number): string {
+  if (!Number.isFinite(m) || m < 0) return "—";
+  const r = Math.round(m);
+  if (r < 1000) return `${r.toLocaleString("es-CO")} m`;
+  return `${(m / 1000).toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
+}
+export const distanciaTexto = (m: number): string => `A ${distanciaCorta(m)}`;
+/** Por encima de esta precisión (m) se avisa que la distancia es aproximada. */
+export const PRECISION_BUENA_M = 50;
+export function avisoPrecision(precision: number | null | undefined): string | null {
+  if (precision === null || precision === undefined || !Number.isFinite(precision) || precision <= PRECISION_BUENA_M) return null;
+  return `Precisión del GPS baja (± ${Math.round(precision).toLocaleString("es-CO")} m): la distancia es aproximada.`;
+}
+/** Predio con coordenadas más cercano a la posición, con su distancia; null si ninguno tiene coordenadas. */
+export function predioMasCercano<P extends { lat: number | null; lon: number | null }>(pos: { lat: number; lon: number }, predios: P[] | null | undefined): { predio: P; distancia_m: number } | null {
+  let mejor: { predio: P; distancia_m: number } | null = null;
+  for (const p of predios ?? []) {
+    if (p.lat === null || p.lon === null || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue;
+    const d = haversineM(pos, { lat: p.lat, lon: p.lon });
+    if (!mejor || d < mejor.distancia_m) mejor = { predio: p, distancia_m: d };
+  }
+  return mejor;
+}
+export function textoCupoCercanos(c: { restantes: number | null; sin_limite: boolean } | null | undefined): string {
+  if (!c || c.sin_limite || c.restantes === null || c.restantes === undefined) return "";
+  return c.restantes === 1 ? "Le queda 1 búsqueda cercana hoy." : `Le quedan ${c.restantes.toLocaleString("es-CO")} búsquedas cercanas hoy.`;
+}
+
+// ---------------- «Buscar el predio» (modo AirTag, addendum §4): todo en el celular ----------------
+/** Lleva un ángulo a [0, 360). */
+export function normalizarGrados(g: number): number {
+  const r = g % 360;
+  return r < 0 ? r + 360 : r === 0 ? 0 : r;
+}
+/** Rumbo inicial (0 = norte, 90 = este) de `desde` hacia `hacia`. */
+export function rumboGrados(desde: { lat: number; lon: number }, hacia: { lat: number; lon: number }): number {
+  const rad = (g: number) => (g * Math.PI) / 180;
+  const f1 = rad(desde.lat), f2 = rad(hacia.lat), dl = rad(hacia.lon - desde.lon);
+  const y = Math.sin(dl) * Math.cos(f2), x = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl);
+  return normalizarGrados((Math.atan2(y, x) * 180) / Math.PI);
+}
+/** Giro de la flecha: rumbo al predio menos el rumbo del celular, en [0, 360). Sin brújula (rumbo del celular null), la flecha apunta respecto al norte: el giro es el rumbo. */
+export const giroFlecha = (rumbo: number, rumboCelular: number | null): number => normalizarGrados(rumbo - (rumboCelular ?? 0));
+const CARDINALES = ["norte", "noreste", "este", "sureste", "sur", "suroeste", "oeste", "noroeste"];
+export const nombreCardinal = (g: number): string => CARDINALES[Math.round(normalizarGrados(g) / 45) % 8];
+export const textoRumbo = (g: number): string => `hacia el ${nombreCardinal(g)} (${Math.round(normalizarGrados(g)) % 360}°)`;
+/** Rumbo del celular a partir de un evento de orientación: `webkitCompassHeading` (iPhone) o 360 − alpha cuando la lectura es absoluta (Android). Sin dato confiable, null. */
+export function rumboDeOrientacion(e: { webkitCompassHeading?: number | null; alpha?: number | null; absolute?: boolean | null }): number | null {
+  if (typeof e.webkitCompassHeading === "number" && Number.isFinite(e.webkitCompassHeading)) return normalizarGrados(e.webkitCompassHeading);
+  if (e.absolute === true && typeof e.alpha === "number" && Number.isFinite(e.alpha)) return normalizarGrados(360 - e.alpha);
+  return null;
+}
+export type Banda = "lejos" | "cerca" | "llego";
+/** Umbrales del addendum: verde (llegó) a menos de 15 m, amarillo a menos de 50 m, gris desde 50 m. */
+export const UMBRAL_LLEGO_M = 15, UMBRAL_CERCA_M = 50, HISTERESIS_M = 5;
+export const bandaCercania = (d: number): Banda => (d < UMBRAL_LLEGO_M ? "llego" : d < UMBRAL_CERCA_M ? "cerca" : "lejos");
+export const TEXTO_BANDA: Record<Banda, string> = { lejos: "Lejos", cerca: "Cerca", llego: "Llegó: el predio debería estar a la vista" };
+/** Vibración al llegar, con histéresis: vibra al entrar a «llegó» si está armada; se vuelve a armar solo al alejarse a 20 m o más (15 + 5), así el temblor del GPS no la repite. */
+export function pasoVibracion(armada: boolean, d: number): { vibrar: boolean; armada: boolean } {
+  if (armada && d < UMBRAL_LLEGO_M) return { vibrar: true, armada: false };
+  if (!armada && d >= UMBRAL_LLEGO_M + HISTERESIS_M) return { vibrar: false, armada: true };
+  return { vibrar: false, armada };
+}
+/** Precisión peor que la distancia que falta: el GPS ya no puede afinar más. */
+export const precisionInsuficiente = (d: number, precision: number | null | undefined): boolean => typeof precision === "number" && Number.isFinite(precision) && precision > d;
+/** Anuncio para lectores de pantalla: al cambiar de banda o cada 5 s como mínimo. */
+export const anunciarAhora = (ultimoMs: number, ahoraMs: number, cambioBanda: boolean): boolean => cambioBanda || ahoraMs - ultimoMs >= 5000;
+export const urlGoogleMapsAPie = (lat: number, lon: number): string => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=walking`;
