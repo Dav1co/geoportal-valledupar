@@ -62,9 +62,10 @@ type Borrador = {
   dashboard_acta?: boolean;
   aseo?: boolean;
   dashboard_aseo?: boolean;
+  analisis_contrato?: boolean;
 };
 
-function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conActa: boolean, conAseo: boolean): Borrador {
+function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conActa: boolean, conAseo: boolean, conAnalisis = false): Borrador {
   return {
     explorar: u.ver_explorar === true,
     focalizacion: u.ver_focalizacion === true,
@@ -77,6 +78,7 @@ function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conA
     ...(conCampo ? { campo: u.ver_campo === true, dashboard_campo: u.ver_dashboard_campo === true } : {}),
     ...(conActa ? { acta: u.ver_acta === true, dashboard_acta: u.ver_dashboard_acta === true } : {}),
     ...(conAseo ? { aseo: u.ver_aseo === true, dashboard_aseo: u.ver_dashboard_aseo === true } : {}),
+    ...(conAnalisis ? { analisis_contrato: u.ver_analisis_contrato === true } : {}),
   };
 }
 
@@ -95,6 +97,8 @@ const CAMPOS_CAMPO: [keyof Borrador, string][] = [
   ["campo", "Formatos de campo"],
   ["dashboard_campo", "Supervisor de reportes de campo"],
 ];
+// Análisis de contrato: va dentro del bloque de campo, SOLO si el servidor ya lista `ver_analisis_contrato`. El interruptor general del bloque no lo enciende (muestra datos personales).
+const CAMPO_ANALISIS: [keyof Borrador, string] = ["analisis_contrato", "Análisis de contrato (consulta un contrato: incluye nombre y teléfono)"];
 const CAMPOS_ACTA: [keyof Borrador, string][] = [
   ["acta", "Acta de inspección técnica"],
   ["dashboard_acta", "Supervisor de actas"],
@@ -178,6 +182,8 @@ export function Admin({ onVolver }: Props) {
   const conActa = useMemo(() => usuarios.some((u) => typeof u.ver_acta === "boolean"), [usuarios]);
   // Igual para la interventoría de aseo (SQL de aseo aplicado).
   const conAseo = useMemo(() => usuarios.some((u) => typeof u.ver_aseo === "boolean"), [usuarios]);
+  // Igual para el análisis de contrato (SQL del análisis aplicado): solo así se muestra la casilla y se envía `analisis_contrato`.
+  const conAnalisis = useMemo(() => usuarios.some((u) => typeof u.ver_analisis_contrato === "boolean"), [usuarios]);
 
   async function cargar() {
     setCargando(true);
@@ -276,6 +282,16 @@ export function Admin({ onVolver }: Props) {
     return ok;
   }
 
+  // Igual para el análisis de contrato.
+  async function verificarAnalisis(correo: string, analisis: boolean): Promise<boolean> {
+    const { usuarios: lista } = await api.admin.listar();
+    const u = lista.find((x) => x.email === correo.toLowerCase());
+    const ok = !!u && (u.ver_analisis_contrato === true) === analisis;
+    if (!ok) setError("El servidor no aplicó el permiso de análisis de contrato de " + correo + ". Falta desplegar la Edge geoportal-admin o aplicar el SQL del análisis de contrato en la base.");
+    setUsuarios(lista);
+    return ok;
+  }
+
   async function agregar() {
     setMsg(null);
     if (!email.includes("@")) {
@@ -328,7 +344,7 @@ export function Admin({ onVolver }: Props) {
       return;
     }
     setEditando(u.email);
-    setBorrador(aBorrador(u, conTecnica, conCampo, conActa, conAseo));
+    setBorrador(aBorrador(u, conTecnica, conCampo, conActa, conAseo, conAnalisis));
   }
 
   async function guardarPermisos(u: UsuarioAdmin) {
@@ -337,11 +353,14 @@ export function Admin({ onVolver }: Props) {
     setError(null);
     setMsg(null);
     try {
-      await api.admin.permisos({ email: u.email, ...borrador });
+      // `analisis_contrato` viaja solo si el servidor lo lista (la Edge lo reenvía únicamente si llega como booleano).
+      const { analisis_contrato, ...resto } = borrador;
+      await api.admin.permisos({ email: u.email, ...resto, ...(conAnalisis && typeof analisis_contrato === "boolean" ? { analisis_contrato } : {}) });
       if (conTecnica && !(await verificarTecnico(u.email, borrador.registro_tecnico === true, borrador.dashboard_tecnico === true))) return;
       if (conCampo && !(await verificarCampo(u.email, borrador.campo === true, borrador.dashboard_campo === true))) return;
       if (conActa && !(await verificarActa(u.email, borrador.acta === true, borrador.dashboard_acta === true))) return;
       if (conAseo && !(await verificarAseo(u.email, borrador.aseo === true, borrador.dashboard_aseo === true))) return;
+      if (conAnalisis && !(await verificarAnalisis(u.email, borrador.analisis_contrato === true))) return;
       setMsg(`Permisos actualizados para ${u.email}.`);
       setEditando(null);
       setBorrador(null);
@@ -557,7 +576,7 @@ export function Admin({ onVolver }: Props) {
               const esAdmin = u.rol === "admin";
               const permitidos = MODOS.filter(([c]) => u[c] === true);
               const tecnicos = MODOS_TECNICOS.filter(([c]) => u[c] === true);
-              const deCampo = MODOS_CAMPO.filter(([c]) => u[c] === true);
+              const deCampo = [...MODOS_CAMPO, ["ver_analisis_contrato", "Análisis de contrato"] as [keyof UsuarioAdmin, string]].filter(([c]) => u[c] === true);
               const deActa = MODOS_ACTA.filter(([c]) => u[c] === true);
               const deAseo = MODOS_ASEO.filter(([c]) => u[c] === true);
               const perfilTec = perfilTecnicoDe(u);
@@ -715,13 +734,19 @@ export function Admin({ onVolver }: Props) {
                 <BloquePermisos
                   titulo="Formatos de campo"
                   campo
-                  campos={CAMPOS_CAMPO}
+                  campos={conAnalisis ? [...CAMPOS_CAMPO, CAMPO_ANALISIS] : CAMPOS_CAMPO}
+                  alEncender={conAnalisis ? ["campo", "dashboard_campo"] : undefined}
                   borrador={borrador}
                   onCambio={(c) => setBorrador({ ...borrador, ...c })}
                 >
                   <p className="adm-aviso-tec">
                     «Formatos de campo» permite reportar. «Supervisor de reportes de campo» permite ver, clasificar y ocultar los reportes. Solo con esto, la persona no ve el mapa ni datos comerciales.
                   </p>
+                  {conAnalisis && (
+                    <p className="adm-aviso-tec">
+                      «Análisis de contrato» muestra la cartera, el consumo, el medidor y las gestiones de un contrato, con el nombre y el teléfono del suscriptor (dato personal). Tiene un límite diario de consultas.
+                    </p>
+                  )}
                   {avisoHorarioCampo(borrador) && <p className="adm-aviso-horario" role="alert">{avisoHorarioCampo(borrador)}</p>}
                 </BloquePermisos>
               )}
@@ -754,7 +779,7 @@ export function Admin({ onVolver }: Props) {
                 </BloquePermisos>
               )}
             </div>
-            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : []), ...(conCampo ? CAMPOS_CAMPO : []), ...(conActa ? CAMPOS_ACTA : []), ...(conAseo ? CAMPOS_ASEO : [])].some(([c]) => borrador[c] === true) && (
+            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : []), ...(conCampo ? CAMPOS_CAMPO : []), ...(conAnalisis ? [CAMPO_ANALISIS] : []), ...(conActa ? CAMPOS_ACTA : []), ...(conAseo ? CAMPOS_ASEO : [])].some(([c]) => borrador[c] === true) && (
               <p className="adm-aviso-tec">Sin ningún modo asignado: al ingresar verá «Sin módulos asignados».</p>
             )}
             <div>

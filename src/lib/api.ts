@@ -117,6 +117,8 @@ export type UsuarioAdmin = {
   // Interventoría de Aseo (Torre C): solo llegan si el SQL de aseo ya está aplicado; si faltan, Administración no muestra las casillas de aseo.
   ver_aseo?: boolean;
   ver_dashboard_aseo?: boolean;
+  // Análisis de contrato: solo llega si el SQL del análisis ya está aplicado; si falta, Administración no muestra la casilla.
+  ver_analisis_contrato?: boolean;
 };
 
 /** Respuesta de geoportal-admin?accion=perfil (la misma que valida la sesión en useSession). */
@@ -130,6 +132,8 @@ export type PerfilResp = {
     acta?: boolean; dashboard_acta?: boolean;
     // Interventoría de Aseo: `aseo` = puede auditar (o supervisa, o es administrador); `dashboard_aseo` = supervisor de aseo (o administrador); `torre_c` = alguna de las dos.
     aseo?: boolean; dashboard_aseo?: boolean; torre_c?: boolean;
+    // Análisis de contrato: consulta un contrato (muestra nombre y teléfono). Abre el área de Formatos de campo con solo esa tarjeta si no hay otro permiso de campo.
+    analisis_contrato?: boolean;
   };
 };
 
@@ -230,6 +234,7 @@ export const api = {
       dashboard_tecnico?: boolean;
       campo?: boolean;              // Formatos de campo (Paso B3): igual, si no se informa el servidor no lo toca
       dashboard_campo?: boolean;
+      analisis_contrato?: boolean;  // Análisis de contrato: solo se envía si el servidor ya lo lista (la Edge lo reenvía solo si llega como booleano)
       acta?: boolean;               // Acta de inspección: igual, si no se informa el servidor no lo toca
       dashboard_acta?: boolean;
       aseo?: boolean;               // Interventoría de Aseo: igual, si no se informa el servidor no lo toca

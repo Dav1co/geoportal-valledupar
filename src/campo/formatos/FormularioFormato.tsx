@@ -10,7 +10,7 @@ import { apiFormatos } from "./apiFormatos";
 import { SeccionConstancia } from "../constancia/SeccionConstancia";
 import { useConstancia } from "../constancia/useConstancia";
 import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "../inicio";
-import { prellenarHoraInicio, agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
+import { aplicarValoresIniciales, prellenarHoraInicio, agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
 import { etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
 
 // Formulario de UN formato del Paso D (campos propios, fotos con etiqueta, resultado y causal, consecutivo). Pensado para el celular (380 px) y una mano.
@@ -27,12 +27,14 @@ type Destino = { tipo: "etiqueta"; codigo: string; nombre: string } | { tipo: "a
 
 export type EnvioPendiente = { tipo: string; resultado: Resultado | null; causal: string | null; datos: Record<string, unknown> | null; reporte_id: string | null };
 
-export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFallarRed, puedeActa = false, onAbrirActa, contratoInicial = "", destinos, onIrA }: {
+export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFallarRed, puedeActa = false, onAbrirActa, contratoInicial = "", destinos, onIrA, valoresIniciales }: {
   def: FormularioCampo; tipo: TipoFormato; correo: string; onVolver: () => void; onOtro: () => void; alFallarRed?: (envio: EnvioPendiente) => void;
   /** Permiso `acta` (lo decide el servidor): solo con él se ofrece abrir el acta de inspección técnica. `onAbrirActa` recibe el contrato para precargarlo. */
   puedeActa?: boolean; onAbrirActa?: (contrato: string) => void;
   /** Cancelar: contrato que llega de otro formulario y a qué otros se puede pasar llevando solo el contrato («me equivoqué de formulario»). */
   contratoInicial?: string; destinos?: DestinoCancelar[]; onIrA?: (destino: string, contrato: string) => void;
+  /** Valores que llegan ya marcados (atajo de «Análisis de contrato»: Instalación de medidor con «Cambio»). Se aplican sobre la hora de inicio; solo prellenan. */
+  valoresIniciales?: Record<string, unknown>;
 }) {
   const [resultado, setResultado] = useState<Resultado | "">("");
   const [causal, setCausal] = useState("");
@@ -43,7 +45,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const recalcularInicio = useRef(false);
   const inicio = useRef<RelojInicio>(abrirReloj());   // pasada 14/11: hora del celular al abrir este formato
   // Decisión 10: «Hora de inicio» (la del papel) nace con la hora de apertura; la persona la puede cambiar
-  const [valores, setValores] = useState<ValoresCampos>(() => prellenarHoraInicio(tipo, inicio.current.iso));
+  const [valores, setValores] = useState<ValoresCampos>(() => aplicarValoresIniciales(tipo, prellenarHoraInicio(tipo, inicio.current.iso), valoresIniciales));
   const [porEtiqueta, setPorEtiqueta] = useState<Record<string, FotoLocal | null>>({});
   const [adicionales, setAdicionales] = useState<FotoLocal[]>([]);
   const [camaraEn, setCamaraEn] = useState<Destino | null>(null);
