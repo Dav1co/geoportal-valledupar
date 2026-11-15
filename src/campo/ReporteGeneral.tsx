@@ -39,6 +39,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
   const ubic = useUbicacion();
   const prep = useRef<Preparacion | null>(null);
   const enviando = useRef(false);
+  const recalcularInicio = useRef(false);
   const inicio = useRef<RelojInicio>(abrirReloj());   // pasada 14/11: hora del celular al abrir (el formulario nace de nuevo con cada reporte)
   const fotosRef = useRef(fotos);
   fotosRef.current = fotos;
@@ -111,6 +112,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
     enviando.current = true;
     setFase("enviando");
     setErrorEnvio(null);
+    if (recalcularInicio.current) { inicio.current = recalcularReloj(inicio.current); recalcularInicio.current = false; }
     try {
       const lista = fotosRef.current.map((f, i) => ({ f, orden: i + 1 })).filter((x): x is { f: FotoLocal; orden: number } => x.f !== null);
       // 1. Preparar (una sola vez; si ya existe, se reutiliza el mismo reporte_id)
@@ -141,7 +143,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
       setFase("guardado");
     } catch (e) {
       const err = e instanceof ErrorCampo ? e : new ErrorCampo("red", "No se pudo completar el envío.", 0);
-      if (esRechazoPorHora(err.message)) inicio.current = recalcularReloj(inicio.current);   // la persona corrige la hora del celular y vuelve a enviar
+      if (esRechazoPorHora(err.message)) recalcularInicio.current = true;   // la persona corrige la hora del celular: el SIGUIENTE envío recalcula el inicio (una vez)
       if (err.tipo === "subida_vencida") {
         // La URL de subida venció: la próxima vez se pide una preparación nueva y se suben todas las fotos de nuevo.
         prep.current = null;

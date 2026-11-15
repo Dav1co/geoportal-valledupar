@@ -189,11 +189,13 @@ try {
     await enviarHasta(pg, desde, 1);
     await esp(400);
     ok(`[${ancho}] el rechazo por la hora del celular se muestra con el texto de la base`, (await texto(pg)).includes("La hora de su celular está adelantada"));
+    // la persona corrige la hora del celular (la atrasa 10 min) y vuelve a enviar
+    await pg.evaluate(() => { const orig = Date.now.bind(Date); Date.now = () => orig() - 600000; });
     await enviarHasta(pg, desde, 2);
     const cs = crearDe(desde).map((p) => p.cuerpo);
     ok(`[${ancho}] Instalación: el primer «crear» lleva el inicio de la apertura`, cs.length >= 1 && Math.abs(Date.parse(cs[0].inicio_dispositivo) - Date.parse(abierto2)) < 3000, JSON.stringify(cs[0] ?? {}).slice(0, 200));
-    ok(`[${ancho}] tras el rechazo por la hora, el segundo envío RECALCULA el inicio (ahora − tiempo transcurrido) y no manda el medidor retirado`,
-      cs.length === 2 && cs[1].inicio_dispositivo !== cs[0].inicio_dispositivo && Date.parse(cs[1].inicio_dispositivo) <= Date.now() && !("me_lectura" in (cs[1].datos ?? {})) && cs[1].datos?.inst_modalidad === "instalacion",
+    ok(`[${ancho}] tras el rechazo y con el reloj corregido (−10 min), el segundo envío RECALCULA el inicio (hora corregida − tiempo transcurrido) y no manda el medidor retirado`,
+      cs.length === 2 && Math.abs(Date.parse(cs[0].inicio_dispositivo) - Date.parse(cs[1].inicio_dispositivo) - 600000) < 3000 && !("me_lectura" in (cs[1].datos ?? {})) && cs[1].datos?.inst_modalidad === "instalacion",
       JSON.stringify(cs.map((x) => x.inicio_dispositivo)));
     ok(`[${ancho}] la hora de inicio del papel viaja en datos`, typeof cs.at(-1)?.datos?.hora_inicio === "string");
     ok(`[${ancho}] formularios sin desborde horizontal`, await sinDesborde(pg));

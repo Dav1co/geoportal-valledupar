@@ -40,6 +40,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const [descripcion, setDescripcion] = useState("");
   const [contrato, setContrato] = useState(contratoInicial);
   const [cancelando, setCancelando] = useState(false);
+  const recalcularInicio = useRef(false);
   const inicio = useRef<RelojInicio>(abrirReloj());   // pasada 14/11: hora del celular al abrir este formato
   // Decisión 10: «Hora de inicio» (la del papel) nace con la hora de apertura; la persona la puede cambiar
   const [valores, setValores] = useState<ValoresCampos>(() => prellenarHoraInicio(tipo, inicio.current.iso));
@@ -124,6 +125,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
     enviando.current = true;
     setFase("enviando");
     setErrorEnvio(null);
+    if (recalcularInicio.current) { inicio.current = recalcularReloj(inicio.current); recalcularInicio.current = false; }
     const { datos } = aplanarDatos(tipo, valores);
     try {
       const ordenadas = ordenarFotos<FotoLocal>(tipo, refEtq.current, refAdic.current);
@@ -159,7 +161,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
       setFase("guardado");
     } catch (e) {
       const err = e instanceof ErrorCampo ? e : new ErrorCampo("red", "No se pudo completar el envío.", 0);
-      if (esRechazoPorHora(err.message)) inicio.current = recalcularReloj(inicio.current);   // la persona corrige la hora del celular y vuelve a enviar
+      if (esRechazoPorHora(err.message)) recalcularInicio.current = true;   // la persona corrige la hora del celular: el SIGUIENTE envío recalcula el inicio (una vez)
       if (err.tipo === "subida_vencida") {
         prep.current = null;                                                      // se pide una preparación nueva y se suben todas las fotos de nuevo
         setPreparada(false);
