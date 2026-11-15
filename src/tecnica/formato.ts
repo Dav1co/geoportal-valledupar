@@ -12,6 +12,21 @@ export function fmtInstante(iso: string | null | undefined): string {
   const p = Object.fromEntries(FMT_BOGOTA.formatToParts(d).map((x) => [x.type, x.value]));
   return `${p.day}/${p.month}/${p.year} ${p.hour === "24" ? "00" : p.hour}:${p.minute}`;
 }
+/** Hora de inicio en Bogotá con la marca «(celular)» si salió del dispositivo; vacía si el registro no tiene inicio (registros viejos o pantalla vieja). */
+export function fmtInicio(iso: string | null | undefined, origen: string | null | undefined): string {
+  if (!iso) return "";
+  const t = fmtInstante(iso); if (t === "—") return "";
+  return origen === "dispositivo" ? `${t} (celular)` : t;
+}
+/** Duración fin − inicio: «1 h 05 min» · «12 min» · «45 s». Vacía si no hay. */
+export function fmtDuracion(seg: number | null | undefined): string {
+  if (seg === null || seg === undefined || !Number.isFinite(seg)) return "";
+  const s = Math.max(0, Math.round(seg));
+  if (s < 60) return `${s} s`;
+  const min = Math.floor(s / 60);
+  if (min < 60) return `${min} min`;
+  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min`;
+}
 /** Hoy en Bogotá como «AAAA-MM-DD» (solo para armar los periodos del filtro; el servidor decide siempre sobre sus datos). */
 export function hoyBogota(ahora = new Date()): string {
   const p = Object.fromEntries(FMT_BOGOTA.formatToParts(ahora).map((x) => [x.type, x.value])); return `${p.year}-${p.month}-${p.day}`;

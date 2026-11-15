@@ -1,5 +1,5 @@
 import type { Celda } from "./xlsx";
-import { etiquetaMarca, etiquetaOrigen, fmtFecha, mayuscula } from "./formato";
+import { etiquetaMarca, etiquetaOrigen, fmtDuracion, fmtFecha, mayuscula } from "./formato";
 
 // Armado de los archivos de descarga (CSV y Excel) a partir de las filas que entrega geoportal_tec_descarga_pagina. Lógica PURA (se prueba en Node).
 export type FilaDescarga = {
@@ -8,16 +8,29 @@ export type FilaDescarga = {
   fecha_muestra: string; hora_muestra: string; registrado_local: string; autor: string; fuente: string; fuera_de_rango: string | null;
   excluido: boolean; exclusion_motivo: string | null; exclusion_autor: string | null; exclusion_local: string | null;
   ref_min: number | null; ref_max: number | null; ref_origen: string | null; ref_fuente: string | null;
+  // Hora de inicio (pasada 14/11): Bogotá «AAAA-MM-DDTHH:MM:SS», origen y duración en minutos con un decimal. Opcionales (filas de dosis o base sin la migración: vacías).
+  inicio_local?: string | null; inicio_origen?: string | null; duracion_min?: number | null;
 };
 
 export const ENCABEZADOS = ["Formulario", "Código de la variable", "Variable", "Unidad", "Valor", "Planta", "Punto (código)", "Punto", "Zona", "Fecha de la muestra", "Hora de la muestra",
   "Fecha y hora de registro (Bogotá)", "Autor", "Fuente", "Excluido", "Motivo de la exclusión", "Excluido por", "Fecha y hora de la exclusión (Bogotá)",
-  "Marca de referencia", "Referencia mínima", "Referencia máxima", "Origen de la referencia", "Fuente de la referencia"];
-export const ANCHOS_XLSX = [18, 22, 30, 12, 14, 14, 14, 24, 9, 14, 11, 20, 32, 12, 10, 40, 32, 20, 18, 12, 12, 18, 44];
+  "Marca de referencia", "Referencia mínima", "Referencia máxima", "Origen de la referencia", "Fuente de la referencia",
+  "Inicio (Bogotá)", "Origen del inicio", "Duración", "Duración (min)"];
+export const ANCHOS_XLSX = [18, 22, 30, 12, 14, 14, 14, 24, 9, 14, 11, 20, 32, 12, 10, 40, 32, 20, 18, 12, 12, 18, 44, 20, 12, 12, 12];
+// Las columnas de inicio van AL FINAL: quien ya lee estos archivos por posición no se afecta. «Fin» es la columna «Fecha y hora de registro».
 
 const fuenteTexto = (f: string) => (f === "telemetria" ? "Telemetría" : "Manual");
+const origenInicioTexto = (o: string | null | undefined) => (o === "dispositivo" ? "Celular" : o === "servidor" ? "Servidor" : "");
+/** Segundos entre dos horas locales de Bogotá «AAAA-MM-DDTHH:MM:SS» (Bogotá no cambia de hora en el año). */
+const segEntre = (ini: string | null | undefined, fin: string | null | undefined): number | null => {
+  if (!ini || !fin) return null; const a = Date.parse(`${ini}Z`), b = Date.parse(`${fin}Z`); return Number.isFinite(a) && Number.isFinite(b) ? (b - a) / 1000 : null;
+};
+/** Duración en texto («1 h 05 min» · «12 min» · «45 s»); vacía sin inicio. */
+export const duracionTexto = (f: FilaDescarga): string => (f.inicio_local ? fmtDuracion(segEntre(f.inicio_local, f.registrado_local)) : "");
 /** «2026-10-24T10:44:12» → «24/10/2026 10:44». */
 const fmtLocal = (s: string | null) => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)} ${s.slice(11, 16)}` : "");
+/** Inicio con segundos («24/10/2026 10:44:12»): las duraciones cortas se leen mejor. */
+const fmtLocalSeg = (s: string | null | undefined) => (s ? `${fmtLocal(s)}:${s.slice(17, 19)}` : "");
 /** Nombre de archivo sin datos personales: registros_tecnica_AAAAMMDD_HHMM.ext a partir de «24/10/2026 10:44». */
 export function nombreArchivo(generadoEn: string, ext: "csv" | "xlsx"): string {
   const m = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/.exec(generadoEn); return m ? `registros_tecnica_${m[3]}${m[2]}${m[1]}_${m[4]}${m[5]}.${ext}` : `registros_tecnica.${ext}`;
@@ -39,7 +52,8 @@ export function filaCsv(f: FilaDescarga): string {
     f.formulario_nombre, f.variable, f.variable_nombre, f.unidad, numeroCsv(f.valor), f.planta_nombre ?? "", f.punto ?? "", f.punto_nombre ?? "", mayuscula(f.zona),
     fmtFecha(f.fecha_muestra), f.hora_muestra, fmtLocal(f.registrado_local), f.autor, fuenteTexto(f.fuente), f.excluido ? "Sí" : "No", f.exclusion_motivo ?? "", f.exclusion_autor ?? "", fmtLocal(f.exclusion_local),
     etiquetaMarca(f.fuera_de_rango), f.ref_min === null ? "" : numeroCsv(f.ref_min), f.ref_max === null ? "" : numeroCsv(f.ref_max), etiquetaOrigen(f.ref_origen), f.ref_fuente ?? "",
-  ].map((x, i) => (i === 4 || i === 19 || i === 20 ? x : textoCsv(x))).join(";") + "\r\n";
+    fmtLocalSeg(f.inicio_local), origenInicioTexto(f.inicio_origen), duracionTexto(f), f.duracion_min === null || f.duracion_min === undefined ? "" : numeroCsv(f.duracion_min),
+  ].map((x, i) => (i === 4 || i === 19 || i === 20 || i === 26 ? x : textoCsv(x))).join(";") + "\r\n";
 }
 export const cabeceraCsv = () => ENCABEZADOS.map(textoCsv).join(";") + "\r\n";
 
@@ -48,10 +62,12 @@ export function filaXlsx(f: FilaDescarga, serialExcel: (fecha: string, hora?: st
   const sf = serialExcel(f.fecha_muestra), sh = serialHora(f.hora_muestra);
   const rl = f.registrado_local ? serialExcel(f.registrado_local.slice(0, 10), f.registrado_local.slice(11)) : null;
   const el = f.exclusion_local ? serialExcel(f.exclusion_local.slice(0, 10), f.exclusion_local.slice(11)) : null;
+  const il = f.inicio_local ? serialExcel(f.inicio_local.slice(0, 10), f.inicio_local.slice(11)) : null;
   return [f.formulario_nombre, f.variable, f.variable_nombre, f.unidad, f.valor, f.planta_nombre, f.punto, f.punto_nombre, mayuscula(f.zona) || null,
     sf === null ? null : { fecha: sf }, sh === null ? null : { hora: sh }, rl === null ? null : { fechaHora: rl }, f.autor, fuenteTexto(f.fuente), f.excluido ? "Sí" : "No",
     f.exclusion_motivo, f.exclusion_autor, el === null ? null : { fechaHora: el },
-    etiquetaMarca(f.fuera_de_rango) || null, f.ref_min, f.ref_max, etiquetaOrigen(f.ref_origen) || null, f.ref_fuente];
+    etiquetaMarca(f.fuera_de_rango) || null, f.ref_min, f.ref_max, etiquetaOrigen(f.ref_origen) || null, f.ref_fuente,
+    il === null ? null : { fechaHora: il }, origenInicioTexto(f.inicio_origen) || null, duracionTexto(f) || null, f.duracion_min ?? null];
 }
 
 /** Hoja «Léame»: filtros aplicados, quién y cuándo descargó, número de filas y advertencias. */
@@ -63,6 +79,7 @@ export function hojaLeame(a: { generadoPor: string; generadoEn: string; filas: n
     ["Filtros aplicados", a.filtros.length ? a.filtros.join("\n") : "Ninguno (todos los registros)"],
     ["Dosis de coagulante", "Al final de la hoja van las filas «Dosis de coagulante · …» (formulario Entrada, unidad ppm): una por envío y planta, con la misma fecha y hora del envío. No se cuentan en «Filas de registros». Sus columnas de marca y referencia quedan vacías. Si el envío de Entrada está excluido, su dosis también (columna «Excluido»)."],
     ["", ""],
+    ["Inicio, fin y duración", "«Inicio» es la hora en que se abrió el formulario en el celular («Celular» en «Origen del inicio»); «Fin» es la «Fecha y hora de registro» (la del servidor). «Duración» = fin − inicio; «Duración (min)» es el mismo dato en minutos con un decimal. Vacías en registros sin inicio (anteriores al 14/11/2026 o enviados por una pantalla vieja) y en las filas de dosis."],
     ["Marca de referencia", "«Sobre el máximo» o «Bajo el mínimo» avisan, pero no impiden guardar ni ocultan el dato. Se calculan con la referencia VIGENTE al momento de descargar (no con la de cuando se registró). «Origen»: Norma (una resolución) o Criterio de planta (límite operativo de la empresa); la fuente trae la cita. Sin referencia, estas columnas quedan vacías."],
     ["Cómo leerlo", "«Valor» es el número tal como se guardó (no está redondeado). Las fechas y horas están en hora de Bogotá. La fecha de la muestra y la de registro pueden diferir (p. ej. resultados de laboratorio)."],
     ["Privacidad", "Este archivo contiene los correos de las personas que registraron y excluyeron datos. Es información interna de EMDUPAR: no lo comparta fuera de la empresa."],
