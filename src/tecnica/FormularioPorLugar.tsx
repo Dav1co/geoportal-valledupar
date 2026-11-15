@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiTec, ErrorTec, type FormularioDef } from "./apiTecnica";
 import { avisoDeError } from "./FormularioCaptura";
-import { borrarBorrador, guardarBorrador, leerBorrador, nuevaClaveEnvio } from "./borrador";
+import { borrarBorrador, guardarBorrador, inicioAlAbrir, inicioAlEnviar, leerBorrador, nuevaClaveEnvio, nuevoInicio } from "./borrador";
 import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
 import { agrupar, claveEnvioTarjeta, claveIntento, claveTexto, conDatos, cuerpoTarjeta, etiquetaCampo, lugarInicial, modoSelector, nombreLugar, textoElegirLugar, tieneLugar, type Tarjeta } from "./lugares";
 import { decimalesAMostrar, formatearNumero, interpretarNumero } from "./numeros";
@@ -39,6 +39,8 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
   const inicial = useMemo(() => leerBorrador(clave, uid, def.fecha_hoy), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [textos, setTextos] = useState<Record<string, string>>(inicial?.textos ?? {});
   const [hora, setHora] = useState<string>(inicial?.hora ?? def.hora_propuesta);
+  // Hora de inicio del formulario abierto: TODAS sus tarjetas la heredan (decisión 12). Cambia solo cuando se guardan todas con éxito o al descartar.
+  const [inicio, setInicio] = useState<string>(() => inicioAlAbrir(inicial?.inicio));
   const extra = useMemo(() => leerExtra(inicial?.claveEnvio), []); // eslint-disable-line react-hooks/exhaustive-deps
   // Planta preseleccionada (la del borrador o la primera, como Entrada). Tanques y puntos: SIN lugar elegido, salvo el que traiga el borrador.
   const [lugares, setLugares] = useState<Record<string, string>>(() => Object.fromEntries(tarjetas.map((t) => [t.id, lugarInicial(t, inicial?.textos ?? {}, extra.lugares[t.id] ?? (t.clase === "planta" ? inicial?.planta : null))])));
@@ -58,6 +60,7 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
     setTextos({}); setErrores({}); setEstados({}); setHora(def.hora_propuesta); setDescartando(false);
     setLugares((l) => Object.fromEntries(tarjetas.map((x) => [x.id, x.clase === "planta" ? l[x.id] ?? "" : lugarInicial(x, {}, null)])));
     intentos.current = {};
+    setInicio(nuevoInicio());
     borrarBorrador(clave);
     setAviso({ tipo: "info", texto: "Se descartó lo escrito en este equipo.", detalle: guardadas > 0 ? `${guardadas === 1 ? "Una tarjeta ya estaba guardada y no se afecta" : `${guardadas} tarjetas ya estaban guardadas y no se afectan`}.` : "Lo ya guardado en el servidor no se tocó." });
   }
@@ -72,10 +75,10 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
   useEffect(() => {
     const t = setTimeout(() => {
       const planta = tarjetas.find((x) => x.clase === "planta");
-      guardarBorrador(clave, { uid, dia: def.fecha_hoy, planta: planta ? lugares[planta.id] ?? null : null, hora, textos, claveEnvio: JSON.stringify({ ...intentos.current, __lugares: Object.fromEntries(tarjetas.filter((x) => x.clase !== "ambas").map((x) => [x.id, lugares[x.id] ?? ""])) }), comunEnviada: null });
+      guardarBorrador(clave, { uid, dia: def.fecha_hoy, planta: planta ? lugares[planta.id] ?? null : null, hora, textos, claveEnvio: JSON.stringify({ ...intentos.current, __lugares: Object.fromEntries(tarjetas.filter((x) => x.clase !== "ambas").map((x) => [x.id, lugares[x.id] ?? ""])) }), comunEnviada: null, inicio });
     }, 400);
     return () => clearTimeout(t);
-  }, [clave, uid, def.fecha_hoy, tarjetas, lugares, hora, textos]);
+  }, [clave, uid, def.fecha_hoy, tarjetas, lugares, hora, textos, inicio]);
 
   const lugarDe = (t: Tarjeta) => lugares[t.id] ?? "";
 
@@ -131,6 +134,8 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
     setFase("enviando");
     setAviso(null);
     const hechos: string[] = []; let fallas = 0; let corte = false;
+    const ini = inicioAlEnviar(inicio);           // el mismo para todas las tarjetas de este envío y para sus reintentos
+    if (ini !== inicio) setInicio(ini);
     for (const { tarjeta: t, lugar } of lista) {
       const ci = claveIntento(t, lugar);
       if (corte) { setEstados((s) => ({ ...s, [ci]: { tipo: "pendiente", texto: "No se envió.", detalle: "Se detuvo el envío por el problema anterior. Lo escrito se conserva; reintente." } })); fallas++; continue; }
@@ -140,7 +145,7 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
       // Mismo contenido = misma clave (reintento seguro); si la persona cambió algo, clave nueva para que el servidor no devuelva el envío anterior.
       if (!previo || previo.huella !== huella) intentos.current[ci] = { base: nuevaClaveEnvio(), huella };
       try {
-        const r = await apiTec.registrar({ ...base, clave_envio: claveEnvioTarjeta(intentos.current[ci].base, t, lugar) });
+        const r = await apiTec.registrar({ ...base, clave_envio: claveEnvioTarjeta(intentos.current[ci].base, t, lugar), inicio_dispositivo: ini });
         setTextos((x) => { const n = { ...x }; for (const v of t.variables) delete n[claveTexto(v, lugar)]; return n; });
         delete intentos.current[ci];
         hechos.push(`${t.clase === "ambas" ? t.titulo : nombreLugar(t, lugar)}: ${r.guardados} ${r.guardados === 1 ? "valor" : "valores"}${r.duplicado ? " (ya estaba guardado)" : ""}`);
@@ -159,6 +164,7 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
       if (fallas === 0) reponerHora.current = true;
     }
     if (fallas === 0) {
+      setInicio(nuevoInicio());                   // todo guardado: lo siguiente que se escriba es otro formulario abierto
       setAviso({ tipo: "ok", texto: hechos.length === 1 ? "Registro guardado." : `${hechos.length} registros guardados.`, detalle: hechos.join(" · ") });
       setErrores({});
       setTimeout(() => refTitulo.current?.scrollIntoView?.({ block: "start" }), 0);

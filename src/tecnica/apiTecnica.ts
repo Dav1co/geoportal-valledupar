@@ -36,6 +36,7 @@ export type RegistrarCuerpo = {
   valores: { variable: string; valor: number }[];
   punto?: string | null; clave_envio: string;
   dosis?: DosisCuerpo;
+  inicio_dispositivo?: string;     // ISO con zona: hora del celular al abrir el formulario (contrato común de inicio). Fuera de «valores»; no lleva «fecha» ni «hora» en el nombre
 };
 export type RegistrarResp = { lote_id: string; formulario: string; fecha_muestra?: string; hora_muestra?: string; guardados: number; duplicado: boolean; dosis_guardada?: boolean };
 /** Opciones de la sección de dosis que entrega el servidor (el catálogo manda: aquí no hay nombres de químicos). Lista vacía = el formulario no tiene la sección. */

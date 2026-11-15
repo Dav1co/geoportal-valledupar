@@ -1,6 +1,7 @@
 // Borrador local de lo que la persona está escribiendo, para que NO se pierda si la sesión vence, se recarga la página o se cae la señal.
 // Vive solo en este equipo (localStorage del navegador). No contiene correos, tokens ni claves: solo lo escrito, la planta, la hora y la clave del envío en curso.
 // Se descarta si es de otra persona (uid), de otro día del servidor o si tiene más de 24 horas. La marca «ya enviada» caduca a los 45 minutos.
+// Guarda también la hora de inicio del formulario abierto (ver «Hora de inicio» abajo). Sin nada escrito no hay borrador: una recarga así abre el formulario de nuevo.
 
 /** «Ya enviada»: hora de la muestra enviada (para mostrar) y marca de tiempo del envío (para que CADUQUE). */
 export type MarcaEnviada = { hora: string; ts: number };
@@ -11,6 +12,7 @@ export type Borrador = {
   textos: Record<string, string>;          // clave: «codigo» (para las dos plantas) o «codigo@planta» (por planta)
   claveEnvio: string;
   comunEnviada: MarcaEnviada | null;       // el bloque «Para las dos plantas» ya se envió; se pliega solo mientras la marca esté vigente
+  inicio?: string | null;                  // hora de INICIO (ISO, reloj del celular) de este formulario abierto: sobrevive a una recarga. Opcional: borradores viejos no la traen
 };
 
 const PREFIJO = "geoportal.tec.borrador.v2.";
@@ -54,6 +56,25 @@ export function borrarBorrador(formulario: string) {
   try {
     localStorage.removeItem(PREFIJO + formulario);
   } catch { /* nada */ }
+}
+
+// ---------- Hora de inicio (contrato común de la pasada 14/11) ----------
+// Se toma UNA vez al abrir el formulario (o al empezar el siguiente tras guardar o descartar) y viaja como «inicio_dispositivo» en cada registro de ese formulario abierto.
+// Los reintentos no la cambian. Las reglas de verdad las aplica el servidor (adelantada > 2 min o de más de 12 h = rechazo); aquí solo se decide cuándo empieza un formulario nuevo.
+export const MAX_HORAS_INICIO = 12;
+const ADELANTO_MS = 2 * 60_000;
+export const nuevoInicio = (ahora = Date.now()): string => new Date(ahora).toISOString();
+const msDe = (iso: string | null | undefined): number => (typeof iso === "string" ? Date.parse(iso) : Number.NaN);
+/** Al ABRIR: conserva el inicio del borrador (recarga, sesión vencida) salvo que sea ilegible, de más de 12 horas o del futuro; en esos casos el formulario se abre de nuevo. */
+export function inicioAlAbrir(guardado: string | null | undefined, ahora = Date.now()): string {
+  const t = msDe(guardado);
+  return Number.isFinite(t) && t <= ahora + ADELANTO_MS && ahora - t <= MAX_HORAS_INICIO * 3_600_000 ? (guardado as string) : nuevoInicio(ahora);
+}
+/** Al ENVIAR (y en cada reintento): el mismo inicio. Única excepción: si quedó más de 2 min en el futuro respecto al reloj de ahora (la persona corrigió la hora del celular
+ *  tras el aviso «adelantada»), se toma la hora actual: el inicio anterior se midió con un reloj equivocado. */
+export function inicioAlEnviar(inicio: string, ahora = Date.now()): string {
+  const t = msDe(inicio);
+  return Number.isFinite(t) && t <= ahora + ADELANTO_MS ? inicio : nuevoInicio(ahora);
 }
 
 /** Clave única de un envío (se reutiliza si hay que reintentar). */

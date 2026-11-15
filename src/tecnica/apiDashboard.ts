@@ -17,6 +17,8 @@ export type RegistroFila = {
   fecha_muestra: string; hora_muestra: string; registrado_en: string; autor: string; fuente: string; fuera_de_rango: "bajo" | "alto" | null;
   excluido: boolean; exclusion_motivo: string | null; exclusion_autor: string | null; exclusion_en: string | null;
   ref_min: number | null; ref_max: number | null; ref_origen: "norma" | "criterio_planta" | null; ref_fuente: string | null;
+  // Hora de inicio (pasada 14/11). Opcionales: con la base sin la migración no llegan y la pantalla los deja vacíos.
+  inicio_en?: string | null; inicio_origen?: "dispositivo" | "servidor" | null; duracion_seg?: number | null;
 };
 export type RegistrosResp = { total: number; devueltos: number; registros: RegistroFila[] };
 export type ExcluirCuerpo = { lote_id?: string; registro_id?: number; motivo: string; accion: "EXCLUIR" | "REINCLUIR" };
