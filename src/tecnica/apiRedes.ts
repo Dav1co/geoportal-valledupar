@@ -36,3 +36,46 @@ export const apiRedes = {
     pedir<Cercanos>("activos_cerca", { ...F, cuerpo: { lat, lon, sistema, radio_m: radio_m ?? null, limite: 15 } }),
   epicrisis: (codigo: string, cursor?: Cursor | null) => pedir<Epicrisis>("epicrisis", { ...F, cuerpo: { codigo, cursor: cursor ?? null } }),
 };
+
+// ---------- Corte 2: daño o falla y minimapa ----------
+export type Opcion = { codigo: string; nombre: string };
+export type TipoDano = Opcion & { clase: "dano" | "falla"; sistemas: string[]; pide_rotura: boolean };
+export type FormularioDano = {
+  perfil: "admin" | "supervisor" | "operador"; sistemas: Opcion[]; tipos: TipoDano[]; roturas: Opcion[]; causas: Opcion[]; terceros: Opcion[]; marcas: Opcion[];
+  reglas: { dias_atras_max: number; min_fotos: number; max_fotos: number; max_bytes_foto: number; max_horas_inicio: number; radio_cercanos_m: number; zoom_min: number; zoom_accesorios: number };
+  hay_tabla_caudales: boolean; ahora: string;
+};
+export type ActivoUbicado = ActivoCorto & { lat: number; lon: number; sistema?: string };
+export type NodoTramo = { rol: "inicio" | "fin"; nombre: string; lat: number; lon: number; activo?: ActivoCorto | null };
+export type TramoNodos = { tramo: ActivoCorto & { sistema: string; longitud_m?: number; diametro_mm?: number }; nodos: NodoTramo[] };
+export type FotoSubida = { n: number; ruta: string; url_subida: string; token: string };
+export type PreparacionDano = { dano_id: string; max_bytes_foto: number; tipo_mime: string; fotos: FotoSubida[] };
+export type DatosDano = Record<string, unknown> & { fotos: { n: number; momento: string; ruta: string }[] };
+export type DanoGuardado = { id: string; codigo: string; registrado_en: string; estado: string; activo: string | null; fuera_de_zona: boolean; repetido: boolean;
+  respuesta_s?: number | null; reparacion_s?: number | null; total_s?: number | null; perdida_estado?: string };
+
+export const apiDano = {
+  formulario: () => pedir<FormularioDano>("formulario_dano", F),
+  preparar: (fotos: number) => pedir<PreparacionDano>("preparar_dano", { ...F, cuerpo: { fotos } }),
+  // 30 s: un envío lento en señal débil no debe cortarse antes de tiempo; el reintento con el mismo dano_id no duplica.
+  crear: (dano_id: string, datos: DatosDano) => pedir<DanoGuardado>("crear_dano", { ...F, cuerpo: { dano_id, datos }, timeoutMs: 30000 }),
+  buscar: (texto: string, sistema: string) => pedir<{ activos: ActivoUbicado[] }>("activo_buscar", { ...F, qs: { texto, sistema } }),
+  tramoNodos: (codigo: string) => pedir<TramoNodos>("tramo_nodos", { ...F, qs: { codigo } }),
+};
+
+/** Sube una foto a su URL firmada (PUT directo a Storage; la URL vale para esa ruta exacta). 409 = ya estaba subida (reintento). */
+export async function subirFotoDano(url: string, foto: Blob): Promise<void> {
+  let r: Response;
+  const ctl = new AbortController();
+  const reloj = setTimeout(() => ctl.abort(), 60000);
+  try {
+    r = await fetch(url, { method: "PUT", headers: { "Content-Type": "image/jpeg", "x-upsert": "false" }, body: foto, signal: ctl.signal });
+  } catch {
+    throw new Error("No se pudo subir la foto: revise su señal.");
+  } finally {
+    clearTimeout(reloj);
+  }
+  if (r.ok || r.status === 409) return;
+  if (r.status === 400 || r.status === 401 || r.status === 403) throw new Error("vencida");
+  throw new Error("El servicio de fotos no está disponible. Intente de nuevo.");
+}

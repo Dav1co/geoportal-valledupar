@@ -1,0 +1,22 @@
+OK    01 huellas antes: «CORTE 1a (listo para el 2)», 8 RPC y bucket «NO EXISTE», 5 dependencias «EXISTE»
+OK    02 ensayo: ERROR con «N de N … SIN FALLAS» · RESULTADO: 87 de 87 pruebas correctas — SIN FALLAS (0.2 s)
+OK    03 el ensayo no deja rastro (ni tablas, ni bucket, ni funciones)
+OK    04 migración _editor · 0.1 s
+OK    05 verificación sin datos: 11 OK
+OK    06 repetir la migración se rechaza (guardia)
+OK    07 huellas después: «CORTE 2 (aplicado)», 8 RPC y bucket «NUEVA (aplicada)»
+OK    08 reversa sin datos: vuelve exactamente al 1a (funciones y epicrisis)
+OK    09 tras la reversa, la verificación del 1a vuelve a dar 13 OK
+OK    10 una segunda reversa se niega
+OK    11 volver a migrar después de la reversa
+OK    12 la carga real del 1a con el Corte 2 aplicado: 35.781 activos · maestro 3.6 s, publicar 12.7 s
+OK    13 consulta para Técnica: los 35 pozos con EST_POZO «0», «por eliminar» y «Sin dato» · (35 filas)
+OK    14 teselas z15 de acueducto en el centro (3×3): la más pesada por debajo de 150 KB (riesgo del Corte 2) · máx 29.8 KB, media 24.3 KB, 56 ms por tesela (con psql)
+OK    14 teselas z15 de alcantarillado en el centro (3×3): la más pesada por debajo de 150 KB (riesgo del Corte 2) · máx 37.1 KB, media 30.5 KB, 48 ms por tesela (con psql)
+OK    15 tesela z17 sobre V85: trae la válvula y accesorios · 3.2 KB
+OK    16 tesela z16 sobre V85: sin accesorios (desde z17)
+OK    17 un daño real (falla: válvula que no opera) sobre V85: DAN-000001 · {"id": "064b0168-34e8-4351-944c-c7deab35c0ac", "activo": "VAL-000001", "codigo": "DAN-000001", "estado": "reportado", "total_s": 1801, "repetido": false, "respuesta_s": null, "reparacion_s": null, "fu
+OK    18 la epicrisis de V85 trae la falla como «hecho» y la ficha cuenta 1 · {"hechos": 1, "registro": 1, "danos_12_meses": 1}
+OK    19 verificación con datos: 11 OK
+OK    20 la reversa se niega con datos (nada se borra)
+RESULTADO: 21 de 21 — SIN FALLAS

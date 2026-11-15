@@ -6,11 +6,13 @@ import { FormularioPorLugar } from "./FormularioPorLugar";
 import { ResumenUltimas24 } from "./ResumenUltimas24";
 import { Dashboard } from "./Dashboard";
 import { ActivosRedes } from "./ActivosRedes";
+import { FormularioDano } from "./FormularioDano";
 import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
 // Formularios que ya tienen pantalla construida (el resto se muestra deshabilitado, «Próximamente»). Esta lista no contiene variables ni nombres de campos.
-const FORMULARIOS_CON_PANTALLA = new Set(["entrada", "salida", "muestreo"]);      // Muestreo: con FormularioPorLugar (variables «por punto»), lista de puntos del servidor
+const FORMULARIOS_CON_PANTALLA = new Set(["entrada", "salida", "muestreo", "danos_fallas"]);      // danos_fallas: pantalla propia (Corte 2), no usa variables. Muestreo: con FormularioPorLugar (variables «por punto»), lista de puntos del servidor
+const PANTALLA_PROPIA = new Set(["danos_fallas"]);      // formularios con pantalla propia, sin variables de planta (con_campos = false en el servidor)
 const ROTULO_PERFIL: Record<MisFormularios["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor técnico", operador: "Operador técnico" };
 
 export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
@@ -21,6 +23,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [errorDef, setErrorDef] = useState<ErrorTec | null>(null);
   const [version, setVersion] = useState(0);        // sube con cada guardado: refresca el resumen y la definición (fecha y hora propuestas)
   const [intento, setIntento] = useState(0);
+  const [vezDano, setVezDano] = useState(0);         // sube al terminar o cancelar un daño: abre uno nuevo en blanco
   const [vista, setVista] = useState<"captura" | "dashboard" | "activos">("captura");     // el Dashboard PTAP y la ficha de activos (Corte 1b) son solo para supervisor y administrador en esta pantalla (el servidor lo vuelve a verificar en cada ruta)
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
       .then((r) => {
         if (!vivo) return;
         setMis(r);
-        setElegido((actual) => actual ?? r.formularios.find((f) => f.con_campos && FORMULARIOS_CON_PANTALLA.has(f.clave))?.clave ?? null);
+        setElegido((actual) => actual ?? r.formularios.find((f) => (f.con_campos || PANTALLA_PROPIA.has(f.clave)) && FORMULARIOS_CON_PANTALLA.has(f.clave))?.clave ?? null);
       })
       .catch((e) => { if (vivo) setErrorMis(e instanceof ErrorTec ? e : new ErrorTec("servidor", "No se pudo cargar.", 0)); });
     return () => { vivo = false; };
@@ -44,8 +47,8 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
       .catch((e) => { if (!silencioso) setErrorDef(e instanceof ErrorTec ? e : new ErrorTec("servidor", "No se pudo cargar.", 0)); });
   }, []);
 
-  useEffect(() => { if (elegido) cargarDef(elegido, false); }, [elegido, cargarDef, intento]);
-  useEffect(() => { if (elegido && version > 0) cargarDef(elegido, true); }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (elegido && !PANTALLA_PROPIA.has(elegido)) cargarDef(elegido, false); }, [elegido, cargarDef, intento]);
+  useEffect(() => { if (elegido && version > 0 && !PANTALLA_PROPIA.has(elegido)) cargarDef(elegido, true); }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ----- errores al entrar -----
   if (errorMis) {
@@ -81,13 +84,13 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
           <div className="tec-chips">
             {mis.formularios.map((f) => {
               const construido = FORMULARIOS_CON_PANTALLA.has(f.clave);
-              const activo = f.con_campos && construido;
+              const activo = (f.con_campos || PANTALLA_PROPIA.has(f.clave)) && construido;
               return (
                 <button key={f.clave} type="button" className="tec-chip-form" aria-pressed={elegido === f.clave} disabled={!activo}
-                  title={!construido ? "Próximamente" : !f.con_campos ? "Este formulario todavía no tiene campos" : undefined}
+                  title={!construido ? "Próximamente" : !activo ? "Este formulario todavía no tiene campos" : undefined}
                   onClick={() => setElegido(f.clave)}>
                   {f.nombre}
-                  {!construido ? <span className="tec-pronto">Próximamente</span> : !f.con_campos ? <span className="tec-pronto">Sin campos</span> : null}
+                  {!construido ? <span className="tec-pronto">Próximamente</span> : !activo ? <span className="tec-pronto">Sin campos</span> : null}
                 </button>
               );
             })}
@@ -107,14 +110,15 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
         </div>
       ) : null}
 
-      {elegido && errorDef ? (
+      {elegido && PANTALLA_PROPIA.has(elegido) ? <FormularioDano key={vezDano} correo={correo} onSalir={() => setVezDano((v) => v + 1)} /> : null}
+      {elegido && !PANTALLA_PROPIA.has(elegido) && errorDef ? (
         <section className="tec-tarjeta" role="alert">
           <p><strong>{errorDef.tipo === "permiso" ? "No tiene permiso para este formulario." : errorDef.message}</strong></p>
           <button type="button" className="tec-boton" onClick={() => setIntento((i) => i + 1)}>Reintentar</button>
         </section>
       ) : null}
-      {elegido && !def && !errorDef ? <p className="tec-sub" role="status">Cargando el formulario…</p> : null}
-      {elegido && def ? (
+      {elegido && !PANTALLA_PROPIA.has(elegido) && !def && !errorDef ? <p className="tec-sub" role="status">Cargando el formulario…</p> : null}
+      {elegido && !PANTALLA_PROPIA.has(elegido) && def ? (
         <>
           {def.variables.some((v) => v.alcance === "por_punto")
             ? <FormularioPorLugar key={elegido} def={def} uid={uid} onGuardado={() => setVersion((v) => v + 1)} />      /* con variables «por punto»: tarjetas por lugar */

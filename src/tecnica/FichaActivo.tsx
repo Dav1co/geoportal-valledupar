@@ -210,16 +210,16 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver }: { codig
   );
 }
 
-const ROTULO_CLASE: Record<string, string> = { alta: "Alta", version: "Nueva versión", evento_retirar: "Retiro", evento_reactivar: "Reactivación", evento_ocultar: "Oculto", evento_reincluir: "Reincluido",
+const ROTULO_CLASE: Record<string, string> = { dano: "Daño", falla: "Falla", intervencion: "Intervención", alta: "Alta", version: "Nueva versión", evento_retirar: "Retiro", evento_reactivar: "Reactivación", evento_ocultar: "Oculto", evento_reincluir: "Reincluido",
   evento_verificar: "Verificado", evento_por_verificar: "Por verificar", componente_agregar: "Componente agregado", componente_quitar: "Componente quitado",
   es_componente_agregar: "Pasa a ser componente", es_componente_quitar: "Deja de ser componente" };
 
 function EventoItem({ e }: { e: EventoEpicrisis }) {
   return (
-    <li className={`red-evento${e.estado === "revertida" ? " red-evento-revertido" : ""}`}>
+    <li className={`red-evento${e.estado === "revertida" ? " red-evento-revertido" : ""}${e.grupo === "hecho" ? ` red-evento-${e.clase}` : ""}`}>
       <span className="red-evento-punto" aria-hidden="true" />
       <div className="red-evento-txt">
-        <span className="red-nota">{fecha(e.cuando)}{e.estado === "revertida" ? " · revertida" : ""}</span>
+        <span className="red-nota">{fecha(e.cuando)}{e.estado === "revertida" ? " · revertida" : e.grupo === "hecho" && e.estado ? ` · ${e.estado}` : ""}</span>
         <span className="red-evento-tit">{ROTULO_CLASE[e.clase] ?? e.clase}</span>
         <span className="red-texto">{e.resumen}</span>
         {e.autor ? <span className="red-nota">{e.autor}</span> : null}

@@ -53,6 +53,8 @@
 .red-evento { display: flex; gap: 12px; padding-bottom: 12px; }
 .red-evento-punto { width: 12px; height: 12px; border-radius: 50%; background: #1f5fa8; flex-shrink: 0; margin-top: 3px; }
 .red-evento-revertido .red-evento-punto { background: #b9beb6; }
+.red-evento-dano .red-evento-punto, .red-evento-falla .red-evento-punto { background: #8c2f1b; border-radius: 0; transform: rotate(45deg); }
+.red-evento-dano .red-evento-tit, .red-evento-falla .red-evento-tit { color: #8c2f1b; }
 .red-evento-revertido .red-evento-tit { text-decoration: line-through; color: #6f756f; }
 .red-evento-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .red-evento-tit { font-size: 15px; font-weight: 600; }

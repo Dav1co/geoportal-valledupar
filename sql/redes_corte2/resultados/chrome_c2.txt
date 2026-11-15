@@ -1,0 +1,63 @@
+OK    [390] el chip «Daño o falla» abre el formulario (sin «Próximamente») y pide primero el sistema
+OK    [390] el operador no ve la entrada a la ficha de activos (David, 1b)
+OK    [390] guardar vacío: lista de lo que falta, sin llamar a la base
+OK    [390] con GPS sobre V85: queda preseleccionada VAL-000001 (Válvula · Cierre · V85)
+OK    [390] minimapa: red de acueducto real dibujada desde la tesela (z 17.5), sin alcantarillado
+OK    [390] la válvula preseleccionada se resalta en el mapa
+OK    [390] hay un tramo para tocar en el mapa
+OK    [390] tocar el tramo RED-008334: aparecen sus dos nodos («Desde» y «Hasta»)
+OK    [390] y el tramo tocado se resalta en el mapa
+OK    [390] elegir un nodo del tramo (Desde: Tee-5562 (Accesorio)) cambia el activo elegido
+OK    [390] y volver al tramo deja elegido RED-008334
+OK    [390] buscar «V85» y elegirlo
+OK    [390] «Ver ficha» abre la ficha del activo desde el minimapa (David, 1b)
+OK    [390] al volver de la ficha, el daño sigue igual (activo elegido)
+OK    [390] «Falla» muestra sus tipos de acueducto (sin los de alcantarillado)
+OK    [390] una fuga pide rotura, largo y presión, y avisa «sin tabla» de caudales
+OK    [390] los tiempos se calculan solos (respuesta 1 h 15 min, reparación 1 h 05 min, total 2 h 50 min)
+OK    [390] causa de terceros: avisa que el nombre o la placa es un dato personal
+OK    [390] cámara: 2 fotos (el daño y el entorno) en miniatura
+OK    [390] la lista de lo que falta desaparece sola al completar el formulario
+OK    [390] el formulario lleno no desborda y sus botones miden 44 px o más
+OK    [390] guardado DAN-000025: sobre VAL-000001, atendido, GPS, rotura parcial, terceros, riesgo alto, 2 fotos, 40 usuarios, 2,5 m, marca vía y hora de apertura
+OK    [390] la placa quedó solo en dano_datos_sensibles
+OK    [390] las 2 fotos subieron a su URL firmada (JPEG, menos de 1,5 MB) y quedaron en Storage
+OK    [390] la epicrisis del activo muestra el daño (hecho), con duración y sin la placa
+OK    [390] bajo el zoom 15: «Acerque el mapa para ver la red»
+OK    [390] alcantarillado: solo colectores y pozos en el minimapa
+OK    [390] «no identificado» guardado (DAN-000026): sin activo, con «qué es», punto del mapa, alcantarillado, reportado; avisa que va a la bandeja
+OK    [390] «Reportar otro» abre un formulario en blanco
+OK    [1280] el chip «Daño o falla» abre el formulario (sin «Próximamente») y pide primero el sistema
+OK    [1280] el operador no ve la entrada a la ficha de activos (David, 1b)
+OK    [1280] guardar vacío: lista de lo que falta, sin llamar a la base
+OK    [1280] con GPS sobre V85: queda preseleccionada VAL-000001 (Válvula · Cierre · V85)
+OK    [1280] minimapa: red de acueducto real dibujada desde la tesela (z 17.5), sin alcantarillado
+OK    [1280] la válvula preseleccionada se resalta en el mapa
+OK    [1280] hay un tramo para tocar en el mapa
+OK    [1280] tocar el tramo RED-008334: aparecen sus dos nodos («Desde» y «Hasta»)
+OK    [1280] y el tramo tocado se resalta en el mapa
+OK    [1280] elegir un nodo del tramo (Desde: Tee-5562 (Accesorio)) cambia el activo elegido
+OK    [1280] y volver al tramo deja elegido RED-008334
+OK    [1280] buscar «V85» y elegirlo
+OK    [1280] «Ver ficha» abre la ficha del activo desde el minimapa (David, 1b)
+OK    [1280] al volver de la ficha, el daño sigue igual (activo elegido)
+OK    [1280] «Falla» muestra sus tipos de acueducto (sin los de alcantarillado)
+OK    [1280] una fuga pide rotura, largo y presión, y avisa «sin tabla» de caudales
+OK    [1280] los tiempos se calculan solos (respuesta 1 h 15 min, reparación 1 h 05 min, total 2 h 50 min)
+OK    [1280] causa de terceros: avisa que el nombre o la placa es un dato personal
+OK    [1280] cámara: 2 fotos (el daño y el entorno) en miniatura
+OK    [1280] la lista de lo que falta desaparece sola al completar el formulario
+OK    [1280] el formulario lleno no desborda y sus botones miden 44 px o más
+OK    [1280] guardado DAN-000027: sobre VAL-000001, atendido, GPS, rotura parcial, terceros, riesgo alto, 2 fotos, 40 usuarios, 2,5 m, marca vía y hora de apertura
+OK    [1280] la placa quedó solo en dano_datos_sensibles
+OK    [1280] las 2 fotos subieron a su URL firmada (JPEG, menos de 1,5 MB) y quedaron en Storage
+OK    [1280] la epicrisis del activo muestra el daño (hecho), con duración y sin la placa
+OK    [1280] bajo el zoom 15: «Acerque el mapa para ver la red»
+OK    [1280] alcantarillado: solo colectores y pozos en el minimapa
+OK    [1280] «no identificado» guardado (DAN-000028): sin activo, con «qué es», punto del mapa, alcantarillado, reportado; avisa que va a la bandeja
+OK    [1280] «Reportar otro» abre un formulario en blanco
+OK    cada daño guardado es uno (el reenvío no duplica) y todos los del navegador quedaron en la base
+OK    sin errores de JavaScript ni de consola
+
+RESULTADO: 60 de 60 — SIN FALLAS
+Capturas: /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/ce745a76-2956-40f4-a938-d24142f51b1c/scratchpad/capturas_c2

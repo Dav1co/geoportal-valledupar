@@ -176,6 +176,7 @@ for (const ancho of [390, 1280]) {
 
   // tanque con componente
   await buscar(p, "tan-000001"); await fichaLista(p, "TAN-000001");
+  await p.waitForFunction(() => /Cambios del registro|Todavía no hay daños/.test(document.body.innerText), { timeout: 10000 });   // la epicrisis llega aparte de la ficha
   let t = await texto(p);
   ok(`${tag} tanque: cabecera (Acueducto · Almacenamiento, TAN-000001, tipo y estado) como la maqueta`, /ACUEDUCTO · ALMACENAMIENTO|Acueducto · Almacenamiento/i.test(t) && /TAN-000001/.test(t) && /Tanque de almacenamiento/.test(t) && /En operación/.test(t), t.slice(0, 300));
   ok(`${tag} tanque: «Datos del activo» con Capacidad «Sin dato», Fecha de instalación «Sin dato» y Barrio o sector «Sin dato»`, /Capacidad\s*Sin dato/.test(t) && /Fecha de instalación\s*Sin dato/.test(t) && /Barrio o sector\s*Sin dato/.test(t));

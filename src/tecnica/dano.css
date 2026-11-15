@@ -1,0 +1,56 @@
+/* Daño o falla (Técnica · distribución, Corte 2). Colores de la maqueta Dano.dc.html; celular primero (390 px); objetivos de 44 px o más; campos de 16 px. */
+.dan { padding-bottom: 24px; }
+.dan-cabeza { margin: 16px 16px 0; background: #8c2f1b; color: #fff; border-radius: 12px; padding: 16px; }
+.dan-cabeza h1 { margin: 0; font-size: 24px; }
+.dan-cabeza p { margin: 4px 0 0; font-size: 14px; color: #f6dcd5; }
+.dan-pad { padding: 16px; }
+.dan-pad-x { margin: 12px 16px 0; }
+.dan-fila { display: flex; flex-wrap: wrap; gap: 8px; }
+.dan-opcion { min-height: 44px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; background: #fff; color: #1b1f1d; border: 1px solid #c9cdc5; }
+.dan-opcion[aria-pressed="true"] { background: #8c2f1b; color: #fff; border-color: #8c2f1b; }
+.dan-opcion:focus-visible, .dan-check input:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.dan-opcion-off { display: inline-flex; align-items: center; color: #6f756f; cursor: default; background: #f4f5f2; }
+.dan-rot { font-size: 15px; font-weight: 600; }
+.dan-mini { display: flex; flex-direction: column; gap: 10px; position: relative; }
+.dan-mini-mapa { height: 55vh; min-height: 280px; max-height: 520px; border-radius: 10px; border: 1px solid #c9cdc5; overflow: hidden; }
+.dan-mini-aviso { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(27, 31, 29, 0.85); color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 14px; pointer-events: none; white-space: nowrap; }
+.dan-mini-aviso-punto { top: auto; bottom: 10px; background: #8c2f1b; }
+.dan-tramo { background: #fdf3f0; border: 1px solid #e6b8ab; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.dan-tramo-tit { margin: 0; font-size: 14px; }
+.dan-tramo-opciones { display: flex; flex-direction: column; gap: 8px; }
+.dan-tramo-opciones .dan-opcion { text-align: left; }
+.dan-elegido { display: flex; align-items: center; gap: 12px; border: 2px solid #8c2f1b; border-radius: 10px; padding: 10px 12px; min-height: 52px; }
+.dan-elegido-txt { display: flex; flex-direction: column; flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.dan-elegido-txt span { color: #5b625d; font-size: 13px; }
+.dan-aviso { margin: 0; }
+.dan-buscar { display: flex; flex-direction: column; gap: 6px; }
+.dan-buscar-fila { display: flex; gap: 8px; }
+.dan-buscar-fila input { flex: 1; min-width: 0; height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; }
+.dan-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; }
+.dan-check input { width: 22px; height: 22px; flex-shrink: 0; }
+.dan-hora { height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; width: 100%; min-width: 0; box-sizing: border-box; background: #fff; }
+.dan-calculo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.dan-calculo div { background: #f4f5f2; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: #5b625d; }
+.dan-calculo strong { font-size: 15px; color: #1b1f1d; }
+.dan-dos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 560px) { .dan-dos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dan-perdida { margin: 0; background: #fdf3f0; border-radius: 8px; padding: 10px 12px; font-size: 14px; color: #5c1f12; }
+.dan-marcas { display: flex; flex-direction: column; }
+.dan-fotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.dan-foto { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.dan-foto img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid #c9cdc5; }
+.dan-foto figcaption { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.dan-texto { border: 1px solid #7b8b99; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; resize: vertical; }
+.dan-errores ul { margin: 4px 0 0; padding-left: 20px; }
+.dan-guardar { background: #8c2f1b; }
+.dan-listo h2 { color: #1e6b47; }
+.tec-campo select { box-sizing: border-box; }
+
+/* Cámara (copiada de campo/campo.css, que no se importa en Técnica) */
+.campo-camara { position: fixed; inset: 0; z-index: 1000; background: #000; display: flex; flex-direction: column; }
+.campo-camara-cab { color: #fff; padding: 12px 16px; font-size: 17px; font-weight: 700; }
+.campo-video { flex: 1; min-height: 0; width: 100%; object-fit: contain; background: #000; }
+.campo-camara-error { flex: 1; display: flex; align-items: center; padding: 20px; color: #fff; font-size: 17px; line-height: 1.5; }
+.campo-camara-acc { display: flex; gap: 12px; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); background: #0b1620; }
+.campo-camara-acc .tec-boton-sec { flex: 0 0 auto; }
+.campo-capturar { flex: 1; min-height: 64px; font-size: 19px; }
