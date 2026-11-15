@@ -26,6 +26,7 @@ export type FilaResumen = {
   variable: string; nombre: string; unidad: string; decimales: number;
   planta: string | null; planta_nombre: string | null;
   punto?: string | null; punto_nombre?: string | null;      // filas «por punto» (cloro en tanques, caudal de distribución)
+  zona?: string | null; zona_nombre?: string | null;        // filas «por zona» (Muestreo: el servidor agrega los puntos de muestreo por zona)
   promedio: number | null; minimo: number | null; maximo: number | null;
 };
 export type ResumenResp = { formulario: string; ventana_horas: number; filas: FilaResumen[] };

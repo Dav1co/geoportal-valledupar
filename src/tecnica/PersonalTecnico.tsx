@@ -46,7 +46,7 @@ export function PersonalTecnico({ catalogo }: { catalogo: Catalogo }) {
       </div>
       <div className="td-cajitas">
         <div className="td-cajita"><strong>Usted puede:</strong> elegir los formularios de cada persona y desactivar su acceso al área técnica.</div>
-        <div className="td-cajita"><strong>Solo el administrador puede:</strong> dar o quitar el acceso al Dashboard técnico, desde Administración general.</div>
+        <div className="td-cajita"><strong>Solo el administrador puede:</strong> dar o quitar el acceso al Dashboard PTAP, desde Administración general.</div>
       </div>
       {aviso ? <div className="td-aviso td-aviso-ok" role="status">{aviso}</div> : null}
       {error ? <div className="td-aviso td-aviso-error" role="alert">{error.texto}{" "}{error.sesion ? <button type="button" className="td-enlace" onClick={() => void supabase.auth.signOut()}>Volver a iniciar sesión</button> : <button type="button" className="td-enlace" onClick={() => void cargar()}>Reintentar</button>}</div> : null}
@@ -57,7 +57,7 @@ export function PersonalTecnico({ catalogo }: { catalogo: Catalogo }) {
           <thead><tr>
             <th>Persona</th><th>Perfil</th>
             {(datos?.formularios ?? catalogo.formularios).map((x) => <th key={x.clave} className="td-centro td-vertical">{x.nombre}</th>)}
-            <th>Dashboard técnico</th><th>Estado en Técnica</th>
+            <th>Dashboard PTAP</th><th>Estado en Técnica</th>
           </tr></thead>
           <tbody>
             {(datos?.personas ?? []).map((p) => (
@@ -123,7 +123,7 @@ function DialogoFormularios({ p, formularios, onCerrar, onHecho, onRefrescar }: 
   }
   return (
     <Fondo titulo={`Editar formularios · ${quien(p)}`} onCerrar={onCerrar} ocupado={ocupado}>
-      {p.captura_todo ? <p className="td-sub">Esta persona tiene permiso de Dashboard técnico: captura todos los formularios sin que se le asignen. Las casillas solo afectan si ese permiso se retira.</p> : null}
+      {p.captura_todo ? <p className="td-sub">Esta persona tiene permiso de Dashboard PTAP: captura todos los formularios sin que se le asignen. Las casillas solo afectan si ese permiso se retira.</p> : null}
       <fieldset className="td-casillas"><legend>Formularios que puede diligenciar</legend>
         {formularios.map((x) => <label key={x.clave} className="td-check"><input type="checkbox" checked={marcados.has(x.clave)} disabled={ocupado} onChange={(e) => { const n = new Set(marcados); if (e.target.checked) n.add(x.clave); else n.delete(x.clave); setMarcados(n); }} /> {x.nombre}</label>)}
       </fieldset>

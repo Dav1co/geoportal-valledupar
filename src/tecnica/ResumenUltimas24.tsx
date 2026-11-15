@@ -21,13 +21,14 @@ export function ResumenUltimas24({ formulario, version }: { formulario: string; 
 
   useEffect(() => cargar(), [cargar, version]);
   const porPunto = !!datos?.filas.some((f) => f.punto);        // filas por punto (cloro en tanques, caudal de distribución): el lugar va como subtítulo
+  const porZona = !!datos?.filas.some((f) => f.zona);          // Muestreo: una fila por variable y zona; la zona va como subtítulo
 
   return (
     <section className="tec-tarjeta" aria-labelledby="tec-resumen-tit">
       <div className="tec-resumen-cab">
         <div>
           <h2 id="tec-resumen-tit">Resumen de las últimas 24 horas</h2>
-          <p className="tec-sub">{porPunto ? "Por planta y por punto, sin autor y sin registros excluidos." : "De las dos plantas, sin autor y sin registros excluidos."}</p>
+          <p className="tec-sub">{porZona ? "Por zona, sin autor y sin registros excluidos." : porPunto ? "Por planta y por punto, sin autor y sin registros excluidos." : "De las dos plantas, sin autor y sin registros excluidos."}</p>
         </div>
         <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => cargar()} disabled={cargando}>{cargando ? "Cargando…" : "Actualizar"}</button>
       </div>
@@ -38,8 +39,8 @@ export function ResumenUltimas24({ formulario, version }: { formulario: string; 
             <div role="columnheader">Variable</div><div role="columnheader" className="tec-der">Prom.</div><div role="columnheader" className="tec-der">Mín.</div><div role="columnheader" className="tec-der">Máx.</div>
           </div>
           {datos.filas.map((f) => (
-            <div role="row" className="tec-fila" key={`${f.variable}@${f.planta ?? ""}@${f.punto ?? ""}`}>
-              <div role="cell">{f.planta_nombre ? `${f.nombre} ${f.planta_nombre}` : f.nombre}{f.punto_nombre ? <span className="tec-lugar-resumen">{f.punto_nombre}</span> : null}<span className="tec-unidad-chica">{f.unidad}</span></div>
+            <div role="row" className="tec-fila" key={`${f.variable}@${f.planta ?? ""}@${f.punto ?? ""}@${f.zona ?? ""}`}>
+              <div role="cell">{f.planta_nombre ? `${f.nombre} ${f.planta_nombre}` : f.nombre}{f.punto_nombre ? <span className="tec-lugar-resumen">{f.punto_nombre}</span> : f.zona ? <span className="tec-lugar-resumen">{`Zona ${f.zona_nombre ?? f.zona}`}</span> : null}<span className="tec-unidad-chica">{f.unidad}</span></div>
               <div role="cell" className="tec-der tec-num">{formatearOGuion(f.promedio, f.decimales)}</div>
               <div role="cell" className="tec-der tec-num">{formatearOGuion(f.minimo, f.decimales)}</div>
               <div role="cell" className="tec-der tec-num">{formatearOGuion(f.maximo, f.decimales)}</div>

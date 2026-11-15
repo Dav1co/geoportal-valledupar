@@ -6,7 +6,7 @@ import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
 import { agrupar, claveEnvioTarjeta, claveIntento, claveTexto, conDatos, cuerpoTarjeta, etiquetaCampo, lugarInicial, modoSelector, nombreLugar, textoElegirLugar, tieneLugar, type Tarjeta } from "./lugares";
 import { decimalesAMostrar, formatearNumero, interpretarNumero } from "./numeros";
 
-// Formulario de captura por «lugar» (Salida, y luego Muestreo). Se dibuja SOLO con la definición del servidor: agrupa las variables en tarjetas (ver lugares.ts) y envía UN registro
+// Formulario de captura por «lugar» (Salida y Muestreo). Se dibuja SOLO con la definición del servidor: agrupa las variables en tarjetas (ver lugares.ts) y envía UN registro
 // por tarjeta con datos (decisión D-C3-1: un envío es de un solo lugar). El operador no recibe ni ve rangos, marcas, autor ni la hora del servidor.
 // Reutiliza de Entrada: números (numeros.ts), borrador local (borrador.ts), clave de envío, errores del servidor (avisoDeError) y estilos.
 

@@ -7,7 +7,7 @@ import { Resumen } from "./Resumen";
 import { Eventos } from "./Eventos";
 import { supabase } from "../lib/supabase";
 
-// Dashboard técnico (supervisor y administrador). Las secciones salen de este registro: agregar «Estado del servicio» o «Eventos» cuando existan es registrar una sección
+// Dashboard PTAP (antes «Dashboard técnico»; supervisor y administrador). Las secciones salen de este registro: agregar «Estado del servicio» o «Eventos» cuando existan es registrar una sección
 // con su componente; el resto de la pantalla no cambia. Las que aún no existen se muestran deshabilitadas, sin datos de ejemplo.
 type Seccion = { clave: string; titulo: string; Componente?: (p: { catalogo: Catalogo }) => JSX.Element };
 const SECCIONES: Seccion[] = [
@@ -34,11 +34,11 @@ export function Dashboard({ correo, rotuloPerfil, onVolver }: { correo: string; 
       <div className="tdash-cab">
         <div className="tdash-ancho">
           <div className="tdash-fila">
-            <h1>Dashboard técnico</h1>
+            <h1>Dashboard PTAP</h1>
             <button type="button" className="td-boton-claro" onClick={onVolver}>← Volver a mis formularios</button>
           </div>
           <div className="tdash-sesion">{correo} · {rotuloPerfil}</div>
-          <nav className="tdash-tabs" aria-label="Secciones del Dashboard técnico">
+          <nav className="tdash-tabs" aria-label="Secciones del Dashboard PTAP">
             {SECCIONES.map((s) => s.Componente
               ? <button key={s.clave} type="button" className="tdash-tab" aria-current={activa === s.clave ? "page" : undefined} onClick={() => setActiva(s.clave)}>{s.titulo}</button>
               : <button key={s.clave} type="button" className="tdash-tab tdash-tab-pronto" disabled aria-disabled="true" title="Próximamente">{s.titulo}<span className="td-pronto">Próximamente</span></button>)}

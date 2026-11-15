@@ -15,7 +15,7 @@ const MODOS: [keyof UsuarioAdmin, string][] = [
 // Área técnica (fase 2). Todo lo técnico se muestra SOLO si el servidor ya trae esas columnas (paquete SQL aplicado); si no, Administración es idéntica a la de siempre.
 const MODOS_TECNICOS: [keyof UsuarioAdmin, string][] = [
   ["ver_registro_tecnico", "Registro técnico"],
-  ["ver_dashboard_tecnico", "Dashboard técnica"],
+  ["ver_dashboard_tecnico", "Dashboard PTAP"],
 ];
 // Formatos de campo (Torre A, Paso B3). Se muestran SOLO si el servidor ya trae esas columnas (Paso A aplicado).
 const MODOS_CAMPO: [keyof UsuarioAdmin, string][] = [
@@ -39,7 +39,7 @@ const PERFILES_TECNICOS: Record<PerfilTecnico, { nombre: string; registro: boole
 };
 const NOMBRES_PERFIL: Record<string, string> = { operador: "Operador técnico", supervisor: "Supervisor técnico" };
 
-/** Perfil técnico de un usuario no administrador: solo técnico (sin ningún modo comercial) con Registro técnico, con o sin Dashboard técnica. */
+/** Perfil técnico de un usuario no administrador: solo técnico (sin ningún modo comercial) con Registro técnico, con o sin Dashboard PTAP. */
 function perfilTecnicoDe(u: UsuarioAdmin): PerfilTecnico | null {
   if (u.rol === "admin" || u.ver_registro_tecnico !== true) return null;
   if (MODOS.some(([c]) => u[c] === true)) return null;
@@ -91,7 +91,7 @@ const CAMPOS_COMERCIAL: [keyof Borrador, string][] = [
 ];
 const CAMPOS_TECNICA: [keyof Borrador, string][] = [
   ["registro_tecnico", "Registro técnico"],
-  ["dashboard_tecnico", "Dashboard técnica"],
+  ["dashboard_tecnico", "Dashboard PTAP"],
 ];
 const CAMPOS_CAMPO: [keyof Borrador, string][] = [
   ["campo", "Formatos de campo"],
@@ -317,7 +317,7 @@ export function Admin({ onVolver }: Props) {
       if (perfilTec && !(await verificarTecnico(email, PERFILES_TECNICOS[perfilTec].registro, PERFILES_TECNICOS[perfilTec].dashboard))) return;
       setMsg(
         perfilTec
-          ? `Usuario ${email} ${r.auth === "creado" ? "creado" : "actualizado"} como ${PERFILES_TECNICOS[perfilTec].nombre}: solo ${perfilTec === "operador" ? "Registro técnico" : "Registro técnico y Dashboard técnica"}, con los modos comerciales apagados.`
+          ? `Usuario ${email} ${r.auth === "creado" ? "creado" : "actualizado"} como ${PERFILES_TECNICOS[perfilTec].nombre}: solo ${perfilTec === "operador" ? "Registro técnico" : "Registro técnico y Dashboard PTAP"}, con los modos comerciales apagados.`
           : r.auth === "creado"
             ? `Usuario ${email} creado con su clave.`
             : `Usuario ${email} actualizado (clave nueva).`,
@@ -481,7 +481,7 @@ export function Admin({ onVolver }: Props) {
             <option value="consulta">Consulta</option>
             <option value="admin">Administrador</option>
             {conTecnica && <option value="operador">Operador técnico (solo Registro técnico)</option>}
-            {conTecnica && <option value="supervisor">Supervisor técnico (Registro técnico y Dashboard técnica)</option>}
+            {conTecnica && <option value="supervisor">Supervisor técnico (Registro técnico y Dashboard PTAP)</option>}
           </select>
           <button className="btn-sm" onClick={agregar} disabled={guardando}>
             {guardando ? "…" : "Guardar"}

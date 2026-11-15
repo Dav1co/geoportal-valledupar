@@ -9,7 +9,7 @@ import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
 // Formularios que ya tienen pantalla construida (el resto se muestra deshabilitado, «Próximamente»). Esta lista no contiene variables ni nombres de campos.
-const FORMULARIOS_CON_PANTALLA = new Set(["entrada", "salida"]);
+const FORMULARIOS_CON_PANTALLA = new Set(["entrada", "salida", "muestreo"]);      // Muestreo: con FormularioPorLugar (variables «por punto»), lista de puntos del servidor
 const ROTULO_PERFIL: Record<MisFormularios["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor técnico", operador: "Operador técnico" };
 
 export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
@@ -20,7 +20,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [errorDef, setErrorDef] = useState<ErrorTec | null>(null);
   const [version, setVersion] = useState(0);        // sube con cada guardado: refresca el resumen y la definición (fecha y hora propuestas)
   const [intento, setIntento] = useState(0);
-  const [vista, setVista] = useState<"captura" | "dashboard">("captura");     // el Dashboard técnico es solo para supervisor y administrador (el servidor lo vuelve a verificar en cada ruta)
+  const [vista, setVista] = useState<"captura" | "dashboard">("captura");     // el Dashboard PTAP es solo para supervisor y administrador (el servidor lo vuelve a verificar en cada ruta)
 
   useEffect(() => {
     let vivo = true;
@@ -100,7 +100,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
 
       {puedeSupervisar ? (
         <div className="tec-supervision">
-          <button type="button" className="tec-boton-sec" onClick={() => setVista("dashboard")}>Dashboard técnico</button>
+          <button type="button" className="tec-boton-sec" onClick={() => setVista("dashboard")}>Dashboard PTAP</button>
         </div>
       ) : null}
 
