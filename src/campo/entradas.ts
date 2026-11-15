@@ -10,7 +10,7 @@ export type EntradaCampo = {
   descripcion: string;
   /** ¿Se puede abrir ya? Una entrada pendiente se dibuja como «Próximamente» y no hace nada. */
   habilitada: boolean;
-  /** MARCADOR: la pantalla de esta entrada aún no existe («Análisis de contrato»). */
+  /** MARCADOR: la pantalla de esta entrada aún no existe (hoy ninguna lo usa; «Análisis de contrato» ya tiene pantalla). */
   pendiente?: boolean;
   /** Bloque visual (1 anomalía · 2 formatos · 3 pérdida y análisis · 4 gestión). Entre bloques distintos se dibuja una separación. */
   seccion: 1 | 2 | 3 | 4;
@@ -27,16 +27,18 @@ export type CondicionesEntradas = {
   hayFormatos: boolean;
   /** Permiso `ver_acta` (clave `acta` del perfil): puede capturar actas. Lo decide el servidor; el supervisor de actas también lo tiene. */
   puedeActa: boolean;
-  /** Permiso de campo (reportar o supervisar). Por omisión verdadero (como antes). Quien solo tiene acta NO ve «Reportar anomalía», «Formatos de actividad» ni «Análisis de contrato». */
+  /** Permiso de campo (reportar o supervisar). Por omisión verdadero (como antes). Quien solo tiene acta NO ve «Reportar anomalía» ni «Formatos de actividad». */
   puedeCampo?: boolean;
   /** Permiso `ver_dashboard_acta` (supervisor de actas) o administrador: abre «Aperturas sin registrar» (pantalla mínima; el tablero completo de actas sigue pendiente). */
   puedeSupervisarActas?: boolean;
   /** El servidor dice que la persona puede supervisar (def.puede.supervisar: supervisor o administrador). Es el permiso `ver_dashboard_campo`; quien reporta nunca ve la lista. */
   puedeSupervisar?: boolean;
+  /** Permiso `analisis_contrato` (o administrador): abre «Análisis de contrato». Sin él la entrada no aparece. Puede venir solo (usuario comercial sin campo, decisión 12). */
+  puedeAnalisis?: boolean;
 };
 
 /** Entradas visibles, en orden (14/11/2026): «Reportar anomalía» · «Formatos de actividad» (solo si hay formatos activos) · «Reportar posible pérdida» (SOLO con el permiso de acta)
- *  y «Análisis de contrato» (Próximamente, solo con campo) · al final, en color de gestión, «Aperturas sin registrar» y «Supervisión y dashboard».
+ *  y «Análisis de contrato» (solo con el permiso `analisis_contrato`) · al final, en color de gestión, «Aperturas sin registrar» y «Supervisión y dashboard».
  *  Solo cambian los nombres visibles: los id internos (reporte_general, acta, revision…) siguen iguales. */
 export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
   const e: EntradaCampo[] = [];
@@ -53,9 +55,9 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
     id: "acta", titulo: "Reportar posible pérdida", seccion: 3,
     descripcion: "Registro digital que acompaña al acta física firmada.", habilitada: true,
   });
-  if (campo) e.push({
-    id: "analisis_contrato", titulo: "Análisis de contrato", seccion: 3, pendiente: true,
-    descripcion: "Escriba un contrato y vea todo: comercial, medidor, consumos, gestiones y ubicación.", habilitada: false,
+  if (c.puedeAnalisis === true) e.push({
+    id: "analisis_contrato", titulo: "Análisis de contrato", seccion: 3, habilitada: true,
+    descripcion: "Escriba un contrato y vea cartera, consumo, medidor, gestiones y ubicación.",
   });
   if (c.puedeSupervisarActas) e.push({ id: "acta_supervision", titulo: "Aperturas sin registrar", seccion: 4, gestion: true, descripcion: "", habilitada: true });
   // Paso C: «Supervisión y dashboard» (antes «Revisión de reportes»: lista, mapa, indicadores; y catálogo y parámetros para el administrador) solo con el permiso de supervisión

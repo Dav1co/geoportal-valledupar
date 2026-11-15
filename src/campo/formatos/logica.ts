@@ -220,3 +220,22 @@ export function prellenarHoraInicio(t: TipoFormato, inicioIso: string): ValoresC
   const c = camposActivos(t).find((x) => x.codigo === CAMPO_HORA_INICIO && x.tipo_dato === "dia_hora");
   return c ? { [CAMPO_HORA_INICIO]: diaHoraBogota(inicioIso) } : {};
 }
+
+// ---------------- Análisis de contrato: valores que llegan ya marcados ----------------
+/** Valores iniciales que trae quien abre el formato (p. ej. el atajo de posible submedición: `inst_modalidad = "cambio"`), sobre `base` (la hora de inicio ya prellenada).
+ *  Solo PRELLENA: la persona lo puede cambiar. Se aceptan solo campos activos del formato y valores válidos para su tipo (una opción que no exista o esté inactiva se ignora). */
+export function aplicarValoresIniciales(t: TipoFormato, base: ValoresCampos, iniciales: Record<string, unknown> | undefined): ValoresCampos {
+  if (!iniciales) return base;
+  const salida: ValoresCampos = { ...base };
+  const campos = new Map(camposActivos(t).map((c) => [c.codigo, c]));
+  const opcionOk = (c: CampoDef, v: string) => (c.opciones ?? []).some((o) => o.codigo === v && o.activo !== false);
+  for (const [codigo, v] of Object.entries(iniciales)) {
+    const c = campos.get(codigo);
+    if (!c || v === null || v === undefined) continue;
+    if (c.tipo_dato === "si_no") { if (typeof v === "boolean") salida[codigo] = v ? "si" : "no"; else if (v === "si" || v === "no") salida[codigo] = v; continue; }
+    if (c.tipo_dato === "opcion") { if (typeof v === "string" && opcionOk(c, v)) salida[codigo] = v; continue; }
+    if (c.tipo_dato === "opciones") { const arr = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && opcionOk(c, x)) : []; if (arr.length) salida[codigo] = arr; continue; }
+    if (typeof v === "string" || typeof v === "number") salida[codigo] = String(v);
+  }
+  return salida;
+}

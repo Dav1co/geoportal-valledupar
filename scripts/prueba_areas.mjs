@@ -44,6 +44,11 @@ const casos = [
   ["Comercial + acta (el acta vive en el área de campo, dentro de Comercial)", P({ explorar: true, acta: true }), "comercial", "comercial", true],
   ["Técnica + acta (sin comercial)", P({ registro_tecnico: true, acta: true }), "entrada", "tecnica+campo", false],
   ["Comercial + técnica + acta", P({ comercial: true, registro_tecnico: true, acta: true }), "entrada", "comercial+tecnica", true],
+  ["CASOS NUEVOS (análisis de contrato, decisión 12)", null],
+  ["Comercial + análisis de contrato (sin campo)", P({ comercial: true, analisis_contrato: true }), "comercial", "comercial", true],
+  ["Explorar + análisis de contrato", P({ explorar: true, analisis_contrato: true }), "comercial", "comercial", true],
+  ["Solo análisis de contrato (sin comercial ni campo)", P({ analisis_contrato: true }), "campo", "campo", false],
+  ["Técnica + análisis de contrato", P({ registro_tecnico: true, analisis_contrato: true }), "entrada", "tecnica+campo", false],
 ];
 let total = 0, fallas = 0;
 const filas = [];
@@ -86,5 +91,7 @@ ok("técnica + aseo: ventana de entrada; campo + aseo: también (campo es tarjet
 ok("aseo NO abre la Torre A (torre_a falsa) ni la técnica", areasDisponibles(PA({ aseo: true })).comercial === false && areasDisponibles(PA({ aseo: true })).tecnica === false);
 ok("sin permiso de aseo, la pantalla «aseo» no es válida; con él sí", !pantallaValida("aseo", areasDisponibles(PA({ campo: true }))) && pantallaValida("aseo", areasDisponibles(PA({ aseo: true }))));
 ok("servidor anterior (sin las claves de aseo): nadie ve Aseo salvo el administrador", areasDisponibles(P({ explorar: true })).aseo === false && areasDisponibles(P({ admin: true })).aseo === true);
+ok("análisis de contrato: comercial sin campo ve el área de campo (con solo esa tarjeta) desde la cabecera de Comercial", areasDisponibles(P({ comercial: true, analisis_contrato: true })).campo === true && areasDisponibles(P({ comercial: true })).campo === false);
+ok("análisis de contrato = false explícito no abre campo", areasDisponibles(P({ explorar: true, analisis_contrato: false })).campo === false);
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas — ${fallas ? fallas + " FALLA(S)" : "SIN FALLAS"}`);
 process.exit(fallas ? 1 : 0);

@@ -13,7 +13,7 @@ type PermisosPerfil = Partial<NonNullable<PerfilResp["permisos"]>> & {
 };
 
 /** «Acceso solo con módulo asignado» (decisión de David): se entra a Comercial solo con algún modo comercial, a Técnica solo con algún permiso técnico, a Formatos de campo solo con algún
- *  permiso de campo o de acta y a la Interventoría de Aseo solo con algún permiso de aseo. El administrador tiene las cuatro. Sin ninguna: «Sin módulos asignados». Si el servidor declara `torre_b`, se respeta para Técnica. */
+ *  permiso de campo, de acta o de análisis de contrato y a la Interventoría de Aseo solo con algún permiso de aseo. El administrador tiene las cuatro. Sin ninguna: «Sin módulos asignados». Si el servidor declara `torre_b`, se respeta para Técnica. */
 export function areasDisponibles(perfil: PerfilResp | null): AreasDisponibles {
   if (!perfil) return { comercial: false, tecnica: false, campo: false, aseo: false };
   if (perfil.es_admin) return { comercial: true, tecnica: true, campo: true, aseo: true };
@@ -24,7 +24,8 @@ export function areasDisponibles(perfil: PerfilResp | null): AreasDisponibles {
   const hayModoComercial = p.explorar === true || p.focalizacion === true || p.comercial === true || p.rutas === true || p.dashboard === true;
   const comercial = hayModoComercial && (typeof p.torre_a !== "boolean" || p.torre_a === true);
   // Campo se abre también con un permiso de acta (el acta vive en la Torre A): `acta` (captura; el supervisor de actas también la tiene) o `dashboard_acta` (reconocido; su pantalla aún no existe).
-  const campo = p.campo === true || p.dashboard_campo === true || p.acta === true || p.dashboard_acta === true;
+  // También con `analisis_contrato` (decisión 12): quien solo es comercial ve el área con la única tarjeta «Análisis de contrato».
+  const campo = p.campo === true || p.dashboard_campo === true || p.acta === true || p.dashboard_acta === true || p.analisis_contrato === true;
   // Aseo (Torre C): `aseo` (captura; el supervisor de aseo también la tiene) o `dashboard_aseo`; si el servidor declara `torre_c`, se respeta.
   const aseo = typeof p.torre_c === "boolean" ? p.torre_c : p.aseo === true || p.dashboard_aseo === true;
   return { comercial, tecnica: tecnico, campo, aseo };

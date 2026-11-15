@@ -1,4 +1,5 @@
 import { supabase, FUNCTIONS_URL } from "../lib/supabase";
+import type { RespuestaAnalisis } from "./analisis/tipos";
 
 // Cliente de la Edge Function geoportal-campo (contrato: edge_contrato.md del Paso A + límite de ritmo del Paso B). Aquí NO hay etiquetas de tipos ni de grupos: todo llega del catálogo del servidor.
 
@@ -117,6 +118,8 @@ export const apiCampo = {
   prepararSubida: (cantidad: number, origen: "campo" | "escritorio") => pedir<Preparacion>("preparar_subida", { cuerpo: { cantidad, origen } }),
   // 30 s: un envío lento en señal débil no debe cortarse antes de tiempo; si se corta, el reintento con el mismo reporte_id es seguro.
   crear: (cuerpo: CuerpoCrear) => pedir<Confirmacion>("crear", { cuerpo, timeoutMs: 30000 }),
+  /** Análisis de contrato (solo lectura). Trae nombre y teléfono (dato personal): la respuesta NO se guarda ni se reutiliza; cada consulta va al servidor (Cache-Control: no-store). */
+  analisisContrato: (contrato: string) => pedir<RespuestaAnalisis>("analisis_contrato", { qs: { contrato } }),
 
   /** Sube UNA foto directo a Storage con la URL firmada (token) que entregó la Edge. No pasa por la Edge ni usa la sesión. Una foto que ya estaba (409) cuenta como subida. */
   async subirFoto(ruta: string, tokenSubida: string, foto: Blob): Promise<void> {

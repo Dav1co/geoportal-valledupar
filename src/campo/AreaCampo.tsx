@@ -13,23 +13,31 @@ import { supabase } from "../lib/supabase";
 
 // «Supervisión y dashboard» (antes «Revisión de reportes», Paso C): carga diferida. Quien no tiene el permiso de supervisión no descarga este código (ni MapLibre, que viene dentro del mapa).
 const Revision = lazy(() => import("./dashboard/Revision"));
+// «Análisis de contrato»: también diferida (su mapa trae MapLibre, que solo se descarga al abrir la sección «Ubicación»).
+const AnalisisContrato = lazy(() => import("./analisis/AnalisisContrato"));
+/** Formato al que lleva el atajo de posible submedición, y lo que llega marcado («Cambio de medidor»). */
+const FORMATO_CAMBIO = "instalacion_medidor";
+const VALORES_CAMBIO = { inst_modalidad: "cambio" };
 
 // Sección «Formatos de campo» de la Torre A. Qué puede hacer la persona lo decide el SERVIDOR (ruta formulario); aquí solo se dibuja.
 // Se usa como pantalla completa para quien solo tiene campo (sin mapa ni datos comerciales) y como vista dentro del área Comercial para quien tiene las dos cosas.
 // Las pantallas son ENTRADAS de una lista (entradas.ts): reporte general, formatos de actividad (Paso D) y acta de inspección (solo con el permiso `acta`; su pantalla aún no existe).
 // Los formatos «Próximamente» no tienen acción. Esta lista de formatos es de interfaz (no es el catálogo de tipos de reporte, que viene del servidor).
 // «Daños» ya no está: son tipos del Reporte general (daño de red de acueducto y de alcantarillado, tapa de manhole, rejilla de sumidero, daño de obra de terceros); no habrá un formulario aparte.
-// «SCRR — Próximamente» pasó a ser la entrada «Análisis de contrato» (pendiente) de entradas.ts; «Instalación de medidor» y «Revisión previa» ya son formatos de actividad.
+// «SCRR — Próximamente» pasó a ser la entrada «Análisis de contrato» de entradas.ts (permiso `analisis_contrato`); «Instalación de medidor» y «Revisión previa» ya son formatos de actividad.
 const ROTULO_PERFIL: Record<FormularioCampo["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor de reportes de campo", reportante: "Reporte de campo" };
 
 /** Permisos que decide el servidor (App los toma del perfil). `acta`: puede capturar actas (si no se informa, la entrada del acta no aparece). `campo`: tiene permiso de campo; por omisión sí (como antes).
- *  Quien solo tiene acta (`campo` falso) NO pide el formulario de campo (su Edge le respondería 403) y ve únicamente las entradas del acta. `dashboardActa`: supervisor de actas (marcador, sin pantalla aún). */
-export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = false }: { correo: string; acta?: boolean; campo?: boolean; dashboardActa?: boolean }) {
+ *  Quien solo tiene acta (`campo` falso) NO pide el formulario de campo (su Edge le respondería 403) y ve únicamente las entradas del acta. `dashboardActa`: supervisor de actas (marcador, sin pantalla aún).
+ *  `analisis`: permiso `analisis_contrato` (o administrador). Quien solo tiene este (usuario comercial, decisión 12) tampoco pide el formulario y ve solo la tarjeta «Análisis de contrato». */
+export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = false, analisis = false }: { correo: string; acta?: boolean; campo?: boolean; dashboardActa?: boolean; analisis?: boolean }) {
   const [def, setDef] = useState<FormularioCampo | null>(null);
   const [error, setError] = useState<ErrorCampo | null>(null);
   const [intento, setIntento] = useState(0);
   const [abierta, setAbierta] = useState<EntradaId | null>(null);   // pantalla abierta (null = la lista de entradas)
   const [contratoPuente, setContratoPuente] = useState("");   // contrato que pasa de un formulario a otro (formato con irregularidad → acta; «me equivoqué de formulario» al cancelar); vacío = nada que precargar
+  const [formatoInicial, setFormatoInicial] = useState<string | undefined>(undefined);                    // atajo de submedición: formato que se abre de una vez…
+  const [valoresIniciales, setValoresIniciales] = useState<Record<string, unknown> | undefined>(undefined); // …y lo que trae marcado («Cambio»)
   const [version, setVersion] = useState(0);        // sube con cada «Hacer otro reporte»: el formulario nace limpio y se vuelve a leer la definición
 
   useEffect(() => {
@@ -64,7 +72,11 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
     ...(campo && def?.puede.reportar && desde !== "formatos" && formatosDisponibles(def.grupos).length > 0 ? [{ id: "formatos", rotulo: "Formatos de actividad" }] : []),
     ...(acta && desde !== "acta" ? [{ id: "acta", rotulo: "Reportar posible pérdida" }] : []),
   ];
-  const irA = (destino: string, contrato: string) => { setContratoPuente(contrato); setVersion((v) => v + 1); setAbierta(destino as EntradaId); };
+  const irA = (destino: string, contrato: string) => { setContratoPuente(contrato); setFormatoInicial(undefined); setValoresIniciales(undefined); setVersion((v) => v + 1); setAbierta(destino as EntradaId); };
+  // Atajo de «Análisis de contrato» (posible submedición): Instalación de medidor con «Cambio» ya marcado y el contrato cargado. Solo si el formato está activo y puede reportar.
+  const puedeCambioMedidor = campo && def?.puede.reportar === true && formatosDisponibles(def.grupos).some((g) => g.tipos.some((t) => t.codigo === FORMATO_CAMBIO));
+  const abrirCambioMedidor = (contrato: string) => { setContratoPuente(contrato); setFormatoInicial(FORMATO_CAMBIO); setValoresIniciales(VALORES_CAMBIO); setVersion((v) => v + 1); setAbierta("formatos"); };
+  const volver = () => { setContratoPuente(""); setFormatoInicial(undefined); setValoresIniciales(undefined); setAbierta(null); };
 
   if (abierta === "acta" && acta) {
     return <PantallaActa correo={correo} contratoInicial={contratoPuente} destinos={destinosDesde("acta")} onIrA={irA} onVolver={() => { setContratoPuente(""); setAbierta(null); }} />;
@@ -75,10 +87,18 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   }
   if (def && abierta === "formatos") {
     return <FormatosCampo key={version} def={def} correo={correo} contratoInicial={contratoPuente} destinos={destinosDesde("formatos")} onIrA={irA}
-      onVolver={() => { setContratoPuente(""); setAbierta(null); }} puedeActa={acta} onAbrirActa={(c) => { setContratoPuente(c); setAbierta("acta"); }} />;
+      onVolver={volver} puedeActa={acta} onAbrirActa={(c) => { setContratoPuente(c); setAbierta("acta"); }} formatoInicial={formatoInicial} valoresIniciales={valoresIniciales} />;
   }
   if (abierta === "acta_supervision" && dashboardActa) {
     return <AperturasSinRegistrar onVolver={() => setAbierta(null)} />;
+  }
+
+  if (abierta === "analisis_contrato" && analisis) {
+    return (
+      <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando Análisis de contrato…</p></section></div>}>
+        <AnalisisContrato onVolver={volver} destinos={destinosDesde("analisis_contrato")} onIrA={irA} puedeCambioMedidor={puedeCambioMedidor} onCambioMedidor={abrirCambioMedidor} />
+      </Suspense>
+    );
   }
 
   if (abierta === "revision" && def?.puede.supervisar) {
@@ -87,14 +107,14 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
 
   const entradas = entradasDeCampo({
     puedeReportar: def?.puede.reportar ?? false, hayFormatos: def ? formatosDisponibles(def.grupos).length > 0 : false,
-    puedeActa: acta, puedeCampo: campo, puedeSupervisarActas: dashboardActa, puedeSupervisar: def?.puede.supervisar ?? false,
+    puedeActa: acta, puedeCampo: campo, puedeSupervisarActas: dashboardActa, puedeSupervisar: def?.puede.supervisar ?? false, puedeAnalisis: analisis,
   });
 
   return (
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
-        <h1>{campo ? "Formatos de campo" : "Reportar posible pérdida"}</h1>
-        <p className="campo-sub">{def ? ROTULO_PERFIL[def.perfil] : "Registro digital de actas"}</p>
+        <h1>{campo || !acta ? "Formatos de campo" : "Reportar posible pérdida"}</h1>
+        <p className="campo-sub">{def ? ROTULO_PERFIL[def.perfil] : acta ? "Registro digital de actas" : "Consulta de contratos"}</p>
         <div className="campo-formatos">
           {entradas.map((e, i) => {
             const separar = i > 0 && entradas[i - 1].seccion !== e.seccion;
