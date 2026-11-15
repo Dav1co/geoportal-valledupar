@@ -1,5 +1,5 @@
 import type { CampoDef, FilaReporte, FormularioRev, OpcionDef } from "./apiRevision";
-import { fmtInstante, fmtLocal, fmtNumero } from "./formatoRevision";
+import { fmtDuracion, fmtInstante, fmtLocal, fmtNumero } from "./formatoRevision";
 
 // REGISTRO DE COLUMNAS (Paso C, sección 7 del encargo): la tabla, el detalle, el filtro de tipo y las descargas leen de AQUÍ. Las columnas base son las que existen para todo formato
 // (contrato de D, §4); las propias de cada tipo se GENERAN de las definiciones del catálogo (`campos[]`): agregar un campo al catálogo agrega su columna sin tocar pantallas.
@@ -20,12 +20,26 @@ export type Columna = {
 const si = (b: boolean | null | undefined) => (b === null || b === undefined ? "" : b ? "Sí" : "No");
 const nombreEstado = (f: FilaReporte, c: Contexto) => c.estados.get(f.estado) ?? f.estado;
 const fecha = (f: FilaReporte) => (f.registrado_local ? fmtLocal(f.registrado_local) : fmtInstante(f.registrado_en));
+/** Pasada 14/11 · inicio (hora en que se abrió el formulario) y duración hasta el registro (fin). Vacíos en los reportes de antes. */
+const hayInicio = (f: FilaReporte) => !!(f.inicio_local || f.inicio_en);
+export const textoInicio = (f: FilaReporte): string => !hayInicio(f) ? "" : `${f.inicio_local ? fmtLocal(f.inicio_local) : fmtInstante(f.inicio_en)}${f.inicio_origen === "dispositivo" ? " (celular)" : ""}`;
+export function duracionMin(f: FilaReporte): number | null {
+  if (f.duracion_min !== undefined && f.duracion_min !== null) return f.duracion_min;
+  if (!f.inicio_en || !f.registrado_en) return null;
+  const ms = Date.parse(f.registrado_en) - Date.parse(f.inicio_en);
+  return Number.isFinite(ms) ? Math.round(ms / 6000) / 10 : null;
+}
+export const textoDuracion = (f: FilaReporte): string => { const m = duracionMin(f); return m === null ? "" : fmtDuracion(Math.max(0, m) * 60); };
 
 /** Columnas base. `conPasoD`: hay datos del Paso D en la respuesta (consecutivo, resultado, causal, datos propios): se muestran por omisión solo entonces. */
 export function columnasBase(conPasoD = false): Columna[] {
   const c = (x: Omit<Columna, "origen" | "filtrable"> & { filtrable?: boolean }): Columna => ({ origen: "base", filtrable: false, ...x });
   return [
     c({ clave: "registrado_en", etiqueta: "Fecha y hora", tipo: "fecha_hora", porOmision: true, ordenable: true, enDescarga: true, valor: (f) => f.registrado_local ?? f.registrado_en, texto: (f) => fecha(f) }),
+    c({ clave: "inicio", etiqueta: "Inicio", tipo: "fecha_hora", porOmision: true, ordenable: true, enDescarga: true, valor: (f) => f.inicio_local ?? f.inicio_en ?? null, texto: textoInicio }),
+    c({ clave: "duracion", etiqueta: "Duración", tipo: "numero", porOmision: true, ordenable: true, enDescarga: true, unidad: "min", valor: (f) => duracionMin(f), texto: textoDuracion }),
+    c({ clave: "inicio_origen", etiqueta: "Origen del inicio", tipo: "etiqueta", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.inicio_origen ?? null,
+        texto: (f) => (f.inicio_origen === "dispositivo" ? "Celular" : f.inicio_origen === "servidor" ? "Servidor" : "") }),
     c({ clave: "consecutivo", etiqueta: "Consecutivo", tipo: "texto", porOmision: conPasoD, ordenable: true, enDescarga: true, valor: (f) => f.consecutivo ?? null, texto: (f) => f.consecutivo ?? "" }),
     c({ clave: "tipo", etiqueta: "Tipo", tipo: "etiqueta", porOmision: true, ordenable: true, filtrable: true, enDescarga: true, valor: (f) => f.tipo.nombre, texto: (f) => f.tipo.nombre }),
     c({ clave: "grupo", etiqueta: "Grupo", tipo: "etiqueta", porOmision: true, ordenable: true, filtrable: true, enDescarga: true, valor: (f) => f.grupo.nombre, texto: (f) => f.grupo.nombre }),

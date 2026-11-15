@@ -165,6 +165,12 @@ export function validarFormato(t: TipoFormato, e: EstadoFormato): string[] {
     if ("error" in r) f.push(r.error);
     else if (r.vacio && c.obligatorio && !inefectivo) f.push(`Falta «${c.nombre}».`);
   }
+  // Pasada 14/11 (decisión 10): las horas del papel, si el formato las lleva, en orden (solo en pantalla; la base guarda lo que se escriba)
+  const hi = e.valores[CAMPO_HORA_INICIO], hf = e.valores[CAMPO_HORA_FINAL];
+  if (typeof hi === "string" && typeof hf === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(hi) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(hf) && hf < hi
+      && camposVisibles(t, e.valores).some((c) => c.codigo === CAMPO_HORA_FINAL)) {
+    f.push("La hora final no puede ser anterior a la hora de inicio.");
+  }
 
   // Fotos
   const etiquetas = etiquetasActivas(t);
@@ -199,3 +205,18 @@ export function ordenarFotos<T>(t: TipoFormato, porEtiqueta: Record<string, T | 
 /** Cuerpo de las fotos para «crear»: la etiqueta solo viaja si el formato usa etiquetas (la base rechaza etiquetas en formatos que no las usan). */
 export const fotosParaCrear = (ordenadas: { orden: number; etiqueta: string | null }[], rutas: Map<number, string>): { orden: number; ruta: string; etiqueta?: string }[] =>
   ordenadas.map((o) => ({ orden: o.orden, ruta: rutas.get(o.orden) ?? "", ...(o.etiqueta ? { etiqueta: o.etiqueta } : {}) }));
+
+// ---------------- Pasada 14/11: hora de inicio del papel ----------------
+const BOGOTA_DH = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+/** Instante → «AAAA-MM-DDTHH:MM» en hora de Bogotá (el formato de los campos «día y hora»). */
+export function diaHoraBogota(iso: string): string {
+  const p = Object.fromEntries(BOGOTA_DH.formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+export const CAMPO_HORA_INICIO = "hora_inicio";
+export const CAMPO_HORA_FINAL = "hora_final";
+/** Valores iniciales del formato: si lleva «Hora de inicio» (día y hora), nace con la hora de apertura en Bogotá; la persona la puede cambiar. */
+export function prellenarHoraInicio(t: TipoFormato, inicioIso: string): ValoresCampos {
+  const c = camposActivos(t).find((x) => x.codigo === CAMPO_HORA_INICIO && x.tipo_dato === "dia_hora");
+  return c ? { [CAMPO_HORA_INICIO]: diaHoraBogota(inicioIso) } : {};
+}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { TEXTO_NO_APLICADO } from "../campo/apiCampo";
 import { apiTec, ErrorTec, type DosisCuerpo, type FormularioDef, type QuimicosResp, type VariableDef } from "./apiTecnica";
-import { borrarBorrador, comunVigente, guardarBorrador, leerBorrador, nuevaClaveEnvio, type MarcaEnviada } from "./borrador";
+import { borrarBorrador, comunVigente, guardarBorrador, inicioAlAbrir, inicioAlEnviar, leerBorrador, nuevaClaveEnvio, nuevoInicio, type MarcaEnviada } from "./borrador";
 import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
 import { decimalesAMostrar, formatearNumero, interpretarNumero } from "./numeros";
 
@@ -44,6 +44,8 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
   const [hora, setHora] = useState<string>(inicial?.hora ?? def.hora_propuesta);
   const [textos, setTextos] = useState<Record<string, string>>(inicial?.textos ?? {});
   const [comunEnviada, setComunEnviada] = useState<MarcaEnviada | null>(inicial?.comunEnviada ?? null);
+  // Hora de inicio de ESTE formulario abierto (la del celular al abrirlo; la del borrador si se recargó). Cambia solo al guardar con éxito o al descartar: empieza otro.
+  const [inicio, setInicio] = useState<string>(() => inicioAlAbrir(inicial?.inicio));
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [descartando, setDescartando] = useState(false);       // panel «¿Descartar lo escrito?»
   const [fase, setFase] = useState<"editando" | "confirmando" | "enviando">("editando");
@@ -65,6 +67,7 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
   function descartar() {
     setTextos({}); setErrores({}); setDosisAbierta(false); setHora(def.hora_propuesta); setDescartando(false);
     intento.current = { clave: nuevaClaveEnvio(), huella: "" };
+    setInicio(nuevoInicio());
     if (!comunVigente(comunEnviada)) borrarBorrador(clave);          // con la marca vigente, el guardado automático deja solo la marca
     setAviso({ tipo: "info", texto: "Se descartó lo escrito en este equipo. Lo ya guardado en el servidor no se tocó." });
   }
@@ -81,10 +84,10 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
   // Borrador local (con una pequeña espera para no escribir en cada tecla). guardarBorrador decide qué conservar: sin texto y sin marca vigente, nada.
   useEffect(() => {
     const t = setTimeout(() => {
-      guardarBorrador(clave, { uid, dia: def.fecha_hoy, planta, hora, textos, claveEnvio: intento.current.clave, comunEnviada });
+      guardarBorrador(clave, { uid, dia: def.fecha_hoy, planta, hora, textos, claveEnvio: intento.current.clave, comunEnviada, inicio });
     }, 400);
     return () => clearTimeout(t);
-  }, [clave, uid, def.fecha_hoy, planta, hora, textos, comunEnviada]);
+  }, [clave, uid, def.fecha_hoy, planta, hora, textos, comunEnviada, inicio]);
 
   // El plegado del bloque «Para las dos plantas» CADUCA a los 45 minutos: se revisa al volver a la pantalla (pestaña visible, foco) y cada 30 s.
   const vencerComun = useCallback((): boolean => {
@@ -193,8 +196,11 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
     // Un reintento (red caída, sin respuesta) lleva la MISMA clave; si la persona cambió algo, la clave es nueva para que el servidor no devuelva el envío anterior.
     const huella = JSON.stringify(base);
     if (intento.current.huella !== huella) intento.current = { clave: intento.current.huella === "" ? intento.current.clave : nuevaClaveEnvio(), huella };
+    // El inicio NO entra en la huella: un reintento lleva el mismo inicio y la misma clave.
+    const ini = inicioAlEnviar(inicio);
+    if (ini !== inicio) setInicio(ini);
     try {
-      const r = await apiTec.registrar({ ...base, clave_envio: intento.current.clave });
+      const r = await apiTec.registrar({ ...base, clave_envio: intento.current.clave, inicio_dispositivo: ini });
       const incluyoComun = base.valores.some((x) => ambas.some((v) => v.codigo === x.variable));
       setTextos((t) => {
         const n = { ...t };
@@ -207,6 +213,7 @@ export function FormularioCaptura({ def, uid, onGuardado }: { def: FormularioDef
       });
       if (incluyoComun) setComunEnviada({ hora: base.hora, ts: Date.now() });
       intento.current = { clave: nuevaClaveEnvio(), huella: "" };
+      setInicio(nuevoInicio());          // el formulario queda listo para la siguiente medición: es otro formulario abierto
       reponerHora.current = true;
       const otraFecha = r.fecha_muestra && r.fecha_muestra !== def.fecha_hoy ? ` Quedó con la fecha ${dmy(r.fecha_muestra)}, porque la muestra es de antes de la medianoche.` : "";
       setAviso({

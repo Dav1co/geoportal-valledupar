@@ -141,3 +141,24 @@
   .rv-descargas { align-items: flex-start; }
   .rv-dl { grid-template-columns: 1fr; }
 }
+
+/* Pasada 14/11 · Personal (tarjetas: caben a 380 px y forman rejilla en escritorio) */
+.rv-per-cajitas { display: grid; gap: 8px; }
+.rv-per-cajita { background: #f2f6fa; border: 1px solid #dde5ea; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.rv-per-buscar { max-width: 360px; }
+.rv-per-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.rv-per-tarjeta { border: 1px solid #dde5ea; border-radius: 10px; padding: 12px; background: #fff; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rv-per-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.rv-per-cab > div { min-width: 0; overflow-wrap: anywhere; }
+.rv-per-dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: 14px; }
+.rv-per-dl dt { color: #52626f; } .rv-per-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.rv-per-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.rv-per-chip { background: #e8f1fb; color: #1e5aa8; border-radius: 999px; padding: 2px 8px; font-size: 13px; }
+.rv-per-todos { color: #166b3f; }
+.rv-per-forms { border: 1px solid #dde5ea; border-radius: 10px; padding: 8px 12px; margin: 0; display: grid; gap: 6px; max-height: 46vh; overflow: auto; }
+.rv-per-grupo-t { font-weight: 700; font-size: 13px; color: #52626f; margin-top: 4px; }
+.rv-per-hist { display: grid; gap: 8px; margin-top: 8px; }
+.rv-per-eventos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rv-per-evento { border-left: 3px solid #dde5ea; padding: 4px 10px; overflow-wrap: anywhere; }
+.rv-per-ev-cab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rv-per-forms .rv-check, .rv-per-tarjeta .rv-boton-sec { min-height: 44px; }

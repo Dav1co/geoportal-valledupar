@@ -37,8 +37,8 @@ export function VentanaEntrada({ areas, onElegir }: { areas: AreasDisponibles; o
             <button type="button" className="area-tarjeta area-tarjeta-campo" onClick={() => onElegir("campo")}>
               <span className="area-texto">
                 <h2 className="area-titulo"><span>GEOPORTAL</span><strong>FORMATOS DE CAMPO</strong></h2>
-                <p>Reporte general: registre en segundos lo que encontró en terreno, con fotos y ubicación.</p>
-                <span className="area-etiqueta">Torre A · Disponible: Reporte general</span>
+                <p>Reportar anomalía: registre en segundos lo que encontró en terreno, con fotos y ubicación.</p>
+                <span className="area-etiqueta">Torre A · Disponible: Reportar anomalía</span>
               </span>
             </button>
           )}

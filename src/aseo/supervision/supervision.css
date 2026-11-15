@@ -17,3 +17,6 @@
 .as-persona-cab { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; } .as-fila { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .td-marca-aviso { background: #fff3d6; color: #7a4a00; }
 @media (max-width: 640px) { .as-dl > div { grid-template-columns: 1fr; gap: 2px; } .as-barra { grid-template-columns: 1fr; gap: 2px; } .as-barra-v { text-align: left; } }
+
+/* Inicio, fin y duración en la lista de auditorías (pasada 14/11): sin cortar la fecha y la hora */
+.as-hora { white-space: nowrap; }

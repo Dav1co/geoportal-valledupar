@@ -55,5 +55,6 @@ export function filaDeDescarga(r: FilaDescarga): FilaReporte {
     fuera_de_zona: r.fuera_de_zona, ...(r.autor !== undefined ? { autor: r.autor } : {}), registrado_en: "", registrado_local: r.registrado_local, estado: r.estado, estado_desde: null, oculto: r.oculto,
     reporte_original_id: r.reporte_original_id, grupo_duplicados: r.grupo_duplicados, tamano_grupo: r.tamano_grupo, n_fotos: r.n_fotos, consecutivo: r.consecutivo, resultado: r.resultado,
     causal: r.causal_nombre ? { codigo: "", nombre: r.causal_nombre } : null, orden_trabajo_id: r.orden_trabajo_id, datos: r.datos,
+    inicio_local: r.inicio_local ?? null, inicio_origen: (r.inicio_origen as FilaReporte["inicio_origen"]) ?? null, duracion_min: r.duracion_min ?? null,   // pasada 14/11
   };
 }

@@ -9,7 +9,8 @@ import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
 import { apiFormatos } from "./apiFormatos";
 import { SeccionConstancia } from "../constancia/SeccionConstancia";
 import { useConstancia } from "../constancia/useConstancia";
-import { agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
+import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "../inicio";
+import { prellenarHoraInicio, agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
 import { etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
 
 // Formulario de UN formato del Paso D (campos propios, fotos con etiqueta, resultado y causal, consecutivo). Pensado para el celular (380 px) y una mano.
@@ -39,7 +40,10 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const [descripcion, setDescripcion] = useState("");
   const [contrato, setContrato] = useState(contratoInicial);
   const [cancelando, setCancelando] = useState(false);
-  const [valores, setValores] = useState<ValoresCampos>({});
+  const recalcularInicio = useRef(false);
+  const inicio = useRef<RelojInicio>(abrirReloj());   // pasada 14/11: hora del celular al abrir este formato
+  // Decisión 10: «Hora de inicio» (la del papel) nace con la hora de apertura; la persona la puede cambiar
+  const [valores, setValores] = useState<ValoresCampos>(() => prellenarHoraInicio(tipo, inicio.current.iso));
   const [porEtiqueta, setPorEtiqueta] = useState<Record<string, FotoLocal | null>>({});
   const [adicionales, setAdicionales] = useState<FotoLocal[]>([]);
   const [camaraEn, setCamaraEn] = useState<Destino | null>(null);
@@ -121,6 +125,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
     enviando.current = true;
     setFase("enviando");
     setErrorEnvio(null);
+    if (recalcularInicio.current) { inicio.current = recalcularReloj(inicio.current); recalcularInicio.current = false; }
     const { datos } = aplanarDatos(tipo, valores);
     try {
       const ordenadas = ordenarFotos<FotoLocal>(tipo, refEtq.current, refAdic.current);
@@ -146,6 +151,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         fotos: fotosParaCrear(ordenadas, rutas),
         datos, resultado: tipo.genera_resultado ? (resultado || null) : null, causal: inefectivo ? causal : null,
         ...(cons.bloque ? { constancia: cons.bloque } : {}),
+        inicio_dispositivo: inicio.current.iso,
       });
       soltarTodo();
       setInvitarActa(marcoIrr && puedeActa && onAbrirActa && tipo.requiere_contrato !== "no" && contrato ? { contrato } : null);
@@ -155,6 +161,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
       setFase("guardado");
     } catch (e) {
       const err = e instanceof ErrorCampo ? e : new ErrorCampo("red", "No se pudo completar el envío.", 0);
+      if (esRechazoPorHora(err.message)) recalcularInicio.current = true;   // la persona corrige la hora del celular: el SIGUIENTE envío recalcula el inicio (una vez)
       if (err.tipo === "subida_vencida") {
         prep.current = null;                                                      // se pide una preparación nueva y se suben todas las fotos de nuevo
         setPreparada(false);
@@ -189,7 +196,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
           {invitarActa && (
             <div className="campo-nota" role="note">
               <p>Marcó que se encontró una irregularidad. Este formato no reemplaza el acta de inspección técnica: ábrala ahora sobre el contrato {invitarActa.contrato}.</p>
-              <button type="button" className="tec-boton" onClick={() => onAbrirActa?.(invitarActa.contrato)}>Abrir el acta de inspección técnica</button>
+              <button type="button" className="tec-boton" onClick={() => onAbrirActa?.(invitarActa.contrato)}>Ir a «Reportar posible pérdida»</button>
             </div>
           )}
           <button type="button" className="tec-boton" onClick={onOtro}>Hacer otro reporte</button>

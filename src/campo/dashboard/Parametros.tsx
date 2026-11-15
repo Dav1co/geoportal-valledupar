@@ -9,6 +9,7 @@ const GRUPOS: { titulo: string; claves: (p: ParametroDef) => boolean }[] = [
   { titulo: "Ritmo de reportes", claves: (p) => p.clave.startsWith("limite_") || p.clave === "multiplo_supervisor" || p.clave === "ventana_limite_minutos" },
   { titulo: "Duplicados", claves: (p) => p.clave === "distancia_duplicados_m" },
   { titulo: "Fotos y descripción", claves: (p) => p.clave === "max_fotos" || p.clave === "max_bytes_foto" || p.clave === "max_descripcion" },
+  { titulo: "Hora de inicio", claves: (p) => p.clave === "max_horas_inicio" },
 ];
 /** «1.234,5» o «1234.5» o «1234,5» → 1234.5; vacío o ilegible → null. */
 export function leerNumero(t: string): number | null {
@@ -18,7 +19,8 @@ export function leerNumero(t: string): number | null {
 }
 const rango = (p: ParametroDef) => `${p.minimo === null ? "—" : fmtNumero(p.minimo, 6)} a ${p.maximo === null ? "—" : fmtNumero(p.maximo, 6)}`;
 
-export function Parametros({ def, alCambiar }: { def: FormularioRev; alCambiar: () => void }) {
+/** `soloLectura` (pasada 14/11): el supervisor ve los valores, el rango y quién los cambió, sin botones (la base solo deja cambiarlos al administrador). */
+export function Parametros({ def, alCambiar, soloLectura = false }: { def: FormularioRev; alCambiar: () => void; soloLectura?: boolean }) {
   const lista = def.parametros ?? [];
   const [edit, setEdit] = useState<string | null>(null); const [valor, setValor] = useState(""); const [motivo, setMotivo] = useState("");
   const [paso, setPaso] = useState<"editar" | "confirmar">("editar"); const [enviando, setEnviando] = useState(false);
@@ -66,7 +68,7 @@ export function Parametros({ def, alCambiar }: { def: FormularioRev; alCambiar: 
           <div><strong>{p.descripcion.replace(/\s*\(PROPUESTA[^)]*\)/i, "").replace(/\s*PROPUESTA\.?$/i, "")}</strong><div className="rv-tenue">{p.clave}</div></div>
           <div className="rv-param-v"><span className="rv-tarjeta-v">{fmtNumero(p.valor, 6)}</span> <span className="rv-tenue">{p.unidad}</span></div>
           <div className="rv-tenue">Rango válido: {rango(p)}<br />{p.actualizado_por ? `Cambió ${p.actualizado_por} · ${fmtInstante(p.actualizado_en)}` : "Sin cambios desde la instalación"}</div>
-          <button type="button" className="rv-boton-sec rv-corto" onClick={() => abrir(p)} disabled={editando}>Cambiar</button>
+          {soloLectura ? null : <button type="button" className="rv-boton-sec rv-corto" onClick={() => abrir(p)} disabled={editando}>Cambiar</button>}
         </div>
         {editando ? (
           <div className="rv-param-edit">
@@ -84,6 +86,7 @@ export function Parametros({ def, alCambiar }: { def: FormularioRev; alCambiar: 
   return (
     <section className="rv-seccion" aria-labelledby="rv-par-tit">
       <div><h2 id="rv-par-tit">Parámetros</h2><p className="rv-sub">Valores que el administrador puede ajustar sin cambiar el sistema. <strong>Un cambio de ritmo, de distancia de duplicados, de fotos, de descripción o de zona se aplica de inmediato.</strong> Todo cambio exige motivo y queda auditado con el valor anterior y el nuevo.</p></div>
+      {soloLectura ? <div className="rv-aviso rv-aviso-info" role="note">Solo el administrador puede cambiar los parámetros. Aquí ve los valores vigentes, su rango y quién los cambió.</div> : null}
       {ok ? <div className="rv-aviso rv-aviso-ok" role="status">{ok}</div> : null}
       {lista.length === 0 ? <div className="rv-aviso rv-aviso-info" role="status">El servidor aún no entrega los parámetros (falta aplicar el Paso C en la base).</div> : null}
       {GRUPOS.map((g) => { const ps = lista.filter(g.claves); return ps.length ? <div key={g.titulo}><h3 className="rv-h3">{g.titulo}</h3>{ps.map(fila)}</div> : null; })}
@@ -92,7 +95,7 @@ export function Parametros({ def, alCambiar }: { def: FormularioRev; alCambiar: 
         <div>
           <h3 className="rv-h3">Caja de zona de operación</h3>
           <p className="rv-sub">Fuera de esta caja el reporte se guarda igual, con la marca «Fuera de zona». Actual: latitud {fmtNumero(zonaP[0].valor, 6)} a {fmtNumero(zonaP[1].valor, 6)}; longitud {fmtNumero(zonaP[2].valor, 6)} a {fmtNumero(zonaP[3].valor, 6)}.</p>
-          {!zona ? <button type="button" className="rv-boton-sec" onClick={abrirZona}>Cambiar la caja de zona</button> : (
+          {soloLectura ? null : !zona ? <button type="button" className="rv-boton-sec" onClick={abrirZona}>Cambiar la caja de zona</button> : (
             <div className="rv-param-edit">
               <div className="rv-zona">{ZONA.map((k) => { const p = zonaP.find((x) => x.clave === k) as ParametroDef; return (
                 <label key={k} className="rv-campo">{k === "zona_lat_min" ? "Latitud mínima (sur)" : k === "zona_lat_max" ? "Latitud máxima (norte)" : k === "zona_lon_min" ? "Longitud mínima (occidente)" : "Longitud máxima (oriente)"}

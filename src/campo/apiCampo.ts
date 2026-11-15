@@ -19,6 +19,8 @@ export type CuerpoCrear = {
   reporte_id: string; tipo: string; subtipo?: string | null; descripcion?: string | null; contrato?: string | null;
   lat: number; lon: number; precision_m?: number | null; riesgo_inmediato: boolean; origen: "campo" | "escritorio";
   fotos: { orden: number; ruta: string }[];
+  /** Pasada 14/11: hora del celular al abrir el formulario (ISO con zona). */
+  inicio_dispositivo?: string;
 };
 
 /** Cómo debe reaccionar la pantalla. «red»: sin respuesta (el envío puede o no haber llegado; reintentar con el MISMO reporte_id es seguro). «sesion»: el token venció.

@@ -34,7 +34,7 @@ async function pedir<T>(funcion: "geoportal-acta" | "geoportal-campo", accion: s
 
 export const DOCUMENTOS = [
   { codigo: "acta_inspeccion", nombre: "Acta de inspección técnica" },
-  { codigo: "revision_previa", nombre: "Revisión previa" },
+  { codigo: "revision_previa", nombre: "Revisiones generales" },
   { codigo: "revision_pqr", nombre: "Revisión PQR" },
   { codigo: "instalacion_medidor", nombre: "Instalación de medidor" },
   { codigo: "instalacion_acometida", nombre: "Instalación de acometida" },

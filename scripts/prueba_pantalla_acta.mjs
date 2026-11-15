@@ -193,12 +193,12 @@ const form = (id) => dibujar(h(FormularioActa, { cat, actaId: id, correo: CORREO
 {
   const area = (props) => sinEtiquetas(dibujar(h(AreaCampo, { correo: CORREO, ...props })));
   const soloActa = area({ acta: true, campo: false });
-  ok("área (solo acta): entra directo y ve ÚNICAMENTE la entrada del acta", soloActa.includes("Acta de inspección") && !soloActa.includes("Reporte general") && !soloActa.includes("Formatos de actividad") && !soloActa.includes("Instalación de medidor") && !soloActa.includes("Cargando"));
+  ok("área (solo acta): entra directo y ve ÚNICAMENTE la entrada del acta", soloActa.includes("Reportar posible pérdida") && !soloActa.includes("Reportar anomalía") && !soloActa.includes("Análisis de contrato") && !soloActa.includes("Formatos de actividad") && !soloActa.includes("Instalación de medidor") && !soloActa.includes("Cargando"));
   ok("área (solo acta): no muestra el error de «Sin acceso a Formatos de campo»", !soloActa.includes("Sin acceso a Formatos de campo"));
-  ok("área (solo acta): la entrada del acta se puede abrir (es un botón habilitado, ya no un marcador)", /<button[^>]*campo-formato-activo[^>]*>\s*<strong>Acta de inspección/.test(dibujar(h(AreaCampo, { correo: CORREO, acta: true, campo: false }))) && !soloActa.includes("Próximamente. Registro digital"));
+  ok("área (solo acta): la entrada del acta se puede abrir (es un botón habilitado, ya no un marcador)", /<button[^>]*campo-formato-activo[^>]*>\s*<strong>Reportar posible pérdida/.test(dibujar(h(AreaCampo, { correo: CORREO, acta: true, campo: false }))) && !soloActa.includes("Próximamente. Registro digital"));
   const nada = area({ acta: false, campo: false });
-  ok("área (sin acta ni campo): ninguna entrada (ni botones)", !nada.includes("Reporte general") && !nada.includes("Registro digital que acompaña") && !/<button/.test(dibujar(h(AreaCampo, { correo: CORREO, acta: false, campo: false }))));
-  ok("área (con campo): pide el formulario de campo (muestra «Cargando…») y NO enseña el acta si no hay permiso", area({ acta: false, campo: true }).includes("Cargando") && !area({ acta: false, campo: true }).includes("Acta de inspección"));
+  ok("área (sin acta ni campo): ninguna entrada (ni botones)", !nada.includes("Reportar anomalía") && !nada.includes("Registro digital que acompaña") && !/<button/.test(dibujar(h(AreaCampo, { correo: CORREO, acta: false, campo: false }))));
+  ok("área (con campo): pide el formulario de campo (muestra «Cargando…») y NO enseña el acta si no hay permiso", area({ acta: false, campo: true }).includes("Cargando") && !area({ acta: false, campo: true }).includes("Reportar posible pérdida"));
   const sup = area({ acta: true, campo: false, dashboardActa: true });
   ok("área (supervisor de actas): ve la entrada «Aperturas sin registrar» (ya no es un marcador)", sup.includes("Aperturas sin registrar") && !sup.includes("Próximamente"));
   const raro = dibujar(h(PantallaActa, { correo: CORREO, onVolver: () => {} }));

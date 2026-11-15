@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiSup, textoError, type Detalle } from "./api";
-import { DialogoMotivo, ErrorCaja, fmtFechaSrv, fmtInstanteBogota, nombreCorto, ROT_ESTADO, ROT_INCIDENCIA, ROT_TIPO } from "./comun";
+import { DialogoMotivo, ErrorCaja, fmtDuracion, fmtFechaSrv, fmtInicio, fmtInstanteBogota, nombreCorto, ROT_ESTADO, ROT_INCIDENCIA, ROT_TIPO } from "./comun";
 import { guardarPdf, regenerarActa } from "./actaSupervision";
 
 // Detalle de una auditoría: datos, respuestas, fotos (URL firmada de 60 s), firmas (solo quién y cómo, sin imagen), no conformidades con su revisión (Marcar revisada / Reabrir, con historial),
@@ -44,6 +44,9 @@ export function DetalleAuditoria({ id, onCerrar, onCambio }: { id: string; onCer
       {error ? <ErrorCaja error={error} onReintentar={() => void cargar()} /> : null}
 
       <div className="td-tabla-caja"><dl className="as-dl">
+        <div><dt>Inicio</dt><dd data-campo="inicio">{fmtInicio(d.inicio_en, d.inicio_origen) || "No registrado (auditoría anterior a la hora de inicio)"}</dd></div>
+        <div><dt>Fin</dt><dd data-campo="fin">{fmtInstanteBogota(d.registrado_en)}</dd></div>
+        <div><dt>Duración</dt><dd data-campo="duracion">{fmtDuracion(d.duracion_s) || "—"}</dd></div>
         <div><dt>Incidencia</dt><dd>{ROT_INCIDENCIA[d.se_realizo]}{d.causal_nombre ? ` · ${d.causal_nombre}` : ""}</dd></div>
         <div><dt>Servicio</dt><dd>{d.servicio_nombre}</dd></div>
         <div><dt>Turno y frecuencia</dt><dd>{[d.turno_nombre, d.frecuencia_nombre].filter(Boolean).join(" · ") || "—"}</dd></div>

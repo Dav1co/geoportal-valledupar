@@ -6,6 +6,7 @@ import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "./ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "./formato";
 import { sinFormatosD } from "./formatos/tipos";
 import { ConfirmarCancelar, type Destino } from "../components/ConfirmarCancelar";
+import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "./inicio";
 
 // Formulario del reporte general de campo. Pensado para el celular (380 px), una mano, buen contraste.
 // - Las etiquetas de grupos, tipos y subtipos salen del catálogo que entrega el servidor (nada escrito aquí).
@@ -38,6 +39,8 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
   const ubic = useUbicacion();
   const prep = useRef<Preparacion | null>(null);
   const enviando = useRef(false);
+  const recalcularInicio = useRef(false);
+  const inicio = useRef<RelojInicio>(abrirReloj());   // pasada 14/11: hora del celular al abrir (el formulario nace de nuevo con cada reporte)
   const fotosRef = useRef(fotos);
   fotosRef.current = fotos;
 
@@ -109,6 +112,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
     enviando.current = true;
     setFase("enviando");
     setErrorEnvio(null);
+    if (recalcularInicio.current) { inicio.current = recalcularReloj(inicio.current); recalcularInicio.current = false; }
     try {
       const lista = fotosRef.current.map((f, i) => ({ f, orden: i + 1 })).filter((x): x is { f: FotoLocal; orden: number } => x.f !== null);
       // 1. Preparar (una sola vez; si ya existe, se reutiliza el mismo reporte_id)
@@ -131,6 +135,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
       const conf = await apiCampo.crear({
         reporte_id: p.reporte_id, tipo: tipoDef.codigo, subtipo: subtipo || null, descripcion: descripcion.trim() || null, contrato: contrato || null,
         lat: Number(fix.lat.toFixed(6)), lon: Number(fix.lon.toFixed(6)), precision_m: Math.round(fix.precision_m * 10) / 10, riesgo_inmediato: riesgo, origen: "campo", fotos: rutas,
+        inicio_dispositivo: inicio.current.iso,
       });
       fotosRef.current.forEach((f) => f && URL.revokeObjectURL(f.url));
       setFotos(Array.from({ length: fotos.length }, () => null));
@@ -138,6 +143,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
       setFase("guardado");
     } catch (e) {
       const err = e instanceof ErrorCampo ? e : new ErrorCampo("red", "No se pudo completar el envío.", 0);
+      if (esRechazoPorHora(err.message)) recalcularInicio.current = true;   // la persona corrige la hora del celular: el SIGUIENTE envío recalcula el inicio (una vez)
       if (err.tipo === "subida_vencida") {
         // La URL de subida venció: la próxima vez se pide una preparación nueva y se suben todas las fotos de nuevo.
         prep.current = null;
@@ -178,7 +184,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
       <section className="tec-tarjeta">
         <div className="campo-cab">
           <button type="button" className="tec-boton-sec tec-boton-corto" onClick={pedirCancelar} disabled={bloqueado}>← Formatos</button>
-          <h1>Reporte general</h1>
+          <h1>Reportar anomalía</h1>
           <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={bloqueado}>Cancelar</button>
         </div>
         {cancelando && (

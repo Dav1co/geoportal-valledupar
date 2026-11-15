@@ -37,7 +37,7 @@ await build({
       limites: { min_fotos_irregularidad: 0, min_fotos_sin_irregularidad: 0, max_fotos: 10, max_fotos_acta_fisica: 2, max_bytes_foto: 1572864, max_bytes_foto_acta_fisica: 2621440, vigencia_apertura_horas: 12, max_dias_acta_fisica_atras: 30 },
       zona: { lat_min: 10.35, lat_max: 10.56, lon_min: -73.36, lon_max: -73.18 } })};
     const def = ${JSON.stringify({ perfil: "reportante", puede: { reportar: true, crear_desde_escritorio: false, supervisar: false, administrar_catalogo: false }, limites: { max_fotos: 2, min_fotos_campo: 0, max_bytes_foto: 1572864, tipo_mime: "image/jpeg", max_descripcion: 1000 }, zona: { lat_min: 10.35, lat_max: 10.56, lon_min: -73.36, lon_max: -73.18 }, grupos: [] })};
-    const tipoRev = ${JSON.stringify({ codigo: "revision_previa", nombre: "Revisión previa", orden: 1, activo: true, exige_texto: false, exige_subtipo: false, tiene_subtipos: false, subtipos: [], fotos_min: 0, fotos_max: 2, requiere_contrato: "no", genera_resultado: false, usa_consecutivo: true, campos: [], fotos: [], causales: [] })};
+    const tipoRev = ${JSON.stringify({ codigo: "revision_previa", nombre: "Revisiones generales", orden: 1, activo: true, exige_texto: false, exige_subtipo: false, tiene_subtipos: false, subtipos: [], fotos_min: 0, fotos_max: 2, requiere_contrato: "no", genera_resultado: false, usa_consecutivo: true, campos: [], fotos: [], causales: [] })};
     const tipoOtro = { ...tipoRev, codigo: "suspension", nombre: "Suspensión" };
     window.__listo = false; window.__llamadas = [];
     const q = new URLSearchParams(location.search), p = q.get("pantalla"), raiz = createRoot(document.getElementById("raiz"));
@@ -162,7 +162,7 @@ try {
   ok("acta: si la configuración falla, la sección no aparece y el formulario funciona", !(await texto(pg)).includes("Constancia por correo") && !(await pg.$eval("button.campo-enviar", (e) => e.disabled)));
   await pg.close(); falloConfig = false;
 
-  // ===== Revisión previa (formato de campo) =====
+  // ===== Revisiones generales (formato de campo) =====
   peticiones.length = 0;
   pg = await abrir("formato");
   ok("formato: pidió la configuración con el tipo", peticiones.some((p) => p.fn === "geoportal-campo" && p.accion === "config_constancia" && p.tipo === "revision_previa"));
@@ -188,7 +188,7 @@ try {
   // ===== Administración =====
   pg = await abrir("admin");
   let ta = await texto(pg);
-  ok("admin: muestra el texto en BORRADOR, los 5 documentos apagados y la cola vacía", ta.includes("BORRADOR") && ["Acta de inspección técnica", "Revisión previa", "Revisión PQR", "Instalación de medidor", "Instalación de acometida"].every((d) => ta.includes(d)) && ta.includes("Sin envíos todavía"));
+  ok("admin: muestra el texto en BORRADOR, los 5 documentos apagados y la cola vacía", ta.includes("BORRADOR") && ["Acta de inspección técnica", "Revisiones generales", "Revisión PQR", "Instalación de medidor", "Instalación de acometida"].every((d) => ta.includes(d)) && ta.includes("Sin envíos todavía"));
   await pg.screenshot({ path: join(CAP, "admin.png"), fullPage: true });
   ok("admin: sin desborde a 380 px", await sinDesborde(pg));
   // habilitar con texto en borrador: la base lo rechaza y se muestra su mensaje

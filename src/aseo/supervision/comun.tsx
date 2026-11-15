@@ -16,6 +16,20 @@ export function fmtInstanteBogota(iso: string | null | undefined): string {
   return `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)} ${d.slice(11, 16)}`;
 }
 
+/** Duración entre inicio y fin: «1 h 05 min», «12 min», «45 s». Vacía sin inicio. Una diferencia negativa (reloj del celular hasta 2 min adelantado) se muestra «0 s». */
+export function fmtDuracion(seg: number | null | undefined): string {
+  if (seg === null || seg === undefined || !Number.isFinite(seg)) return "";
+  const s = Math.max(0, Math.round(seg));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
+}
+/** Inicio en hora de Bogotá, con «(celular)» cuando lo tomó el celular. Vacío si no hay. */
+export function fmtInicio(iso: string | null | undefined, origen: string | null | undefined): string {
+  if (!iso) return "";
+  return `${fmtInstanteBogota(iso)}${origen === "dispositivo" ? " (celular)" : ""}`;
+}
+
 export function ErrorCaja({ error, onReintentar }: { error: { texto: string; sesion: boolean }; onReintentar: () => void }) {
   return (
     <div className="td-aviso td-aviso-error" role="alert">{error.texto}{" "}

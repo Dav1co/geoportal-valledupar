@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { apiRev, textoError, type FormularioRev, type GrupoCat } from "./apiRevision";
+import { apiRev, textoError, type FormularioRev, type GrupoCat, type CatalogoLectura } from "./apiRevision";
 
 // Gestión del catálogo (solo administrador): grupos, tipos, subtipos y estados por la ruta «catalogo». Crear, renombrar, reordenar, desactivar y reactivar; NUNCA borrar. Se muestran los
 // inactivos con su marca y, antes de confirmar, el efecto del cambio. Cada cambio queda auditado en el servidor con el antes y el después. Los campos propios de cada formato se ven
@@ -17,10 +17,12 @@ const EFECTO: Record<string, (f: Fila) => string> = {
   reordenar: () => "Cambia solo la posición en las listas.",
 };
 
-export function Catalogo({ alCambiar }: { alCambiar: () => void }) {
-  const [d, setD] = useState<FormularioRev | null>(null); const [error, setError] = useState<string | null>(null); const [ok, setOk] = useState<string | null>(null);
+/** `lectura` (pasada 14/11): catálogo completo del supervisor, de SOLO LECTURA (sin botones; la base además rechaza cualquier escritura que no sea del administrador). */
+export function Catalogo({ alCambiar, lectura }: { alCambiar: () => void; lectura?: CatalogoLectura }) {
+  const soloLectura = !!lectura;
+  const [d, setD] = useState<FormularioRev | null>(lectura ?? null); const [error, setError] = useState<string | null>(null); const [ok, setOk] = useState<string | null>(null);
   const [dlg, setDlg] = useState<Dialogo | null>(null);
-  const cargar = useCallback(async () => { try { setD(await apiRev.formulario(true)); setError(null); } catch (e) { setError(textoError(e).texto); } }, []);
+  const cargar = useCallback(async () => { if (soloLectura) return; try { setD(await apiRev.formulario(true)); setError(null); } catch (e) { setError(textoError(e).texto); } }, [soloLectura]);
   useEffect(() => { void cargar(); }, [cargar]);
 
   async function aplicar(dg: Dialogo, v: { codigo?: string; nombre: string; orden: string; exige_motivo?: boolean }): Promise<string | null> {
@@ -42,6 +44,7 @@ export function Catalogo({ alCambiar }: { alCambiar: () => void }) {
   return (
     <section className="rv-seccion" aria-labelledby="rv-cat-tit">
       <div><h2 id="rv-cat-tit">Catálogo</h2><p className="rv-sub">Grupos, tipos, subtipos y estados. <strong>Nada se borra:</strong> se desactiva, y lo desactivado se conserva con su marca. Quién cambió qué queda auditado con el antes y el después.</p></div>
+      {soloLectura ? <div className="rv-aviso rv-aviso-info" role="note">Solo el administrador puede editar el catálogo. Usted lo ve completo, incluido lo desactivado.</div> : null}
       {error ? <div className="rv-aviso rv-aviso-error" role="alert">{error} <button type="button" className="rv-enlace" onClick={() => void cargar()}>Reintentar</button></div> : null}
       {ok ? <div className="rv-aviso rv-aviso-ok" role="status">{ok}</div> : null}
       {!d && !error ? <p className="rv-sub" role="status">Cargando el catálogo…</p> : null}
@@ -50,27 +53,27 @@ export function Catalogo({ alCambiar }: { alCambiar: () => void }) {
           <div className="rv-cat">
             {d.grupos.map((g) => (
               <div key={g.codigo} className="rv-cat-grupo">
-                <Item f={filasGrupo(g)} onAccion={(modo, fila) => setDlg({ modo, fila })} />
+                <Item f={filasGrupo(g)} onAccion={soloLectura ? undefined : (modo, fila) => setDlg({ modo, fila })} />
                 <div className="rv-cat-hijos">
                   {g.tipos.map((t) => (
                     <div key={t.codigo}>
-                      <Item f={{ entidad: "tipo", codigo: t.codigo, nombre: t.nombre, orden: t.orden, activo: t.activo, padre: g.codigo, extra: t.campos?.length ? `${t.campos.length} campos propios` : undefined }} onAccion={(modo, fila) => setDlg({ modo, fila })} />
+                      <Item f={{ entidad: "tipo", codigo: t.codigo, nombre: t.nombre, orden: t.orden, activo: t.activo, padre: g.codigo, extra: t.campos?.length ? `${t.campos.length} campos propios` : undefined }} onAccion={soloLectura ? undefined : (modo, fila) => setDlg({ modo, fila })} />
                       <div className="rv-cat-hijos">
-                        {t.subtipos.map((s) => <Item key={s.codigo} f={{ entidad: "subtipo", codigo: s.codigo, nombre: s.nombre, orden: s.orden, activo: s.activo, padre: t.codigo }} onAccion={(modo, fila) => setDlg({ modo, fila })} />)}
-                        <button type="button" className="rv-enlace" onClick={() => setDlg({ modo: "crear", entidad: "subtipo", padre: t.codigo })}>+ Agregar subtipo a «{t.nombre}»</button>
+                        {t.subtipos.map((s) => <Item key={s.codigo} f={{ entidad: "subtipo", codigo: s.codigo, nombre: s.nombre, orden: s.orden, activo: s.activo, padre: t.codigo }} onAccion={soloLectura ? undefined : (modo, fila) => setDlg({ modo, fila })} />)}
+                        {soloLectura ? null : <button type="button" className="rv-enlace" onClick={() => setDlg({ modo: "crear", entidad: "subtipo", padre: t.codigo })}>+ Agregar subtipo a «{t.nombre}»</button>}
                       </div>
                     </div>
                   ))}
-                  <button type="button" className="rv-enlace" onClick={() => setDlg({ modo: "crear", entidad: "tipo", padre: g.codigo })}>+ Agregar tipo a «{g.nombre}»</button>
+                  {soloLectura ? null : <button type="button" className="rv-enlace" onClick={() => setDlg({ modo: "crear", entidad: "tipo", padre: g.codigo })}>+ Agregar tipo a «{g.nombre}»</button>}
                 </div>
               </div>
             ))}
-            <button type="button" className="rv-boton-sec" onClick={() => setDlg({ modo: "crear", entidad: "grupo" })}>+ Agregar grupo</button>
+            {soloLectura ? null : <button type="button" className="rv-boton-sec" onClick={() => setDlg({ modo: "crear", entidad: "grupo" })}>+ Agregar grupo</button>}
           </div>
           <h3 className="rv-h3">Estados</h3>
           <div className="rv-cat-grupo">
-            {(d.estados ?? []).map((e) => <Item key={e.codigo} f={{ entidad: "estado", codigo: e.codigo, nombre: e.nombre, orden: e.orden, activo: e.activo, protegido: e.codigo === "reportado" || e.codigo === "duplicado", extra: `${e.cambio_manual ? "se cambia a mano" : "lo pone el sistema"}${e.exige_motivo ? " · exige motivo" : ""}` }} onAccion={(modo, fila) => setDlg({ modo, fila })} />)}
-            <button type="button" className="rv-boton-sec" onClick={() => setDlg({ modo: "crear", entidad: "estado" })}>+ Agregar estado</button>
+            {(d.estados ?? []).map((e) => <Item key={e.codigo} f={{ entidad: "estado", codigo: e.codigo, nombre: e.nombre, orden: e.orden, activo: e.activo, protegido: e.codigo === "reportado" || e.codigo === "duplicado", extra: `${e.cambio_manual ? "se cambia a mano" : "lo pone el sistema"}${e.exige_motivo ? " · exige motivo" : ""}` }} onAccion={soloLectura ? undefined : (modo, fila) => setDlg({ modo, fila })} />)}
+            {soloLectura ? null : <button type="button" className="rv-boton-sec" onClick={() => setDlg({ modo: "crear", entidad: "estado" })}>+ Agregar estado</button>}
           </div>
         </>
       ) : null}
@@ -79,15 +82,16 @@ export function Catalogo({ alCambiar }: { alCambiar: () => void }) {
   );
 }
 
-function Item({ f, onAccion }: { f: Fila; onAccion: (modo: "renombrar" | "reordenar" | "activar" | "desactivar", f: Fila) => void }) {
+function Item({ f, onAccion }: { f: Fila; onAccion?: (modo: "renombrar" | "reordenar" | "activar" | "desactivar", f: Fila) => void }) {
   return (
     <div className={`rv-cat-item${f.activo ? "" : " rv-inactivo"}`}>
       <span><strong>{f.nombre}</strong> <span className="rv-tenue">{f.codigo} · posición {f.orden}{f.extra ? ` · ${f.extra}` : ""}</span>{f.activo ? null : <span className="rv-marca rv-marca-gris">Desactivado</span>}</span>
+      {onAccion ? (
       <span className="rv-cat-acc">
         <button type="button" className="rv-enlace" onClick={() => onAccion("renombrar", f)}>Renombrar</button>
         <button type="button" className="rv-enlace" onClick={() => onAccion("reordenar", f)}>Posición</button>
         {f.protegido && f.activo ? <span className="rv-tenue">del sistema</span> : <button type="button" className="rv-enlace" onClick={() => onAccion(f.activo ? "desactivar" : "activar", f)}>{f.activo ? "Desactivar" : "Reactivar"}</button>}
-      </span>
+      </span>) : null}
     </div>
   );
 }

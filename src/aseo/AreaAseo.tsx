@@ -61,9 +61,9 @@ export function AreaAseo({ correo }: { correo: string }) {
           ) : (
             <div key={a.codigo} className="campo-formato campo-formato-proximo" aria-disabled="true"><strong>{a.nombre}</strong><span>Próximamente</span></div>
           ))}
-          {def.puede.supervisar ? <button type="button" className="campo-formato campo-formato-activo" onClick={() => setVista({ tipo: "supervision" })}><strong>Supervisión y dashboard</strong><span>Revisión de las actas de supervisión, no conformidades e indicadores.</span></button> : null}
+          {def.puede.supervisar ? <button type="button" className="campo-formato campo-formato-activo campo-formato-gestion" onClick={() => setVista({ tipo: "supervision" })}><strong>Supervisión y dashboard</strong><span>Revisión de las actas de supervisión, no conformidades e indicadores.</span></button> : null}
           {def.puede.administrar ? <>
-            <button type="button" className="campo-formato campo-formato-activo" onClick={() => setVista({ tipo: "admin" })}><strong>Administración de rutas</strong><span>Plan operativo, capas de rutas, barrios e historial de cargas.</span></button></> : null}
+            <button type="button" className="campo-formato campo-formato-activo campo-formato-gestion" onClick={() => setVista({ tipo: "admin" })}><strong>Administración de rutas</strong><span>Plan operativo, capas de rutas, barrios e historial de cargas.</span></button></> : null}
         </div>
       </section>
     </div>
