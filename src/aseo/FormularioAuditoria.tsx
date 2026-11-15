@@ -10,7 +10,8 @@ import type { Actividad, Confirmacion, Criterio, FormularioAseo, Modalidad, Prep
 
 // Formulario de la auditoría. Se dibuja del catálogo del servidor (preguntas, fotos, causales): aquí no hay ninguna pregunta escrita. Flujo decidido: ¿Se realizó? Sí / No / Parcial → fotos de la ruta → SST (con foto
 // obligatoria si la respuesta es «No») → Registrar. Un solo envío (patrón del Paso D): se piden las URL de subida, se suben las fotos y se crea TODO junto (todo o nada, reintento seguro con el mismo identificador).
-// Las fotos viven SOLO en memoria (no se guardan en el dispositivo ni en la galería). La fecha y la hora las fija el servidor: aquí solo se muestran.
+// Las fotos viven SOLO en memoria (no se guardan en el dispositivo ni en la galería). La fecha y la hora de REGISTRO las fija el servidor: aquí solo se muestran.
+// Hora de INICIO (pasada 14/11): la del celular al abrir este formulario, tomada UNA vez al montarlo; los reintentos mandan la misma (la base la valida y la guarda fuera del sello).
 
 export type FotoLocal = { id: string; etiqueta: string; blob: Blob; url: string };
 export type ResultadoAuditoria = {
@@ -19,6 +20,8 @@ export type ResultadoAuditoria = {
 };
 
 const coma = (n: number) => n.toFixed(5).replace(".", ",");
+/** Rechazos de la base por la hora del celular (contrato de la pasada 14/11). */
+const RECHAZO_HORA_INICIO = /hora de su celular está adelantada|formulario se abrió hace más de/;
 const megas = (b: number) => `${(b / 1048576).toLocaleString("es-CO", { maximumFractionDigits: 1 })} MB`;
 
 /** Hora de Bogotá del servidor, avanzando con el reloj del teléfono desde el instante en que llegó (el reloj del teléfono nunca se usa como dato, solo para mover la hora que se muestra). */
@@ -48,6 +51,10 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
   const ubic = useUbicacion();
   const inicio = useRef<{ lat: number; lon: number } | null>(null);
   if (!inicio.current && ubic.fix) inicio.current = { lat: ubic.fix.lat, lon: ubic.fix.lon };       // posición AL ABRIR: el primer fijo del formulario
+  // Hora AL ABRIR, junto con un reloj monotónico. Solo si la base la rechaza por la hora del celular (no quedó nada registrado) se recalcula UNA vez en el siguiente envío:
+  // hora (ya corregida) del celular − tiempo transcurrido desde que se abrió. Un reintento por señal o servidor manda exactamente la misma.
+  const horaInicio = useRef<{ iso: string; mono: number; recalcular: boolean } | null>(null);
+  if (!horaInicio.current) horaInicio.current = { iso: new Date().toISOString(), mono: performance.now(), recalcular: false };
   const prep = useRef<{ p: Preparacion; n: number; subidas: Set<number> } | null>(null);
   const hora = useHoraServidor(ahora);
   const fotosRef = useRef<FotoLocal[]>([]); fotosRef.current = fotos;
@@ -73,6 +80,8 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
     const ordenadas: FotoLocal[] = [];
     for (const n of necesarias) ordenadas.push(...fotos.filter((f) => f.etiqueta === n.etiqueta).slice(0, n.max));
     setError(null); setFase("enviando");
+    const hi = horaInicio.current!;
+    if (hi.recalcular) { hi.iso = new Date(Date.now() - (performance.now() - hi.mono)).toISOString(); hi.recalcular = false; }
     try {
       if (!prep.current || prep.current.n !== ordenadas.length) { setProgreso("Preparando el envío…"); prep.current = { p: await apiAseo.prepararSubida(actividad.codigo, ordenadas.length), n: ordenadas.length, subidas: new Set() }; }
       const { p, subidas } = prep.current;
@@ -88,6 +97,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
         observaciones: observaciones.trim() || null, lat: fin.lat, lon: fin.lon, precision_m: fin.precision_m, lat_inicio: inicio.current?.lat ?? null, lon_inicio: inicio.current?.lon ?? null, precision_inicio_m: null,
         fotos: ordenadas.map((f, i) => ({ orden: i + 1, ruta: p.fotos[i].ruta, etiqueta: f.etiqueta })),
         firmas: cuerpoFirmas({ auditor: firmas.auditor?.b64 ?? null, representante: { estado: firmas.representante.estado, nombre: firmas.representante.nombre, imagen: firmas.representante.imagen?.b64 ?? null } }),
+        inicio_dispositivo: hi.iso,
       });
       const respuestas = criterios.filter((c) => c.codigo in datos).map((c) => ({ pregunta: c.nombre, respuesta: textoRespuesta(c, datos[c.codigo]) }));
       setFotos((l) => l.filter((f) => !ordenadas.includes(f)));      // las fotos pasan al acta (la pantalla siguiente las libera)
@@ -98,6 +108,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
       // Una Edge anterior a las firmas rechaza el cuerpo (413: pasa de 16 kB). Es «falta la actualización del servidor», no un fallo de señal: lo escrito y las fotos siguen aquí.
       if (err.status === 413) err = new ErrorAseo("no_aplicado", TEXTO_NO_APLICADO, 413);
       if (err.tipo === "subida_vencida") prep.current = null;                // se pedirá un permiso nuevo y se subirá todo de nuevo
+      if (RECHAZO_HORA_INICIO.test(err.message)) hi.recalcular = true;      // la persona corrige la hora del celular y vuelve a enviar
       setError(avisoDeError(err)); setFase("editando"); setProgreso("");
     }
   }
@@ -123,7 +134,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
         ) : null}
         <dl className="campo-auto">
           <div><dt>Ruta</dt><dd><strong className="mono">{ruta.codigo}</strong> · {ruta.servicio.nombre}<br /><small>{ruta.sectores ?? "Sin sectores"}</small></dd></div>
-          <div><dt>Fecha y hora</dt><dd>{textoFechaHora(hora)}<br /><small>La fija el servidor al registrar; la del teléfono no cuenta.</small></dd></div>
+          <div><dt>Fecha y hora</dt><dd>{textoFechaHora(hora)}<br /><small>La fija el servidor al registrar. La hora del teléfono solo marca cuándo abrió este formulario.</small></dd></div>
           <div><dt>Ubicación</dt><dd>{ubic.fix ? `${coma(ubic.fix.lat)}, ${coma(ubic.fix.lon)} · precisión ${Math.round(ubic.fix.precision_m)} m` : ubic.estado === "buscando" ? "Buscando…" : "Sin ubicación"}
             {precisionMala ? <small> La precisión es baja (más de {UMBRAL_PRECISION_MALA_M} m): salga a cielo abierto. Se puede registrar igual.</small> : null}
             {ubic.mensaje ? <small> {ubic.mensaje}</small> : null}

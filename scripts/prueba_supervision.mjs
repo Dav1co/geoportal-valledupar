@@ -27,20 +27,29 @@ const fila = (o = {}) => ({ id: "1", seq: 1, consecutivo: "BAR-000001", registra
   turno_nombre: "Día", frecuencia_nombre: "L-D", barrios: "Centro, El Carmen", autor: "aud@emdupar.gov.co", auditor_nombre: "Aud Prueba", auditor_cargo: null, representante_estado: "se_nego", representante_nombre: "Pedro; \"P\"", incidencia: "parcial", causal_nombre: "Clima",
   observaciones: "=SUMA(1;2)", marcas: ["Lejos de la ruta"], nc_tipos: ["sst", "parcial"], nc_estado: "sin_revisar", oculta: false, oculta_motivo: null, n_fotos: 4, lat: 10.47078, lon: -73.24365, sello: "ab".repeat(32), respuestas: { sst_herramientas: "Sí", sst_epp: "No" }, ...o });
 const h = D.encabezados(crit), l = D.filaCsv(fila(), crit).trimEnd().split(";");
-ok("encabezados: 28 fijas + una por pregunta del catálogo", h.length === 28 + 2 && h[28] === "¿Cuenta con las herramientas?" && D.anchos(crit).length === h.length);
+ok("encabezados: 31 fijas (con Inicio, Duración y Origen del inicio) + una por pregunta del catálogo", h.length === 31 + 2 && h[31] === "¿Cuenta con las herramientas?" && D.anchos(crit).length === h.length);
 ok("encabezados: dice «Incidencia» y no «Resultado»", h.includes("Incidencia") && !h.some((x) => /Resultado/.test(x)));
 ok("CSV: una celda por encabezado (con «;» dentro de comillas)", D.filaCsv(fila(), crit).trimEnd().match(/("([^"]|"")*"|[^;]*)(;|$)/g).length >= h.length);
 ok("CSV: cargo faltante = «Cargo no registrado»; incidencia legible; fórmulas neutralizadas con apóstrofo", D.filaCsv(fila(), crit).includes("Cargo no registrado") && D.filaCsv(fila(), crit).includes(";Parcial;") && D.filaCsv(fila(), crit).includes("\"'=SUMA(1;2)\""));
-ok("CSV: coordenadas con coma decimal y sin comillas; fechas dd/mm/aaaa", l.includes("10,47078") && l.includes("-73,24365") && l[1] === "13/11/2026 10:30" && l[2] === "13/11/2026");
+ok("CSV: coordenadas con coma decimal y sin comillas; fechas dd/mm/aaaa", l.includes("10,47078") && l.includes("-73,24365") && l[2] === "13/11/2026 10:30" && l[5] === "13/11/2026");
 ok("CSV: el representante entra solo con estado y nombre, sin imagen, y el nombre con comillas se escapa", D.filaCsv(fila(), crit).includes("Se negó a firmar;\"Pedro; \"\"P\"\"\"") && !/imagen|b64/i.test(D.filaCsv(fila(), crit)));
 ok("CSV: tipos de no conformidad y estado en español", D.filaCsv(fila(), crit).includes("\"SST; Parcial\";Sin revisar") && D.filaCsv(fila({ nc_estado: null, nc_tipos: [] }), crit).includes("Sin no conformidades"));
 ok("CSV: respuestas por pregunta al final", l.slice(-2).join("|") === "Sí|No" && D.filaCsv(fila({ respuestas: {} }), crit).trimEnd().endsWith(";;"));
-ok("CSV: cabecera con BOM aparte y separador «;»", D.BOM === "﻿" && D.cabeceraCsv(crit).startsWith("Consecutivo;Fecha y hora de registro (Bogotá);"));
+ok("CSV: cabecera con BOM aparte y separador «;»", D.BOM === "﻿" && D.cabeceraCsv(crit).startsWith("Consecutivo;Inicio (Bogotá);Fecha y hora de registro (Bogotá);Duración (min);Origen del inicio;Fecha de servicio;"));
 const x = D.filaXlsx(fila(), crit, X.serialExcel);
-ok("Excel: fecha y hora reales, números y mismo largo que los encabezados", x.length === h.length && typeof x[1] === "object" && "fechaHora" in x[1] && "fecha" in x[2] && x[23] === 10.47078 && x[22] === 4);
+ok("Excel: fecha y hora reales, números y mismo largo que los encabezados", x.length === h.length && x[1] === null && typeof x[2] === "object" && "fechaHora" in x[2] && "fecha" in x[5] && x[h.indexOf("Latitud")] === 10.47078 && x[h.indexOf("Fotos")] === 4 && x[3] === null);
+// ---------- Hora de inicio (pasada 14/11) ----------
+const fi = fila({ inicio_local: "2026-11-13T10:05:09", inicio_origen: "dispositivo", duracion_min: 25.1 }), li = D.filaCsv(fi, crit).trimEnd().split(";");
+ok("CSV con inicio: Inicio, Fin, Duración (número con coma, sin comillas) y Origen «Celular»", li[1] === "13/11/2026 10:05" && li[2] === "13/11/2026 10:30" && li[3] === "25,1" && li[4] === "Celular", li.slice(0, 6));
+ok("CSV sin inicio (registro anterior o servidor sin actualizar): las tres celdas vacías", l[1] === "" && l[3] === "" && l[4] === "");
+const xi = D.filaXlsx(fi, crit, X.serialExcel);
+ok("Excel con inicio: Inicio como fecha y hora real y Duración numérica", typeof xi[1] === "object" && "fechaHora" in xi[1] && xi[1].fechaHora < xi[2].fechaHora && xi[3] === 25.1 && xi[4] === "Celular");
+ok("Excel: la duración negativa (reloj hasta 2 min adelantado) se descarga tal cual", D.filaXlsx(fila({ inicio_local: "2026-11-13T10:31:00", inicio_origen: "dispositivo", duracion_min: -0.8 }), crit, X.serialExcel)[3] === -0.8);
+ok("duración en pantalla: «1 h 05 min», «12 min», «45 s», vacía sin inicio y 0 s si es negativa", C.fmtDuracion(3900) === "1 h 05 min" && C.fmtDuracion(725) === "12 min" && C.fmtDuracion(45) === "45 s" && C.fmtDuracion(null) === "" && C.fmtDuracion(undefined) === "" && C.fmtDuracion(-30) === "0 s" && C.fmtDuracion(3600) === "1 h 00 min");
+ok("inicio en pantalla: hora de Bogotá con «(celular)»; vacío sin inicio", C.fmtInicio("2026-11-13T15:05:00+00:00", "dispositivo") === "13/11/2026 10:05 (celular)" && C.fmtInicio("2026-11-13T15:05:00+00:00", "servidor") === "13/11/2026 10:05" && C.fmtInicio(null, null) === "");
 ok("nombre del archivo sin datos personales", D.nombreArchivo("barrido", "13/11/2026 10:44", "xlsx") === "auditorias_barrido_20261113_1044.xlsx" && D.nombreArchivo("corte_cesped", "xx", "csv") === "auditorias_corte_cesped.csv");
 const leame = D.hojaLeame({ generadoPor: "sup@emdupar.gov.co", generadoEn: "13/11/2026 10:44", filas: 12345, formato: "csv", actividad: "Barrido", filtros: ["Actividad: Barrido"] });
-ok("Léame: filtros, quién y cuándo, filas con puntos, privacidad, barrio actual", leame.some((r) => r[0] === "Filas (una por auditoría)" && r[1] === "12.345") && leame.some((r) => /Privacidad/.test(r[0])) && leame.some((r) => /Barrio/.test(r[0]) && /actual/.test(r[1])) && leame.some((r) => /sin imágenes|No se incluyen imágenes/.test(r[1])));
+ok("Léame: filtros, quién y cuándo, filas con puntos, privacidad, barrio actual", leame.some((r) => r[0] === "Filas (una por auditoría)" && r[1] === "12.345") && leame.some((r) => /Privacidad/.test(r[0])) && leame.some((r) => /Barrio/.test(r[0]) && /actual/.test(r[1])) && leame.some((r) => /sin imágenes|No se incluyen imágenes/.test(r[1])) && leame.some((r) => /Inicio, fin y duración/.test(r[0]) && /celular/.test(r[1])));
 
 // ---------- Filtros y fechas ----------
 const f0 = C.FILTROS_INICIALES;

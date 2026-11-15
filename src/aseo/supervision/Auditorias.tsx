@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiSup, textoError, type FilaAuditoria, type Resumen as ResumenT } from "./api";
-import { aServidor, ErrorCaja, FILTROS_INICIALES, FiltrosSup, fmtFechaSrv, nombreCorto, rangoInvalido, ROT_ESTADO, ROT_INCIDENCIA, ROT_TIPO, textoFiltros, type EstadoFiltros } from "./comun";
+import { aServidor, ErrorCaja, FILTROS_INICIALES, FiltrosSup, fmtDuracion, fmtFechaSrv, fmtInstanteBogota, nombreCorto, rangoInvalido, ROT_ESTADO, ROT_INCIDENCIA, ROT_TIPO, textoFiltros, type EstadoFiltros } from "./comun";
 import { DescargaCancelada, ejecutarDescarga, guardarArchivo, type Progreso } from "./descargas";
 import { DetalleAuditoria } from "./DetalleAuditoria";
 import type { FormularioAseo } from "../tipos";
@@ -51,12 +51,15 @@ export function Auditorias({ def, cat, modo, inicial }: { def: FormularioAseo; c
       {error ? <ErrorCaja error={error} onReintentar={() => void cargar()} /> : null}
       <p className="td-sub" role="status">{cargando ? "Cargando…" : `${total.toLocaleString("es-CO")} ${total === 1 ? "auditoría" : "auditorías"} · ${pend.toLocaleString("es-CO")} pendientes · ${rev.toLocaleString("es-CO")} revisadas`}</p>
       <div className="td-tabla-caja"><table className="td-tabla">
-        <thead><tr><th>Consecutivo</th><th>Servicio</th><th>Ruta</th><th>Incidencia</th><th>Auditor</th><th>No conformidades</th><th>Marcas</th><th><span className="td-solo-lectores">Acciones</span></th></tr></thead>
+        <thead><tr><th>Consecutivo</th><th>Inicio</th><th>Fin</th><th>Duración</th><th>Servicio</th><th>Ruta</th><th>Incidencia</th><th>Auditor</th><th>No conformidades</th><th>Marcas</th><th><span className="td-solo-lectores">Acciones</span></th></tr></thead>
         <tbody>
-          {!cargando && filas.length === 0 ? <tr><td colSpan={8} className="td-vacio">Sin auditorías con esos filtros</td></tr> : null}
+          {!cargando && filas.length === 0 ? <tr><td colSpan={11} className="td-vacio">Sin auditorías con esos filtros</td></tr> : null}
           {filas.map((x) => (
             <tr key={x.id} className={x.oculta ? "td-excluida" : ""} data-auditoria={x.id}>
               <td><strong className="td-num">{x.consecutivo}</strong><br /><span className="td-chico">{fmtFechaSrv(x.fecha_servicio)} · {x.oculta ? "oculta" : x.actividad_nombre}</span></td>
+              <td className="as-hora" data-col="inicio">{x.inicio_en ? <>{fmtInstanteBogota(x.inicio_en)}{x.inicio_origen === "dispositivo" ? <><br /><span className="td-chico">(celular)</span></> : null}</> : <span className="td-chico">—</span>}</td>
+              <td className="as-hora" data-col="fin">{fmtInstanteBogota(x.registrado_en)}</td>
+              <td className="as-hora" data-col="duracion">{fmtDuracion(x.duracion_s) || <span className="td-chico">—</span>}</td>
               <td>{x.servicio_nombre}<br /><span className="td-chico">{x.turno_nombre ?? ""}</span></td>
               <td className="td-num">{x.ruta_codigo}<br /><span className="td-chico">{x.barrios ?? ""}</span></td>
               <td>{ROT_INCIDENCIA[x.se_realizo]}{x.causal_nombre ? <><br /><span className="td-chico">{x.causal_nombre}</span></> : null}</td>
