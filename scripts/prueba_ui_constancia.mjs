@@ -162,7 +162,7 @@ try {
   ok("acta: si la configuración falla, la sección no aparece y el formulario funciona", !(await texto(pg)).includes("Constancia por correo") && !(await pg.$eval("button.campo-enviar", (e) => e.disabled)));
   await pg.close(); falloConfig = false;
 
-  // ===== Revisión previa (formato de campo) =====
+  // ===== Revisiones generales (formato de campo) =====
   peticiones.length = 0;
   pg = await abrir("formato");
   ok("formato: pidió la configuración con el tipo", peticiones.some((p) => p.fn === "geoportal-campo" && p.accion === "config_constancia" && p.tipo === "revision_previa"));
@@ -188,7 +188,7 @@ try {
   // ===== Administración =====
   pg = await abrir("admin");
   let ta = await texto(pg);
-  ok("admin: muestra el texto en BORRADOR, los 5 documentos apagados y la cola vacía", ta.includes("BORRADOR") && ["Acta de inspección técnica", "Revisión previa", "Revisión PQR", "Instalación de medidor", "Instalación de acometida"].every((d) => ta.includes(d)) && ta.includes("Sin envíos todavía"));
+  ok("admin: muestra el texto en BORRADOR, los 5 documentos apagados y la cola vacía", ta.includes("BORRADOR") && ["Acta de inspección técnica", "Revisiones generales", "Revisión PQR", "Instalación de medidor", "Instalación de acometida"].every((d) => ta.includes(d)) && ta.includes("Sin envíos todavía"));
   await pg.screenshot({ path: join(CAP, "admin.png"), fullPage: true });
   ok("admin: sin desborde a 380 px", await sinDesborde(pg));
   // habilitar con texto en borrador: la base lo rechaza y se muestra su mensaje
