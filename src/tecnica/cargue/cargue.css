@@ -27,7 +27,7 @@
 .cg-dos { display: grid; grid-template-columns: 1fr; gap: 12px; }
 @media (min-width: 720px) { .cg-dos { grid-template-columns: 1fr 1fr; } }
 .cg-leida p { margin: 0 0 4px; overflow-wrap: anywhere; }
-.cg-nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.cg-nav { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; }      /* 5d: con .tec-acciones (columna) la base de 140 px se iba al alto */
 .cg-nav > button { flex: 1 1 140px; }
 .cg-progreso .cg-barra { height: 10px; background: #e6eaee; border-radius: 5px; overflow: hidden; }
 .cg-progreso .cg-barra span { display: block; height: 100%; background: var(--t-modo, #0f3d2b); transition: width .2s; }

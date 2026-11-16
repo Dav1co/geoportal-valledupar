@@ -1,0 +1,25 @@
+== prueba_l116_5d_simulada.ts
+OK    el marcador sigue en la línea 1, autorizar() tal cual y el correo nunca del cuerpo ni de la URL
+OK    _shared/auth.ts sin tocar en esta rama (lo comprueba git en el resumen; aquí, que siga exportando autorizar)
+OK    sin token: 401 y ninguna RPC
+OK    vincular: reporte, daño (en mayúscula) y motivo a geoportal_redes_l116_vincular_dano; el correo es el del token
+OK    vincular: el número puede venir como texto; un correo en el cuerpo no se usa
+OK    vincular: sin reporte → 400 sin RPC
+OK    vincular: reporte negativo → 400 sin RPC
+OK    vincular: daño mal escrito → 400 sin RPC
+OK    vincular: motivo corto → 400 sin RPC
+OK    vincular: solo POST
+OK    vincular: el 42501 de la RPC sale como 403
+OK    capa pqr_116: capa y fechas a geoportal_redes_geovisor_capa, sin caché, con «sin_ubicar»
+OK    capa pqr_116: una fecha que no existe → 400 sin RPC
+RESULTADO: 13 de 13 — SIN FALLAS
+== prueba_plan_maestro_9a_simulada.ts
+RESULTADO: 44 de 44 — SIN FALLAS
+== prueba_geovisor_6b_simulada.ts
+RESULTADO: 34 de 34 — SIN FALLAS
+== prueba_geovisor_simulada.ts
+RESULTADO: 38 de 38 — SIN FALLAS
+== prueba_cargue_simulada.ts
+RESULTADO: 53 de 53
+== prueba_redes_simulada.ts
+RESULTADO: 189 de 189 comprobaciones correctas
