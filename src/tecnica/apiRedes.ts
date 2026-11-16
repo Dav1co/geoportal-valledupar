@@ -159,7 +159,7 @@ export const apiPerfil = {
 };
 
 // ---------- Corte 4a: Dashboard distribución (supervisor de distribución y administrador; el servidor lo vuelve a verificar) ----------
-export type MiPerfilRedes = { perfil: "admin" | "supervisor" | "operador"; dashboard_redes: boolean; dashboard_ptap: boolean };
+export type MiPerfilRedes = { perfil: "admin" | "supervisor" | "operador"; dashboard_redes: boolean; dashboard_ptap: boolean; geovisor?: boolean };   // geovisor: Corte 6a
 export type DanoLista = { codigo: string; clase: "dano" | "falla"; tipo: string; sistema: string; activo: string | null; no_identificado: string | null; estado: string;
   t_detectado: string; riesgo: string; causa_clase: string; sector: number | null; origen: string; autor: string; total_s: number; fotos: number; intervenciones: number; tiene_tercero: boolean };
 export type ReporteBot = { id: string; radicado: string; canal: string; tipo: string; lat: number | null; lon: number | null; direccion: string | null; descripcion: string | null;

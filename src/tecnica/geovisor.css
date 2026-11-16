@@ -1,0 +1,68 @@
+/* Geovisor técnico (Técnica fase 1, Corte 6a). Pensado para 390 px y una mano; en escritorio el panel de capas va al lado derecho.
+   Un solo bloque que llena el alto debajo de la barra de la app (flex: 1, min-height: 0), sin 100vh (Safari no cuenta las barras del navegador). */
+.geo { --geo-color: #0f3d2b; position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; background: #f3f6f8; color: #22313f; -webkit-text-size-adjust: 100%; }
+.geo-msg { padding: 16px; overflow: auto; }
+.geo-barra { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--geo-color); color: #fff; flex: 0 0 auto; }
+.geo-volver { min-width: 44px; min-height: 44px; border: none; background: rgba(255, 255, 255, 0.12); color: #fff; border-radius: 10px; font-size: 20px; cursor: pointer; }
+.geo-titulo { flex: 1 1 auto; min-width: 0; }
+.geo-titulo h1 { margin: 0; font-size: 18px; line-height: 1.2; }
+.geo-titulo span { font-size: 13px; color: #c6dccf; }
+.geo-boton { min-height: 44px; padding: 0 16px; border-radius: 10px; border: 2px solid #fff; background: transparent; color: #fff; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+.geo-boton[aria-expanded="true"] { background: #fff; color: var(--geo-color); }
+
+.geo-herr { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 8px 10px; background: #fff; border-bottom: 1px solid #dbe3e8; flex: 0 0 auto; }
+.geo-seg { display: inline-flex; border: 1px solid #b9c6cf; border-radius: 8px; overflow: hidden; }
+.geo-seg button { min-height: 40px; padding: 0 12px; border: none; border-right: 1px solid #b9c6cf; background: #fff; color: #22313f; font: inherit; font-size: 14px; cursor: pointer; }
+.geo-seg button:last-child { border-right: none; }
+.geo-seg button[aria-pressed="true"] { background: var(--geo-color); color: #fff; font-weight: 700; }
+.geo-periodo { display: flex; flex-direction: column; gap: 6px; }
+.geo-periodo-fijo { margin: 0; align-self: center; font-size: 14px; color: #3c4b57; }
+.geo-rango { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; }
+.geo-rango label { display: flex; flex-direction: column; font-size: 13px; gap: 2px; }
+.geo-rango input { min-height: 40px; font: inherit; font-size: 15px; border: 1px solid #b9c6cf; border-radius: 8px; padding: 0 6px; }
+.geo-rango .tec-boton-sec { min-height: 40px; }
+
+.geo-cuerpo { position: relative; flex: 1 1 auto; min-height: 0; }
+.geo-cuerpo > .geo-mapa { position: absolute; inset: 0; }      /* más específico que .maplibregl-map { position: relative } de MapLibre */
+.geo-aviso { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(15, 61, 43, 0.92); color: #fff; padding: 8px 14px; border-radius: 20px; font-size: 14px; white-space: nowrap; pointer-events: none; }
+.geo-aviso-suave { background: rgba(255, 255, 255, 0.92); color: #22313f; border: 1px solid #c8d3da; }
+.geo-avisos { position: absolute; top: 52px; left: 10px; right: 56px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+.geo-avisos p { margin: 0; background: #fff7e6; border: 1px solid #f0c36d; color: #5b3d00; border-radius: 8px; padding: 6px 10px; font-size: 13.5px; }
+.geo-leyenda { position: absolute; left: 10px; bottom: 28px; max-width: 220px; max-height: 45%; overflow: auto; background: rgba(255, 255, 255, 0.95); border: 1px solid #c8d3da; border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+.geo-leyenda ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.geo-leyenda li { display: flex; align-items: center; gap: 6px; }
+.geo-leyenda li span { width: 18px; height: 4px; border-radius: 2px; flex: 0 0 auto; }
+
+.geo-tarjeta { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 62%; overflow: auto; background: #fff; border-radius: 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22); padding: 12px 14px; z-index: 3; }
+.geo-tarjeta-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.geo-tarjeta h2 { margin: 0; font-size: 18px; }
+.geo-tarjeta-cab p { margin: 2px 0 0; color: #3c4b57; font-size: 14.5px; }
+.geo-tarjeta dl { margin: 10px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.geo-tarjeta dt { font-size: 12.5px; color: #5b6b77; }
+.geo-tarjeta dd { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.geo-tarjeta-acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.geo-tarjeta-acc .tec-boton-sec { flex: 1 1 140px; min-height: 44px; }
+.geo-cerrar { min-width: 44px; min-height: 44px; border: none; background: #eef2f5; border-radius: 10px; font-size: 16px; cursor: pointer; color: #22313f; }
+
+.geo-panel { position: absolute; inset: 0; background: #fff; overflow: auto; padding: 10px 14px 24px; z-index: 4; display: flex; flex-direction: column; gap: 8px; }
+.geo-panel-cab { display: flex; justify-content: space-between; align-items: center; }
+.geo-panel-cab h2 { margin: 0; font-size: 18px; }
+.geo-omision { width: 100%; }
+.geo-grupo h3 { margin: 10px 0 2px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: #5b6b77; }
+.geo-capa { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 6px 0; border-bottom: 1px solid #eef2f5; cursor: pointer; }
+.geo-capa input { width: 22px; height: 22px; margin: 2px 0 0; flex: 0 0 auto; accent-color: var(--geo-color); }
+.geo-capa-off { cursor: default; color: #6b7a85; }
+.geo-capa-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.geo-capa-nom { font-size: 15px; }
+.geo-capa-nota { font-size: 13px; color: #6b7a85; }
+.geo-est { margin-left: 6px; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: #eef2f5; color: #3c4b57; white-space: nowrap; }
+.geo-campo { display: flex; flex-direction: column; gap: 4px; font-size: 14px; margin-top: 6px; }
+.geo-campo select, .geo-campo textarea { font: inherit; font-size: 15px; border: 1px solid #b9c6cf; border-radius: 8px; padding: 8px; min-height: 44px; }
+
+.geo-ficha { position: absolute; inset: 0; z-index: 6; background: #f3f6f8; overflow: auto; }
+
+@media (min-width: 900px) {
+  .geo-panel { left: auto; width: 360px; box-shadow: -4px 0 18px rgba(0, 0, 0, 0.12); }
+  .geo-tarjeta { left: auto; right: 12px; width: 380px; bottom: 12px; }
+  .geo-herr { padding: 8px 16px; }
+}

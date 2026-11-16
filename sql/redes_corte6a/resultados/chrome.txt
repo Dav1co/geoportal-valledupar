@@ -1,0 +1,138 @@
+OK    [390] A1 el administrador entra al geovisor desde Técnica; dice «Administrador»
+OK    [390] A2 la red se dibuja con la tesela del geovisor (tramos de acueducto y conductos), pedida con el token
+OK    [390] A3 las capas por grupo; encendidas al abrir las de los dos supervisores (red, actividades, muestreo y tanques)
+OK    [390] A4 las capas preparadas se ven apagadas, sin poder encenderlas y con su nota (contratos «Llega en el Corte 6b»; reportes de Comercial)
+OK    [390] A5 «Volver a la vista por omisión» empieza desactivado
+OK    [390] A6 apagar los tramos y prender los reportes del bot cambia el mapa (sin guardarlo en la base)
+OK    [390] A7 «Volver a la vista por omisión» deja todo como al abrir
+OK    [390] B1 colores por material: la leyenda trae los materiales y los tramos se pintan por el campo material
+OK    [390] B2 colores por edad: la leyenda por rangos de años y «Sin fecha de instalación»
+OK    [390] B3 «Tipo» quita la leyenda
+OK    [390] C1 los daños de hoy se piden al abrir (desde = hasta = hoy) y el daño sembrado está en la capa, sin la descripción
+OK    [390] C2 «7 días» vuelve a pedir los daños y las intervenciones con 7 días de rango
+OK    [390] C3 un rango de más de 12 meses no se deja pedir («máximo 12 meses»)
+OK    [390] D1 tocar el tramo abre su tarjeta: código, tipo con su nombre, material, diámetro, edad y estado; con «Ver ficha», «Reportar daño» y «Registrar intervención»
+OK    [390] D2 la tarjeta sin desborde y con botones de 44 px o más
+OK    [390] D3 «Ver ficha» abre la ficha del activo encima del mapa
+OK    [390] D4 «Volver al mapa» regresa al mismo lugar con la tarjeta
+OK    [390] D5 tocar el daño: su código, tipo, estado, la hora y el activo; nada de la descripción
+OK    [390] D6 cerrar la tarjeta
+OK    [390] D7 «Reportar daño» abre el formulario con el tramo ya elegido
+OK    [390] E1 sin motivo no se guarda
+OK    [390] E2 el administrador enciende los tramos para el supervisor de planta: queda el evento con su motivo
+OK    [390] F1 el supervisor de planta abre con muestreo, tanques y (desde E2) los tramos; los daños, apagados
+OK    [390] F2 los 27 puntos de muestreo; tocar uno verificado abre su tarjeta
+OK    [390] G1 el operador con la casilla entra en «Solo lectura»; las actividades, solo de hoy
+OK    [390] G2 sin muestreo, reportes ni capas preparadas en su lista
+OK    [390] G3 la tarjeta del tramo, sin «Ver ficha»; con «Reportar daño» y «Registrar intervención» porque los tiene asignados
+OK    [390] G4 el operador pidió solo las actividades de hoy (desde = hasta = hoy), nunca otros días ni capas de supervisión
+OK    [390] G5 sin desborde a lo ancho
+OK    [390] G6 el operador sin la casilla no ve el botón del geovisor
+OK    [390] H1 el supervisor de distribución ve «Cargar versión» en sensores, sumideros y acometidas
+OK    [390] H2 en el acueducto, conductos, pozos y descargas: «La carga el administrador» y sin botón de cargar
+OK    [390] H3 «Cargar varias capas de un archivo» disponible (solo con sus capas)
+OK    [1280] A1 el administrador entra al geovisor desde Técnica; dice «Administrador»
+OK    [1280] A2 la red se dibuja con la tesela del geovisor (tramos de acueducto y conductos), pedida con el token
+OK    [1280] A3 las capas por grupo; encendidas al abrir las de los dos supervisores (red, actividades, muestreo y tanques)
+OK    [1280] A4 las capas preparadas se ven apagadas, sin poder encenderlas y con su nota (contratos «Llega en el Corte 6b»; reportes de Comercial)
+OK    [1280] A5 «Volver a la vista por omisión» empieza desactivado
+OK    [1280] A6 apagar los tramos y prender los reportes del bot cambia el mapa (sin guardarlo en la base)
+OK    [1280] A7 «Volver a la vista por omisión» deja todo como al abrir
+OK    [1280] B1 colores por material: la leyenda trae los materiales y los tramos se pintan por el campo material
+OK    [1280] B2 colores por edad: la leyenda por rangos de años y «Sin fecha de instalación»
+OK    [1280] B3 «Tipo» quita la leyenda
+OK    [1280] C1 los daños de hoy se piden al abrir (desde = hasta = hoy) y el daño sembrado está en la capa, sin la descripción
+OK    [1280] C2 «7 días» vuelve a pedir los daños y las intervenciones con 7 días de rango
+OK    [1280] C3 un rango de más de 12 meses no se deja pedir («máximo 12 meses»)
+OK    [1280] D1 tocar el tramo abre su tarjeta: código, tipo con su nombre, material, diámetro, edad y estado; con «Ver ficha», «Reportar daño» y «Registrar intervención»
+OK    [1280] D2 la tarjeta sin desborde y con botones de 44 px o más
+OK    [1280] D3 «Ver ficha» abre la ficha del activo encima del mapa
+OK    [1280] D4 «Volver al mapa» regresa al mismo lugar con la tarjeta
+OK    [1280] D5 tocar el daño: su código, tipo, estado, la hora y el activo; nada de la descripción
+OK    [1280] D6 cerrar la tarjeta
+OK    [1280] D7 «Reportar daño» abre el formulario con el tramo ya elegido
+OK    [1280] E1 sin motivo no se guarda
+OK    [1280] E2 el administrador enciende los tramos para el supervisor de planta: queda el evento con su motivo
+OK    [1280] F1 el supervisor de planta abre con muestreo, tanques y (desde E2) los tramos; los daños, apagados
+OK    [1280] F2 los 27 puntos de muestreo; tocar uno verificado abre su tarjeta
+OK    [1280] G1 el operador con la casilla entra en «Solo lectura»; las actividades, solo de hoy
+OK    [1280] G2 sin muestreo, reportes ni capas preparadas en su lista
+OK    [1280] G3 la tarjeta del tramo, sin «Ver ficha»; con «Reportar daño» y «Registrar intervención» porque los tiene asignados
+OK    [1280] G4 el operador pidió solo las actividades de hoy (desde = hasta = hoy), nunca otros días ni capas de supervisión
+OK    [1280] G5 sin desborde a lo ancho
+OK    [1280] G6 el operador sin la casilla no ve el botón del geovisor
+OK    [1280] H1 el supervisor de distribución ve «Cargar versión» en sensores, sumideros y acometidas
+OK    [1280] H2 en el acueducto, conductos, pozos y descargas: «La carga el administrador» y sin botón de cargar
+OK    [1280] H3 «Cargar varias capas de un archivo» disponible (solo con sus capas)
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+----
+OK    [390] A1 el administrador entra al geovisor desde Técnica; dice «Administrador»
+OK    [390] A2 la red se dibuja con la tesela del geovisor (tramos de acueducto y conductos), pedida con el token
+OK    [390] A3 las capas por grupo; encendidas al abrir las de los dos supervisores (red, actividades, muestreo y tanques)
+OK    [390] A4 las capas preparadas se ven apagadas, sin poder encenderlas y con su nota (contratos «Llega en el Corte 6b»; reportes de Comercial)
+OK    [390] A5 «Volver a la vista por omisión» empieza desactivado
+OK    [390] A6 apagar los tramos y prender los reportes del bot cambia el mapa (sin guardarlo en la base)
+OK    [390] A7 «Volver a la vista por omisión» deja todo como al abrir
+OK    [390] B1 colores por material: la leyenda trae los materiales y los tramos se pintan por el campo material
+OK    [390] B2 colores por edad: la leyenda por rangos de años y «Sin fecha de instalación»
+OK    [390] B3 «Tipo» quita la leyenda
+OK    [390] C1 los daños de hoy se piden al abrir (desde = hasta = hoy) y el daño sembrado está en la capa, sin la descripción
+OK    [390] C2 «7 días» vuelve a pedir los daños y las intervenciones con 7 días de rango
+OK    [390] C3 un rango de más de 12 meses no se deja pedir («máximo 12 meses»)
+OK    [390] D1 tocar el tramo abre su tarjeta: código, tipo con su nombre, material, diámetro, edad y estado; con «Ver ficha», «Reportar daño» y «Registrar intervención»
+OK    [390] D2 la tarjeta sin desborde y con botones de 44 px o más
+OK    [390] D3 «Ver ficha» abre la ficha del activo encima del mapa
+OK    [390] D4 «Volver al mapa» regresa al mismo lugar con la tarjeta
+OK    [390] D5 tocar el daño: su código, tipo, estado, la hora y el activo; nada de la descripción
+OK    [390] D6 cerrar la tarjeta
+OK    [390] D7 «Reportar daño» abre el formulario con el tramo ya elegido
+OK    [390] E1 sin motivo no se guarda
+OK    [390] E2 el administrador enciende los tramos para el supervisor de planta: queda el evento con su motivo
+OK    [390] F1 el supervisor de planta abre con muestreo, tanques y (desde E2) los tramos; los daños, apagados
+OK    [390] F2 los 27 puntos de muestreo; tocar uno verificado abre su tarjeta
+OK    [390] G1 el operador con la casilla entra en «Solo lectura»; las actividades, solo de hoy
+OK    [390] G2 sin muestreo, reportes ni capas preparadas en su lista
+OK    [390] G3 la tarjeta del tramo, sin «Ver ficha»; con «Reportar daño» y «Registrar intervención» porque los tiene asignados
+OK    [390] G4 el operador pidió solo las actividades de hoy (desde = hasta = hoy), nunca otros días ni capas de supervisión
+OK    [390] G5 sin desborde a lo ancho
+OK    [390] G6 el operador sin la casilla no ve el botón del geovisor
+OK    [390] H1 el supervisor de distribución ve «Cargar versión» en sensores, sumideros y acometidas
+OK    [390] H2 en el acueducto, conductos, pozos y descargas: «La carga el administrador» y sin botón de cargar
+OK    [390] H3 «Cargar varias capas de un archivo» disponible (solo con sus capas)
+OK    [1280] A1 el administrador entra al geovisor desde Técnica; dice «Administrador»
+OK    [1280] A2 la red se dibuja con la tesela del geovisor (tramos de acueducto y conductos), pedida con el token
+OK    [1280] A3 las capas por grupo; encendidas al abrir las de los dos supervisores (red, actividades, muestreo y tanques)
+OK    [1280] A4 las capas preparadas se ven apagadas, sin poder encenderlas y con su nota (contratos «Llega en el Corte 6b»; reportes de Comercial)
+OK    [1280] A5 «Volver a la vista por omisión» empieza desactivado
+OK    [1280] A6 apagar los tramos y prender los reportes del bot cambia el mapa (sin guardarlo en la base)
+OK    [1280] A7 «Volver a la vista por omisión» deja todo como al abrir
+OK    [1280] B1 colores por material: la leyenda trae los materiales y los tramos se pintan por el campo material
+OK    [1280] B2 colores por edad: la leyenda por rangos de años y «Sin fecha de instalación»
+OK    [1280] B3 «Tipo» quita la leyenda
+OK    [1280] C1 los daños de hoy se piden al abrir (desde = hasta = hoy) y el daño sembrado está en la capa, sin la descripción
+OK    [1280] C2 «7 días» vuelve a pedir los daños y las intervenciones con 7 días de rango
+OK    [1280] C3 un rango de más de 12 meses no se deja pedir («máximo 12 meses»)
+OK    [1280] D1 tocar el tramo abre su tarjeta: código, tipo con su nombre, material, diámetro, edad y estado; con «Ver ficha», «Reportar daño» y «Registrar intervención»
+OK    [1280] D2 la tarjeta sin desborde y con botones de 44 px o más
+OK    [1280] D3 «Ver ficha» abre la ficha del activo encima del mapa
+OK    [1280] D4 «Volver al mapa» regresa al mismo lugar con la tarjeta
+OK    [1280] D5 tocar el daño: su código, tipo, estado, la hora y el activo; nada de la descripción
+OK    [1280] D6 cerrar la tarjeta
+OK    [1280] D7 «Reportar daño» abre el formulario con el tramo ya elegido
+OK    [1280] E1 sin motivo no se guarda
+OK    [1280] E2 el administrador enciende los tramos para el supervisor de planta: queda el evento con su motivo
+OK    [1280] F1 el supervisor de planta abre con muestreo, tanques y (desde E2) los tramos; los daños, apagados
+OK    [1280] F2 los 27 puntos de muestreo; tocar uno verificado abre su tarjeta
+OK    [1280] G1 el operador con la casilla entra en «Solo lectura»; las actividades, solo de hoy
+OK    [1280] G2 sin muestreo, reportes ni capas preparadas en su lista
+OK    [1280] G3 la tarjeta del tramo, sin «Ver ficha»; con «Reportar daño» y «Registrar intervención» porque los tiene asignados
+OK    [1280] G4 el operador pidió solo las actividades de hoy (desde = hasta = hoy), nunca otros días ni capas de supervisión
+OK    [1280] G5 sin desborde a lo ancho
+OK    [1280] G6 el operador sin la casilla no ve el botón del geovisor
+OK    [1280] H1 el supervisor de distribución ve «Cargar versión» en sensores, sumideros y acometidas
+OK    [1280] H2 en el acueducto, conductos, pozos y descargas: «La carga el administrador» y sin botón de cargar
+OK    [1280] H3 «Cargar varias capas de un archivo» disponible (solo con sus capas)
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 68 de 68 — SIN FALLAS

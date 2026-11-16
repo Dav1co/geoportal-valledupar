@@ -1,0 +1,52 @@
+OK    [390] P1 Dashboard PTAP: un solo bloque debajo de la barra (el selector va dentro del encabezado), sin franja vacía arriba
+OK    [390] P2 el encabezado azul se ve entero (el título dentro del encabezado y en pantalla)
+OK    [390] P3 el dashboard llega hasta abajo de la pantalla (sin franja blanca) y la página no se desplaza por fuera
+OK    [390] P4 al bajar hasta el final, lo último del contenido queda a la vista y nada lo tapa
+OK    [390] P5 el selector PTAP | distribución va en el encabezado, con el PTAP marcado
+OK    [390] D1 Dashboard distribución: el mismo armado (un solo bloque, encabezado entero, hasta abajo, sin desplazar la página)
+OK    [390] D2 encabezado, título, sesión, «Volver a mis formularios», pestañas, selector y cuerpo con los MISMOS estilos que el PTAP
+OK    [390] D3 la única diferencia es el color: el PTAP azul oscuro y distribución verde oscuro
+OK    [390] D4 al bajar hasta el final de Personal, lo último queda a la vista
+OK    [390] D5 los botones secundarios del contenido son iguales en los dos (letra, tamaño, peso, radio y alto)
+OK    [390] D6 las tarjetas del contenido de distribución: blancas, borde gris claro, radio de 12 px y alineadas con el cuerpo del PTAP (sin margen propio)
+OK    [390] D7 «← Volver a mis formularios» vuelve a los formularios
+OK    [1280] P1 Dashboard PTAP: un solo bloque debajo de la barra (el selector va dentro del encabezado), sin franja vacía arriba
+OK    [1280] P2 el encabezado azul se ve entero (el título dentro del encabezado y en pantalla)
+OK    [1280] P3 el dashboard llega hasta abajo de la pantalla (sin franja blanca) y la página no se desplaza por fuera
+OK    [1280] P4 al bajar hasta el final, lo último del contenido queda a la vista y nada lo tapa
+OK    [1280] P5 el selector PTAP | distribución va en el encabezado, con el PTAP marcado
+OK    [1280] D1 Dashboard distribución: el mismo armado (un solo bloque, encabezado entero, hasta abajo, sin desplazar la página)
+OK    [1280] D2 encabezado, título, sesión, «Volver a mis formularios», pestañas, selector y cuerpo con los MISMOS estilos que el PTAP
+OK    [1280] D3 la única diferencia es el color: el PTAP azul oscuro y distribución verde oscuro
+OK    [1280] D4 al bajar hasta el final de Personal, lo último queda a la vista
+OK    [1280] D5 los botones secundarios del contenido son iguales en los dos (letra, tamaño, peso, radio y alto)
+OK    [1280] D6 las tarjetas del contenido de distribución: blancas, borde gris claro, radio de 12 px y alineadas con el cuerpo del PTAP (sin margen propio)
+OK    [1280] D7 «← Volver a mis formularios» vuelve a los formularios
+OK    Z1 sin errores de JavaScript ni de consola
+----
+OK    [390] P1 Dashboard PTAP: un solo bloque debajo de la barra (el selector va dentro del encabezado), sin franja vacía arriba
+OK    [390] P2 el encabezado azul se ve entero (el título dentro del encabezado y en pantalla)
+OK    [390] P3 el dashboard llega hasta abajo de la pantalla (sin franja blanca) y la página no se desplaza por fuera
+OK    [390] P4 al bajar hasta el final, lo último del contenido queda a la vista y nada lo tapa
+OK    [390] P5 el selector PTAP | distribución va en el encabezado, con el PTAP marcado
+OK    [390] D1 Dashboard distribución: el mismo armado (un solo bloque, encabezado entero, hasta abajo, sin desplazar la página)
+OK    [390] D2 encabezado, título, sesión, «Volver a mis formularios», pestañas, selector y cuerpo con los MISMOS estilos que el PTAP
+OK    [390] D3 la única diferencia es el color: el PTAP azul oscuro y distribución verde oscuro
+OK    [390] D4 al bajar hasta el final de Personal, lo último queda a la vista
+OK    [390] D5 los botones secundarios del contenido son iguales en los dos (letra, tamaño, peso, radio y alto)
+OK    [390] D6 las tarjetas del contenido de distribución: blancas, borde gris claro, radio de 12 px y alineadas con el cuerpo del PTAP (sin margen propio)
+OK    [390] D7 «← Volver a mis formularios» vuelve a los formularios
+OK    [1280] P1 Dashboard PTAP: un solo bloque debajo de la barra (el selector va dentro del encabezado), sin franja vacía arriba
+OK    [1280] P2 el encabezado azul se ve entero (el título dentro del encabezado y en pantalla)
+OK    [1280] P3 el dashboard llega hasta abajo de la pantalla (sin franja blanca) y la página no se desplaza por fuera
+OK    [1280] P4 al bajar hasta el final, lo último del contenido queda a la vista y nada lo tapa
+OK    [1280] P5 el selector PTAP | distribución va en el encabezado, con el PTAP marcado
+OK    [1280] D1 Dashboard distribución: el mismo armado (un solo bloque, encabezado entero, hasta abajo, sin desplazar la página)
+OK    [1280] D2 encabezado, título, sesión, «Volver a mis formularios», pestañas, selector y cuerpo con los MISMOS estilos que el PTAP
+OK    [1280] D3 la única diferencia es el color: el PTAP azul oscuro y distribución verde oscuro
+OK    [1280] D4 al bajar hasta el final de Personal, lo último queda a la vista
+OK    [1280] D5 los botones secundarios del contenido son iguales en los dos (letra, tamaño, peso, radio y alto)
+OK    [1280] D6 las tarjetas del contenido de distribución: blancas, borde gris claro, radio de 12 px y alineadas con el cuerpo del PTAP (sin margen propio)
+OK    [1280] D7 «← Volver a mis formularios» vuelve a los formularios
+OK    Z1 sin errores de JavaScript ni de consola
+RESULTADO: 25 de 25 — SIN FALLAS

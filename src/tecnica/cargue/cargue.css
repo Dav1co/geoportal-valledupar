@@ -48,3 +48,4 @@
 .cg-choque p { margin: 0; overflow-wrap: anywhere; }
 .cg-puntos { font-size: 14px; }
 .cg-revertir { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #e6eaee; padding-top: 12px; }
+.cg-solo-admin { align-self: center; font-size: 13px; color: #5b6b62; }

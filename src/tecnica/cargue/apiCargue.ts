@@ -9,6 +9,7 @@ export type CapaCargue = {
   codigo: string; nombre: string; grupo: "acueducto" | "alcantarillado" | "tecnologia_perdidas" | "calidad_pqr" | "base"; sistema: string | null;
   geometria: "punto" | "linea" | "poligono" | "mixta"; prefijo: string | null; fuente: string; derivada_de: string | null; columna_llave: string | null;
   formatos: string[]; lector: "modelo" | "generico" | "muestreo" | null; version: number; vigentes: number; estado: EstadoCapa;
+  puede_cargar?: boolean; solo_admin?: boolean;      // Corte 6a: el supervisor de distribución carga las que no vienen del modelo (lo decide el servidor)
   ultima: { carga_id: number; publicada_en: string; autor: string; formato: string; filas: number; nota: string | null; motivo: string | null } | null;
   abierta: { carga_id: number; creado_en: string; autor: string; formato: string; filas: number; recibidas: number; sha256: string; columna_llave: string; srid: number; masiva: boolean } | null;
 };

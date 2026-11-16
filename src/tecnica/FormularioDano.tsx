@@ -33,16 +33,18 @@ function duracion(desde: string, hasta: string): string | null {
 }
 const numeroONulo = (t: string) => { const v = t.trim().replace(",", "."); if (!v) return null; const n = Number(v); return Number.isFinite(n) ? n : NaN; };
 
-export function FormularioDano({ correo, onSalir, onRegistrarReparacion }: {
+export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoInicial }: {
   correo: string; onSalir?: () => void;
+  activoInicial?: { codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null;      // Corte 6a: «Reportar daño» desde la tarjeta del geovisor
   onRegistrarReparacion?: (d: { codigo: string; sistema: "acueducto" | "alcantarillado"; activo: string | null; lat: number; lon: number }) => void;   // Corte 3a
 }) {
   const [def, setDef] = useState<Def | null>(null);
   const [errorDef, setErrorDef] = useState<string | null>(null);
   const ubic = useUbicacion();
   const reloj = useRef<RelojInicio>(abrirReloj());
-  const [sistema, setSistema] = useState<"acueducto" | "alcantarillado" | null>(null);
-  const [eleccion, setEleccion] = useState<Eleccion | null>(null);
+  const [sistema, setSistema] = useState<"acueducto" | "alcantarillado" | null>(activoInicial?.sistema ?? null);
+  const [eleccion, setEleccion] = useState<Eleccion | null>(activoInicial
+    ? { tipo: "activo", activo: { codigo: activoInicial.codigo, prefijo: activoInicial.codigo.slice(0, 3), tipo: "", estado: "", estado_codigo: "", retirado: false, lat: activoInicial.lat, lon: activoInicial.lon } } : null);
   const [detalle, setDetalle] = useState<Ficha | null>(null);
   const [noIdent, setNoIdent] = useState(false);
   const [queEs, setQueEs] = useState("");
@@ -70,7 +72,7 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion }: {
   const [guardado, setGuardado] = useState<DanoGuardado | null>(null);
   const [cancelar, setCancelar] = useState(false);
   const [ficha, setFicha] = useState<string | null>(null);
-  const cercanosPedidos = useRef<string | null>(null);
+  const cercanosPedidos = useRef<string | null>(activoInicial?.sistema ?? null);      // con el activo del geovisor no se preselecciona el más cercano
 
   useEffect(() => {
     apiDano.formulario().then(setDef).catch((e) => setErrorDef(e instanceof ErrorTec && e.tipo === "permiso" ? "No tiene asignado el formulario de daños y fallas." : e instanceof Error ? e.message : "No se pudo cargar."));

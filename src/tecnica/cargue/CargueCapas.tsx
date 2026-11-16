@@ -59,7 +59,7 @@ export function CargueCapas() {
   if (!datos) return <p className="tec-sub dan-pad" role="status">Cargando las capas…</p>;
   if (vista.tipo === "carga") return <Asistente capa={vista.capa} datos={datos} onCerrar={volver} />;
   if (vista.tipo === "masiva") return <Masiva datos={datos} onCerrar={volver} />;
-  if (vista.tipo === "historial") return <Historial capa={vista.capa} puede={datos.puede_cargar} onCerrar={volver} />;
+  if (vista.tipo === "historial") return <Historial capa={vista.capa} puede={vista.capa.puede_cargar ?? datos.puede_cargar} onCerrar={volver} />;
 
   const visibles = datos.capas;
   const pasa = (est: string) => filtro === "todas" || (filtro === "pend" && (est === "sin_cargar" || est === "desactualizada")) || (filtro === "dia" && est === "al_dia");
@@ -69,7 +69,8 @@ export function CargueCapas() {
       <section className="tec-tarjeta cg-cabeza">
         <h2>Cargue de capas</h2>
         <p className="tec-sub">{total} capas en {GRUPOS.length} grupos. Cada carga crea una versión nueva; la anterior queda guardada. Nada se borra: lo que no venga en la versión nueva queda retirado, con motivo, y sus intervenciones se conservan.</p>
-        {!datos.puede_cargar ? <p className="tec-aviso tec-aviso-info" role="note">Usted ve el Cargue en solo lectura: las capas las carga el administrador.</p> : null}
+        {!datos.puede_cargar ? <p className="tec-aviso tec-aviso-info" role="note">Usted ve el Cargue en solo lectura: las capas las carga el administrador.</p>
+          : datos.capas.some((c) => c.solo_admin && c.lector) ? <p className="tec-aviso tec-aviso-info" role="note">Las capas de la red que vienen del modelo hidráulico (acueducto, conductos, pozos y descargas) las carga solo el administrador: llevan la topología, el enlace de los contratos y la simulación de cierre.</p> : null}
         <div className="dan-fila" role="group" aria-label="Filtro de capas">
           {([["todas", "Todas"], ["pend", "Por cargar o desactualizadas"], ["dia", "Al día"]] as const).map(([c, t]) => (
             <button key={c} type="button" className="dan-opcion" aria-pressed={filtro === c} onClick={() => setFiltro(c)}>{t}</button>))}
@@ -106,8 +107,9 @@ export function CargueCapas() {
                 <p className="tec-ayuda">{c.version ? `Versión ${c.version} · ${fecha(c.ultima?.publicada_en)} · ${n(c.vigentes)} ${c.codigo === "muestreo" ? "puntos activos" : "vigentes"}` : c.fuente === "carga" ? "Todavía no se ha cargado" : `${n(c.vigentes)} vigentes`}</p>
                 {c.abierta ? <p className="tec-aviso tec-aviso-error cg-abierta">Hay una carga abierta (la {c.abierta.carga_id}, de {c.abierta.autor}, {fecha(c.abierta.creado_en)}): llegaron {n(c.abierta.recibidas)} de {n(c.abierta.filas)} filas.</p> : null}
                 <div className="dash-acciones">
-                  {datos.puede_cargar && c.fuente === "carga" && c.lector ? <button type="button" className="tec-boton-sec" onClick={() => setVista({ tipo: "carga", capa: c })}>{c.abierta ? "Seguir o anular la carga" : "Cargar versión"}</button> : null}
+                  {(c.puede_cargar ?? datos.puede_cargar) && c.fuente === "carga" && c.lector ? <button type="button" className="tec-boton-sec" onClick={() => setVista({ tipo: "carga", capa: c })}>{c.abierta ? "Seguir o anular la carga" : "Cargar versión"}</button> : null}
                   {c.fuente === "carga" ? <button type="button" className="tec-boton-sec" onClick={() => setVista({ tipo: "historial", capa: c })}>Historial</button> : null}
+                  {datos.puede_cargar && c.solo_admin && c.lector && !(c.puede_cargar ?? false) ? <span className="cg-solo-admin">La carga el administrador</span> : null}
                 </div>
               </article>))}
             {otras.map((o) => (
@@ -525,7 +527,7 @@ function Masiva({ datos, onCerrar }: { datos: CapasResp; onCerrar: (aviso?: stri
   const [ocupado, setOcupado] = useState(false);
   const [fase, setFase] = useState<"elegir" | "revisar" | "hecho">("elegir");
   const [nota, setNota] = useState("");
-  const cargables = datos.capas.filter((c) => c.fuente === "carga" && c.lector && c.codigo !== "muestreo");
+  const cargables = datos.capas.filter((c) => c.fuente === "carga" && c.lector && c.codigo !== "muestreo" && (c.puede_cargar ?? true));      // Corte 6a: solo las que esta persona carga
   const destinoDe = (nombre: string) => { const k = normalizarNombre(nombre); return cargables.find((c) => c.codigo === k || normalizarNombre(c.nombre) === k || (ALIAS[c.codigo] ?? []).includes(k))?.codigo ?? ""; };
   const llaveDe = (destino: string, l: CapaLeida) => { const c = cargables.find((x) => x.codigo === destino); if (!c) return ""; return c.columna_llave ?? proponerLlave(l) ?? SIN_LLAVE; };
   const poner = (i: number, cambio: Partial<ItemMasiva>) => setItems((xs) => xs && xs.map((x, k) => (k === i ? { ...x, ...cambio } : x)));

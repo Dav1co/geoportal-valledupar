@@ -1,0 +1,24 @@
+OK    00 base con la carga real del 1a, la MUE y el 5c; la reversa vacía la deja en el 5c · 18 s · 35781 activos vigentes
+OK    01 huellas antes: «CORTE 5c (listo para el 6a)», 4 RPC «NO EXISTE», 10 «CORTE 5c (sin cambiar)», 4 «NO EXISTE» · 0 funciones de redes (conjunto)=CORTE 5c (listo para el 6a) | 1 columna redes.capas.carga_supervisor=NO EXISTE (sin aplicar) | 1 tabla redes.capas_por_perfil=NO EXISTE (sin aplicar) | 1 tabla redes.capas_por_perfil_eventos=NO EXISTE (sin aplicar) | 1 tabla redes.geovisor_capas=NO EXISTE (sin aplicar
+OK    02 ensayo con la carga real: ERROR esperado, N de N SIN FALLAS · RESULTADO: 93 de 93 pruebas correctas — SIN FALLAS · 3.1 s
+OK    03 el ensayo no deja rastro (sin tablas del 6a, misma huella, sin auditoría de prueba)
+OK    04 migración · 0.0 s
+OK    05 la huella del 6a es la de generar.py · 91a4d3e6e1c3539d8a447cb00a52d735
+OK    06 verificación: todas las filas OK · de tesela tienen prefijos que existen; ninguna preparada está encendida al abrir|OK | 08 los 8 parámetros del geovisor existen dentro de su rango|OK | 09 las RPC del Cargue de la pantalla ya no piden «solo el administrador» (la de psql del 1a sí, como antes)|OK | INFO capas del geovisor · encendidas por perfil (distribución · planta · operador) · cambios de las capas por omisión|19 · 7 · 2 · 6 · 0
+OK    07 guardia: migrar dos veces se niega · CONTEXTO:  función PL/pgSQL inline_code_block en la línea 8 en RAISE
+OK    08 huellas después: «CORTE 6a (aplicado)», 4 «NUEVA», 10 «CORTE 6a (reemplazada)», 4 «EXISTE» · 0 funciones de redes (conjunto)=CORTE 6a (aplicado) | 1 columna redes.capas.carga_supervisor=EXISTE (aplicado) | 1 tabla redes.capas_por_perfil=EXISTE (aplicado) | 1 tabla redes.capas_por_perfil_eventos=EXISTE (aplicado) | 1 tabla redes.geovisor_capas=EXISTE (aplicado) | public.geoportal_redes_carga
+OK    09 reversa vacía: exacta al 5c (funciones), sin tablas ni columna nuevas
+OK    10 migrar de nuevo después de la reversa
+OK    11 tesela del centro de Valledupar: vacía a z12; a z13 (red principal) menos de 200 KB; ninguna pasa de 200 KB ni de 1,5 s · z12 0 KB 25 ms · z13 58 KB 68 ms · z14 134 KB 56 ms · z15 59 KB 50 ms · z16 12 KB 47 ms · z17 3 KB 46 ms
+OK    12 la tesela real a z15 trae tramos, nodos y los materiales del modelo (PVC y AC), sin nombres de contrato · 61316 bytes
+OK    13 las teselas de z14 que cubren toda la red de acueducto: la más pesada, menos de 250 KB · 20 teselas · la mayor 185 KB · 1.0 s en total
+OK    14 la configuración del administrador con los datos reales: 19 capas, 8 encendidas, los tipos con alias (TOR = Torre…) · {'min': 13, 'nodos': 15, 'accesorios': 17, 'red_completa': 14}
+OK    15 la capa de muestreo trae los 27 puntos reales (3 verificados y 24 aproximados) · 27 ms
+OK    16 la capa de daños con 12 meses de rango responde (sin datos en la base local) · 29 ms
+OK    17 el supervisor de distribución no puede recargar el acueducto real · ERROR: ERROR:  La capa Red de acueducto (tramos del modelo) viene del modelo hidráulico: la carga solo el administrador
+CONTEXTO:  función PL/pgSQL f_autorizar_
+OK    18 … pero ve «puede cargar» para las demás capas · true
+OK    19 verificación con datos: todas OK · INFO capas del geovisor · encendidas por perfil (distribución · planta · operador) · cambios de las capas por omisión|19 · 7 · 3 · 6 · 1
+OK    20 reversa con datos: se niega (ya hay cambios de las capas por omisión) y no cambia nada · CONTEXTO:  función PL/pgSQL inline_code_block en la línea 5 en RAISE
+
+RESULTADO: 21 de 21 — SIN FALLAS
