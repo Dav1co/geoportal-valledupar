@@ -33,13 +33,17 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [desdeDano, setDesdeDano] = useState<DesdeDano | null>(null);      // «Registrar la reparación» desde el daño recién guardado
   const [activoItv, setActivoItv] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // desde la ficha
   const [activoDano, setActivoDano] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // Corte 6a: desde el geovisor
-  const [vista, setVista] = useState<"captura" | "dashboard" | "activos" | "redes" | "geovisor">("captura");      // Corte 6a: «geovisor» (N-13: supervisores, administrador y el operador con la casilla)     // Corte 4a: «redes» = Dashboard distribución (supervisor de distribución y administrador)
+  const [vista, setVista] = useState<"captura" | "dashboard" | "activos" | "redes" | "geovisor">("captura");
+  // Corte 6b (§30.2): un enlace compartido del geovisor (#geovisor=<código>) se consume una vez: se quita de la barra de direcciones y abre el geovisor
+  const [vistaId, setVistaId] = useState<string | null>(() => /(?:^|[#&])geovisor=([a-z0-9]{10})(?:&|$)/.exec(window.location.hash)?.[1] ?? null);
+  const [avisoEnlace, setAvisoEnlace] = useState<string | null>(null);
+  const [redesListo, setRedesListo] = useState(false);      // Corte 6a: «geovisor» (N-13: supervisores, administrador y el operador con la casilla)     // Corte 4a: «redes» = Dashboard distribución (supervisor de distribución y administrador)
   const [redes, setRedes] = useState<MiPerfilRedes | null>(null);      // perfil de redes (ver_dashboard_redes), del servidor     // el Dashboard PTAP y la ficha de activos (Corte 1b) son solo para supervisor y administrador en esta pantalla (el servidor lo vuelve a verificar en cada ruta)
 
   useEffect(() => {
     let vivo = true;
     setErrorMis(null);
-    apiDash.miPerfil().then((r) => { if (vivo) setRedes(r); }).catch(() => { if (vivo) setRedes(null); });
+    apiDash.miPerfil().then((r) => { if (vivo) setRedes(r); }).catch(() => { if (vivo) setRedes(null); }).finally(() => { if (vivo) setRedesListo(true); });
     apiTec.misFormularios()
       .then((r) => {
         if (!vivo) return;
@@ -59,6 +63,12 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   }, []);
 
   useEffect(() => { if (elegido && !PANTALLA_PROPIA.has(elegido)) cargarDef(elegido, false); }, [elegido, cargarDef, intento]);
+  useEffect(() => {
+    if (!vistaId || !redesListo) return;      // se espera a saber si tiene el geovisor
+    try { window.history.replaceState(null, "", window.location.pathname + window.location.search); } catch { /* sin historial: no importa */ }
+    if (redes?.geovisor) setVista("geovisor");
+    else { setAvisoEnlace("Le compartieron una vista del geovisor técnico, pero su cuenta no tiene el geovisor. Pídale a su supervisor que se lo active."); setVistaId(null); }
+  }, [vistaId, redesListo]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (elegido && version > 0 && !PANTALLA_PROPIA.has(elegido)) cargarDef(elegido, true); }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ----- errores al entrar -----
@@ -66,7 +76,9 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     const a = avisoDeError(errorMis);
     const sinAcceso = errorMis.tipo === "permiso" || errorMis.tipo === "denegado";
     // quien solo tiene el Dashboard distribución (sin formularios de Técnica) entra directo a él
-    if (sinAcceso && redes?.dashboard_redes) return <DashboardRedes correo={correo} onVolver={() => setIntento((i) => i + 1)} />;
+    // Corte 6b: quien solo tiene el Dashboard distribución también entra al geovisor (y por un enlace compartido)
+    if (sinAcceso && redes?.geovisor && vista === "geovisor") return <Geovisor vistaId={vistaId} onVolver={() => { setVistaId(null); setVista("redes"); }} />;
+    if (sinAcceso && redes?.dashboard_redes) return <DashboardRedes correo={correo} onVolver={() => setIntento((i) => i + 1)} onGeovisor={redes.geovisor ? () => setVista("geovisor") : undefined} />;
     return (
       <div className="tec-pagina">
         <section className="tec-tarjeta" role="alert">
@@ -90,17 +102,18 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     ? <SelectorDashboards actual={vista === "redes" ? "distribucion" : "ptap"} onElegir={(d) => setVista(d === "ptap" ? "dashboard" : "redes")} /> : null;
 
   if (puedeSupervisar && vista === "dashboard") return <Dashboard correo={correo} rotuloPerfil={ROTULO_PERFIL[mis.perfil]} selector={selector} onVolver={() => setVista("captura")} />;
-  if (puedeRedes && vista === "redes") return <DashboardRedes correo={correo} selector={selector} onVolver={() => setVista("captura")} />;
+  if (puedeRedes && vista === "redes") return <DashboardRedes correo={correo} selector={selector} onVolver={() => setVista("captura")} onGeovisor={redes?.geovisor ? () => setVista("geovisor") : undefined} />;
   const tieneItv = mis.formularios.some((f) => f.clave === "mantenimiento");
   const abrirItv = (d: DesdeDano | null, a: typeof activoItv) => { setDesdeDano(d); setActivoItv(a); setVezItv((v) => v + 1); setElegido("mantenimiento"); setVista("captura"); window.scrollTo?.(0, 0); };
   const tieneGeovisor = redes?.geovisor === true;                                    // Corte 6a: lo decide el servidor (redes.f_geovisor_lectura)
   const abrirDano = (a: typeof activoDano) => { setActivoDano(a); setVezDano((v) => v + 1); setElegido("danos_fallas"); setVista("captura"); window.scrollTo?.(0, 0); };
-  if (tieneGeovisor && vista === "geovisor") return <Geovisor onVolver={() => setVista("captura")} onReportarDano={(a) => abrirDano(a)} onRegistrarIntervencion={(a) => abrirItv(null, a)} />;
+  if (tieneGeovisor && vista === "geovisor") return <Geovisor vistaId={vistaId} onVolver={() => { setVistaId(null); setVista("captura"); }} onReportarDano={(a) => abrirDano(a)} onRegistrarIntervencion={(a) => abrirItv(null, a)} />;
   if ((puedeSupervisar || puedeRedes) && vista === "activos") return <ActivosRedes onVolver={() => setVista("captura")} onRegistrarIntervencion={tieneItv || puedeSupervisar || puedeRedes ? (a) => abrirItv(null, a) : undefined} />;
 
   return (
     <div className="tec-pagina">
       <div className="tec-sesion">Sesión de {correo} · {ROTULO_PERFIL[mis.perfil]}</div>
+      {avisoEnlace ? <p className="tec-aviso tec-aviso-info" role="status">{avisoEnlace}</p> : null}
 
       {hayAlgunoAsignado ? (
         <nav className="tec-formularios" aria-label="Tus formularios">

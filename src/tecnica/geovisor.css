@@ -66,3 +66,27 @@
   .geo-tarjeta { left: auto; right: 12px; width: 380px; bottom: 12px; }
   .geo-herr { padding: 8px 16px; }
 }
+
+/* Corte 6b */
+.geo-boton-sec { border-color: rgba(255, 255, 255, 0.6); }
+.geo-capa-fila { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #eef2f5; }
+.geo-capa-fila .geo-capa { flex: 1 1 auto; border-bottom: none; }
+.geo-atenuar { min-height: 40px; padding: 0 10px; border-radius: 8px; border: 1px solid #b9c6cf; background: #fff; font: inherit; font-size: 13px; cursor: pointer; flex: 0 0 auto; }
+.geo-atenuar[aria-pressed="true"] { background: #eef2f5; font-weight: 700; }
+.geo-aviso-abajo { top: auto; bottom: 12px; }
+.geo-vista-aviso { position: absolute; top: 10px; left: 10px; right: 56px; z-index: 2; display: flex; gap: 8px; align-items: flex-start; background: #e8f1fb; border: 1px solid #9cc0e6; color: #0c3c6e; border-radius: 10px; padding: 6px 6px 6px 12px; font-size: 14px; }
+.geo-vista-aviso span { flex: 1 1 auto; padding-top: 6px; }
+.geo-personal { margin-top: 10px; border: 1px dashed #c69b2e; background: #fffaf0; border-radius: 10px; padding: 6px 10px 8px; }
+.geo-personal dl { margin-top: 4px; }
+.geo-personal-rotulo { font-size: 12px; font-weight: 700; color: #8a5a00; }
+.geo-consumo { margin-top: 10px; }
+.geo-consumo-tit { margin: 0 0 4px; font-size: 13px; color: #5b6b77; }
+.geo-barras { display: flex; align-items: flex-end; gap: 6px; height: 92px; }
+.geo-barra-mes { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; min-width: 0; }
+.geo-barra-col { width: 100%; max-width: 34px; background: #1F5FA8; border-radius: 3px 3px 0 0; }
+.geo-barra-est { background: #9ab7da; }
+.geo-barra-val { font-size: 12px; }
+.geo-barra-per { font-size: 11px; color: #5b6b77; }
+.geo-compartir { position: absolute; left: 8px; right: 8px; top: 8px; z-index: 5; background: #fff; border-radius: 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.geo-enlace { width: 100%; box-sizing: border-box; min-height: 44px; font: inherit; font-size: 14px; border: 1px solid #b9c6cf; border-radius: 8px; padding: 0 8px; }
+@media (min-width: 900px) { .geo-compartir { left: auto; right: 12px; width: 420px; } }

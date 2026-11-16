@@ -27,7 +27,7 @@ const ESTADO: Record<string, string> = { reportado: "Reportado", en_atencion: "E
 const err = (e: unknown, sin: string) => (e instanceof ErrorTec && e.tipo === "permiso" ? sin : e instanceof Error ? e.message : "No se pudo completar.");
 
 // §34: el mismo armado y estilo que el Dashboard PTAP (encabezado común, pestañas, cuerpo); la única diferencia es el color verde oscuro (tdash-verde).
-export function DashboardRedes({ correo, selector, onVolver }: { correo: string; selector?: React.ReactNode; onVolver: () => void }) {
+export function DashboardRedes({ correo, selector, onVolver, onGeovisor }: { correo: string; selector?: React.ReactNode; onVolver: () => void; onGeovisor?: () => void }) {
   const [pestana, setPestana] = useState<Pestana>("no_identificados");
   const [ficha, setFicha] = useState<string | null>(null);
   const [admin, setAdmin] = useState(false);
@@ -36,7 +36,7 @@ export function DashboardRedes({ correo, selector, onVolver }: { correo: string;
   if (ficha) return <FichaActivo codigo={ficha} onAbrir={setFicha} onVolver={() => setFicha(null)} rotuloVolver="Volver al Dashboard distribución" />;
   return (
     <div className="tdash tdash-verde">
-      <CabeceraDashboard titulo="Dashboard distribución" sesion={rotulo ? `${correo} · ${rotulo}` : correo} onVolver={onVolver} selector={selector} etiqueta="Pestañas del Dashboard distribución"
+      <CabeceraDashboard titulo="Dashboard distribución" sesion={rotulo ? `${correo} · ${rotulo}` : correo} onVolver={onVolver} onGeovisor={onGeovisor} selector={selector} etiqueta="Pestañas del Dashboard distribución"
         pestanas={PESTANAS.filter((p) => !p.admin || admin).map((p) => ({ clave: p.c, titulo: p.n }))} activa={pestana} onElegir={(c) => setPestana(c as Pestana)} />
       <div className="tdash-cuerpo dan itv dash-redes">
       {pestana === "no_identificados" ? <NoIdentificados onFicha={setFicha} /> : null}

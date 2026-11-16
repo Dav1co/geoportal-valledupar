@@ -130,6 +130,9 @@ function leerURL() {
 }
 
 const URL0 = leerURL();
+// Técnica fase 1, Corte 6b (§30.2): un enlace del geovisor técnico (#geovisor=<código>) abre Técnica, que lo consume (AreaTecnica). El enlace exige sesión: esta app
+// no muestra nada sin iniciar sesión, y el servidor vuelve a revisar el permiso de cada capa.
+const ENLACE_GEOVISOR = /(?:^|[#&])geovisor=[a-z0-9]{10}(?:&|$)/.test(window.location.hash);
 
 // Permisos que se asumen mientras el perfil no trae `permisos` (los mismos valores iniciales de antes).
 const PERMISOS_BASE = { explorar: true, focalizacion: false, comercial: false, rutas: false, dashboard: false };
@@ -218,7 +221,8 @@ export default function App() {
   useEffect(() => {
     setPantalla((actual) => {
       if (!perfilListo) return null;
-      return actual && pantallaValida(actual, areas) ? actual : pantallaInicial(areas);
+      if (actual && pantallaValida(actual, areas)) return actual;
+      return ENLACE_GEOVISOR && pantallaValida("tecnica", areas) ? "tecnica" : pantallaInicial(areas);
     });
   }, [perfilListo, areas]);
   function irA(a: Area | "entrada") {

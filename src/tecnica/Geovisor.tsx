@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./geovisor.css";
 import { CENTRO_VALLEDUPAR, FUENTE_BASE_CALLES } from "../lib/mapaBase";
 import { FUNCTIONS_URL, supabase } from "../lib/supabase";
-import { apiGeovisor, type CapaDatos, type CapaGeovisor, type ConfigGeovisor, type GrupoCapa, type PerfilGeovisor } from "./apiGeovisor";
+import { apiGeovisor, type CapaDatos, type CapaGeovisor, type ConfigGeovisor, type GrupoCapa, type PerfilGeovisor, type TarjetaContrato, type VistaAbierta } from "./apiGeovisor";
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 
@@ -15,7 +15,11 @@ import { FichaActivo } from "./FichaActivo";
 // · Tocar un elemento abre su tarjeta. Desde un activo: «Ver ficha» (supervisores y administrador), «Reportar daño» y «Registrar intervención» (si tiene el formulario).
 // · El operador con la casilla del geovisor (N-13) ve solo lectura: la red y las actividades del día, sin ficha ni capas de supervisión.
 // · Las capas preparadas (contratos, reportes de Comercial, PQR, presión…) se ven en la lista, apagadas y con su nota: no tienen datos todavía.
-// · Sin datos de contratos, nombres, descripciones ni el tercero de un daño.
+// · Corte 6b: la capa de contratos (supervisores y administrador) y su tarjeta, con el nombre y la dirección pedidos al tocar (DATO PERSONAL: solo en pantalla,
+//   la lectura queda registrada en el servidor; nunca en descargas, listados ni PDF; sin teléfono ni deuda); el muestreo coloreado por el último cloro y la
+//   turbiedad frente a los rangos de Salida; la capa de reportes de Comercial (azul con contrato, rojo posible clandestino) que se puede atenuar; y
+//   «Compartir» con un enlace (quien lo abre inicia sesión y ve solo las capas para las que tiene permiso).
+// · Fuera de la tarjeta del contrato, nada de nombres, descripciones ni el tercero de un daño.
 
 type ActivoTarjeta = { codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number };
 type Tarjeta = { capa: string; props: Record<string, unknown>; lat: number; lon: number };
@@ -34,6 +38,12 @@ const COLOR_NODO: Record<string, string> = { VAL: "#C2410C", TOR: "#0F766E", HID
   DES: "#0A2540", EBA: "#0A2540", POZ: "#8A5A2B", SUM: "#A16207", VER: "#5B21B6", EBR: "#5B21B6", PTR: "#5B21B6", SEN: "#6D28D9", SCA: "#6D28D9" };
 const PALETA = ["#1F77B4", "#D62728", "#2CA02C", "#9467BD", "#FF7F0E", "#8C564B", "#E377C2", "#17BECF", "#BCBD22", "#393B79", "#AD494A", "#637939"];
 const SIN_DATO = "#A7ADA9";
+const SIN_FECHA = "#C9B79C";      // respuesta 2 de David al 6a: «sin fecha» con un gris propio (cálido), distinto del «sin dato» del material
+const COLOR_CALIDAD: Record<string, string> = { dentro: "#2E7D32", fuera: "#C62828", sin_rango: "#90A4AE", sin_muestra: "#90A4AE" };
+const NOMBRE_CALIDAD: Record<string, string> = { dentro: "Dentro del rango", fuera: "Fuera del rango", sin_rango: "Sin rango", sin_muestra: "Sin muestra reciente" };
+const COLOR_CONTRATO: Record<string, string> = { activo: "#37474F", retirado: "#FFFFFF", otro: "#F9A825", sin_dato: "#B0BEC5" };
+const ESTADO_CONTRATO: Record<string, string> = { activo: "Activo", retirado: "Retirado", otro: "Otro", sin_dato: "Sin dato" };
+const ATENUABLES = new Set(["reportes_comercial"]);      // §30.4: la capa de reportes de Comercial se puede apagar o atenuar
 const EDADES: [number, string, string][] = [[0, "#2E7D32", "Menos de 10 años"], [10, "#9CCC65", "10 a 24 años"], [25, "#F9A825", "25 a 39 años"], [40, "#C62828", "40 años o más"]];
 const COLOR_DANO: Record<string, string> = { reportado: "#D32F2F", en_atencion: "#EF6C00", atendido: "#2E7D32" };
 const COLOR_ITV: Record<string, string> = { preventivo: "#0277BD", correctivo: "#EF6C00", reparacion: "#6A1B9A", reposicion: "#00838F", inversion: "#2E7D32" };
@@ -47,32 +57,46 @@ const texto = (v: unknown) => (v === null || v === undefined || v === "" ? "—"
 const sumarDias = (iso: string, d: number) => { const x = new Date(iso + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + d); return x.toISOString().slice(0, 10); };
 const restarMeses = (iso: string, m: number) => { const x = new Date(iso + "T12:00:00Z"); x.setUTCMonth(x.getUTCMonth() - m); return x.toISOString().slice(0, 10); };
 
-export function Geovisor({ onVolver, onReportarDano, onRegistrarIntervencion }: {
+export function Geovisor({ onVolver, onReportarDano, onRegistrarIntervencion, vistaId }: {
   onVolver: () => void; onReportarDano?: (a: ActivoTarjeta) => void; onRegistrarIntervencion?: (a: ActivoTarjeta) => void;
+  vistaId?: string | null;      // Corte 6b: el código de un enlace compartido
 }) {
   const [cfg, setCfg] = useState<ConfigGeovisor | null>(null);
+  const [vista, setVista] = useState<VistaAbierta | null | undefined>(vistaId ? undefined : null);
+  const [avisoVista, setAvisoVista] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [vez, setVez] = useState(0);
   useEffect(() => {
     let vivo = true;
     setError(null);
-    apiGeovisor.config().then((c) => { if (vivo) setCfg(c); })
+    apiGeovisor.config().then((c) => {
+      if (!vivo) return;
+      setCfg(c);
+      if (vistaId) apiGeovisor.abrirVista(vistaId).then((v) => { if (vivo) setVista(v); })
+        .catch((e) => { if (vivo) { setVista(null); setAvisoVista(`No se pudo abrir la vista compartida: ${e instanceof Error ? e.message : "error"}. Se abrió la vista por omisión.`); } });
+    })
       .catch((e) => { if (vivo) setError(e instanceof ErrorTec && e.tipo === "permiso" ? "No tiene el geovisor técnico. Pídale a su supervisor que se lo active en Personal." : e instanceof Error ? e.message : "No se pudo abrir el geovisor."); });
     return () => { vivo = false; };
   }, [vez]);
   if (error) return <div className="geo geo-msg"><section className="tec-tarjeta" role="alert"><h1>Geovisor técnico</h1><p>{error}</p>
     <div className="dash-acciones"><button type="button" className="tec-boton-sec" onClick={onVolver}>← Volver</button><button type="button" className="tec-boton" onClick={() => setVez((v) => v + 1)}>Reintentar</button></div></section></div>;
-  if (!cfg) return <div className="geo geo-msg"><p className="tec-sub" role="status">Abriendo el geovisor…</p></div>;
-  return <GeovisorMapa cfg={cfg} onVolver={onVolver} onReportarDano={onReportarDano} onRegistrarIntervencion={onRegistrarIntervencion} onRecargar={() => setVez((v) => v + 1)} />;
+  if (!cfg || vista === undefined) return <div className="geo geo-msg"><p className="tec-sub" role="status">Abriendo el geovisor…</p></div>;
+  return <GeovisorMapa cfg={cfg} inicial={vista} avisoInicial={avisoVista} onVolver={onVolver} onReportarDano={onReportarDano} onRegistrarIntervencion={onRegistrarIntervencion} onRecargar={() => setVez((v) => v + 1)} />;
 }
 
-function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, onRecargar }: {
-  cfg: ConfigGeovisor; onVolver: () => void; onReportarDano?: (a: ActivoTarjeta) => void; onRegistrarIntervencion?: (a: ActivoTarjeta) => void; onRecargar: () => void;
+function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, onRegistrarIntervencion, onRecargar }: {
+  cfg: ConfigGeovisor; inicial?: VistaAbierta | null; avisoInicial?: string | null; onVolver: () => void; onReportarDano?: (a: ActivoTarjeta) => void; onRegistrarIntervencion?: (a: ActivoTarjeta) => void; onRecargar: () => void;
 }) {
   const omision = useMemo(() => new Set(cfg.capas.filter((c) => c.encendida && c.fuente !== "preparada").map((c) => c.codigo)), [cfg]);
-  const [on, setOn] = useState<Set<string>>(omision);
-  const [colores, setColores] = useState<Colores>("tipo");
-  const [periodo, setPeriodo] = useState<Periodo>({ modo: "hoy", desde: cfg.hoy, hasta: cfg.hoy });
+  const [on, setOn] = useState<Set<string>>(inicial ? new Set(inicial.capas) : omision);
+  const [colores, setColores] = useState<Colores>(inicial?.colores ?? "tipo");
+  const [periodo, setPeriodo] = useState<Periodo>(inicial ? { modo: inicial.periodo.modo, desde: inicial.periodo.desde, hasta: inicial.periodo.hasta } : { modo: "hoy", desde: cfg.hoy, hasta: cfg.hoy });
+  const [atenuadas, setAtenuadas] = useState<Set<string>>(new Set(inicial?.atenuadas ?? []));
+  const [compartir, setCompartir] = useState(false);
+  const [avisoAbierto, setAvisoAbierto] = useState<string | null>(avisoInicial ?? (inicial ? [
+    "Vista compartida.",
+    inicial.omitidas.length ? `No se muestran ${inicial.omitidas.join(", ")}: no tiene permiso para esas capas.` : "",
+    inicial.fechas_cambiadas ? "Se muestran las actividades de hoy (su geovisor es de solo lectura)." : ""].filter(Boolean).join(" ") : null));
   const [panel, setPanel] = useState<"" | "capas" | "omision">("");
   const [tarjeta, setTarjeta] = useState<Tarjeta | null>(null);
   const [ficha, setFicha] = useState<string[]>([]);
@@ -83,6 +107,7 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
   const token = useRef<string | null>(null);
   const [listo, setListo] = useState(false);
   const capasRef = useRef(cfg.capas);
+  const inicialRef = useRef(inicial);
   const onRef = useRef(on);
   onRef.current = on;
   const teselas = cfg.capas.filter((c) => c.fuente === "tesela");
@@ -123,14 +148,24 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
         const vis = onRef.current.has(c.codigo) ? "visible" : "none";
         const color = c.codigo === "danos" ? ["match", ["get", "estado"], ...Object.entries(COLOR_DANO).flat(), "#D32F2F"]
           : c.codigo === "intervenciones" ? ["match", ["get", "tipo_codigo"], ...Object.entries(COLOR_ITV).flat(), "#455A64"]
-          : c.codigo === "muestreo" ? ["case", ["==", ["get", "exactitud"], "verificada"], "#00897B", "rgba(255,255,255,0.85)"] : "#7B1FA2";
+          : c.codigo === "muestreo" ? ["case", ["==", ["get", "exactitud"], "verificada"], ["match", ["get", "calidad"], ...Object.entries(COLOR_CALIDAD).flat(), "#90A4AE"], "rgba(255,255,255,0.9)"]
+          : c.codigo === "reportes_comercial" ? ["case", ["get", "con_contrato"], "#1565C0", "#C62828"] : "#7B1FA2";
+        const borde = c.codigo === "muestreo" ? ["match", ["get", "calidad"], ...Object.entries(COLOR_CALIDAD).flat(), "#90A4AE"] : "#FFFFFF";
         capas.push({ id: `g-${c.codigo}`, type: "circle", source: `g-${c.codigo}`, layout: { visibility: vis },
                      paint: { "circle-radius": c.codigo === "muestreo" ? 7 : 6.5, "circle-color": color as unknown as string,
-                              "circle-stroke-color": c.codigo === "muestreo" ? "#00897B" : "#FFFFFF", "circle-stroke-width": c.codigo === "muestreo" ? 2.5 : 2 } });
+                              "circle-stroke-color": borde as unknown as string, "circle-stroke-width": c.codigo === "muestreo" ? 2.5 : 2 } });
+      }
+      const conContratos = capasRef.current.some((c) => c.fuente === "contratos");
+      if (conContratos) {
+        capas.push({ id: "c-contratos", type: "circle", source: "contratos", "source-layer": "contratos", layout: { visibility: onRef.current.has("contratos") ? "visible" : "none" },
+                     paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 16, 3.5, 19, 7], "circle-color": ["match", ["get", "estado"], ...Object.entries(COLOR_CONTRATO).flat(), "#B0BEC5"] as unknown as string,
+                              "circle-stroke-color": ["match", ["get", "estado"], "retirado", "#B71C1C", "#FFFFFF"] as unknown as string, "circle-stroke-width": 1.5 } });
+        const i = capas.findIndex((x) => x.id.startsWith("g-"));
+        if (i > 0) capas.splice(i, 0, capas.pop()!);      // debajo de las actividades y del muestreo
       }
       capas.push({ id: "sel", type: "circle", source: "sel", paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#D6336C", "circle-stroke-width": 3.5 } });
       m = new maplibregl.Map({
-        container: cont.current, center: CENTRO_VALLEDUPAR, zoom: 14, maxZoom: 20, minZoom: 11, attributionControl: { compact: true },
+        container: cont.current, center: inicialRef.current ? [inicialRef.current.lon, inicialRef.current.lat] : CENTRO_VALLEDUPAR, zoom: inicialRef.current?.zoom ?? 14, maxZoom: 20, minZoom: 11, attributionControl: { compact: true },
         dragRotate: false, pitchWithRotate: false, touchPitch: false,
         transformRequest: (url) => (url.includes("accion=geovisor_tesela") && token.current ? { url, headers: { Authorization: `Bearer ${token.current}` } } : { url }),
         style: {
@@ -138,6 +173,8 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
           sources: {
             base: FUENTE_BASE_CALLES,
             red: { type: "vector", tiles: [`${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela&z={z}&x={x}&y={y}&v=${cfg.version}`], minzoom: cfg.zoom.min, maxzoom: 18 },
+            ...(conContratos ? { contratos: { type: "vector" as const, tiles: [`${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela_contratos&z={z}&x={x}&y={y}&v=${encodeURIComponent(cfg.contratos_capa?.calculado_en ?? "0")}`],
+                                              minzoom: cfg.zoom.contratos ?? 16, maxzoom: 18 } } : {}),
             ...fuentesGeo,
             sel: { type: "geojson", data: VACIO },
           },
@@ -151,13 +188,13 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
       m.on("click", (ev) => {
         if (!m) return;
         const caja: [maplibregl.PointLike, maplibregl.PointLike] = [[ev.point.x - 14, ev.point.y - 14], [ev.point.x + 14, ev.point.y + 14]];
-        const orden = [...capasGeo.map((c) => `g-${c.codigo}`), ...capasTesela.map((c) => `t-${c.codigo}-p`), ...capasTesela.map((c) => `t-${c.codigo}-l`), ...capasTesela.map((c) => `t-${c.codigo}-a`)]
+        const orden = [...capasGeo.map((c) => `g-${c.codigo}`), "c-contratos", ...capasTesela.map((c) => `t-${c.codigo}-p`), ...capasTesela.map((c) => `t-${c.codigo}-l`), ...capasTesela.map((c) => `t-${c.codigo}-a`)]
           .filter((id) => m!.getLayer(id) && m!.getLayoutProperty(id, "visibility") !== "none");
         const feats = m.queryRenderedFeatures(caja, { layers: orden });
         const f = orden.map((id) => feats.find((x) => x.layer.id === id)).find(Boolean);
         if (!f) { setTarjeta(null); return; }
         const id = f.layer.id;
-        const capa = id.startsWith("g-") ? id.slice(2) : "activo";
+        const capa = id.startsWith("g-") ? id.slice(2) : id === "c-contratos" ? "contrato" : "activo";
         const [lon, lat] = f.geometry.type === "Point" ? (f.geometry.coordinates as [number, number]) : [ev.lngLat.lng, ev.lngLat.lat];
         setTarjeta({ capa, props: f.properties as Record<string, unknown>, lat, lon });
       });
@@ -173,9 +210,11 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
     const aplicar = () => {
       for (const c of teselas) for (const s of ["-a", "-ab", "-l", "-p"]) if (m.getLayer(`t-${c.codigo}${s}`)) m.setLayoutProperty(`t-${c.codigo}${s}`, "visibility", on.has(c.codigo) ? "visible" : "none");
       for (const c of geojson) if (m.getLayer(`g-${c.codigo}`)) m.setLayoutProperty(`g-${c.codigo}`, "visibility", on.has(c.codigo) ? "visible" : "none");
+      if (m.getLayer("c-contratos")) m.setLayoutProperty("c-contratos", "visibility", on.has("contratos") ? "visible" : "none");
+      for (const c of ATENUABLES) if (m.getLayer(`g-${c}`)) { const o = atenuadas.has(c) ? 0.3 : 1; m.setPaintProperty(`g-${c}`, "circle-opacity", o); m.setPaintProperty(`g-${c}`, "circle-stroke-opacity", o); }
     };
     if (m.getLayer("sel")) aplicar(); else m.once("styledata", aplicar);
-  }, [on, listo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [on, atenuadas, listo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- colores de los tramos ----------
   const materiales = useMemo(() => cfg.materiales.map((x, i) => ({ ...x, color: PALETA[i % PALETA.length] })), [cfg]);
@@ -183,7 +222,7 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
     const m = mapa.current;
     if (!m || !listo) return;
     const expr = colores === "material" ? ["match", ["get", "material"], ...materiales.flatMap((x) => [x.codigo, x.color]), SIN_DATO]
-      : colores === "edad" ? ["case", ["!", ["has", "edad"]], SIN_DATO, ["step", ["get", "edad"], EDADES[0][1], EDADES[1][0], EDADES[1][1], EDADES[2][0], EDADES[2][1], EDADES[3][0], EDADES[3][1]]]
+      : colores === "edad" ? ["case", ["!", ["has", "edad"]], SIN_FECHA, ["step", ["get", "edad"], EDADES[0][1], EDADES[1][0], EDADES[1][1], EDADES[2][0], EDADES[2][1], EDADES[3][0], EDADES[3][1]]]
       : ["match", ["get", "sistema"], "alcantarillado", COLOR_SISTEMA.alcantarillado, "tecnologia", COLOR_SISTEMA.tecnologia, COLOR_SISTEMA.acueducto];
     const aplicar = () => { for (const c of teselas) if (m.getLayer(`t-${c.codigo}-l`)) m.setPaintProperty(`t-${c.codigo}-l`, "line-color", expr as unknown as string); };
     if (m.getLayer("sel")) aplicar(); else m.once("styledata", aplicar);
@@ -232,6 +271,7 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
       <header className="geo-barra">
         <button type="button" className="geo-volver" onClick={onVolver} aria-label="Volver a Técnica">←</button>
         <div className="geo-titulo"><h1>Geovisor técnico</h1><span>{cfg.completo ? (cfg.perfil === "admin" ? "Administrador" : "Supervisor") : "Solo lectura"}</span></div>
+        {cfg.compartir ? <button type="button" className="geo-boton geo-boton-sec" onClick={() => setCompartir(true)}>Compartir</button> : null}
         <button type="button" className="geo-boton" aria-expanded={panel === "capas"} onClick={() => setPanel((p) => (p === "capas" ? "" : "capas"))}>Capas</button>
       </header>
 
@@ -252,6 +292,9 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
               : `${c.nombre}: se muestran los ${cfg.max_elementos} más recientes. Acorte el rango de fechas.`}</p>)}
           </div>) : null}
         {colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} /> : null}
+        {on.has("contratos") && zoom < (cfg.zoom.contratos ?? 16) && zoom >= cfg.zoom.min ? <div className="geo-aviso geo-aviso-suave geo-aviso-abajo" role="status">Acerque más para ver los contratos</div> : null}
+        {avisoAbierto ? <div className="geo-vista-aviso" role="status"><span>{avisoAbierto}</span><button type="button" className="geo-cerrar" onClick={() => setAvisoAbierto(null)} aria-label="Cerrar el aviso">✕</button></div> : null}
+        {compartir ? <Compartir cfg={cfg} mapa={mapa.current} on={on} colores={colores} periodo={periodo} atenuadas={atenuadas} onCerrar={() => setCompartir(false)} /> : null}
         {tarjeta ? <TarjetaElemento t={tarjeta} cfg={cfg} onCerrar={() => setTarjeta(null)} onVerFicha={(c) => setFicha([c])}
           onReportarDano={onReportarDano} onRegistrarIntervencion={onRegistrarIntervencion} /> : null}
 
@@ -266,7 +309,9 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
               return (
                 <section key={g.c} className="geo-grupo" aria-labelledby={`geo-g-${g.c}`}>
                   <h3 id={`geo-g-${g.c}`}>{g.n}</h3>
-                  {cs.map((c) => <FilaCapa key={c.codigo} c={c} encendida={on.has(c.codigo)} onConmutar={() => conmutar(c.codigo)} />)}
+                  {cs.map((c) => <FilaCapa key={c.codigo} c={c} encendida={on.has(c.codigo)} onConmutar={() => conmutar(c.codigo)}
+                    atenuada={ATENUABLES.has(c.codigo) ? atenuadas.has(c.codigo) : undefined}
+                    onAtenuar={() => setAtenuadas((s) => { const n = new Set(s); if (n.has(c.codigo)) n.delete(c.codigo); else n.add(c.codigo); return n; })} />)}
                 </section>);
             })}
             {cfg.por_perfil ? <button type="button" className="tec-boton-sec geo-omision" onClick={() => setPanel("omision")}>Capas al abrir, por perfil…</button> : null}
@@ -284,9 +329,10 @@ function GeovisorMapa({ cfg, onVolver, onReportarDano, onRegistrarIntervencion, 
   );
 }
 
-function FilaCapa({ c, encendida, onConmutar }: { c: CapaGeovisor; encendida: boolean; onConmutar: () => void }) {
+function FilaCapa({ c, encendida, onConmutar, atenuada, onAtenuar }: { c: CapaGeovisor; encendida: boolean; onConmutar: () => void; atenuada?: boolean; onAtenuar?: () => void }) {
   const preparada = c.fuente === "preparada";
   return (
+    <div className="geo-capa-fila">
     <label className={`geo-capa${preparada ? " geo-capa-off" : ""}`} data-capa={c.codigo}>
       <input type="checkbox" checked={encendida && !preparada} disabled={preparada} onChange={onConmutar} />
       <span className="geo-capa-txt">
@@ -294,6 +340,8 @@ function FilaCapa({ c, encendida, onConmutar }: { c: CapaGeovisor; encendida: bo
         {c.nota ? <span className="geo-capa-nota">{c.nota}</span> : null}
       </span>
     </label>
+    {atenuada !== undefined && encendida ? <button type="button" className="geo-atenuar" aria-pressed={atenuada} onClick={onAtenuar} data-atenuar={c.codigo}>{atenuada ? "Atenuada" : "Atenuar"}</button> : null}
+    </div>
   );
 }
 
@@ -323,7 +371,7 @@ function SelectorPeriodo({ cfg, periodo, onCambiar }: { cfg: ConfigGeovisor; per
 }
 
 function Leyenda({ colores, materiales }: { colores: Colores; materiales: { codigo: string; nombre: string; color: string }[] }) {
-  const items = colores === "material" ? [...materiales.map((x) => [x.color, x.nombre]), [SIN_DATO, "Sin dato"]] : [...EDADES.map((e) => [e[1], e[2]]), [SIN_DATO, "Sin fecha de instalación"]];
+  const items = colores === "material" ? [...materiales.map((x) => [x.color, x.nombre]), [SIN_DATO, "Sin dato"]] : [...EDADES.map((e) => [e[1], e[2]]), [SIN_FECHA, "Sin fecha de instalación"]];
   return (
     <div className="geo-leyenda" aria-label={colores === "material" ? "Colores por material" : "Colores por edad"}>
       <strong>{colores === "material" ? "Material" : "Edad"}</strong>
@@ -358,7 +406,18 @@ function TarjetaElemento({ t, cfg, onCerrar, onVerFicha, onReportarDano, onRegis
     activo = p.activo ? String(p.activo) : null;
   } else if (t.capa === "muestreo") {
     sub = `Punto de muestreo · ${texto(p.nombre)}`;
-    filas.push(["Zona", texto(p.zona)], ["Ubicación", p.exactitud === "verificada" ? "Verificada" : "Aproximada (por barrio)"]);
+    filas.push(["Calidad", NOMBRE_CALIDAD[String(p.calidad)] ?? "Sin muestra reciente"], ["Zona", texto(p.zona)], ["Ubicación", p.exactitud === "verificada" ? "Verificada" : "Aproximada (por barrio)"]);
+    const medidas = (typeof p.medidas === "string" ? JSON.parse(p.medidas) : p.medidas ?? []) as { nombre: string; unidad: string; valor: number; cuando: string; reciente: boolean; min: number | null; max: number | null; rango: string | null }[];
+    for (const x of medidas) {
+      const rango = x.rango ? ` · rango ${x.min ?? "—"} a ${x.max ?? "—"} (${x.rango === "salida" ? "Salida" : "Muestreo"})` : " · sin rango";
+      filas.push([x.nombre, `${nf.format(x.valor)} ${x.unidad}${rango} · ${fechaHora(x.cuando)}${x.reciente ? "" : " (vieja)"}`]);
+    }
+  } else if (t.capa === "reportes_comercial") {
+    sub = `Reporte de Comercial · ${texto(p.tipo)}`;
+    filas.push(["Contrato", p.con_contrato === true || p.con_contrato === "true" ? "Con código de contrato" : "Sin contrato (posible clandestino)"], ["Subtipo", texto(p.subtipo)],
+               ["Área", texto(p.area)], ["Estado", texto(p.estado)], ["Registrado", fechaHora(p.cuando)]);
+  } else if (t.capa === "contrato") {
+    return <TarjetaDeContrato contrato={String(p.contrato)} cfg={cfg} onCerrar={onCerrar} onVerFicha={onVerFicha} />;
   } else if (t.capa === "reportes_bot") {
     sub = `Reporte del bot · ${texto(p.tipo)}`;
     filas.push(["Estado", texto(p.estado)], ["Recibido", fechaHora(p.cuando)], ["Canal", texto(p.canal)]);
@@ -425,5 +484,91 @@ function EditarOmision({ cfg, onCerrar }: { cfg: ConfigGeovisor; onCerrar: (camb
         {enviando ? "Guardando…" : cambios.length ? `Guardar ${cambios.length} cambio${cambios.length > 1 ? "s" : ""}` : "Sin cambios"}
       </button>
     </aside>
+  );
+}
+
+// Tarjeta del contrato (§30.1). El nombre, la dirección y el barrio son DATO PERSONAL: se piden al tocar, viven solo en el estado de esta tarjeta y se
+// descartan al cerrarla. No se guardan, no se descargan ni se imprimen. Sin teléfono ni deuda. El servidor registra la lectura.
+function TarjetaDeContrato({ contrato, cfg, onCerrar, onVerFicha }: { contrato: string; cfg: ConfigGeovisor; onCerrar: () => void; onVerFicha: (c: string) => void }) {
+  const [d, setD] = useState<TarjetaContrato | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    setD(null); setError(null);
+    apiGeovisor.tarjetaContrato(contrato).then((r) => { if (vivo) setD(r); }).catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudo cargar el contrato."); });
+    return () => { vivo = false; setD(null); };
+  }, [contrato]);
+  const meses = d?.consumo?.meses ?? [];
+  const tope = Math.max(1, ...meses.map((m) => m.m3 ?? 0));
+  return (
+    <section className="geo-tarjeta" aria-label={`Contrato ${contrato}`} data-capa="contrato">
+      <div className="geo-tarjeta-cab">
+        <div><h2>Contrato {contrato}</h2><p>{d ? `${ESTADO_CONTRATO[d.estado] ?? d.estado}${d.estado_texto && d.estado === "otro" ? ` (${d.estado_texto.toLowerCase()})` : ""} · ${d.uso ?? "uso sin dato"}` : "Cargando…"}</p></div>
+        <button type="button" className="geo-cerrar" onClick={onCerrar} aria-label="Cerrar la tarjeta">✕</button>
+      </div>
+      {error ? <p className="tec-error-caja" role="alert">{error}</p> : null}
+      {d ? (
+        <>
+          <div className="geo-personal" aria-label="Datos del suscriptor">
+            <span className="geo-personal-rotulo">Dato personal · solo en pantalla</span>
+            <dl>
+              <div><dt>Suscriptor</dt><dd data-personal="nombre">{d.suscriptor.nombre ?? "Sin dato"}</dd></div>
+              <div><dt>Dirección</dt><dd data-personal="direccion">{d.suscriptor.direccion ?? "Sin dato"}</dd></div>
+              <div><dt>Barrio</dt><dd>{d.suscriptor.barrio ?? "Sin dato"}</dd></div>
+            </dl>
+          </div>
+          <dl>
+            <div><dt>Medidor</dt><dd>{d.medidor_anios === null ? "Sin fecha real" : `${d.medidor_anios} años`}</dd></div>
+            <div><dt>Tramo de acueducto</dt><dd>{d.tramo ?? "Sin enlazar"}</dd></div>
+          </dl>
+          {d.consumo ? (
+            <div className="geo-consumo" aria-label="Perfil de consumo de 6 meses">
+              <p className="geo-consumo-tit">Consumo (m³) · promedio {d.consumo.promedio === null ? "—" : nf.format(d.consumo.promedio)}</p>
+              <div className="geo-barras">
+                {meses.map((m) => (
+                  <div key={m.periodo} className="geo-barra-mes" title={`${m.periodo}: ${m.sin_dato ? "sin dato" : `${m.m3} m³`}`}>
+                    <span className="geo-barra-val">{m.sin_dato || m.m3 === null ? "—" : m.m3}</span>
+                    <span className={`geo-barra-col${m.lectura_real ? "" : " geo-barra-est"}`} style={{ height: `${m.sin_dato || m.m3 === null ? 0 : Math.max(4, (m.m3 / tope) * 56)}px` }} />
+                    <span className="geo-barra-per">{m.periodo.slice(4)}/{m.periodo.slice(2, 4)}</span>
+                  </div>))}
+              </div>
+            </div>) : <p className="tec-ayuda">Sin perfil de consumo en la ficha del contrato.</p>}
+          {d.tramo && cfg.ficha ? <div className="geo-tarjeta-acc"><button type="button" className="tec-boton-sec" onClick={() => onVerFicha(d.tramo!)}>Ficha del tramo</button></div> : null}
+        </>) : null}
+    </section>
+  );
+}
+
+// «Compartir» (§30.2): guarda la vista (capas, colores, fechas, centro y zoom; nada personal) y da un enlace. Quien lo abre inicia sesión y ve solo lo que puede.
+function Compartir({ cfg, mapa, on, colores, periodo, atenuadas, onCerrar }: {
+  cfg: ConfigGeovisor; mapa: maplibregl.Map | null; on: Set<string>; colores: Colores; periodo: Periodo; atenuadas: Set<string>; onCerrar: () => void;
+}) {
+  const [enlace, setEnlace] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
+  useEffect(() => {
+    if (!mapa) return;
+    const c = mapa.getCenter();
+    const capas = [...on].filter((x) => cfg.capas.some((k) => k.codigo === x && k.fuente !== "preparada"));
+    apiGeovisor.compartir({ capas, colores, periodo: periodo.modo === "rango" ? periodo : { modo: periodo.modo }, lon: Number(c.lng.toFixed(6)), lat: Number(c.lat.toFixed(6)),
+                            zoom: Number(Math.min(20, Math.max(10, mapa.getZoom())).toFixed(2)), atenuadas: [...atenuadas] })
+      .then((r) => setEnlace(`${window.location.origin}${window.location.pathname}#geovisor=${r.id}`))
+      .catch((e) => setError(e instanceof Error ? e.message : "No se pudo compartir."));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const copiar = () => { if (enlace) void navigator.clipboard?.writeText(enlace).then(() => setCopiado(true)).catch(() => setCopiado(false)); };
+  const nav = navigator as Navigator & { share?: (d: { title?: string; url?: string }) => Promise<void> };
+  return (
+    <div className="geo-compartir" role="dialog" aria-label="Compartir la vista">
+      <div className="geo-panel-cab"><h2>Compartir la vista</h2><button type="button" className="geo-cerrar" onClick={onCerrar} aria-label="Cerrar">✕</button></div>
+      <p className="tec-ayuda">El enlace abre el geovisor con estas capas, colores, fechas y este lugar del mapa. Quien lo abra debe iniciar sesión y solo verá las capas para las que tiene permiso. No lleva datos personales.</p>
+      {error ? <p className="tec-error-caja" role="alert">{error}</p> : !enlace ? <p className="tec-sub" role="status">Creando el enlace…</p> : (
+        <>
+          <input className="geo-enlace" readOnly value={enlace} aria-label="Enlace de la vista" onFocus={(e) => e.currentTarget.select()} />
+          <div className="geo-tarjeta-acc">
+            <button type="button" className="tec-boton-sec" onClick={copiar}>{copiado ? "Copiado" : "Copiar enlace"}</button>
+            {nav.share ? <button type="button" className="tec-boton-sec" onClick={() => void nav.share!({ title: "Geovisor técnico", url: enlace }).catch(() => {})}>Enviar…</button> : null}
+          </div>
+        </>)}
+    </div>
   );
 }

@@ -142,7 +142,7 @@ async function abrir(ancho, rol) {
   p.on("console", async (m) => {
     if (m.type() !== "error" && m.type() !== "warn") return;
     let txt = m.text();
-    if (/JSHandle@/.test(txt)) txt = (await Promise.all(m.args().map((a) => a.evaluate((x) => (x instanceof Error ? `${x.name}: ${x.message} ${x.url ?? ""}` : String(x))).catch(() => "?")))).join(" ");
+    if (/JSHandle@/.test(txt)) txt = m.args().map((a) => a.remoteObject().description ?? a.remoteObject().value ?? "?").join(" ");      // sin evaluar: la página puede estar cerrándose
     if (!/status of 40[0349]|status of 500|Failed to load resource|GL Driver Message|tile\.openstreetmap\.org|AJAXError|Failed to fetch|WebGL|GPU stall/.test(txt)) errores.push(`${ancho} ${rol} consola: ${txt}`);
   });
   await p.goto(`http://127.0.0.1:${P_BASE}/?rol=${rol}`); await p.waitForFunction(() => window.__listo === true, { timeout: 15000 });
@@ -188,9 +188,10 @@ for (const ancho of [390, 1280]) {
      (await marcada(p, "acu_tramos")) && (await marcada(p, "danos")) && (await marcada(p, "muestreo")) && (await marcada(p, "acu_instalaciones")) && (await marcada(p, "reportes_bot")) === false
      && /Actividades registradas/i.test(await texto(p)) && /Calidad y PQR/i.test(await texto(p)),
      JSON.stringify(await p.evaluate(() => [...document.querySelectorAll(".geo-panel [data-capa] input")].map((i) => i.closest("[data-capa]").dataset.capa + "=" + i.checked))));
-  ok(`${tag} A4 las capas preparadas se ven apagadas, sin poder encenderlas y con su nota (contratos «Llega en el Corte 6b»; reportes de Comercial)`,
-     await p.evaluate(() => { const i = document.querySelector(".geo-panel [data-capa=contratos] input"); return i && i.disabled && !i.checked; })
-     && /Llega en el Corte 6b/.test(await texto(p)) && /Reportes de Comercial/.test(await texto(p)) && /Espera el dato/.test(await texto(p)));
+  // (en la rama del 6b, contratos y reportes de Comercial dejan de ser «preparadas»: se comprueba con la presión)
+  ok(`${tag} A4 las capas preparadas se ven apagadas, sin poder encenderlas y con su nota (presión «Espera el modelo hidráulico»)`,
+     await p.evaluate(() => { const i = document.querySelector(".geo-panel [data-capa=presion] input"); return i && i.disabled && !i.checked; })
+     && /Espera el modelo hidráulico/.test(await texto(p)) && /Reportes de Comercial/.test(await texto(p)) && /Espera el dato/.test(await texto(p)));
   ok(`${tag} A5 «Volver a la vista por omisión» empieza desactivado`, await p.evaluate(() => [...document.querySelectorAll(".geo-panel button")].find((b) => b.textContent.startsWith("Volver a la vista"))?.disabled === true));
   await p.evaluate(() => document.querySelector(".geo-panel [data-capa=acu_tramos] input").click());
   await p.evaluate(() => document.querySelector(".geo-panel [data-capa=reportes_bot] input").click());

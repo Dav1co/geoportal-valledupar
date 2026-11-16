@@ -7,8 +7,8 @@ import "./dashboard.css";
 
 export type PestanaDash = { clave: string; titulo: string; pronto?: boolean };
 
-export function CabeceraDashboard({ titulo, sesion, onVolver, selector, pestanas, activa, onElegir, etiqueta }: {
-  titulo: string; sesion: string; onVolver: () => void; selector?: ReactNode;
+export function CabeceraDashboard({ titulo, sesion, onVolver, selector, pestanas, activa, onElegir, etiqueta, onGeovisor }: {
+  titulo: string; sesion: string; onVolver: () => void; selector?: ReactNode; onGeovisor?: () => void;      // Corte 6b: entrada al geovisor desde el dashboard
   pestanas: PestanaDash[]; activa: string; onElegir: (clave: string) => void; etiqueta: string;
 }) {
   return (
@@ -18,6 +18,7 @@ export function CabeceraDashboard({ titulo, sesion, onVolver, selector, pestanas
         <div className="tdash-fila">
           <h1>{titulo}</h1>
           <button type="button" className="td-boton-claro" onClick={onVolver}>← Volver a mis formularios</button>
+          {onGeovisor ? <button type="button" className="td-boton-claro" onClick={onGeovisor}>Geovisor técnico</button> : null}
         </div>
         <div className="tdash-sesion">{sesion}</div>
         <nav className="tdash-tabs" aria-label={etiqueta} role="tablist">

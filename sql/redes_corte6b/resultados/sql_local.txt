@@ -1,0 +1,23 @@
+OK    00 base con la carga real, la MUE, el 6a y 111.950 contratos sintéticos · 26 s · 111651 contratos en el catastro
+OK    01 huellas antes: «CORTE 6a (listo para el 6b)», 4 RPC y 5 objetos «NO EXISTE», 2 «CORTE 6a (sin cambiar)» · 0 funciones de redes (conjunto)=CORTE 6a (listo para el 6b) | 1 objeto redes.contratos_capa=NO EXISTE (sin aplicar) | 1 objeto redes.contratos_capa_estado=NO EXISTE (sin aplicar) | 1 objeto redes.muestreo_rangos=NO EXISTE (sin aplicar) | 1 objeto redes.v_reportes_comercial=NO EXISTE (sin aplicar) | 
+OK    02 ensayo con la carga real y los contratos: ERROR esperado, N de N SIN FALLAS · RESULTADO: 53 de 53 pruebas correctas — SIN FALLAS · 4.6 s
+OK    03 el ensayo no deja rastro
+OK    04 migración · 0.1 s
+OK    05 verificación: todas las filas OK · rámetros nuevos están en su rango|OK | 09 cada lectura de la tarjeta del contrato quedó en la auditoría sin el nombre ni la dirección|OK | INFO contratos en la capa (calculada el) · vistas compartidas · lecturas de tarjetas · rango de Salida del cloro (mín–máx)|sin calcular todavía · 0 · 0 · 0.3–2.0
+OK    06 guardia: migrar dos veces se niega · CONTEXTO:  función PL/pgSQL inline_code_block en la línea 6 en RAISE
+OK    07 huellas después: «CORTE 6b (aplicado)», 4 «NUEVA», 2 «CORTE 6b (reemplazada)», 5 «EXISTE» · 0 funciones de redes (conjunto)=CORTE 6b (aplicado) | 1 objeto redes.contratos_capa=EXISTE (aplicado) | 1 objeto redes.contratos_capa_estado=EXISTE (aplicado) | 1 objeto redes.muestreo_rangos=EXISTE (aplicado) | 1 objeto redes.v_reportes_comercial=EXISTE (aplicado) | 1 objeto redes.vistas_compartida
+OK    08 reversa vacía: exacta al 6a, sin las tablas nuevas y el catálogo como en el 6a
+OK    09 migrar de nuevo después de la reversa
+OK    10 la primera configuración del supervisor rehace la capa de contratos (sin el comodín ni el «0»; uno por contrato) en menos de 15 s · 111649 contratos · 2.1 s · 2055 ms de rehacer
+OK    11 la siguiente configuración no la rehace (rápida) · 29 ms
+OK    12 estados de la cartera: activos, retirados y otros (suspendidos) · activo=94929 otro=4315 retirado=12405
+OK    13 tesela de contratos del centro: vacía a z15; a z16 menos de 200 KB; ninguna de más de 1 s · z15 0 KB 27 ms · z16 29 KB 48 ms · z17 6 KB 46 ms · z18 1 KB 46 ms
+OK    14 la tesela no lleva nombres, direcciones ni teléfonos de la cartera sintética · 6527 bytes
+OK    15 la tarjeta de un contrato sintético: nombre del último corte, consumo de 6 meses, tramo enlazado o nulo; sin teléfono ni deuda; menos de 300 ms · 35 ms · {"uso": "Residencial", "corte": "20261114", "tramo": null, "estado": "activo", "consumo": {"meses": [{"m3": 13, "periodo": "202605", "sin_dato": false, "lectura_real": true}, {"m3": null, "periodo": "
+OK    16 la lectura quedó en la auditoría sin el nombre
+OK    17 los 27 puntos MUE con su color: uno «fuera» (cloro 0,1), uno «dentro», y los demás «sin_muestra» (uno con una muestra de hace 90 días) · {'sin_muestra': 25, 'dentro': 1, 'fuera': 1}
+OK    18 compartir y abrir una vista · 639b59e50d
+OK    19 verificación con datos: todas OK · INFO contratos en la capa (calculada el) · vistas compartidas · lecturas de tarjetas · rango de Salida del cloro (mín–máx)|111649 (2026-11-16 11:46) · 1 · 1 · 0.3–2.0
+OK    20 reversa con datos: se niega (ya hay vistas compartidas) y no cambia nada · CONTEXTO:  función PL/pgSQL inline_code_block en la línea 4 en RAISE
+
+RESULTADO: 21 de 21 — SIN FALLAS
