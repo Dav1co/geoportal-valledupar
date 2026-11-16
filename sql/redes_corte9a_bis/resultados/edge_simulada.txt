@@ -1,0 +1,45 @@
+OK    el marcador sigue en la línea 1, autorizar() tal cual y el correo nunca del cuerpo ni de la URL
+OK    _shared/auth.ts sin tocar en esta rama (lo comprueba git en el resumen; aquí, que siga exportando autorizar)
+OK    sin token: 401 y ninguna RPC
+OK    tesela de referencia: capa, z, x y y a geoportal_redes_geovisor_mvt_ref (y nada más)
+OK    tesela de referencia: binaria con caché privada
+OK    tesela de referencia vacía: 204
+OK    tesela de referencia: una capa mal escrita se rechaza sin llamar a la base
+OK    tesela de referencia: fuera de rango, 400 sin RPC
+OK    tesela de referencia: solo GET
+OK    tesela de referencia: el 42501 de la RPC sale como 403 con texto genérico
+OK    tarjeta de referencia: capa y llave a geoportal_redes_referencia, sin caché
+OK    tarjeta de referencia: sin la llave, 400 sin RPC
+OK    tarjeta de referencia: una llave de más de 120 caracteres se rechaza
+OK    tarjeta de referencia: lo que no existe sale 404 con el mensaje de la RPC
+OK    ficha preliminar: el nodo (número) a geoportal_redes_nodo_preliminar
+OK    ficha preliminar: nodo «» no válido, 400 sin RPC
+OK    ficha preliminar: nodo «abc» no válido, 400 sin RPC
+OK    ficha preliminar: nodo «0» no válido, 400 sin RPC
+OK    ficha preliminar: nodo «-3» no válido, 400 sin RPC
+OK    ficha preliminar: nodo «1.5» no válido, 400 sin RPC
+OK    clasificar un nodo: nodo, clase y motivo a la RPC; el solicitante es el del token, nunca el del cuerpo
+OK    clasificar un nodo: una clase fuera de la lista se rechaza sin RPC
+OK    clasificar un nodo: el nodo como texto se rechaza
+OK    clasificar un nodo: sin motivo, 400
+OK    clasificar un nodo: solo POST
+OK    bandeja por verificar: grupo y cursor a la RPC, de a 50 y sin caché
+OK    bandeja por verificar: sin filtros, grupo y cursor nulos
+OK    bandeja por verificar: un grupo que no existe, 400 sin RPC
+OK    verificado: el código y lo que se encontró a geoportal_redes_activo_verificar
+OK    verificado: sin motivo, 400 sin RPC
+OK    verificado: sin el código, 400 sin RPC
+OK    verificado: el operador recibe 403
+OK    9a-bis sector_en: la posición del CUERPO a geoportal_redes_sector_en, sin caché
+OK    9a-bis sector_en: solo POST (la posición nunca en la URL)
+OK    9a-bis sector_en: una posición fuera de rango, 400 sin RPC
+OK    9a-bis sector_en: la latitud como texto se rechaza
+OK    9a-bis grupo: sin huella es la vista previa (huella y motivo nulos)
+OK    9a-bis grupo: con huella y motivo, confirma
+OK    9a-bis grupo: solo los grupos de «no crear activo»
+OK    9a-bis grupo: una huella mal formada se rechaza
+OK    9a-bis grupo: confirmar sin motivo, 400
+OK    9a-bis grupo: el solicitante es el del token, nunca el del cuerpo
+OK    nodos por clasificar: el filtro «sugerencia:…» viaja en la búsqueda de siempre
+OK    una acción que no existe: 400
+RESULTADO: 44 de 44 — SIN FALLAS

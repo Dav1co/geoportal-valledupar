@@ -109,3 +109,12 @@
 .nodo-sug-revisar { background: #f4f5f2; border-color: #c9cdc5; color: #3f4541; }
 .nodo-sug-linea { margin: 0; font-size: 13.5px; color: #3f4541; overflow-wrap: anywhere; }
 .pv-motivo { margin: 0; font-size: 13.5px; color: #3f4541; overflow-wrap: anywhere; }
+
+/* Corte 9a-bis: confirmar nodos por grupo */
+.nodo-grupos { display: flex; flex-direction: column; gap: 10px; }
+.nodo-grupo { border-top: 1px solid #eceee9; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nodo-grupo-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.nodo-grupo-txt { font-size: 14.5px; overflow-wrap: anywhere; }
+.nodo-muestra { overflow-wrap: anywhere; }
+.dan-sector-prop { margin: 4px 0 0; font-size: 13px; color: #1e6b47; overflow-wrap: anywhere; }
+.dan-sector-prop-dif { color: #9a5b00; }

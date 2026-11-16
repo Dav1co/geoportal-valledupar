@@ -1,0 +1,32 @@
+OK    01 la base local es como producción hoy: huella del conjunto de redes del 9a publicado, con la carga del Plan
+OK    02 volumen real: 36.302 activos vigentes y más de 111 mil contratos en el catastro
+OK    03 huellas ANTES: «CORTE 9a (listo para el 9a-bis)», 14 «sin cambiar», 7 «NO EXISTE», los 4 índices y nada «DISTINTA» ni «FALTA»
+OK    04 ensayo en transacción: termina en ERROR con «50 de 50 … SIN FALLAS» (2.4 s)
+     TIEMPOS: ficha de una válvula 2 ms y de un tramo 2 ms (de prueba) · ficha de una válvula real (VAL-000001) 2 ms y de un tramo real (RED-000001) 2 ms · minimapa de un tramo 1 ms · sector de un punto 0 ms · bandeja de nodos 38 ms · vista previa de un grupo 4 ms
+OK    05 el ensayo no deja rastro y el 9a-bis sigue sin aplicar
+OK    06 la migración aplica en una transacción (0.0 s)
+OK    07 huella del conjunto de redes del 9a-bis
+OK    08 verificación: 7 OK y ninguna MAL
+OK    09 huellas DESPUÉS: «CORTE 9a-bis (aplicado)», 14 «reemplazada» y 7 «NUEVA»
+OK    10 guardia: migrar dos veces se niega («ya está aplicado»)
+OK    11 la reversa deja las funciones EXACTAS como en el 9a y la capa de sectores como estaba
+OK    12 se puede migrar de nuevo después de la reversa y la huella es la misma
+OK    13 ensayo de los sectores oficiales: ERROR con «6 de 6 … SIN FALLAS» y sin rastro (1.1 s)
+OK    14 sectores_oficiales.sql: los 36 polígonos pasan a «En operación» con una versión nueva por el motor (1.1 s)
+OK    15 repetirlo se niega (el mismo archivo ya está publicado) y no cambia nada
+OK    16 la verificación sigue en 7 OK; la fila INFO dice 36 en operación y 0 proyectados
+OK    17 Edge: la ficha de una válvula real trae su nodo y sus tramos
+OK    18 Edge: la ficha de un tramo real trae sus extremos
+OK    19 Edge: el minimapa de un tramo trae sus 2 nodos
+OK    20 Edge: el operador ve el sector hidráulico y no la referencia del Plan
+OK    21 Edge: «ficha_buscar» sí para el operador de redes y no para quien no lo es
+OK    22 Edge: el sector de un punto (4.1)
+OK    23 Edge: el supervisor ve la bandeja de nodos con los grupos de «no crear activo» (491, 5 y 4)
+OK    24 Edge: la vista previa del grupo de válvulas propuestas
+OK    25 Edge (escribe): confirmar el grupo de 491 válvulas pasa por la API (inserts con motivo; nada sin WHERE)
+OK    26 Edge: la RPC de crear daño sigue validando como antes (sin datos: «Falta…», no un error del servidor)
+OK    27 Edge: el operador no ve la bandeja de nodos (42501)
+OK    28 ninguna llamada pasó de 1,5 s en local con el volumen real (la más lenta: vista previa de las válvulas propuestas, 196 ms, con el arranque de psql)
+TIEMPOS (local, cada uno con el arranque de psql): ficha de una válvula 57 ms · ficha de un tramo 59 ms · minimapa de un tramo 42 ms · ficha del operador 60 ms · mi perfil del operador 29 ms · sector de un punto 41 ms · bandeja de nodos (supervisor) 87 ms · vista previa de las válvulas propuestas 196 ms · confirmar 491 válvulas propuestas 117 ms · crear un daño (sector de la ubicación) 32 ms
+----
+RESULTADO: 28 de 28 — SIN FALLAS

@@ -61,7 +61,7 @@ export function NodoPreliminar({ nodoId, onCerrar }: { nodoId: number; onCerrar:
   const m = p.modelo;
   const filas: [string, string | null][] = [
     ["Tramos que conecta", String(p.tramos.length)],
-    ["Sector según el Plan", p.sector ? `${p.sector.sector}${p.sector.subsector ? ` · subsector ${p.sector.subsector}` : ""}` : "Fuera de los sectores del Plan"],
+    ["Sector hidráulico", p.sector ? `${p.sector.sector}${p.sector.subsector ? ` · subsector ${p.sector.subsector}` : ""}` : "Fuera de los sectores"],
     ["Cota", num(m?.cota_m, "m")], ["Ubicación", `${p.lat}, ${p.lon}`],
   ];
   const modelo: [string, string | null][] = m ? [

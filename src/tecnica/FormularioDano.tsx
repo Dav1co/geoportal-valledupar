@@ -56,6 +56,8 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
   const ahora = useMemo(() => aLocal(new Date()), []);
   const [tIni, setTIni] = useState(""); const [tDet, setTDet] = useState(ahora); const [tRep, setTRep] = useState(""); const [tRes, setTRes] = useState("");
   const [rotura, setRotura] = useState(""); const [largo, setLargo] = useState(""); const [presion, setPresion] = useState("");
+  const [sectorProp, setSectorProp] = useState<{ sector: number | null; subsector: string | null } | null>(null);      // 9a-bis: el de la ubicación
+  const sectorAuto = useRef(true);      // mientras la persona no escriba otro, el campo sigue a la ubicación
   const [usuarios, setUsuarios] = useState(""); const [sector, setSector] = useState(""); const [riesgo, setRiesgo] = useState(""); const [marcas, setMarcas] = useState<string[]>([]);
   const [causaClase, setCausaClase] = useState(""); const [causa, setCausa] = useState(""); const [terceroTipo, setTerceroTipo] = useState(""); const [terceroNombre, setTerceroNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -98,6 +100,22 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
   }, [eleccion?.tipo === "activo" ? eleccion.activo.codigo : null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => fotos.forEach((f) => URL.revokeObjectURL(f.url)), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 9a-bis (David, 16-nov): el sector hidráulico de la ubicación es el oficial. Se propone desde el mismo punto que se guarda con el daño (el marcado en el mapa,
+  // el GPS o el activo); lo que la persona escriba queda de respaldo y ya no se pisa. El servidor también lo toma de la ubicación si llega vacío.
+  const puntoSector = noIdent && eleccion?.tipo === "punto" ? { lat: eleccion.lat, lon: eleccion.lon } : ubic.fix ? { lat: ubic.fix.lat, lon: ubic.fix.lon }
+    : eleccion?.tipo === "activo" ? { lat: eleccion.activo.lat, lon: eleccion.activo.lon } : null;
+  const claveSector = puntoSector ? `${puntoSector.lat.toFixed(4)},${puntoSector.lon.toFixed(4)}` : "";
+  useEffect(() => {
+    if (!puntoSector) return;
+    let vivo = true;
+    apiRedes.sectorEn(puntoSector.lat, puntoSector.lon).then((r) => {
+      if (!vivo) return;
+      setSectorProp(r);
+      if (sectorAuto.current) setSector(r.sector ? String(r.sector) : "");
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, [claveSector]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (ficha) return <FichaActivo codigo={ficha} onAbrir={setFicha} onVolver={() => setFicha(null)} rotuloVolver="Volver al daño" />;
   if (errorDef) return <section className="tec-tarjeta" role="alert"><h2>Daño o falla</h2><p>{errorDef}</p></section>;
@@ -316,7 +334,15 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
         <h2 id="dan-t5">{tipoSel?.pide_rotura ? "5" : "4"}. Afectación y riesgo</h2>
         <div className="dan-dos">
           <div className="tec-campo"><label htmlFor="dan-usuarios">Usuarios sin servicio (aprox.)</label><input id="dan-usuarios" type="text" inputMode="numeric" value={usuarios} onChange={(e) => setUsuarios(e.target.value)} /></div>
-          <div className="tec-campo"><label htmlFor="dan-sector">Sector (opcional, número del 1 al 100)</label><input id="dan-sector" type="text" inputMode="numeric" maxLength={3} placeholder="1 a 100" value={sector} onChange={(e) => setSector(e.target.value.replace(/[^0-9]/g, ""))} /></div>
+          <div className="tec-campo"><label htmlFor="dan-sector">Sector hidráulico (sale de la ubicación)</label>
+            <input id="dan-sector" type="text" inputMode="numeric" maxLength={3} placeholder="1 a 100" value={sector}
+              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); sectorAuto.current = v === ""; setSector(v); }} />
+            {sectorProp?.sector ? (
+              sector === String(sectorProp.sector)
+                ? <p className="dan-sector-prop" data-sector-propuesto>Por la ubicación: sector {sectorProp.sector}{sectorProp.subsector ? `, subsector ${sectorProp.subsector}` : ""}.</p>
+                : <p className="dan-sector-prop dan-sector-prop-dif" data-sector-propuesto>Por la ubicación sería el sector {sectorProp.sector}{sectorProp.subsector ? ` (${sectorProp.subsector})` : ""}. Queda el que usted escribió.</p>
+            ) : sectorProp ? <p className="dan-sector-prop dan-sector-prop-dif" data-sector-propuesto>La ubicación no cae en ningún sector: escríbalo si lo sabe.</p> : null}
+          </div>
         </div>
         <span className="dan-rot">Riesgo</span>
         <div className="dan-fila" role="group" aria-label="Riesgo">{RIESGOS.map((r) => opcion(riesgo === r.c, r.n, () => setRiesgo(r.c), r.c))}</div>

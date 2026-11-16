@@ -20,7 +20,7 @@ import { CargueCapas } from "./cargue/CargueCapas";
 type Pestana = "no_identificados" | "intervenciones" | "danos" | "por_verificar" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos";
 const PESTANAS: { c: Pestana; n: string; admin?: boolean }[] = [{ c: "no_identificados", n: "No identificados" }, { c: "intervenciones", n: "Intervenciones" },
   { c: "danos", n: "Daños y fallas" }, { c: "por_verificar", n: "Por verificar" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
-  { c: "cargue", n: "Cargue de capas" }, { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar", admin: true }];
+  { c: "cargue", n: "Cargue de capas" }, { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar" }];      // 9a-bis: también el supervisor de distribución (David, 16-nov)
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const ESTADO: Record<string, string> = { reportado: "Reportado", en_atencion: "En atención", atendido: "Atendido", oculto: "Oculto", cerrada: "Cerrada", anulada: "Anulada", oculta: "Oculta",
   recibido: "Recibido", descartado: "Descartado" };
@@ -50,7 +50,7 @@ export function DashboardRedes({ correo, selector, onVolver, onGeovisor }: { cor
       {pestana === "cargue" ? <CargueCapas /> : null}
       {pestana === "catalogo" ? <Catalogo /> : null}
       {pestana === "parametros" ? <Parametros /> : null}
-      {pestana === "nodos" && admin ? <Nodos onFicha={setFicha} /> : null}
+      {pestana === "nodos" ? <Nodos onFicha={setFicha} admin={admin} /> : null}
       </div>
     </div>
   );
@@ -107,7 +107,7 @@ function Intervenciones({ onFicha }: { onFicha: (c: string) => void }) {
             <h2>{i.codigo} · {i.tipo} <span className="itv-etiqueta">{ESTADO[i.estado] ?? i.estado}</span></h2>
             <p className="red-texto">{i.activo ? <button type="button" className="tec-enlace" onClick={() => onFicha(i.activo!)}>{i.activo}</button> : <>«{i.no_identificado}» (no identificado)</>}
               {i.dano ? <> · atiende {i.dano}</> : null} · {i.ejecutor === "emdupar" ? "EMDUPAR" : `contratista${i.contratista ? ` ${i.contratista}` : ""}`}</p>
-            <p className="tec-ayuda">{fecha(i.t_fin)} · {i.autor} · {i.fotos} foto(s) · recursos {i.recursos === "completos" ? "completos" : "por completar"}{i.sector_plan ? ` · sector según Plan ${i.sector_plan.sector}${i.sector_plan.subsector ? ` (${i.sector_plan.subsector})` : ""}` : ""}</p>
+            <p className="tec-ayuda">{fecha(i.t_fin)} · {i.autor} · {i.fotos} foto(s) · recursos {i.recursos === "completos" ? "completos" : "por completar"}{i.sector_hidraulico ? ` · sector ${i.sector_hidraulico.sector}${i.sector_hidraulico.subsector ? ` (${i.sector_hidraulico.subsector})` : ""}` : ""}</p>
             <div className="dash-acciones">
               <ConMotivo rotulo="Ocultar" id={`oc-${i.codigo}`} avisar={setAviso} onEnviar={async (m) => { const r = await apiDash.intervencionEvento(i.codigo, "ocultar", m); setVez((v) => v + 1); return `${r.codigo} quedó oculta.`; }} />
               {i.estado === "cerrada" ? <ConMotivo rotulo="Anular" id={`an-${i.codigo}`} avisar={setAviso} onEnviar={async (m) => { const r = await apiDash.intervencionEvento(i.codigo, "anulada", m); setVez((v) => v + 1); return `${r.codigo} quedó anulada.${r.aviso ? " " + r.aviso : ""}`; }} /> : null}
@@ -165,6 +165,13 @@ function PorVerificarLista({ onFicha }: { onFicha: (c: string) => void }) {
 }
 
 // ---------- Daños y fallas ----------
+// 9a-bis (David, 16-nov): el sector hidráulico de la ubicación es el oficial; el número guardado (escrito o propuesto) va primero y, si no coincide, se avisa.
+function sectorDano(d: DanoLista): string {
+  const h = d.sector_hidraulico;
+  if (d.sector && h && d.sector !== h.sector) return ` · sector ${d.sector} (por la ubicación: ${h.sector}${h.subsector ? `, ${h.subsector}` : ""})`;
+  if (d.sector) return ` · sector ${d.sector}${h?.subsector ? ` (${h.subsector})` : ""}`;
+  return h ? ` · sector ${h.sector}${h.subsector ? ` (${h.subsector})` : ""} (por la ubicación)` : "";
+}
 const FILTROS_DANO = [{ c: "abiertos", n: "Abiertos" }, { c: "no_identificados", n: "No identificados" }, { c: "ocultos", n: "Ocultos" }, { c: "todos", n: "Todos" }] as const;
 function Danos({ onFicha }: { onFicha: (c: string) => void }) {
   const [filtro, setFiltro] = useState<(typeof FILTROS_DANO)[number]["c"]>("abiertos");
@@ -191,7 +198,7 @@ function Danos({ onFicha }: { onFicha: (c: string) => void }) {
           <section key={d.codigo} className="tec-tarjeta itv-bandeja" aria-label={d.codigo}>
             <h2><span className={`itv-etiqueta itv-etiqueta-dano`}>{d.clase === "dano" ? "Daño" : "Falla"}</span> {d.codigo} · {d.tipo} <span className="itv-etiqueta">{ESTADO[d.estado] ?? d.estado}</span></h2>
             <p className="red-texto">{d.activo ? <button type="button" className="tec-enlace" onClick={() => onFicha(d.activo!)}>{d.activo}</button> : <>«{d.no_identificado}» (no identificado)</>}
-              {" "}· {d.sistema} · riesgo {d.riesgo}{d.sector ? ` · sector ${d.sector}` : ""}{d.sector_plan ? ` · sector según Plan ${d.sector_plan.sector}${d.sector_plan.subsector ? ` (${d.sector_plan.subsector})` : ""}` : ""}</p>
+              {" "}· {d.sistema} · riesgo {d.riesgo}{sectorDano(d)}</p>
             <p className="tec-ayuda">Detectado {fecha(d.t_detectado)} · {d.autor} · {d.fotos} foto(s) · {d.intervenciones} intervención(es){d.origen === "bot" ? " · del bot" : ""}</p>
             {d.tiene_tercero ? (
               terceros[d.codigo] ? <p className="red-texto">Tercero: <strong>{terceros[d.codigo]}</strong> <span className="tec-ayuda">(dato personal; la lectura quedó registrada)</span></p>

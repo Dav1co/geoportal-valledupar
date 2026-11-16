@@ -27,7 +27,7 @@ export type TarjetaContrato = {
   datos_personales?: boolean;      // Corte 7a: false para el supervisor de planta (sin nombre ni dirección)
   consumo: { periodo_ultimo: string; promedio: number | null; meses_con_lectura: number; meses: { periodo: string; m3: number | null; sin_dato: boolean; lectura_real: boolean }[] } | null;
   medidor_anios: number | null; tramo: string | null;
-  sector_plan?: { sector: number; subsector?: string | null } | null;      // Corte 9a: el sector del contrato es el de su tramo (por geometría)
+  sector_hidraulico?: { sector: number; subsector?: string | null } | null;      // Corte 9a: el sector del contrato es el de su tramo (por geometría); 9a-bis: el oficial
   suscriptor: { nombre: string | null; direccion: string | null; barrio: string | null };
   corte: string | null;
 };

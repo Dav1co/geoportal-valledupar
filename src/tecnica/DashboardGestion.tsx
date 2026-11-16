@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  apiGestion, type AccionSugerida, type Area, type CatalogoRedes, type Descarga, type EventoFicha, type GraficasRedes, type NodoPorClasificar, type NodosPorClasificar,
+  apiGestion, type AccionSugerida, type Area, type GrupoNoCrear, type VistaPreviaGrupo, type CatalogoRedes, type Descarga, type EventoFicha, type GraficasRedes, type NodoPorClasificar, type NodosPorClasificar,
   type Parametro, type ParametrosRedes, type PersonaRedes, type PersonalRedes, type TipoCatalogo,
 } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
@@ -517,7 +517,9 @@ export function Descargas() {
 // Corte 9a: cada nodo trae lo que dice el modelo y una SUGERENCIA (que se confirma con motivo; nada se clasifica solo), y abre su ficha preliminar de solo lectura.
 const SUGERENCIA: Record<AccionSugerida, string> = { no_crear: "Propuesto por el Plan: no crear activo", dejar_nodo: "Dejar como nodo", crear: "Crear el activo", revisar: "Revisar en campo", sin_modelo: "Sin datos del modelo" };
 const CLASE_NODO = { nodo_calculo: "Dejar como nodo (no es un activo)", propuesta_plan: "Propuesto por el Plan, no instalado (no crear activo)" } as const;
-export function Nodos({ onFicha }: { onFicha: (c: string) => void }) {
+// 9a-bis (respuestas de David del 16-nov): la bandeja la usan el supervisor de distribución y el administrador; el nombre visible de un nodo (catálogo) sigue
+// siendo solo del administrador. Los grupos de «no crear activo» se confirman de una vez, con vista previa (cuántos, cuáles y en qué sectores) y un motivo.
+export function Nodos({ onFicha, admin = false }: { onFicha: (c: string) => void; admin?: boolean }) {
   const [sug, setSug] = useState<AccionSugerida | null>(null);
   const [buscar, setBuscar] = useState(""); const [d, setD] = useState<NodosPorClasificar | null>(null); const [items, setItems] = useState<NodoPorClasificar[]>([]);
   const [error, setError] = useState<string | null>(null); const [vez, setVez] = useState(0); const [aviso, setAviso] = useState<{ ok: boolean; t: string; activo?: string } | null>(null);
@@ -526,7 +528,7 @@ export function Nodos({ onFicha }: { onFicha: (c: string) => void }) {
   useEffect(() => {
     const v = ++ver.current; const t = setTimeout(() => {
       apiGestion.nodos(consulta, null).then((r) => { if (v === ver.current) { setD(r); setItems(r.items); setError(null); } })
-        .catch((e) => { if (v === ver.current) setError(err(e, "La bandeja de nodos por clasificar es solo del administrador.")); });
+        .catch((e) => { if (v === ver.current) setError(err(e, "La bandeja de nodos por clasificar es del supervisor de distribución y del administrador.")); });
     }, 250);
     return () => clearTimeout(t);
   }, [consulta, vez]);
@@ -535,6 +537,7 @@ export function Nodos({ onFicha }: { onFicha: (c: string) => void }) {
     <>
       <p className="tec-ayuda dan-pad-x">Nodos del modelo de acueducto sin activo (S, J, M, Pila, Módulos). Abra la ficha preliminar para ver qué es cada uno; luego confirme la sugerencia, póngale un nombre visible o cree el activo que es: queda enlazado al nodo y el nombre del modelo no cambia.</p>
       {d ? <p className="dan-pad-x gest-grupos">{d.grupos.map((g) => <span key={g.grupo} className="itv-etiqueta">{g.grupo}: {nf(g.n)}</span>)}</p> : null}
+      {d?.grupos_no_crear?.length ? <GruposNoCrear grupos={d.grupos_no_crear} onListo={(t) => { setAviso({ ok: true, t }); setVez((v) => v + 1); }} /> : null}
       {d?.sugerencias?.length ? (
         <div className="dan-fila dan-pad-x" role="group" aria-label="Filtrar por la sugerencia del modelo">
           <button type="button" className="dan-opcion" aria-pressed={sug === null} onClick={() => setSug(null)}>Todos</button>
@@ -550,7 +553,7 @@ export function Nodos({ onFicha }: { onFicha: (c: string) => void }) {
         : !items.length ? <section className="tec-tarjeta"><p className="red-vacio">{buscar ? "Ningún nodo coincide." : "No quedan nodos por clasificar."}</p></section>
         : <>
             <p className="tec-ayuda dan-pad-x">{nf(d.total)} nodo{d.total === 1 ? "" : "s"}{sug ? " con esa sugerencia" : buscar ? " con esa búsqueda" : ""}.</p>
-            {items.map((n) => <NodoItem key={n.nodo_id} n={n} tipos={d.tipos.filter((t) => t.sistema === n.sistema)}
+            {items.map((n) => <NodoItem key={n.nodo_id} n={n} admin={admin} tipos={d.tipos.filter((t) => t.sistema === n.sistema)}
               onListo={(t, activo) => { setAviso({ ok: true, t, activo }); setVez((v) => v + 1); }} />)}
             {items.length < d.total ? <div className="dan-pad-x"><button type="button" className="tec-boton-sec" onClick={() => apiGestion.nodos(consulta, items[items.length - 1].nodo_id)
               .then((r) => setItems([...items, ...r.items])).catch(() => {})}>Cargar más ({nf(d.total - items.length)})</button></div> : null}
@@ -559,7 +562,53 @@ export function Nodos({ onFicha }: { onFicha: (c: string) => void }) {
   );
 }
 
-function NodoItem({ n, tipos, onListo }: { n: NodoPorClasificar; tipos: NodosPorClasificar["tipos"]; onListo: (t: string, activo?: string) => void }) {
+function GruposNoCrear({ grupos, onListo }: { grupos: NonNullable<NodosPorClasificar["grupos_no_crear"]>; onListo: (t: string) => void }) {
+  const [abierto, setAbierto] = useState<GrupoNoCrear | null>(null);
+  const [vista, setVista] = useState<VistaPreviaGrupo | null>(null);
+  const [motivo, setMotivo] = useState(""); const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null); const [enviando, setEnviando] = useState(false);
+  const ver = (g: GrupoNoCrear) => { setAbierto(g); setVista(null); setMsg(null); setMotivo("");
+    apiGestion.grupoVistaPrevia(g).then(setVista).catch((e) => setMsg({ ok: false, t: err(e, "Solo el supervisor de distribución o el administrador clasifican nodos.") })); };
+  async function confirmar() {
+    if (!vista) return;
+    if (motivo.trim().length < MOTIVO_MIN) { setMsg({ ok: false, t: "Escriba el motivo (10 caracteres o más)." }); return; }
+    setEnviando(true); setMsg(null);
+    try {
+      const r = await apiGestion.grupoConfirmar(vista.grupo, vista.huella, motivo.trim());
+      setAbierto(null); setVista(null); onListo(`Se clasificaron ${nf(r.n)} nodos de una vez: ${r.texto?.replace(/: no crear activo$/, "") ?? r.grupo}. No se creó ningún activo.`);
+    } catch (e) {
+      setMsg({ ok: false, t: err(e, "Solo el supervisor de distribución o el administrador clasifican nodos.") });
+      if (e instanceof Error && /cambió desde la vista previa/.test(e.message)) apiGestion.grupoVistaPrevia(vista.grupo).then(setVista).catch(() => {});
+    } finally { setEnviando(false); }
+  }
+  return (
+    <section className="tec-tarjeta itv-bandeja nodo-grupos" aria-label="Confirmar por grupo">
+      <h2>Confirmar por grupo</h2>
+      <p className="tec-ayuda">Solo los grupos que el modelo sugiere «no crear activo». Primero vea cuáles son; luego confirme con un motivo. No se crea ningún activo.</p>
+      {grupos.map((g) => (
+        <div key={g.grupo} className="nodo-grupo" data-grupo-nodos={g.grupo}>
+          <div className="nodo-grupo-cab"><span className="nodo-grupo-txt">{g.texto.replace(/: no crear activo$/, "")} · <strong>{nf(g.n)}</strong></span>
+            {abierto !== g.grupo ? <button type="button" className="tec-boton-sec" onClick={() => ver(g.grupo)}>Ver vista previa</button> : null}</div>
+          {abierto === g.grupo ? (
+            <div className="itv-nuevo">
+              {!vista ? (msg ? null : <p className="tec-sub" role="status">Cargando la vista previa…</p>) : (
+                <>
+                  <p className="nodo-sug nodo-sug-no_crear" role="note">Se van a clasificar <strong>{nf(vista.n)}</strong> nodos como «propuesto por el Plan, no instalado». Salen de la bandeja; no se crea ningún activo.</p>
+                  <p className="tec-ayuda">Por sector: {vista.por_sector.map((s) => `${s.sector === null ? "fuera de los sectores" : `sector ${s.sector}`}: ${nf(s.n)}`).join(" · ")}</p>
+                  <p className="tec-ayuda nodo-muestra">{vista.muestra.map((m) => m.nombre).join(", ")}{vista.n > vista.muestra.length ? ` y ${nf(vista.n - vista.muestra.length)} más` : ""}</p>
+                  <CampoMotivo id={`ng-${g.grupo}`} valor={motivo} onCambio={setMotivo} />
+                </>)}
+              <Aviso msg={msg} />
+              <div className="tec-acciones">
+                {vista && vista.n > 0 ? <button type="button" className="tec-boton itv-guardar" disabled={enviando} onClick={confirmar}>{enviando ? "Guardando…" : `Confirmar ${nf(vista.n)} nodos`}</button> : null}
+                <button type="button" className="tec-boton-sec" disabled={enviando} onClick={() => { setAbierto(null); setVista(null); setMsg(null); }}>Cancelar</button>
+              </div>
+            </div>) : null}
+        </div>))}
+    </section>
+  );
+}
+
+function NodoItem({ n, tipos, onListo, admin }: { n: NodoPorClasificar; tipos: NodosPorClasificar["tipos"]; onListo: (t: string, activo?: string) => void; admin: boolean }) {
   const [modo, setModo] = useState<null | "alias" | "activo" | "clasificar">(null);
   const [pre, setPre] = useState(false);
   const [claseNodo, setClaseNodo] = useState<keyof typeof CLASE_NODO>(n.sugerencia?.clase ?? "nodo_calculo");
@@ -583,7 +632,7 @@ function NodoItem({ n, tipos, onListo }: { n: NodoPorClasificar; tipos: NodosPor
         const r = await apiGestion.nodoCrearActivo(n.nodo_id, tipo.prefijo, clase || null, nombre.trim() || null, motivo.trim());
         onListo(`${r.nombre_modelo} es ahora ${r.activo} (${r.tipo}).`, r.activo);
       }
-    } catch (e) { setMsg({ ok: false, t: err(e, "Solo el administrador clasifica nodos.") }); } finally { setEnviando(false); }
+    } catch (e) { setMsg({ ok: false, t: err(e, "Solo el supervisor de distribución o el administrador clasifican nodos.") }); } finally { setEnviando(false); }
   }
   return (
     <section className="tec-tarjeta itv-bandeja" aria-label={`Nodo ${n.nombre_modelo ?? n.llave_modelo}`}>
@@ -596,7 +645,7 @@ function NodoItem({ n, tipos, onListo }: { n: NodoPorClasificar; tipos: NodosPor
           {!pre ? <button type="button" className="tec-boton-sec" onClick={() => setPre(true)}>Ver ficha preliminar</button> : null}
           {n.sugerencia?.clase ? <button type="button" className="tec-boton-sec" onClick={() => { setClaseNodo(n.sugerencia!.clase!); setModo("clasificar"); }}>Confirmar la sugerencia</button>
             : <button type="button" className="tec-boton-sec" onClick={() => setModo("clasificar")}>No es un activo</button>}
-          <button type="button" className="tec-boton-sec" onClick={() => setModo("alias")}>Nombre visible</button>
+          {admin ? <button type="button" className="tec-boton-sec" onClick={() => setModo("alias")}>Nombre visible</button> : null}
           <button type="button" className="tec-boton-sec" onClick={() => setModo("activo")}>Crear el activo</button></div>
         : <div className="itv-nuevo">
             {modo === "clasificar" ? <>

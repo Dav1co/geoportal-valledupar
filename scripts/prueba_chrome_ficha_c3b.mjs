@@ -20,8 +20,8 @@ if (!CHROME || !PUP || !DENO || !FUNCIONES || !PSQL) { console.error("Uso: node 
 mkdirSync(CAP, { recursive: true });
 const puppeteer = createRequire(import.meta.url)(PUP);
 const { build } = createRequire(join(raiz, "package.json"))("esbuild");
-const P_BASE = 54995, P_EDGE = 54996;
-const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: "55432", PGUSER: "postgres", PGDATABASE: "redes_local" };
+const P_BASE = Number(process.env.P_BASE_PRUEBA || 54995), P_EDGE = P_BASE + 1;      // 9a-bis: Code B la corre en 55995
+const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: process.env.PGPORT_PRUEBA || "55432", PGUSER: "postgres", PGDATABASE: process.env.PGBASE_PRUEBA || "redes_local" };      // 9a-bis: Code B usa su clúster (55442)
 const sqlq = (s) => execFileSync(PSQL, ["-AtX", "-v", "ON_ERROR_STOP=1", "-c", s], { env: PGENV, encoding: "utf8" }).trim();
 const lit = (v) => (v === null || v === undefined ? "null" : typeof v === "number" ? String(v) : typeof v === "object" ? `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb` : `'${String(v).replace(/'/g, "''")}'`);
 const EMAILS = { op: "zt.oper@emdupar.gov.co", sup: "zt.super@emdupar.gov.co", adm: "zt.admin@emdupar.gov.co" };
@@ -136,11 +136,26 @@ const nav = await puppeteer.launch({ executablePath: CHROME, headless: "new", ar
 await nav.defaultBrowserContext().overridePermissions(`http://127.0.0.1:${P_BASE}`, ["geolocation", "camera"]);
 const errores = [];
 const texto = (p) => p.evaluate(() => document.body.innerText);
-const esperarTexto = async (p, re, ms = 15000) => {
-  try { await p.waitForFunction((s) => new RegExp(s).test(document.body.innerText), { timeout: ms }, re.source); }
-  catch { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }); throw new Error(`no apareció /${re.source}/; pantalla: ${(await texto(p)).slice(0, 1500)} · edge: ${edgeLog.slice(-800)}`); }
+// ---- Corte 11 (inicio por modos): ayudantes de Code A (los de prueba_chrome_dashboard_c4a.mjs): buscan en cada modo (Planta, Redes y Supervisión)
+const TABS_MODO = '[role=tablist][aria-label="Modo de trabajo"] [role=tab]';
+const esperarTexto = async (p, re, ms = 30000) => {
+  const fin = Date.now() + ms;
+  for (;;) {
+    const esta = await p.evaluate(async (s, sel) => {
+      const r = new RegExp(s); if (r.test(document.body.innerText)) return true;
+      if (!document.querySelector("[data-modo-actual]")) return false;
+      for (const t of document.querySelectorAll(sel)) { t.click(); await new Promise((x) => setTimeout(x, 0)); if (r.test(document.body.innerText)) return true; }
+      return false; }, re.source, TABS_MODO).catch(() => false);
+    if (esta) return;
+    if (Date.now() > fin) { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }).catch(() => {}); throw new Error(`no apareció /${re.source}/; pantalla: ${(await texto(p)).slice(-1500)}`); }
+    await new Promise((x) => setTimeout(x, 150));
+  }
 };
-const clicTexto = (p, sel, t) => p.evaluate((sel, t) => { const b = [...document.querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled); if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, sel, t);
+const clicTexto = (p, sel, t, dentro = "body") => p.evaluate(async (sel, t, dentro, tabs) => {
+  const buscar = () => [...document.querySelector(dentro).querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled);
+  let b = buscar();
+  if (!b && document.querySelector("[data-modo-actual]")) for (const m of document.querySelectorAll(tabs)) { m.click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); if (b) break; }
+  if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, sel, t, dentro, TABS_MODO);
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const poner = (p, sel, valor) => p.evaluate((sel, valor) => { const el = document.querySelector(sel); const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, "value").set.call(el, valor); el.dispatchEvent(new Event("input", { bubbles: true })); return true; }, sel, valor);
 const elegirSelect = (p, sel, valor) => p.select(sel, valor);
@@ -159,7 +174,7 @@ async function abrir(ancho, rol, gps) {
   });
   if (gps) await p.setGeolocation({ latitude: gps[0], longitude: gps[1], accuracy: 6 });
   await p.goto(`http://127.0.0.1:${P_BASE}/?rol=${rol}`); await p.waitForFunction(() => window.__listo === true);
-  await esperarTexto(p, /1\. Activo y ubicación/); return p;
+  await esperarTexto(p, /Sesión de/); return p;      // Corte 11: se entra al inicio por modos
 }
 /** Espera a que el minimapa tenga red dibujada. */
 const teselas = [];
@@ -212,7 +227,8 @@ const { dano: DANO, itv: ITV } = hechosEnV85();
 const minimosFicha = (p) => p.evaluate(() => Math.min(...[...document.querySelectorAll(".red-ficha .tec-boton, .red-ficha .tec-boton-sec, .red-volver, .red-minimapa")].filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect().height)));
 const imagenCargada = (p, sel) => p.waitForFunction((sel) => { const i = document.querySelector(sel); return i && i.complete && i.naturalWidth > 0; }, { timeout: 15000 }, sel).then(() => true, () => false);
 async function abrirFichaPorBusqueda(p, texto) {
-  await clicTexto(p, "button", "Ficha de activos (redes)"); await p.waitForSelector("#red-codigo");
+  await clicTexto(p, "button.tec-tarjeta-modo", "Ficha de activos");      // Corte 11: la tarjeta del modo Redes (o «Ficha de activos (editar)» en Supervisión)
+  await p.waitForSelector("#red-codigo");
   await poner(p, "#red-codigo", texto); await clicTexto(p, "button", "Abrir la ficha");
 }
 const estatico = (p) => p.waitForFunction((c) => { const m = document.querySelector(".red-minimapa-mapa")?.__mapa; return m && m.loaded() && m.queryRenderedFeatures({ layers: ["sel-nodo"] }).some((f) => f.properties.codigo === c); },
@@ -290,6 +306,8 @@ for (const ancho of [390, 1280]) {
 
   // ===== C. Operador: desde el minimapa del daño =====
   p = await abrir(ancho, "op", [Number(V85[1]), Number(V85[2])]);
+  // Corte 11: el daño ya no se abre solo; se abre desde su tarjeta del inicio
+  if (!(await p.$(".dan-opcion"))) { await esperarTexto(p, /Daño o falla/); await clicTexto(p, "button.tec-tarjeta-modo", "Daño o falla"); await p.waitForSelector(".dan-opcion"); }
   await clicTexto(p, ".dan-opcion", "Acueducto"); await esperarTexto(p, /Se preseleccionó el activo más cercano/);
   await clicTexto(p, ".dan-elegido button", "Ver ficha"); await esperarTexto(p, /Datos del activo/);
   await esperarTexto(p, /Cambio de la ficha/);

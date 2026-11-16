@@ -144,7 +144,8 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
           <span className={`red-chip ${tonoEstado(a)}`}>{a.retirado ? "Retirado" : a.estado}</span>
           {a.codigo_anterior ? <span className="red-chip red-chip-suave">Código anterior: {a.codigo_anterior}</span> : null}
           {a.por_verificar ? <span className="red-chip red-chip-suave">Por verificar</span> : null}
-          {ficha.sector_plan ? <span className="red-chip red-chip-suave">Sector {ficha.sector_plan.sector}{ficha.sector_plan.subsector ? ` · ${ficha.sector_plan.subsector}` : ""} (Plan)</span> : null}
+          {perfil && !perfil.editable ? <span className="red-chip red-chip-suave" data-solo-lectura>Solo lectura</span> : null}
+          {ficha.sector_hidraulico ? <span className="red-chip red-chip-suave">Sector {ficha.sector_hidraulico.sector}{ficha.sector_hidraulico.subsector ? ` · ${ficha.sector_hidraulico.subsector}` : ""}</span> : null}
           {perfil?.placa ? <span className="red-chip red-chip-placa">Placa: {perfil.placa}</span> : null}
         </div>
         {perfil?.editable && modo === "ver" ? (
@@ -190,7 +191,7 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
             {a.campos.map((c) => <Dato key={c.clave} rotulo={c.rotulo} v={valor(c.valor, c.unidad)} />)}
             <Dato rotulo="Fecha de instalación" v={a.fecha_instalacion ? fechaDia(a.fecha_instalacion) : null} />
             <Dato rotulo="Barrio o sector" v={a.barrio_sector ?? null} />
-            {a.prefijo !== "SEC" ? <Dato rotulo="Sector según el Plan Maestro (por ubicación)" v={ficha.sector_plan ? `Sector ${ficha.sector_plan.sector}${ficha.sector_plan.subsector ? ` · subsector ${ficha.sector_plan.subsector}` : ""}` : "Fuera de los sectores del Plan"} /> : null}
+            {a.prefijo !== "SEC" ? <Dato rotulo="Sector hidráulico (por su ubicación)" v={ficha.sector_hidraulico ? `Sector ${ficha.sector_hidraulico.sector}${ficha.sector_hidraulico.subsector ? ` · subsector ${ficha.sector_hidraulico.subsector}` : ""}` : "Fuera de los sectores"} /> : null}
           </div>
           {a.tipo !== a.tipo_catalogo ? <p className="red-nota">En el catálogo: {a.tipo_catalogo} ({a.prefijo}).</p> : null}
         </section>

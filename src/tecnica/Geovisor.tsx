@@ -440,7 +440,7 @@ function TarjetaElemento({ t, cfg, onCerrar, onVerFicha, onReportarDano, onRegis
     filas.push(["Edad", typeof p.edad === "number" ? `${p.edad} años` : "Sin fecha de instalación"]);
     filas.push(["Estado", cfg.estados?.[String(p.estado)] ?? texto(p.estado)]);
     if (p.nombre) filas.unshift(["Nombre", texto(p.nombre)]);      // Corte 9a: sectores e instalaciones
-    if (p.prefijo === "SEC") filas.push(["Origen", "Proyectado por el Plan Maestro 2014"]);
+    if (p.prefijo === "SEC") filas.push(["Origen", "Plan Maestro 2014 · sectores con que se opera"]);      // 9a-bis (David, 16-nov): son los de hoy
     activo = String(p.codigo);
   } else if (t.capa.startsWith("ref:")) {
     return <TarjetaReferencia capa={t.capa.slice(4)} llave={String(p.llave)} nombre={texto(p.nombre)} cfg={cfg} onCerrar={onCerrar} onVerFicha={onVerFicha} />;
@@ -645,7 +645,7 @@ function TarjetaDeContrato({ contrato, cfg, onCerrar, onVerFicha }: { contrato: 
           <dl>
             <div><dt>Medidor</dt><dd>{d.medidor_anios === null ? "Sin fecha real" : `${d.medidor_anios} años`}</dd></div>
             <div><dt>Tramo de acueducto</dt><dd>{d.tramo ?? "Sin enlazar"}</dd></div>
-            {d.sector_plan ? <div><dt>Sector según el Plan</dt><dd>{d.sector_plan.sector}{d.sector_plan.subsector ? ` · subsector ${d.sector_plan.subsector}` : ""}</dd></div> : null}
+            {d.sector_hidraulico ? <div><dt>Sector hidráulico</dt><dd>{d.sector_hidraulico.sector}{d.sector_hidraulico.subsector ? ` · subsector ${d.sector_hidraulico.subsector}` : ""}</dd></div> : null}
           </dl>
           {d.consumo ? (
             <div className="geo-consumo" aria-label="Perfil de consumo de 6 meses">
