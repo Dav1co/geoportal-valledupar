@@ -98,7 +98,7 @@ const srv = http.createServer((req, res) => {
       if (fn === "geoportal_estado_acceso") return json(200, "ok");
       if (fn === "geoportal_log") return json(200, null);
       rpcs.push({ fn, a });
-      if (fn.startsWith("geoportal_redes_") || /^geoportal_tec_punto/.test(fn)) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
+      if (fn.startsWith("geoportal_redes_") || /^geoportal_tec_punto|^geoportal_tec_quimic/.test(fn)) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
       const r = rpcPlanta(fn, a);
       return r && typeof r.status === "number" && r.cuerpo ? json(r.status, r.cuerpo) : json(200, r);
     }
@@ -196,6 +196,7 @@ for (const ancho of [390, 1280]) {
   const tag = `[${ancho}]`;
   rehacer(); rpcs.length = 0;
   sqlq(`select public.geoportal_redes_personal_fijar('${EMAILS.dist}', '${EMAILS.op}', 'geovisor', 'si', 'Necesita ver la red en la calle')`);
+  sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario) values ('${EMAILS.op2}', 'asignar_formulario', 'uso_quimicos'), ('${EMAILS.op2}', 'asignar_formulario', 'entrada_quimicos')`);      // 7b
 
   // ===== A. Operador de planta: solo Planta, sin selector =====
   let p = await abrir(ancho, "op2"); await esperarTexto(p, /Entrada de químicos/);
@@ -205,12 +206,13 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} A3 ningún formulario se abre solo al entrar (no se pidió ninguno)`, !i.hayForm && !rpcs.some((r) => r.fn === "geoportal_tec_obtener_formulario"));
   ok(`${tag} A4 tarjetas grandes: al menos 68 px de alto, con la inicial, el nombre y una línea de descripción; sin desborde`,
      i.tarjetas.every((t) => t.alto >= 68 && t.ini === t.nom.trim().charAt(0) && t.desc.length > 8) && (await sinDesborde(p)), JSON.stringify(i.tarjetas.map((t) => [t.clave, t.alto, t.ini, t.desc])));
-  ok(`${tag} A5 los formularios sin pantalla (químicos, hasta el 7b) salen «Próximamente», con borde punteado y no son botones`,
-     i.tarjetas.filter((t) => /quimicos/.test(t.clave)).every((t) => !t.boton && t.borde === "dashed" && /Próximamente/.test(t.nom)) && i.tarjetas.filter((t) => !/quimicos/.test(t.clave)).every((t) => t.boton && t.borde === "solid"));
+  ok(`${tag} A5 (7b) las cinco tarjetas se abren: los dos formularios de químicos ya tienen pantalla (ninguna «Próximamente»)`,
+     i.tarjetas.every((t) => t.boton && t.borde === "solid" && !/Próximamente/.test(t.nom)), JSON.stringify(i.tarjetas.map((t) => [t.clave, t.boton, t.borde])));
   ok(`${tag} A6 el color del modo Planta (#0a2540) en la inicial y el fondo #f2f5f8`, i.tarjetas[0].colorIni === COLOR.planta && i.fondo === "rgb(242, 245, 248)", i.tarjetas[0].colorIni + " " + i.fondo);
   await p.screenshot({ path: join(CAP, `operador_planta_${ancho}.png`) });
-  await p.evaluate(() => document.querySelector("[data-tarjeta=entrada_quimicos]").click());
-  ok(`${tag} A7 tocar una tarjeta «Próximamente» no abre nada`, !(await inicio(p)).hayForm);
+  await tocar(p, "entrada_quimicos"); await p.waitForSelector(".fq #fq-cantidad");
+  ok(`${tag} A7 (7b) «Entrada de químicos» se abre con «Volver» y su nombre`, (await p.evaluate(() => document.querySelector(".tec-volver-tit").textContent)) === "Entrada de químicos");
+  await clicTexto(p, ".tec-volver-barra button", "←"); await p.waitForSelector("[data-tarjeta=entrada]");
   await tocar(p, "entrada"); await p.waitForSelector(".tec-volver-barra");
   await p.waitForFunction(() => !/Cargando el formulario/.test(document.body.innerText));
   ok(`${tag} A8 al tocar «Entrada» se abre en su pantalla, con «Volver» arriba y su nombre, y solo entonces se pide el formulario`,

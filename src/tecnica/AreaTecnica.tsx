@@ -7,6 +7,7 @@ import { ResumenUltimas24 } from "./ResumenUltimas24";
 import { Dashboard } from "./Dashboard";
 import { ActivosRedes } from "./ActivosRedes";
 import { FormularioDano } from "./FormularioDano";
+import { FormularioQuimicos } from "./FormularioQuimicos";
 import { FormularioIntervencion, type DesdeDano } from "./FormularioIntervencion";
 import { DashboardRedes } from "./DashboardRedes";
 import { Geovisor } from "./Geovisor";
@@ -16,8 +17,8 @@ import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
 // Formularios que ya tienen pantalla construida (el resto se muestra deshabilitado, «Próximamente»). Esta lista no contiene variables ni nombres de campos.
-const FORMULARIOS_CON_PANTALLA = new Set(["entrada", "salida", "muestreo", "danos_fallas", "mantenimiento"]);   // mantenimiento = «Registrar intervención» (Corte 3a)      // danos_fallas: pantalla propia (Corte 2), no usa variables. Muestreo: con FormularioPorLugar (variables «por punto»), lista de puntos del servidor
-const PANTALLA_PROPIA = new Set(["danos_fallas", "mantenimiento"]);      // formularios con pantalla propia, sin variables de planta (con_campos = false en el servidor)
+const FORMULARIOS_CON_PANTALLA = new Set(["entrada", "salida", "muestreo", "danos_fallas", "mantenimiento", "entrada_quimicos", "uso_quimicos"]);   // Corte 7b: los dos de químicos   // mantenimiento = «Registrar intervención» (Corte 3a)      // danos_fallas: pantalla propia (Corte 2), no usa variables. Muestreo: con FormularioPorLugar (variables «por punto»), lista de puntos del servidor
+const PANTALLA_PROPIA = new Set(["danos_fallas", "mantenimiento", "entrada_quimicos", "uso_quimicos"]);      // formularios con pantalla propia, sin variables de planta (con_campos = false en el servidor)
 const ROTULO_PERFIL: Record<MisFormularios["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor técnico", operador: "Operador técnico" };
 
 // Corte 11 (render aprobado por David, 16-nov 13:30): el inicio de Técnica va por MODOS de trabajo (Planta, Redes y Supervisión), con tarjetas grandes.
@@ -218,6 +219,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
         <span className="tec-volver-tit">{nombreElegido}</span>
       </div>
 
+      {elegido === "entrada_quimicos" || elegido === "uso_quimicos" ? <FormularioQuimicos key={elegido} formulario={elegido} onSalir={volverInicio} /> : null}
       {elegido === "danos_fallas" ? <FormularioDano key={vezDano} correo={correo} activoInicial={activoDano} onSalir={() => { setActivoDano(null); setVezDano((v) => v + 1); }}
         onRegistrarReparacion={tieneItv || puedeSupervisar || puedeRedes ? (d) => abrirItv(d, null) : undefined} /> : null}
       {elegido === "mantenimiento" ? <FormularioIntervencion key={vezItv} correo={correo} desdeDano={desdeDano} activoInicial={activoItv}

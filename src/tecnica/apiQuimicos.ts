@@ -18,7 +18,17 @@ export type FilaComparacion = { dia: string; planta: string; planta_nombre: stri
   dosis_optima_ppm: number | null; esperado_kg: number | null; usado_kg: number; desvio_pct: number | null; marca: boolean | null };
 export type Comparacion = { desde: string; hasta: string; desvio_pct: number; marca_activa: boolean; filas: FilaComparacion[] };
 
+// Corte 7b: formularios del operador (Entrada y Uso de químicos). Sin saldo ni dosis óptima: el operador no los ve.
+export type FormularioQuimicos = { formulario: string; hoy: string; unidades?: string[]; dias_atras: number; quimicos: { codigo: string; nombre: string; potabilizacion: boolean }[];
+  plantas: { codigo: string; nombre: string }[]; para_que: string[] | null };
+export type MovimientoGuardado = { movimiento_id: number; cantidad_kg: number; repetido: boolean };
+
 export const apiQuimicos = {
+  formulario: (formulario: "entrada_quimicos" | "uso_quimicos") => pedir<FormularioQuimicos>("quimicos_formulario", { qs: { formulario } }),
+  entrada: (datos: { quimico: string; cantidad: number; unidad: "t" | "kg"; dia: string; proveedor: string | null; remision: string | null; lote: string | null; vence: string | null }, clave_envio: string) =>
+    pedir<MovimientoGuardado>("quimico_entrada", { cuerpo: { datos, clave_envio } }),
+  uso: (datos: { quimico: string; cantidad: number; unidad: "kg"; dia: string; para_que: string; planta: string | null }, clave_envio: string) =>
+    pedir<MovimientoGuardado>("quimico_uso", { cuerpo: { datos, clave_envio } }),
   catalogo: () => pedir<Catalogo>("quimicos_catalogo"),
   historial: (quimico: string) => pedir<Historial>("quimico_historial", { qs: { quimico } }),
   prepararFicha: () => pedir<{ ruta: string; max_bytes: number; url_subida: string; token: string }>("quimico_ficha_preparar", { cuerpo: {} }),

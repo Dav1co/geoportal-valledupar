@@ -34,3 +34,13 @@
 .qm-ver { min-height: 44px; }
 .qm-cmp-marca { border-color: #e2a3a3; background: #fff7f7; }
 .qm-historial { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+
+/* Corte 7b: formularios del operador (Entrada y Uso de químicos). Celular primero; botones de 52 px. */
+.fq-rotulo { font-size: 15px; font-weight: 600; }
+.fq-opciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.fq-opcion { min-height: 52px; padding: 6px 10px; }
+.fq-opcion[aria-pressed="true"] { background: #0a2540; border-color: #0a2540; }
+.fq-unidades { align-self: stretch; display: flex; }
+.fq-unidades button { flex: 1; min-height: 48px; font-size: 16px; }
+.fq-acciones { display: flex; flex-direction: column; gap: 10px; }
+@media (min-width: 760px) { .fq-acciones { flex-direction: row; } .fq-acciones .tec-boton { flex: 1; } }
