@@ -125,6 +125,18 @@ export async function pedir<T>(accion: string, opciones: { qs?: Record<string, s
   throw new ErrorTec("sesion", "Su sesión venció.", 401);
 }
 
+// ---------- Corte 5b: minimapa de Muestreo y «Guardar la ubicación de este punto» ----------
+/** exactitud: «verificada» (David, o el GPS del operador aprobado por el supervisor) o «aproximada» (centro del barrio). */
+export type PuntoMapa = { codigo: string; nombre: string; zona: string | null; exactitud: "verificada" | "aproximada"; fuente: string; en_revision: boolean; propuesta_mia: boolean; lat: number; lon: number };
+export type PuntosMapaResp = {
+  type: "FeatureCollection"; precision_max_m: number;
+  features: { type: "Feature"; geometry: { type: "Point"; coordinates: [number, number] }; properties: Omit<PuntoMapa, "lat" | "lon"> }[];
+  sin_ubicacion: { codigo: string; nombre: string; en_revision: boolean }[];
+};
+export type ProponerResp = { propuesta_id: number; punto: string; estado: "pendiente"; duplicado: boolean; lat: number; lon: number; precision_m: number; distancia_m?: number | null };
+/** Los puntos del GeoJSON, planos (con lat y lon). */
+export const puntosDelMapa = (r: PuntosMapaResp): PuntoMapa[] => r.features.map((f) => ({ ...f.properties, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }));
+
 export const apiTec = {
   misFormularios: () => pedir<MisFormularios>("mis_formularios"),
   formulario: (clave: string) => pedir<FormularioDef>("formulario", { qs: { formulario: clave } }),
@@ -132,4 +144,7 @@ export const apiTec = {
   quimicos: (clave: string) => pedir<QuimicosResp>("quimicos", { qs: { formulario: clave } }),
   // 30 s: un envío lento en señal débil no debe cortarse antes de tiempo; si se corta, el reintento con la misma clave es seguro.
   registrar: (cuerpo: RegistrarCuerpo) => pedir<RegistrarResp>("registrar", { cuerpo, timeoutMs: 30000 }),
+  puntosMapa: () => pedir<PuntosMapaResp>("puntos_mapa"),
+  proponerUbicacion: (punto: string, lat: number, lon: number, precision_m: number) =>
+    pedir<ProponerResp>("ubicacion_proponer", { cuerpo: { punto, lat: Number(lat.toFixed(6)), lon: Number(lon.toFixed(6)), precision_m: Math.max(0.1, Math.round(precision_m * 10) / 10) }, timeoutMs: 30000 }),
 };

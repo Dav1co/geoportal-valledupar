@@ -1,0 +1,31 @@
+/* Minimapa de Muestreo y ubicación de los puntos (Corte 5b). Pensado para 390 px y una mano: botones de 44 px o más. */
+.mue { display: flex; flex-direction: column; gap: 10px; }
+.mue-cab { display: flex; flex-wrap: wrap; gap: 8px; }
+.mue-boton { min-height: 44px; font-size: 15px; }
+.mue-mapa { height: 42vh; min-height: 240px; max-height: 420px; border-radius: 10px; border: 1px solid #c9cdc5; overflow: hidden; }
+.mue-mapa-bajo { height: 220px; min-height: 0; }
+.mue-leyenda { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: #3d4440; }
+.mue-leyenda li { display: inline-flex; align-items: center; gap: 6px; }
+.mue-simb { width: 14px; height: 14px; border-radius: 50%; display: inline-block; box-sizing: border-box; }
+.mue-simb-ver { background: #0f766e; border: 2px solid #fff; box-shadow: 0 0 0 1px #0f766e; }
+.mue-simb-aprox { background: #fff; border: 2.5px solid #c2410c; box-shadow: 0 0 0 4px rgba(194, 65, 12, 0.15); }
+.mue-simb-rev { background: #fff; border: 4px solid #6d28d9; }
+.mue-cercano { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #eef4fb; border: 1px solid #b9cde6; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.mue-estado { display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: #3d4440; overflow-wrap: anywhere; }
+.mue-guardar { border: 2px solid #6d28d9; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: #faf8ff; }
+.mue-guardar h3 { margin: 0; font-size: 16px; }
+.mue-precision { margin: 0; font-size: 16px; }
+.mue-ok { color: #0f766e; }
+.mue-mal { color: #b42318; }
+.mue-enlace { background: none; border: none; color: #0a4f9c; text-decoration: underline; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; padding: 10px 4px; min-height: 44px; }
+/* Dashboard PTAP · pestaña «Puntos» */
+.pto-lista { display: flex; flex-direction: column; gap: 14px; }
+.pto-tarjeta { border: 1px solid #c9cdc5; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #fff; min-width: 0; }
+.pto-tarjeta h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.pto-meta { margin: 0; font-size: 14px; color: #3d4440; overflow-wrap: anywhere; }
+.pto-lejos { display: inline-block; background: #fde8e7; color: #8a1c13; border-radius: 6px; padding: 2px 8px; font-size: 13px; font-weight: 700; margin-left: 6px; }
+.pto-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.pto-tabla-env { overflow-x: auto; max-width: 100%; }
+.pto-tabla { border-collapse: collapse; width: 100%; font-size: 14px; }
+.pto-tabla th, .pto-tabla td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e3e6e0; vertical-align: top; }
+.pto-tabla td { overflow-wrap: anywhere; }

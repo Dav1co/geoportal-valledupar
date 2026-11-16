@@ -75,6 +75,17 @@ export type UmbralHistorial = { planta: string; planta_nombre: string; umbral: n
 export type UmbralesResp = { variable: string; unidad: string; plantas: UmbralPlanta[]; historial: UmbralHistorial[] };
 export type FijarUmbralResp = { planta: string; umbral: number | null; activo: boolean; id: number | null };
 
+// ---------- Corte 5b: ubicación de los puntos de muestreo (pestaña «Puntos») ----------
+export type UbicacionVigente = { lat: number; lon: number; exactitud: "verificada" | "aproximada"; fuente: string };
+export type UbicacionPendiente = {
+  propuesta_id: number; punto: string; nombre: string; zona: string | null; activo: boolean; lat: number; lon: number; precision_m: number;
+  autor: string; autor_nombre: string | null; creado_en: string; propia: boolean; vigente: UbicacionVigente | null; distancia_m: number | null; lejos: boolean;
+};
+export type PuntoUbicado = { codigo: string; nombre: string; zona: string | null; lat: number | null; lon: number | null; exactitud: "verificada" | "aproximada" | null; fuente: string | null; desde: string | null; en_revision: boolean };
+export type UbicacionRevisada = { propuesta_id: number; punto: string; nombre: string; decision: "aprobada" | "rechazada"; motivo: string | null; autor: string; revisor: string; revisada_en: string; precision_m: number };
+export type UbicacionesResp = { precision_max_m: number; distancia_aviso_m: number; pendientes: UbicacionPendiente[]; puntos: PuntoUbicado[]; revisadas: UbicacionRevisada[] };
+export type RevisarUbicacionResp = { propuesta_id: number; punto: string; decision: "aprobar" | "rechazar"; estado: "aprobada" | "rechazada"; ubicacion_id: number | null };
+
 const sinVacios = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== "")) as Partial<T>;
 
 export const apiDash = {
@@ -103,6 +114,9 @@ export const apiDash = {
   avisosTurbiedad: () => pedir<AvisosTurbiedadResp>("avisos_turbiedad"),
   umbralesAviso: () => pedir<UmbralesResp>("umbrales_aviso"),
   fijarUmbralAviso: (planta: string, umbral: number | null, motivo: string) => pedir<FijarUmbralResp>("fijar_umbral_aviso", { cuerpo: { planta, umbral, ...(motivo.trim() ? { motivo: motivo.trim() } : {}) } }),
+  ubicaciones: () => pedir<UbicacionesResp>("ubicaciones"),
+  revisarUbicacion: (propuestaId: number, decision: "aprobar" | "rechazar", motivo: string) =>
+    pedir<RevisarUbicacionResp>("ubicacion_revisar", { cuerpo: { propuesta_id: propuestaId, decision, ...(motivo.trim() ? { motivo: motivo.trim() } : {}) } }),
   descargaCerrar: (id: number, filas: number, resultado: "completa" | "cancelada" | "error") => pedir<{ cerrada: boolean }>("descarga_cerrar", { cuerpo: { descarga_id: id, filas, resultado } }),
 };
 

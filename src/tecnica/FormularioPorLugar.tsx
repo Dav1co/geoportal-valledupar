@@ -5,6 +5,7 @@ import { borrarBorrador, guardarBorrador, inicioAlAbrir, inicioAlEnviar, leerBor
 import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
 import { agrupar, claveEnvioTarjeta, claveIntento, claveTexto, conDatos, cuerpoTarjeta, etiquetaCampo, lugarInicial, modoSelector, nombreLugar, textoElegirLugar, tieneLugar, type Tarjeta } from "./lugares";
 import { decimalesAMostrar, formatearNumero, interpretarNumero } from "./numeros";
+import { MapaMuestreo } from "./MapaMuestreo";
 
 // Formulario de captura por «lugar» (Salida y Muestreo). Se dibuja SOLO con la definición del servidor: agrupa las variables en tarjetas (ver lugares.ts) y envía UN registro
 // por tarjeta con datos (decisión D-C3-1: un envío es de un solo lugar). El operador no recibe ni ve rangos, marcas, autor ni la hora del servidor.
@@ -262,6 +263,10 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
           <h2 id={`tec-g-${t.id}`} className="tec-bloque-tit">{t.numero} · {t.titulo}</h2>
           <div className="tec-ayuda">{t.ayuda}</div>
         </div>
+        {t.clase === "punto" && t.grupo === "muestreo" && t.opciones.length > 0 ? (
+          // Corte 5b: el minimapa de los puntos de muestreo, sincronizado con la lista (tocar un punto lo elige; elegirlo en la lista lo resalta)
+          <MapaMuestreo opciones={t.opciones} lugar={lugar} bloqueado={bloqueado} onElegir={(c) => setLugares((x) => ({ ...x, [t.id]: c }))} />
+        ) : null}
         {selector(t)}
         {t.clase !== "ambas" && t.opciones.length > 0 && !tieneLugar(t, lugar) ? <p className="tec-elegir" data-testid="elegir-lugar">{textoElegirLugar(t)}</p> : null}
         {tieneLugar(t, lugar) ? t.variables.map((v) => campo(t, v)) : null}

@@ -1,0 +1,37 @@
+OK    el marcador sigue en la línea 1 y es el del manifiesto
+OK    usa autorizar() de _shared/auth.ts tal cual y no lee el correo del cuerpo
+OK    sin token: 401 y ninguna RPC
+OK    puntos_mapa: GET llama a geoportal_tec_puntos_mapa solo con el correo del token
+OK    puntos_mapa: POST → 405 sin RPC
+OK    puntos_mapa: el 42501 de la RPC sale como 403 con el texto fijo
+OK    proponer: llama a la RPC con el correo del token, el código recortado, lat, lon, precisión e IP (y nada más del cuerpo)
+OK    proponer: GET → 405
+OK    proponer: sin punto → 400 sin RPC
+OK    proponer: punto con caracteres raros → 400 sin RPC
+OK    proponer: lat como texto → 400 sin RPC
+OK    proponer: lat fuera de rango → 400 sin RPC
+OK    proponer: lon infinita (null en JSON) → 400 sin RPC
+OK    proponer: sin precisión → 400 sin RPC
+OK    proponer: precisión cero → 400 sin RPC
+OK    proponer: precisión absurda → 400 sin RPC
+OK    proponer: un campo con «fecha» se rechaza como siempre (la fecha la fija el servidor)
+OK    proponer: cuerpo que no es JSON → 400
+OK    proponer: cuerpo de más de 32 KB → 413
+OK    proponer: el mensaje de la RPC para la persona llega tal cual (400)
+OK    proponer: ya hay una en revisión → 409
+OK    proponer: un error interno sale genérico (500, sin el detalle)
+OK    ubicaciones: GET llama a geoportal_tec_punto_ubicaciones solo con el correo
+OK    ubicaciones: POST → 405
+OK    revisar: aprobar sin motivo → RPC con motivo nulo, el correo del token y la IP
+OK    revisar: rechazar con motivo pasa el motivo
+OK    revisar: sin propuesta → 400 sin RPC
+OK    revisar: propuesta como texto → 400 sin RPC
+OK    revisar: propuesta cero → 400 sin RPC
+OK    revisar: decisión que no existe → 400 sin RPC
+OK    revisar: motivo que no es texto → 400 sin RPC
+OK    revisar: motivo de más de 1.000 → 400 sin RPC
+OK    revisar: GET → 405
+OK    registrar (Salida) sigue llamando a la misma RPC con los mismos argumentos
+OK    una acción desconocida sigue en 400
+
+RESULTADO: 35 de 35 — SIN FALLAS

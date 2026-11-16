@@ -82,6 +82,9 @@ function rpc(fn, a) {
     case "geoportal_tec_mis_formularios": return { perfil: "operador", formularios: Object.keys(DEFS).map((k) => ({ clave: k, nombre: NOMBRES[k], descripcion: "", con_campos: true })) };
     case "geoportal_tec_obtener_formulario": { const k = a.p_formulario; const d = DEFS[k];
       return { formulario: { clave: k, nombre: NOMBRES[k], descripcion: `Formulario ${NOMBRES[k]}` }, fecha_hoy: HOY, hora_propuesta: horaMenos(15), dias_atras_max: DIAS[k], fecha_minima: dia(-DIAS[k]), plantas: d.plantas, puntos: d.puntos, variables: d.variables }; }
+    // Corte 5b: el minimapa de Muestreo (los 27 puntos, aproximados, alrededor de Valledupar)
+    case "geoportal_tec_puntos_mapa": return { type: "FeatureCollection", precision_max_m: 30, sin_ubicacion: [],
+      features: MUES.map((m, i) => ({ type: "Feature", geometry: { type: "Point", coordinates: [-73.28 + (i % 6) * 0.01, 10.44 + Math.floor(i / 6) * 0.008] }, properties: { codigo: m.codigo, nombre: m.nombre, zona: m.zona, exactitud: "aproximada", fuente: "barrio", en_revision: false, propuesta_mia: false } })) };
     case "geoportal_tec_resumen_operador": return { formulario: a.p_formulario, ventana_horas: 24, filas: [] };
     case "geoportal_tec_listar_quimicos": return a.p_formulario === "entrada" ? { formulario: "entrada", max_ppm: 1000, max_nombre: 60, opciones: [{ codigo: "pac", nombre: "Policloruro de aluminio", pide_nombre: false, predeterminado: true }] } : { formulario: a.p_formulario, max_ppm: 1000, max_nombre: 60, opciones: [] };
     case "geoportal_tec_registrar_medicion":

@@ -1,0 +1,21 @@
+OK    01 como en la base viva al publicar: carga real (35.781 activos) y la primera carga MUE (27 puntos: 3 verificados, 24 aproximados)
+OK    02 huellas antes: «CORTE 5a (listo para el 5b)», 4 RPC «NO EXISTE», la reemplazada «CORTE 5a (sin cambiar)», 2 tablas «NO EXISTE»
+OK    03 ensayo DESPUÉS de la carga real y la MUE: ERROR con «N de N … SIN FALLAS» · RESULTADO: 53 de 53 pruebas correctas — SIN FALLAS (0.1 s)
+OK    04 el ensayo no deja rastro (ni tablas, ni funciones, ni ubicaciones, ni puntos de prueba)
+OK    05 migración _editor · 0.1 s
+OK    06 verificación: 8 OK
+OK    07 repetir la migración se rechaza (guardia)
+OK    08 huellas después: «CORTE 5b (aplicado)», 4 «NUEVA», «CORTE 5b (reemplazada)» y 2 «EXISTE»
+OK    09 la verificación del 5a, con el 5b aplicado: solo la fila 05 dice MAL (a propósito: cambió el conjunto de funciones)
+OK    10 reversa sin datos: vuelve exactamente al 5a
+OK    11 tras la reversa, la verificación del 5a vuelve a dar 9 OK
+OK    12 una segunda reversa se niega (no hay nada que revertir)
+OK    13 migrar de nuevo después de la reversa
+OK    14 el operador propone la ubicación de MUE-05 (aproximada por barrio) con el GPS: pendiente · {"lat": 10.441507, "lon": -73.243955, "punto": "MUE-05", "estado": "pendiente", "duplicado": false, "distancia_m": 40, "precision_m": 7.5, "propuesta_id": 1}
+OK    15 el supervisor de planta la aprueba: MUE-05 queda verificada, del GPS del operador · {"punto": "MUE-05", "estado": "aprobada", "decision": "aprobar", "revision_id": 1, "propuesta_id": 1, "ubicacion_id": 36}
+OK    16 el minimapa trae los 27 puntos, 4 verificados
+OK    17 recarga MUE con el archivo de la primera carga: MUE-05 sale «conserva_verificada» y la carga queda lista para publicar
+OK    18 al publicar la recarga, MUE-05 sigue verificada por GPS y las otras 26 no cambian · {"capa": "muestreo", "nuevos": 0, "iguales": 26, "carga_id": 8, "reactivados": 0, "ubicaciones": 0, "desactivados": 0, "version_capa": 2, "codigos_asignados": []}
+OK    19 verificación con datos: 8 OK (INFO: 0 pendientes · 1 aprobada; 4 verificados · 23 aproximados)
+OK    20 la reversa con datos se niega (nada se borra)
+RESULTADO: 20 de 20 — SIN FALLAS

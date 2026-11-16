@@ -5,6 +5,7 @@ import { RegistrosRecientes } from "./RegistrosRecientes";
 import { PersonalTecnico } from "./PersonalTecnico";
 import { Resumen } from "./Resumen";
 import { Eventos } from "./Eventos";
+import { PuntosUbicacion } from "./PuntosUbicacion";
 import { supabase } from "../lib/supabase";
 
 // Dashboard PTAP (antes «Dashboard técnico»; supervisor y administrador). Las secciones salen de este registro: agregar «Estado del servicio» o «Eventos» cuando existan es registrar una sección
@@ -16,7 +17,7 @@ const SECCIONES: Seccion[] = [
   { clave: "eventos", titulo: "Eventos", Componente: Eventos },
   { clave: "quimicos", titulo: "Químicos" },
   { clave: "personal", titulo: "Personal técnico", Componente: PersonalTecnico },
-  { clave: "puntos", titulo: "Puntos" },
+  { clave: "puntos", titulo: "Puntos", Componente: PuntosUbicacion },      // Corte 5b: ubicación de los puntos de muestreo
   { clave: "reportes", titulo: "Reportes" },
 ];
 

@@ -82,6 +82,9 @@ const srv = http.createServer((req, res) => {
       case "resumen": return json(200, u.searchParams.get("formulario") === "muestreo" ? RESUMEN_MUESTREO : { formulario: u.searchParams.get("formulario"), ventana_horas: 24, filas: [] });
       case "quimicos": return json(200, { formulario: u.searchParams.get("formulario"), max_ppm: 500, max_nombre: 60, opciones: [] });
       case "registrar": { const c = JSON.parse(cuerpo || "{}"); envios.push(c); return json(200, { lote_id: `00000000-0000-4000-8000-${String(envios.length).padStart(12, "0")}`, formulario: c.formulario, guardados: c.valores?.length ?? 0, duplicado: false, hora_muestra: c.hora }); }
+      // Corte 5b: el minimapa de Muestreo (los puntos del formulario, aproximados, alrededor de Valledupar)
+      case "puntos_mapa": return json(200, { type: "FeatureCollection", precision_max_m: 30, sin_ubicacion: [],
+        features: DEF_MUESTREO.puntos.map((m, i) => ({ type: "Feature", geometry: { type: "Point", coordinates: [-73.28 + (i % 6) * 0.01, 10.44 + Math.floor(i / 6) * 0.008] }, properties: { codigo: m.codigo, nombre: m.nombre, zona: m.zona ?? null, exactitud: "aproximada", fuente: "barrio", en_revision: false, propuesta_mia: false } })) });
       case "catalogo": return supervisa ? json(200, CATALOGO) : json(403, { error: "Sin permiso." });
       case "registros": return supervisa ? json(200, { total: 0, devueltos: 0, registros: [] }) : json(403, { error: "Sin permiso." });
       case "dosis": return supervisa ? json(200, { total: 0, devueltos: 0, dosis: [] }) : json(403, { error: "Sin permiso." });
