@@ -1,0 +1,25 @@
+OK    [390] antes: el operador sin «Registrar intervención» no puede abrirla
+OK    [390] el editor de la ficha trae los formularios de distribución con su casilla
+OK    [390] asignado: evento en la tabla de siempre, con el supervisor de distribución como autor
+OK    [390] la tarjeta muestra sus formularios al día
+OK    [390] su propia ficha (y sus formularios) no la edita
+OK    [390] Personal no desborda y los botones miden 44 px o más
+OK    [390] el Catálogo le dice que puede crear y cambiar las cuadrillas (y no el nombre visible de los tipos)
+OK    [390] el supervisor de distribución crea una cuadrilla
+OK    [390] el operador ya abre «Registrar intervención»
+OK    [390] la intervención del supervisor dice «hasta 30 días atrás» y «máximo 72 h», ya no «sin tope»
+OK    [390] la intervención no desborda
+OK    [1280] el editor de la ficha trae los formularios de distribución con su casilla
+OK    [1280] quitado: evento en la tabla de siempre, con el supervisor de distribución como autor
+OK    [1280] la tarjeta muestra sus formularios al día
+OK    [1280] su propia ficha (y sus formularios) no la edita
+OK    [1280] Personal no desborda y los botones miden 44 px o más
+OK    [1280] el Catálogo le dice que puede crear y cambiar las cuadrillas (y no el nombre visible de los tipos)
+OK    [1280] el supervisor de distribución crea una cuadrilla
+OK    [1280] el operador ya no abre «Registrar intervención»
+OK    [1280] la intervención del supervisor dice «hasta 30 días atrás» y «máximo 72 h», ya no «sin tope»
+OK    [1280] la intervención no desborda
+OK    sin errores de JavaScript ni de consola
+
+RESULTADO: 22 de 22 — SIN FALLAS
+Capturas: /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/52442979-4330-46e0-8c83-723ad8873e7d/scratchpad/capturas_c5a

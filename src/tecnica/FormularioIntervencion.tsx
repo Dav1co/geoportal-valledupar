@@ -451,7 +451,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
             <div className="itv-fin"><input id="itv-fin" type="datetime-local" className="dan-hora" max={aLocal(new Date())} value={tFin} onChange={(e) => setTFin(e.target.value)} />
               <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => setTFin(aLocal(new Date()))}>Ahora</button></div></div>
         </div>
-        <p className="tec-ayuda">El inicio se toma del celular al abrir el formulario; cámbielo si el trabajo empezó antes{reglas.dias_atras_max ? ` (hasta ${reglas.dias_atras_max} días atrás)` : " (sin tope: las obras largas se registran desde aquí)"}. Duración: <strong>{dur ?? "—"}</strong>{reglas.max_horas ? ` (máximo ${reglas.max_horas} h)` : ""}.</p>
+        <p className="tec-ayuda">El inicio se toma del celular al abrir el formulario; cámbielo si el trabajo empezó antes{reglas.dias_atras_max ? ` (hasta ${reglas.dias_atras_max} días atrás)` : ""}. Duración: <strong>{dur ?? "—"}</strong>{reglas.max_horas ? ` (máximo ${reglas.max_horas} h; una obra larga va en varias intervenciones, cada una con su foto)` : ""}.</p>
       </section>
 
       <section className="tec-tarjeta" aria-labelledby="itv-t4">

@@ -1,0 +1,22 @@
+OK    01 huellas antes: «CORTE 4b (listo para el 5a)», 4 de permisos «CORTE 4a (sin cambiar)», la RPC y las 3 tablas «NO EXISTE», 9 «CORTE 4b (sin cambiar)»
+OK    02 carga real (35.781 activos) y los 27 puntos de muestreo sin ubicación, como en la base viva · publicar 12.8 s
+OK    03 ensayo DESPUÉS de la carga real: ERROR con «N de N … SIN FALLAS» · RESULTADO: 55 de 55 pruebas correctas — SIN FALLAS (8.9 s)
+OK    04 el ensayo no deja rastro (ni tablas, ni funciones, ni puntos, ni cargas)
+OK    05 migración _editor · 0.1 s
+OK    06 verificación: 9 OK
+OK    07 repetir la migración se rechaza (guardia)
+OK    08 huellas después: «CORTE 5a (aplicado)», la RPC «NUEVA», 9 «CORTE 5a (reemplazada)» y 3 «EXISTE»
+OK    09 reversa sin datos: vuelve exactamente al 4b (la capa queda inactiva)
+OK    10 tras la reversa, la verificación del 4b vuelve a dar 9 OK
+OK    11 una segunda reversa se niega
+OK    12 volver a migrar después de la reversa (la capa vuelve a quedar activa)
+OK    13 carga_mue_todo.sql: un solo comando; el resumen dice «lista para publicar: SÍ», 27 «ubicacion» y ninguno se desactiva · 0.0 s
+OK    14 publicar_mue.sql: 27 ubicaciones (3 verificadas y 24 aproximadas), ningún punto nuevo ni desactivado; tecnica.puntos con las mismas filas · 0.0 s
+OK    15 MUE-24 San Joaquín en la ubicación que dio David y MUE-02 en el barrio Villalba
+OK    16 volver a correr el mismo archivo se niega («ya se publicó»)
+OK    17 recarga real del acueducto (10.578 tramos): sin choques (el modelo no trae nombre para V85: gana la ficha sin aviso), el nodo de la bandeja contado y nada cambia · lotes 0.4 s, resumen 2.6 s · [] · {"igual": 17960}
+OK    18 publicar la recarga: V85 conserva su nombre y su fecha de la ficha, el accesorio de la bandeja sigue enlazado y no se retira nada · publicar 5.2 s · {"capa": "acueducto", "nuevos": 0, "origen": 0, "iguales": 17960, "carga_id": 12, "segundos": 5.1, "cambiados": 0, "retirados": 0, "enlaces_mac": 0, "reactivados": 0, "tramo_nodos": 0, "version_capa":
+OK    19 el supervisor de distribución asigna «Registrar intervención» a un operador real · {"nombre": "Registrar intervención", "persona": "zt.oper.sinform@emdupar.gov.co", "asignado": true, "formulario": "mantenimiento"}
+OK    20 verificación con datos: 9 OK (27 puntos con ubicación: 3 verificadas y 24 aproximadas)
+OK    21 la reversa se niega con la carga MUE publicada (nada se borra)
+RESULTADO: 21 de 21 — SIN FALLAS

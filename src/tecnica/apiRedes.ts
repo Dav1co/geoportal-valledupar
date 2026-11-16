@@ -190,7 +190,7 @@ export type EventoFicha = { id: number; persona: string; persona_nombre: string 
   motivo: string; autor: string; autor_nombre: string | null; creado_en: string };
 export type TipoCatalogo = { prefijo: string; nombre: string; nombre_visible: string; alias: string | null; sistema: string; geometria: string; es_base: boolean; activo: boolean; vigentes: number };
 export type CatalogoRedes = {
-  puede_editar: boolean; tipos: TipoCatalogo[];
+  puede_editar: boolean; puede_cuadrillas?: boolean; tipos: TipoCatalogo[];
   materiales: (Opcion & { activo: boolean })[]; estados: (Opcion & { cuenta_vigente: boolean })[]; contratistas: (Opcion & { activo: boolean })[];
   aportantes: (Opcion & { activo: boolean })[]; tipos_intervencion: (Opcion & { activo: boolean })[]; tipos_dano: (Opcion & { clase: string; activo: boolean })[];
   causas: (Opcion & { activo: boolean })[]; cuadrillas: { id: number; nombre: string; activa: boolean; personas: number }[];
@@ -220,6 +220,9 @@ export const apiGestion = {
   catalogo: () => pedir<CatalogoRedes>("catalogo", F),
   aliasFijar: (objeto: "tipo" | "nodo", ref: string, alias: string | null, motivo: string) => pedir<{ alias: string | null }>("alias_fijar", { ...F, cuerpo: { objeto, ref, alias, motivo } }),
   aliasHistorial: (objeto: "tipo" | "nodo", ref: string) => pedir<{ eventos: EventoAlias[] }>("alias_historial", { ...F, cuerpo: { objeto, ref } }),
+  // Corte 5a (§28.2): el supervisor de distribución asigna o quita los formularios de distribución
+  personalFormulario: (persona: string, formulario: string, asignar: boolean, motivo: string) =>
+    pedir<{ persona: string; formulario: string; nombre: string; asignado: boolean }>("personal_formulario", { ...F, cuerpo: { persona, formulario, asignar, motivo } }),
   cuadrillaFijar: (id: number | null, nombre: string | null, activa: boolean | null, motivo: string) =>
     pedir<{ id: number; nombre: string; activa: boolean; nueva: boolean }>("cuadrilla_fijar", { ...F, cuerpo: { id, nombre, activa, motivo } }),
   parametros: () => pedir<ParametrosRedes>("parametros", F),

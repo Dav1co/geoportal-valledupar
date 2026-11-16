@@ -58,7 +58,7 @@ export function Personal() {
           <input id="gest-buscar" type="text" maxLength={80} value={buscar} placeholder="Nombre o correo" onChange={(e) => setBuscar(e.target.value)} /></div>
       </div>
       <p className="tec-ayuda dan-pad-x">El área decide en qué dashboard sale la persona. La casilla del geovisor es solo del operador de distribución: le deja ver la red en solo lectura
-        (llega con el geovisor). Los formularios se siguen asignando en Personal del Dashboard PTAP.</p>
+        (llega con el geovisor). Aquí se asignan los formularios de distribución; los de planta, en Personal del Dashboard PTAP.</p>
       <Aviso msg={aviso} onCerrar={() => setAviso(null)} />
       {error ? <section className="tec-tarjeta" role="alert"><p>{error}</p></section>
         : !datos ? <p className="tec-sub dan-pad" role="status">Cargando…</p>
@@ -75,7 +75,7 @@ export function Personal() {
               <div><dt>Geovisor</dt><dd>{p.geovisor === "por_permiso" ? "Completo, por su permiso de supervisor" : p.geovisor === "si" ? "Sí, en solo lectura" : "No"}</dd></div>
               <div><dt>Formularios</dt><dd>{p.formularios.length ? p.formularios.map((c) => nombreForm.get(c) ?? c).join(" · ") : p.perfil === "supervisor" ? "Captura sin asignación (supervisor)" : "Ninguno de distribución"}</dd></div>
             </dl>
-            {editando === p.email ? <EditarFicha p={p} cuadrillas={datos.cuadrillas} onCerrar={() => setEditando(null)}
+            {editando === p.email ? <EditarFicha p={p} cuadrillas={datos.cuadrillas} formularios={datos.formularios} onCerrar={() => setEditando(null)}
                 onListo={(t) => { setEditando(null); setAviso({ ok: true, t }); setVez((v) => v + 1); }} />
               : <div className="dash-acciones">
                   {p.email === datos.yo ? <span className="tec-ayuda">Su propia ficha la cambia otro supervisor o el administrador.</span>
@@ -92,11 +92,13 @@ export function Personal() {
   );
 }
 
-function EditarFicha({ p, cuadrillas, onCerrar, onListo }: { p: PersonaRedes; cuadrillas: { id: number; nombre: string }[]; onCerrar: () => void; onListo: (t: string) => void }) {
+function EditarFicha({ p, cuadrillas, formularios, onCerrar, onListo }: { p: PersonaRedes; cuadrillas: { id: number; nombre: string }[]; formularios: { clave: string; nombre: string }[]; onCerrar: () => void; onListo: (t: string) => void }) {
   const [area, setArea] = useState<string>(p.area ?? "");
   const [cargo, setCargo] = useState(p.cargo ?? "");
   const [cuadrilla, setCuadrilla] = useState(p.cuadrilla ? String(p.cuadrilla.id) : "");
   const [geovisor, setGeovisor] = useState(p.geovisor === "si");
+  const [forms, setForms] = useState<Set<string>>(() => new Set(p.formularios));
+  const cambiosForm = formularios.filter((f) => forms.has(f.clave) !== p.formularios.includes(f.clave));
   const [motivo, setMotivo] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -107,12 +109,13 @@ function EditarFicha({ p, cuadrillas, onCerrar, onListo }: { p: PersonaRedes; cu
   if (p.geovisor !== "por_permiso" && geovisor !== (p.geovisor === "si")) cambios.push(["geovisor", geovisor ? "si" : "no"]);
   const id = p.email.replace(/[^a-z0-9]/gi, "-");
   async function guardar() {
-    if (!cambios.length) { setMsg({ ok: false, t: "No hay cambios." }); return; }
+    if (!cambios.length && !cambiosForm.length) { setMsg({ ok: false, t: "No hay cambios." }); return; }
     if (cargo.trim() && (cargo.trim().length < 2 || cargo.trim().length > 80)) { setMsg({ ok: false, t: "El cargo lleva de 2 a 80 caracteres." }); return; }
     if (motivo.trim().length < MOTIVO_MIN) { setMsg({ ok: false, t: "Escriba el motivo (10 caracteres o más)." }); return; }
     setEnviando(true); setMsg(null); let hechos = 0;
     try {
       for (const [tipo, valor] of cambios) { await apiGestion.personalFijar(p.email, tipo, valor, motivo.trim()); hechos++; }
+      for (const f of cambiosForm) { await apiGestion.personalFormulario(p.email, f.clave, forms.has(f.clave), motivo.trim()); hechos++; }
       onListo(`Ficha de ${p.nombre ?? p.email} actualizada (${hechos} cambio${hechos === 1 ? "" : "s"}).`);
     } catch (e) {
       setMsg({ ok: false, t: err(e, "No tiene permiso para esta acción.") + (hechos ? ` Se alcanzaron a guardar ${hechos} cambio(s); revise la ficha.` : "") });
@@ -136,10 +139,15 @@ function EditarFicha({ p, cuadrillas, onCerrar, onListo }: { p: PersonaRedes; cu
         {!cuadrillas.length ? <p className="tec-ayuda">Todavía no hay cuadrillas: las crea el administrador en Catálogo.</p> : null}</div>
       {p.geovisor === "por_permiso" ? <p className="tec-ayuda">Ve el geovisor completo por su permiso de supervisor: no lleva casilla.</p>
         : <label className="dan-check gest-check"><input type="checkbox" checked={geovisor} onChange={(e) => setGeovisor(e.target.checked)} /> Geovisor en solo lectura (ve la red y las actividades del día)</label>}
+      {p.perfil === "supervisor" ? <p className="tec-ayuda">Como supervisor de distribución captura los formularios de distribución sin que se le asignen.</p>
+        : !p.registro_tecnico ? <p className="tec-ayuda">Sin «Registro técnico»: el administrador debe dárselo antes de asignarle formularios.</p>
+        : <fieldset className="gest-formularios"><legend>Formularios de distribución</legend>
+            {formularios.map((f) => <label key={f.clave} className="dan-check gest-check"><input type="checkbox" data-formulario={f.clave} checked={forms.has(f.clave)}
+              onChange={(e) => { const n = new Set(forms); if (e.target.checked) n.add(f.clave); else n.delete(f.clave); setForms(n); }} /> {f.nombre}</label>)}</fieldset>}
       <CampoMotivo id={`mo-${id}`} valor={motivo} onCambio={setMotivo} />
       <Aviso msg={msg} />
       <div className="tec-acciones">
-        <button type="button" className="tec-boton itv-guardar" disabled={enviando} onClick={guardar}>{enviando ? "Guardando…" : `Guardar (${cambios.length} cambio${cambios.length === 1 ? "" : "s"})`}</button>
+        <button type="button" className="tec-boton itv-guardar" disabled={enviando} onClick={guardar}>{enviando ? "Guardando…" : `Guardar (${cambios.length + cambiosForm.length} cambio${cambios.length + cambiosForm.length === 1 ? "" : "s"})`}</button>
         <button type="button" className="tec-boton-sec" disabled={enviando} onClick={onCerrar}>Cancelar</button>
       </div>
     </div>
@@ -182,13 +190,13 @@ export function Catalogo() {
   const sistemas = [...new Set(c.tipos.map((t) => t.sistema))];
   return (
     <>
-      <p className="tec-ayuda dan-pad-x">{c.puede_editar ? "Usted puede cambiar el nombre visible de cada tipo (el prefijo y los códigos no cambian) y las cuadrillas." : "Solo lectura: el nombre visible y las cuadrillas los cambia el administrador."}</p>
+      <p className="tec-ayuda dan-pad-x">{c.puede_editar ? "Usted puede cambiar el nombre visible de cada tipo (el prefijo y los códigos no cambian) y las cuadrillas." : c.puede_cuadrillas ? "Usted puede crear y cambiar las cuadrillas. El nombre visible de los tipos lo cambia el administrador." : "Solo lectura: el nombre visible y las cuadrillas los cambia el administrador."}</p>
       <Aviso msg={aviso} onCerrar={() => setAviso(null)} />
       <section className="tec-tarjeta" aria-label="Cuadrillas">
         <h2>Cuadrillas</h2>
         {!c.cuadrillas.length ? <p className="red-vacio">Todavía no hay cuadrillas.</p> : (
-          <ul className="gest-lista">{c.cuadrillas.map((q) => <Cuadrilla key={q.id} q={q} editable={c.puede_editar} onListo={listo} />)}</ul>)}
-        {c.puede_editar ? <NuevaCuadrilla onListo={listo} /> : null}
+          <ul className="gest-lista">{c.cuadrillas.map((q) => <Cuadrilla key={q.id} q={q} editable={c.puede_editar || !!c.puede_cuadrillas} onListo={listo} />)}</ul>)}
+        {c.puede_editar || c.puede_cuadrillas ? <NuevaCuadrilla onListo={listo} /> : null}
       </section>
       {sistemas.map((s) => (
         <section key={s} className="tec-tarjeta" aria-label={`Tipos de activo de ${SISTEMA[s] ?? s}`}>
@@ -248,7 +256,7 @@ function Cuadrilla({ q, editable, onListo }: { q: CatalogoRedes["cuadrillas"][nu
     if (motivo.trim().length < MOTIVO_MIN) { setMsg({ ok: false, t: "Escriba el motivo (10 caracteres o más)." }); return; }
     try { const r = await apiGestion.cuadrillaFijar(q.id, activa === null && nombre.trim() !== q.nombre ? nombre.trim() : null, activa, motivo.trim());
       setAbierto(false); onListo(`Cuadrilla «${r.nombre}» ${r.activa ? "activa" : "desactivada"}.`); }
-    catch (e) { setMsg({ ok: false, t: err(e, "Solo el administrador cambia las cuadrillas.") }); }
+    catch (e) { setMsg({ ok: false, t: err(e, "Solo el supervisor de distribución o el administrador cambian las cuadrillas.") }); }
   }
   return (
     <li className="gest-item">
@@ -280,7 +288,7 @@ function NuevaCuadrilla({ onListo }: { onListo: (t: string) => void }) {
         if (nombre.trim().length < 2) { setMsg({ ok: false, t: "Escriba el nombre (2 a 60 caracteres)." }); return; }
         if (motivo.trim().length < MOTIVO_MIN) { setMsg({ ok: false, t: "Escriba el motivo (10 caracteres o más)." }); return; }
         try { const r = await apiGestion.cuadrillaFijar(null, nombre.trim(), null, motivo.trim()); setNombre(""); setMotivo(""); setMsg(null); onListo(`Cuadrilla «${r.nombre}» creada.`); }
-        catch (e) { setMsg({ ok: false, t: err(e, "Solo el administrador crea cuadrillas.") }); }
+        catch (e) { setMsg({ ok: false, t: err(e, "Solo el supervisor de distribución o el administrador crean cuadrillas.") }); }
       }}>Crear la cuadrilla</button>
     </div>
   );

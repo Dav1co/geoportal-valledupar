@@ -81,3 +81,6 @@
 .gest-fechas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .gest-grupos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; margin-bottom: 4px; }
 .gest-barra-cero { min-width: 0; }
+/* Corte 5a: formularios de distribución en la ficha del personal */
+.gest-formularios { border: 1px solid #dde5ea; border-radius: 10px; padding: 8px 12px; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.gest-formularios legend { font-size: 15px; font-weight: 600; padding: 0 4px; }

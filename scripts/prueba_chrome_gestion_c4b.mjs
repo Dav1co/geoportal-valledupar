@@ -274,7 +274,8 @@ for (const ancho of [390, 1280]) {
   // Catálogo y Parámetros: solo lectura para él
   await pestana(p, "Catálogo"); await esperarTexto(p, /Tipos de activo · Acueducto/);
   t = await texto(p);
-  ok(`${tag} Catálogo en solo lectura para el supervisor (sin «Nombre visible» ni «Crear la cuadrilla»)`, /Solo lectura/.test(t) && !(await clicTexto(p, "button", "Nombre visible")) && !/Crear la cuadrilla/.test(t));
+  // Corte 5a (§28.5): el supervisor de distribución también crea las cuadrillas; el nombre visible de los tipos sigue siendo del administrador
+  ok(`${tag} Catálogo: el supervisor crea cuadrillas pero no cambia el nombre visible de los tipos`, /Usted puede crear y cambiar las cuadrillas/.test(t) && !(await clicTexto(p, "button", "Nombre visible")) && /Crear la cuadrilla/.test(t));
   await pestana(p, "Parámetros"); await esperarTexto(p, /itv_radio_danos_m/);
   ok(`${tag} Parámetros en solo lectura para el supervisor`, /Solo lectura/.test(await texto(p)) && !(await clicTexto(p, "button", "Cambiar")));
   // Gráficas
