@@ -1,0 +1,55 @@
+OK    [390] A1 el minimapa de Muestreo dibuja los 27 puntos (sin pedir el GPS al abrir)
+OK    [390] A2 con la leyenda (verificada, aproximada y en revisión) y sin el aviso de puntos sin ubicación
+OK    [390] A3 tocar MUE-11 en el mapa lo elige en la lista y dice «verificada», sin el botón de guardar ubicación
+OK    [390] A4 y aparecen los campos del punto elegido
+OK    [390] A5 elegir MUE-05 en la lista lo resalta en el mapa; dice «aproximada» y ofrece guardar la ubicación
+OK    [390] A6 «Ver dónde estoy» marca el GPS y propone el punto más cercano (OGB), sin cambiar lo elegido
+OK    [390] A7 con 45 m de precisión no deja guardar y dice cuánto se necesita
+OK    [390] A8 con 6 m de precisión sí deja guardar
+OK    [390] A9 la confirmación dice la precisión y la distancia a la ubicación aproximada (~40 m), y que nada cambia hasta que el supervisor apruebe
+OK    [390] A10 queda pendiente en la base, a nombre del operador, con su precisión; la vigente sigue aproximada
+OK    [390] A11 la Edge pasó solo el correo del token, el punto, lat, lon, precisión e IP
+OK    [390] A12 el punto queda «en revisión» (texto y borde morado en el mapa) y ya no ofrece guardar
+OK    [390] A13 sin desborde a lo ancho; los botones del minimapa miden 44 px o más
+OK    [390] A14 el registro de Muestreo sale igual que antes (punto MUE-05, con la fecha de la muestra)
+OK    [390] B1 la pestaña «Puntos» lista 2 por revisar; MUE-05 dice quién la tomó, la precisión y la distancia a la aproximada
+OK    [390] B2 la que tomó él mismo (MUE-06) dice «Lejos» y no tiene Aprobar ni Rechazar
+OK    [390] B3 su minimapa dibuja la ubicación de ahora y la propuesta
+OK    [390] B4 la tabla de puntos trae los 27 con su ubicación (3 verificadas)
+OK    [390] B5 sin desborde a lo ancho (la tabla se desplaza dentro de su caja)
+OK    [390] B6 rechazar sin motivo: lo pide y no llama al servidor
+OK    [390] B7 aprobada: MUE-05 queda verificada, del GPS del operador (autor: el operador) y la lista baja a 1
+OK    [390] B8 la tabla muestra MUE-05 «Verificada · GPS del operador» y la revisión en «Últimas revisiones»
+OK    [390] B9 otro supervisor rechaza la de MUE-06 con motivo: queda «No hay ubicaciones por revisar» y la de MUE-06 sigue aproximada
+OK    [390] C1 MUE-05 sale verificada (GPS del operador, aprobada) y ya no ofrece guardar
+OK    [390] C2 «Ocultar el mapa» lo quita y la lista sigue
+OK    [390] C3 con la base sin el SQL del 5b: avisa que no cargó el mapa y la lista funciona como antes
+OK    [1280] A1 el minimapa de Muestreo dibuja los 27 puntos (sin pedir el GPS al abrir)
+OK    [1280] A2 con la leyenda (verificada, aproximada y en revisión) y sin el aviso de puntos sin ubicación
+OK    [1280] A3 tocar MUE-11 en el mapa lo elige en la lista y dice «verificada», sin el botón de guardar ubicación
+OK    [1280] A4 y aparecen los campos del punto elegido
+OK    [1280] A5 elegir MUE-05 en la lista lo resalta en el mapa; dice «aproximada» y ofrece guardar la ubicación
+OK    [1280] A6 «Ver dónde estoy» marca el GPS y propone el punto más cercano (OGB), sin cambiar lo elegido
+OK    [1280] A7 con 45 m de precisión no deja guardar y dice cuánto se necesita
+OK    [1280] A8 con 6 m de precisión sí deja guardar
+OK    [1280] A9 la confirmación dice la precisión y la distancia a la ubicación aproximada (~40 m), y que nada cambia hasta que el supervisor apruebe
+OK    [1280] A10 queda pendiente en la base, a nombre del operador, con su precisión; la vigente sigue aproximada
+OK    [1280] A11 la Edge pasó solo el correo del token, el punto, lat, lon, precisión e IP
+OK    [1280] A12 el punto queda «en revisión» (texto y borde morado en el mapa) y ya no ofrece guardar
+OK    [1280] A13 sin desborde a lo ancho; los botones del minimapa miden 44 px o más
+OK    [1280] A14 el registro de Muestreo sale igual que antes (punto MUE-05, con la fecha de la muestra)
+OK    [1280] B1 la pestaña «Puntos» lista 2 por revisar; MUE-05 dice quién la tomó, la precisión y la distancia a la aproximada
+OK    [1280] B2 la que tomó él mismo (MUE-06) dice «Lejos» y no tiene Aprobar ni Rechazar
+OK    [1280] B3 su minimapa dibuja la ubicación de ahora y la propuesta
+OK    [1280] B4 la tabla de puntos trae los 27 con su ubicación (3 verificadas)
+OK    [1280] B5 sin desborde a lo ancho (la tabla se desplaza dentro de su caja)
+OK    [1280] B6 rechazar sin motivo: lo pide y no llama al servidor
+OK    [1280] B7 aprobada: MUE-05 queda verificada, del GPS del operador (autor: el operador) y la lista baja a 1
+OK    [1280] B8 la tabla muestra MUE-05 «Verificada · GPS del operador» y la revisión en «Últimas revisiones»
+OK    [1280] B9 otro supervisor rechaza la de MUE-06 con motivo: queda «No hay ubicaciones por revisar» y la de MUE-06 sigue aproximada
+OK    [1280] C1 MUE-05 sale verificada (GPS del operador, aprobada) y ya no ofrece guardar
+OK    [1280] C2 «Ocultar el mapa» lo quita y la lista sigue
+OK    [1280] C3 con la base sin el SQL del 5b: avisa que no cargó el mapa y la lista funciona como antes
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 54 de 54 — SIN FALLAS

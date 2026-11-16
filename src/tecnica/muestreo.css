@@ -29,3 +29,9 @@
 .pto-tabla { border-collapse: collapse; width: 100%; font-size: 14px; }
 .pto-tabla th, .pto-tabla td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e3e6e0; vertical-align: top; }
 .pto-tabla td { overflow-wrap: anywhere; }
+/* Corte 5c (§32.2): corregir una ubicación verificada */
+.pto-corregir { border: 1px solid #c9cdc5; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: #fbfcfa; min-width: 0; }
+.pto-corregir h3 { margin: 0; font-size: 16px; }
+.pto-corregir select, .pto-corregir input[type="text"] { min-height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 16px; background: #fff; width: 100%; min-width: 0; box-sizing: border-box; }
+.pto-coords { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pto-corregir .td-boton-sec, .pto-corregir .td-boton { min-height: 44px; }

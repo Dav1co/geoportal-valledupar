@@ -1,0 +1,54 @@
+OK    los marcadores siguen en la línea 1 y _shared/auth.ts no se toca (autorizar tal cual; el correo nunca del cuerpo)
+OK    sin token: 401 y ninguna RPC
+OK    cargue_capas: GET llama a geoportal_redes_cargue_capas solo con el correo del token, sin caché
+OK    cargue_capas: POST → 405 sin RPC
+OK    cargue_historial: la capa va a la RPC
+OK    cargue_historial: una capa mal escrita → 400 sin RPC
+OK    el 42501 de la RPC sale como 403 con el texto fijo
+OK    iniciar: pasa capa, huella, formato, sistema, llave, filas, nota y masiva (y nada más del cuerpo)
+OK    iniciar: capa rara → 400 sin RPC
+OK    iniciar: huella corta → 400 sin RPC
+OK    iniciar: formato raro → 400 sin RPC
+OK    iniciar: sistema como texto → 400 sin RPC
+OK    iniciar: sin llave → 400 sin RPC
+OK    iniciar: filas cero → 400 sin RPC
+OK    iniciar: masiva que no es UUID → 400 sin RPC
+OK    iniciar: nota de más de 500 → 400 sin RPC
+OK    lote: llama a geoportal_redes_carga_lote (la RPC del 1a) con las filas limpias
+OK    lote: 200 líneas (~355 KB, más de los 32 KB de las demás rutas) pasan
+OK    lote: 201 filas → 400 sin RPC
+OK    lote: más de 512 KB → 413
+OK    lote: orden cero → 400 sin RPC
+OK    lote: orden como texto → 400 sin RPC
+OK    lote: wkt que no es geometría → 400 sin RPC
+OK    lote: un campo de más → 400 sin RPC
+OK    lote: atributos que no son objeto → 400 sin RPC
+OK    lote: un atributo objeto → 400 sin RPC
+OK    lote: un texto de más de 2.000 → 400 sin RPC
+OK    lote: una fila sin geometría pasa (la base la marca con error)
+OK    resumen: GET con la carga → geoportal_redes_carga_resumen
+OK    muestra: GET con la carga → geoportal_redes_carga_muestra
+OK    resumen: carga mal escrita → 400 sin RPC
+OK    publicar: carga y motivo → geoportal_redes_carga_publicar
+OK    anular: → geoportal_redes_carga_anular
+OK    publicar: carga como texto → 400 sin RPC
+OK    revertir: capa y motivo → geoportal_redes_carga_revertir
+OK    publicar: el mensaje de la RPC para la persona llega tal cual
+OK    devolver: carga, código recortado, campo y motivo → geoportal_redes_carga_devolver_campo
+OK    devolver: un campo de los atributos pasa
+OK    devolver: un campo raro → 400 sin RPC
+OK    devolver: el 55000 sale como 409 con su texto
+OK    las demás rutas siguen con su tope de 32 KB (413)
+OK    corregir: punto recortado, lat, lon, método, precisión, motivo e IP → geoportal_tec_punto_ubicacion_corregir (y nada más del cuerpo)
+OK    corregir: sin precisión (mapa) va nula
+OK    corregir: sin punto → 400 sin RPC
+OK    corregir: lat como texto → 400 sin RPC
+OK    corregir: lon fuera de rango → 400 sin RPC
+OK    corregir: método raro → 400 sin RPC
+OK    corregir: precisión cero → 400 sin RPC
+OK    corregir: sin motivo → 400 sin RPC
+OK    corregir: motivo de más de 1.000 → 400 sin RPC
+OK    corregir: GET → 405
+OK    corregir: un campo con «fecha» se rechaza como siempre en la Edge de planta
+OK    corregir: el 55000 de la RPC sale como 409 con su texto
+RESULTADO: 53 de 53

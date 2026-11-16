@@ -1,0 +1,154 @@
+OK    [390] A1 el Cargue de capas: 5 grupos; la red de acueducto «Al día» en la versión 1; sumideros «Sin cargar»; PQR y barrios como otras capas
+OK    [390] A2 el filtro «Por cargar o desactualizadas» deja las capas sin cargar y quita las que están al día
+OK    [390] A3 sin desborde y con botones de 44 px o más
+OK    [390] B1 paso 1: lee el SHP en zip (9.146 puntos) y muestra sus columnas
+OK    [390] B2 paso 2: propone una columna única como llave y ofrece «Sin columna llave»
+OK    [390] B3 paso 3: detecta MAGNA-SIRGAS Origen Nacional (EPSG 9377) por el .prj
+OK    [390] B4 subió en lotes de 200 o menos (por la Edge, cada uno de menos de 512 KB) y el resumen dice 9.146 nuevos, 0 retirados, lista para publicar
+OK    [390] B5 la vista previa dibuja la muestra sobre Valledupar (EPSG 9377 → WGS 84 en el servidor) con la caja de todo
+OK    [390] B6 sin nota no publica
+OK    [390] B7 publicada: 9.146 nuevos; en la base, la carga quedó con el sistema 9377, la llave LABEL y el archivo en la nota
+OK    [390] B8 de vuelta en la lista, sumideros «Al día», versión 1 con 9.146 vigentes
+OK    [390] C1 la red de acueducto se carga siempre con su llave del modelo (ID), sin elegirla
+OK    [390] C2 el resumen lista el choque: diámetro de la ficha 250 y el de la capa; nada más cambia
+OK    [390] C3 devuelto: el resumen otra vez, sin el choque y con 1 cambiado; la devolución queda con su motivo
+OK    [390] C4 publicada la versión 2 del acueducto: el tramo vuelve al diámetro de la capa y es el único con versión nueva (1 cambiado, 0 retirados)
+OK    [390] D1 «Sin columna llave» explica el cruce por geometría
+OK    [390] D2 las columnas X y Y (ESTE y NORTE) se reconocen y el sistema se propone por el rango (MAGNA Bogotá)
+OK    [390] D3 si se elige un sistema que no cuadra con las coordenadas, avisa antes de subir
+OK    [390] D4 el resumen dice el resultado del cruce: 0 encontraron par y 3 entran como nuevos
+OK    [390] D5 «Anular esta carga» la deja anulada y no cambia nada
+OK    [390] E1 el KML se lee (4 descargas) y, como esa capa no se carga con KML, no deja seguir
+OK    [390] E2 el Excel (9.146 filas): reconoce lon y lat y propone WGS 84
+OK    [390] F1 reparte las 3 capas del GeoPackage por el nombre (conductos, pozos y descargas) y detecta EPSG 9377 en cada una
+OK    [390] F2 suben las 2 elegidas: 9.064 nuevos en interceptores y los 9.146 sumideros por su llave (ninguno nuevo, ninguno retirado)
+OK    [390] F3 publicadas las dos, con la misma marca de carga masiva
+OK    [390] G1 el historial de sumideros: 2 cargas publicadas, la masiva marcada, con su nota y su sistema
+OK    [390] G2 volver a la versión anterior: la carga masiva de sumideros queda revertida y la versión 1 vuelve a contar
+OK    [390] G3 sin desborde en el historial
+OK    [390] H1 el supervisor de distribución ve el Cargue en solo lectura: sin «Cargar versión» ni carga masiva, con el historial
+OK    [390] I1 la que tomó el administrador dice que puede revisarla y tiene «Aprobar»
+OK    [390] I2 el administrador aprueba la suya: MUE-05 queda verificada (GPS del operador), con él como autor
+OK    [390] I3 tocar el mapa marca la ubicación nueva (morada) y dice a cuántos metros queda (~60 m)
+OK    [390] I4 sin motivo no guarda
+OK    [390] I5 con el GPS del equipo (6 m) la nueva pasa a ser la del GPS
+OK    [390] I6 corregida: MUE-11 verificada, fuente «correccion», del administrador; la anterior (de David) queda en el historial; sale en «Últimas correcciones»
+OK    [390] I7 sin desborde en «Puntos» y botones de 44 px o más en la corrección
+OK    [390] I8 el supervisor de planta sigue sin poder revisar la suya
+OK    [1280] A1 el Cargue de capas: 5 grupos; la red de acueducto «Al día» en la versión 1; sumideros «Sin cargar»; PQR y barrios como otras capas
+OK    [1280] A2 el filtro «Por cargar o desactualizadas» deja las capas sin cargar y quita las que están al día
+OK    [1280] A3 sin desborde y con botones de 44 px o más
+OK    [1280] B1 paso 1: lee el SHP en zip (9.146 puntos) y muestra sus columnas
+OK    [1280] B2 paso 2: propone una columna única como llave y ofrece «Sin columna llave»
+OK    [1280] B3 paso 3: detecta MAGNA-SIRGAS Origen Nacional (EPSG 9377) por el .prj
+OK    [1280] B4 subió en lotes de 200 o menos (por la Edge, cada uno de menos de 512 KB) y el resumen dice 9.146 nuevos, 0 retirados, lista para publicar
+OK    [1280] B5 la vista previa dibuja la muestra sobre Valledupar (EPSG 9377 → WGS 84 en el servidor) con la caja de todo
+OK    [1280] B6 sin nota no publica
+OK    [1280] B7 publicada: 9.146 nuevos; en la base, la carga quedó con el sistema 9377, la llave LABEL y el archivo en la nota
+OK    [1280] B8 de vuelta en la lista, sumideros «Al día», versión 1 con 9.146 vigentes
+OK    [1280] C1 la red de acueducto se carga siempre con su llave del modelo (ID), sin elegirla
+OK    [1280] C2 el resumen lista el choque: diámetro de la ficha 250 y el de la capa; nada más cambia
+OK    [1280] C3 devuelto: el resumen otra vez, sin el choque y con 1 cambiado; la devolución queda con su motivo
+OK    [1280] C4 publicada la versión 2 del acueducto: el tramo vuelve al diámetro de la capa y es el único con versión nueva (1 cambiado, 0 retirados)
+OK    [1280] D1 «Sin columna llave» explica el cruce por geometría
+OK    [1280] D2 las columnas X y Y (ESTE y NORTE) se reconocen y el sistema se propone por el rango (MAGNA Bogotá)
+OK    [1280] D3 si se elige un sistema que no cuadra con las coordenadas, avisa antes de subir
+OK    [1280] D4 el resumen dice el resultado del cruce: 0 encontraron par y 3 entran como nuevos
+OK    [1280] D5 «Anular esta carga» la deja anulada y no cambia nada
+OK    [1280] E1 el KML se lee (4 descargas) y, como esa capa no se carga con KML, no deja seguir
+OK    [1280] E2 el Excel (9.146 filas): reconoce lon y lat y propone WGS 84
+OK    [1280] F1 reparte las 3 capas del GeoPackage por el nombre (conductos, pozos y descargas) y detecta EPSG 9377 en cada una
+OK    [1280] F2 suben las 2 elegidas: 9.064 nuevos en interceptores y los 9.146 sumideros por su llave (ninguno nuevo, ninguno retirado)
+OK    [1280] F3 publicadas las dos, con la misma marca de carga masiva
+OK    [1280] G1 el historial de sumideros: 2 cargas publicadas, la masiva marcada, con su nota y su sistema
+OK    [1280] G2 volver a la versión anterior: la carga masiva de sumideros queda revertida y la versión 1 vuelve a contar
+OK    [1280] G3 sin desborde en el historial
+OK    [1280] H1 el supervisor de distribución ve el Cargue en solo lectura: sin «Cargar versión» ni carga masiva, con el historial
+OK    [1280] I1 la que tomó el administrador dice que puede revisarla y tiene «Aprobar»
+OK    [1280] I2 el administrador aprueba la suya: MUE-05 queda verificada (GPS del operador), con él como autor
+OK    [1280] I3 tocar el mapa marca la ubicación nueva (morada) y dice a cuántos metros queda (~60 m)
+OK    [1280] I4 sin motivo no guarda
+OK    [1280] I5 con el GPS del equipo (6 m) la nueva pasa a ser la del GPS
+OK    [1280] I6 corregida: MUE-11 verificada, fuente «correccion», del administrador; la anterior (de David) queda en el historial; sale en «Últimas correcciones»
+OK    [1280] I7 sin desborde en «Puntos» y botones de 44 px o más en la corrección
+OK    [1280] I8 el supervisor de planta sigue sin poder revisar la suya
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+----
+OK    [390] A1 el Cargue de capas: 5 grupos; la red de acueducto «Al día» en la versión 1; sumideros «Sin cargar»; PQR y barrios como otras capas
+OK    [390] A2 el filtro «Por cargar o desactualizadas» deja las capas sin cargar y quita las que están al día
+OK    [390] A3 sin desborde y con botones de 44 px o más
+OK    [390] B1 paso 1: lee el SHP en zip (9.146 puntos) y muestra sus columnas
+OK    [390] B2 paso 2: propone una columna única como llave y ofrece «Sin columna llave»
+OK    [390] B3 paso 3: detecta MAGNA-SIRGAS Origen Nacional (EPSG 9377) por el .prj
+OK    [390] B4 subió en lotes de 200 o menos (por la Edge, cada uno de menos de 512 KB) y el resumen dice 9.146 nuevos, 0 retirados, lista para publicar
+OK    [390] B5 la vista previa dibuja la muestra sobre Valledupar (EPSG 9377 → WGS 84 en el servidor) con la caja de todo
+OK    [390] B6 sin nota no publica
+OK    [390] B7 publicada: 9.146 nuevos; en la base, la carga quedó con el sistema 9377, la llave LABEL y el archivo en la nota
+OK    [390] B8 de vuelta en la lista, sumideros «Al día», versión 1 con 9.146 vigentes
+OK    [390] C1 la red de acueducto se carga siempre con su llave del modelo (ID), sin elegirla
+OK    [390] C2 el resumen lista el choque: diámetro de la ficha 250 y el de la capa; nada más cambia
+OK    [390] C3 devuelto: el resumen otra vez, sin el choque y con 1 cambiado; la devolución queda con su motivo
+OK    [390] C4 publicada la versión 2 del acueducto: el tramo vuelve al diámetro de la capa y es el único con versión nueva (1 cambiado, 0 retirados)
+OK    [390] D1 «Sin columna llave» explica el cruce por geometría
+OK    [390] D2 las columnas X y Y (ESTE y NORTE) se reconocen y el sistema se propone por el rango (MAGNA Bogotá)
+OK    [390] D3 si se elige un sistema que no cuadra con las coordenadas, avisa antes de subir
+OK    [390] D4 el resumen dice el resultado del cruce: 0 encontraron par y 3 entran como nuevos
+OK    [390] D5 «Anular esta carga» la deja anulada y no cambia nada
+OK    [390] E1 el KML se lee (4 descargas) y, como esa capa no se carga con KML, no deja seguir
+OK    [390] E2 el Excel (9.146 filas): reconoce lon y lat y propone WGS 84
+OK    [390] F1 reparte las 3 capas del GeoPackage por el nombre (conductos, pozos y descargas) y detecta EPSG 9377 en cada una
+OK    [390] F2 suben las 2 elegidas: 9.064 nuevos en interceptores y los 9.146 sumideros por su llave (ninguno nuevo, ninguno retirado)
+OK    [390] F3 publicadas las dos, con la misma marca de carga masiva
+OK    [390] G1 el historial de sumideros: 2 cargas publicadas, la masiva marcada, con su nota y su sistema
+OK    [390] G2 volver a la versión anterior: la carga masiva de sumideros queda revertida y la versión 1 vuelve a contar
+OK    [390] G3 sin desborde en el historial
+OK    [390] H1 el supervisor de distribución ve el Cargue en solo lectura: sin «Cargar versión» ni carga masiva, con el historial
+OK    [390] I1 la que tomó el administrador dice que puede revisarla y tiene «Aprobar»
+OK    [390] I2 el administrador aprueba la suya: MUE-05 queda verificada (GPS del operador), con él como autor
+OK    [390] I3 tocar el mapa marca la ubicación nueva (morada) y dice a cuántos metros queda (~60 m)
+OK    [390] I4 sin motivo no guarda
+OK    [390] I5 con el GPS del equipo (6 m) la nueva pasa a ser la del GPS
+OK    [390] I6 corregida: MUE-11 verificada, fuente «correccion», del administrador; la anterior (de David) queda en el historial; sale en «Últimas correcciones»
+OK    [390] I7 sin desborde en «Puntos» y botones de 44 px o más en la corrección
+OK    [390] I8 el supervisor de planta sigue sin poder revisar la suya
+OK    [1280] A1 el Cargue de capas: 5 grupos; la red de acueducto «Al día» en la versión 1; sumideros «Sin cargar»; PQR y barrios como otras capas
+OK    [1280] A2 el filtro «Por cargar o desactualizadas» deja las capas sin cargar y quita las que están al día
+OK    [1280] A3 sin desborde y con botones de 44 px o más
+OK    [1280] B1 paso 1: lee el SHP en zip (9.146 puntos) y muestra sus columnas
+OK    [1280] B2 paso 2: propone una columna única como llave y ofrece «Sin columna llave»
+OK    [1280] B3 paso 3: detecta MAGNA-SIRGAS Origen Nacional (EPSG 9377) por el .prj
+OK    [1280] B4 subió en lotes de 200 o menos (por la Edge, cada uno de menos de 512 KB) y el resumen dice 9.146 nuevos, 0 retirados, lista para publicar
+OK    [1280] B5 la vista previa dibuja la muestra sobre Valledupar (EPSG 9377 → WGS 84 en el servidor) con la caja de todo
+OK    [1280] B6 sin nota no publica
+OK    [1280] B7 publicada: 9.146 nuevos; en la base, la carga quedó con el sistema 9377, la llave LABEL y el archivo en la nota
+OK    [1280] B8 de vuelta en la lista, sumideros «Al día», versión 1 con 9.146 vigentes
+OK    [1280] C1 la red de acueducto se carga siempre con su llave del modelo (ID), sin elegirla
+OK    [1280] C2 el resumen lista el choque: diámetro de la ficha 250 y el de la capa; nada más cambia
+OK    [1280] C3 devuelto: el resumen otra vez, sin el choque y con 1 cambiado; la devolución queda con su motivo
+OK    [1280] C4 publicada la versión 2 del acueducto: el tramo vuelve al diámetro de la capa y es el único con versión nueva (1 cambiado, 0 retirados)
+OK    [1280] D1 «Sin columna llave» explica el cruce por geometría
+OK    [1280] D2 las columnas X y Y (ESTE y NORTE) se reconocen y el sistema se propone por el rango (MAGNA Bogotá)
+OK    [1280] D3 si se elige un sistema que no cuadra con las coordenadas, avisa antes de subir
+OK    [1280] D4 el resumen dice el resultado del cruce: 0 encontraron par y 3 entran como nuevos
+OK    [1280] D5 «Anular esta carga» la deja anulada y no cambia nada
+OK    [1280] E1 el KML se lee (4 descargas) y, como esa capa no se carga con KML, no deja seguir
+OK    [1280] E2 el Excel (9.146 filas): reconoce lon y lat y propone WGS 84
+OK    [1280] F1 reparte las 3 capas del GeoPackage por el nombre (conductos, pozos y descargas) y detecta EPSG 9377 en cada una
+OK    [1280] F2 suben las 2 elegidas: 9.064 nuevos en interceptores y los 9.146 sumideros por su llave (ninguno nuevo, ninguno retirado)
+OK    [1280] F3 publicadas las dos, con la misma marca de carga masiva
+OK    [1280] G1 el historial de sumideros: 2 cargas publicadas, la masiva marcada, con su nota y su sistema
+OK    [1280] G2 volver a la versión anterior: la carga masiva de sumideros queda revertida y la versión 1 vuelve a contar
+OK    [1280] G3 sin desborde en el historial
+OK    [1280] H1 el supervisor de distribución ve el Cargue en solo lectura: sin «Cargar versión» ni carga masiva, con el historial
+OK    [1280] I1 la que tomó el administrador dice que puede revisarla y tiene «Aprobar»
+OK    [1280] I2 el administrador aprueba la suya: MUE-05 queda verificada (GPS del operador), con él como autor
+OK    [1280] I3 tocar el mapa marca la ubicación nueva (morada) y dice a cuántos metros queda (~60 m)
+OK    [1280] I4 sin motivo no guarda
+OK    [1280] I5 con el GPS del equipo (6 m) la nueva pasa a ser la del GPS
+OK    [1280] I6 corregida: MUE-11 verificada, fuente «correccion», del administrador; la anterior (de David) queda en el historial; sale en «Últimas correcciones»
+OK    [1280] I7 sin desborde en «Puntos» y botones de 44 px o más en la corrección
+OK    [1280] I8 el supervisor de planta sigue sin poder revisar la suya
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 76 de 76 — SIN FALLAS

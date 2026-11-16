@@ -7,17 +7,18 @@ import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 import { NoIdentificados, Recursos } from "./IntervencionesSupervisor";
 import { Catalogo, Descargas, Graficas, Nodos, Parametros, Personal } from "./DashboardGestion";
+import { CargueCapas } from "./cargue/CargueCapas";
 
 // Dashboard distribución (Técnica fase 1, Corte 4a; §7 y §16 de la bitácora). Para el supervisor de distribución (ver_dashboard_redes) y el administrador:
 // el servidor lo vuelve a verificar en cada ruta. Pestañas de este corte: no identificados (asociar o crear el activo), intervenciones (recursos por completar,
 // ocultar o anular con motivo), daños y fallas (ocultar, reincluir o reabrir con motivo; el nombre del tercero con lectura auditada) y reportes del bot.
 // Corte 4b (DashboardGestion.tsx): Personal, Gráficas, Descargas, Catálogo, Parámetros y, solo para el administrador, Nodos por clasificar.
-// El Cargue de capas llega en el Corte 5. Nada se borra: todo es un evento con motivo.
+// Corte 5c (cargue/CargueCapas.tsx): Cargue de capas (el supervisor lo lee; carga el administrador). Nada se borra: todo es un evento con motivo.
 
-type Pestana = "no_identificados" | "intervenciones" | "danos" | "bot" | "graficas" | "descargas" | "personal" | "catalogo" | "parametros" | "nodos";
+type Pestana = "no_identificados" | "intervenciones" | "danos" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos";
 const PESTANAS: { c: Pestana; n: string; admin?: boolean }[] = [{ c: "no_identificados", n: "No identificados" }, { c: "intervenciones", n: "Intervenciones" },
   { c: "danos", n: "Daños y fallas" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
-  { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar", admin: true }];
+  { c: "cargue", n: "Cargue de capas" }, { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar", admin: true }];
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const ESTADO: Record<string, string> = { reportado: "Reportado", en_atencion: "En atención", atendido: "Atendido", oculto: "Oculto", cerrada: "Cerrada", anulada: "Anulada", oculta: "Oculta",
   recibido: "Recibido", descartado: "Descartado" };
@@ -50,6 +51,7 @@ export function DashboardRedes({ selector, onVolver }: { selector?: React.ReactN
       {pestana === "graficas" ? <Graficas onFicha={setFicha} /> : null}
       {pestana === "descargas" ? <Descargas /> : null}
       {pestana === "personal" ? <Personal /> : null}
+      {pestana === "cargue" ? <CargueCapas /> : null}
       {pestana === "catalogo" ? <Catalogo /> : null}
       {pestana === "parametros" ? <Parametros /> : null}
       {pestana === "nodos" && admin ? <Nodos onFicha={setFicha} /> : null}

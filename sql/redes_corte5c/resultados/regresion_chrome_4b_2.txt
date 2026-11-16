@@ -1,0 +1,62 @@
+OK    [390] supervisor de distribución: las pestañas nuevas (Gráficas, Descargas, Personal, Catálogo, Parámetros) y no «Nodos por clasificar»
+OK    [390] su propia ficha no la edita (la cambia otro supervisor o el administrador)
+OK    [390] sin motivo, la pantalla no envía
+OK    [390] área, cargo y geovisor guardados como eventos (distribucion · Fontanero 390 · ∅ · true)
+OK    [390] el supervisor con los dos dashboards sale con el geovisor «por su permiso», sin casilla
+OK    [390] el filtro «Distribución» trae al operador
+OK    [390] el historial del operador, con quién y el motivo
+OK    [390] Personal no desborda y los botones miden 44 px o más
+OK    [390] Catálogo: el supervisor crea cuadrillas pero no cambia el nombre visible de los tipos
+OK    [390] Parámetros en solo lectura para el supervisor
+OK    [390] Gráficas: intervenciones por mes y por tipo, valor por fuente, daños por causa y los 10 activos (V85 con sus reparaciones)
+OK    [390] Gráficas no desborda
+OK    [390] el Excel de daños se descarga (danos_fallas_2026-11-01_a_2026-11-16.xlsx), trae el daño de prueba con el tipo de tercero y NO su placa
+OK    [390] la descarga queda en la auditoría con quién la hizo
+OK    [390] Descargas no desborda
+OK    [390] el administrador ve también «Nodos por clasificar»
+OK    [390] el administrador crea una cuadrilla
+FALLA [390] alias del tipo TOR (N-12): el catálogo lo muestra con su nombre original → 
+OK    [390] la pantalla revisa el rango del parámetro antes de enviar
+OK    [390] el administrador cambia el parámetro: valor nuevo y su evento en «Últimos cambios»
+OK    [390] la caja de Valledupar no tiene «Cambiar»
+OK    [390] la cuadrilla nueva se asigna desde Personal
+OK    [390] la bandeja de nodos: los grupos (S, J…) y el total (783)
+OK    [390] «Crear el activo» en el nodo J-309: ACC-006347, enlazado, con J-309 como código anterior, y la bandeja baja en uno
+OK    [390] tras crearlo, el nodo sale de la bandeja en la pantalla
+OK    [390] «Ver la ficha» abre la ficha del activo nuevo
+OK    [390] el operador no ve el Dashboard distribución (aunque tenga la casilla del geovisor)
+OK    [1280] supervisor de distribución: las pestañas nuevas (Gráficas, Descargas, Personal, Catálogo, Parámetros) y no «Nodos por clasificar»
+OK    [1280] su propia ficha no la edita (la cambia otro supervisor o el administrador)
+OK    [1280] sin motivo, la pantalla no envía
+OK    [1280] área, cargo y geovisor guardados como eventos (ambas · Fontanero 1280 · 1 · false)
+OK    [1280] el supervisor con los dos dashboards sale con el geovisor «por su permiso», sin casilla
+OK    [1280] el filtro «Distribución» trae al operador
+OK    [1280] el historial del operador, con quién y el motivo
+OK    [1280] Personal no desborda y los botones miden 44 px o más
+OK    [1280] Catálogo: el supervisor crea cuadrillas pero no cambia el nombre visible de los tipos
+OK    [1280] Parámetros en solo lectura para el supervisor
+OK    [1280] Gráficas: intervenciones por mes y por tipo, valor por fuente, daños por causa y los 10 activos (V85 con sus reparaciones)
+OK    [1280] Gráficas no desborda
+OK    [1280] el Excel de daños se descarga (danos_fallas_2026-11-01_a_2026-11-16.xlsx), trae el daño de prueba con el tipo de tercero y NO su placa
+OK    [1280] la descarga queda en la auditoría con quién la hizo
+OK    [1280] Descargas no desborda
+OK    [1280] el administrador ve también «Nodos por clasificar»
+OK    [1280] el administrador crea una cuadrilla
+OK    [1280] alias del tipo TOR (N-12): el catálogo lo muestra con su nombre original
+OK    [1280] la pantalla revisa el rango del parámetro antes de enviar
+OK    [1280] el administrador cambia el parámetro: valor nuevo y su evento en «Últimos cambios»
+OK    [1280] la caja de Valledupar no tiene «Cambiar»
+OK    [1280] la cuadrilla nueva se asigna desde Personal
+OK    [1280] la bandeja de nodos: los grupos (S, J…) y el total (782)
+OK    [1280] «Crear el activo» en el nodo J-185: ACC-006348, enlazado, con J-185 como código anterior, y la bandeja baja en uno
+OK    [1280] tras crearlo, el nodo sale de la bandeja en la pantalla
+OK    [1280] «Ver la ficha» abre la ficha del activo nuevo
+OK    [1280] el operador no ve el Dashboard distribución (aunque tenga la casilla del geovisor)
+OK    [390] Administración muestra el geovisor del operador («no», lo último que puso el supervisor) y el área, sin ningún control para cambiarlo
+OK    [390] Administración no desborda
+OK    [1280] Administración muestra el geovisor del operador («no», lo último que puso el supervisor) y el área, sin ningún control para cambiarlo
+OK    [1280] Administración no desborda
+OK    sin errores de JavaScript ni de consola
+
+RESULTADO: 58 de 59 — 1 FALLA(S)
+Capturas: /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/1bfd21a1-a264-4563-b035-f0de3ffef881/scratchpad/capturas_4b_reg

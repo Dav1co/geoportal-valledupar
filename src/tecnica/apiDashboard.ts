@@ -80,10 +80,14 @@ export type UbicacionVigente = { lat: number; lon: number; exactitud: "verificad
 export type UbicacionPendiente = {
   propuesta_id: number; punto: string; nombre: string; zona: string | null; activo: boolean; lat: number; lon: number; precision_m: number;
   autor: string; autor_nombre: string | null; creado_en: string; propia: boolean; vigente: UbicacionVigente | null; distancia_m: number | null; lejos: boolean;
+  puede_revisar?: boolean;      // Corte 5c (§32.1): el administrador revisa también la que tomó él mismo; sin el 5c, vale «no propia»
 };
 export type PuntoUbicado = { codigo: string; nombre: string; zona: string | null; lat: number | null; lon: number | null; exactitud: "verificada" | "aproximada" | null; fuente: string | null; desde: string | null; en_revision: boolean };
 export type UbicacionRevisada = { propuesta_id: number; punto: string; nombre: string; decision: "aprobada" | "rechazada"; motivo: string | null; autor: string; revisor: string; revisada_en: string; precision_m: number };
-export type UbicacionesResp = { precision_max_m: number; distancia_aviso_m: number; pendientes: UbicacionPendiente[]; puntos: PuntoUbicado[]; revisadas: UbicacionRevisada[] };
+export type CorreccionUbicacion = { id: number; punto: string; nombre: string; metodo: "mapa" | "coordenadas" | "gps"; distancia_m: number; motivo: string; autor: string; creado_en: string };
+export type UbicacionesResp = { precision_max_m: number; distancia_aviso_m: number; pendientes: UbicacionPendiente[]; puntos: PuntoUbicado[]; revisadas: UbicacionRevisada[];
+  soy_admin?: boolean; correcciones?: CorreccionUbicacion[] };      // Corte 5c
+export type CorregirUbicacionResp = { punto: string; correccion_id: number; ubicacion_id: number; lat: number; lon: number; distancia_m: number };
 export type RevisarUbicacionResp = { propuesta_id: number; punto: string; decision: "aprobar" | "rechazar"; estado: "aprobada" | "rechazada"; ubicacion_id: number | null };
 
 const sinVacios = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== "")) as Partial<T>;
@@ -117,6 +121,10 @@ export const apiDash = {
   ubicaciones: () => pedir<UbicacionesResp>("ubicaciones"),
   revisarUbicacion: (propuestaId: number, decision: "aprobar" | "rechazar", motivo: string) =>
     pedir<RevisarUbicacionResp>("ubicacion_revisar", { cuerpo: { propuesta_id: propuestaId, decision, ...(motivo.trim() ? { motivo: motivo.trim() } : {}) } }),
+  // Corte 5c (§32.2): corregir una ubicación verificada, con motivo
+  corregirUbicacion: (punto: string, lat: number, lon: number, metodo: "mapa" | "coordenadas" | "gps", precision_m: number | null, motivo: string) =>
+    pedir<CorregirUbicacionResp>("ubicacion_corregir", { cuerpo: { punto, lat: Number(lat.toFixed(6)), lon: Number(lon.toFixed(6)), metodo,
+      ...(precision_m !== null ? { precision_m: Math.max(0.1, Math.round(precision_m * 10) / 10) } : {}), motivo: motivo.trim() }, timeoutMs: 30000 }),
   descargaCerrar: (id: number, filas: number, resultado: "completa" | "cancelada" | "error") => pedir<{ cerrada: boolean }>("descarga_cerrar", { cuerpo: { descarga_id: id, filas, resultado } }),
 };
 

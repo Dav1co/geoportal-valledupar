@@ -1,0 +1,23 @@
+OK    01 como en la base viva al publicar: carga real (35.781 activos), la primera carga MUE (27 puntos) y el 5b aplicado
+OK    02 huellas antes: «CORTE 5b (listo para el 5c)», 6 RPC y 2 tablas «NO EXISTE», 8 «CORTE 5b (sin cambiar)»
+OK    03 ensayo DESPUÉS de la carga real y la MUE: ERROR con «N de N … SIN FALLAS» · RESULTADO: 68 de 68 pruebas correctas — SIN FALLAS (8.0 s)
+OK    04 el ensayo no deja rastro (ni tablas, ni funciones, ni CHECK, ni capas, ni cargas, ni ubicaciones, ni puntos de prueba)
+OK    05 migración _editor · 0.0 s
+OK    06 verificación: 9 OK (la 09 reproyecta un punto en EPSG 9377 en esta base)
+OK    07 repetir la migración se rechaza (guardia)
+OK    08 huellas después: «CORTE 5c (aplicado)», 6 «NUEVA», 8 «CORTE 5c (reemplazada)» y 2 «EXISTE»
+OK    09 la verificación del 5b, con el 5c aplicado: solo las filas 03 y 05 dicen MAL (a propósito: hay 5 RPC geoportal_tec_punto* y cambió el conjunto de funciones)
+OK    10 reversa vacía: las funciones y el CHECK quedan exactos al 5b; las capas nuevas, inactivas
+OK    11 después de la reversa, la verificación del 5b vuelve a dar todo OK
+OK    12 migrar de nuevo: 9 OK (las capas nuevas vuelven a quedar activas)
+OK    13 recarga real del acueducto (10.578 tramos) desde la RPC de la pantalla: el choque del diámetro (ficha 250 / capa) y nada más cambia · lotes 0.4 s, resumen 1.9 s · [{"capa": "203", "campo": "diametro_mm", "ficha": "250", "codigo": "RED-000001"}] · {"igual": 17960}
+OK    14 «Devolver este campo a la capa»: el resumen otra vez, sin el choque y con ese tramo «cambiado» · resumen 1.9 s · {"igual": 17959, "cambiado": 1}
+OK    15 publicar: el tramo vuelve al diámetro de la capa (versión nueva), nada se retira, el muro conserva la edición · publicar 3.3 s · {"capa": "acueducto", "nuevos": 0, "origen": 0, "iguales": 17959, "carga_id": 20, "segundos": 3.3, "cambiados": 1, "retirados": 0, "enlaces_mac": 0, "reactivados": 0, "tramo_nodos": 1, "version_capa":
+OK    16 8753 pozos reales en EPSG 9377 (Origen Nacional), sin columna llave: sin errores de geometría, todos nuevos, y a menos de 1 cm de su lugar · lotes 3.8 s, resumen 1.0 s, máx. 0.000 m · []
+OK    17 la recarga de los mismos pozos en WGS 84 y en otro orden: todos se cruzan por geometría con el suyo, sin nuevos ni retiros · publicar 2.6 s · lotes 0.3 s, resumen 9.2 s · {"igual": 1887, "cambiado": 6866}
+OK    18 9064 conductos reales a una capa de líneas sin llave: se publican todos como nuevos (INT) · lotes 0.4 s, publicar 3.3 s
+OK    19 la recarga del mismo archivo en otro orden: todas las líneas se cruzan (Hausdorff) y quedan iguales · lotes 0.3 s, resumen 10.6 s · {"igual": 9064}
+OK    20 la capa MUE desde la RPC de la pantalla, con lo vigente: los 27 «igual», lista para publicar · {"igual": 27} []
+OK    21 verificación con datos: 9 OK (1 devolución y 0 correcciones)
+OK    22 la reversa con datos se niega (nada se borra)
+RESULTADO: 22 de 22

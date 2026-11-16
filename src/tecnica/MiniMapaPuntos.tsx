@@ -17,20 +17,24 @@ function fc(puntos: PuntoMapa[]): GeoJSON.FeatureCollection {
 }
 const unPunto = (m: Marca | null | undefined): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features: m ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [m.lon, m.lat] } }] : [] });
 
-export function MiniMapaPuntos({ puntos, elegido, onElegir, yo, propuesta, bajo = false, etiqueta = "Mapa de los puntos de muestreo: toque un punto para elegirlo" }: {
+export function MiniMapaPuntos({ puntos, elegido, onElegir, onTocarMapa, yo, propuesta, bajo = false, etiqueta = "Mapa de los puntos de muestreo: toque un punto para elegirlo" }: {
   puntos: PuntoMapa[]; elegido: string; onElegir?: (codigo: string) => void; yo?: Marca | null; propuesta?: Marca | null; bajo?: boolean; etiqueta?: string;
+  /** Corte 5c (§32.2): tocar el mapa entrega la posición (corregir una ubicación en el Dashboard PTAP). Sin esto, el mapa se comporta como en el 5b. */
+  onTocarMapa?: (lat: number, lon: number) => void;
 }) {
   const cont = useRef<HTMLDivElement>(null);
   const mapa = useRef<maplibregl.Map | null>(null);
   const elegirRef = useRef(onElegir);
   elegirRef.current = onElegir;
+  const tocarRef = useRef(onTocarMapa);
+  tocarRef.current = onTocarMapa;
   const [listo, setListo] = useState(false);
 
   useEffect(() => {
     if (!cont.current) return;
     const m = new maplibregl.Map({
       container: cont.current, center: CENTRO_VALLEDUPAR, zoom: 12.5, maxZoom: 19, minZoom: 10, attributionControl: { compact: true },
-      interactive: !!onElegir || !bajo, dragRotate: false, pitchWithRotate: false, touchPitch: false,
+      interactive: !!onElegir || !!onTocarMapa || !bajo, dragRotate: false, pitchWithRotate: false, touchPitch: false,
       style: {
         version: 8,
         sources: { base: FUENTE_BASE_CALLES, puntos: { type: "geojson", data: fc(puntos) }, yo: { type: "geojson", data: unPunto(yo) }, propuesta: { type: "geojson", data: unPunto(propuesta) } },
@@ -65,7 +69,7 @@ export function MiniMapaPuntos({ puntos, elegido, onElegir, yo, propuesta, bajo 
     };
     enmarcar();
     m.on("click", (ev) => {
-      if (!elegirRef.current) return;
+      if (!elegirRef.current) { if (tocarRef.current) tocarRef.current(ev.lngLat.lat, ev.lngLat.lng); return; }
       const caja: [maplibregl.PointLike, maplibregl.PointLike] = [[ev.point.x - 18, ev.point.y - 18], [ev.point.x + 18, ev.point.y + 18]];
       const feats = m.queryRenderedFeatures(caja, { layers: ["puntos"] });
       if (!feats.length) return;

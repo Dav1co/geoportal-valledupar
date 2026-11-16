@@ -1,0 +1,17 @@
+OK    L01 SHP en zip (acueducto real): 1 capa, 10.578 tramos, WGS 84 por el .prj, ID única · 10578 filas, srid 4326 (por el archivo .prj), 150 ms
+OK    L02 las líneas: LINESTRING con coordenadas de Valledupar escritas como en la carga inicial; los atributos con su tipo (ID número, LABEL texto, C número) · {"LINESTRING":10578} LINESTRING(-73.2545768 10.460241722, -73.254880062 10.459671493)
+OK    L03 la llave propuesta del acueducto es una columna única (ID o LABEL) · ID
+OK    L04 SHP en EPSG 9377 (pozos reales reproyectados por GDAL): 9.146 puntos y el .prj se reconoce como Origen Nacional · 9146, srid 9377 (por el archivo .prj) · POINT(4969684.009852908 2714151.779089567)
+OK    L05 SHP en EPSG 3116 (conductos): 9.064 líneas y MAGNA Bogotá por el .prj · 9064, srid 3116 (por el archivo .prj) · LINESTRING(1087489.869000001 1649003.441999999, 1087509.574 1648956.90
+OK    L06 GeoPackage (lector propio de SQLite): 3 capas con su nombre, EPSG 9377 por gpkg_spatial_ref_sys y los conteos de ogrinfo · conductos 9064 9377 {"LINESTRING":9064} · pozos 9146 9377 {"POINT":9146} · descargas 4 9377 {"POINT":4} · 136 ms
+OK    L07 el GeoPackage y el SHP traen las mismas coordenadas por LABEL (a menos de 1 cm) · 9146 comparados, máx. 0.0000 m
+OK    L08 las líneas del GeoPackage son LINESTRING o MULTILINESTRING y traen sus atributos (sin la columna de geometría) · fid,Q_T_LLENO,TUBO_SHID,ID_TUBO,R_INICIAL,R_FINAL,PRF_NORMAL,DIAMETRO
+OK    L09 GeoJSON: 4 descargas, WGS 84 (sin «crs») · por el «crs» del GeoJSON
+OK    L10 CSV con «;»: 9.146 filas, las dos columnas «X» se distinguen (X y X_2), X y Y propuestas, y MAGNA Bogotá por el rango · X,Y,ESTADO_CAn,EST_OPERA … · por el rango de las coordenadas: parece MAGNA Bogotá; confirme si es otra zona
+OK    L11 la geometría del CSV sale de X y Y (los números con coma decimal también se leen) · POINT(1087628.92 1648893.23)
+OK    L12 los lotes del acueducto: de 200 filas o menos y menos de 450 KB cada uno · 53 lotes, el mayor de 84784 bytes
+OK    L13 la huella SHA-256 es la del archivo
+OK    L14 la detección del .prj: Origen Nacional, Bogotá, WGS 84 y un sistema raro
+OK    L15 un zip dañado y un .shp suelto dan un mensaje claro · El archivo no es un .zip válido. · Del shapefile se necesitan varios archivos (.shp, .dbf, .prj): comprímalos juntos en un .zip y cárguelo.
+OK    L16 el acueducto leído aquí es el mismo que subió la carga inicial del 1a: 10.578 tramos con la geometría idéntica y los atributos con el mismo valor · 10578 en el 1a · geometría distinta 0 · atributos distintos 0 · 
+RESULTADO: 16 de 16
