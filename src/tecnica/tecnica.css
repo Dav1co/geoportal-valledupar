@@ -103,3 +103,44 @@
 .tec-etiqueta { font-size: 15px; font-weight: 600; }
 /* Corte 4a: selector Dashboard PTAP | Dashboard distribución */
 /* §34: el selector PTAP | distribución pasó al encabezado común (dashboard.css, .tdash-selector). */
+
+/* ---------- Corte 11: inicio de Técnica por modos (Planta, Redes y Supervisión). Celular primero; tarjetas de al menos 68 px; un color por modo. ---------- */
+.tec-inicio { background: #f2f5f8; }
+.tec-inicio > * { max-width: 1120px; }
+.tec-inicio-cab { background: #fff; border-bottom: 1px solid #dde5ea; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; max-width: none !important; }
+.tec-inicio-tit h1 { margin: 0; font-size: 22px; color: #0a2540; }
+.tec-inicio-sesion { margin: 2px 0 0; font-size: 13px; color: #52626f; overflow-wrap: anywhere; }
+.tec-modos { display: flex; background: #e6ecf1; border-radius: 12px; padding: 4px; gap: 4px; }
+.tec-modo { flex: 1; min-height: 44px; border: none; border-radius: 9px; background: transparent; font: inherit; font-size: 15px; font-weight: 700; color: #33424f; cursor: pointer; padding: 0 10px; }
+.tec-modo[aria-selected="true"] { color: #fff; }
+.tec-modo-planta[aria-selected="true"] { background: #0a2540; }
+.tec-modo-redes[aria-selected="true"] { background: #0f3d2b; }
+.tec-modo-supervision[aria-selected="true"] { background: #1e5aa8; }
+.tec-modo:focus-visible, .tec-tarjeta-modo:focus-visible, .tec-volver:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.tec-tarjetas { padding: 16px; --tec-modo: #0a2540; }
+.tec-tarjetas-redes { --tec-modo: #0f3d2b; }
+.tec-tarjetas-supervision { --tec-modo: #1e5aa8; }
+.tec-modo-unico { margin: 0 0 12px; font-size: 14px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--tec-modo); }
+.tec-rejilla { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.tec-tarjeta-modo { min-height: 68px; width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; padding: 12px 14px; border-radius: 14px; background: #fff;
+  border: 1px solid #cfd9e0; border-left: 5px solid var(--tec-modo); font: inherit; color: #22313f; cursor: pointer; box-sizing: border-box; }
+button.tec-tarjeta-modo:hover { border-color: var(--tec-modo); }
+button.tec-tarjeta-modo:active { background: #eef3f6; }
+.tec-tarjeta-ini { flex: 0 0 44px; width: 44px; height: 44px; border-radius: 12px; background: var(--tec-modo); color: #fff; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.tec-tarjeta-ini::before { content: attr(data-ini); }
+.tec-tarjeta-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tec-tarjeta-nom { font-size: 17px; font-weight: 700; color: #0a2540; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tec-tarjeta-desc { font-size: 14px; color: #52626f; }
+.tec-tarjeta-pronto { border: 2px dashed #9aa9b5; border-left: 2px dashed #9aa9b5; background: #f7f9fb; cursor: default; }
+.tec-tarjeta-pronto .tec-tarjeta-ini { background: #6b7a85; }
+.tec-tarjeta-pronto .tec-tarjeta-nom { color: #33424f; }
+.tec-volver-barra { background: #fff; border-bottom: 1px solid #dde5ea; padding: 8px 12px; display: flex; align-items: center; gap: 12px; max-width: none !important; position: sticky; top: 0; z-index: 5; }
+.tec-volver { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #7b8b99; background: #fff; font: inherit; font-size: 15px; font-weight: 700; color: #0a2540; cursor: pointer; }
+.tec-volver-tit { font-size: 16px; font-weight: 700; color: #0a2540; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 760px) {
+  .tec-inicio-cab { flex-direction: row; align-items: center; justify-content: space-between; padding: 16px max(16px, calc((100% - 1120px) / 2 + 16px)); }
+  .tec-modos { flex: 0 0 auto; }
+  .tec-modo { flex: 0 0 auto; min-width: 128px; }
+  .tec-rejilla { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .tec-tarjeta-modo { min-height: 84px; }
+}

@@ -136,11 +136,33 @@ const nav = await puppeteer.launch({ executablePath: CHROME, headless: "new", pr
   "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1"] });
 const errores = [];
 const texto = (p) => p.evaluate(() => document.body.innerText);
+// ---- Corte 11: el inicio de Técnica va por modos (Planta, Redes y Supervisión) y ningún formulario se abre solo. Estos ayudantes buscan en cada modo.
+const TABS_MODO = '[role=tablist][aria-label="Modo de trabajo"] [role=tab]';
 const esperarTexto = async (p, re, ms = 30000) => {
-  try { await p.waitForFunction((s) => new RegExp(s).test(document.body.innerText), { timeout: ms }, re.source); }
-  catch { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }); throw new Error(`no apareció /${re.source}/; pantalla: ${(await texto(p)).slice(-1500)} · edge: ${edgeLog.slice(-600)}`); }
+  const fin = Date.now() + ms;
+  for (;;) {
+    const esta = await p.evaluate(async (s, sel) => {
+      const r = new RegExp(s); if (r.test(document.body.innerText)) return true;
+      if (!document.querySelector("[data-modo-actual]")) return false;
+      for (const t of document.querySelectorAll(sel)) { t.click(); await new Promise((x) => setTimeout(x, 0)); if (r.test(document.body.innerText)) return true; }
+      return false; }, re.source, TABS_MODO).catch(() => false);
+    if (esta) return;
+    if (Date.now() > fin) { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }).catch(() => {}); throw new Error(`no apareció /${re.source}/; pantalla: ${(await texto(p)).slice(-1500)}`); }
+    await new Promise((x) => setTimeout(x, 150));
+  }
 };
-const clicTexto = (p, sel, t, dentro = "body") => p.evaluate((sel, t, dentro) => { const b = [...document.querySelector(dentro).querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled); if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, sel, t, dentro);
+const clicTexto = (p, sel, t, dentro = "body") => p.evaluate(async (sel, t, dentro, tabs) => {
+  const buscar = () => [...document.querySelector(dentro).querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled);
+  let b = buscar();
+  if (!b && document.querySelector("[data-modo-actual]")) for (const m of document.querySelectorAll(tabs)) { m.click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); if (b) break; }
+  if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, sel, t, dentro, TABS_MODO);
+/** Todo lo que la persona tiene en el inicio (la suma de sus modos). */
+const textoInicio = (p) => p.evaluate(async (sel) => {
+  const tabs = [...document.querySelectorAll(sel)]; if (!tabs.length) return document.body.innerText;
+  let s = ""; for (const t of tabs) { t.click(); await new Promise((x) => setTimeout(x, 0)); s += document.body.innerText + "\n"; }
+  tabs[0].click(); await new Promise((x) => setTimeout(x, 0)); return s; }, TABS_MODO);
+/** Abre un formulario desde su tarjeta del inicio (antes el primero se abría solo). */
+const abrirFormulario = async (p, nombre) => { await esperarTexto(p, new RegExp(nombre)); if (!(await clicTexto(p, "button.tec-tarjeta-modo", nombre))) throw new Error("no está la tarjeta " + nombre); await p.waitForSelector(".tec-volver-barra"); };
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const poner = (p, sel, valor) => p.evaluate((sel, valor) => { const el = document.querySelector(sel); const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, "value").set.call(el, valor); el.dispatchEvent(new Event("input", { bubbles: true })); return true; }, sel, valor);
 const minimo = (p, sel) => p.evaluate((sel) => Math.min(...[...document.querySelectorAll(sel)].filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect().height)), sel);
@@ -259,7 +281,7 @@ for (const ancho of [390, 1280]) {
   await p.close();
 
   // ===== G. Quién no ve químicos =====
-  p = await abrir(ancho, "op"); await esperarTexto(p, /Tus formularios/);
+  p = await abrir(ancho, "op"); await esperarTexto(p, /Sesión de/);
   ok(`${tag} G1 el operador no tiene el Dashboard PTAP (ni químicos)`, !/Dashboard PTAP/.test(await texto(p)));
   await p.close();
   p = await abrir(ancho, "dist"); await esperarTexto(p, /Dashboard distribución/);
