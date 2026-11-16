@@ -1,0 +1,24 @@
+OK    00 base como producción: carga real, MUE, 6b + hotfix de safeupdate (huella 8113af17…) y 111.950 contratos sintéticos · 18 s · 111651 contratos en el catastro · 35781 activos vigentes
+OK    01 ANTES (6b + hotfix): la configuración del geovisor rehace la copia de contratos dentro de la petición · 1.1 s en local (44,7 s en producción, contra el tope de 30 s) · {"filas": 111649, "calculado_en": "2026-11-16T13:19:16.97089-05:00"}
+OK    02 huellas antes: «CORTE 6b + hotfix (listo para el 6c)», 3 «CORTE 6b (sin cambiar)», 2 «NO EXISTE», 4 «EXISTE (sin aplicar)» y los 4 índices «EXISTE» · 0 funciones de redes (conjunto)=CORTE 6b + hotfix (listo para el 6c) | 2 public.geoportal_redes_contrato_tarjeta(text,text,text)=CORTE 6b (sin cambiar) | 2 public.geoportal_redes_geovisor(text)=CORTE 6b (sin cambiar) | 2 public.geoportal_redes_geovisor_mvt_contratos(text,integer,integer,integer)=CORTE 6b (sin cambiar) | 3 redes.f_contrato_uso(text,text)=NO EXISTE (sin aplicar) | 3 redes.f_funcione
+OK    03 ensayo con el volumen real: ERROR esperado, N de N SIN FALLAS · RESULTADO: 35 de 35 pruebas correctas — SIN FALLAS · 0.4 s · TIEMPOS: tesela de contratos más cargada (z16 19435/30851, 2233 predios, 74 KB): 27 ms la primera vez y 25 ms la segunda · configuración del geovisor: 1 ms · tarjeta: 0 ms
+OK    04 el ensayo no deja rastro
+OK    05 migración · 0.0 s
+OK    06 verificación: todas las filas OK ·  contratos está en su rango|OK | 09 cada lectura de la tarjeta del contrato sigue en la auditoría sin el nombre ni la dirección|OK | INFO predios del catastro con contrato y punto · contratos distintos · lecturas de tarjetas · topes de service_role (statement_timeout) y authenticator (lock_timeout)|112149 · 111649 · 0 · 30s y 8s
+OK    07 guardia: migrar dos veces se niega · CONTEXTO:  PL/pgSQL function inline_code_block line 4 at RAISE
+OK    08 huellas después: «CORTE 6c (aplicado)», 3 «CORTE 6c (reemplazada)», 2 «NUEVA», 4 «RETIRADO» y los 4 índices · 0 funciones de redes (conjunto)=CORTE 6c (aplicado) | 2 public.geoportal_redes_contrato_tarjeta(text,text,text)=CORTE 6c (reemplazada) | 2 public.geoportal_redes_geovisor(text)=CORTE 6c (reemplazada) | 2 public.geoportal_redes_geovisor_mvt_contratos(text,integer,integer,integer)=CORTE 6c (reemplazad
+OK    09 reversa: exacta al 6b + hotfix (8113af17…), con la copia derivada de vuelta (vacía) y su función
+OK    10 reversa dos veces: se niega · CONTEXTO:  PL/pgSQL function inline_code_block line 3 at RAISE
+OK    11 migrar de nuevo después de la reversa: la misma huella · 2c2658002d114d755f19a7b5f5dfe542
+OK    12 Edge (service_role, 30 s y 8 s): la configuración del geovisor ya no rehace nada: responde en menos de 1 s las dos veces, con la capa de contratos y sin «contratos_capa» · 29 ms y 28 ms
+OK    13 la tesela al vuelo trae los mismos contratos que traía la copia del 6b (misma tesela del centro, zoom 17) y pesa lo mismo (±1 %: solo cambia el orden) · 187 contratos · 6531 bytes (antes 6528) · 54 ms
+OK    14 la tesela no lleva nombres, direcciones, barrios ni teléfonos de la cartera sintética
+OK    15 Edge: TODAS las teselas de contratos de zoom 16 de la ciudad, una por una: ninguna falla, ninguna pasa de 2 s (meta del encargo: 10 s; tope: 30 s) ni de 500 KB · 150 teselas · la más lenta 72 ms (19435/30851, 2233 predios, 73 KB) · la más pesada 73 KB en 19435/30851 (2233 predios) · recorrerlas todas 8.4 s
+OK    16 Edge: la tarjeta de un contrato sintético: nombre del último corte, estado y uso leídos en el momento, 6 meses de consumo; sin teléfono ni deuda; menos de 300 ms · 28 ms · {"uso": "Residencial", "corte": "20261114", "tramo": null, "estado": "activo", "consumo": {"meses": [{"m3": 13, "periodo": "202605", "sin_dato": false, "lectura
+OK    17 la lectura quedó en la auditoría sin el nombre
+OK    18 la API no ejecuta la comprobación estática (interna); como administrador de la base devuelve cero funciones con DELETE o UPDATE sin WHERE · 0
+OK    19 INFO redes.f_refrescar_vigente y redes.f_recalcular_contrato_tramo con la red real y 112 mil predios (cada una menos de 30 s en local) · f_refrescar_vigente 0.5 s (35781 activos) · f_recalcular_contrato_tramo 5.4 s (104325 contratos enlazados)
+OK    20 INFO Cargue de capas: recarga COMPLETA del acueducto (10.578 tramos) por las RPC de la pantalla, cada una como petición de la Edge (30 s y 8 s): ninguna falla en local · lote más lento 0.1 s de 53 · resumen 1.9 s · publicar 8.8 s
+OK    21 verificación después de todo: todas OK · INFO predios del catastro con contrato y punto · contratos distintos · lecturas de tarjetas · topes de service_role (statement_timeout) y authenticator (lock_timeout)|112149 · 111649 · 1 · 30s y 8s
+
+RESULTADO: 22 de 22 — SIN FALLAS
