@@ -140,6 +140,7 @@ export type EdicionFicha = {
   campos_tipo: { clave: string; rotulo: string; tipo: string; unidad?: string; valor?: string | number | null }[];
   lleva: { diametro_mm: boolean; capacidad: boolean; profundidad_m: boolean; clase: boolean; efecto: boolean };
   estados: Opcion[]; materiales: Opcion[]; clases: Opcion[]; efectos: Opcion[]; aportantes: Opcion[]; max_bytes_foto: number;
+  puede_origen?: boolean;      // Corte 4a (§26.2): solo el administrador corrige el origen
 };
 export type Perfil = { codigo: string; alias?: string; placa?: string; sistema: string; geometria: string; perfil: "admin" | "supervisor" | "operador"; editable: boolean;
   foto_principal?: FotoFirmada; fotos?: number; edicion?: EdicionFicha };
@@ -155,4 +156,24 @@ export const apiPerfil = {
   // búsqueda en toda la red: código del geoportal o de la capa, placa (o número de inventario) y alias
   buscar: (texto: string) => pedir<{ activos: (ActivoUbicado & { alias?: string; placa?: string })[] }>("activo_buscar", { ...F, qs: { texto } }),
   fotoFijar: (codigo: string, ruta: string, motivo: string) => pedir<{ codigo: string; repetido: boolean }>("foto_perfil_fijar", { ...F, cuerpo: { codigo, ruta, motivo } }),
+};
+
+// ---------- Corte 4a: Dashboard distribución (supervisor de distribución y administrador; el servidor lo vuelve a verificar) ----------
+export type MiPerfilRedes = { perfil: "admin" | "supervisor" | "operador"; dashboard_redes: boolean; dashboard_ptap: boolean };
+export type DanoLista = { codigo: string; clase: "dano" | "falla"; tipo: string; sistema: string; activo: string | null; no_identificado: string | null; estado: string;
+  t_detectado: string; riesgo: string; causa_clase: string; sector: number | null; origen: string; autor: string; total_s: number; fotos: number; intervenciones: number; tiene_tercero: boolean };
+export type ReporteBot = { id: string; radicado: string; canal: string; tipo: string; lat: number | null; lon: number | null; direccion: string | null; descripcion: string | null;
+  recibido_en: string; estado_bot: string; dano: string | null; fotos: number };
+export const apiDash = {
+  miPerfil: () => pedir<MiPerfilRedes>("mi_perfil", F),
+  danos: (filtro: "abiertos" | "todos" | "ocultos" | "no_identificados") => pedir<{ filtro: string; danos: DanoLista[] }>("danos", { ...F, qs: { filtro } }),
+  danoEvento: (codigo: string, tipo: "ocultar" | "reincluir" | "reabrir", motivo: string) => pedir<{ codigo: string; estado: string }>("dano_evento", { ...F, cuerpo: { codigo, tipo, motivo } }),
+  danoTercero: (codigo: string) => pedir<{ codigo: string; tercero: string }>("dano_tercero", { ...F, cuerpo: { codigo } }),
+  intervencionEvento: (codigo: string, tipo: "ocultar" | "reincluir" | "anulada", motivo: string) =>
+    pedir<{ codigo: string; estado: string; aviso?: string | null }>("intervencion_evento", { ...F, cuerpo: { codigo, tipo, motivo } }),
+  reportesBot: (filtro: "pendientes" | "todos") => pedir<{ filtro: string; reportes: ReporteBot[] }>("reportes_bot", { ...F, qs: { filtro } }),
+  reporteConvertir: (id: string, datos: Record<string, string | null>) => pedir<{ reporte: string; dano_codigo: string; estado_bot: string }>("reporte_convertir", { ...F, cuerpo: { id, datos } }),
+  reporteDescartar: (id: string, motivo: string) => pedir<{ reporte: string; estado_bot: string }>("reporte_descartar", { ...F, cuerpo: { id, motivo } }),
+  crearActivoBandeja: (clase: "intervencion" | "dano", codigo: string, prefijo: string, clase_activo: string | null, nombre: string | null, motivo: string) =>
+    pedir<{ codigo: string; activo: string }>("crear_activo_bandeja", { ...F, cuerpo: { clase, codigo, prefijo, clase_activo, nombre, motivo } }),
 };

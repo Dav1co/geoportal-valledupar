@@ -58,7 +58,8 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion }: {
   const [causaClase, setCausaClase] = useState(""); const [causa, setCausa] = useState(""); const [terceroTipo, setTerceroTipo] = useState(""); const [terceroNombre, setTerceroNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [fotos, setFotos] = useState<Foto[]>([]);
-  const [sinFotos, setSinFotos] = useState(false); const [sinFotosMotivo, setSinFotosMotivo] = useState("");     // Corte 3a: solo supervisor o administrador
+  const sinFotos = false;      // §25.8 (Corte 4a): nadie registra «sin evidencia fotográfica»; lo que llega sin foto entra por el reporte de anomalías
+  const [yaReparado, setYaReparado] = useState(false);      // §25 (Corte 4a): los tiempos de reparación solo si el daño se registra ya reparado; si no, la reparación va con «Registrar intervención»
   const ubicGuardada = useRef<{ lat: number; lon: number } | null>(null);
   const [camara, setCamara] = useState<Foto["momento"] | null>(null);
   const [intentado, setIntentado] = useState(false);       // tras el primer «Guardar», la lista de lo que falta se recalcula en vivo
@@ -121,15 +122,22 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion }: {
     else if (eleccion?.tipo !== "activo") m.push("Elija el activo en el mapa (o márquelo como no identificado).");
     if (!tipo) m.push("Elija qué pasó.");
     if (!tDet) m.push("Escriba cuándo se detectó.");
-    if (tRes && !tRep) m.push("Para el servicio restablecido, escriba también el inicio de la reparación.");
+    if (yaReparado && !tRep) m.push("Escriba el inicio de la reparación (o desmarque «El daño ya se reparó»).");
+    if (yaReparado && tRes && tRep && new Date(tRes) < new Date(tRep)) m.push("El servicio restablecido no puede ser antes del inicio de la reparación.");
     if (tipoSel?.pide_rotura && !rotura) m.push("Elija el tipo de rotura.");
-    for (const [t, r] of [[largo, "El largo afectado"], [presion, "La presión"], [usuarios, "Los usuarios sin servicio"]] as const) if (Number.isNaN(numeroONulo(t))) m.push(`${r} debe ser un número.`);
+    // §25.4 (Corte 4a): todos los topes se revisan aquí antes de enviar (los mismos de la base)
+    for (const [t, r, min, max, entero] of [[largo, "El largo afectado", 0, 10000, false], [presion, "La presión", 0, 300, false], [usuarios, "Los usuarios sin servicio", 0, 1000000, true],
+                                            [sector, "El sector", 1, 100, true]] as const) {
+      const n = numeroONulo(t);
+      if (Number.isNaN(n)) m.push(`${r} debe ser un número.`);
+      else if (n !== null && (n < min || n > max || (entero && !Number.isInteger(n)))) m.push(`${r} va de ${min} a ${max.toLocaleString("es-CO")}${entero ? ", sin decimales" : ""}.`);
+    }
+    if (causaClase === "terceros" && terceroNombre.trim().length === 1) m.push("El nombre, la empresa o la placa lleva de 2 a 120 caracteres.");
     if (!riesgo) m.push("Elija el riesgo.");
     if (!causaClase) m.push("Elija la causa: propia, de terceros o desconocida.");
     if (causaClase === "propia" && !causa) m.push("Elija la causa propia.");
     if (causaClase === "terceros" && !terceroTipo) m.push("Elija quién lo causó.");
-    if (sinFotos) { if (sinFotosMotivo.trim().length < 10) m.push("Escriba por qué no hay evidencia fotográfica (10 caracteres o más)."); }
-    else if (fotosDano < 1) m.push("Tome al menos una foto del daño.");
+    if (fotosDano < 1) m.push("Tome al menos una foto del daño.");
     if (fotos.length > def!.reglas.max_fotos) m.push(`Máximo ${def!.reglas.max_fotos} fotos.`);
     if (!ubic.fix && eleccion?.tipo !== "activo" && eleccion?.tipo !== "punto") m.push("Falta la ubicación del daño.");
     return m;
@@ -157,13 +165,12 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion }: {
       const datos = {
         clase, tipo, sistema, activo: !noIdent && eleccion?.tipo === "activo" ? eleccion.activo.codigo : null, no_identificado: noIdent ? queEs.trim() : null,
         lat: Number(punto!.lat.toFixed(6)), lon: Number(punto!.lon.toFixed(6)), precision_m: punto!.precision, ubicacion_origen: punto!.origen,
-        t_inicio_dano: aIso(tIni), t_detectado: aIso(tDet), t_inicio_reparacion: aIso(tRep), t_restablecido: aIso(tRes), inicio_dispositivo: reloj.current.iso,
+        t_inicio_dano: aIso(tIni), t_detectado: aIso(tDet), t_inicio_reparacion: yaReparado ? aIso(tRep) : null, t_restablecido: yaReparado ? aIso(tRes) : null, inicio_dispositivo: reloj.current.iso,
         tipo_rotura: tipoSel?.pide_rotura ? rotura : null, largo_afectado_m: tipoSel?.pide_rotura ? numeroONulo(largo) : null, presion_mca: tipoSel?.pide_rotura ? numeroONulo(presion) : null,
-        usuarios_sin_servicio: numeroONulo(usuarios), sector: sector.trim() || null, riesgo, marcas, causa_clase: causaClase,
+        usuarios_sin_servicio: numeroONulo(usuarios), sector: numeroONulo(sector), riesgo, marcas, causa_clase: causaClase,
         causa: causaClase === "propia" ? causa : null, tercero_tipo: causaClase === "terceros" ? terceroTipo : null,
         tercero_nombre: causaClase === "terceros" && terceroNombre.trim() ? terceroNombre.trim() : null, descripcion: descripcion.trim() || null,
         fotos: fotos.map((f, i) => ({ n: i + 1, momento: f.momento, ruta: p.fotos[i].ruta })),
-        sin_evidencia_motivo: sinFotos ? sinFotosMotivo.trim() : null,
       };
       ubicGuardada.current = { lat: datos.lat, lon: datos.lon };
       setGuardado(await apiDano.crear(p.dano_id, datos));
@@ -273,19 +280,21 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion }: {
       <section className="tec-tarjeta" aria-labelledby="dan-t3">
         <h2 id="dan-t3">3. Tiempos</h2>
         {[["dan-tini", "Inicio del daño (si se sabe)", tIni, setTIni, "Cuándo empezó, según vecinos o PQR."], ["dan-tdet", "Detectado", tDet, setTDet, `Cuándo se supo del daño (hasta ${def.reglas.dias_atras_max} días atrás).`],
-          ["dan-trep", "Inicio de la reparación", tRep, setTRep, "Llegada de la cuadrilla y comienzo del trabajo."], ["dan-tres", "Servicio restablecido", tRes, setTRes, "Fin de la reparación."]].map(([id, rot, v, set, ayuda]) => (
+          ...(yaReparado ? [["dan-trep", "Inicio de la reparación", tRep, setTRep, "Llegada de la cuadrilla y comienzo del trabajo."], ["dan-tres", "Servicio restablecido", tRes, setTRes, "Fin de la reparación."]] : [])].map(([id, rot, v, set, ayuda]) => (
           <div className="tec-campo" key={id as string}>
             <label htmlFor={id as string}>{rot as string}</label>
             <input id={id as string} type="datetime-local" className="dan-hora" max={ahora} value={v as string} onChange={(e) => (set as (x: string) => void)(e.target.value)} />
             <span className="tec-ayuda">{ayuda as string}</span>
           </div>
         ))}
+        <label className="dan-check"><input type="checkbox" checked={yaReparado} onChange={(e) => setYaReparado(e.target.checked)} />El daño ya se reparó (registrar los tiempos de la reparación)</label>
+        <p className="tec-ayuda">{yaReparado ? "Con el servicio restablecido, el daño queda atendido de una vez." : "Lo normal: la reparación se registra después con «Registrar intervención», y ahí el daño queda atendido."}</p>
         <div className="dan-calculo">
           <div><span>Respuesta</span><strong>{respuesta ?? "—"}</strong></div>
           <div><span>Reparación</span><strong>{reparacion ?? "—"}</strong></div>
           <div><span>Total del daño</span><strong>{total ?? "corre"}</strong></div>
         </div>
-        <p className="tec-ayuda">Se calculan solos. Si la reparación sigue abierta, el daño queda «en atención» y el total corre.</p>
+        <p className="tec-ayuda">Se calculan solos. Mientras no haya servicio restablecido, el total corre.</p>
       </section>
 
       {tipoSel?.pide_rotura ? (
@@ -305,7 +314,7 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion }: {
         <h2 id="dan-t5">{tipoSel?.pide_rotura ? "5" : "4"}. Afectación y riesgo</h2>
         <div className="dan-dos">
           <div className="tec-campo"><label htmlFor="dan-usuarios">Usuarios sin servicio (aprox.)</label><input id="dan-usuarios" type="text" inputMode="numeric" value={usuarios} onChange={(e) => setUsuarios(e.target.value)} /></div>
-          <div className="tec-campo"><label htmlFor="dan-sector">Sector (opcional)</label><input id="dan-sector" type="text" maxLength={80} value={sector} onChange={(e) => setSector(e.target.value)} /></div>
+          <div className="tec-campo"><label htmlFor="dan-sector">Sector (opcional, número del 1 al 100)</label><input id="dan-sector" type="text" inputMode="numeric" maxLength={3} placeholder="1 a 100" value={sector} onChange={(e) => setSector(e.target.value.replace(/[^0-9]/g, ""))} /></div>
         </div>
         <span className="dan-rot">Riesgo</span>
         <div className="dan-fila" role="group" aria-label="Riesgo">{RIESGOS.map((r) => opcion(riesgo === r.c, r.n, () => setRiesgo(r.c), r.c))}</div>
@@ -334,12 +343,6 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion }: {
       <section className="tec-tarjeta" aria-labelledby="dan-t7">
         <h2 id="dan-t7">{tipoSel?.pide_rotura ? "7" : "6"}. Fotos</h2>
         <p className="tec-ayuda">{sinFotos ? "Sin fotos: queda marcado «sin evidencia fotográfica»." : `Al menos una del daño. Máximo ${def.reglas.max_fotos}. Solo cámara; la foto no se guarda en el celular.`}</p>
-        {def.perfil !== "operador" ? (
-          <>
-            <label className="dan-check"><input type="checkbox" checked={sinFotos} onChange={(e) => { setSinFotos(e.target.checked); prep.current = null; }} />Registrar sin evidencia fotográfica (por ejemplo, llegó por la 116 o por llamada)</label>
-            {sinFotos ? <div className="tec-campo"><label htmlFor="dan-sinf">¿Por qué no hay fotos?</label><input id="dan-sinf" type="text" maxLength={300} value={sinFotosMotivo} onChange={(e) => setSinFotosMotivo(e.target.value)} /></div> : null}
-          </>
-        ) : null}
         {!sinFotos ? <div className="dan-fila">{MOMENTOS.map((m) => (
           <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= def.reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}>📷 {m.n}</button>))}</div> : null}
         {camara ? (

@@ -86,7 +86,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
   const [fotos, setFotos] = useState<Foto[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [camara, setCamara] = useState<Clase | null>(null);
-  const [sinFotos, setSinFotos] = useState(false); const [sinFotosMotivo, setSinFotosMotivo] = useState("");
+  const sinFotos = false;      // §25.8 (Corte 4a): nadie registra «sin evidencia fotográfica»
   const [intentado, setIntentado] = useState(false);
   const [enviando, setEnviando] = useState<string | null>(null);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
@@ -189,22 +189,33 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
         if (tipoNuevo.geometria === "linea" && !(eleccion?.tipo === "linea" && eleccion.puntos.length >= 2)) m.push("Toque en el mapa el inicio y el fin del tramo nuevo.");
         if (tipoNuevo.geometria === "punto" && eleccion?.tipo !== "punto") m.push("Toque en el mapa dónde quedó el activo nuevo.");
       }
-      if (Number.isNaN(decimalONulo(nuevoDiam))) m.push("El diámetro debe ser un número.");
+      const dn = decimalONulo(nuevoDiam);
+      if (Number.isNaN(dn)) m.push("El diámetro debe ser un número.");
+      else if (dn !== null && (dn <= 0 || dn > 5000)) m.push("El diámetro va de 1 a 5.000 mm.");
     } else if (noIdent) { if (queEs.trim().length < 3) m.push("Diga qué es el activo no identificado (3 caracteres o más)."); if (eleccion?.tipo !== "punto") m.push("Toque el mapa donde está la intervención."); }
     else if (eleccion?.tipo !== "activo") m.push("Elija el activo en el mapa (o márquelo como no identificado).");
     if (!tIni || !tFin) m.push("Escriba el inicio y el fin de la intervención.");
     else if (new Date(tFin) < new Date(tIni)) m.push("El fin no puede ser antes del inicio.");
     if (descripcion.trim().length < 10) m.push("Describa qué se hizo (10 caracteres o más).");
+    else if (descripcion.trim().length > 2000) m.push("La descripción admite hasta 2.000 caracteres.");
     for (const x of materiales) {
-      if (x.material.trim().length < 2) m.push("Cada material lleva su nombre.");
-      const c = decimalONulo(x.cantidad); if (c === null || Number.isNaN(c) || c <= 0) m.push(`Escriba la cantidad de «${x.material || "material"}».`);
+      if (x.material.trim().length < 2) m.push("Cada material lleva su nombre (2 a 80 caracteres).");
+      const c = decimalONulo(x.cantidad); if (c === null || Number.isNaN(c) || c <= 0 || c >= 1000000) m.push(`Escriba la cantidad de «${x.material || "material"}» (mayor que 0 y menor que un millón).`);
     }
     if (ejecutor === "contratista" && !contratista && contratistaNombre.trim().length < 2) m.push("Elija o escriba el contratista.");
+    if (companeros.trim().length === 1) m.push("Los compañeros de cuadrilla: 2 caracteres o más (o déjelo vacío).");
     if (!fuentes.length) m.push("Marque quién aporta los recursos.");
     if (fuentes.some((f) => f.aportante === "otro" && f.entidad.trim().length < 2)) m.push("Diga cuál es la otra entidad que aporta.");
-    if (apoderado) for (const f of fuentes) { if (Number.isNaN(numeroONulo(f.valor))) m.push("El valor debe ser un número."); if (Number.isNaN(decimalONulo(f.porcentaje))) m.push("El porcentaje debe ser un número."); }
-    if (sinFotos) { if (sinFotosMotivo.trim().length < 10) m.push("Escriba por qué no hay evidencia fotográfica (10 caracteres o más)."); }
-    else if (fotosN < Math.max(1, reglas.min_fotos)) m.push("Tome al menos una foto de la intervención.");
+    if (apoderado) {
+      let suma = 0;
+      for (const f of fuentes) {
+        const v = numeroONulo(f.valor), p = decimalONulo(f.porcentaje);
+        if (Number.isNaN(v)) m.push("El valor debe ser un número."); else if (v !== null && v < 0) m.push("El valor no puede ser negativo.");
+        if (Number.isNaN(p)) m.push("El porcentaje debe ser un número."); else if (p !== null && (p <= 0 || p > 100)) m.push("El porcentaje va de 0 a 100."); else suma += p ?? 0;
+      }
+      if (suma > 100) m.push("Los porcentajes de las fuentes suman más de 100.");
+    }
+    if (fotosN < Math.max(1, reglas.min_fotos)) m.push("Tome al menos una foto de la intervención.");
     if (fotosN > reglas.max_fotos) m.push(`Máximo ${reglas.max_fotos} fotos.`);
     if (!ubic.fix && !(eleccion?.tipo === "activo" || eleccion?.tipo === "punto" || eleccion?.tipo === "linea")) m.push("Falta la ubicación de la intervención.");
     return m;
@@ -252,7 +263,6 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
         tambien: tambien.map((t) => t.codigo),
         fuentes: fuentes.map((f) => ({ aportante: f.aportante, entidad: f.entidad.trim() || null,
           ...(apoderado ? { valor: numeroONulo(f.valor), porcentaje: decimalONulo(f.porcentaje), soporte: f.soporte.trim() || null } : {}) })),
-        sin_evidencia_motivo: sinFotos ? sinFotosMotivo.trim() : null,
         archivos: [...fs.map((f, i) => ({ n: p.fotos[i].n, clase: f.clase, ruta: p.fotos[i].ruta })), ...docs.map((_, i) => ({ n: p.documentos[i].n, clase: "documento", ruta: p.documentos[i].ruta }))],
       };
       setGuardado(await apiItv.crear(p.intervencion_id, datos));
@@ -302,22 +312,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
           {opcion(nace === "programada", "Programada o mejora", () => elegirNace("programada"))}
           {opcion(nace === "dano", "Daño o falla", () => elegirNace("dano"), undefined, "itv-op-dano")}
         </div>
-        {nace === "dano" ? (
-          <div className="itv-danos" role="radiogroup" aria-label="Daño o falla que se atiende">
-            <span className="dan-rot">Daño o falla que se atiende</span>
-            {!sistema || !refDanos ? <p className="tec-ayuda">Elija primero el sistema y el activo (sección 2): salen los daños abiertos de ese activo o de los cercanos.</p>
-              : danos === null ? <p className="tec-sub" role="status">Buscando los daños abiertos…</p>
-              : danos.length === 0 ? <p className="tec-ayuda">No hay daños abiertos de este activo ni a {reglas.radio_danos_m} m. Si el daño no está reportado, repórtelo primero en «Daño o falla».</p>
-              : danos.map((d) => (
-                <button key={d.codigo} type="button" role="radio" aria-checked={dano === d.codigo} className="itv-dano" onClick={() => setDano(d.codigo)}>
-                  <strong>{d.codigo}</strong> · {d.tipo}{d.activo ? ` en ${d.activo}` : d.no_identificado ? ` (${d.no_identificado})` : ""}
-                  <span>{fechaCorta(d.t_detectado)} · {d.estado === "en_atencion" ? "en atención" : "reportado"} · {d.mismo_activo ? "mismo activo" : `a ${d.distancia_m} m`}</span>
-                </button>))}
-            <p className="tec-ayuda">Solo salen los daños abiertos de este activo o de los cercanos. Un daño puede tener varias intervenciones.</p>
-            <label className="dan-check itv-resuelve"><input type="checkbox" checked={resuelve} onChange={(e) => setResuelve(e.target.checked)} />Con esta queda resuelto el daño</label>
-            <p className="tec-ayuda">{resuelve ? "Al guardar, el daño queda atendido con el fin de esta intervención como servicio restablecido." : "Sin marcarla, el daño sigue en atención (por ejemplo, si falta otra cuadrilla o la reposición)."}</p>
-          </div>
-        ) : null}
+        {nace === "dano" ? <p className="tec-ayuda">El daño o falla que se atiende se elige después del mapa, porque la lista depende del activo.</p> : null}
         <span className="dan-rot">Tipo</span>
         <div className="dan-fila" role="group" aria-label="Tipo de intervención">{tipos.map((t) => opcion(tipo === t.codigo, t.nombre, () => elegirTipo(t.codigo), t.codigo))}</div>
         {esInversion ? (
@@ -426,6 +421,20 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
                   </button>))}</div> : null}
               </div>
             ) : null}
+            {nace === "dano" ? (
+              <div className="itv-danos" role="radiogroup" aria-label="Daño o falla que se atiende">
+                <span className="dan-rot">Daño o falla que se atiende</span>
+                {!sistema || !refDanos ? <p className="tec-ayuda">Elija primero el activo (o marque el punto): salen los daños abiertos de ese activo o de los cercanos.</p>
+                  : danos === null ? <p className="tec-sub" role="status">Buscando los daños abiertos…</p>
+                  : danos.length === 0 ? <p className="tec-aviso tec-aviso-info">No hay daños abiertos en este activo ni cerca (a {reglas.radio_danos_m} m). Si el daño no está reportado, repórtelo primero en «Daño o falla».</p>
+                  : danos.map((d) => (
+                    <button key={d.codigo} type="button" role="radio" aria-checked={dano === d.codigo} className="itv-dano" onClick={() => setDano(d.codigo)}>
+                      <strong>{d.codigo}</strong> · {d.tipo}{d.activo ? ` en ${d.activo}` : d.no_identificado ? ` (${d.no_identificado})` : ""}
+                      <span>{fechaCorta(d.t_detectado)} · {d.estado === "en_atencion" ? "en atención" : "reportado"} · {d.mismo_activo ? "mismo activo" : `a ${d.distancia_m} m`}</span>
+                    </button>))}
+                {danos?.length ? <p className="tec-ayuda">Solo salen los daños abiertos de este activo o de los cercanos. Un daño puede tener varias intervenciones.</p> : null}
+              </div>
+            ) : null}
             <p className="tec-ayuda">
               {ubic.fix ? <>Ubicación: GPS del celular · precisión ±{Math.round(ubic.fix.precision_m)} m{ubic.fix.precision_m > UMBRAL_PRECISION_MALA_M ? " (mala: si puede, espere a cielo abierto)" : ""}.</>
                 : ubic.mensaje ? ubic.mensaje : "Buscando la ubicación del celular…"}
@@ -520,12 +529,6 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
             <figcaption>{i + 1}. {CLASES.find((m) => m.c === f.clase)!.n}
               <button type="button" className="tec-enlace" disabled={!!enviando} onClick={() => { URL.revokeObjectURL(f.url); setFotos((x) => x.filter((_, j) => j !== i)); prep.current = null; }}>Quitar</button></figcaption>
           </figure>))}</div> : null}
-        {reglas.puede_sin_fotos ? (
-          <>
-            <label className="dan-check"><input type="checkbox" checked={sinFotos} onChange={(e) => { setSinFotos(e.target.checked); prep.current = null; }} />Registrar sin evidencia fotográfica (por ejemplo, llegó por la 116 o por llamada)</label>
-            {sinFotos ? <div className="tec-campo"><label htmlFor="itv-sinf">¿Por qué no hay fotos?</label><input id="itv-sinf" type="text" maxLength={300} value={sinFotosMotivo} onChange={(e) => setSinFotosMotivo(e.target.value)} /></div> : null}
-          </>
-        ) : null}
         <div className="tec-campo">
           <label htmlFor="itv-doc">Adjuntar documento (orden, acta, factura; PDF, hasta {reglas.max_documentos})</label>
           <input id="itv-doc" type="file" accept="application/pdf" disabled={docs.length >= reglas.max_documentos || !!enviando}
@@ -537,6 +540,12 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
         </div>
       </section>
 
+      {nace === "dano" && dano ? (
+        <section className="tec-tarjeta itv-cierre" aria-label="¿Queda resuelto el daño?">
+          <label className="dan-check itv-resuelve"><input type="checkbox" checked={resuelve} onChange={(e) => setResuelve(e.target.checked)} />Con esta queda resuelto el daño {dano}</label>
+          <p className="tec-ayuda">{resuelve ? "Al guardar, el daño queda atendido con el fin de esta intervención como servicio restablecido." : "Sin marcarla, el daño sigue en atención (por ejemplo, si falta otra cuadrilla o la reposición)."}</p>
+        </section>
+      ) : null}
       {errores.length ? <div className="tec-aviso tec-aviso-error dan-errores dan-pad-x" role="alert"><strong>Falta completar:</strong><ul>{errores.map((e) => <li key={e}>{e}</li>)}</ul></div> : null}
       {errorEnvio ? <p className="tec-aviso tec-aviso-error dan-pad-x" role="alert">{errorEnvio}</p> : null}
       {cancelar ? (

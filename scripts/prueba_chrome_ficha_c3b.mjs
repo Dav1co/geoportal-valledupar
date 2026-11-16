@@ -279,11 +279,13 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} buscar por el alias lista la válvula con su alias y su placa`, new RegExp(`placa INV-ZT-${ancho}`).test(await texto(p)));
   await p.close();
 
-  // ===== B. Supervisor: ve todo, no edita =====
+  // ===== B. Supervisor de distribución (Corte 4a, §26.2): edita todo menos el origen =====
   p = await abrir(ancho, "sup", null);
   await abrirFichaPorBusqueda(p, V85[0]); await esperarTexto(p, /Galería/);
   t = await texto(p);
-  ok(`${tag} el supervisor ve la foto principal y la galería, pero no «Editar ficha» (por ahora solo el administrador)`, await imagenCargada(p, ".red-foto-principal img") && /Ver las fotos \(\d+\)/.test(t) && !/Editar ficha/.test(t) && !/Cambiar foto principal/.test(t));
+  ok(`${tag} el supervisor de distribución ve la foto, la galería y «Editar ficha»`, await imagenCargada(p, ".red-foto-principal img") && /Ver las fotos \(\d+\)/.test(t) && /Editar ficha/.test(t) && /Cambiar foto principal/.test(t));
+  await clicTexto(p, "button", "Editar ficha"); await esperarTexto(p, /Editar la ficha/);
+  ok(`${tag} el editor del supervisor de distribución no trae el origen (solo el administrador lo corrige)`, !/Origen \(solo lo corrige el administrador\)/.test(await texto(p)) && !(await p.$("#fe-origen")));
   await p.close();
 
   // ===== C. Operador: desde el minimapa del daño =====
@@ -293,7 +295,7 @@ for (const ancho of [390, 1280]) {
   await esperarTexto(p, /Cambio de la ficha/);
   t = await texto(p);
   ok(`${tag} el operador ve el minimapa estático, el alias y el muro con el cambio de la ficha`, await estatico(p) && new RegExp(`Válvula de la glorieta ${ancho}`).test(t) && /Revisión de la válvula en campo/.test(t));
-  ok(`${tag} el operador no ve la foto principal, ni la galería, ni los botones de edición`, !(await p.$(".red-foto-principal")) && !/Galería/.test(t) && !/Editar ficha/.test(t));
+  ok(`${tag} el operador ve la foto principal y la galería (§26.1), sin los botones de edición`, await imagenCargada(p, ".red-foto-principal img") && /Galería/.test(t) && !/Editar ficha/.test(t));
   ok(`${tag} la ficha del operador no desborda`, await sinDesborde(p));
   await p.screenshot({ path: join(CAP, `ficha_operador_${ancho}.png`), fullPage: true });
   await p.close();

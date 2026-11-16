@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import "./ficha.css";
 import "./dano.css";
 import "./intervencion.css";
-import { apiDano, apiItv, type ActivoUbicado, type IntervencionLista, type NoIdentificado } from "./apiRedes";
+import { apiDano, apiDash, apiItv, type ActivoUbicado, type IntervencionLista, type NoIdentificado, type TipoNuevo } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 
@@ -40,10 +40,12 @@ export function IntervencionesSupervisor({ onVolver }: { onVolver: () => void })
   );
 }
 
-function NoIdentificados({ onFicha }: { onFicha: (c: string) => void }) {
+export function NoIdentificados({ onFicha }: { onFicha: (c: string) => void }) {
   const [datos, setDatos] = useState<{ radio_m: number; pendientes: number; items: NoIdentificado[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [vez, setVez] = useState(0);
+  const [tipos, setTipos] = useState<TipoNuevo[]>([]);      // tipos de PUNTO que se pueden crear desde la bandeja (Corte 4a)
+  useEffect(() => { apiItv.formulario().then((f) => setTipos(f.tipos_nuevo.filter((t) => t.geometria === "punto"))).catch(() => {}); }, []);
   const cargar = useCallback(() => {
     setError(null);
     apiItv.noIdentificados().then(setDatos).catch((e) => setError(e instanceof ErrorTec && e.tipo === "permiso" ? "Solo el supervisor o el administrador ven esta bandeja." : e instanceof Error ? e.message : "No se pudo cargar."));
@@ -55,22 +57,31 @@ function NoIdentificados({ onFicha }: { onFicha: (c: string) => void }) {
   return (
     <>
       <p className="tec-sub dan-pad-x">{datos.pendientes} pendiente(s). Se proponen los activos del mismo sistema a {datos.radio_m} m o menos.</p>
-      {datos.items.map((n) => <ItemNoIdentificado key={`${n.clase}-${n.codigo}`} n={n} onFicha={onFicha} onListo={() => setVez((v) => v + 1)} />)}
+      {datos.items.map((n) => <ItemNoIdentificado key={`${n.clase}-${n.codigo}`} n={n} tipos={tipos.filter((t) => t.sistema === n.sistema)} onFicha={onFicha} onListo={() => setVez((v) => v + 1)} />)}
     </>
   );
 }
 
-function ItemNoIdentificado({ n, onFicha, onListo }: { n: NoIdentificado; onFicha: (c: string) => void; onListo: () => void }) {
+function ItemNoIdentificado({ n, tipos, onFicha, onListo }: { n: NoIdentificado; tipos: TipoNuevo[]; onFicha: (c: string) => void; onListo: () => void }) {
+  const [modo, setModo] = useState<"asociar" | "crear">("asociar");
+  const [nuevoTipo, setNuevoTipo] = useState(""); const [nuevoClase, setNuevoClase] = useState(""); const [nuevoNombre, setNuevoNombre] = useState("");
+  const tipoSel = tipos.find((t) => t.prefijo === nuevoTipo);
   const [activo, setActivo] = useState<string>(n.propuestos[0]?.codigo ?? "");
   const [motivo, setMotivo] = useState("");
   const [buscar, setBuscar] = useState(""); const [res, setRes] = useState<ActivoUbicado[] | null>(null);
   const [estado, setEstado] = useState<"" | "enviando">("");
   const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null);
   async function asociar() {
-    if (!activo) { setMsg({ ok: false, t: "Elija el activo." }); return; }
+    if (modo === "asociar" && !activo) { setMsg({ ok: false, t: "Elija el activo." }); return; }
+    if (modo === "crear" && !tipoSel) { setMsg({ ok: false, t: "Elija el tipo del activo nuevo." }); return; }
+    if (modo === "crear" && tipoSel?.clase_obligatoria && !nuevoClase) { setMsg({ ok: false, t: "Elija la clase del activo nuevo." }); return; }
     if (motivo.trim().length < 10) { setMsg({ ok: false, t: "Escriba el motivo (10 caracteres o más)." }); return; }
     setEstado("enviando"); setMsg(null);
-    try { const r = await apiItv.asociar(n.clase, n.codigo, activo, motivo.trim()); setMsg({ ok: true, t: `${r.codigo} quedó asociado a ${r.activo}.` }); setTimeout(onListo, 900); }
+    try {
+      const r = modo === "asociar" ? await apiItv.asociar(n.clase, n.codigo, activo, motivo.trim())
+        : await apiDash.crearActivoBandeja(n.clase, n.codigo, nuevoTipo, nuevoClase || null, nuevoNombre.trim() || null, motivo.trim());
+      setMsg({ ok: true, t: modo === "asociar" ? `${r.codigo} quedó asociado a ${r.activo}.` : `Se creó ${r.activo} («por verificar») y ${r.codigo} quedó sobre él.` }); setTimeout(onListo, 900);
+    }
     catch (e) { setMsg({ ok: false, t: e instanceof Error ? e.message : "No se pudo asociar." }); }
     finally { setEstado(""); }
   }
@@ -79,6 +90,22 @@ function ItemNoIdentificado({ n, onFicha, onListo }: { n: NoIdentificado; onFich
       <h2><span className={`itv-etiqueta itv-etiqueta-${n.clase}`}>{n.clase === "intervencion" ? "Intervención" : "Daño"}</span> {n.codigo}</h2>
       <p className="red-texto"><strong>«{n.que_es}»</strong> · {n.resumen} · {n.sistema}</p>
       <p className="tec-ayuda">{fecha(n.cuando)} · {n.autor} · {n.lat.toFixed(5)}, {n.lon.toFixed(5)}</p>
+      <div className="dan-fila" role="group" aria-label={`Qué hacer con ${n.codigo}`}>
+        <button type="button" className="dan-opcion" aria-pressed={modo === "asociar"} onClick={() => setModo("asociar")}>Asociar a un activo</button>
+        <button type="button" className="dan-opcion" aria-pressed={modo === "crear"} onClick={() => setModo("crear")}>Crear el activo</button>
+      </div>
+      {modo === "crear" ? (
+        <div className="itv-nuevo">
+          <div className="tec-campo"><label htmlFor={`nt-${n.codigo}`}>Tipo del activo nuevo (de punto)</label>
+            <select id={`nt-${n.codigo}`} value={nuevoTipo} onChange={(e) => { setNuevoTipo(e.target.value); setNuevoClase(""); }}><option value="">Elija…</option>
+              {tipos.map((t) => <option key={t.prefijo} value={t.prefijo}>{t.nombre} ({t.prefijo})</option>)}</select></div>
+          {tipoSel?.clases.length ? <div className="tec-campo"><label htmlFor={`nc-${n.codigo}`}>Clase</label>
+            <select id={`nc-${n.codigo}`} value={nuevoClase} onChange={(e) => setNuevoClase(e.target.value)}><option value="">Elija…</option>{tipoSel.clases.map((c) => <option key={c.codigo} value={c.codigo}>{c.nombre}</option>)}</select></div> : null}
+          <div className="tec-campo"><label htmlFor={`nn-${n.codigo}`}>Nombre (opcional)</label><input id={`nn-${n.codigo}`} type="text" maxLength={120} value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} /></div>
+          <p className="tec-ayuda">Se crea en el punto del registro, «por verificar». Un tramo nuevo se dibuja en el Cargue de capas.</p>
+        </div>
+      ) : null}
+      {modo === "asociar" ? <>
       <span className="dan-rot">Activos propuestos (los más cercanos)</span>
       {n.propuestos.length ? (
         <div className="itv-danos" role="radiogroup" aria-label="Activo propuesto">{n.propuestos.map((p) => (
@@ -95,15 +122,16 @@ function ItemNoIdentificado({ n, onFicha, onListo }: { n: NoIdentificado; onFich
           <span className="red-icono" aria-hidden="true" /><span className="red-fila-txt"><span className="red-fila-cod">{r.codigo}</span><span className="red-fila-sub">{r.tipo}</span></span></button>))}</div>
         : <p className="tec-ayuda">No se encontró nada con «{buscar}».</p>) : null}
       {activo ? <p className="tec-ayuda">Elegido: <strong>{activo}</strong> · <button type="button" className="tec-enlace" onClick={() => onFicha(activo)}>Ver ficha</button></p> : null}
+      </> : null}
       <div className="tec-campo"><label htmlFor={`mot-${n.codigo}`}>Motivo</label>
         <input id={`mot-${n.codigo}`} type="text" maxLength={1000} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Por qué es este activo (lo vi en la visita, según el plano…)" /></div>
       {msg ? <p className={`tec-aviso ${msg.ok ? "tec-aviso-info" : "tec-aviso-error"}`} role={msg.ok ? "status" : "alert"}>{msg.t}</p> : null}
-      <div className="tec-acciones"><button type="button" className="tec-boton itv-guardar" disabled={estado === "enviando"} onClick={() => void asociar()}>{estado === "enviando" ? "Asociando…" : `Asociar a ${activo || "…"}`}</button></div>
+      <div className="tec-acciones"><button type="button" className="tec-boton itv-guardar" disabled={estado === "enviando"} onClick={() => void asociar()}>{estado === "enviando" ? "Guardando…" : modo === "crear" ? "Crear y asociar" : `Asociar a ${activo || "…"}`}</button></div>
     </section>
   );
 }
 
-function Recursos({ onFicha }: { onFicha: (c: string) => void }) {
+export function Recursos({ onFicha }: { onFicha: (c: string) => void }) {
   const [lista, setLista] = useState<IntervencionLista[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [vez, setVez] = useState(0);

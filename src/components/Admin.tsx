@@ -16,6 +16,7 @@ const MODOS: [keyof UsuarioAdmin, string][] = [
 const MODOS_TECNICOS: [keyof UsuarioAdmin, string][] = [
   ["ver_registro_tecnico", "Registro técnico"],
   ["ver_dashboard_tecnico", "Dashboard PTAP"],
+  ["ver_dashboard_redes", "Dashboard distribución"],      // Corte 4a: solo aparece si el servidor ya trae la columna
 ];
 // Formatos de campo (Torre A, Paso B3). Se muestran SOLO si el servidor ya trae esas columnas (Paso A aplicado).
 const MODOS_CAMPO: [keyof UsuarioAdmin, string][] = [
@@ -63,9 +64,10 @@ type Borrador = {
   aseo?: boolean;
   dashboard_aseo?: boolean;
   analisis_contrato?: boolean;
+  dashboard_redes?: boolean;
 };
 
-function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conActa: boolean, conAseo: boolean, conAnalisis = false): Borrador {
+function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conActa: boolean, conAseo: boolean, conAnalisis = false, conRedes = false): Borrador {
   return {
     explorar: u.ver_explorar === true,
     focalizacion: u.ver_focalizacion === true,
@@ -79,6 +81,7 @@ function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conA
     ...(conActa ? { acta: u.ver_acta === true, dashboard_acta: u.ver_dashboard_acta === true } : {}),
     ...(conAseo ? { aseo: u.ver_aseo === true, dashboard_aseo: u.ver_dashboard_aseo === true } : {}),
     ...(conAnalisis ? { analisis_contrato: u.ver_analisis_contrato === true } : {}),
+    ...(conRedes ? { dashboard_redes: u.ver_dashboard_redes === true } : {}),
   };
 }
 
@@ -93,6 +96,8 @@ const CAMPOS_TECNICA: [keyof Borrador, string][] = [
   ["registro_tecnico", "Registro técnico"],
   ["dashboard_tecnico", "Dashboard PTAP"],
 ];
+// Técnica fase 1, Corte 4a: supervisor de distribución (D-12). Solo si el servidor ya lista `ver_dashboard_redes`.
+const CAMPO_REDES: [keyof Borrador, string] = ["dashboard_redes", "Dashboard distribución (supervisor de distribución)"];
 const CAMPOS_CAMPO: [keyof Borrador, string][] = [
   ["campo", "Formatos de campo"],
   ["dashboard_campo", "Supervisor de reportes de campo"],
@@ -184,6 +189,8 @@ export function Admin({ onVolver }: Props) {
   const conAseo = useMemo(() => usuarios.some((u) => typeof u.ver_aseo === "boolean"), [usuarios]);
   // Igual para el análisis de contrato (SQL del análisis aplicado): solo así se muestra la casilla y se envía `analisis_contrato`.
   const conAnalisis = useMemo(() => usuarios.some((u) => typeof u.ver_analisis_contrato === "boolean"), [usuarios]);
+  // Igual para el Dashboard distribución (SQL del Corte 4a aplicado).
+  const conRedes = useMemo(() => usuarios.some((u) => typeof u.ver_dashboard_redes === "boolean"), [usuarios]);
 
   async function cargar() {
     setCargando(true);
@@ -292,6 +299,15 @@ export function Admin({ onVolver }: Props) {
     return ok;
   }
 
+  async function verificarRedes(correo: string, redes: boolean): Promise<boolean> {
+    const { usuarios: lista } = await api.admin.listar();
+    const u = lista.find((x) => x.email === correo.toLowerCase());
+    const ok = !!u && (u.ver_dashboard_redes === true) === redes;
+    if (!ok) setError("El servidor no aplicó el permiso del Dashboard distribución de " + correo + ". Falta desplegar la Edge geoportal-admin o aplicar el SQL del Corte 4a.");
+    setUsuarios(lista);
+    return ok;
+  }
+
   async function agregar() {
     setMsg(null);
     if (!email.includes("@")) {
@@ -344,7 +360,7 @@ export function Admin({ onVolver }: Props) {
       return;
     }
     setEditando(u.email);
-    setBorrador(aBorrador(u, conTecnica, conCampo, conActa, conAseo, conAnalisis));
+    setBorrador(aBorrador(u, conTecnica, conCampo, conActa, conAseo, conAnalisis, conRedes));
   }
 
   async function guardarPermisos(u: UsuarioAdmin) {
@@ -354,13 +370,15 @@ export function Admin({ onVolver }: Props) {
     setMsg(null);
     try {
       // `analisis_contrato` viaja solo si el servidor lo lista (la Edge lo reenvía únicamente si llega como booleano).
-      const { analisis_contrato, ...resto } = borrador;
-      await api.admin.permisos({ email: u.email, ...resto, ...(conAnalisis && typeof analisis_contrato === "boolean" ? { analisis_contrato } : {}) });
+      const { analisis_contrato, dashboard_redes, ...resto } = borrador;
+      await api.admin.permisos({ email: u.email, ...resto, ...(conAnalisis && typeof analisis_contrato === "boolean" ? { analisis_contrato } : {}),
+                                 ...(conRedes && typeof dashboard_redes === "boolean" ? { dashboard_redes } : {}) });
       if (conTecnica && !(await verificarTecnico(u.email, borrador.registro_tecnico === true, borrador.dashboard_tecnico === true))) return;
       if (conCampo && !(await verificarCampo(u.email, borrador.campo === true, borrador.dashboard_campo === true))) return;
       if (conActa && !(await verificarActa(u.email, borrador.acta === true, borrador.dashboard_acta === true))) return;
       if (conAseo && !(await verificarAseo(u.email, borrador.aseo === true, borrador.dashboard_aseo === true))) return;
       if (conAnalisis && !(await verificarAnalisis(u.email, borrador.analisis_contrato === true))) return;
+      if (conRedes && !(await verificarRedes(u.email, borrador.dashboard_redes === true))) return;
       setMsg(`Permisos actualizados para ${u.email}.`);
       setEditando(null);
       setBorrador(null);
@@ -697,7 +715,7 @@ export function Admin({ onVolver }: Props) {
                 <BloquePermisos
                   titulo="Geoportal Técnica"
                   tecnico
-                  campos={CAMPOS_TECNICA}
+                  campos={conRedes ? [...CAMPOS_TECNICA, CAMPO_REDES] : CAMPOS_TECNICA}
                   borrador={borrador}
                   onCambio={(c) => setBorrador({ ...borrador, ...c })}
                 >
@@ -706,10 +724,13 @@ export function Admin({ onVolver }: Props) {
                     value=""
                     aria-label="Aplicar un perfil técnico"
                     onChange={(e) => {
-                      const p = e.target.value as PerfilTecnico | "";
-                      if (!p) return;
+                      const v = e.target.value;
+                      if (!v) return;
+                      // Corte 4a: supervisor de distribución = Registro técnico + Dashboard distribución (§16)
+                      const p = (v === "distribucion" ? "operador" : v) as PerfilTecnico;
                       setBorrador({ explorar: false, focalizacion: false, comercial: false, rutas: false, dashboard: false, horario: "sin_restriccion", dias: "todos",
                                     registro_tecnico: PERFILES_TECNICOS[p].registro, dashboard_tecnico: PERFILES_TECNICOS[p].dashboard,
+                                    ...(conRedes ? { dashboard_redes: v === "distribucion" } : {}),
                                     ...(borrador.campo !== undefined ? { campo: borrador.campo, dashboard_campo: borrador.dashboard_campo } : {}),
                                     ...(borrador.acta !== undefined ? { acta: borrador.acta, dashboard_acta: borrador.dashboard_acta } : {}),
                                     ...(borrador.aseo !== undefined ? { aseo: borrador.aseo, dashboard_aseo: borrador.dashboard_aseo } : {}) });
@@ -718,8 +739,9 @@ export function Admin({ onVolver }: Props) {
                     <option value="">Aplicar perfil…</option>
                     <option value="operador">Operador técnico</option>
                     <option value="supervisor">Supervisor técnico</option>
+                    {conRedes && <option value="distribucion">Supervisor de distribución</option>}
                   </select>
-                  {(borrador.registro_tecnico || borrador.dashboard_tecnico) && (
+                  {(borrador.registro_tecnico || borrador.dashboard_tecnico || borrador.dashboard_redes) && (
                     <p className="adm-aviso-tec">
                       {CAMPOS_COMERCIAL.some(([c]) => borrador[c] === true)
                         ? "Con modos comerciales y técnicos verá las dos áreas y la ventana de entrada."
@@ -779,7 +801,7 @@ export function Admin({ onVolver }: Props) {
                 </BloquePermisos>
               )}
             </div>
-            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : []), ...(conCampo ? CAMPOS_CAMPO : []), ...(conAnalisis ? [CAMPO_ANALISIS] : []), ...(conActa ? CAMPOS_ACTA : []), ...(conAseo ? CAMPOS_ASEO : [])].some(([c]) => borrador[c] === true) && (
+            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : []), ...(conRedes ? [CAMPO_REDES] : []), ...(conCampo ? CAMPOS_CAMPO : []), ...(conAnalisis ? [CAMPO_ANALISIS] : []), ...(conActa ? CAMPOS_ACTA : []), ...(conAseo ? CAMPOS_ASEO : [])].some(([c]) => borrador[c] === true) && (
               <p className="adm-aviso-tec">Sin ningún modo asignado: al ingresar verá «Sin módulos asignados».</p>
             )}
             <div>

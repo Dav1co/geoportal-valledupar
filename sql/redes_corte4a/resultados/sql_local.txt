@@ -1,0 +1,21 @@
+OK    01 huellas antes: «CORTE 3b (listo para el 4a)», las 4 de permisos «14-nov (sin cambiar)», 7 RPC «NO EXISTE» y 10 «CORTE 3b (sin cambiar)»
+OK    02 carga real (35.781 activos), predios, y un daño y una reparación reales en V85 con fotos (Cortes 2 y 3a) · publicar 12.7 s, DAN-000001, ITV-000001
+OK    03 ensayo DESPUÉS de la carga real y con hechos reales: ERROR con «N de N … SIN FALLAS» · RESULTADO: 70 de 70 pruebas correctas — SIN FALLAS (6.9 s)
+OK    04 el ensayo no deja rastro (ni columnas, ni funciones, ni las de permisos cambiadas)
+OK    05 migración _editor · 0.1 s
+OK    06 verificación: 8 OK
+OK    07 repetir la migración se rechaza (guardia)
+OK    08 huellas después: «CORTE 4a (aplicado)», 4 «con dashboard_redes», 7 «NUEVA» y 10 «reemplazada»
+OK    09 reversa sin datos: vuelve exactamente al 3b y a las 4 funciones de permisos del 14-nov
+OK    10 tras la reversa, la verificación del 3b vuelve a dar 10 OK
+OK    11 una segunda reversa se niega
+OK    12 volver a migrar después de la reversa
+OK    13 el administrador da ver_dashboard_redes a zt.super (y le quita el de planta): es supervisor de distribución
+OK    14 la lista de daños abiertos trae el daño real (atendido no; el reabierto sí) · 0.03 s
+OK    15 reabrir el daño real atendido: «en atención» · {"codigo": "DAN-000001", "estado": "en_atencion"}
+OK    16 ocultar la intervención real de prueba: «oculta» y fuera de la epicrisis de V85
+OK    17 la ficha de V85 la edita el supervisor de distribución (alias), y el origen no
+OK    18 la lista de daños en la base real tarda menos de 1 s · 0.03 s
+OK    19 verificación con datos: 8 OK y 1 supervisor de distribución
+OK    20 la reversa se niega con un supervisor de distribución asignado (nada se borra)
+RESULTADO: 20 de 20 — SIN FALLAS

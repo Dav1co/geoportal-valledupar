@@ -119,6 +119,8 @@ export type UsuarioAdmin = {
   ver_dashboard_aseo?: boolean;
   // Análisis de contrato: solo llega si el SQL del análisis ya está aplicado; si falta, Administración no muestra la casilla.
   ver_analisis_contrato?: boolean;
+  // Técnica fase 1, Corte 4a: supervisor de distribución. Solo llega si el SQL del 4a ya está aplicado; si falta, Administración no muestra la casilla.
+  ver_dashboard_redes?: boolean;
 };
 
 /** Respuesta de geoportal-admin?accion=perfil (la misma que valida la sesión en useSession). */
@@ -235,6 +237,7 @@ export const api = {
       campo?: boolean;              // Formatos de campo (Paso B3): igual, si no se informa el servidor no lo toca
       dashboard_campo?: boolean;
       analisis_contrato?: boolean;  // Análisis de contrato: solo se envía si el servidor ya lo lista (la Edge lo reenvía solo si llega como booleano)
+      dashboard_redes?: boolean;    // Dashboard distribución (Corte 4a): igual, solo si el servidor ya lo lista
       acta?: boolean;               // Acta de inspección: igual, si no se informa el servidor no lo toca
       dashboard_acta?: boolean;
       aseo?: boolean;               // Interventoría de Aseo: igual, si no se informa el servidor no lo toca

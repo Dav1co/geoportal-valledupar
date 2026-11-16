@@ -212,7 +212,7 @@ for (const ancho of [390, 1280]) {
   const danoA = danoEnV85();
   let p = await abrir(ancho, "op", [Number(V85[1]), Number(V85[2])]);
   let t = await texto(p);
-  ok(`${tag} el operador no ve «Registrar sin evidencia fotográfica» en el daño (David, respuesta 2)`, !/Registrar sin evidencia fotográfica/.test(t));
+  ok(`${tag} el operador no ve «Registrar sin evidencia fotográfica» en el daño`, !/Registrar sin evidencia fotográfica/.test(t));
   await abrirItv(p); t = await texto(p);
   ok(`${tag} el chip «Registrar intervención» abre el formulario (sin «Próximamente»), con las 7 secciones de la maqueta`,
      ["1. De dónde nace y tipo", "2. Activo", "3. Fecha y hora", "4. Qué se hizo", "5. Quién la ejecuta", "6. De dónde salen los recursos", "7. Fotos y soportes"].every((x) => t.includes(x)) && !/Próximamente/.test(t));
@@ -222,7 +222,7 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} guardar vacío: lista de lo que falta, sin llamar a la base`, /Elija el tipo de intervención/.test(t) && /Elija el sistema/.test(t) && /Describa qué se hizo/.test(t)
      && /Tome al menos una foto de la intervención/.test(t) && /Escriba el inicio y el fin/.test(t) && rpcs.filter((r) => r.fn === "geoportal_redes_preparar_intervencion").length === prep0);
   await clicTexto(p, ".dan-opcion", "Daño o falla"); t = await texto(p);
-  ok(`${tag} «Daño o falla» deja solo correctivo, reparación y reposición, y pide primero el activo`, /Elija primero el sistema y el activo/.test(t) && /Reparación/.test(t) && /Reposición/.test(t)
+  ok(`${tag} «Daño o falla» deja solo correctivo, reparación y reposición, y pide primero el activo (desde el 4a, la lista va después del mapa)`, /se elige después del mapa/.test(t) && /Reparación/.test(t) && /Reposición/.test(t)
      && /Mantenimiento correctivo/.test(t) && !/Mantenimiento preventivo/.test(t) && !/Inversión/.test(t));
   await clicTexto(p, ".dan-opcion", "Acueducto"); await esperarTexto(p, /Se preseleccionó el activo más cercano/);
   await esperarTexto(p, new RegExp(danoA));
@@ -314,7 +314,7 @@ for (const ancho of [390, 1280]) {
   // ===== C. Supervisor: preventivo sin fotos, no identificado, con valores =====
   p = await abrir(ancho, "sup", null);
   t = await texto(p);
-  ok(`${tag} el supervisor sí ve «Registrar sin evidencia fotográfica» en el daño`, /Registrar sin evidencia fotográfica/.test(t));
+  ok(`${tag} desde el Corte 4a (§25.8) el supervisor tampoco ve «Registrar sin evidencia fotográfica»`, !/Registrar sin evidencia fotográfica/.test(t));
   await abrirItv(p);
   await clicTexto(p, ".dan-opcion", "Mantenimiento preventivo"); await clicTexto(p, ".dan-opcion", "Alcantarillado"); await p.waitForSelector(".dan-mini-mapa");
   await p.evaluate((lat, lon) => { const m = document.querySelector(".dan-mini-mapa").__mapa; m.jumpTo({ center: [lon, lat], zoom: 17 }); }, Number(V85[1]), Number(V85[2]));
@@ -327,20 +327,20 @@ for (const ancho of [390, 1280]) {
   t = await texto(p);
   ok(`${tag} recursos del supervisor: valor, porcentaje y soporte por fuente`, /Cada una con su valor o porcentaje y su soporte/.test(t) && (await p.$$('[aria-label="Valor de EMDUPAR"]')).length === 1);
   await poner(p, '[aria-label="Valor de EMDUPAR"]', "1.250.000"); await poner(p, '[aria-label="Soporte de EMDUPAR"]', "Presupuesto de mantenimiento");
-  await marcar(p, "Registrar sin evidencia fotográfica"); await poner(p, "#itv-sinf", "Llegó por llamada a la línea 116");
-  ok(`${tag} sin fotos: se ocultan los botones de la cámara`, (await p.$$eval("button", (bs) => bs.filter((b) => /📷/.test(b.textContent)).length)) === 0);
+  ok(`${tag} la intervención tampoco ofrece «sin evidencia fotográfica» al supervisor (§25.8)`, !/sin evidencia fotográfica/.test(await texto(p)));
+  await foto(p, "Después");
   await clicTexto(p, "button", "Guardar intervención"); await esperarTexto(p, /Intervención guardada: ITV-\d{6}/, 30000);
   t = await texto(p);
   const itvC = t.match(/ITV-\d{6}/)[0];
-  const fc = sqlq(`select coalesce(activo_codigo, 'nulo') || '|' || no_ident_que_es || '|' || sin_evidencia || '|' || sin_evidencia_motivo || '|' || recursos || '|' || ubicacion_origen
+  const fc = sqlq(`select coalesce(activo_codigo, 'nulo') || '|' || no_ident_que_es || '|' || sin_evidencia || '|' || coalesce(sin_evidencia_motivo, '') || '|' || recursos || '|' || ubicacion_origen
      || '|' || (select valor || '/' || soporte from redes.v_intervencion_fuentes f where f.intervencion_id = v.id) from redes.v_intervencion v where codigo = '${itvC}'`).split("|");
-  ok(`${tag} guardada ${itvC} «sin evidencia fotográfica», no identificada (va a la bandeja), con el valor de 1.250.000 y su soporte`, /sin evidencia fotográfica/.test(t) && /bandeja del supervisor/.test(t)
-     && fc[0] === "nulo" && fc[1] === `Cámara sin código ${ancho}` && fc[2] === "true" && fc[3] === "Llegó por llamada a la línea 116" && fc[4] === "completos" && fc[5] === "mapa" && fc[6] === "1250000.00/Presupuesto de mantenimiento", fc.join("|"));
+  ok(`${tag} guardada ${itvC} con su foto, no identificada (va a la bandeja), con el valor de 1.250.000 y su soporte`, !/sin evidencia fotográfica/.test(t) && /bandeja del supervisor/.test(t)
+     && fc[0] === "nulo" && fc[1] === `Cámara sin código ${ancho}` && fc[2] === "false" && fc[4] === "completos" && fc[5] === "mapa" && fc[6] === "1250000.00/Presupuesto de mantenimiento", fc.join("|"));
   await p.close();
 
   // ===== D. Supervisor: bandeja de no identificados y recursos por completar =====
   p = await abrir(ancho, "sup", null);
-  await clicTexto(p, "button", "Intervenciones · supervisión"); await esperarTexto(p, /Intervenciones · supervisión/);
+  await clicTexto(p, "button", "Dashboard distribución"); await esperarTexto(p, /Pestañas|No identificados/);      // Corte 4a: la bandeja vive en el Dashboard distribución
   await esperarTexto(p, new RegExp(itvC));
   t = await p.evaluate((c) => [...document.querySelectorAll(".itv-bandeja")].find((s) => s.innerText.includes(c))?.innerText ?? "", itvC);
   ok(`${tag} la bandeja trae ${itvC} con «qué es» y los activos más cercanos propuestos`, t.includes(`«Cámara sin código ${ancho}»`) && /Activos propuestos/.test(t) && /(COL|POZ)-\d{6}[\s\S]{0,40}a [\d.]+ m/.test(t), t);
@@ -354,7 +354,7 @@ for (const ancho of [390, 1280]) {
      && sqlq(`select activo_id is null from redes.intervenciones where codigo = '${itvC}'`) === "t");
   ok(`${tag} la bandeja no desborda y sus botones miden 44 px o más`, (await sinDesborde(p)) && (await minimos(p)) >= 44, String(await minimos(p)));
   await p.screenshot({ path: join(CAP, `bandeja_no_identificados_${ancho}.png`), fullPage: true });
-  await clicTexto(p, "[role=tab]", "Recursos por completar"); await esperarTexto(p, new RegExp(`${itvA} · Reparación`));
+  await clicTexto(p, "[role=tab]", "Intervenciones"); await esperarTexto(p, new RegExp(`${itvA} · Reparación`));
   await p.evaluate((c) => { const s = [...document.querySelectorAll(".itv-bandeja")].find((x) => x.innerText.includes(c)); s.scrollIntoView({ block: "center" }); }, itvA);
   await poner(p, `[aria-label="Porcentaje de EMDUPAR en ${itvA}"]`, "40");
   await poner(p, `[aria-label="Valor de Alcaldía de Valledupar en ${itvA}"]`, "3.400.000"); await poner(p, `[aria-label="Soporte de Alcaldía de Valledupar en ${itvA}"]`, "Convenio 12 de 2026");
@@ -370,13 +370,12 @@ for (const ancho of [390, 1280]) {
   p = await abrir(ancho, "sup", [Number(V85[1]), Number(V85[2])]);
   await clicTexto(p, ".dan-opcion", "Acueducto"); await esperarTexto(p, /Se preseleccionó el activo más cercano/);
   await clicTexto(p, ".dan-opcion", "Falla"); await clicTexto(p, ".dan-opcion", "Válvula que no opera"); await clicTexto(p, ".dan-opcion", "Medio"); await clicTexto(p, ".dan-opcion", "Desconocida");
-  await marcar(p, "Registrar sin evidencia fotográfica"); await poner(p, "#dan-sinf", "Llegó por la línea 116, sin fotos");
+  await foto(p, "El daño");
   await clicTexto(p, "button", "Guardar daño o falla"); await esperarTexto(p, /Falla guardado: DAN-\d{6}/, 30000);
   t = await texto(p);
   const danoE = t.match(/DAN-\d{6}/)[0];
-  ok(`${tag} el supervisor guarda la falla ${danoE} sin fotos: «sin evidencia fotográfica», con su nota`, /Quedó marcado «sin evidencia fotográfica»/.test(t)
-     && sqlq(`select count(*) from redes.dano_eventos e join redes.danos d on d.id = e.dano_id where d.codigo = '${danoE}' and e.tipo = 'nota' and e.motivo = 'Sin evidencia fotográfica: Llegó por la línea 116, sin fotos'`) === "1"
-     && sqlq(`select count(*) from redes.dano_fotos f join redes.danos d on d.id = f.dano_id where d.codigo = '${danoE}'`) === "0");
+  ok(`${tag} el supervisor guarda la falla ${danoE} con su foto (sin «sin evidencia»)`, !/sin evidencia fotográfica/.test(t)
+     && sqlq(`select count(*) from redes.dano_fotos f join redes.danos d on d.id = f.dano_id where d.codigo = '${danoE}'`) === "1");
   await clicTexto(p, "button", "Registrar la reparación"); await esperarTexto(p, /1\. De dónde nace y tipo/);
   await esperarTexto(p, new RegExp(`${danoE}\\s*· Válvula que no opera`));
   const est = await p.evaluate((c) => ({

@@ -41,3 +41,9 @@
 .itv-prop[aria-checked="true"] { border-color: #1f5fa8; background: #e8eff8; }
 .itv [role="tab"][aria-selected="true"] { background: #1f5fa8; color: #fff; border-color: #1f5fa8; }
 .itv-resuelve { margin-top: 4px; font-weight: 600; }
+/* Corte 4a: Dashboard distribución */
+.dash-pestanas { margin-top: 12px; }
+.dash-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dash-motivo { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.dash-motivo input { height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; }
+.dash-motivo label { font-size: 15px; font-weight: 600; }

@@ -240,6 +240,8 @@ for (const ancho of [390, 1280]) {
   await clicTexto(p, ".dan-opcion", "Rotura parcial"); await poner(p, "#dan-largo", "2,5");
   const ahora = await p.evaluate(() => document.querySelector("#dan-tdet").value);
   const menos = (min) => { const d = new Date(ahora + ":00"); d.setMinutes(d.getMinutes() - min); const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); };
+  // Corte 4a (§25): los tiempos de la reparación se piden solo si se marca «El daño ya se reparó»
+  await p.evaluate(() => [...document.querySelectorAll(".dan-check")].find((l) => /El daño ya se reparó/.test(l.textContent)).querySelector("input").click()); await p.waitForSelector("#dan-trep");
   await poner(p, "#dan-tini", menos(180)); await poner(p, "#dan-tdet", menos(150)); await poner(p, "#dan-trep", menos(75)); await poner(p, "#dan-tres", menos(10));
   t = await texto(p);
   ok(`${tag} los tiempos se calculan solos (respuesta 1 h 15 min, reparación 1 h 05 min, total 2 h 50 min)`, /Respuesta\s*1 h 15 min/.test(t) && /Reparación\s*1 h 05 min/.test(t) && /Total del daño\s*2 h 50 min/.test(t), t.match(/Respuesta[\s\S]{0,80}/)?.[0]);

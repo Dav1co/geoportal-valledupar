@@ -1,0 +1,8 @@
+OK    dashboard_redes = true viaja como p_dashboard_redes
+OK    dashboard_redes = false viaja como false
+OK    sin dashboard_redes no se envía (funciona con la base anterior, de 19 argumentos)
+OK    un valor que no es booleano no se envía
+OK    sin el aislamiento verificado: 409 con el texto claro y sin tocar permisos
+OK    quitarlo no pasa por la compuerta
+
+RESULTADO: 6 de 6 comprobaciones correctas

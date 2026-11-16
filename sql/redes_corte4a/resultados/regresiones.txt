@@ -1,0 +1,11 @@
+En la rama tecnica-corte4a. Las de redes, cada una sobre una base limpia (1a + carga + 2 + 3a + 3b + 4a, con zt.super de planta y distribución, zt.planta y zt.dist):
+itv_c3a: RESULTADO: 76 de 76 — SIN FALLAS   (ajustada: nadie ve «sin evidencia»; el supervisor guarda con foto; la bandeja vive en el Dashboard distribución; la lista de daños va después del mapa)
+ficha_c3b: RESULTADO: 41 de 41 — SIN FALLAS (ajustada a la §26: el supervisor de distribución edita sin el origen; el operador ve la galería)
+dano_c2: RESULTADO: 60 de 60 — SIN FALLAS   (ajustada: los tiempos de reparación con la casilla «El daño ya se reparó»)
+redes_c1b: RESULTADO: 60 de 60 — SIN FALLAS
+c0b: 68 de 68
+análisis de contrato (Chrome, incluye Administración): 143 de 143 — SIN FALLAS
+p14 (Chrome): 54 de 54 — SIN FALLAS
+áreas: 51 de 51 — SIN FALLAS
+tsc y npm run build: sin errores
+Nota: prueba_chrome_tec_c0 (Corte 0, todo simulado) da 26 de 30 desde el Corte 2: espera «Daños y fallas · Próximamente» y su doble no conoce la ruta nueva mi_perfil (la pantalla sigue sin ella: si falla, no muestra el Dashboard distribución). La reemplaza c0b; no está en la lista de regresiones desde el 3b.

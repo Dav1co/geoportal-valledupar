@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import "./dano.css";
 import { apiPerfil, subirArchivo, type CambiosFicha, type EdicionFicha, type Opcion } from "./apiRedes";
 
-// Editar la ficha del activo (Corte 3b, §22 y §23). Por ahora solo el administrador (el servidor lo vuelve a verificar); el supervisor de distribución
-// desde el Corte 4. Cada guardado es una edición con autor, fecha y motivo: los datos crean una VERSIÓN nueva (nada se sobrescribe); el alias y la placa
+// Editar la ficha del activo (Corte 3b, §22 y §23). El administrador y, desde el Corte 4a, el supervisor de distribución (§26.2); el origen, solo el
+// administrador. El servidor lo vuelve a verificar. Cada guardado es una edición con autor, fecha y motivo: los datos crean una VERSIÓN nueva (nada se sobrescribe); el alias y la placa
 // van como eventos; el origen se corrige con una fila nueva. La epicrisis muestra «se cambió X de A a B».
 
 type Campo = { clave: string; rotulo: string; tipo: "texto" | "numero" | "fecha" | "lista" | "largo"; opciones?: Opcion[]; unidad?: string; max?: number };
@@ -53,13 +53,24 @@ export function FichaEditar({ codigo, edicion, onCancelar, onGuardado }: { codig
     resumen.push(`${c.rotulo}: de «${a || "sin dato"}» a «${b || "sin dato"}»`);
   }
   if (Object.keys(attrCambios).length) cambios.atributos = attrCambios;
-  const origenCambia = origen.origen !== (vacio(v0.origen) || "emdupar") || (origen.origen !== "emdupar" && origen.aportante !== vacio(v0.aportante)) || origen.nota.trim() !== vacio(v0.origen_nota);
+  const puedeOrigen = edicion.puede_origen === true;
+  const origenCambia = puedeOrigen && origen.origen !== (vacio(v0.origen) || "emdupar") || (origen.origen !== "emdupar" && origen.aportante !== vacio(v0.aportante)) || origen.nota.trim() !== vacio(v0.origen_nota);
   if (origenCambia) { cambios.origen = { origen: origen.origen, aportante: origen.origen === "emdupar" ? null : origen.aportante || null, nota: origen.nota.trim() || null }; resumen.push("Se corrige el origen del activo"); }
 
   async function guardar() {
     setError(null);
     if (!resumen.length) { setError("No hay cambios."); return; }
-    for (const c of campos) if (c.tipo === "numero" && cambios[c.clave] !== undefined && cambios[c.clave] !== null && Number.isNaN(cambios[c.clave])) { setError(`${c.rotulo} debe ser un número.`); return; }
+    const RANGOS: Record<string, [number, number]> = { diametro_mm: [1, 5000], capacidad: [0, 1e12], profundidad_m: [0, 200] };
+    for (const c of campos) {
+      const v = cambios[c.clave];
+      if (c.tipo !== "numero" || v === undefined || v === null) continue;
+      if (Number.isNaN(v)) { setError(`${c.rotulo} debe ser un número.`); return; }
+      const [mn, mx] = RANGOS[c.clave] ?? [-Infinity, Infinity];
+      if ((v as number) < mn || (v as number) > mx) { setError(`${c.rotulo} va de ${mn} a ${mx.toLocaleString("es-CO")}.`); return; }
+    }
+    if (cambios.alias !== undefined && cambios.alias !== null && String(cambios.alias).length < 2) { setError("El alias lleva de 2 a 60 caracteres."); return; }
+    if (cambios.placa !== undefined && cambios.placa !== null && !/^[A-Za-z0-9][A-Za-z0-9./ _-]{0,39}$/.test(String(cambios.placa))) { setError("La placa lleva de 1 a 40 letras, números, punto, guion o barra."); return; }
+    if (cambios.fecha_instalacion && (String(cambios.fecha_instalacion) < "1900-01-01" || new Date(String(cambios.fecha_instalacion)) > new Date())) { setError("La fecha de instalación no puede ser futura ni antes de 1900."); return; }
     if (motivo.trim().length < 10) { setError("Escriba el motivo del cambio (10 caracteres o más)."); return; }
     setEstado("guardando");
     try {
@@ -94,7 +105,8 @@ export function FichaEditar({ codigo, edicion, onCancelar, onGuardado }: { codig
           <input id={`fa-${c.clave}`} type="text" maxLength={120} inputMode={c.tipo === "numero" || c.tipo === "entero" ? "decimal" : undefined} value={attr[c.clave] ?? ""}
             onChange={(e) => setAttr((x) => ({ ...x, [c.clave]: e.target.value }))} />
         </div>))}
-      <h3 className="red-sub">Origen (solo lo ve el supervisor)</h3>
+      {puedeOrigen ? <>
+      <h3 className="red-sub">Origen (solo lo corrige el administrador)</h3>
       <div className="tec-campo"><label htmlFor="fe-origen">Origen</label>
         <select id="fe-origen" value={origen.origen} onChange={(e) => setOrigen((o) => ({ ...o, origen: e.target.value }))}>
           <option value="emdupar">EMDUPAR</option><option value="tercero">Tercero</option><option value="mixto">Tercero y EMDUPAR</option></select></div>
@@ -102,6 +114,7 @@ export function FichaEditar({ codigo, edicion, onCancelar, onGuardado }: { codig
         <select id="fe-aportante" value={origen.aportante} onChange={(e) => setOrigen((o) => ({ ...o, aportante: e.target.value }))}><option value="">Elija…</option>
           {edicion.aportantes.filter((a) => a.codigo !== "emdupar").map((a) => <option key={a.codigo} value={a.codigo}>{a.nombre}</option>)}</select></div> : null}
       <div className="tec-campo"><label htmlFor="fe-onota">Nota del origen (opcional)</label><input id="fe-onota" type="text" maxLength={500} value={origen.nota} onChange={(e) => setOrigen((o) => ({ ...o, nota: e.target.value }))} /></div>
+      </> : null}
       <div className="red-cambios" aria-live="polite">
         <strong>{resumen.length ? "Se cambiará:" : "Todavía no hay cambios."}</strong>
         {resumen.length ? <ul>{resumen.map((r) => <li key={r}>{r}</li>)}</ul> : null}

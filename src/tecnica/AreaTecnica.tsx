@@ -8,7 +8,8 @@ import { Dashboard } from "./Dashboard";
 import { ActivosRedes } from "./ActivosRedes";
 import { FormularioDano } from "./FormularioDano";
 import { FormularioIntervencion, type DesdeDano } from "./FormularioIntervencion";
-import { IntervencionesSupervisor } from "./IntervencionesSupervisor";
+import { DashboardRedes } from "./DashboardRedes";
+import { apiDash, type MiPerfilRedes } from "./apiRedes";
 import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
@@ -29,11 +30,13 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [vezItv, setVezItv] = useState(0);           // ídem para la intervención
   const [desdeDano, setDesdeDano] = useState<DesdeDano | null>(null);      // «Registrar la reparación» desde el daño recién guardado
   const [activoItv, setActivoItv] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // desde la ficha
-  const [vista, setVista] = useState<"captura" | "dashboard" | "activos" | "intervenciones">("captura");     // el Dashboard PTAP y la ficha de activos (Corte 1b) son solo para supervisor y administrador en esta pantalla (el servidor lo vuelve a verificar en cada ruta)
+  const [vista, setVista] = useState<"captura" | "dashboard" | "activos" | "redes">("captura");     // Corte 4a: «redes» = Dashboard distribución (supervisor de distribución y administrador)
+  const [redes, setRedes] = useState<MiPerfilRedes | null>(null);      // perfil de redes (ver_dashboard_redes), del servidor     // el Dashboard PTAP y la ficha de activos (Corte 1b) son solo para supervisor y administrador en esta pantalla (el servidor lo vuelve a verificar en cada ruta)
 
   useEffect(() => {
     let vivo = true;
     setErrorMis(null);
+    apiDash.miPerfil().then((r) => { if (vivo) setRedes(r); }).catch(() => { if (vivo) setRedes(null); });
     apiTec.misFormularios()
       .then((r) => {
         if (!vivo) return;
@@ -59,6 +62,8 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   if (errorMis) {
     const a = avisoDeError(errorMis);
     const sinAcceso = errorMis.tipo === "permiso" || errorMis.tipo === "denegado";
+    // quien solo tiene el Dashboard distribución (sin formularios de Técnica) entra directo a él
+    if (sinAcceso && redes?.dashboard_redes) return <DashboardRedes onVolver={() => setIntento((i) => i + 1)} />;
     return (
       <div className="tec-pagina">
         <section className="tec-tarjeta" role="alert">
@@ -74,13 +79,20 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   if (!mis) return <div className="tec-pagina"><p className="tec-sub" role="status">Cargando Técnica…</p></div>;
 
   const hayAlgunoAsignado = mis.formularios.length > 0;
-  const puedeSupervisar = mis.perfil === "admin" || mis.perfil === "supervisor";
+  const puedeSupervisar = mis.perfil === "admin" || mis.perfil === "supervisor";      // Dashboard PTAP (planta)
+  const puedeRedes = redes?.dashboard_redes === true;                                  // Dashboard distribución (Corte 4a)
+  // selector arriba de cada dashboard, cuando la persona tiene los dos (§1 de la bitácora: no se solapan)
+  const selector = puedeSupervisar && puedeRedes ? (
+    <div className="tec-selector-dash" role="group" aria-label="Dashboard">
+      <button type="button" className="tec-chip-form" aria-pressed={vista === "dashboard"} onClick={() => setVista("dashboard")}>Dashboard PTAP</button>
+      <button type="button" className="tec-chip-form" aria-pressed={vista === "redes"} onClick={() => setVista("redes")}>Dashboard distribución</button>
+    </div>) : null;
 
-  if (puedeSupervisar && vista === "dashboard") return <Dashboard correo={correo} rotuloPerfil={ROTULO_PERFIL[mis.perfil]} onVolver={() => setVista("captura")} />;
+  if (puedeSupervisar && vista === "dashboard") return <>{selector ? <div className="tec-pagina tec-pagina-selector">{selector}</div> : null}<Dashboard correo={correo} rotuloPerfil={ROTULO_PERFIL[mis.perfil]} onVolver={() => setVista("captura")} /></>;
+  if (puedeRedes && vista === "redes") return <DashboardRedes selector={selector} onVolver={() => setVista("captura")} />;
   const tieneItv = mis.formularios.some((f) => f.clave === "mantenimiento");
   const abrirItv = (d: DesdeDano | null, a: typeof activoItv) => { setDesdeDano(d); setActivoItv(a); setVezItv((v) => v + 1); setElegido("mantenimiento"); setVista("captura"); window.scrollTo?.(0, 0); };
-  if (puedeSupervisar && vista === "activos") return <ActivosRedes onVolver={() => setVista("captura")} onRegistrarIntervencion={tieneItv || puedeSupervisar ? (a) => abrirItv(null, a) : undefined} />;
-  if (puedeSupervisar && vista === "intervenciones") return <IntervencionesSupervisor onVolver={() => setVista("captura")} />;
+  if ((puedeSupervisar || puedeRedes) && vista === "activos") return <ActivosRedes onVolver={() => setVista("captura")} onRegistrarIntervencion={tieneItv || puedeSupervisar || puedeRedes ? (a) => abrirItv(null, a) : undefined} />;
 
   return (
     <div className="tec-pagina">
@@ -111,16 +123,16 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
         </section>
       )}
 
-      {puedeSupervisar ? (
+      {puedeSupervisar || puedeRedes ? (
         <div className="tec-supervision">
-          <button type="button" className="tec-boton-sec" onClick={() => setVista("dashboard")}>Dashboard PTAP</button>
+          {puedeSupervisar ? <button type="button" className="tec-boton-sec" onClick={() => setVista("dashboard")}>Dashboard PTAP</button> : null}
+          {puedeRedes ? <button type="button" className="tec-boton-sec" onClick={() => setVista("redes")}>Dashboard distribución</button> : null}
           <button type="button" className="tec-boton-sec" onClick={() => setVista("activos")}>Ficha de activos (redes)</button>
-          <button type="button" className="tec-boton-sec" onClick={() => setVista("intervenciones")}>Intervenciones · supervisión</button>
         </div>
       ) : null}
 
       {elegido === "danos_fallas" ? <FormularioDano key={vezDano} correo={correo} onSalir={() => setVezDano((v) => v + 1)}
-        onRegistrarReparacion={tieneItv || puedeSupervisar ? (d) => abrirItv(d, null) : undefined} /> : null}
+        onRegistrarReparacion={tieneItv || puedeSupervisar || puedeRedes ? (d) => abrirItv(d, null) : undefined} /> : null}
       {elegido === "mantenimiento" ? <FormularioIntervencion key={vezItv} correo={correo} desdeDano={desdeDano} activoInicial={activoItv}
         onSalir={() => { setDesdeDano(null); setActivoItv(null); setVezItv((v) => v + 1); }} /> : null}
       {elegido && !PANTALLA_PROPIA.has(elegido) && errorDef ? (
