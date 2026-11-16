@@ -1,6 +1,6 @@
 OK    01 huellas antes: «CORTE 2 (listo para el 3a)», 8 RPC «NO EXISTE», 2 RPC y 2 vistas «CORTE 2 (sin cambiar)», bucket y 5 dependencias «EXISTE»
-OK    02 carga real publicada (35.781 activos), 111.983 predios y un daño real en V85 con el Corte 2 (el operador lo reporta) · maestro 3.7 s, publicar 12.3 s, DAN-000001
-OK    03 ensayo DESPUÉS de la carga real y con daños reales: ERROR con «N de N … SIN FALLAS» · RESULTADO: 118 de 118 pruebas correctas — SIN FALLAS (6.9 s)
+OK    02 carga real publicada (35.781 activos), 111.983 predios y un daño real en V85 con el Corte 2 (el operador lo reporta) · maestro 3.5 s, publicar 12.6 s, DAN-000001
+OK    03 ensayo DESPUÉS de la carga real y con daños reales: ERROR con «N de N … SIN FALLAS» · RESULTADO: 122 de 122 pruebas correctas — SIN FALLAS (7.2 s)
 OK    04 el ensayo no deja rastro (ni tablas, ni funciones, ni activos retirados, ni el daño real tocado)
 OK    05 migración _editor · 0.1 s
 OK    06 verificación sin intervenciones: 11 OK
@@ -12,11 +12,11 @@ OK    11 tras la reversa, la verificación del Corte 2 vuelve a dar 11 OK
 OK    12 una segunda reversa se niega
 OK    13 volver a migrar después de la reversa
 OK    14 «daños abiertos» de V85 trae el daño real, como del mismo activo
-OK    15 una reparación real sobre V85 que atiende su daño: ITV-000001, cerrada, y el daño atendido · {"id": "ad93568f-b919-41d9-85a6-e841b8adf48a", "dano": "DAN-000001", "activo": "VAL-000001", "codigo": "ITV-000001", "estado": "cerrada", "recursos": "por_completar", "repetido": false, "duracion_s": 5400, "dano_estado": "atendido", "activo_creado": false, "fuera_de_zona": false, "registrado_en": "2
+OK    15 una reparación real sobre V85 que atiende su daño: ITV-000001, cerrada, y el daño atendido · {"id": "d5f293a0-802e-486e-a26e-656aa16d4556", "dano": "DAN-000001", "activo": "VAL-000001", "codigo": "ITV-000001", "estado": "cerrada", "recursos": "por_completar", "repetido": false, "duracion_s": 5400, "dano_estado": "atendido", "activo_creado": false, "fuera_de_zona": false, "registrado_en": "2
 OK    16 la epicrisis de V85 trae la reparación y el daño atendido; la ficha cuenta 2 hechos · {"hechos": 2, "registro": 1, "danos_12_meses": 1}
-OK    17 la inversión crea un tramo RED-010574 (el siguiente después de los 10.573 cargados), por verificar y de origen tercero · {"id": "9f75291e-92f7-4247-9a97-09f0e78fe559", "dano": null, "activo": "RED-010574", "codigo": "ITV-000002", "estado": "cerrada", "recursos": "por_completar", "repetido": false, "duracion_s": 14400, "dano_estado": null, "activo_creado": true, "fuera_de_zona": false, "registrado_en": "2026-11-15T18:4
+OK    17 la inversión crea un tramo RED-010574 (el siguiente después de los 10.573 cargados), por verificar y de origen tercero · {"id": "5ad9f8af-aea5-49c6-8c04-c2551ff59fb3", "dano": null, "activo": "RED-010574", "codigo": "ITV-000002", "estado": "cerrada", "recursos": "por_completar", "repetido": false, "duracion_s": 14400, "dano_estado": null, "activo_creado": true, "fuera_de_zona": false, "registrado_en": "2026-11-15T19:0
 OK    18 el tramo nuevo sale en la tesela del minimapa, en la búsqueda y en la tabla vigente (sin recalcularla entera)
-OK    19 registrar una intervención en la base real tarda menos de 2 s (con psql) · 0.22 s (preparar, daños abiertos y crear)
+OK    19 registrar una intervención en la base real tarda menos de 2 s (con psql) · 0.23 s (preparar, daños abiertos y crear)
 OK    20 verificación con datos: 11 OK
 OK    21 la reversa se niega con datos (nada se borra)
 RESULTADO: 21 de 21 — SIN FALLAS

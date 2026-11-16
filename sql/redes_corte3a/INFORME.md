@@ -26,7 +26,7 @@ Fuente: `01_modelo_propuesto.md` §C y §I; `02_plan_por_cortes.md` (fila 3); la
   - Internas: `f_supervisor`, `f_mat_refrescar_uno`, `f_activo_crear`, `f_fuentes_validas` y `f_dano_elegible`.
 - **`30_semilla.sql`:** 5 tipos, 8 unidades y 11 parámetros (`on conflict do nothing`).
 - **`40_permisos.sql`:** revoke a los cuatro roles, RLS y execute solo a `service_role`.
-- **`70_pruebas.sql`:** **118 pruebas**, con su propia red de prueba (ID 99300xx, LABEL ZT3-…). No supone códigos ni datos reales.
+- **`70_pruebas.sql`:** **122 pruebas**, con su propia red de prueba (ID 99300xx, LABEL ZT3-…). No supone códigos ni datos reales.
 - **`80_verificacion.sql`:** 11 OK y 3 INFO. Desde aquí, la fila 07 de la verificación del Corte 2 dice MAL a propósito (el conjunto de funciones cambió).
 - **`90_reversa.sql`:** devuelve las 2 RPC y las 2 vistas al texto exacto del Corte 2. Se niega si hay intervenciones, preparaciones, archivos, activos creados por intervenciones o daños asociados.
 
@@ -51,11 +51,16 @@ Fuente: `01_modelo_propuesto.md` §C y §I; `02_plan_por_cortes.md` (fila 3); la
 - **Ficha:** botón «Registrar intervención» (pospuesto del 1b), chip «Por verificar» y la intervención en azul en la epicrisis.
 
 ## Resultados (N de N)
-- **Ensayo:** **118 de 118**, termina en el ERROR esperado y no deja rastro (6,9 s después de la carga real).
+- **Ensayo:** **122 de 122**, termina en el ERROR esperado y no deja rastro (7,2 s después de la carga real).
 - **Arnés local** (`pruebas_locales/correr_local.py`): **21 de 21**. Con la carga real, predios y un daño real. Recorre huellas, ensayo, migración, verificación, guardia, reversa exacta al Corte 2, la verificación del Corte 2 de nuevo, una reparación real sobre V85 que atiende su daño, una inversión que crea RED-010574, la tesela y la búsqueda con el tramo nuevo, y la reversa con datos (rechazo). Registrar una intervención tarda 0,22 s.
-- **Edge simulada:** **105 de 105** (66 de antes y 39 nuevas). `deno check` sin errores. Verificador de permisos: **0 errores**.
-- **Chrome real, a 390 px y en escritorio: 72 de 72.** App compilada, Edges reales en Deno, RPC reales sobre la carga completa y Storage simulado.
+- **Edge simulada:** **107 de 107** (66 de antes y 41 nuevas). `deno check` sin errores. Verificador de permisos: **0 errores**.
+- **Chrome real, a 390 px y en escritorio: 76 de 76.** App compilada, Edges reales en Deno, RPC reales sobre la carga completa y Storage simulado.
 - **Regresiones:** Corte 2 **60 de 60**, 1b **60 de 60**, 0b **68 de 68**, áreas **51 de 51**, `tsc` y `npm run build`.
 
 ## Decisiones de esta sesión (de Code)
 Ver la entrada del Corte 3a en la bitácora.
+
+## Ajustes del 15-nov-2026 (19:20), con las respuestas de David al 3a (antes de publicar)
+1. **Tiempos:** el operario conserva el tope de 7 días atrás y 72 h; el supervisor y el administrador registran las obras largas sin tope (el formulario les manda los topes en nulo).
+2. **Un daño puede tener varias intervenciones.** Columna nueva `resuelve_dano` («Con esta queda resuelto el daño»): la intervención que la marca le pone el servicio restablecido y lo deja **atendido**; las demás le ponen el inicio de la reparación (si no lo tenía) y un evento `en_atencion` («sigue abierto»). La epicrisis dice «(lo resuelve)» o «(sigue abierto)». La verificación 09 comprueba el evento de cada una.
+3. **El origen del activo nuevo** sigue saliendo de quién aporta; la corrección del origen la hace el Corte 3b (edición de la ficha).

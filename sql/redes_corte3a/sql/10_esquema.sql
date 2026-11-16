@@ -86,9 +86,11 @@ create table redes.intervenciones (
   contrato_orden       text check (contrato_orden is null or length(btrim(contrato_orden)) between 1 and 60),
   companeros           text check (companeros is null or length(btrim(companeros)) between 2 and 200),
   sin_evidencia_motivo text check (sin_evidencia_motivo is null or length(btrim(sin_evidencia_motivo)) between 10 and 300),
+  resuelve_dano        boolean not null default false,                              -- «Con esta queda resuelto el daño» (David, respuesta 2 al 3a)
   autor                text not null,
   registrado_en        timestamptz not null default clock_timestamp(),
   check ((nace_de = 'dano') = (dano_id is not null)),
+  check (not resuelve_dano or nace_de = 'dano'),
   check ((tipo_codigo = 'inversion') = (inversion_modo is not null)),
   check (activo_id is not null or no_ident_que_es is not null),
   check (not activo_creado or (inversion_modo = 'nuevo' and activo_id is not null)),

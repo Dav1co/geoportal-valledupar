@@ -4,6 +4,8 @@ OK    [390] guardar vacío: lista de lo que falta, sin llamar a la base
 OK    [390] «Daño o falla» deja solo correctivo, reparación y reposición, y pide primero el activo
 OK    [390] con GPS sobre V85: queda VAL-000001 y salen los daños abiertos del activo, con DAN-000001 como «mismo activo»
 OK    [390] elegir el daño lo marca
+OK    [390] sin marcar «Con esta queda resuelto el daño», avisa que el daño sigue en atención
+OK    [390] al marcar «Con esta queda resuelto el daño», avisa que quedará atendido
 OK    [390] el minimapa del Corte 2 dibuja la red y se proponen los cercanos como «también intervenidos»
 OK    [390] agregar un propuesto lo deja como chip (RED-000013)
 OK    [390] el inicio viene del celular y el fin con «Ahora»: la duración se calcula sola
@@ -39,6 +41,8 @@ OK    [1280] guardar vacío: lista de lo que falta, sin llamar a la base
 OK    [1280] «Daño o falla» deja solo correctivo, reparación y reposición, y pide primero el activo
 OK    [1280] con GPS sobre V85: queda VAL-000001 y salen los daños abiertos del activo, con DAN-000003 como «mismo activo»
 OK    [1280] elegir el daño lo marca
+OK    [1280] sin marcar «Con esta queda resuelto el daño», avisa que el daño sigue en atención
+OK    [1280] al marcar «Con esta queda resuelto el daño», avisa que quedará atendido
 OK    [1280] el minimapa del Corte 2 dibuja la red y se proponen los cercanos como «también intervenidos»
 OK    [1280] agregar un propuesto lo deja como chip (RED-000013)
 OK    [1280] el inicio viene del celular y el fin con «Ahora»: la duración se calcula sola
@@ -71,5 +75,5 @@ OK    [1280] «Registrar intervención» desde la ficha de VAL-000001 abre el fo
 OK    cada intervención guardada es una (el reenvío no duplica): 3 por ancho
 OK    sin errores de JavaScript ni de consola
 
-RESULTADO: 72 de 72 — SIN FALLAS
+RESULTADO: 76 de 76 — SIN FALLAS
 Capturas: /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/b95dd3c6-2438-41f3-aa49-7e903eb7f038/scratchpad/capturas_c3a

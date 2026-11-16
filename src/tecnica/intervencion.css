@@ -40,3 +40,4 @@
 .itv-etiqueta-dano { background: #fdf3f0; color: #8c2f1b; }
 .itv-prop[aria-checked="true"] { border-color: #1f5fa8; background: #e8eff8; }
 .itv [role="tab"][aria-selected="true"] { background: #1f5fa8; color: #fff; border-color: #1f5fa8; }
+.itv-resuelve { margin-top: 4px; font-weight: 600; }

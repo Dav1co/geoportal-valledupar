@@ -86,7 +86,7 @@ export type TipoNuevo = { prefijo: string; nombre: string; sistema: string; geom
 export type FormularioIntervencion = {
   perfil: "admin" | "supervisor" | "operador"; sistemas: Opcion[]; tipos: TipoIntervencion[]; aportantes: Opcion[]; contratistas: Opcion[]; unidades: Opcion[];
   tipos_nuevo: TipoNuevo[]; materiales: Opcion[];
-  reglas: { dias_atras_max: number; max_horas: number; min_fotos: number; puede_sin_fotos: boolean; pone_valores: boolean; max_fotos: number; max_documentos: number;
+  reglas: { dias_atras_max: number | null; max_horas: number | null; min_fotos: number; puede_sin_fotos: boolean; pone_valores: boolean; max_fotos: number; max_documentos: number;
             max_bytes_foto: number; max_bytes_documento: number; max_horas_inicio: number; radio_cercanos_m: number; radio_danos_m: number; max_tambien: number;
             max_materiales: number; zoom_min: number; zoom_accesorios: number };
   ahora: string;

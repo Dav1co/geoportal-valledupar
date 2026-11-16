@@ -56,6 +56,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
   const [modo, setModo] = useState<"nuevo" | "mejora" | "">("");
   const [danos, setDanos] = useState<DanoAbierto[] | null>(null);
   const [dano, setDano] = useState<string>(desdeDano?.codigo ?? "");
+  const [resuelve, setResuelve] = useState(false);      // «Con esta queda resuelto el daño» (David, respuesta 2 al 3a): sin marcarla, el daño sigue en atención
   // 2. activo
   const ini = desdeDano ?? activoInicial ?? null;
   const [sistema, setSistema] = useState<"acueducto" | "alcantarillado" | null>(ini?.sistema ?? null);
@@ -239,7 +240,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
         : eleccion?.tipo === "activo" ? { lat: eleccion.activo.lat, lon: eleccion.activo.lon, origen: "activo", precision: null } : null;
       const r6 = (n: number) => Number(n.toFixed(6));
       const datos: Record<string, unknown> = {
-        nace_de: nace, dano: nace === "dano" ? dano : null, tipo, inversion_modo: esInversion ? modo : null, sistema,
+        nace_de: nace, dano: nace === "dano" ? dano : null, resuelve_dano: nace === "dano" && resuelve, tipo, inversion_modo: esInversion ? modo : null, sistema,
         activo: activoSel?.codigo ?? null, no_identificado: noIdent && !esNuevo ? queEs.trim() : null,
         nuevo: esNuevo && tipoNuevo ? { prefijo: tipoNuevo.prefijo, clase: nuevoClase || null, material: nuevoMaterial || null, diametro_mm: decimalONulo(nuevoDiam), nombre: nuevoNombre.trim() || null,
           puntos: (eleccion?.tipo === "linea" ? eleccion.puntos : eleccion?.tipo === "punto" ? [eleccion] : []).map((x) => [r6(x.lat), r6(x.lon)]) } : null,
@@ -271,7 +272,9 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
       <section className="tec-tarjeta dan-listo itv-listo" role="status">
         <h2>Intervención guardada: {guardado.codigo}</h2>
         <p>Estado: <strong>Cerrada</strong>{guardado.activo ? <> · activo <strong>{guardado.activo}</strong>{guardado.activo_creado ? " (nuevo, queda por verificar)" : ""} (va a su epicrisis)</> : <> · activo no identificado (va a la bandeja del supervisor)</>}.</p>
-        {guardado.dano ? <p>El daño <strong>{guardado.dano}</strong> quedó <strong>{guardado.dano_estado === "atendido" ? "atendido" : guardado.dano_estado}</strong>, con los tiempos de esta intervención.</p> : null}
+        {guardado.dano ? (guardado.dano_estado === "atendido"
+          ? <p>El daño <strong>{guardado.dano}</strong> quedó <strong>atendido</strong>, con los tiempos de esta intervención.</p>
+          : <p>El daño <strong>{guardado.dano}</strong> sigue <strong>en atención</strong>: quedará atendido con la intervención que lo resuelva.</p>) : null}
         {guardado.sin_evidencia ? <p className="tec-aviso tec-aviso-info">Quedó marcada «sin evidencia fotográfica».</p> : null}
         {guardado.recursos === "por_completar" ? <p className="tec-ayuda">El supervisor completará el valor, el porcentaje y el soporte de los recursos.</p> : null}
         {guardado.fuera_de_zona ? <p className="tec-aviso tec-aviso-info">La ubicación quedó fuera de Valledupar: se guardó con esa marca.</p> : null}
@@ -310,7 +313,9 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
                   <strong>{d.codigo}</strong> · {d.tipo}{d.activo ? ` en ${d.activo}` : d.no_identificado ? ` (${d.no_identificado})` : ""}
                   <span>{fechaCorta(d.t_detectado)} · {d.estado === "en_atencion" ? "en atención" : "reportado"} · {d.mismo_activo ? "mismo activo" : `a ${d.distancia_m} m`}</span>
                 </button>))}
-            <p className="tec-ayuda">Solo salen los daños abiertos de este activo o de los cercanos. Al guardar, el daño queda atendido con sus tiempos.</p>
+            <p className="tec-ayuda">Solo salen los daños abiertos de este activo o de los cercanos. Un daño puede tener varias intervenciones.</p>
+            <label className="dan-check itv-resuelve"><input type="checkbox" checked={resuelve} onChange={(e) => setResuelve(e.target.checked)} />Con esta queda resuelto el daño</label>
+            <p className="tec-ayuda">{resuelve ? "Al guardar, el daño queda atendido con el fin de esta intervención como servicio restablecido." : "Sin marcarla, el daño sigue en atención (por ejemplo, si falta otra cuadrilla o la reposición)."}</p>
           </div>
         ) : null}
         <span className="dan-rot">Tipo</span>
@@ -437,7 +442,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
             <div className="itv-fin"><input id="itv-fin" type="datetime-local" className="dan-hora" max={aLocal(new Date())} value={tFin} onChange={(e) => setTFin(e.target.value)} />
               <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => setTFin(aLocal(new Date()))}>Ahora</button></div></div>
         </div>
-        <p className="tec-ayuda">El inicio se toma del celular al abrir el formulario; cámbielo si el trabajo empezó antes (hasta {reglas.dias_atras_max} días atrás). Duración: <strong>{dur ?? "—"}</strong>{reglas.max_horas ? ` (máximo ${reglas.max_horas} h)` : ""}.</p>
+        <p className="tec-ayuda">El inicio se toma del celular al abrir el formulario; cámbielo si el trabajo empezó antes{reglas.dias_atras_max ? ` (hasta ${reglas.dias_atras_max} días atrás)` : " (sin tope: las obras largas se registran desde aquí)"}. Duración: <strong>{dur ?? "—"}</strong>{reglas.max_horas ? ` (máximo ${reglas.max_horas} h)` : ""}.</p>
       </section>
 
       <section className="tec-tarjeta" aria-labelledby="itv-t4">

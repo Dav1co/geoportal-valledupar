@@ -72,7 +72,7 @@ select b.id, b.codigo, b.nace_de, b.dano_id, (select d.codigo from redes.danos d
        b.no_ident_que_es, b.lat, b.lon, b.geom, b.ubicacion_origen, b.precision_m, b.fuera_de_zona,
        b.t_inicio, b.t_fin, extract(epoch from (b.t_fin - b.t_inicio))::bigint as duracion_s, b.inicio_en, b.inicio_origen, b.descripcion,
        b.ejecutor, b.contratista_id, coalesce((select c.nombre from redes.contratistas c where c.id = b.contratista_id), b.contratista_nombre) as contratista,
-       b.contrato_orden, b.companeros, b.sin_evidencia_motivo, b.autor, b.registrado_en,
+       b.contrato_orden, b.companeros, b.sin_evidencia_motivo, b.resuelve_dano, b.autor, b.registrado_en,
        case when b.oculta then 'oculta' else coalesce(b.ev_estado, 'cerrada') end as estado,
        b.fotos, b.documentos, b.fotos = 0 as sin_evidencia,
        case when exists (select 1 from redes.v_intervencion_fuentes f where f.intervencion_id = b.id and f.valor is null and f.porcentaje is null) then 'por_completar' else 'completos' end as recursos,
@@ -131,7 +131,7 @@ union all
 select i.activo_id, i.t_fin, 'intervencion', substring(i.codigo from 5)::bigint,
        i.codigo || ' · ' || i.tipo_nombre
          || case i.inversion_modo when 'nuevo' then ' (activo nuevo)' when 'mejora' then ' (mejora)' else '' end
-         || case when i.dano_codigo is not null then ' · atiende ' || i.dano_codigo else ' · programada o mejora' end
+         || case when i.dano_codigo is not null then ' · atiende ' || i.dano_codigo || case when i.resuelve_dano then ' (lo resuelve)' else ' (sigue abierto)' end else ' · programada o mejora' end
          || case i.ejecutor when 'emdupar' then ' · EMDUPAR' else ' · contratista' || coalesce(' ' || i.contratista, '') end
          || ' · duración ' || (i.duracion_s / 3600) || ' h ' || lpad(((i.duracion_s % 3600) / 60)::text, 2, '0') || ' min'
          || case when i.tambien > 0 then ' · ' || i.tambien || ' activo(s) más' else '' end

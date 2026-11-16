@@ -36,10 +36,11 @@ select k, v from (
                      and c.relname in ('tipos_intervencion', 'unidades_material')) = 2 then 'OK' else 'MAL' end
   union all select 8, '08 la epicrisis incluye las intervenciones y el daño toma el activo asociado',
          case when position('v_intervencion' in pg_get_viewdef('redes.v_epicrisis'::regclass, true)) > 0 and position('asociar_activo' in pg_get_viewdef('redes.v_dano'::regclass, true)) > 0 then 'OK' else 'MAL' end
-  union all select 9, '09 todo archivo de intervención existe en Storage, y toda intervención que nace de un daño lo dejó atendido con su código',
+  union all select 9, '09 todo archivo de intervención existe en Storage, y toda intervención que nace de un daño dejó su evento (atendido si lo resuelve; en atención si no)',
          case when not exists (select 1 from redes.intervencion_archivos f where not exists (select 1 from storage.objects o where o.bucket_id = 'redes-evidencias' and o.name = f.ruta_storage))
                and not exists (select 1 from redes.intervenciones i where i.dano_id is not null
-                                and not exists (select 1 from redes.dano_eventos e where e.dano_id = i.dano_id and e.tipo = 'atendido' and e.intervencion_id = i.id)) then 'OK' else 'MAL' end
+                                and not exists (select 1 from redes.dano_eventos e where e.dano_id = i.dano_id and e.intervencion_id = i.id
+                                                 and e.tipo = case when i.resuelve_dano then 'atendido' else 'en_atencion' end)) then 'OK' else 'MAL' end
   union all select 10, '10 toda intervención sin fotos tiene su motivo; todo daño sin fotos tiene su nota «Sin evidencia fotográfica»',
          case when not exists (select 1 from redes.v_intervencion where sin_evidencia and sin_evidencia_motivo is null)
                and not exists (select 1 from redes.danos d where not exists (select 1 from redes.dano_fotos f where f.dano_id = d.id) and d.origen = 'formulario'

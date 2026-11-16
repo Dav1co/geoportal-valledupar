@@ -275,19 +275,19 @@ begin
   -- (a) operador: reparación que nace del daño 1, con la válvula también intervenida, materiales, 2 fotos y 1 PDF
   v_r := public.geoportal_redes_crear_intervencion(op, v_id, pg_temp.itv(jsonb_build_array(jsonb_build_object('n', 1, 'clase', 'antes', 'ruta', v_ruta),
             jsonb_build_object('n', 2, 'clase', 'despues', 'ruta', v_p -> 'fotos' -> 1 ->> 'ruta'), jsonb_build_object('n', 3, 'clase', 'documento', 'ruta', v_p -> 'documentos' -> 0 ->> 'ruta')),
-            jsonb_build_object('nace_de', 'dano', 'tipo', 'reparacion', 'dano', v_d1, 't_inicio', pg_temp.iso('-4 hours'), 't_fin', pg_temp.iso('-2 hours'),
+            jsonb_build_object('nace_de', 'dano', 'tipo', 'reparacion', 'dano', v_d1, 'resuelve_dano', true, 't_inicio', pg_temp.iso('-4 hours'), 't_fin', pg_temp.iso('-2 hours'),
               'inicio_dispositivo', pg_temp.iso('-10 minutes'), 'tambien', jsonb_build_array(v_val), 'companeros', 'Cuadrilla 2',
               'materiales', jsonb_build_array(jsonb_build_object('material', 'Tubo PVC 3 pulg', 'cantidad', 6, 'unidad', 'm'), jsonb_build_object('material', 'Unión de reparación 3 pulg', 'cantidad', 2, 'unidad', 'und')),
               'fuentes', jsonb_build_array(jsonb_build_object('aportante', 'emdupar')))), '10.0.0.3');
   v_ia := v_r ->> 'codigo';
-  perform pg_temp.reg('07.01 se guarda la reparación: ITV-…, cerrada, sobre el tramo 1; el daño queda atendido; recursos por completar',
+  perform pg_temp.reg('07.01 se guarda la reparación que marca «queda resuelto»: ITV-…, cerrada, sobre el tramo 1; el daño queda atendido; recursos por completar',
      v_ia ~ '^ITV-[0-9]{6}$' and v_r ->> 'estado' = 'cerrada' and v_r ->> 'activo' = v_red1 and v_r ->> 'dano' = v_d1 and v_r ->> 'dano_estado' = 'atendido'
      and v_r ->> 'recursos' = 'por_completar' and not (v_r ->> 'sin_evidencia')::boolean and not (v_r ->> 'repetido')::boolean
      and (select ultimo from redes.consecutivos where prefijo = 'ITV') = v_itv0 + 1, v_r::text);
   select row_to_json(x)::jsonb into v_x from redes.v_dano x where codigo = v_d1;
   perform pg_temp.reg('07.02 el daño recibe los tiempos de la intervención: reparación de 2 h, respuesta de 1 h y el evento «atendido» con el código',
      (v_x ->> 'reparacion_s')::integer between 7190 and 7210 and (v_x ->> 'respuesta_s')::integer between 3590 and 3610
-     and exists (select 1 from redes.dano_eventos e join redes.danos d on d.id = e.dano_id where d.codigo = v_d1 and e.tipo = 'atendido' and e.intervencion_id = v_id and e.motivo like '%' || v_ia || '%')
+     and exists (select 1 from redes.dano_eventos e join redes.danos d on d.id = e.dano_id where d.codigo = v_d1 and e.tipo = 'atendido' and e.intervencion_id = v_id and e.motivo like 'Resuelto con la intervención ' || v_ia || '%')
      and exists (select 1 from redes.dano_tiempos t join redes.danos d on d.id = t.dano_id where d.codigo = v_d1 and t.fuente = 'intervencion'), v_x::text);
   perform pg_temp.reg('07.03 quedan los materiales, la válvula también intervenida, la fuente sin valores, 2 fotos y 1 PDF leídos de Storage',
      (select count(*) from redes.intervencion_materiales where intervencion_id = v_id) = 2
@@ -304,14 +304,24 @@ begin
   perform pg_temp.err('07.06 otra intervención no puede atender el mismo daño', format($$select public.geoportal_redes_crear_intervencion(%L, %L, %L)$$, op, (v_p ->> 'intervencion_id')::uuid,
      pg_temp.itv(pg_temp.a1(v_p -> 'fotos' -> 0 ->> 'ruta'), jsonb_build_object('nace_de', 'dano', 'tipo', 'reparacion', 'dano', v_d1))), '22023', 'ya está atendido');
 
-  -- (b) el daño 2 ya estaba en atención: se conserva su inicio de reparación y la intervención le pone el restablecido
+  -- (b) el daño 2 ya estaba en atención. Un daño puede tener varias intervenciones (David, respuesta 2 al 3a): la primera NO lo resuelve
+  --     (sigue en atención, con su inicio de reparación de antes); la segunda marca «queda resuelto» y le pone el restablecido.
   v_p := pg_temp.preparar(op, 1); v_ida := (v_p ->> 'intervencion_id')::uuid;
   v_r := public.geoportal_redes_crear_intervencion(op, v_ida, pg_temp.itv(pg_temp.a1(v_p -> 'fotos' -> 0 ->> 'ruta'),
-            jsonb_build_object('nace_de', 'dano', 'tipo', 'correctivo', 'dano', v_d2, 'activo', v_red2, 't_inicio', pg_temp.iso('-3 hours'), 't_fin', pg_temp.iso('-90 minutes'))));
+            jsonb_build_object('nace_de', 'dano', 'tipo', 'correctivo', 'dano', v_d2, 'activo', v_red2, 't_inicio', pg_temp.iso('-3 hours'), 't_fin', pg_temp.iso('-150 minutes'))));
   v_ib := v_r ->> 'codigo';
+  perform pg_temp.reg('07.07 una intervención que no lo resuelve: el daño sigue «en atención», con un evento que lo dice, sin restablecido',
+     v_r ->> 'dano_estado' = 'en_atencion' and (select t_restablecido is null from redes.v_dano where codigo = v_d2)
+     and exists (select 1 from redes.dano_eventos e join redes.danos d on d.id = e.dano_id where d.codigo = v_d2 and e.tipo = 'en_atencion' and e.motivo like '%' || v_ib || '%sigue abierto'), v_r::text);
+  v_p := pg_temp.preparar(op, 1); v_ida := (v_p ->> 'intervencion_id')::uuid;
+  v_r := public.geoportal_redes_crear_intervencion(op, v_ida, pg_temp.itv(pg_temp.a1(v_p -> 'fotos' -> 0 ->> 'ruta'),
+            jsonb_build_object('nace_de', 'dano', 'tipo', 'reposicion', 'dano', v_d2, 'activo', v_red2, 'resuelve_dano', true, 't_inicio', pg_temp.iso('-2 hours'), 't_fin', pg_temp.iso('-90 minutes'))));
   select row_to_json(x)::jsonb into v_x from redes.v_dano x where codigo = v_d2;
-  perform pg_temp.reg('07.07 daño en atención: queda atendido, con su inicio de reparación de antes (hace 4 h) y el fin de la intervención (reparación 2,5 h)',
-     v_r ->> 'dano_estado' = 'atendido' and (v_x ->> 'reparacion_s')::integer between 8990 and 9010, v_r::text || ' / ' || v_x::text);
+  perform pg_temp.reg('07.07b la segunda marca «queda resuelto»: atendido, con el inicio de reparación de antes (hace 4 h) y el fin de esta (reparación 2,5 h); el daño tiene 2 intervenciones',
+     v_r ->> 'dano_estado' = 'atendido' and (v_x ->> 'reparacion_s')::integer between 8990 and 9010
+     and (select count(*) from redes.intervenciones i join redes.danos d on d.id = i.dano_id where d.codigo = v_d2) = 2, v_r::text || ' / ' || v_x::text);
+  perform pg_temp.err('07.07c «queda resuelto» sin nacer de un daño', format($$select public.geoportal_redes_crear_intervencion(%L, %L, %L)$$, op, (pg_temp.preparar(op, 1) ->> 'intervencion_id')::uuid,
+     pg_temp.itv(pg_temp.a1(v_ruta), '{"resuelve_dano": true}')), '22023', 'solo va cuando');
 
   -- (c) supervisor desde el escritorio: preventivo SIN fotos, con el motivo; contratista escrito; los valores ya puestos
   v_p := public.geoportal_redes_preparar_intervencion(sv, 0); v_ida := (v_p ->> 'intervencion_id')::uuid;
@@ -320,7 +330,15 @@ begin
             'ejecutor', 'contratista', 'contratista_nombre', 'Obras ZT SAS', 'contrato_orden', 'OT-ZT-77',
             'fuentes', jsonb_build_array(jsonb_build_object('aportante', 'emdupar', 'porcentaje', 60, 'soporte', 'Presupuesto 2026'),
                                          jsonb_build_object('aportante', 'gobernacion', 'valor', 4000000, 'soporte', 'Convenio ZT-1')))));
-  v_ic := v_r ->> 'codigo';
+  v_ic := v_r ->> 'codigo'; v_x := v_r;
+  v_p := public.geoportal_redes_preparar_intervencion(sv, 0); v_ida := (v_p ->> 'intervencion_id')::uuid;
+  v_x := public.geoportal_redes_crear_intervencion(sv, v_ida, pg_temp.itv('[]'::jsonb, jsonb_build_object('activo', v_red2, 'sin_evidencia_motivo', 'Obra larga registrada desde el escritorio',
+            't_inicio', pg_temp.iso('-20 days'), 't_fin', pg_temp.iso('-10 days'))));
+  perform pg_temp.reg('07.08b el supervisor registra una obra larga sin el tope del operario (empezó hace 20 días y duró 10)', v_x ->> 'codigo' ~ '^ITV-' and (v_x ->> 'duracion_s')::integer = 864000, v_x::text);
+  perform pg_temp.reg('07.08c el formulario no le pone tope de días ni de horas al supervisor; al operario sí (7 y 72)',
+     public.geoportal_redes_formulario_intervencion(sv) -> 'reglas' -> 'dias_atras_max' = 'null'::jsonb and public.geoportal_redes_formulario_intervencion(sv) -> 'reglas' -> 'max_horas' = 'null'::jsonb
+     and (public.geoportal_redes_formulario_intervencion(op) -> 'reglas' ->> 'max_horas')::integer = 72);
+  v_r := (select jsonb_build_object('sin_evidencia', sin_evidencia, 'recursos', recursos) from redes.v_intervencion where codigo = v_ic);
   perform pg_temp.reg('07.09 se guarda «sin evidencia fotográfica», con el contratista y los recursos completos',
      (v_r ->> 'sin_evidencia')::boolean and v_r ->> 'recursos' = 'completos'
      and exists (select 1 from redes.v_intervencion where codigo = v_ic and contratista = 'Obras ZT SAS' and contrato_orden = 'OT-ZT-77' and sin_evidencia_motivo like 'Lo reportó%'
@@ -372,9 +390,9 @@ begin
 
   -- ---------- 08 Epicrisis y ficha ----------
   v_r := public.geoportal_redes_epicrisis(op, v_red1);
-  perform pg_temp.reg('08.01 epicrisis del tramo 1: la reparación es un «hecho», con el daño que atiende, la duración, «1 activo(s) más» y las fotos',
+  perform pg_temp.reg('08.01 epicrisis del tramo 1: la reparación es un «hecho», con el daño que resuelve, la duración, «1 activo(s) más» y las fotos',
      exists (select 1 from jsonb_array_elements(v_r -> 'items') i where i ->> 'clase' = 'intervencion' and i ->> 'grupo' = 'hecho' and i ->> 'estado' = 'Cerrada'
-              and i ->> 'resumen' = v_ia || ' · Reparación · atiende ' || v_d1 || ' · EMDUPAR · duración 2 h 00 min · 1 activo(s) más · 2 foto(s)')
+              and i ->> 'resumen' = v_ia || ' · Reparación · atiende ' || v_d1 || ' (lo resuelve) · EMDUPAR · duración 2 h 00 min · 1 activo(s) más · 2 foto(s)')
      and exists (select 1 from jsonb_array_elements(v_r -> 'items') i where i ->> 'clase' = 'dano' and i ->> 'estado' = 'Atendido'), v_r::text);
   perform pg_temp.reg('08.02 la válvula también intervenida la tiene en su epicrisis, con el principal', exists (select 1 from jsonb_array_elements(public.geoportal_redes_epicrisis(op, v_val) -> 'items') i
      where i ->> 'clase' = 'intervencion' and i ->> 'resumen' = v_ia || ' · Reparación · también intervenido (principal ' || v_red1 || ')'));

@@ -87,9 +87,11 @@ create table redes.intervenciones (
   contrato_orden       text check (contrato_orden is null or length(btrim(contrato_orden)) between 1 and 60),
   companeros           text check (companeros is null or length(btrim(companeros)) between 2 and 200),
   sin_evidencia_motivo text check (sin_evidencia_motivo is null or length(btrim(sin_evidencia_motivo)) between 10 and 300),
+  resuelve_dano        boolean not null default false,                              -- «Con esta queda resuelto el daño» (David, respuesta 2 al 3a)
   autor                text not null,
   registrado_en        timestamptz not null default clock_timestamp(),
   check ((nace_de = 'dano') = (dano_id is not null)),
+  check (not resuelve_dano or nace_de = 'dano'),
   check ((tipo_codigo = 'inversion') = (inversion_modo is not null)),
   check (activo_id is not null or no_ident_que_es is not null),
   check (not activo_creado or (inversion_modo = 'nuevo' and activo_id is not null)),
@@ -292,7 +294,7 @@ select b.id, b.codigo, b.nace_de, b.dano_id, (select d.codigo from redes.danos d
        b.no_ident_que_es, b.lat, b.lon, b.geom, b.ubicacion_origen, b.precision_m, b.fuera_de_zona,
        b.t_inicio, b.t_fin, extract(epoch from (b.t_fin - b.t_inicio))::bigint as duracion_s, b.inicio_en, b.inicio_origen, b.descripcion,
        b.ejecutor, b.contratista_id, coalesce((select c.nombre from redes.contratistas c where c.id = b.contratista_id), b.contratista_nombre) as contratista,
-       b.contrato_orden, b.companeros, b.sin_evidencia_motivo, b.autor, b.registrado_en,
+       b.contrato_orden, b.companeros, b.sin_evidencia_motivo, b.resuelve_dano, b.autor, b.registrado_en,
        case when b.oculta then 'oculta' else coalesce(b.ev_estado, 'cerrada') end as estado,
        b.fotos, b.documentos, b.fotos = 0 as sin_evidencia,
        case when exists (select 1 from redes.v_intervencion_fuentes f where f.intervencion_id = b.id and f.valor is null and f.porcentaje is null) then 'por_completar' else 'completos' end as recursos,
@@ -351,7 +353,7 @@ union all
 select i.activo_id, i.t_fin, 'intervencion', substring(i.codigo from 5)::bigint,
        i.codigo || ' · ' || i.tipo_nombre
          || case i.inversion_modo when 'nuevo' then ' (activo nuevo)' when 'mejora' then ' (mejora)' else '' end
-         || case when i.dano_codigo is not null then ' · atiende ' || i.dano_codigo else ' · programada o mejora' end
+         || case when i.dano_codigo is not null then ' · atiende ' || i.dano_codigo || case when i.resuelve_dano then ' (lo resuelve)' else ' (sigue abierto)' end else ' · programada o mejora' end
          || case i.ejecutor when 'emdupar' then ' · EMDUPAR' else ' · contratista' || coalesce(' ' || i.contratista, '') end
          || ' · duración ' || (i.duracion_s / 3600) || ' h ' || lpad(((i.duracion_s % 3600) / 60)::text, 2, '0') || ' min'
          || case when i.tambien > 0 then ' · ' || i.tambien || ' activo(s) más' else '' end
@@ -483,7 +485,9 @@ begin
                      order by t.orden)
                       from redes.v_tipo_visible t where t.sistema in ('acueducto', 'alcantarillado') and t.geometria in ('punto', 'linea')),
     'materiales', (select jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre) order by orden) from redes.materiales),
-    'reglas', jsonb_build_object('dias_atras_max', redes.f_param('itv_dias_atras_max'), 'max_horas', redes.f_param('itv_max_horas'),
+    -- el operario conserva el tope de días y de horas; el supervisor y el administrador registran las obras largas sin ese tope (David, respuesta 1 al 3a)
+    'reglas', jsonb_build_object('dias_atras_max', case when v_perfil in ('admin', 'supervisor') then null else redes.f_param('itv_dias_atras_max') end,
+                                 'max_horas', case when v_perfil in ('admin', 'supervisor') then null else redes.f_param('itv_max_horas') end,
                                  'min_fotos', case when v_perfil in ('admin', 'supervisor') then 0 else redes.f_param('min_fotos_itv') end,
                                  'puede_sin_fotos', v_perfil in ('admin', 'supervisor'), 'pone_valores', v_perfil in ('admin', 'supervisor'),
                                  'max_fotos', redes.f_param('max_fotos_itv'), 'max_documentos', redes.f_param('max_docs_itv'),
@@ -556,7 +560,7 @@ declare
   v_f jsonb; v_ruta text; v_size bigint; v_mime text; v_prep redes.intervencion_preparaciones%rowtype; v_sinev text := nullif(btrim(coalesce(d ->> 'sin_evidencia_motivo', '')), '');
   v_cons bigint; v_codigo text; v_ctr bigint; v_ctr_nom text; v_orden text := nullif(btrim(coalesce(d ->> 'contrato_orden', '')), '');
   v_comp text := nullif(btrim(coalesce(d ->> 'companeros', '')), ''); v_pto geometry; v_creado boolean := false; v_origen text; v_aport text; v_cod_nuevo text;
-  v_dano_estado text;
+  v_dano_estado text; v_resuelve boolean := coalesce((p_datos ->> 'resuelve_dano')::boolean, false);
 begin
   if p_id is null then perform tecnica.f_error('Falta el identificador de la intervención: prepare la subida primero'); end if;
   -- reintento: mismo id y mismo autor devuelve lo guardado, sin revalidar
@@ -651,11 +655,12 @@ begin
   if v_t_ini is null or v_t_fin is null then perform tecnica.f_error('Escriba el inicio y el fin de la intervención'); end if;
   if v_t_fin > v_ahora + interval '2 minutes' then perform tecnica.f_error('El fin está en el futuro: la intervención se registra cuando ya se hizo'); end if;
   if v_t_ini > v_t_fin then perform tecnica.f_error('El inicio no puede ser después del fin'); end if;
-  if v_t_ini < v_ahora - make_interval(days => redes.f_param('itv_dias_atras_max')::integer) then
+  -- el tope de días y de horas es del operario; el supervisor y el administrador registran las obras largas desde el escritorio sin él
+  if not v_super and v_t_ini < v_ahora - make_interval(days => redes.f_param('itv_dias_atras_max')::integer) then
     perform tecnica.f_error(format('El inicio no puede ser de hace más de %s días', redes.f_param('itv_dias_atras_max')::integer));
   end if;
-  if v_t_fin - v_t_ini > make_interval(hours => redes.f_param('itv_max_horas')::integer) then
-    perform tecnica.f_error(format('Una intervención dura hasta %s horas: si duró más, regístrela por partes', redes.f_param('itv_max_horas')::integer));
+  if not v_super and v_t_fin - v_t_ini > make_interval(hours => redes.f_param('itv_max_horas')::integer) then
+    perform tecnica.f_error(format('Una intervención dura hasta %s horas: si duró más, la registra el supervisor desde el escritorio', redes.f_param('itv_max_horas')::integer));
   end if;
   v_inicio := redes.f_instante(d ->> 'inicio_dispositivo', 'apertura del formulario');
   if v_inicio is not null and (v_inicio > v_ahora + interval '2 minutes' or v_inicio < v_ahora - make_interval(hours => tecnica.f_max_horas_inicio())) then
@@ -675,9 +680,11 @@ begin
     if v_dano.t_inicio_reparacion is null and v_t_ini < v_dano.t_detectado then
       perform tecnica.f_error(format('La intervención empezó antes de que se detectara el daño %s: revise las horas', v_dano.codigo));
     end if;
-    if v_dano.t_inicio_reparacion is not null and v_t_fin < v_dano.t_inicio_reparacion then
+    if v_resuelve and v_dano.t_inicio_reparacion is not null and v_t_fin < v_dano.t_inicio_reparacion then
       perform tecnica.f_error(format('La intervención terminó antes del inicio de la reparación que ya tenía el daño %s', v_dano.codigo));
     end if;
+  elsif v_resuelve then
+    perform tecnica.f_error('«Con esta queda resuelto el daño» solo va cuando la intervención nace de un daño');
   end if;
 
   -- 4. qué se hizo y materiales
@@ -767,10 +774,10 @@ begin
 
   insert into redes.intervenciones (id, codigo, nace_de, dano_id, tipo_codigo, inversion_modo, sistema, activo_id, activo_creado, no_ident_que_es, lat, lon,
          ubicacion_origen, precision_m, fuera_de_zona, t_inicio, t_fin, inicio_en, inicio_origen, descripcion, ejecutor, contratista_id, contratista_nombre,
-         contrato_orden, companeros, sin_evidencia_motivo, autor, registrado_en)
+         contrato_orden, companeros, sin_evidencia_motivo, resuelve_dano, autor, registrado_en)
   values (p_id, v_codigo, d ->> 'nace_de', v_dano.id, v_tipo.codigo, v_modo, v_sis, v_activo, v_creado, v_noid, round(v_lat, 6), round(v_lon, 6),
           d ->> 'ubicacion_origen', (d ->> 'precision_m')::numeric, v_fuera, v_t_ini, v_t_fin, v_inicio, case when v_inicio is not null then 'dispositivo' end,
-          v_desc, d ->> 'ejecutor', v_ctr, v_ctr_nom, v_orden, v_comp, v_sinev, v_email, v_ahora);
+          v_desc, d ->> 'ejecutor', v_ctr, v_ctr_nom, v_orden, v_comp, v_sinev, v_resuelve, v_email, v_ahora);
   insert into redes.intervencion_activos (intervencion_id, activo_id, n) select p_id, x, o from unnest(v_tambien) with ordinality u(x, o);
   insert into redes.intervencion_materiales (intervencion_id, n, material, cantidad, unidad)
   select p_id, o, btrim(e ->> 'material'), (e ->> 'cantidad')::numeric, e ->> 'unidad' from jsonb_array_elements(v_mats) with ordinality x(e, o);
@@ -784,19 +791,25 @@ begin
     insert into redes.intervencion_eventos (intervencion_id, tipo, activo_id, motivo, autor) values (p_id, 'crear_activo', v_activo, format('Inversión: se creó el activo %s, por verificar', v_cod_nuevo), v_email);
   end if;
 
-  -- al cerrar una intervención que nace de un daño: el daño recibe sus tiempos de reparación y queda atendido
+  -- intervención que nace de un daño (un daño puede tener varias, David, respuesta 2 al 3a):
+  --   · la primera le pone el inicio de la reparación (si no lo tenía) y el daño queda «en atención»;
+  --   · la que marca «Con esta queda resuelto el daño» le pone el servicio restablecido y lo deja «atendido».
   if v_dano.id is not null then
-    insert into redes.dano_tiempos (dano_id, t_inicio_reparacion, t_restablecido, fuente, autor)
-    values (v_dano.id, case when v_dano.t_inicio_reparacion is null then v_t_ini end, v_t_fin, 'intervencion', v_email);
+    if v_dano.t_inicio_reparacion is null or v_resuelve then
+      insert into redes.dano_tiempos (dano_id, t_inicio_reparacion, t_restablecido, fuente, autor)
+      values (v_dano.id, case when v_dano.t_inicio_reparacion is null then v_t_ini end, case when v_resuelve then v_t_fin end, 'intervencion', v_email);
+    end if;
     insert into redes.dano_eventos (dano_id, tipo, intervencion_id, motivo, autor)
-    values (v_dano.id, 'atendido', p_id, format('Atendido con la intervención %s (%s)', v_codigo, v_tipo.nombre), v_email);
+    values (v_dano.id, case when v_resuelve then 'atendido' else 'en_atencion' end, p_id,
+            case when v_resuelve then format('Resuelto con la intervención %s (%s)', v_codigo, v_tipo.nombre)
+                 else format('Atendido en parte con la intervención %s (%s); sigue abierto', v_codigo, v_tipo.nombre) end, v_email);
     select x.estado into v_dano_estado from redes.v_dano x where x.id = v_dano.id;
   end if;
 
   -- auditoría sin la posición ni los valores
   perform tecnica.f_auditar(v_email, 'redes_crear_intervencion', v_codigo, jsonb_build_object('tipo', v_tipo.codigo, 'nace_de', d ->> 'nace_de', 'dano', v_dano.codigo,
           'sistema', v_sis, 'activo', coalesce(v_act.codigo, v_cod_nuevo), 'activo_creado', v_creado, 'no_identificado', v_noid is not null, 'tambien', cardinality(v_tambien),
-          'fotos', v_nf, 'documentos', v_nd, 'sin_evidencia', v_nf = 0, 'ejecutor', d ->> 'ejecutor'), p_ip);
+          'fotos', v_nf, 'documentos', v_nd, 'sin_evidencia', v_nf = 0, 'ejecutor', d ->> 'ejecutor', 'resuelve_dano', v_resuelve), p_ip);
   return (select jsonb_build_object('id', x.id, 'codigo', x.codigo, 'registrado_en', x.registrado_en, 'estado', x.estado, 'activo', x.activo_codigo, 'activo_creado', x.activo_creado,
                                     'dano', x.dano_codigo, 'dano_estado', v_dano_estado, 'recursos', x.recursos, 'sin_evidencia', x.sin_evidencia, 'fuera_de_zona', x.fuera_de_zona,
                                     'duracion_s', x.duracion_s, 'repetido', false) from redes.v_intervencion x where x.id = p_id);

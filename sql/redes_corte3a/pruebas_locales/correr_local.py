@@ -118,7 +118,7 @@ for r_ in rutas:
     q(f"insert into storage.objects (bucket_id, name, metadata) values ('redes-evidencias', '{r_}', '{{\"size\": 280000, \"mimetype\": \"image/jpeg\"}}')")
 abiertos = q(f"select public.geoportal_redes_danos_abiertos('{OPER}', 'acueducto', '{v85[2]}')")
 reg('14 «daños abiertos» de V85 trae el daño real, como del mismo activo', f'"codigo": "{cod_dano}"' in abiertos and '"mismo_activo": true' in abiertos)
-datos = ('{"nace_de": "dano", "dano": "%s", "tipo": "reparacion", "sistema": "acueducto", "activo": "%s", "lat": %s, "lon": %s, "ubicacion_origen": "gps", '
+datos = ('{"nace_de": "dano", "dano": "%s", "resuelve_dano": true, "tipo": "reparacion", "sistema": "acueducto", "activo": "%s", "lat": %s, "lon": %s, "ubicacion_origen": "gps", '
          '"t_inicio": "%s", "t_fin": "%s", "descripcion": "Cambio del empaque de la válvula", "ejecutor": "emdupar", "fuentes": [{"aportante": "emdupar"}], '
          '"materiales": [{"material": "Empaque 4 pulg", "cantidad": 1, "unidad": "und"}], '
          '"archivos": [{"n": 1, "clase": "antes", "ruta": "%s"}, {"n": 2, "clase": "despues", "ruta": "%s"}]}') % (cod_dano, v85[2], v85[0], v85[1], ISO('-2 hours'), ISO('-30 minutes'), rutas[0], rutas[1])
@@ -128,7 +128,7 @@ cod_itv = (re.search(r'"codigo": "(ITV-\d+)"', r) or [None, ''])[1]
 reg('15 una reparación real sobre V85 que atiende su daño: ITV-000001, cerrada, y el daño atendido', cod_itv == 'ITV-000001' and '"dano_estado": "atendido"' in r, r[:300])
 ep = q(f"select public.geoportal_redes_epicrisis('{ADMIN}', '{v85[2]}')")
 fi = q(f"select public.geoportal_redes_activo('{OPER}', '{v85[2]}') -> 'epicrisis'")
-reg('16 la epicrisis de V85 trae la reparación y el daño atendido; la ficha cuenta 2 hechos', f'{cod_itv} · Reparación · atiende {cod_dano}' in ep and '"estado": "Atendido"' in ep and '"hechos": 2' in fi, fi)
+reg('16 la epicrisis de V85 trae la reparación y el daño atendido; la ficha cuenta 2 hechos', f'{cod_itv} · Reparación · atiende {cod_dano} (lo resuelve)' in ep and '"estado": "Atendido"' in ep and '"hechos": 2' in fi, fi)
 
 # una inversión real: tramo nuevo de 2 puntos al lado de V85
 lat, lon = float(v85[0]), float(v85[1])

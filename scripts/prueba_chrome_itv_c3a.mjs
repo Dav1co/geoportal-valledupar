@@ -230,6 +230,9 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} con GPS sobre V85: queda ${V85[0]} y salen los daños abiertos del activo, con ${danoA} como «mismo activo»`, t.includes(V85[0]) && new RegExp(`${danoA}\\s*· Fuga o tubería rota en ${V85[0]}[\\s\\S]{0,80}mismo activo`).test(t), t.match(/Daño o falla que se atiende[\s\S]{0,300}/)?.[0]);
   await clicTexto(p, ".itv-dano", danoA);
   ok(`${tag} elegir el daño lo marca`, await p.evaluate((c) => [...document.querySelectorAll(".itv-dano")].some((b) => b.textContent.startsWith(c) && b.getAttribute("aria-checked") === "true"), danoA));
+  ok(`${tag} sin marcar «Con esta queda resuelto el daño», avisa que el daño sigue en atención`, /Sin marcarla, el daño sigue en atención/.test(await texto(p)));
+  await marcar(p, "Con esta queda resuelto el daño");
+  ok(`${tag} al marcar «Con esta queda resuelto el daño», avisa que quedará atendido`, /Al guardar, el daño queda atendido/.test(await texto(p)));
   await clicTexto(p, ".dan-opcion", "Reparación");
   await esperarRed(p);
   await p.waitForFunction(() => document.querySelectorAll(".itv-propuesto").length > 0, { timeout: 10000 }).catch(() => {});
@@ -269,9 +272,9 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} las 2 fotos subieron a su URL firmada (JPEG) bajo intervenciones/`, subidas.length === s0 + 2 && subidas.slice(-2).every((x) => x.mime === "image/jpeg" && x.ruta.startsWith("intervenciones/") && x.bytes > 1000), JSON.stringify(subidas.slice(-2)));
   await p.screenshot({ path: join(CAP, `itv_guardada_${ancho}.png`), fullPage: true });
   await clicTexto(p, "button", "Ver la ficha de"); await esperarTexto(p, /Epicrisis del activo/);
-  await esperarTexto(p, new RegExp(`${itvA} · Reparación · atiende ${danoA}`));
+  await esperarTexto(p, new RegExp(`${itvA} · Reparación · atiende ${danoA} \\(lo resuelve\\)`));
   t = await p.evaluate(() => [...document.querySelectorAll(".red-seccion")].find((x) => /Epicrisis del activo/.test(x.innerText))?.innerText ?? "");
-  ok(`${tag} la epicrisis de ${V85[0]} muestra la intervención (cerrada) y el daño atendido`, new RegExp(`${itvA} · Reparación · atiende ${danoA} · contratista Obras ZT ${ancho} · duración 2 h 0[45] min · 1 activo\\(s\\) más · 2 foto\\(s\\)`).test(t)
+  ok(`${tag} la epicrisis de ${V85[0]} muestra la intervención (cerrada) y el daño atendido`, new RegExp(`${itvA} · Reparación · atiende ${danoA} \\(lo resuelve\\) · contratista Obras ZT ${ancho} · duración 2 h 0[45] min · 1 activo\\(s\\) más · 2 foto\\(s\\)`).test(t)
      && /Cerrada/.test(t) && /Intervención/.test(t) && new RegExp(`${danoA} · Fuga[^\\n]*`).test(t), t);
   await p.screenshot({ path: join(CAP, `itv_epicrisis_${ancho}.png`), fullPage: true });
   await p.close();

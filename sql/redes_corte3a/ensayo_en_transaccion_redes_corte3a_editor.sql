@@ -87,9 +87,11 @@ create table redes.intervenciones (
   contrato_orden       text check (contrato_orden is null or length(btrim(contrato_orden)) between 1 and 60),
   companeros           text check (companeros is null or length(btrim(companeros)) between 2 and 200),
   sin_evidencia_motivo text check (sin_evidencia_motivo is null or length(btrim(sin_evidencia_motivo)) between 10 and 300),
+  resuelve_dano        boolean not null default false,                              -- «Con esta queda resuelto el daño» (David, respuesta 2 al 3a)
   autor                text not null,
   registrado_en        timestamptz not null default clock_timestamp(),
   check ((nace_de = 'dano') = (dano_id is not null)),
+  check (not resuelve_dano or nace_de = 'dano'),
   check ((tipo_codigo = 'inversion') = (inversion_modo is not null)),
   check (activo_id is not null or no_ident_que_es is not null),
   check (not activo_creado or (inversion_modo = 'nuevo' and activo_id is not null)),
@@ -292,7 +294,7 @@ select b.id, b.codigo, b.nace_de, b.dano_id, (select d.codigo from redes.danos d
        b.no_ident_que_es, b.lat, b.lon, b.geom, b.ubicacion_origen, b.precision_m, b.fuera_de_zona,
        b.t_inicio, b.t_fin, extract(epoch from (b.t_fin - b.t_inicio))::bigint as duracion_s, b.inicio_en, b.inicio_origen, b.descripcion,
        b.ejecutor, b.contratista_id, coalesce((select c.nombre from redes.contratistas c where c.id = b.contratista_id), b.contratista_nombre) as contratista,
-       b.contrato_orden, b.companeros, b.sin_evidencia_motivo, b.autor, b.registrado_en,
+       b.contrato_orden, b.companeros, b.sin_evidencia_motivo, b.resuelve_dano, b.autor, b.registrado_en,
        case when b.oculta then 'oculta' else coalesce(b.ev_estado, 'cerrada') end as estado,
        b.fotos, b.documentos, b.fotos = 0 as sin_evidencia,
        case when exists (select 1 from redes.v_intervencion_fuentes f where f.intervencion_id = b.id and f.valor is null and f.porcentaje is null) then 'por_completar' else 'completos' end as recursos,
@@ -351,7 +353,7 @@ union all
 select i.activo_id, i.t_fin, 'intervencion', substring(i.codigo from 5)::bigint,
        i.codigo || ' · ' || i.tipo_nombre
          || case i.inversion_modo when 'nuevo' then ' (activo nuevo)' when 'mejora' then ' (mejora)' else '' end
-         || case when i.dano_codigo is not null then ' · atiende ' || i.dano_codigo else ' · programada o mejora' end
+         || case when i.dano_codigo is not null then ' · atiende ' || i.dano_codigo || case when i.resuelve_dano then ' (lo resuelve)' else ' (sigue abierto)' end else ' · programada o mejora' end
          || case i.ejecutor when 'emdupar' then ' · EMDUPAR' else ' · contratista' || coalesce(' ' || i.contratista, '') end
          || ' · duración ' || (i.duracion_s / 3600) || ' h ' || lpad(((i.duracion_s % 3600) / 60)::text, 2, '0') || ' min'
          || case when i.tambien > 0 then ' · ' || i.tambien || ' activo(s) más' else '' end
@@ -483,7 +485,9 @@ begin
                      order by t.orden)
                       from redes.v_tipo_visible t where t.sistema in ('acueducto', 'alcantarillado') and t.geometria in ('punto', 'linea')),
     'materiales', (select jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre) order by orden) from redes.materiales),
-    'reglas', jsonb_build_object('dias_atras_max', redes.f_param('itv_dias_atras_max'), 'max_horas', redes.f_param('itv_max_horas'),
+    -- el operario conserva el tope de días y de horas; el supervisor y el administrador registran las obras largas sin ese tope (David, respuesta 1 al 3a)
+    'reglas', jsonb_build_object('dias_atras_max', case when v_perfil in ('admin', 'supervisor') then null else redes.f_param('itv_dias_atras_max') end,
+                                 'max_horas', case when v_perfil in ('admin', 'supervisor') then null else redes.f_param('itv_max_horas') end,
                                  'min_fotos', case when v_perfil in ('admin', 'supervisor') then 0 else redes.f_param('min_fotos_itv') end,
                                  'puede_sin_fotos', v_perfil in ('admin', 'supervisor'), 'pone_valores', v_perfil in ('admin', 'supervisor'),
                                  'max_fotos', redes.f_param('max_fotos_itv'), 'max_documentos', redes.f_param('max_docs_itv'),
@@ -556,7 +560,7 @@ declare
   v_f jsonb; v_ruta text; v_size bigint; v_mime text; v_prep redes.intervencion_preparaciones%rowtype; v_sinev text := nullif(btrim(coalesce(d ->> 'sin_evidencia_motivo', '')), '');
   v_cons bigint; v_codigo text; v_ctr bigint; v_ctr_nom text; v_orden text := nullif(btrim(coalesce(d ->> 'contrato_orden', '')), '');
   v_comp text := nullif(btrim(coalesce(d ->> 'companeros', '')), ''); v_pto geometry; v_creado boolean := false; v_origen text; v_aport text; v_cod_nuevo text;
-  v_dano_estado text;
+  v_dano_estado text; v_resuelve boolean := coalesce((p_datos ->> 'resuelve_dano')::boolean, false);
 begin
   if p_id is null then perform tecnica.f_error('Falta el identificador de la intervención: prepare la subida primero'); end if;
   -- reintento: mismo id y mismo autor devuelve lo guardado, sin revalidar
@@ -651,11 +655,12 @@ begin
   if v_t_ini is null or v_t_fin is null then perform tecnica.f_error('Escriba el inicio y el fin de la intervención'); end if;
   if v_t_fin > v_ahora + interval '2 minutes' then perform tecnica.f_error('El fin está en el futuro: la intervención se registra cuando ya se hizo'); end if;
   if v_t_ini > v_t_fin then perform tecnica.f_error('El inicio no puede ser después del fin'); end if;
-  if v_t_ini < v_ahora - make_interval(days => redes.f_param('itv_dias_atras_max')::integer) then
+  -- el tope de días y de horas es del operario; el supervisor y el administrador registran las obras largas desde el escritorio sin él
+  if not v_super and v_t_ini < v_ahora - make_interval(days => redes.f_param('itv_dias_atras_max')::integer) then
     perform tecnica.f_error(format('El inicio no puede ser de hace más de %s días', redes.f_param('itv_dias_atras_max')::integer));
   end if;
-  if v_t_fin - v_t_ini > make_interval(hours => redes.f_param('itv_max_horas')::integer) then
-    perform tecnica.f_error(format('Una intervención dura hasta %s horas: si duró más, regístrela por partes', redes.f_param('itv_max_horas')::integer));
+  if not v_super and v_t_fin - v_t_ini > make_interval(hours => redes.f_param('itv_max_horas')::integer) then
+    perform tecnica.f_error(format('Una intervención dura hasta %s horas: si duró más, la registra el supervisor desde el escritorio', redes.f_param('itv_max_horas')::integer));
   end if;
   v_inicio := redes.f_instante(d ->> 'inicio_dispositivo', 'apertura del formulario');
   if v_inicio is not null and (v_inicio > v_ahora + interval '2 minutes' or v_inicio < v_ahora - make_interval(hours => tecnica.f_max_horas_inicio())) then
@@ -675,9 +680,11 @@ begin
     if v_dano.t_inicio_reparacion is null and v_t_ini < v_dano.t_detectado then
       perform tecnica.f_error(format('La intervención empezó antes de que se detectara el daño %s: revise las horas', v_dano.codigo));
     end if;
-    if v_dano.t_inicio_reparacion is not null and v_t_fin < v_dano.t_inicio_reparacion then
+    if v_resuelve and v_dano.t_inicio_reparacion is not null and v_t_fin < v_dano.t_inicio_reparacion then
       perform tecnica.f_error(format('La intervención terminó antes del inicio de la reparación que ya tenía el daño %s', v_dano.codigo));
     end if;
+  elsif v_resuelve then
+    perform tecnica.f_error('«Con esta queda resuelto el daño» solo va cuando la intervención nace de un daño');
   end if;
 
   -- 4. qué se hizo y materiales
@@ -767,10 +774,10 @@ begin
 
   insert into redes.intervenciones (id, codigo, nace_de, dano_id, tipo_codigo, inversion_modo, sistema, activo_id, activo_creado, no_ident_que_es, lat, lon,
          ubicacion_origen, precision_m, fuera_de_zona, t_inicio, t_fin, inicio_en, inicio_origen, descripcion, ejecutor, contratista_id, contratista_nombre,
-         contrato_orden, companeros, sin_evidencia_motivo, autor, registrado_en)
+         contrato_orden, companeros, sin_evidencia_motivo, resuelve_dano, autor, registrado_en)
   values (p_id, v_codigo, d ->> 'nace_de', v_dano.id, v_tipo.codigo, v_modo, v_sis, v_activo, v_creado, v_noid, round(v_lat, 6), round(v_lon, 6),
           d ->> 'ubicacion_origen', (d ->> 'precision_m')::numeric, v_fuera, v_t_ini, v_t_fin, v_inicio, case when v_inicio is not null then 'dispositivo' end,
-          v_desc, d ->> 'ejecutor', v_ctr, v_ctr_nom, v_orden, v_comp, v_sinev, v_email, v_ahora);
+          v_desc, d ->> 'ejecutor', v_ctr, v_ctr_nom, v_orden, v_comp, v_sinev, v_resuelve, v_email, v_ahora);
   insert into redes.intervencion_activos (intervencion_id, activo_id, n) select p_id, x, o from unnest(v_tambien) with ordinality u(x, o);
   insert into redes.intervencion_materiales (intervencion_id, n, material, cantidad, unidad)
   select p_id, o, btrim(e ->> 'material'), (e ->> 'cantidad')::numeric, e ->> 'unidad' from jsonb_array_elements(v_mats) with ordinality x(e, o);
@@ -784,19 +791,25 @@ begin
     insert into redes.intervencion_eventos (intervencion_id, tipo, activo_id, motivo, autor) values (p_id, 'crear_activo', v_activo, format('Inversión: se creó el activo %s, por verificar', v_cod_nuevo), v_email);
   end if;
 
-  -- al cerrar una intervención que nace de un daño: el daño recibe sus tiempos de reparación y queda atendido
+  -- intervención que nace de un daño (un daño puede tener varias, David, respuesta 2 al 3a):
+  --   · la primera le pone el inicio de la reparación (si no lo tenía) y el daño queda «en atención»;
+  --   · la que marca «Con esta queda resuelto el daño» le pone el servicio restablecido y lo deja «atendido».
   if v_dano.id is not null then
-    insert into redes.dano_tiempos (dano_id, t_inicio_reparacion, t_restablecido, fuente, autor)
-    values (v_dano.id, case when v_dano.t_inicio_reparacion is null then v_t_ini end, v_t_fin, 'intervencion', v_email);
+    if v_dano.t_inicio_reparacion is null or v_resuelve then
+      insert into redes.dano_tiempos (dano_id, t_inicio_reparacion, t_restablecido, fuente, autor)
+      values (v_dano.id, case when v_dano.t_inicio_reparacion is null then v_t_ini end, case when v_resuelve then v_t_fin end, 'intervencion', v_email);
+    end if;
     insert into redes.dano_eventos (dano_id, tipo, intervencion_id, motivo, autor)
-    values (v_dano.id, 'atendido', p_id, format('Atendido con la intervención %s (%s)', v_codigo, v_tipo.nombre), v_email);
+    values (v_dano.id, case when v_resuelve then 'atendido' else 'en_atencion' end, p_id,
+            case when v_resuelve then format('Resuelto con la intervención %s (%s)', v_codigo, v_tipo.nombre)
+                 else format('Atendido en parte con la intervención %s (%s); sigue abierto', v_codigo, v_tipo.nombre) end, v_email);
     select x.estado into v_dano_estado from redes.v_dano x where x.id = v_dano.id;
   end if;
 
   -- auditoría sin la posición ni los valores
   perform tecnica.f_auditar(v_email, 'redes_crear_intervencion', v_codigo, jsonb_build_object('tipo', v_tipo.codigo, 'nace_de', d ->> 'nace_de', 'dano', v_dano.codigo,
           'sistema', v_sis, 'activo', coalesce(v_act.codigo, v_cod_nuevo), 'activo_creado', v_creado, 'no_identificado', v_noid is not null, 'tambien', cardinality(v_tambien),
-          'fotos', v_nf, 'documentos', v_nd, 'sin_evidencia', v_nf = 0, 'ejecutor', d ->> 'ejecutor'), p_ip);
+          'fotos', v_nf, 'documentos', v_nd, 'sin_evidencia', v_nf = 0, 'ejecutor', d ->> 'ejecutor', 'resuelve_dano', v_resuelve), p_ip);
   return (select jsonb_build_object('id', x.id, 'codigo', x.codigo, 'registrado_en', x.registrado_en, 'estado', x.estado, 'activo', x.activo_codigo, 'activo_creado', x.activo_creado,
                                     'dano', x.dano_codigo, 'dano_estado', v_dano_estado, 'recursos', x.recursos, 'sin_evidencia', x.sin_evidencia, 'fuera_de_zona', x.fuera_de_zona,
                                     'duracion_s', x.duracion_s, 'repetido', false) from redes.v_intervencion x where x.id = p_id);
@@ -1378,19 +1391,19 @@ begin
   -- (a) operador: reparación que nace del daño 1, con la válvula también intervenida, materiales, 2 fotos y 1 PDF
   v_r := public.geoportal_redes_crear_intervencion(op, v_id, pg_temp.itv(jsonb_build_array(jsonb_build_object('n', 1, 'clase', 'antes', 'ruta', v_ruta),
             jsonb_build_object('n', 2, 'clase', 'despues', 'ruta', v_p -> 'fotos' -> 1 ->> 'ruta'), jsonb_build_object('n', 3, 'clase', 'documento', 'ruta', v_p -> 'documentos' -> 0 ->> 'ruta')),
-            jsonb_build_object('nace_de', 'dano', 'tipo', 'reparacion', 'dano', v_d1, 't_inicio', pg_temp.iso('-4 hours'), 't_fin', pg_temp.iso('-2 hours'),
+            jsonb_build_object('nace_de', 'dano', 'tipo', 'reparacion', 'dano', v_d1, 'resuelve_dano', true, 't_inicio', pg_temp.iso('-4 hours'), 't_fin', pg_temp.iso('-2 hours'),
               'inicio_dispositivo', pg_temp.iso('-10 minutes'), 'tambien', jsonb_build_array(v_val), 'companeros', 'Cuadrilla 2',
               'materiales', jsonb_build_array(jsonb_build_object('material', 'Tubo PVC 3 pulg', 'cantidad', 6, 'unidad', 'm'), jsonb_build_object('material', 'Unión de reparación 3 pulg', 'cantidad', 2, 'unidad', 'und')),
               'fuentes', jsonb_build_array(jsonb_build_object('aportante', 'emdupar')))), '10.0.0.3');
   v_ia := v_r ->> 'codigo';
-  perform pg_temp.reg('07.01 se guarda la reparación: ITV-…, cerrada, sobre el tramo 1; el daño queda atendido; recursos por completar',
+  perform pg_temp.reg('07.01 se guarda la reparación que marca «queda resuelto»: ITV-…, cerrada, sobre el tramo 1; el daño queda atendido; recursos por completar',
      v_ia ~ '^ITV-[0-9]{6}$' and v_r ->> 'estado' = 'cerrada' and v_r ->> 'activo' = v_red1 and v_r ->> 'dano' = v_d1 and v_r ->> 'dano_estado' = 'atendido'
      and v_r ->> 'recursos' = 'por_completar' and not (v_r ->> 'sin_evidencia')::boolean and not (v_r ->> 'repetido')::boolean
      and (select ultimo from redes.consecutivos where prefijo = 'ITV') = v_itv0 + 1, v_r::text);
   select row_to_json(x)::jsonb into v_x from redes.v_dano x where codigo = v_d1;
   perform pg_temp.reg('07.02 el daño recibe los tiempos de la intervención: reparación de 2 h, respuesta de 1 h y el evento «atendido» con el código',
      (v_x ->> 'reparacion_s')::integer between 7190 and 7210 and (v_x ->> 'respuesta_s')::integer between 3590 and 3610
-     and exists (select 1 from redes.dano_eventos e join redes.danos d on d.id = e.dano_id where d.codigo = v_d1 and e.tipo = 'atendido' and e.intervencion_id = v_id and e.motivo like '%' || v_ia || '%')
+     and exists (select 1 from redes.dano_eventos e join redes.danos d on d.id = e.dano_id where d.codigo = v_d1 and e.tipo = 'atendido' and e.intervencion_id = v_id and e.motivo like 'Resuelto con la intervención ' || v_ia || '%')
      and exists (select 1 from redes.dano_tiempos t join redes.danos d on d.id = t.dano_id where d.codigo = v_d1 and t.fuente = 'intervencion'), v_x::text);
   perform pg_temp.reg('07.03 quedan los materiales, la válvula también intervenida, la fuente sin valores, 2 fotos y 1 PDF leídos de Storage',
      (select count(*) from redes.intervencion_materiales where intervencion_id = v_id) = 2
@@ -1407,14 +1420,24 @@ begin
   perform pg_temp.err('07.06 otra intervención no puede atender el mismo daño', format($$select public.geoportal_redes_crear_intervencion(%L, %L, %L)$$, op, (v_p ->> 'intervencion_id')::uuid,
      pg_temp.itv(pg_temp.a1(v_p -> 'fotos' -> 0 ->> 'ruta'), jsonb_build_object('nace_de', 'dano', 'tipo', 'reparacion', 'dano', v_d1))), '22023', 'ya está atendido');
 
-  -- (b) el daño 2 ya estaba en atención: se conserva su inicio de reparación y la intervención le pone el restablecido
+  -- (b) el daño 2 ya estaba en atención. Un daño puede tener varias intervenciones (David, respuesta 2 al 3a): la primera NO lo resuelve
+  --     (sigue en atención, con su inicio de reparación de antes); la segunda marca «queda resuelto» y le pone el restablecido.
   v_p := pg_temp.preparar(op, 1); v_ida := (v_p ->> 'intervencion_id')::uuid;
   v_r := public.geoportal_redes_crear_intervencion(op, v_ida, pg_temp.itv(pg_temp.a1(v_p -> 'fotos' -> 0 ->> 'ruta'),
-            jsonb_build_object('nace_de', 'dano', 'tipo', 'correctivo', 'dano', v_d2, 'activo', v_red2, 't_inicio', pg_temp.iso('-3 hours'), 't_fin', pg_temp.iso('-90 minutes'))));
+            jsonb_build_object('nace_de', 'dano', 'tipo', 'correctivo', 'dano', v_d2, 'activo', v_red2, 't_inicio', pg_temp.iso('-3 hours'), 't_fin', pg_temp.iso('-150 minutes'))));
   v_ib := v_r ->> 'codigo';
+  perform pg_temp.reg('07.07 una intervención que no lo resuelve: el daño sigue «en atención», con un evento que lo dice, sin restablecido',
+     v_r ->> 'dano_estado' = 'en_atencion' and (select t_restablecido is null from redes.v_dano where codigo = v_d2)
+     and exists (select 1 from redes.dano_eventos e join redes.danos d on d.id = e.dano_id where d.codigo = v_d2 and e.tipo = 'en_atencion' and e.motivo like '%' || v_ib || '%sigue abierto'), v_r::text);
+  v_p := pg_temp.preparar(op, 1); v_ida := (v_p ->> 'intervencion_id')::uuid;
+  v_r := public.geoportal_redes_crear_intervencion(op, v_ida, pg_temp.itv(pg_temp.a1(v_p -> 'fotos' -> 0 ->> 'ruta'),
+            jsonb_build_object('nace_de', 'dano', 'tipo', 'reposicion', 'dano', v_d2, 'activo', v_red2, 'resuelve_dano', true, 't_inicio', pg_temp.iso('-2 hours'), 't_fin', pg_temp.iso('-90 minutes'))));
   select row_to_json(x)::jsonb into v_x from redes.v_dano x where codigo = v_d2;
-  perform pg_temp.reg('07.07 daño en atención: queda atendido, con su inicio de reparación de antes (hace 4 h) y el fin de la intervención (reparación 2,5 h)',
-     v_r ->> 'dano_estado' = 'atendido' and (v_x ->> 'reparacion_s')::integer between 8990 and 9010, v_r::text || ' / ' || v_x::text);
+  perform pg_temp.reg('07.07b la segunda marca «queda resuelto»: atendido, con el inicio de reparación de antes (hace 4 h) y el fin de esta (reparación 2,5 h); el daño tiene 2 intervenciones',
+     v_r ->> 'dano_estado' = 'atendido' and (v_x ->> 'reparacion_s')::integer between 8990 and 9010
+     and (select count(*) from redes.intervenciones i join redes.danos d on d.id = i.dano_id where d.codigo = v_d2) = 2, v_r::text || ' / ' || v_x::text);
+  perform pg_temp.err('07.07c «queda resuelto» sin nacer de un daño', format($$select public.geoportal_redes_crear_intervencion(%L, %L, %L)$$, op, (pg_temp.preparar(op, 1) ->> 'intervencion_id')::uuid,
+     pg_temp.itv(pg_temp.a1(v_ruta), '{"resuelve_dano": true}')), '22023', 'solo va cuando');
 
   -- (c) supervisor desde el escritorio: preventivo SIN fotos, con el motivo; contratista escrito; los valores ya puestos
   v_p := public.geoportal_redes_preparar_intervencion(sv, 0); v_ida := (v_p ->> 'intervencion_id')::uuid;
@@ -1423,7 +1446,15 @@ begin
             'ejecutor', 'contratista', 'contratista_nombre', 'Obras ZT SAS', 'contrato_orden', 'OT-ZT-77',
             'fuentes', jsonb_build_array(jsonb_build_object('aportante', 'emdupar', 'porcentaje', 60, 'soporte', 'Presupuesto 2026'),
                                          jsonb_build_object('aportante', 'gobernacion', 'valor', 4000000, 'soporte', 'Convenio ZT-1')))));
-  v_ic := v_r ->> 'codigo';
+  v_ic := v_r ->> 'codigo'; v_x := v_r;
+  v_p := public.geoportal_redes_preparar_intervencion(sv, 0); v_ida := (v_p ->> 'intervencion_id')::uuid;
+  v_x := public.geoportal_redes_crear_intervencion(sv, v_ida, pg_temp.itv('[]'::jsonb, jsonb_build_object('activo', v_red2, 'sin_evidencia_motivo', 'Obra larga registrada desde el escritorio',
+            't_inicio', pg_temp.iso('-20 days'), 't_fin', pg_temp.iso('-10 days'))));
+  perform pg_temp.reg('07.08b el supervisor registra una obra larga sin el tope del operario (empezó hace 20 días y duró 10)', v_x ->> 'codigo' ~ '^ITV-' and (v_x ->> 'duracion_s')::integer = 864000, v_x::text);
+  perform pg_temp.reg('07.08c el formulario no le pone tope de días ni de horas al supervisor; al operario sí (7 y 72)',
+     public.geoportal_redes_formulario_intervencion(sv) -> 'reglas' -> 'dias_atras_max' = 'null'::jsonb and public.geoportal_redes_formulario_intervencion(sv) -> 'reglas' -> 'max_horas' = 'null'::jsonb
+     and (public.geoportal_redes_formulario_intervencion(op) -> 'reglas' ->> 'max_horas')::integer = 72);
+  v_r := (select jsonb_build_object('sin_evidencia', sin_evidencia, 'recursos', recursos) from redes.v_intervencion where codigo = v_ic);
   perform pg_temp.reg('07.09 se guarda «sin evidencia fotográfica», con el contratista y los recursos completos',
      (v_r ->> 'sin_evidencia')::boolean and v_r ->> 'recursos' = 'completos'
      and exists (select 1 from redes.v_intervencion where codigo = v_ic and contratista = 'Obras ZT SAS' and contrato_orden = 'OT-ZT-77' and sin_evidencia_motivo like 'Lo reportó%'
@@ -1475,9 +1506,9 @@ begin
 
   -- ---------- 08 Epicrisis y ficha ----------
   v_r := public.geoportal_redes_epicrisis(op, v_red1);
-  perform pg_temp.reg('08.01 epicrisis del tramo 1: la reparación es un «hecho», con el daño que atiende, la duración, «1 activo(s) más» y las fotos',
+  perform pg_temp.reg('08.01 epicrisis del tramo 1: la reparación es un «hecho», con el daño que resuelve, la duración, «1 activo(s) más» y las fotos',
      exists (select 1 from jsonb_array_elements(v_r -> 'items') i where i ->> 'clase' = 'intervencion' and i ->> 'grupo' = 'hecho' and i ->> 'estado' = 'Cerrada'
-              and i ->> 'resumen' = v_ia || ' · Reparación · atiende ' || v_d1 || ' · EMDUPAR · duración 2 h 00 min · 1 activo(s) más · 2 foto(s)')
+              and i ->> 'resumen' = v_ia || ' · Reparación · atiende ' || v_d1 || ' (lo resuelve) · EMDUPAR · duración 2 h 00 min · 1 activo(s) más · 2 foto(s)')
      and exists (select 1 from jsonb_array_elements(v_r -> 'items') i where i ->> 'clase' = 'dano' and i ->> 'estado' = 'Atendido'), v_r::text);
   perform pg_temp.reg('08.02 la válvula también intervenida la tiene en su epicrisis, con el principal', exists (select 1 from jsonb_array_elements(public.geoportal_redes_epicrisis(op, v_val) -> 'items') i
      where i ->> 'clase' = 'intervencion' and i ->> 'resumen' = v_ia || ' · Reparación · también intervenido (principal ' || v_red1 || ')'));

@@ -82,6 +82,8 @@ OK    preparar_intervencion: fotos decimales → 400 sin RPC
 OK    preparar_intervencion: una ruta con otro formato NO se firma (500 genérico, sin la ruta)
 OK    crear_intervencion: pasa p_id, los datos limpios (archivos solo con n, clase y ruta; fuentes con sus 5 claves), el correo del token y la IP
 OK    crear_intervencion: el activo nuevo viaja con sus puntos
+OK    crear_intervencion: «queda resuelto el daño» viaja como booleano
+OK    crear_intervencion: «queda resuelto» como texto → 400
 OK    crear_intervencion: sin intervencion_id → 400
 OK    crear_intervencion: un campo de más (autor) → 400
 OK    crear_intervencion: hora mal escrita → 400
@@ -104,4 +106,4 @@ OK    asociar_activo: sin motivo → 400
 OK    asociar_activo: GET → 405
 OK    acción desconocida → 400 sin RPC
 
-RESULTADO: 105 de 105 comprobaciones correctas
+RESULTADO: 107 de 107 comprobaciones correctas
