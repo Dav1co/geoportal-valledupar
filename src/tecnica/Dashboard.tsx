@@ -6,6 +6,7 @@ import { PersonalTecnico } from "./PersonalTecnico";
 import { Resumen } from "./Resumen";
 import { Eventos } from "./Eventos";
 import { PuntosUbicacion } from "./PuntosUbicacion";
+import { QuimicosPTAP } from "./QuimicosPTAP";
 import { supabase } from "../lib/supabase";
 import { CabeceraDashboard } from "./CabeceraDashboard";
 
@@ -16,7 +17,7 @@ const SECCIONES: Seccion[] = [
   { clave: "resumen", titulo: "Resumen", Componente: Resumen },
   { clave: "registros", titulo: "Registros", Componente: RegistrosRecientes },
   { clave: "eventos", titulo: "Eventos", Componente: Eventos },
-  { clave: "quimicos", titulo: "Químicos" },
+  { clave: "quimicos", titulo: "Químicos", Componente: QuimicosPTAP },      // Corte 7a (§29): bodega, ficha técnica, dosis óptima y esperado contra usado
   { clave: "personal", titulo: "Personal técnico", Componente: PersonalTecnico },
   { clave: "puntos", titulo: "Puntos", Componente: PuntosUbicacion },      // Corte 5b: ubicación de los puntos de muestreo
   { clave: "reportes", titulo: "Reportes" },

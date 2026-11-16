@@ -1,0 +1,82 @@
+OK    [390] A1 la pestaña «Químicos» del Dashboard PTAP: PAC y cloro gaseoso de potabilización, hipoclorito de calcio para limpieza; sin inventario ni PDF todavía
+OK    [390] A2 sin desborde y con botones de 44 px o más
+OK    [390] B1 cambiar la dosis óptima sin el PDF: aviso y «Guardar» desactivado
+OK    [390] B2 con el PDF: el PDF sube a su URL firmada (tecnica-evidencias, application/pdf), la dosis queda en 18 ppm y la ficha se ve (URL firmada)
+OK    [390] B3 en la base: el evento de dosis óptima con su PDF y el motivo
+OK    [390] C1 el inventario en toneladas muestra su equivalente en kg antes de guardar
+OK    [390] C2 saldo del PAC: 12.000 kg
+OK    [390] C3 el ajuste muestra el saldo que queda
+OK    [390] C4 saldo después del ajuste: 11.950 kg
+OK    [390] D1 sin el PDF no se deja agregar
+OK    [390] D2 se agrega con su código, de potabilización, 25 ppm y su ficha
+OK    [390] D3 desactivarlo con motivo: queda «Inactivo» en el catálogo (no se borra)
+OK    [390] E1 el historial del PAC: la dosis óptima con su PDF y motivo; el inventario y el ajuste con sus kg
+OK    [390] F1 hoy en Huaricha: Qi 1.000 L/s (86.400 m³), 18 ppm, esperado 1.555,2 kg, usado 300 kg y la marca
+OK    [390] F2 sin desborde
+OK    [390] G1 el operador no tiene el Dashboard PTAP (ni químicos)
+OK    [390] G2 el supervisor de distribución tampoco (químicos es solo de planta)
+OK    [390] H1 el supervisor de planta ve la tarjeta del contrato SIN nombre ni dirección (sí el barrio y el consumo)
+OK    [390] H2 un color por estado del contrato (activo, suspendido, cortado, retirado, otro)
+OK    [1280] A1 la pestaña «Químicos» del Dashboard PTAP: PAC y cloro gaseoso de potabilización, hipoclorito de calcio para limpieza; sin inventario ni PDF todavía
+OK    [1280] A2 sin desborde y con botones de 44 px o más
+OK    [1280] B1 cambiar la dosis óptima sin el PDF: aviso y «Guardar» desactivado
+OK    [1280] B2 con el PDF: el PDF sube a su URL firmada (tecnica-evidencias, application/pdf), la dosis queda en 18 ppm y la ficha se ve (URL firmada)
+OK    [1280] B3 en la base: el evento de dosis óptima con su PDF y el motivo
+OK    [1280] C1 el inventario en toneladas muestra su equivalente en kg antes de guardar
+OK    [1280] C2 saldo del PAC: 12.000 kg
+OK    [1280] C3 el ajuste muestra el saldo que queda
+OK    [1280] C4 saldo después del ajuste: 11.950 kg
+OK    [1280] D1 sin el PDF no se deja agregar
+OK    [1280] D2 se agrega con su código, de potabilización, 25 ppm y su ficha
+OK    [1280] D3 desactivarlo con motivo: queda «Inactivo» en el catálogo (no se borra)
+OK    [1280] E1 el historial del PAC: la dosis óptima con su PDF y motivo; el inventario y el ajuste con sus kg
+OK    [1280] F1 hoy en Huaricha: Qi 1.000 L/s (86.400 m³), 18 ppm, esperado 1.555,2 kg, usado 300 kg y la marca
+OK    [1280] F2 sin desborde
+OK    [1280] G1 el operador no tiene el Dashboard PTAP (ni químicos)
+OK    [1280] G2 el supervisor de distribución tampoco (químicos es solo de planta)
+OK    [1280] H1 el supervisor de planta ve la tarjeta del contrato SIN nombre ni dirección (sí el barrio y el consumo)
+OK    [1280] H2 un color por estado del contrato (activo, suspendido, cortado, retirado, otro)
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+----
+OK    [390] A1 la pestaña «Químicos» del Dashboard PTAP: PAC y cloro gaseoso de potabilización, hipoclorito de calcio para limpieza; sin inventario ni PDF todavía
+OK    [390] A2 sin desborde y con botones de 44 px o más
+OK    [390] B1 cambiar la dosis óptima sin el PDF: aviso y «Guardar» desactivado
+OK    [390] B2 con el PDF: el PDF sube a su URL firmada (tecnica-evidencias, application/pdf), la dosis queda en 18 ppm y la ficha se ve (URL firmada)
+OK    [390] B3 en la base: el evento de dosis óptima con su PDF y el motivo
+OK    [390] C1 el inventario en toneladas muestra su equivalente en kg antes de guardar
+OK    [390] C2 saldo del PAC: 12.000 kg
+OK    [390] C3 el ajuste muestra el saldo que queda
+OK    [390] C4 saldo después del ajuste: 11.950 kg
+OK    [390] D1 sin el PDF no se deja agregar
+OK    [390] D2 se agrega con su código, de potabilización, 25 ppm y su ficha
+OK    [390] D3 desactivarlo con motivo: queda «Inactivo» en el catálogo (no se borra)
+OK    [390] E1 el historial del PAC: la dosis óptima con su PDF y motivo; el inventario y el ajuste con sus kg
+OK    [390] F1 hoy en Huaricha: Qi 1.000 L/s (86.400 m³), 18 ppm, esperado 1.555,2 kg, usado 300 kg y la marca
+OK    [390] F2 sin desborde
+OK    [390] G1 el operador no tiene el Dashboard PTAP (ni químicos)
+OK    [390] G2 el supervisor de distribución tampoco (químicos es solo de planta)
+OK    [390] H1 el supervisor de planta ve la tarjeta del contrato SIN nombre ni dirección (sí el barrio y el consumo)
+OK    [390] H2 un color por estado del contrato (activo, suspendido, cortado, retirado, otro)
+OK    [1280] A1 la pestaña «Químicos» del Dashboard PTAP: PAC y cloro gaseoso de potabilización, hipoclorito de calcio para limpieza; sin inventario ni PDF todavía
+OK    [1280] A2 sin desborde y con botones de 44 px o más
+OK    [1280] B1 cambiar la dosis óptima sin el PDF: aviso y «Guardar» desactivado
+OK    [1280] B2 con el PDF: el PDF sube a su URL firmada (tecnica-evidencias, application/pdf), la dosis queda en 18 ppm y la ficha se ve (URL firmada)
+OK    [1280] B3 en la base: el evento de dosis óptima con su PDF y el motivo
+OK    [1280] C1 el inventario en toneladas muestra su equivalente en kg antes de guardar
+OK    [1280] C2 saldo del PAC: 12.000 kg
+OK    [1280] C3 el ajuste muestra el saldo que queda
+OK    [1280] C4 saldo después del ajuste: 11.950 kg
+OK    [1280] D1 sin el PDF no se deja agregar
+OK    [1280] D2 se agrega con su código, de potabilización, 25 ppm y su ficha
+OK    [1280] D3 desactivarlo con motivo: queda «Inactivo» en el catálogo (no se borra)
+OK    [1280] E1 el historial del PAC: la dosis óptima con su PDF y motivo; el inventario y el ajuste con sus kg
+OK    [1280] F1 hoy en Huaricha: Qi 1.000 L/s (86.400 m³), 18 ppm, esperado 1.555,2 kg, usado 300 kg y la marca
+OK    [1280] F2 sin desborde
+OK    [1280] G1 el operador no tiene el Dashboard PTAP (ni químicos)
+OK    [1280] G2 el supervisor de distribución tampoco (químicos es solo de planta)
+OK    [1280] H1 el supervisor de planta ve la tarjeta del contrato SIN nombre ni dirección (sí el barrio y el consumo)
+OK    [1280] H2 un color por estado del contrato (activo, suspendido, cortado, retirado, otro)
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 40 de 40 — SIN FALLAS

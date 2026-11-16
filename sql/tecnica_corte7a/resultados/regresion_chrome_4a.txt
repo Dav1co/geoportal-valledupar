@@ -1,0 +1,46 @@
+OK    [390] el supervisor de planta ve el Dashboard PTAP y no el de distribución
+OK    [390] el supervisor de distribución ve el Dashboard distribución y no el PTAP
+OK    [390] el operador no ve ninguno de los dos dashboards
+OK    [390] el selector PTAP | distribución aparece arriba, dentro del encabezado (§34; tiene los dos) y las 4 pestañas
+OK    [390] «Crear el activo» desde la bandeja: POZ-008754 «por verificar», y la intervención queda sobre él
+OK    [390] el daño muestra su sector (4) y que tiene tercero, sin el nombre
+OK    [390] ver el tercero lo muestra y deja la lectura auditada (sin el valor)
+OK    [390] ocultar el daño con motivo: queda oculto (evento; el daño no se borra)
+OK    [390] reabrir un daño atendido: queda en atención
+OK    [390] tras reabrir, la tarjeta se actualiza, se cierra el formulario y el aviso queda arriba de la lista
+OK    [390] el Dashboard distribución no desborda y sus botones miden 44 px o más
+OK    [390] anular la intervención con motivo: queda «anulada»
+OK    [390] convertir el reporte del bot en daño: enlazado al radicado
+OK    [390] descartar el otro con motivo
+OK    [390] el daño ya no pide los tiempos de reparación hasta marcar «El daño ya se reparó»
+OK    [390] la pantalla revisa los topes antes de enviar: sector 1 a 100 y usuarios sin decimales
+OK    [390] guardado DAN-000004 con el sector 4 como número, reportado (sin tiempos de reparación)
+OK    [390] «Daño o falla que se atiende» va después del mapa (misma sección) y «queda resuelto» al final, antes de Guardar (§25.5 y §25.6)
+OK    [390] sin daños abiertos cerca lo dice (§25.7)
+OK    [1280] el supervisor de planta ve el Dashboard PTAP y no el de distribución
+OK    [1280] el supervisor de distribución ve el Dashboard distribución y no el PTAP
+OK    [1280] el operador no ve ninguno de los dos dashboards
+OK    [1280] el selector PTAP | distribución aparece arriba, dentro del encabezado (§34; tiene los dos) y las 4 pestañas
+OK    [1280] «Crear el activo» desde la bandeja: POZ-008755 «por verificar», y la intervención queda sobre él
+OK    [1280] el daño muestra su sector (4) y que tiene tercero, sin el nombre
+OK    [1280] ver el tercero lo muestra y deja la lectura auditada (sin el valor)
+OK    [1280] ocultar el daño con motivo: queda oculto (evento; el daño no se borra)
+OK    [1280] reabrir un daño atendido: queda en atención
+OK    [1280] tras reabrir, la tarjeta se actualiza, se cierra el formulario y el aviso queda arriba de la lista
+OK    [1280] el Dashboard distribución no desborda y sus botones miden 44 px o más
+OK    [1280] anular la intervención con motivo: queda «anulada»
+OK    [1280] convertir el reporte del bot en daño: enlazado al radicado
+OK    [1280] descartar el otro con motivo
+OK    [1280] el daño ya no pide los tiempos de reparación hasta marcar «El daño ya se reparó»
+OK    [1280] la pantalla revisa los topes antes de enviar: sector 1 a 100 y usuarios sin decimales
+OK    [1280] guardado DAN-000008 con el sector 4 como número, reportado (sin tiempos de reparación)
+OK    [1280] «Daño o falla que se atiende» va después del mapa (misma sección) y «queda resuelto» al final, antes de Guardar (§25.5 y §25.6)
+OK    [1280] sin daños abiertos cerca lo dice (§25.7)
+OK    [390] Administración: la casilla «Dashboard distribución» da el permiso (Edge geoportal-admin real y función de la base)
+OK    [390] Administración no desborda
+OK    [1280] Administración: la casilla «Dashboard distribución» quita el permiso (Edge geoportal-admin real y función de la base)
+OK    [1280] Administración no desborda
+OK    sin errores de JavaScript ni de consola
+
+RESULTADO: 43 de 43 — SIN FALLAS
+Capturas: /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/90bfc378-7032-4f0b-b952-ed22e606e3b1/scratchpad/cap7_prueba_chrome_dashboard_c4a

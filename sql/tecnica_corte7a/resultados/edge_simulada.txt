@@ -1,0 +1,20 @@
+== tecnica/prueba_aviso_simulada.ts
+RESULTADO: 21 de 21 comprobaciones correctas
+== tecnica/prueba_dosis_simulada.ts
+RESULTADO: 51 de 51 comprobaciones correctas
+== tecnica/prueba_fecha_muestra_simulada.ts
+RESULTADO: 42 de 42 comprobaciones correctas
+== tecnica/prueba_inicio_simulada.ts
+RESULTADO: 23 de 23 comprobaciones correctas
+== tecnica/prueba_puntos_mapa_simulada.ts
+RESULTADO: 35 de 35 — SIN FALLAS
+== tecnica/prueba_quimicos_simulada.ts
+RESULTADO: 33 de 33 — SIN FALLAS
+== redes/prueba_cargue_simulada.ts
+RESULTADO: 53 de 53
+== redes/prueba_geovisor_6b_simulada.ts
+RESULTADO: 34 de 34 — SIN FALLAS
+== redes/prueba_geovisor_simulada.ts
+RESULTADO: 38 de 38 — SIN FALLAS
+== redes/prueba_redes_simulada.ts
+RESULTADO: 189 de 189 comprobaciones correctas

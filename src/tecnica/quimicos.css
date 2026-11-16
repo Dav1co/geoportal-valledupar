@@ -1,0 +1,36 @@
+/* Dashboard PTAP · Químicos (Técnica fase 1, Corte 7a). Tarjetas en vez de tabla ancha: se lee a 390 px. */
+.qm { display: flex; flex-direction: column; gap: 12px; }
+.qm-seg { display: inline-flex; border: 1px solid #b9c6cf; border-radius: 8px; overflow: hidden; align-self: flex-start; max-width: 100%; }
+.qm-seg button { min-height: 44px; padding: 0 14px; border: none; border-right: 1px solid #b9c6cf; background: #fff; color: #22313f; font: inherit; font-size: 15px; cursor: pointer; }
+.qm-seg button:last-child { border-right: none; }
+.qm-seg button[aria-selected="true"] { background: #0a2540; color: #fff; font-weight: 700; }
+.qm-acciones { display: flex; gap: 8px; }
+.qm-lista, .qm-cmp { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; }
+.qm-tarjeta, .qm-cmp-fila, .qm-form { background: #fff; border: 1px solid #dde5ea; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.qm-inactivo { background: #f5f7f8; color: #52626f; }
+.qm-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+.qm-cab h3, .qm-cab h4 { margin: 0; font-size: 17px; }
+.qm-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.qm-chip { font-size: 12.5px; padding: 2px 10px; border-radius: 12px; background: #eef2f5; color: #3c4b57; white-space: nowrap; }
+.qm-chip-pot { background: #e3f2ee; color: #0f5e4f; font-weight: 700; }
+.qm-chip-off { background: #f2e7e7; color: #8a1c1c; }
+.qm-chip-marca { background: #c62828; color: #fff; font-weight: 700; }
+.qm-datos { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.qm-datos dt { font-size: 12.5px; color: #5b6b77; }
+.qm-datos dd { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.qm-saldo { font-weight: 700; }
+.qm-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.qm-botones button { flex: 1 1 140px; }
+.qm-form { border-color: #9ab7c9; background: #f8fbfd; }
+.qm-form h3 { margin: 0; font-size: 16px; }
+.qm-form h4 { margin: 4px 0 0; font-size: 14px; }
+.qm-check { min-height: 44px; display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.qm-check input { width: 22px; height: 22px; }
+.qm-fila { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.qm-fila .td-campo { flex: 1 1 140px; }
+.qm-fila .td-campo input, .qm-fila .td-campo select { min-width: 0; width: 100%; }
+.qm-form .td-campo input[type="text"], .qm-form .td-campo select { min-width: 0; width: 100%; }
+.qm-form input[type="file"] { min-height: 44px; font: inherit; max-width: 100%; }
+.qm-ver { min-height: 44px; }
+.qm-cmp-marca { border-color: #e2a3a3; background: #fff7f7; }
+.qm-historial { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }

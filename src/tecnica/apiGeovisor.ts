@@ -21,7 +21,8 @@ export type CapaDatos = GeoJSON.FeatureCollection & { capa: string; desde: strin
 
 // Corte 6b. La tarjeta del contrato trae DATO PERSONAL (nombre, dirección y barrio): solo se pinta en pantalla; no se guarda, no se descarga ni se imprime.
 export type TarjetaContrato = {
-  contrato: string; estado: "activo" | "retirado" | "otro" | "sin_dato"; estado_texto: string | null; uso: string | null;
+  contrato: string; estado: "activo" | "suspendido" | "cortado" | "retirado" | "otro" | "sin_dato"; estado_texto: string | null; uso: string | null;
+  datos_personales?: boolean;      // Corte 7a: false para el supervisor de planta (sin nombre ni dirección)
   consumo: { periodo_ultimo: string; promedio: number | null; meses_con_lectura: number; meses: { periodo: string; m3: number | null; sin_dato: boolean; lectura_real: boolean }[] } | null;
   medidor_anios: number | null; tramo: string | null;
   suscriptor: { nombre: string | null; direccion: string | null; barrio: string | null };

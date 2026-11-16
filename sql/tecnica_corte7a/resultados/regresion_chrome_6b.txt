@@ -1,0 +1,102 @@
+OK    [390] A1 la capa de contratos se dibuja (desde el zoom 16), pedida con el token, sin nombres en la tesela
+OK    [390] A2 tocar el contrato abre su tarjeta: número, estado, uso, «Dato personal» con nombre, dirección y barrio, el medidor y el tramo
+OK    [390] A3 el perfil de consumo de 6 meses (con el mes sin dato) y el promedio
+OK    [390] A4 sin teléfono ni deuda en la pantalla
+OK    [390] A5 la lectura quedó en la auditoría (quién y contrato), sin el nombre
+OK    [390] A6 la tarjeta sin desborde y legible a lo ancho
+OK    [390] A7 al cerrar la tarjeta, el nombre ya no está en la página
+OK    [390] B1 los 27 puntos con su calidad: uno fuera (cloro 0,1), uno dentro y los demás sin muestra reciente
+OK    [390] B2 su tarjeta: «Fuera del rango» y el cloro con su valor, su rango de Salida (0,3 a 2) y la fecha
+OK    [390] B3 el color del punto sale de la calidad
+OK    [390] C1 la capa de reportes de Comercial se enciende y pide sus datos por fecha (vacía hasta el Corte 8)
+OK    [390] C2 azul con contrato y rojo posible clandestino
+OK    [390] C3 «Atenuar» baja su opacidad (y solo esa capa tiene el botón)
+OK    [390] D1 por edad, «Sin fecha de instalación» tiene su gris propio (no el del «sin dato» del material)
+OK    [390] D2 por material, «Sin dato» sigue en el gris de antes
+OK    [390] E1 «Compartir» da un enlace #geovisor=<código> y guarda la vista (capas, colores, centro y zoom; sin datos personales)
+OK    [390] E2 el aviso dice que quien lo abra debe iniciar sesión y tener permiso
+OK    [390] E3 el supervisor de distribución abre el enlace: entra directo al geovisor, en el mismo lugar y zoom, con los colores por material
+OK    [390] E4 … y la dirección ya no lleva el código (se consumió)
+OK    [390] E5 el operador lo abre en solo lectura: no ve contratos, muestreo ni reportes de Comercial (el aviso los nombra) y sin «Compartir»
+OK    [390] E6 quien no tiene el geovisor recibe el aviso y no ve el mapa
+OK    [390] F1 el operador no tiene la capa de contratos ni «Compartir»
+OK    [390] F2 nunca pidió la tesela ni la tarjeta de contratos
+OK    [390] G1 el Dashboard distribución tiene la entrada «Geovisor técnico»
+OK    [1280] A1 la capa de contratos se dibuja (desde el zoom 16), pedida con el token, sin nombres en la tesela
+OK    [1280] A2 tocar el contrato abre su tarjeta: número, estado, uso, «Dato personal» con nombre, dirección y barrio, el medidor y el tramo
+OK    [1280] A3 el perfil de consumo de 6 meses (con el mes sin dato) y el promedio
+OK    [1280] A4 sin teléfono ni deuda en la pantalla
+OK    [1280] A5 la lectura quedó en la auditoría (quién y contrato), sin el nombre
+OK    [1280] A6 la tarjeta sin desborde y legible a lo ancho
+OK    [1280] A7 al cerrar la tarjeta, el nombre ya no está en la página
+OK    [1280] B1 los 27 puntos con su calidad: uno fuera (cloro 0,1), uno dentro y los demás sin muestra reciente
+OK    [1280] B2 su tarjeta: «Fuera del rango» y el cloro con su valor, su rango de Salida (0,3 a 2) y la fecha
+OK    [1280] B3 el color del punto sale de la calidad
+OK    [1280] C1 la capa de reportes de Comercial se enciende y pide sus datos por fecha (vacía hasta el Corte 8)
+OK    [1280] C2 azul con contrato y rojo posible clandestino
+OK    [1280] C3 «Atenuar» baja su opacidad (y solo esa capa tiene el botón)
+OK    [1280] D1 por edad, «Sin fecha de instalación» tiene su gris propio (no el del «sin dato» del material)
+OK    [1280] D2 por material, «Sin dato» sigue en el gris de antes
+OK    [1280] E1 «Compartir» da un enlace #geovisor=<código> y guarda la vista (capas, colores, centro y zoom; sin datos personales)
+OK    [1280] E2 el aviso dice que quien lo abra debe iniciar sesión y tener permiso
+OK    [1280] E3 el supervisor de distribución abre el enlace: entra directo al geovisor, en el mismo lugar y zoom, con los colores por material
+OK    [1280] E4 … y la dirección ya no lleva el código (se consumió)
+OK    [1280] E5 el operador lo abre en solo lectura: no ve contratos, muestreo ni reportes de Comercial (el aviso los nombra) y sin «Compartir»
+OK    [1280] E6 quien no tiene el geovisor recibe el aviso y no ve el mapa
+OK    [1280] F1 el operador no tiene la capa de contratos ni «Compartir»
+OK    [1280] F2 nunca pidió la tesela ni la tarjeta de contratos
+OK    [1280] G1 el Dashboard distribución tiene la entrada «Geovisor técnico»
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+----
+OK    [390] A1 la capa de contratos se dibuja (desde el zoom 16), pedida con el token, sin nombres en la tesela
+OK    [390] A2 tocar el contrato abre su tarjeta: número, estado, uso, «Dato personal» con nombre, dirección y barrio, el medidor y el tramo
+OK    [390] A3 el perfil de consumo de 6 meses (con el mes sin dato) y el promedio
+OK    [390] A4 sin teléfono ni deuda en la pantalla
+OK    [390] A5 la lectura quedó en la auditoría (quién y contrato), sin el nombre
+OK    [390] A6 la tarjeta sin desborde y legible a lo ancho
+OK    [390] A7 al cerrar la tarjeta, el nombre ya no está en la página
+OK    [390] B1 los 27 puntos con su calidad: uno fuera (cloro 0,1), uno dentro y los demás sin muestra reciente
+OK    [390] B2 su tarjeta: «Fuera del rango» y el cloro con su valor, su rango de Salida (0,3 a 2) y la fecha
+OK    [390] B3 el color del punto sale de la calidad
+OK    [390] C1 la capa de reportes de Comercial se enciende y pide sus datos por fecha (vacía hasta el Corte 8)
+OK    [390] C2 azul con contrato y rojo posible clandestino
+OK    [390] C3 «Atenuar» baja su opacidad (y solo esa capa tiene el botón)
+OK    [390] D1 por edad, «Sin fecha de instalación» tiene su gris propio (no el del «sin dato» del material)
+OK    [390] D2 por material, «Sin dato» sigue en el gris de antes
+OK    [390] E1 «Compartir» da un enlace #geovisor=<código> y guarda la vista (capas, colores, centro y zoom; sin datos personales)
+OK    [390] E2 el aviso dice que quien lo abra debe iniciar sesión y tener permiso
+OK    [390] E3 el supervisor de distribución abre el enlace: entra directo al geovisor, en el mismo lugar y zoom, con los colores por material
+OK    [390] E4 … y la dirección ya no lleva el código (se consumió)
+OK    [390] E5 el operador lo abre en solo lectura: no ve contratos, muestreo ni reportes de Comercial (el aviso los nombra) y sin «Compartir»
+OK    [390] E6 quien no tiene el geovisor recibe el aviso y no ve el mapa
+OK    [390] F1 el operador no tiene la capa de contratos ni «Compartir»
+OK    [390] F2 nunca pidió la tesela ni la tarjeta de contratos
+OK    [390] G1 el Dashboard distribución tiene la entrada «Geovisor técnico»
+OK    [1280] A1 la capa de contratos se dibuja (desde el zoom 16), pedida con el token, sin nombres en la tesela
+OK    [1280] A2 tocar el contrato abre su tarjeta: número, estado, uso, «Dato personal» con nombre, dirección y barrio, el medidor y el tramo
+OK    [1280] A3 el perfil de consumo de 6 meses (con el mes sin dato) y el promedio
+OK    [1280] A4 sin teléfono ni deuda en la pantalla
+OK    [1280] A5 la lectura quedó en la auditoría (quién y contrato), sin el nombre
+OK    [1280] A6 la tarjeta sin desborde y legible a lo ancho
+OK    [1280] A7 al cerrar la tarjeta, el nombre ya no está en la página
+OK    [1280] B1 los 27 puntos con su calidad: uno fuera (cloro 0,1), uno dentro y los demás sin muestra reciente
+OK    [1280] B2 su tarjeta: «Fuera del rango» y el cloro con su valor, su rango de Salida (0,3 a 2) y la fecha
+OK    [1280] B3 el color del punto sale de la calidad
+OK    [1280] C1 la capa de reportes de Comercial se enciende y pide sus datos por fecha (vacía hasta el Corte 8)
+OK    [1280] C2 azul con contrato y rojo posible clandestino
+OK    [1280] C3 «Atenuar» baja su opacidad (y solo esa capa tiene el botón)
+OK    [1280] D1 por edad, «Sin fecha de instalación» tiene su gris propio (no el del «sin dato» del material)
+OK    [1280] D2 por material, «Sin dato» sigue en el gris de antes
+OK    [1280] E1 «Compartir» da un enlace #geovisor=<código> y guarda la vista (capas, colores, centro y zoom; sin datos personales)
+OK    [1280] E2 el aviso dice que quien lo abra debe iniciar sesión y tener permiso
+OK    [1280] E3 el supervisor de distribución abre el enlace: entra directo al geovisor, en el mismo lugar y zoom, con los colores por material
+OK    [1280] E4 … y la dirección ya no lleva el código (se consumió)
+OK    [1280] E5 el operador lo abre en solo lectura: no ve contratos, muestreo ni reportes de Comercial (el aviso los nombra) y sin «Compartir»
+OK    [1280] E6 quien no tiene el geovisor recibe el aviso y no ve el mapa
+OK    [1280] F1 el operador no tiene la capa de contratos ni «Compartir»
+OK    [1280] F2 nunca pidió la tesela ni la tarjeta de contratos
+OK    [1280] G1 el Dashboard distribución tiene la entrada «Geovisor técnico»
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 50 de 50 — SIN FALLAS

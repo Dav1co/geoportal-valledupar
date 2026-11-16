@@ -1,0 +1,19 @@
+OK    00 base hasta el 6b con la carga real, contratos sintéticos y caudales de Entrada · 26 s
+OK    01 huellas antes: «CORTE 6b (listo para el 7a)», 11 RPC y 7 objetos «NO EXISTE», 2 «CORTE 6b (sin cambiar)» · 0 funciones de redes (conjunto)=CORTE 6b (listo para el 7a) | 1 bucket tecnica-evidencias=NO EXISTE (sin aplicar) | 1 objeto tecnica.quimico_ficha_eventos=NO EXISTE (sin aplicar) | 1 objeto tecnica.quimico_ficha_preparaciones=NO EXISTE (sin aplicar) | 1 objeto tecnica.quimico_movimientos=NO EXISTE (
+OK    02 ensayo sobre la base completa: ERROR esperado, N de N SIN FALLAS · RESULTADO: 55 de 55 pruebas correctas — SIN FALLAS · 2.2 s
+OK    03 el ensayo no deja rastro
+OK    04 migración · 0.1 s
+OK    05 verificación: todas las filas OK · do y cortado) y el muestreo a 35 días|OK | 09 cada movimiento cuadra: kg = cantidad (× 1.000 si son toneladas), con signo (el uso resta)|OK | INFO químicos (activos · de potabilización · con ficha en PDF · con dosis óptima) · movimientos · saldo de PAC (kg)|3 · 2 · 0 · 0 · 0 · sin inventario inicial
+OK    06 guardia: migrar dos veces se niega · CONTEXTO:  función PL/pgSQL inline_code_block en la línea 6 en RAISE
+OK    07 huellas después: «CORTE 7a (aplicado)», 11 «NUEVA», 2 «CORTE 7a (reemplazada)», 7 «EXISTE» · 0 funciones de redes (conjunto)=CORTE 7a (aplicado) | 1 bucket tecnica-evidencias=EXISTE (aplicado) | 1 objeto tecnica.quimico_ficha_eventos=EXISTE (aplicado) | 1 objeto tecnica.quimico_ficha_preparaciones=EXISTE (aplicado) | 1 objeto tecnica.quimico_movimientos=EXISTE (aplicado) | 1 objeto tecnica.
+OK    08 reversa vacía: exacta al 6b, sin las tablas de químicos, hipoclorito desactivado, el bucket vacío se queda
+OK    09 migrar de nuevo después de la reversa (reutiliza el bucket y el hipoclorito)
+OK    10 la primera apertura rehace la capa y aparecen los suspendidos como estado propio · activo=94929 retirado=12405 suspendido=4315 · 2.2 s
+OK    11 el supervisor de planta: tarjeta sin nombre ni dirección
+OK    12 el supervisor de planta fija la dosis óptima del PAC con su PDF · {"codigo": "pac", "cambios": ["dosis_optima"]}
+OK    13 saldo del PAC: 12 t + 5 t − 300 kg = 16.700 kg
+OK    14 la comparación del PAC en Huaricha con el caudal sintético (1.000 L/s): esperado 18 × 86.400 / 1.000 = 1.555,2 kg por día; usado 300 hoy y marca · 2 filas · 29 ms · [{'dia': '2026-11-16', 'marca': True, 'planta': 'huaricha', 'qi_lps': 1000.0, 'quimico': 'pac', 'usado_kg': 300.0, 'desvio_pct': -80.7, 'volumen_m3': 86400, 'esperado_kg': 1555.2, 'planta_nombre': 'Huaricha', 'quimico_nombre': 'Policloruro de aluminio', 'dosis_optima_ppm': 18}]
+OK    15 verificación con datos: todas OK · INFO químicos (activos · de potabilización · con ficha en PDF · con dosis óptima) · movimientos · saldo de PAC (kg)|3 · 2 · 1 · 1 · 3 · 16700
+OK    16 reversa con datos: se niega (ya hay movimientos) y no cambia nada · CONTEXTO:  función PL/pgSQL inline_code_block en la línea 7 en RAISE
+
+RESULTADO: 17 de 17 — SIN FALLAS

@@ -41,8 +41,9 @@ const SIN_DATO = "#A7ADA9";
 const SIN_FECHA = "#C9B79C";      // respuesta 2 de David al 6a: «sin fecha» con un gris propio (cálido), distinto del «sin dato» del material
 const COLOR_CALIDAD: Record<string, string> = { dentro: "#2E7D32", fuera: "#C62828", sin_rango: "#90A4AE", sin_muestra: "#90A4AE" };
 const NOMBRE_CALIDAD: Record<string, string> = { dentro: "Dentro del rango", fuera: "Fuera del rango", sin_rango: "Sin rango", sin_muestra: "Sin muestra reciente" };
-const COLOR_CONTRATO: Record<string, string> = { activo: "#37474F", retirado: "#FFFFFF", otro: "#F9A825", sin_dato: "#B0BEC5" };
-const ESTADO_CONTRATO: Record<string, string> = { activo: "Activo", retirado: "Retirado", otro: "Otro", sin_dato: "Sin dato" };
+// Corte 7a (respuesta 2 de David al 6b): un color por estado del contrato
+const COLOR_CONTRATO: Record<string, string> = { activo: "#37474F", suspendido: "#F57C00", cortado: "#7B1FA2", retirado: "#FFFFFF", otro: "#F9A825", sin_dato: "#B0BEC5" };
+const ESTADO_CONTRATO: Record<string, string> = { activo: "Activo", suspendido: "Suspendido", cortado: "Cortado", retirado: "Retirado", otro: "Otro", sin_dato: "Sin dato" };
 const ATENUABLES = new Set(["reportes_comercial"]);      // §30.4: la capa de reportes de Comercial se puede apagar o atenuar
 const EDADES: [number, string, string][] = [[0, "#2E7D32", "Menos de 10 años"], [10, "#9CCC65", "10 a 24 años"], [25, "#F9A825", "25 a 39 años"], [40, "#C62828", "40 años o más"]];
 const COLOR_DANO: Record<string, string> = { reportado: "#D32F2F", en_atencion: "#EF6C00", atendido: "#2E7D32" };
@@ -509,14 +510,19 @@ function TarjetaDeContrato({ contrato, cfg, onCerrar, onVerFicha }: { contrato: 
       {error ? <p className="tec-error-caja" role="alert">{error}</p> : null}
       {d ? (
         <>
-          <div className="geo-personal" aria-label="Datos del suscriptor">
-            <span className="geo-personal-rotulo">Dato personal · solo en pantalla</span>
-            <dl>
-              <div><dt>Suscriptor</dt><dd data-personal="nombre">{d.suscriptor.nombre ?? "Sin dato"}</dd></div>
-              <div><dt>Dirección</dt><dd data-personal="direccion">{d.suscriptor.direccion ?? "Sin dato"}</dd></div>
+          {d.datos_personales !== false ? (
+            <div className="geo-personal" aria-label="Datos del suscriptor">
+              <span className="geo-personal-rotulo">Dato personal · solo en pantalla</span>
+              <dl>
+                <div><dt>Suscriptor</dt><dd data-personal="nombre">{d.suscriptor.nombre ?? "Sin dato"}</dd></div>
+                <div><dt>Dirección</dt><dd data-personal="direccion">{d.suscriptor.direccion ?? "Sin dato"}</dd></div>
+                <div><dt>Barrio</dt><dd>{d.suscriptor.barrio ?? "Sin dato"}</dd></div>
+              </dl>
+            </div>) : (
+            <dl data-sin-personal="si">
               <div><dt>Barrio</dt><dd>{d.suscriptor.barrio ?? "Sin dato"}</dd></div>
-            </dl>
-          </div>
+              <div><dt>Suscriptor</dt><dd className="tec-ayuda">El nombre y la dirección los ve el supervisor de distribución</dd></div>
+            </dl>)}
           <dl>
             <div><dt>Medidor</dt><dd>{d.medidor_anios === null ? "Sin fecha real" : `${d.medidor_anios} años`}</dd></div>
             <div><dt>Tramo de acueducto</dt><dd>{d.tramo ?? "Sin enlazar"}</dd></div>
