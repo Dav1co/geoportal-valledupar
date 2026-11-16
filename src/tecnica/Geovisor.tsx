@@ -11,6 +11,8 @@ import { FichaActivo } from "./FichaActivo";
 // Geovisor técnico (Técnica fase 1, Corte 6a; 01 sección D, N-11, N-13 y N-14).
 // · Interruptores por grupo, encendidos al abrir según el perfil (lo decide el servidor) y «Volver a la vista por omisión». Encender o apagar no se guarda.
 // · Red en una tesela propia (activos vigentes, con material, diámetro, edad y estado); colores por tipo, por material o por edad.
+// · Corte 5d: la línea 116 («pqr_116», solo supervisores) por fecha, color por servicio y estado, los repetidos del mismo contrato, causal y día en un punto;
+//   sin nombre, dirección ni barrio; la leyenda dice cuántos del periodo no tienen ubicación.
 // · Daños, intervenciones y reportes del bot por fecha (hoy, últimos 7 días o un rango de hasta 12 meses); los puntos de muestreo, verificados o aproximados.
 // · Tocar un elemento abre su tarjeta. Desde un activo: «Ver ficha» (supervisores y administrador), «Reportar daño» y «Registrar intervención» (si tiene el formulario).
 // · El operador con la casilla del geovisor (N-13) ve solo lectura: la red y las actividades del día, sin ficha ni capas de supervisión.
@@ -49,6 +51,10 @@ const COLOR_CONTRATO: Record<string, string> = { activo: "#37474F", suspendido: 
 const ESTADO_CONTRATO: Record<string, string> = { activo: "Activo", suspendido: "Suspendido", cortado: "Cortado", retirado: "Retirado", otro: "Otro", sin_dato: "Sin dato" };
 const ATENUABLES = new Set(["reportes_comercial"]);      // §30.4: la capa de reportes de Comercial se puede apagar o atenuar
 const EDADES: [number, string, string][] = [[0, "#2E7D32", "Menos de 10 años"], [10, "#9CCC65", "10 a 24 años"], [25, "#F9A825", "25 a 39 años"], [40, "#C62828", "40 años o más"]];
+// Corte 5d: la línea 116, color por servicio; lleno si sigue registrado, hueco si ya se atendió; más grande si agrupa varios reportes
+const COLOR_116: Record<string, string> = { acueducto: "#1565C0", alcantarillado: "#8D4E1E", otros: "#616161" };
+const NOMBRE_SERV_116: Record<string, string> = { acueducto: "Acueducto", alcantarillado: "Alcantarillado", otros: "Otros (incidentes externos, pluvial)" };
+const METODO_116: Record<string, string> = { contrato: "Por el contrato (punto del predio)", direccion: "Por la dirección (catastro)", barrio: "Aproximada (centro del barrio)" };
 const COLOR_DANO: Record<string, string> = { reportado: "#D32F2F", en_atencion: "#EF6C00", atendido: "#2E7D32" };
 const COLOR_ITV: Record<string, string> = { preventivo: "#0277BD", correctivo: "#EF6C00", reparacion: "#6A1B9A", reposicion: "#00838F", inversion: "#2E7D32" };
 const NOMBRE_ITV: Record<string, string> = { preventivo: "Preventivo", correctivo: "Correctivo", reparacion: "Reparación", reposicion: "Reposición", inversion: "Inversión" };
@@ -161,11 +167,14 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
         const color = c.codigo === "danos" ? ["match", ["get", "estado"], ...Object.entries(COLOR_DANO).flat(), "#D32F2F"]
           : c.codigo === "intervenciones" ? ["match", ["get", "tipo_codigo"], ...Object.entries(COLOR_ITV).flat(), "#455A64"]
           : c.codigo === "muestreo" ? ["case", ["==", ["get", "exactitud"], "verificada"], ["match", ["get", "calidad"], ...Object.entries(COLOR_CALIDAD).flat(), "#90A4AE"], "rgba(255,255,255,0.9)"]
-          : c.codigo === "reportes_comercial" ? ["case", ["get", "con_contrato"], "#1565C0", "#C62828"] : "#7B1FA2";
-        const borde = c.codigo === "muestreo" ? ["match", ["get", "calidad"], ...Object.entries(COLOR_CALIDAD).flat(), "#90A4AE"] : "#FFFFFF";
+          : c.codigo === "reportes_comercial" ? ["case", ["get", "con_contrato"], "#1565C0", "#C62828"]
+          : c.codigo === "pqr_116" ? ["case", ["==", ["get", "estado"], "registrado"], ["match", ["get", "grupo_servicio"], ...Object.entries(COLOR_116).flat(), "#616161"], "#FFFFFF"] : "#7B1FA2";
+        const borde = c.codigo === "muestreo" ? ["match", ["get", "calidad"], ...Object.entries(COLOR_CALIDAD).flat(), "#90A4AE"]
+          : c.codigo === "pqr_116" ? ["match", ["get", "grupo_servicio"], ...Object.entries(COLOR_116).flat(), "#616161"] : "#FFFFFF";
+        const radio = c.codigo === "muestreo" ? 7 : c.codigo === "pqr_116" ? ["min", 13, ["+", 5.5, ["*", 1.5, ["get", "n"]]]] : 6.5;
         capas.push({ id: `g-${c.codigo}`, type: "circle", source: `g-${c.codigo}`, layout: { visibility: vis },
-                     paint: { "circle-radius": c.codigo === "muestreo" ? 7 : 6.5, "circle-color": color as unknown as string,
-                              "circle-stroke-color": borde as unknown as string, "circle-stroke-width": c.codigo === "muestreo" ? 2.5 : 2 } });
+                     paint: { "circle-radius": radio as unknown as number, "circle-color": color as unknown as string,
+                              "circle-stroke-color": borde as unknown as string, "circle-stroke-width": c.codigo === "muestreo" || c.codigo === "pqr_116" ? 2.5 : 2 } });
       }
       // Corte 9a: capas de referencia, cada una con su fuente (solo pide teselas cuando está encendida)
       const capasReferencia = capasRef.current.filter((c) => c.fuente === "referencia");
@@ -328,6 +337,8 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
               : `${c.nombre}: se muestran los ${cfg.max_elementos} más recientes. Acorte el rango de fechas.`}</p>)}
           </div>) : null}
         {colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} /> : null}
+        {on.has("pqr_116") ? <Leyenda116 derecha={colores !== "tipo" || [...CAPAS_PRESION].some((c) => on.has(c))}
+          sinUbicar={(() => { const d = datos.pqr_116; return d && d !== "cargando" && !("error" in d) ? (d as { sin_ubicar?: number }).sin_ubicar ?? 0 : 0; })()} /> : null}
         {[...CAPAS_PRESION].some((c) => on.has(c)) ? <LeyendaPresion modelo={on.has("presion_modelo")} medida={on.has("campana_2014")} arriba={colores !== "tipo"} /> : null}
         {on.has("contratos") && zoom < (cfg.zoom.contratos ?? 16) && zoom >= cfg.zoom.min ? <div className="geo-aviso geo-aviso-suave geo-aviso-abajo" role="status">Acerque más para ver los contratos</div> : null}
         {avisoAbierto ? <div className="geo-vista-aviso" role="status"><span>{avisoAbierto}</span><button type="button" className="geo-cerrar" onClick={() => setAvisoAbierto(null)} aria-label="Cerrar el aviso">✕</button></div> : null}
@@ -425,6 +436,18 @@ function Leyenda({ colores, materiales }: { colores: Colores; materiales: { codi
   );
 }
 
+// Corte 5d. Leyenda de la línea 116 (y cuántos reportes del periodo no están en el mapa por no tener ubicación)
+function Leyenda116({ derecha, sinUbicar }: { derecha: boolean; sinUbicar: number }) {
+  return (
+    <div className={`geo-leyenda geo-leyenda-presion${derecha ? " geo-leyenda-2" : ""}`} aria-label="Colores de la línea 116" data-testid="leyenda-116">
+      <strong>Línea 116</strong>
+      <ul>{Object.entries(COLOR_116).map(([k, c]) => <li key={k}><span className="geo-leyenda-punto" style={{ background: c }} aria-hidden="true" />{NOMBRE_SERV_116[k]}</li>)}</ul>
+      <p className="geo-leyenda-nota">Lleno: registrado · hueco: atendido · más grande: varios reportes del mismo contrato, causal y día</p>
+      {sinUbicar > 0 ? <p className="geo-leyenda-nota">{nf.format(sinUbicar)} del periodo sin ubicar (no están en el mapa)</p> : null}
+    </div>
+  );
+}
+
 function TarjetaElemento({ t, cfg, onCerrar, onVerFicha, onReportarDano, onRegistrarIntervencion }: {
   t: Tarjeta; cfg: ConfigGeovisor; onCerrar: () => void; onVerFicha: (c: string) => void;
   onReportarDano?: (a: ActivoTarjeta) => void; onRegistrarIntervencion?: (a: ActivoTarjeta) => void;
@@ -465,6 +488,19 @@ function TarjetaElemento({ t, cfg, onCerrar, onVerFicha, onReportarDano, onRegis
     sub = `Reporte de Comercial · ${texto(p.tipo)}`;
     filas.push(["Contrato", p.con_contrato === true || p.con_contrato === "true" ? "Con código de contrato" : "Sin contrato (posible clandestino)"], ["Subtipo", texto(p.subtipo)],
                ["Área", texto(p.area)], ["Estado", texto(p.estado)], ["Registrado", fechaHora(p.cuando)]);
+  } else if (t.capa === "pqr_116") {      // Corte 5d: sin nombre, dirección ni barrio
+    const reps = (typeof p.reportes === "string" ? JSON.parse(p.reportes) : p.reportes ?? []) as number[];
+    const danos = (typeof p.danos === "string" ? JSON.parse(p.danos) : p.danos ?? []) as string[] | null;
+    const nRep = Number(p.n ?? 1), reg = Number(p.registrados ?? 0);
+    titulo = nRep > 1 ? `${nRep} reportes de la línea 116` : `Reporte ${texto(p.codigo)} de la línea 116`;
+    sub = `${NOMBRE_SERV_116[String(p.grupo_servicio)] ?? texto(p.servicio)} · ${texto(p.causal)}`;
+    filas.push(["Estado", nRep > 1 ? (reg ? `${reg} de ${nRep} registrados (sin atender)` : "Todos atendidos") : reg ? "Registrado (sin atender)" : "Atendido"]);
+    filas.push([nRep > 1 ? "Reportes" : "Reporte", reps.map((r) => String(r)).join(", ") + (nRep > reps.length ? ` y ${nRep - reps.length} más` : "")]);
+    filas.push(["Registrado", nRep > 1 && p.ultimo !== p.cuando ? `${fechaHora(p.cuando)} a ${fechaHora(p.ultimo)}` : fechaHora(p.cuando)]);
+    if (p.contrato) filas.push(["Contrato", texto(p.contrato)]);
+    filas.push(["Ubicación", METODO_116[String(p.metodo)] ?? texto(p.metodo)]);
+    if (p.sector) filas.push(["Sector hidráulico", p.subsector ? `${p.sector} (subsector ${p.subsector})` : String(p.sector)]);
+    if (danos && danos.length) filas.push(["Convertido en", danos.join(", ")]);
   } else if (t.capa === "contrato") {
     return <TarjetaDeContrato contrato={String(p.contrato)} cfg={cfg} onCerrar={onCerrar} onVerFicha={onVerFicha} />;
   } else if (t.capa === "reportes_bot") {

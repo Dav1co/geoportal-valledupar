@@ -1,0 +1,24 @@
+OK    01 el ensayo termina en el ERROR esperado: N de N … SIN FALLAS
+OK    02 … y no deja nada (sigue la huella del 9a-bis y no hay tablas de la 116)
+OK    03 public.predios_comercial es vista materializada, como en producción
+OK    04 escribir en ella falla (ningún paquete la escribe ni la refresca)
+OK    05 ningún archivo del paquete escribe ni refresca predios_comercial
+OK    06 la migración se aplica
+OK    07 la verificación: todas las filas OK
+OK    08 una segunda migración se niega
+OK    09 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
+OK    10 iniciar como la Edge (29 ms)
+OK    11 los 115 lotes como la Edge, cada uno en menos de 8 s (el más lento, con el arranque de psql: 61 ms)
+OK    12 NOMBRE no llegó a la base (ninguna fila de la carga lo guarda)
+OK    13 el resumen como la Edge, en menos de 30 s (4338 ms)
+OK    14 la publicación como la Edge, en menos de 30 s (4887 ms): 22978 nuevos, ubicación {'barrio': 0, 'contrato': 19696, 'direccion': 0, 'sin_ubicar': 3282}
+OK    15 la capa del geovisor (12 meses: 148 ms; hoy: 44 ms) en menos de 8 s, sin dirección, barrio ni nombre
+OK    16 la segunda carga completa reconoce todo por el número: 0 nuevos, 1.000 cambios de estado, 21978 iguales (resumen 724 ms, publicar 798 ms)
+OK    17 los cambios de estado son eventos (nada se borra): 1.000 eventos «estado» y 22.978 «alta»
+OK    18 la reversa se niega si ya hay cargas de la 116 (no borra datos)
+OK    19 sin cargas, la reversa deja la huella del 9a-bis y la capa pqr_116 como estaba
+OK    20 las huellas después de la reversa dicen «listo para el 5d» y nada «DISTINTA»
+OK    21 el ENSAYO de la carga inicial con el archivo real: 7 de 7 SIN FALLAS (subir 115 lotes 1054 ms, resumen 4474 ms, publicar 4931 ms, capa del geovisor, 12 meses 8 ms; INFO ubicación de los reportes de esta carga: contrato 1328 · sin_ubicar 21650; en local el catastro es sintético)
+----
+TIEMPOS DEL ENSAYO: TIEMPOS con 22978 reportes (20000 contratos del catastro): iniciar 1 ms · lote más lento 9 ms · resumen 4408 ms · publicar 5004 ms · capa de 12 meses 96 ms (3000 puntos, recortada) · capa de 7 días 8 ms · ubicación {"barrio": 0, "contrato": 19696, "direccion": 0, "sin_ubicar": 3282}
+RESULTADO: 21 de 21 — SIN FALLAS

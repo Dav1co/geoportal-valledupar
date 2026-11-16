@@ -1,0 +1,70 @@
+OK    [390] A1 la capa «Reportes de la línea 116» está en el Cargue (CSV o Excel; se reconoce por el número y se ubica por contrato, dirección o barrio), sin cargar todavía
+OK    [390] A2 al elegir el Excel: 4 reportes y «No se envían: NOMBRE» (se descarta en el equipo)
+OK    [390] A3 la revisión: 4 nuevos, 0 cambian de estado, cómo se ubicaron (2+1 por contrato) y «Lista para publicar»
+OK    [390] A4 el nombre no salió de la página: ningún lote lleva NOMBRE ni el nombre de prueba, y el resumen no trae direcciones ni barrios
+OK    [390] A5 publicar exige la nota y publica: «4 nuevos · 0 con cambio de estado»; en la base, 4 reportes sin nombre
+OK    [390] A6 la segunda carga (CSV, fecha DD/MM/AAAA) reconoce el reporte por su número: 1 nuevo y 1 que cambia de estado
+OK    [390] A7 el cambio de estado queda como evento con fecha (registrado → atendido) y nada se borra
+OK    [390] A8 el asistente no se desborda y sus botones miden 40 px o más
+OK    [390] B1 la capa «Línea 116 (reportes)» está en la lista, apagada al abrir
+OK    [390] B2 la capa se dibuja (hoy) y su leyenda dice los colores por servicio, lleno/hueco por estado, y que 1 reporte del periodo no tiene ubicación
+OK    [390] B3 tocar el punto abre una sola tarjeta para los 2 reportes del mismo contrato, causal y día: estado, números, contrato, ubicación y sector
+OK    [390] B4 la tarjeta no trae nombre, dirección ni barrio
+OK    [390] B5 el geovisor con la capa no se desborda
+OK    [390] B6 el operador en solo lectura no ve la capa de la línea 116
+OK    [390] C1 el supervisor de distribución ve «Reportar anomalía» y «Revisiones generales» entre los formularios que asigna
+OK    [390] C2 se lo asigna a un operador (queda el evento con su motivo)
+OK    [1280] A1 la capa «Reportes de la línea 116» está en el Cargue (CSV o Excel; se reconoce por el número y se ubica por contrato, dirección o barrio), sin cargar todavía
+OK    [1280] A2 al elegir el Excel: 4 reportes y «No se envían: NOMBRE» (se descarta en el equipo)
+OK    [1280] A3 la revisión: 4 nuevos, 0 cambian de estado, cómo se ubicaron (2+1 por contrato) y «Lista para publicar»
+OK    [1280] A4 el nombre no salió de la página: ningún lote lleva NOMBRE ni el nombre de prueba, y el resumen no trae direcciones ni barrios
+OK    [1280] A5 publicar exige la nota y publica: «4 nuevos · 0 con cambio de estado»; en la base, 4 reportes sin nombre
+OK    [1280] A6 la segunda carga (CSV, fecha DD/MM/AAAA) reconoce el reporte por su número: 1 nuevo y 1 que cambia de estado
+OK    [1280] A7 el cambio de estado queda como evento con fecha (registrado → atendido) y nada se borra
+OK    [1280] A8 el asistente no se desborda y sus botones miden 40 px o más
+OK    [1280] B1 la capa «Línea 116 (reportes)» está en la lista, apagada al abrir
+OK    [1280] B2 la capa se dibuja (hoy) y su leyenda dice los colores por servicio, lleno/hueco por estado, y que 1 reporte del periodo no tiene ubicación
+OK    [1280] B3 tocar el punto abre una sola tarjeta para los 2 reportes del mismo contrato, causal y día: estado, números, contrato, ubicación y sector
+OK    [1280] B4 la tarjeta no trae nombre, dirección ni barrio
+OK    [1280] B5 el geovisor con la capa no se desborda
+OK    [1280] B6 el operador en solo lectura no ve la capa de la línea 116
+OK    [1280] C1 el supervisor de distribución ve «Reportar anomalía» y «Revisiones generales» entre los formularios que asigna
+OK    [1280] C2 se lo asigna a un operador (queda el evento con su motivo)
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+----
+OK    [390] A1 la capa «Reportes de la línea 116» está en el Cargue (CSV o Excel; se reconoce por el número y se ubica por contrato, dirección o barrio), sin cargar todavía
+OK    [390] A2 al elegir el Excel: 4 reportes y «No se envían: NOMBRE» (se descarta en el equipo)
+OK    [390] A3 la revisión: 4 nuevos, 0 cambian de estado, cómo se ubicaron (2+1 por contrato) y «Lista para publicar»
+OK    [390] A4 el nombre no salió de la página: ningún lote lleva NOMBRE ni el nombre de prueba, y el resumen no trae direcciones ni barrios
+OK    [390] A5 publicar exige la nota y publica: «4 nuevos · 0 con cambio de estado»; en la base, 4 reportes sin nombre
+OK    [390] A6 la segunda carga (CSV, fecha DD/MM/AAAA) reconoce el reporte por su número: 1 nuevo y 1 que cambia de estado
+OK    [390] A7 el cambio de estado queda como evento con fecha (registrado → atendido) y nada se borra
+OK    [390] A8 el asistente no se desborda y sus botones miden 40 px o más
+OK    [390] B1 la capa «Línea 116 (reportes)» está en la lista, apagada al abrir
+OK    [390] B2 la capa se dibuja (hoy) y su leyenda dice los colores por servicio, lleno/hueco por estado, y que 1 reporte del periodo no tiene ubicación
+OK    [390] B3 tocar el punto abre una sola tarjeta para los 2 reportes del mismo contrato, causal y día: estado, números, contrato, ubicación y sector
+OK    [390] B4 la tarjeta no trae nombre, dirección ni barrio
+OK    [390] B5 el geovisor con la capa no se desborda
+OK    [390] B6 el operador en solo lectura no ve la capa de la línea 116
+OK    [390] C1 el supervisor de distribución ve «Reportar anomalía» y «Revisiones generales» entre los formularios que asigna
+OK    [390] C2 se lo asigna a un operador (queda el evento con su motivo)
+OK    [1280] A1 la capa «Reportes de la línea 116» está en el Cargue (CSV o Excel; se reconoce por el número y se ubica por contrato, dirección o barrio), sin cargar todavía
+OK    [1280] A2 al elegir el Excel: 4 reportes y «No se envían: NOMBRE» (se descarta en el equipo)
+OK    [1280] A3 la revisión: 4 nuevos, 0 cambian de estado, cómo se ubicaron (2+1 por contrato) y «Lista para publicar»
+OK    [1280] A4 el nombre no salió de la página: ningún lote lleva NOMBRE ni el nombre de prueba, y el resumen no trae direcciones ni barrios
+OK    [1280] A5 publicar exige la nota y publica: «4 nuevos · 0 con cambio de estado»; en la base, 4 reportes sin nombre
+OK    [1280] A6 la segunda carga (CSV, fecha DD/MM/AAAA) reconoce el reporte por su número: 1 nuevo y 1 que cambia de estado
+OK    [1280] A7 el cambio de estado queda como evento con fecha (registrado → atendido) y nada se borra
+OK    [1280] A8 el asistente no se desborda y sus botones miden 40 px o más
+OK    [1280] B1 la capa «Línea 116 (reportes)» está en la lista, apagada al abrir
+OK    [1280] B2 la capa se dibuja (hoy) y su leyenda dice los colores por servicio, lleno/hueco por estado, y que 1 reporte del periodo no tiene ubicación
+OK    [1280] B3 tocar el punto abre una sola tarjeta para los 2 reportes del mismo contrato, causal y día: estado, números, contrato, ubicación y sector
+OK    [1280] B4 la tarjeta no trae nombre, dirección ni barrio
+OK    [1280] B5 el geovisor con la capa no se desborda
+OK    [1280] B6 el operador en solo lectura no ve la capa de la línea 116
+OK    [1280] C1 el supervisor de distribución ve «Reportar anomalía» y «Revisiones generales» entre los formularios que asigna
+OK    [1280] C2 se lo asigna a un operador (queda el evento con su motivo)
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 34 de 34 — SIN FALLAS

@@ -8,7 +8,7 @@ export type EstadoCapa = "al_dia" | "desactualizada" | "sin_cargar" | "derivada"
 export type CapaCargue = {
   codigo: string; nombre: string; grupo: "acueducto" | "alcantarillado" | "tecnologia_perdidas" | "calidad_pqr" | "base"; sistema: string | null;
   geometria: "punto" | "linea" | "poligono" | "mixta"; prefijo: string | null; fuente: string; derivada_de: string | null; columna_llave: string | null;
-  formatos: string[]; lector: "modelo" | "generico" | "muestreo" | null; version: number; vigentes: number; estado: EstadoCapa;
+  formatos: string[]; lector: "modelo" | "generico" | "muestreo" | "linea_116" | null; version: number; vigentes: number; estado: EstadoCapa;
   puede_cargar?: boolean; solo_admin?: boolean;      // Corte 6a: el supervisor de distribución carga las que no vienen del modelo (lo decide el servidor)
   ultima: { carga_id: number; publicada_en: string; autor: string; formato: string; filas: number; nota: string | null; motivo: string | null } | null;
   abierta: { carga_id: number; creado_en: string; autor: string; formato: string; filas: number; recibidas: number; sha256: string; columna_llave: string; srid: number; masiva: boolean } | null;
@@ -25,11 +25,12 @@ export type Resumen = {
   por_prefijo?: Record<string, number>; frente_a_vigente: Record<string, number>; retirados?: number; detalle?: Record<string, unknown>;
   avisos: string[]; bloqueos: string[]; lista_para_publicar: boolean; choques?: Choque[];
   desactivar?: { codigo: string; nombre: string }[]; puntos?: PuntoMue[];       // capa MUE
+  ubicacion?: { contrato: number; direccion: number; barrio: number; sin_ubicar: number }; con_sector?: number; sin_ubicar_muestra?: number[];      // línea 116 (Corte 5d)
 };
 export type Muestra = { carga_id: number; capa: string; esperadas: number; recibidas: number; con_geometria: number; con_error: number;
   errores: { orden: number; llave: string | null; error: string }[]; caja: [number, number, number, number] | null; muestra: GeoJSON.FeatureCollection };
 export type Publicada = { carga_id: number; capa: string; version_capa: number; nuevos: number; cambiados: number; iguales?: number; retirados?: number; reactivados?: number;
-  desactivados?: number; segundos?: number };
+  desactivados?: number; segundos?: number; cambios_estado?: number };
 
 const F = { funcion: "geoportal-redes" };
 export const apiCargue = {
