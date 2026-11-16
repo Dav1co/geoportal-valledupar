@@ -257,10 +257,12 @@ for (const ancho of [390, 1280]) {
   await p.close();
 
   // ===== D. Supervisor de distribución sin formularios de Técnica (mis_formularios: 403) =====
-  p = await abrir(ancho, "dist"); await p.waitForSelector("[data-tarjeta=ficha_buscar]");
+  p = await abrir(ancho, "dist"); await p.waitForSelector("[data-tarjeta=dashboard_distribucion]");
   i = await inicio(p);
-  ok(`${tag} D1 supervisor de distribución (sin formularios de Técnica): entra al mismo inicio, con Redes y Supervisión; no se le abre el dashboard solo`,
-     i.pestanas.map((x) => x.modo).join() === "redes,supervision" && i.modo === "redes" && claves(i) === "ficha_buscar" && !(await p.$(".tdash-cab")), JSON.stringify(i.pestanas) + claves(i));
+  ok(`${tag} D1 supervisor de distribución (sin formularios de Técnica): entra al mismo inicio, con Redes y Supervisión, y la primera vez abre en Supervisión (David, 14:39); no se le abre el dashboard solo`,
+     i.pestanas.map((x) => x.modo).join() === "redes,supervision" && i.modo === "supervision" && claves(i) === "dashboard_distribucion,geovisor,ficha_editar" && !(await p.$(".tdash-cab")), JSON.stringify(i.pestanas) + claves(i));
+  await modoA(p, "redes");
+  ok(`${tag} D1b en Redes solo tiene «Ficha de activos» (buscar)`, claves(await inicio(p)) === "ficha_buscar");
   ok(`${tag} D2 su sesión dice «Supervisor de distribución»`, /Supervisor de distribución/.test(await p.evaluate(() => document.querySelector(".tec-inicio-sesion").textContent)));
   await modoA(p, "supervision"); i = await inicio(p);
   ok(`${tag} D3 en Supervisión: Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»; sin Dashboard PTAP`, claves(i) === "dashboard_distribucion,geovisor,ficha_editar", claves(i));

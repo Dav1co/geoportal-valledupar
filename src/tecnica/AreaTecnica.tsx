@@ -161,7 +161,9 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     ],
   };
   const modosVisibles = MODOS.filter((m) => porModo[m.clave].length > 0);
-  const modoActual: Modo | null = modosVisibles.some((m) => m.clave === modo) ? modo : modosVisibles[0]?.clave ?? null;
+  // La primera vez (sin modo recordado): quien no tiene formularios propios y sí supervisa (el supervisor de distribución) abre en Supervisión (David, 16-nov 14:39)
+  const modoInicial: Modo | null = formularios.length === 0 && porModo.supervision.length > 0 ? "supervision" : modosVisibles[0]?.clave ?? null;
+  const modoActual: Modo | null = modosVisibles.some((m) => m.clave === modo) ? modo : modoInicial;
   const nombreElegido = formularios.find((f) => f.clave === elegido)?.nombre ?? "Formulario";
   const volverInicio = () => { setElegido(null); setDef(null); setDesdeDano(null); setActivoItv(null); setActivoDano(null); setVista("inicio"); window.scrollTo?.(0, 0); };
 
