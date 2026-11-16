@@ -13,7 +13,7 @@ export type ConfigGeovisor = {
   perfil: "admin" | "supervisor" | "operador"; completo: boolean; perfiles: PerfilGeovisor[]; hoy: string; rango_meses: number; max_elementos: number;
   zoom: { min: number; red_completa: number; nodos: number; accesorios: number; contratos?: number }; version: number;
   formularios: { danos_fallas: boolean; mantenimiento: boolean }; ficha: boolean;
-  compartir?: boolean; contratos_capa?: { filas: number; calculado_en: string } | null;      // Corte 6b
+  compartir?: boolean;      // Corte 6b. Corte 6c: ya no hay «contratos_capa»: la tesela de contratos se arma al vuelo, siempre al día
   capas: CapaGeovisor[]; tipos: Record<string, string>; estados?: Record<string, string>; materiales: { codigo: string; nombre: string }[];
   por_perfil: { perfil: PerfilGeovisor; capa: string; encendida: boolean; actualizado_en: string; actualizado_por: string }[] | null;
 };
