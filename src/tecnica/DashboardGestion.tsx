@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  apiGestion, type Area, type CatalogoRedes, type Descarga, type EventoFicha, type GraficasRedes, type NodoPorClasificar, type NodosPorClasificar,
+  apiGestion, type AccionSugerida, type Area, type CatalogoRedes, type Descarga, type EventoFicha, type GraficasRedes, type NodoPorClasificar, type NodosPorClasificar,
   type Parametro, type ParametrosRedes, type PersonaRedes, type PersonalRedes, type TipoCatalogo,
 } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
+import { NodoPreliminar } from "./NodoPreliminar";
 
 // Dashboard distribución · gestión (Técnica fase 1, Corte 4b): Personal (área, cargo, cuadrilla y la casilla del geovisor del operador, N-13 y §27.3),
 // Catálogo (alias N-12 y cuadrillas), Parámetros, Gráficas (D-19), Descargas en Excel (auditadas) y Nodos por clasificar (solo el administrador).
@@ -513,34 +514,45 @@ export function Descargas() {
 // =====================================================================
 // NODOS POR CLASIFICAR (solo el administrador; N-3)
 // =====================================================================
+// Corte 9a: cada nodo trae lo que dice el modelo y una SUGERENCIA (que se confirma con motivo; nada se clasifica solo), y abre su ficha preliminar de solo lectura.
+const SUGERENCIA: Record<AccionSugerida, string> = { no_crear: "Propuesto por el Plan: no crear activo", dejar_nodo: "Dejar como nodo", crear: "Crear el activo", revisar: "Revisar en campo", sin_modelo: "Sin datos del modelo" };
+const CLASE_NODO = { nodo_calculo: "Dejar como nodo (no es un activo)", propuesta_plan: "Propuesto por el Plan, no instalado (no crear activo)" } as const;
 export function Nodos({ onFicha }: { onFicha: (c: string) => void }) {
+  const [sug, setSug] = useState<AccionSugerida | null>(null);
   const [buscar, setBuscar] = useState(""); const [d, setD] = useState<NodosPorClasificar | null>(null); const [items, setItems] = useState<NodoPorClasificar[]>([]);
   const [error, setError] = useState<string | null>(null); const [vez, setVez] = useState(0); const [aviso, setAviso] = useState<{ ok: boolean; t: string; activo?: string } | null>(null);
   const ver = useRef(0);
+  const consulta = sug ? `sugerencia:${sug}` : buscar.trim();
   useEffect(() => {
     const v = ++ver.current; const t = setTimeout(() => {
-      apiGestion.nodos(buscar.trim(), null).then((r) => { if (v === ver.current) { setD(r); setItems(r.items); setError(null); } })
+      apiGestion.nodos(consulta, null).then((r) => { if (v === ver.current) { setD(r); setItems(r.items); setError(null); } })
         .catch((e) => { if (v === ver.current) setError(err(e, "La bandeja de nodos por clasificar es solo del administrador.")); });
     }, 250);
     return () => clearTimeout(t);
-  }, [buscar, vez]);
+  }, [consulta, vez]);
   if (error) return <section className="tec-tarjeta" role="alert"><p>{error}</p></section>;
   return (
     <>
-      <p className="tec-ayuda dan-pad-x">Nodos del modelo de acueducto sin activo (S, J, M, Pila, Módulos). Póngale un nombre visible o cree el activo que es: queda enlazado al nodo y el nombre del modelo no cambia.</p>
+      <p className="tec-ayuda dan-pad-x">Nodos del modelo de acueducto sin activo (S, J, M, Pila, Módulos). Abra la ficha preliminar para ver qué es cada uno; luego confirme la sugerencia, póngale un nombre visible o cree el activo que es: queda enlazado al nodo y el nombre del modelo no cambia.</p>
       {d ? <p className="dan-pad-x gest-grupos">{d.grupos.map((g) => <span key={g.grupo} className="itv-etiqueta">{g.grupo}: {nf(g.n)}</span>)}</p> : null}
+      {d?.sugerencias?.length ? (
+        <div className="dan-fila dan-pad-x" role="group" aria-label="Filtrar por la sugerencia del modelo">
+          <button type="button" className="dan-opcion" aria-pressed={sug === null} onClick={() => setSug(null)}>Todos</button>
+          {d.sugerencias.map((s) => <button key={s.accion} type="button" className="dan-opcion" aria-pressed={sug === s.accion} data-sugerencia={s.accion}
+            onClick={() => { setSug(s.accion); setBuscar(""); }}>{SUGERENCIA[s.accion] ?? s.accion}: {nf(s.n)}</button>)}
+        </div>) : null}
       <div className="dan-pad-x"><div className="tec-campo"><label htmlFor="nd-buscar">Buscar nodo</label>
-        <input id="nd-buscar" type="text" maxLength={60} value={buscar} placeholder="Nombre del modelo, nombre visible o ID" onChange={(e) => setBuscar(e.target.value)} /></div></div>
+        <input id="nd-buscar" type="text" maxLength={60} value={buscar} placeholder="Nombre del modelo, nombre visible, ID o lo que es (válvula, cálculo…)" onChange={(e) => { setSug(null); setBuscar(e.target.value); }} /></div></div>
       {aviso ? <p className={`tec-aviso ${aviso.ok ? "tec-aviso-info" : "tec-aviso-error"} dan-pad-x`} role="status">{aviso.t}
         {aviso.activo ? <> <button type="button" className="tec-enlace" onClick={() => onFicha(aviso.activo!)}>Ver la ficha de {aviso.activo}</button></> : null}
         {" "}<button type="button" className="tec-enlace" onClick={() => setAviso(null)}>Cerrar</button></p> : null}
       {!d ? <p className="tec-sub dan-pad" role="status">Cargando…</p>
         : !items.length ? <section className="tec-tarjeta"><p className="red-vacio">{buscar ? "Ningún nodo coincide." : "No quedan nodos por clasificar."}</p></section>
         : <>
-            <p className="tec-ayuda dan-pad-x">{nf(d.total)} nodo{d.total === 1 ? "" : "s"}{buscar ? " con esa búsqueda" : ""}.</p>
+            <p className="tec-ayuda dan-pad-x">{nf(d.total)} nodo{d.total === 1 ? "" : "s"}{sug ? " con esa sugerencia" : buscar ? " con esa búsqueda" : ""}.</p>
             {items.map((n) => <NodoItem key={n.nodo_id} n={n} tipos={d.tipos.filter((t) => t.sistema === n.sistema)}
               onListo={(t, activo) => { setAviso({ ok: true, t, activo }); setVez((v) => v + 1); }} />)}
-            {items.length < d.total ? <div className="dan-pad-x"><button type="button" className="tec-boton-sec" onClick={() => apiGestion.nodos(buscar.trim(), items[items.length - 1].nodo_id)
+            {items.length < d.total ? <div className="dan-pad-x"><button type="button" className="tec-boton-sec" onClick={() => apiGestion.nodos(consulta, items[items.length - 1].nodo_id)
               .then((r) => setItems([...items, ...r.items])).catch(() => {})}>Cargar más ({nf(d.total - items.length)})</button></div> : null}
           </>}
     </>
@@ -548,8 +560,10 @@ export function Nodos({ onFicha }: { onFicha: (c: string) => void }) {
 }
 
 function NodoItem({ n, tipos, onListo }: { n: NodoPorClasificar; tipos: NodosPorClasificar["tipos"]; onListo: (t: string, activo?: string) => void }) {
-  const [modo, setModo] = useState<null | "alias" | "activo">(null);
-  const [alias, setAlias] = useState(n.alias ?? ""); const [prefijo, setPrefijo] = useState(""); const [clase, setClase] = useState(""); const [nombre, setNombre] = useState("");
+  const [modo, setModo] = useState<null | "alias" | "activo" | "clasificar">(null);
+  const [pre, setPre] = useState(false);
+  const [claseNodo, setClaseNodo] = useState<keyof typeof CLASE_NODO>(n.sugerencia?.clase ?? "nodo_calculo");
+  const [alias, setAlias] = useState(n.alias ?? ""); const [prefijo, setPrefijo] = useState(n.sugerencia?.accion === "crear" ? n.sugerencia.prefijo ?? "" : ""); const [clase, setClase] = useState(""); const [nombre, setNombre] = useState("");
   const [motivo, setMotivo] = useState(""); const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null); const [enviando, setEnviando] = useState(false);
   const tipo = tipos.find((t) => t.prefijo === prefijo);
   async function enviar() {
@@ -560,6 +574,9 @@ function NodoItem({ n, tipos, onListo }: { n: NodoPorClasificar; tipos: NodosPor
         if (alias.trim() && (alias.trim().length < 2 || alias.trim().length > 60)) { setMsg({ ok: false, t: "El nombre visible lleva de 2 a 60 caracteres." }); return; }
         await apiGestion.aliasFijar("nodo", String(n.nodo_id), alias.trim() || null, motivo.trim());
         onListo(alias.trim() ? `${n.nombre_modelo ?? n.llave_modelo} se ve ahora como «${alias.trim()}».` : `${n.nombre_modelo ?? n.llave_modelo} volvió a su nombre del modelo.`);
+      } else if (modo === "clasificar") {
+        await apiGestion.nodoClasificar(n.nodo_id, claseNodo, motivo.trim());
+        onListo(`${n.nombre_modelo ?? n.llave_modelo} quedó clasificado: ${CLASE_NODO[claseNodo].toLowerCase()}. Sale de la bandeja; no se creó ningún activo.`);
       } else {
         if (!tipo) { setMsg({ ok: false, t: "Elija el tipo de activo." }); return; }
         if (tipo.pide_clase && !clase) { setMsg({ ok: false, t: `Elija la clase (${tipo.nombre}).` }); return; }
@@ -572,11 +589,22 @@ function NodoItem({ n, tipos, onListo }: { n: NodoPorClasificar; tipos: NodosPor
     <section className="tec-tarjeta itv-bandeja" aria-label={`Nodo ${n.nombre_modelo ?? n.llave_modelo}`}>
       <h2>{n.nombre_visible} {n.alias ? <span className="itv-etiqueta">Modelo: {n.nombre_modelo}</span> : null}</h2>
       <p className="tec-ayuda">ID del modelo {n.llave_modelo} · {n.tramos} tramo{n.tramos === 1 ? "" : "s"} · {n.lat}, {n.lon}</p>
+      {n.que_es || n.tipo_modelo ? <p className="nodo-sug-linea">En el modelo: <strong>{n.que_es ?? n.tipo_modelo}</strong></p> : null}
+      {n.sugerencia ? <p className={`nodo-sug nodo-sug-${n.sugerencia.accion}`} role="note"><strong>Sugerencia:</strong> {n.sugerencia.texto}</p> : null}
+      {pre ? <NodoPreliminar nodoId={n.nodo_id} onCerrar={() => setPre(false)} /> : null}
       {!modo ? <div className="dash-acciones">
+          {!pre ? <button type="button" className="tec-boton-sec" onClick={() => setPre(true)}>Ver ficha preliminar</button> : null}
+          {n.sugerencia?.clase ? <button type="button" className="tec-boton-sec" onClick={() => { setClaseNodo(n.sugerencia!.clase!); setModo("clasificar"); }}>Confirmar la sugerencia</button>
+            : <button type="button" className="tec-boton-sec" onClick={() => setModo("clasificar")}>No es un activo</button>}
           <button type="button" className="tec-boton-sec" onClick={() => setModo("alias")}>Nombre visible</button>
           <button type="button" className="tec-boton-sec" onClick={() => setModo("activo")}>Crear el activo</button></div>
         : <div className="itv-nuevo">
-            {modo === "alias" ? <div className="tec-campo"><label htmlFor={`na-${n.nodo_id}`}>Nombre visible (vacío = el del modelo)</label>
+            {modo === "clasificar" ? <>
+                <div className="tec-campo"><label htmlFor={`nk-${n.nodo_id}`}>Cómo queda el nodo</label>
+                  <select id={`nk-${n.nodo_id}`} value={claseNodo} onChange={(e) => setClaseNodo(e.target.value as keyof typeof CLASE_NODO)}>
+                    {(Object.keys(CLASE_NODO) as (keyof typeof CLASE_NODO)[]).map((k) => <option key={k} value={k}>{CLASE_NODO[k]}</option>)}</select></div>
+                <p className="tec-ayuda">No se crea ningún activo y el nodo sale de esta bandeja. Queda registrado quién lo confirmó y por qué.</p>
+              </> : modo === "alias" ? <div className="tec-campo"><label htmlFor={`na-${n.nodo_id}`}>Nombre visible (vacío = el del modelo)</label>
                 <input id={`na-${n.nodo_id}`} type="text" maxLength={60} value={alias} onChange={(e) => setAlias(e.target.value)} placeholder={n.nombre_modelo ?? ""} /></div>
               : <>
                   <div className="tec-campo"><label htmlFor={`nt-${n.nodo_id}`}>Tipo de activo</label>
@@ -592,7 +620,7 @@ function NodoItem({ n, tipos, onListo }: { n: NodoPorClasificar; tipos: NodosPor
             <CampoMotivo id={`nm-${n.nodo_id}`} valor={motivo} onCambio={setMotivo} />
             <Aviso msg={msg} />
             <div className="tec-acciones">
-              <button type="button" className="tec-boton itv-guardar" disabled={enviando} onClick={enviar}>{enviando ? "Guardando…" : modo === "alias" ? "Guardar el nombre" : "Crear el activo"}</button>
+              <button type="button" className="tec-boton itv-guardar" disabled={enviando} onClick={enviar}>{enviando ? "Guardando…" : modo === "alias" ? "Guardar el nombre" : modo === "clasificar" ? "Confirmar" : "Crear el activo"}</button>
               <button type="button" className="tec-boton-sec" disabled={enviando} onClick={() => { setModo(null); setMsg(null); }}>Cancelar</button>
             </div>
           </div>}

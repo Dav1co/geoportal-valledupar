@@ -144,6 +144,7 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
           <span className={`red-chip ${tonoEstado(a)}`}>{a.retirado ? "Retirado" : a.estado}</span>
           {a.codigo_anterior ? <span className="red-chip red-chip-suave">Código anterior: {a.codigo_anterior}</span> : null}
           {a.por_verificar ? <span className="red-chip red-chip-suave">Por verificar</span> : null}
+          {ficha.sector_plan ? <span className="red-chip red-chip-suave">Sector {ficha.sector_plan.sector}{ficha.sector_plan.subsector ? ` · ${ficha.sector_plan.subsector}` : ""} (Plan)</span> : null}
           {perfil?.placa ? <span className="red-chip red-chip-placa">Placa: {perfil.placa}</span> : null}
         </div>
         {perfil?.editable && modo === "ver" ? (
@@ -177,6 +178,7 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
         {modo === "editar" && perfil?.edicion ? <FichaEditar codigo={a.codigo} edicion={perfil.edicion} onCancelar={() => setModo("ver")} onGuardado={listo} /> : null}
         {modo === "foto" && perfil?.edicion ? <FotoPerfilCambiar codigo={a.codigo} maxBytes={perfil.edicion.max_bytes_foto} onCancelar={() => setModo("ver")} onGuardado={listo} /> : null}
         {a.retirado ? <p className="tec-aviso tec-aviso-error red-aviso">Este activo está retirado: no vino en la última carga de su capa. Su hoja de vida se conserva.</p> : null}
+        {a.por_verificar && ficha.por_verificar_motivo ? <p className="tec-aviso tec-aviso-info red-aviso" data-por-verificar>Por verificar en campo. {ficha.por_verificar_motivo}</p> : null}
         {!a.retirado && a.punteado ? <p className="tec-aviso tec-aviso-info red-aviso">Estado «{a.estado}»: se dibuja punteado y no cuenta como activo vigente en los indicadores.</p> : null}
 
         <section className="red-seccion" aria-labelledby="red-t-datos">
@@ -188,6 +190,7 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
             {a.campos.map((c) => <Dato key={c.clave} rotulo={c.rotulo} v={valor(c.valor, c.unidad)} />)}
             <Dato rotulo="Fecha de instalación" v={a.fecha_instalacion ? fechaDia(a.fecha_instalacion) : null} />
             <Dato rotulo="Barrio o sector" v={a.barrio_sector ?? null} />
+            {a.prefijo !== "SEC" ? <Dato rotulo="Sector según el Plan Maestro (por ubicación)" v={ficha.sector_plan ? `Sector ${ficha.sector_plan.sector}${ficha.sector_plan.subsector ? ` · subsector ${ficha.sector_plan.subsector}` : ""}` : "Fuera de los sectores del Plan"} /> : null}
           </div>
           {a.tipo !== a.tipo_catalogo ? <p className="red-nota">En el catálogo: {a.tipo_catalogo} ({a.prefijo}).</p> : null}
         </section>
@@ -221,6 +224,20 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
             {ficha.origen.origen !== "emdupar" ? <Dato rotulo="Entregado por" v={ficha.origen.aportante_nombre ?? null} /> : null}
             <Dato rotulo="Soporte" v={ficha.origen.tiene_soporte ? "Tiene soporte cargado" : "Sin soporte todavía"} />
             {ficha.origen.nota ? <p className="red-nota">{ficha.origen.nota}</p> : null}
+          </section>
+        ) : null}
+
+        {(ficha.referencia ?? []).length > 0 ? (
+          <section className="red-seccion red-referencia" aria-labelledby="red-t-ref">
+            <h2 id="red-t-ref">Referencia del Plan Maestro 2014</h2>
+            <p className="red-nota">Datos de referencia. No hacen parte de la ficha oficial del activo y no la cambian.</p>
+            {ficha.referencia!.map((g) => (
+              <div key={g.titulo} className="red-ref-grupo">
+                <h3 className="red-sub">{g.titulo}</h3>
+                {g.advertencia ? <p className="red-ref-adv" role="note">{g.advertencia}</p> : null}
+                <div className="red-rejilla">{g.filas.map((f) => <Dato key={f.r} rotulo={f.r} v={`${typeof f.v === "number" ? nf.format(f.v) : f.v}${f.u ? ` ${f.u}` : ""}`} />)}</div>
+              </div>))}
+            {ficha.referencia![0].origen ? <p className="red-nota">Origen: {ficha.referencia![0].origen}.</p> : null}
           </section>
         ) : null}
 

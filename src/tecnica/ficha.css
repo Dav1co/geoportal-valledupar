@@ -92,3 +92,20 @@
 .red-evento-ficha .red-evento-punto { background: #6b4a00; }
 .red-evento-ficha .red-evento-tit { color: #6b4a00; }
 .red-cabeza .red-accion { background: #ffffff; color: #1f5fa8; border: 1px solid #ffffff; }
+
+/* Corte 9a: datos de referencia del Plan Maestro en la ficha, ficha preliminar del nodo y bandeja «Por verificar» */
+.red-referencia { border-style: dashed; }
+.red-ref-grupo { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #eceee9; padding-top: 10px; }
+.red-ref-adv { margin: 0; padding: 6px 10px; border-radius: 8px; background: #fff3e0; border: 1px solid #f0b46d; color: #7a3d00; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.nodo-pre { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #eceee9; padding-top: 10px; min-width: 0; }
+.nodo-pre h3 { margin: 0; font-size: 15px; }
+.nodo-pre h4 { margin: 4px 0 0; font-size: 14px; color: #3f4541; }
+.nodo-pre-mapa { height: 240px; border: 1px solid #c9cdc5; border-radius: 10px; overflow: hidden; }
+.nodo-pre-tramos { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; overflow-wrap: anywhere; }
+.nodo-sug { margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 14px; background: #eef4fb; border: 1px solid #9cc0e6; color: #0c3c6e; overflow-wrap: anywhere; }
+.nodo-sug span { font-weight: 400; color: #3f4541; }
+.nodo-sug-no_crear { background: #fff3e0; border-color: #f0b46d; color: #7a3d00; }
+.nodo-sug-crear { background: #e8f5e9; border-color: #8cc08f; color: #1b5e20; }
+.nodo-sug-revisar { background: #f4f5f2; border-color: #c9cdc5; color: #3f4541; }
+.nodo-sug-linea { margin: 0; font-size: 13.5px; color: #3f4541; overflow-wrap: anywhere; }
+.pv-motivo { margin: 0; font-size: 13.5px; color: #3f4541; overflow-wrap: anywhere; }

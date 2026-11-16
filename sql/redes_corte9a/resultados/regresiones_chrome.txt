@@ -1,0 +1,12 @@
+== regresión geovisor (copia temporal del guion, en el clúster de Code B, sobre el 9a con el Plan cargado)
+RESULTADO: 54 de 54 — SIN FALLAS
+== regresión gestion_c4b (copia temporal del guion, en el clúster de Code B, sobre el 9a con el Plan cargado)
+FALLA [1280] el administrador ve también «Nodos por clasificar» → 
+RESULTADO: 58 de 59 — 1 FALLA(S)
+== regresión dashboard_c4a (copia temporal del guion, en el clúster de Code B, sobre el 9a con el Plan cargado)
+RESULTADO: 43 de 43 — SIN FALLAS
+== regresión ficha_c3b (copia temporal del guion, en el clúster de Code B, sobre el 9a con el Plan cargado)
+RESULTADO: 41 de 41 — SIN FALLAS
+== regresión gestion_c4b, segunda corrida
+FALLA [1280] el administrador ve también «Nodos por clasificar» → 
+RESULTADO: 58 de 59 — 1 FALLA(S)

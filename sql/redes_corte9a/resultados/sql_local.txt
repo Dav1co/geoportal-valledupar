@@ -1,0 +1,47 @@
+OK    01 la base local es como producción hoy: huella del conjunto de redes del 7a publicado
+OK    02 volumen real: 35.781 activos vigentes y más de 111 mil contratos en el catastro
+OK    03 huellas ANTES: «CORTE 7a (listo para el 9a)», 6 «sin cambiar», 13 «NO EXISTE», la vista «CORTE 1a» y nada «DISTINTA» ni «FALTA»
+OK    04 ensayo en transacción: termina en ERROR con «91 de 91 … SIN FALLAS» (1.7 s)
+     TIEMPOS: nodos por clasificar (785 en la base): 38 ms · bandeja por verificar: 0 ms · ficha con referencia y sector: 41 ms · tesela de la red más tesela de presión (z14): 1 ms · lista de daños con sector: 1 ms
+OK    05 el ensayo no deja rastro (ni personas, ni activos, ni eventos, ni auditoría) y el 9a sigue sin aplicar
+OK    06 la migración aplica en una transacción (0.1 s)
+OK    07 huella del conjunto de redes del 9a
+OK    08 verificación: 9 OK y ninguna MAL (antes de la carga)
+OK    09 huellas DESPUÉS: «CORTE 9a (aplicado)», 6 «reemplazada», 13 «NUEVA», 10 tablas y la vista «CORTE 9a»
+OK    10 guardia: migrar dos veces se niega («ya está aplicado»)
+OK    11 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
+OK    12 lo publicado sigue igual con el 9a: activos vigentes, nodos por clasificar (783) y ningún activo «por verificar» todavía
+OK    13 la reversa (sin datos cargados) deja las funciones y la vista de nodos EXACTAS como en el 7a
+OK    14 después de la reversa, las huellas vuelven a decir «CORTE 7a (listo para el 9a)» y la vista «CORTE 1a»
+OK    15 se puede migrar de nuevo después de la reversa (las siembras son repetibles) y la huella es la misma
+OK    16 ensayo de la carga: termina en ERROR con «15 de 15 … SIN FALLAS» (3.8 s en local)
+OK    17 el ensayo de la carga no deja rastro
+OK    18 carga_pm_todo.sql: las 12 cargas de referencia y las cargas del motor abiertas, «lista para publicar: SÍ» en las dos (1.4 s en local)
+OK    19 hasta aquí nada cambió en los activos: los sectores y sumideros no están publicados
+OK    20 publicar_pm.sql: termina bien, con sus 15 comprobaciones en OK y ninguna FALLA (2.7 s en local)
+OK    21 repetir la carga se niega (los mismos archivos por md5) y no duplica nada
+OK    22 la carga solo la corre un administrador
+OK    23 verificación de la carga: 15 OK y ninguna MAL
+OK    24 la verificación del 9a sigue en 9 OK después de la carga
+OK    25 lo que quedó: 36.302 activos vigentes (35.781 + 36 SEC + 484 SUM + el tanque La Popa), 782 nodos por clasificar, 1.746 por verificar y el efecto de las 758 válvulas sin tocar
+OK    26 «gana la ficha»: VAL-000001 («V85») sigue en su versión y con su alias
+OK    27 con el Plan cargado, la reversa se niega (no borra datos) y no cambia nada
+OK    28 Edge: la configuración del geovisor trae las 5 capas de referencia
+OK    29 Edge: las teselas de las 5 capas de referencia (z13, la más cargada de nodos del modelo, y z15) responden sin error
+OK    30 Edge: la tesela de la red (ahora con los sectores y su nombre) responde y pesa menos de 700 KB en base64
+OK    31 Edge: la tarjeta de la campaña trae la serie completa del punto 2 (661 lecturas)
+OK    32 Edge: la tarjeta de presión dice «Presión de MODELO, no medida»
+OK    33 Edge: la bandeja «Por verificar» (1.746)
+OK    34 Edge: nodos por clasificar con sus sugerencias (500 no crear, 281 dejar como nodo, 1 crear)
+OK    35 Edge: la ficha preliminar de un nodo trae sus tramos
+OK    36 Edge: la ficha de una válvula trae la referencia del Plan (modelo, presión y sugerencia)
+OK    37 Edge: la ficha de un tramo real trae su sector según el Plan (también para el operador)
+OK    38 Edge: la lista de daños responde
+OK    39 Edge (escribe): clasificar un nodo sin crear activo pasa por la API (un insert con motivo; nada sin WHERE)
+OK    40 Edge (escribe): marcar «verificado» pasa por la API
+OK    41 Edge: el operador no ve la bandeja (42501)
+OK    42 ninguna llamada pasó de 2 s en local con el volumen real (la más lenta: ficha de un tramo (RED) con sector, 126 ms, con el arranque de psql)
+TIEMPOS (local, cada uno con el arranque de psql): configuración del geovisor 50 ms · tesela de presion_modelo z13 71 ms · tesela de presion_modelo z15 48 ms · tesela de pluvial z13 50 ms · tesela de pluvial z15 46 ms · tesela de pluvial_2043 z13 48 ms · tesela de pluvial_2043 z15 47 ms · tesela de plan_valvulas z13 47 ms · tesela de plan_valvulas z15 47 ms · tesela de campana_2014 z13 47 ms · tesela de campana_2014 z15 46 ms · tesela de la red z13 con sectores 68 ms · tarjeta de la campaña (serie de 15 min) 47 ms · tarjeta de presión de modelo 44 ms · bandeja por verificar 46 ms · nodos por clasificar 87 ms · ficha preliminar de un nodo 60 ms · ficha de una válvula con referencia 95 ms · ficha de un tramo (RED) con sector 126 ms · lista de daños con sector 30 ms
+TIEMPOS DE LA CARGA (local): carga_pm_todo.sql 1.4 s · publicar_pm.sql 2.7 s
+----
+RESULTADO: 42 de 42 — SIN FALLAS

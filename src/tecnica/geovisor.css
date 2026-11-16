@@ -91,3 +91,19 @@
 .geo-compartir { position: absolute; left: 8px; right: 8px; top: 8px; z-index: 5; background: #fff; border-radius: 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
 .geo-enlace { width: 100%; box-sizing: border-box; min-height: 44px; font: inherit; font-size: 14px; border: 1px solid #b9c6cf; border-radius: 8px; padding: 0 8px; }
 @media (min-width: 900px) { .geo-compartir { left: auto; right: 12px; width: 420px; } }
+
+/* Corte 9a: capas de referencia del Plan Maestro (presión de modelo, campaña de 2014, propuestas y pluvial) */
+.geo-leyenda-presion { max-width: 210px; }
+.geo-leyenda-2 { left: auto; right: 10px; }
+.geo-leyenda li .geo-leyenda-punto, .geo-nivel .geo-leyenda-punto { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
+.geo-leyenda-nota { margin: 4px 0 0; font-size: 12px; color: #5b6b77; }
+.geo-adv { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; background: #fff3e0; border: 1px solid #f0b46d; color: #7a3d00; font-size: 13.5px; font-weight: 600; }
+.geo-leyenda .geo-adv { margin-top: 4px; padding: 4px 8px; font-size: 12.5px; }
+.geo-adv-medida { background: #e8f5e9; border-color: #8cc08f; color: #1b5e20; }
+.geo-nivel { margin: 8px 0 0; display: flex; align-items: center; gap: 6px; font-size: 14.5px; font-weight: 600; }
+.geo-origen { margin: 10px 0 0; font-size: 12.5px; color: #5b6b77; }
+.geo-grafica { margin: 10px 0 0; }
+.geo-grafica svg { width: 100%; height: auto; display: block; background: #fafcfd; border: 1px solid #e3eaee; border-radius: 8px; }
+.geo-grafica figcaption { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: #3c4b57; }
+.geo-grafica figcaption i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.geo-grafica-ref { color: #5b6b77; }

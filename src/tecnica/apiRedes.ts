@@ -7,6 +7,7 @@ export type ActivoCorto = {
   codigo: string; prefijo: string; tipo: string; clase?: string; estado: string; estado_codigo: string; retirado: boolean;
   codigo_anterior?: string; distancia_m?: number; sistema?: string;
 };
+export type SectorPlan = { sector: number; subsector?: string | null; codigo?: string; nombre?: string };
 export type Campo = { clave: string; rotulo: string; unidad?: string; valor?: string | number | boolean };
 export type Ficha = {
   perfil: "admin" | "supervisor" | "operador";
@@ -18,6 +19,10 @@ export type Ficha = {
   };
   origen?: { origen: "emdupar" | "tercero" | "mixto"; aportante?: string; aportante_nombre?: string; tiene_soporte: boolean; nota?: string };
   modelo?: Record<string, unknown>;
+  // Corte 9a (Plan Maestro 2014): nada de esto es de la ficha oficial. El sector se calcula por geometría; «referencia» viene de tablas aparte, ya rotulada.
+  sector_plan?: SectorPlan;
+  referencia?: { titulo: string; origen?: string; advertencia?: string; filas: { r: string; v: string | number; u?: string }[] }[];
+  por_verificar_motivo?: string;
   nodo?: { nombre_modelo?: string; nombre_visible: string; tramos: number };
   tramo?: { metodo: string; inicio?: { nombre: string; activo?: ActivoCorto }; fin?: { nombre: string; activo?: ActivoCorto } };
   contratos_enlazados?: number;
@@ -98,7 +103,7 @@ export type PreparacionIntervencion = { intervencion_id: string; max_bytes_foto:
 export type Fuente = { aportante: string; entidad?: string | null; valor?: number | null; porcentaje?: number | null; soporte?: string | null };
 export type IntervencionGuardada = { id: string; codigo: string; registrado_en: string; estado: string; activo: string | null; activo_creado: boolean; dano: string | null;
   dano_estado?: string | null; recursos?: string; sin_evidencia: boolean; fuera_de_zona: boolean; duracion_s?: number; repetido: boolean };
-export type IntervencionLista = { codigo: string; tipo: string; inversion_modo?: string | null; sistema: string; activo: string | null; no_identificado: string | null; dano: string | null;
+export type IntervencionLista = { sector_plan?: SectorPlan | null; codigo: string; tipo: string; inversion_modo?: string | null; sistema: string; activo: string | null; no_identificado: string | null; dano: string | null;
   t_fin: string; ejecutor: string; contratista: string | null; autor: string; recursos: "completos" | "por_completar"; sin_evidencia: boolean; fotos: number; estado: string;
   fuentes: (Fuente & { n: number; aportante_nombre: string })[] };
 export type NoIdentificado = { clase: "intervencion" | "dano"; codigo: string; sistema: string; que_es: string; resumen: string; estado: string; cuando: string; autor: string;
@@ -161,10 +166,17 @@ export const apiPerfil = {
 // ---------- Corte 4a: Dashboard distribución (supervisor de distribución y administrador; el servidor lo vuelve a verificar) ----------
 export type MiPerfilRedes = { perfil: "admin" | "supervisor" | "operador"; dashboard_redes: boolean; dashboard_ptap: boolean; geovisor?: boolean };   // geovisor: Corte 6a
 export type DanoLista = { codigo: string; clase: "dano" | "falla"; tipo: string; sistema: string; activo: string | null; no_identificado: string | null; estado: string;
-  t_detectado: string; riesgo: string; causa_clase: string; sector: number | null; origen: string; autor: string; total_s: number; fotos: number; intervenciones: number; tiene_tercero: boolean };
+  t_detectado: string; riesgo: string; causa_clase: string; sector: number | null; sector_plan?: SectorPlan | null; origen: string; autor: string; total_s: number; fotos: number; intervenciones: number; tiene_tercero: boolean };
 export type ReporteBot = { id: string; radicado: string; canal: string; tipo: string; lat: number | null; lon: number | null; direccion: string | null; descripcion: string | null;
   recibido_en: string; estado_bot: string; dano: string | null; fotos: number };
+// Corte 9a: bandeja «Por verificar» (lo que dejó el Plan Maestro y los activos nuevos de una inversión)
+export type GrupoVerificar = "estado" | "valvula" | "pozo" | "otros";
+export type PorVerificar = { activo_id: number; codigo: string; prefijo: string; tipo: string; nombre: string | null; sistema: string; estado: string; grupo: GrupoVerificar; motivo: string; desde: string; lat: number; lon: number };
+export type ListaPorVerificar = { grupos: { grupo: GrupoVerificar; n: number }[]; total: number; items: PorVerificar[]; siguiente: number | null };
 export const apiDash = {
+  porVerificar: (grupo: GrupoVerificar | null, despues_de: number | null) =>
+    pedir<ListaPorVerificar>("por_verificar", { ...F, qs: { ...(grupo ? { grupo } : {}), ...(despues_de ? { despues_de: String(despues_de) } : {}) } }),
+  activoVerificar: (codigo: string, motivo: string) => pedir<{ codigo: string; por_verificar: boolean }>("activo_verificar", { ...F, cuerpo: { codigo, motivo } }),
   miPerfil: () => pedir<MiPerfilRedes>("mi_perfil", F),
   danos: (filtro: "abiertos" | "todos" | "ocultos" | "no_identificados") => pedir<{ filtro: string; danos: DanoLista[] }>("danos", { ...F, qs: { filtro } }),
   danoEvento: (codigo: string, tipo: "ocultar" | "reincluir" | "reabrir", motivo: string) => pedir<{ codigo: string; estado: string }>("dano_evento", { ...F, cuerpo: { codigo, tipo, motivo } }),
@@ -206,9 +218,20 @@ export type GraficasRedes = {
   top_correctivos: { activo: string; tipo: string | null; n: number }[];
 };
 export type Descarga = { conjunto: "intervenciones" | "danos"; desde: string; hasta: string; incluir_ocultos: boolean; total: number; generado_en: string; generado_por: string; filas: Record<string, unknown>[] };
-export type NodoPorClasificar = { nodo_id: number; sistema: string; llave_modelo: string; nombre_modelo: string | null; nombre_visible: string; alias: string | null; lat: number; lon: number; tramos: number };
+// Corte 9a: lo que dice el modelo de cada nodo y la SUGERENCIA de clasificación (la confirma el administrador; nada se clasifica solo)
+export type AccionSugerida = "crear" | "no_crear" | "dejar_nodo" | "revisar" | "sin_modelo";
+export type SugerenciaNodo = { accion: Exclude<AccionSugerida, "sin_modelo">; texto: string; prefijo?: string; clase?: "nodo_calculo" | "propuesta_plan" };
+export type NodoPorClasificar = { nodo_id: number; sistema: string; llave_modelo: string; nombre_modelo: string | null; nombre_visible: string; alias: string | null; lat: number; lon: number; tramos: number;
+  tipo_modelo?: string; que_es?: string; sugerencia?: SugerenciaNodo };
+export type NodoPreliminar = {
+  nodo_id: number; sistema: "acueducto" | "alcantarillado"; llave_modelo: string; nombre_modelo?: string; nombre_visible: string; clase_nodo: string; lat: number; lon: number;
+  sector?: SectorPlan; sugerencia?: SugerenciaNodo;
+  modelo?: { tipo?: string; que_es?: string; zona?: string; nota?: string; estado_modelo?: string; cota_m?: number; demanda_exist_lps?: number; demanda_futura_lps?: number;
+    pres_exist_mediana?: number; pres_exist_min?: number; pres_exist_max?: number; pres_futura_mediana?: number; pres_futura_min?: number; pres_futura_max?: number };
+  tramos: { codigo: string; prefijo: string; nombre?: string; material?: string; diametro_mm?: number; longitud_m?: number; estado: string; extremo: "inicio" | "fin"; linea: GeoJSON.LineString | GeoJSON.MultiLineString }[];
+};
 export type NodosPorClasificar = {
-  grupos: { grupo: string; n: number }[]; total: number; items: NodoPorClasificar[]; siguiente: number | null;
+  grupos: { grupo: string; n: number }[]; sugerencias?: { accion: AccionSugerida; n: number }[]; total: number; items: NodoPorClasificar[]; siguiente: number | null;
   tipos: { prefijo: string; nombre: string; sistema: string; pide_clase: boolean; clases: Opcion[] }[];
 };
 
@@ -231,6 +254,9 @@ export const apiGestion = {
   descarga: (conjunto: "intervenciones" | "danos", desde: string, hasta: string, incluir_ocultos: boolean) =>
     pedir<Descarga>("descarga", { ...F, cuerpo: { conjunto, desde, hasta, incluir_ocultos }, timeoutMs: 60000 }),
   nodos: (buscar: string, despues_de: number | null) => pedir<NodosPorClasificar>("nodos_por_clasificar", { ...F, qs: { buscar, ...(despues_de ? { despues_de: String(despues_de) } : {}) } }),
+  nodoPreliminar: (nodo: number) => pedir<NodoPreliminar>("nodo_preliminar", { ...F, qs: { nodo: String(nodo) } }),
+  nodoClasificar: (nodo: number, clase: "nodo_calculo" | "propuesta_plan" | "por_clasificar", motivo: string) =>
+    pedir<{ nodo_id: number; nombre_modelo: string | null; clase_nodo: string }>("nodo_clasificar", { ...F, cuerpo: { nodo, clase, motivo } }),
   nodoCrearActivo: (nodo: number, prefijo: string, clase_activo: string | null, nombre: string | null, motivo: string) =>
     pedir<{ activo: string; tipo: string; nombre_modelo: string }>("nodo_crear_activo", { ...F, cuerpo: { nodo, prefijo, clase_activo, nombre, motivo } }),
 };
