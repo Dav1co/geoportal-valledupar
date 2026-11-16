@@ -33,7 +33,10 @@ function duracion(desde: string, hasta: string): string | null {
 }
 const numeroONulo = (t: string) => { const v = t.trim().replace(",", "."); if (!v) return null; const n = Number(v); return Number.isFinite(n) ? n : NaN; };
 
-export function FormularioDano({ correo, onSalir }: { correo: string; onSalir?: () => void }) {
+export function FormularioDano({ correo, onSalir, onRegistrarReparacion }: {
+  correo: string; onSalir?: () => void;
+  onRegistrarReparacion?: (d: { codigo: string; sistema: "acueducto" | "alcantarillado"; activo: string | null; lat: number; lon: number }) => void;   // Corte 3a
+}) {
   const [def, setDef] = useState<Def | null>(null);
   const [errorDef, setErrorDef] = useState<string | null>(null);
   const ubic = useUbicacion();
@@ -55,6 +58,8 @@ export function FormularioDano({ correo, onSalir }: { correo: string; onSalir?: 
   const [causaClase, setCausaClase] = useState(""); const [causa, setCausa] = useState(""); const [terceroTipo, setTerceroTipo] = useState(""); const [terceroNombre, setTerceroNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [fotos, setFotos] = useState<Foto[]>([]);
+  const [sinFotos, setSinFotos] = useState(false); const [sinFotosMotivo, setSinFotosMotivo] = useState("");     // Corte 3a: solo supervisor o administrador
+  const ubicGuardada = useRef<{ lat: number; lon: number } | null>(null);
   const [camara, setCamara] = useState<Foto["momento"] | null>(null);
   const [intentado, setIntentado] = useState(false);       // tras el primer «Guardar», la lista de lo que falta se recalcula en vivo
   const [enviando, setEnviando] = useState<string | null>(null);
@@ -123,16 +128,19 @@ export function FormularioDano({ correo, onSalir }: { correo: string; onSalir?: 
     if (!causaClase) m.push("Elija la causa: propia, de terceros o desconocida.");
     if (causaClase === "propia" && !causa) m.push("Elija la causa propia.");
     if (causaClase === "terceros" && !terceroTipo) m.push("Elija quién lo causó.");
-    if (fotosDano < 1) m.push("Tome al menos una foto del daño.");
+    if (sinFotos) { if (sinFotosMotivo.trim().length < 10) m.push("Escriba por qué no hay evidencia fotográfica (10 caracteres o más)."); }
+    else if (fotosDano < 1) m.push("Tome al menos una foto del daño.");
     if (fotos.length > def!.reglas.max_fotos) m.push(`Máximo ${def!.reglas.max_fotos} fotos.`);
     if (!ubic.fix && eleccion?.tipo !== "activo" && eleccion?.tipo !== "punto") m.push("Falta la ubicación del daño.");
     return m;
   }
 
   async function guardar() {
+    const fotosTomadas = fotos;
     const m = validar(); setIntentado(true); setErrorEnvio(null);
     if (m.length) { document.querySelector(".dan-errores")?.scrollIntoView?.({ block: "center" }); return; }
     try {
+      const fotos = sinFotos ? [] : fotosTomadas;
       if (!prep.current || prep.current.fotos.length !== fotos.length) { setEnviando("Preparando el envío…"); prep.current = await apiDano.preparar(fotos.length); subidas.current = new Set(); }
       const p = prep.current;
       for (let i = 0; i < fotos.length; i++) {
@@ -155,7 +163,9 @@ export function FormularioDano({ correo, onSalir }: { correo: string; onSalir?: 
         causa: causaClase === "propia" ? causa : null, tercero_tipo: causaClase === "terceros" ? terceroTipo : null,
         tercero_nombre: causaClase === "terceros" && terceroNombre.trim() ? terceroNombre.trim() : null, descripcion: descripcion.trim() || null,
         fotos: fotos.map((f, i) => ({ n: i + 1, momento: f.momento, ruta: p.fotos[i].ruta })),
+        sin_evidencia_motivo: sinFotos ? sinFotosMotivo.trim() : null,
       };
+      ubicGuardada.current = { lat: datos.lat, lon: datos.lon };
       setGuardado(await apiDano.crear(p.dano_id, datos));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "No se pudo guardar.";
@@ -174,7 +184,11 @@ export function FormularioDano({ correo, onSalir }: { correo: string; onSalir?: 
         <h2>{clase === "dano" ? "Daño" : "Falla"} guardado: {guardado.codigo}</h2>
         <p>Estado: <strong>{guardado.estado === "reportado" ? "Reportado" : guardado.estado === "en_atencion" ? "En atención" : "Atendido"}</strong>{guardado.activo ? <> · activo <strong>{guardado.activo}</strong> (va a su epicrisis)</> : <> · activo no identificado (va a la bandeja del supervisor)</>}.</p>
         {guardado.fuera_de_zona ? <p className="tec-aviso tec-aviso-info">La ubicación quedó fuera de Valledupar: se guardó con esa marca.</p> : null}
+        {guardado.sin_evidencia ? <p className="tec-aviso tec-aviso-info">Quedó marcado «sin evidencia fotográfica».</p> : null}
         <div className="tec-acciones">
+          {onRegistrarReparacion && guardado.estado !== "atendido" && sistema ? (
+            <button type="button" className="tec-boton" onClick={() => onRegistrarReparacion({ codigo: guardado.codigo, sistema, activo: guardado.activo, lat: ubicGuardada.current?.lat ?? 0, lon: ubicGuardada.current?.lon ?? 0 })}>
+              Registrar la reparación</button>) : null}
           {guardado.activo ? <button type="button" className="tec-boton-sec" onClick={() => setFicha(guardado.activo!)}>Ver la ficha de {guardado.activo}</button> : null}
           <button type="button" className="tec-boton" onClick={() => onSalir?.()}>Reportar otro daño o falla</button>
         </div>
@@ -319,16 +333,22 @@ export function FormularioDano({ correo, onSalir }: { correo: string; onSalir?: 
 
       <section className="tec-tarjeta" aria-labelledby="dan-t7">
         <h2 id="dan-t7">{tipoSel?.pide_rotura ? "7" : "6"}. Fotos</h2>
-        <p className="tec-ayuda">Al menos una del daño. Máximo {def.reglas.max_fotos}. Solo cámara; la foto no se guarda en el celular.</p>
-        <div className="dan-fila">{MOMENTOS.map((m) => (
-          <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= def.reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}>📷 {m.n}</button>))}</div>
+        <p className="tec-ayuda">{sinFotos ? "Sin fotos: queda marcado «sin evidencia fotográfica»." : `Al menos una del daño. Máximo ${def.reglas.max_fotos}. Solo cámara; la foto no se guarda en el celular.`}</p>
+        {def.perfil !== "operador" ? (
+          <>
+            <label className="dan-check"><input type="checkbox" checked={sinFotos} onChange={(e) => { setSinFotos(e.target.checked); prep.current = null; }} />Registrar sin evidencia fotográfica (por ejemplo, llegó por la 116 o por llamada)</label>
+            {sinFotos ? <div className="tec-campo"><label htmlFor="dan-sinf">¿Por qué no hay fotos?</label><input id="dan-sinf" type="text" maxLength={300} value={sinFotosMotivo} onChange={(e) => setSinFotosMotivo(e.target.value)} /></div> : null}
+          </>
+        ) : null}
+        {!sinFotos ? <div className="dan-fila">{MOMENTOS.map((m) => (
+          <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= def.reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}>📷 {m.n}</button>))}</div> : null}
         {camara ? (
           <CamaraActa rotulo={`Foto: ${MOMENTOS.find((m) => m.c === camara)!.n.toLowerCase()}`} maxBytes={def.reglas.max_bytes_foto}
             sello={() => [new Date().toLocaleString("es-CO"), ubic.fix ? `${ubic.fix.lat.toFixed(5)}, ${ubic.fix.lon.toFixed(5)}` : "sin GPS"]}
             onFoto={({ blob }) => { setFotos((f) => [...f, { blob, momento: camara, url: URL.createObjectURL(blob) }]); prep.current = null; setCamara(null); }}
             onCerrar={() => setCamara(null)} />
         ) : null}
-        {fotos.length ? <div className="dan-fotos">{fotos.map((f, i) => (
+        {fotos.length && !sinFotos ? <div className="dan-fotos">{fotos.map((f, i) => (
           <figure key={f.url} className="dan-foto">
             <img src={f.url} alt={`Foto ${i + 1}: ${MOMENTOS.find((m) => m.c === f.momento)!.n}`} />
             <figcaption>{i + 1}. {MOMENTOS.find((m) => m.c === f.momento)!.n}

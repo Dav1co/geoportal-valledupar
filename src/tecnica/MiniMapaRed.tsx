@@ -10,20 +10,32 @@ import { apiDano, type ActivoCorto, type ActivoUbicado, type TramoNodos } from "
 // · Desde el zoom mínimo (15) se ve la red; los accesorios, desde el 17 (los filtra el servidor). Debajo, «Acerque el mapa».
 // · Tocar un nodo (válvula, pozo, accesorio…) lo elige. Tocar un tramo lo resalta y muestra sus dos nodos para quedarse con el tramo o con un nodo.
 // · Modo «no identificado»: tocar el mapa marca el punto, sin activo.
+// · Modo «línea» (Corte 3a, inversión en un tramo nuevo): tocar el inicio y el fin; un tercer toque vuelve a empezar. Lo marcado se dibuja.
 // · Pensado para 390 px y una mano: mapa al 55 % del alto, botones de 44 px o más.
 
-export type Eleccion = { tipo: "activo"; activo: ActivoUbicado } | { tipo: "punto"; lat: number; lon: number };
+export type Eleccion = { tipo: "activo"; activo: ActivoUbicado } | { tipo: "punto"; lat: number; lon: number } | { tipo: "linea"; puntos: { lat: number; lon: number }[] };
+const VACIO = { type: "FeatureCollection" as const, features: [] as GeoJSON.Feature[] };
+function dibujo(e: Eleccion | null): GeoJSON.FeatureCollection {
+  if (e?.tipo === "punto") return { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [e.lon, e.lat] } }] };
+  if (e?.tipo === "linea") {
+    const f: GeoJSON.Feature[] = e.puntos.map((p, i) => ({ type: "Feature", properties: { n: i + 1 }, geometry: { type: "Point", coordinates: [p.lon, p.lat] } }));
+    if (e.puntos.length > 1) f.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: e.puntos.map((p) => [p.lon, p.lat]) } });
+    return { type: "FeatureCollection", features: f };
+  }
+  return VACIO;
+}
 const COLOR: Record<string, string> = { acueducto: "#1F5FA8", alcantarillado: "#8A5A2B" };
 const SEL = "#D6336C";
 
-export function MiniMapaRed({ sistema, centro, eleccion, modoPunto, zoomMin, onElegir }: {
-  sistema: "acueducto" | "alcantarillado"; centro: { lat: number; lon: number } | null; eleccion: Eleccion | null; modoPunto: boolean; zoomMin: number;
+export function MiniMapaRed({ sistema, centro, eleccion, modoPunto, modoLinea = false, textoPunto = "Toque el mapa donde está el daño", zoomMin, onElegir }: {
+  sistema: "acueducto" | "alcantarillado"; centro: { lat: number; lon: number } | null; eleccion: Eleccion | null; modoPunto: boolean; modoLinea?: boolean; textoPunto?: string; zoomMin: number;
   onElegir: (e: Eleccion) => void;
 }) {
   const cont = useRef<HTMLDivElement>(null);
   const mapa = useRef<maplibregl.Map | null>(null);
   const token = useRef<string | null>(null);
   const modoRef = useRef(modoPunto);
+  const lineaRef = useRef(modoLinea);
   const elegirRef = useRef(onElegir);
   const eleccionRef = useRef(eleccion);
   const [zoom, setZoom] = useState(17);
@@ -31,6 +43,7 @@ export function MiniMapaRed({ sistema, centro, eleccion, modoPunto, zoomMin, onE
   const [cargandoTramo, setCargandoTramo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   modoRef.current = modoPunto;
+  lineaRef.current = modoLinea;
   elegirRef.current = onElegir;
   eleccionRef.current = eleccion;
 
@@ -50,6 +63,7 @@ export function MiniMapaRed({ sistema, centro, eleccion, modoPunto, zoomMin, onE
           sources: {
             base: FUENTE_BASE_CALLES,
             red: { type: "vector", tiles: [`${FUNCTIONS_URL}/geoportal-redes?accion=tesela&sistema=${sistema}&z={z}&x={x}&y={y}&v=1`], minzoom: zoomMin, maxzoom: 18 },
+            dibujo: { type: "geojson", data: dibujo(eleccionRef.current) },
           },
           layers: [
             { id: "base", type: "raster", source: "base" },
@@ -65,6 +79,9 @@ export function MiniMapaRed({ sistema, centro, eleccion, modoPunto, zoomMin, onE
                 "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.5 } },
             { id: "sel-nodo", type: "circle", source: "red", "source-layer": "red", filter: ["==", ["get", "codigo"], ""],
               paint: { "circle-radius": 11, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": SEL, "circle-stroke-width": 4 } },
+            { id: "dibujo-linea", type: "line", source: "dibujo", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": "#4B2A8A", "line-width": 5, "line-dasharray": [1.5, 1] } },
+            { id: "dibujo-punto", type: "circle", source: "dibujo", filter: ["==", ["geometry-type"], "Point"],
+              paint: { "circle-radius": 8, "circle-color": "#4B2A8A", "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 2.5 } },
           ],
         },
       });
@@ -74,6 +91,12 @@ export function MiniMapaRed({ sistema, centro, eleccion, modoPunto, zoomMin, onE
       setListo(true);
       m.on("click", (ev) => {
         if (!m) return;
+        if (lineaRef.current) {
+          const prev = eleccionRef.current?.tipo === "linea" ? eleccionRef.current.puntos : [];
+          setTramo(null);
+          elegirRef.current({ tipo: "linea", puntos: prev.length >= 2 ? [{ lat: ev.lngLat.lat, lon: ev.lngLat.lng }] : [...prev, { lat: ev.lngLat.lat, lon: ev.lngLat.lng }] });
+          return;
+        }
         if (modoRef.current) { setTramo(null); elegirRef.current({ tipo: "punto", lat: ev.lngLat.lat, lon: ev.lngLat.lng }); return; }
         const caja: [maplibregl.PointLike, maplibregl.PointLike] = [[ev.point.x - 14, ev.point.y - 14], [ev.point.x + 14, ev.point.y + 14]];
         const feats = m.queryRenderedFeatures(caja, { layers: ["nodos", "tramos", "tramos-punteados"] });
@@ -109,10 +132,9 @@ export function MiniMapaRed({ sistema, centro, eleccion, modoPunto, zoomMin, onE
         m.setFilter("sel-nodo", ["all", ["==", ["get", "forma"], "nodo"], ["==", ["get", "codigo"], cod]]);
         m.setFilter("sel-tramo", ["all", ["==", ["get", "forma"], "tramo"], ["==", ["get", "codigo"], cod]]);
       }
-      if (eleccion) {
-        const p = eleccion.tipo === "activo" ? eleccion.activo : eleccion;
-        if (!m.getBounds().contains([p.lon, p.lat]) || m.getZoom() < zoomMin) m.easeTo({ center: [p.lon, p.lat], zoom: Math.max(m.getZoom(), 17.5), duration: 0 });
-      }
+      (m.getSource("dibujo") as maplibregl.GeoJSONSource | undefined)?.setData(dibujo(eleccion));
+      const p = eleccion?.tipo === "activo" ? eleccion.activo : eleccion?.tipo === "punto" ? eleccion : null;     // la línea se dibuja sin mover el mapa
+      if (p && (!m.getBounds().contains([p.lon, p.lat]) || m.getZoom() < zoomMin)) m.easeTo({ center: [p.lon, p.lat], zoom: Math.max(m.getZoom(), 17.5), duration: 0 });
     };
     // las capas existen apenas se lee el estilo (aunque la base de calles no haya cargado, p. ej. sin señal): no se espera el evento «load»
     if (m.getLayer("sel-nodo")) aplicar(); else m.once("styledata", aplicar);
@@ -125,7 +147,8 @@ export function MiniMapaRed({ sistema, centro, eleccion, modoPunto, zoomMin, onE
     <div className="dan-mini">
       <div ref={cont} className="dan-mini-mapa" role="application" aria-label={`Mapa de la red de ${sistema}: toque un tramo o un nodo`} data-zoom={zoom.toFixed(1)} />
       {zoom < zoomMin ? <div className="dan-mini-aviso" role="status">Acerque el mapa para ver la red</div> : null}
-      {modoPunto ? <div className="dan-mini-aviso dan-mini-aviso-punto" role="status">Toque el mapa donde está el daño</div> : null}
+      {modoLinea ? <div className="dan-mini-aviso dan-mini-aviso-punto" role="status">{eleccion?.tipo === "linea" && eleccion.puntos.length === 1 ? "Ahora toque el fin del tramo nuevo" : eleccion?.tipo === "linea" && eleccion.puntos.length >= 2 ? "Tramo marcado (otro toque vuelve a empezar)" : "Toque el inicio del tramo nuevo"}</div>
+        : modoPunto ? <div className="dan-mini-aviso dan-mini-aviso-punto" role="status">{textoPunto}</div> : null}
       {cargandoTramo ? <p className="tec-sub" role="status">Cargando los nodos del tramo…</p> : null}
       {error ? <p className="tec-error-caja">{error}</p> : null}
       {tramo ? (

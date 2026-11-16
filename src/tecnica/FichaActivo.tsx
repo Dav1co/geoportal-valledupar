@@ -48,7 +48,10 @@ function FilaActivo({ a, onAbrir, detalle }: { a: ActivoCorto; onAbrir: (c: stri
   );
 }
 
-export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver }: { codigo: string; onVolver: () => void; onAbrir: (c: string) => void; rotuloVolver: string }) {
+export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistrarIntervencion }: {
+  codigo: string; onVolver: () => void; onAbrir: (c: string) => void; rotuloVolver: string;
+  onRegistrarIntervencion?: (a: { codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number }) => void;     // Corte 3a (pospuesto del 1b)
+}) {
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [error, setError] = useState<ErrorTec | null>(null);
   const [epi, setEpi] = useState<Epicrisis | null>(null);
@@ -114,7 +117,11 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver }: { codig
         <div className="red-chips">
           <span className={`red-chip ${tonoEstado(a)}`}>{a.retirado ? "Retirado" : a.estado}</span>
           {a.codigo_anterior ? <span className="red-chip red-chip-suave">Código anterior: {a.codigo_anterior}</span> : null}
+          {a.por_verificar ? <span className="red-chip red-chip-suave">Por verificar</span> : null}
         </div>
+        {onRegistrarIntervencion && !a.retirado && (a.sistema === "acueducto" || a.sistema === "alcantarillado") ? (
+          <button type="button" className="tec-boton red-accion" onClick={() => onRegistrarIntervencion({ codigo: a.codigo, sistema: a.sistema as "acueducto" | "alcantarillado", lat: a.lat, lon: a.lon })}>Registrar intervención</button>
+        ) : null}
       </header>
 
       <div className="red-cuerpo">
@@ -193,7 +200,7 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver }: { codig
           </div>
           {errorEpi ? <p className="tec-error-caja">{errorEpi}</p> : null}
           {!epi && !errorEpi ? <p className="tec-sub" role="status">Cargando…</p> : null}
-          {epi && hechos.length === 0 ? <p className="red-vacio">Todavía no hay daños, fallas ni intervenciones registrados para este activo. Se verán aquí cuando lleguen los formularios de daño o falla y de intervención.</p> : null}
+          {epi && hechos.length === 0 ? <p className="red-vacio">Todavía no hay daños, fallas ni intervenciones registrados para este activo.</p> : null}
           {hechos.length > 0 ? <ol className="red-linea">{hechos.map((e) => <EventoItem key={`${e.clase}-${e.ref_id}`} e={e} />)}</ol> : null}
           {registro.length > 0 ? (
             <details className="red-registro">

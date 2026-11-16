@@ -1,0 +1,75 @@
+OK    [390] el operador no ve «Registrar sin evidencia fotográfica» en el daño (David, respuesta 2)
+OK    [390] el chip «Registrar intervención» abre el formulario (sin «Próximamente»), con las 7 secciones de la maqueta
+OK    [390] guardar vacío: lista de lo que falta, sin llamar a la base
+OK    [390] «Daño o falla» deja solo correctivo, reparación y reposición, y pide primero el activo
+OK    [390] con GPS sobre V85: queda VAL-000001 y salen los daños abiertos del activo, con DAN-000001 como «mismo activo»
+OK    [390] elegir el daño lo marca
+OK    [390] el minimapa del Corte 2 dibuja la red y se proponen los cercanos como «también intervenidos»
+OK    [390] agregar un propuesto lo deja como chip (RED-000013)
+OK    [390] el inicio viene del celular y el fin con «Ahora»: la duración se calcula sola
+OK    [390] recursos del operario: solo marca quién aporta (sin valor, porcentaje ni soporte, D-8)
+OK    [390] sin términos tarifarios en la pantalla del operador
+OK    [390] cámara: 2 fotos (antes y después) en miniatura
+OK    [390] la lista de lo que falta desaparece sola al completar
+OK    [390] el formulario lleno no desborda y sus botones miden 44 px o más
+OK    [390] guardada ITV-000001: el daño DAN-000001 quedó atendido y avisa que el supervisor completa los recursos
+OK    [390] en la base: sobre VAL-000001, atiende DAN-000001 (atendido), reparación, cerrada, recursos por completar, 2 fotos, 1 también intervenido, contratista, EMDUPAR y alcaldía, 1 material, ~125 min
+OK    [390] las 2 fotos subieron a su URL firmada (JPEG) bajo intervenciones/
+OK    [390] la epicrisis de VAL-000001 muestra la intervención (cerrada) y el daño atendido
+OK    [390] inversión, activo nuevo: pide el tipo, el material y el diámetro, y el mapa pide el inicio del tramo
+OK    [390] tocar inicio y fin dibuja el tramo nuevo en el minimapa (2 puntos y la línea)
+OK    [390] adjuntar un PDF lo lista con su nombre y tamaño
+OK    [390] guardada ITV-000002: crea el tramo RED-010574 «nuevo, queda por verificar»
+OK    [390] en la base: RED-010574 por verificar, PVC de 76 mm, con largo, origen EMDUPAR y en la tabla vigente
+OK    [390] el PDF subió como application/pdf (y la foto como JPEG)
+OK    [390] el supervisor sí ve «Registrar sin evidencia fotográfica» en el daño
+OK    [390] recursos del supervisor: valor, porcentaje y soporte por fuente
+OK    [390] sin fotos: se ocultan los botones de la cámara
+OK    [390] guardada ITV-000003 «sin evidencia fotográfica», no identificada (va a la bandeja), con el valor de 1.250.000 y su soporte
+OK    [390] la bandeja trae ITV-000003 con «qué es» y los activos más cercanos propuestos
+OK    [390] «Asociar» deja ITV-000003 con COL-007129 (evento con motivo; la intervención no se reescribe)
+OK    [390] la bandeja no desborda y sus botones miden 44 px o más
+OK    [390] el supervisor completa los recursos de ITV-000001: versión 2, completos (EMDUPAR 40 % y la alcaldía $ 3.400.000 con su convenio)
+OK    [390] el supervisor guarda la falla DAN-000002 sin fotos: «sin evidencia fotográfica», con su nota
+OK    [390] «Registrar la reparación» abre la intervención que nace de DAN-000002, ya elegido, como reparación y sobre VAL-000001
+OK    [390] «Registrar intervención» desde la ficha de VAL-000001 abre el formulario con el activo y el sistema elegidos
+OK    [1280] el operador no ve «Registrar sin evidencia fotográfica» en el daño (David, respuesta 2)
+OK    [1280] el chip «Registrar intervención» abre el formulario (sin «Próximamente»), con las 7 secciones de la maqueta
+OK    [1280] guardar vacío: lista de lo que falta, sin llamar a la base
+OK    [1280] «Daño o falla» deja solo correctivo, reparación y reposición, y pide primero el activo
+OK    [1280] con GPS sobre V85: queda VAL-000001 y salen los daños abiertos del activo, con DAN-000003 como «mismo activo»
+OK    [1280] elegir el daño lo marca
+OK    [1280] el minimapa del Corte 2 dibuja la red y se proponen los cercanos como «también intervenidos»
+OK    [1280] agregar un propuesto lo deja como chip (RED-000013)
+OK    [1280] el inicio viene del celular y el fin con «Ahora»: la duración se calcula sola
+OK    [1280] recursos del operario: solo marca quién aporta (sin valor, porcentaje ni soporte, D-8)
+OK    [1280] sin términos tarifarios en la pantalla del operador
+OK    [1280] cámara: 2 fotos (antes y después) en miniatura
+OK    [1280] la lista de lo que falta desaparece sola al completar
+OK    [1280] el formulario lleno no desborda y sus botones miden 44 px o más
+OK    [1280] guardada ITV-000004: el daño DAN-000003 quedó atendido y avisa que el supervisor completa los recursos
+OK    [1280] en la base: sobre VAL-000001, atiende DAN-000003 (atendido), reparación, cerrada, recursos por completar, 2 fotos, 1 también intervenido, contratista, EMDUPAR y alcaldía, 1 material, ~125 min
+OK    [1280] las 2 fotos subieron a su URL firmada (JPEG) bajo intervenciones/
+OK    [1280] la epicrisis de VAL-000001 muestra la intervención (cerrada) y el daño atendido
+OK    [1280] inversión, activo nuevo: pide el tipo, el material y el diámetro, y el mapa pide el inicio del tramo
+OK    [1280] tocar inicio y fin dibuja el tramo nuevo en el minimapa (2 puntos y la línea)
+OK    [1280] adjuntar un PDF lo lista con su nombre y tamaño
+OK    [1280] guardada ITV-000005: crea el tramo RED-010575 «nuevo, queda por verificar»
+OK    [1280] en la base: RED-010575 por verificar, PVC de 76 mm, con largo, origen EMDUPAR y en la tabla vigente
+OK    [1280] el PDF subió como application/pdf (y la foto como JPEG)
+OK    [1280] el supervisor sí ve «Registrar sin evidencia fotográfica» en el daño
+OK    [1280] recursos del supervisor: valor, porcentaje y soporte por fuente
+OK    [1280] sin fotos: se ocultan los botones de la cámara
+OK    [1280] guardada ITV-000006 «sin evidencia fotográfica», no identificada (va a la bandeja), con el valor de 1.250.000 y su soporte
+OK    [1280] la bandeja trae ITV-000006 con «qué es» y los activos más cercanos propuestos
+OK    [1280] «Asociar» deja ITV-000006 con COL-007129 (evento con motivo; la intervención no se reescribe)
+OK    [1280] la bandeja no desborda y sus botones miden 44 px o más
+OK    [1280] el supervisor completa los recursos de ITV-000004: versión 2, completos (EMDUPAR 40 % y la alcaldía $ 3.400.000 con su convenio)
+OK    [1280] el supervisor guarda la falla DAN-000004 sin fotos: «sin evidencia fotográfica», con su nota
+OK    [1280] «Registrar la reparación» abre la intervención que nace de DAN-000004, ya elegido, como reparación y sobre VAL-000001
+OK    [1280] «Registrar intervención» desde la ficha de VAL-000001 abre el formulario con el activo y el sistema elegidos
+OK    cada intervención guardada es una (el reenvío no duplica): 3 por ancho
+OK    sin errores de JavaScript ni de consola
+
+RESULTADO: 72 de 72 — SIN FALLAS
+Capturas: /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/b95dd3c6-2438-41f3-aa49-7e903eb7f038/scratchpad/capturas_c3a

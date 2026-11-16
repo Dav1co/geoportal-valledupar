@@ -63,3 +63,6 @@
   .red-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   .red-cuerpo > .red-aviso, .red-cuerpo > .red-pie { grid-column: 1 / -1; }
 }
+.red-evento-intervencion .red-evento-punto { background: #1f5fa8; }
+.red-evento-intervencion .red-evento-tit { color: #1f5fa8; }
+.red-accion { align-self: flex-start; margin-top: 10px; background: #1f5fa8; }

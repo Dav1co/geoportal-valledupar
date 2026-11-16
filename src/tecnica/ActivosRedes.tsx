@@ -12,7 +12,7 @@ type Sistema = "acueducto" | "alcantarillado" | null;
 const SISTEMAS: { codigo: Sistema; nombre: string }[] = [{ codigo: null, nombre: "Todos" }, { codigo: "acueducto", nombre: "Acueducto" }, { codigo: "alcantarillado", nombre: "Alcantarillado" }];
 const nf = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 });
 
-export function ActivosRedes({ onVolver }: { onVolver: () => void }) {
+export function ActivosRedes({ onVolver, onRegistrarIntervencion }: { onVolver: () => void; onRegistrarIntervencion?: Parameters<typeof FichaActivo>[0]["onRegistrarIntervencion"] }) {
   const [pila, setPila] = useState<string[]>([]);           // fichas abiertas, la última arriba (volver regresa a la anterior)
   const [codigo, setCodigo] = useState("");
   const [sistema, setSistema] = useState<Sistema>(null);
@@ -22,7 +22,7 @@ export function ActivosRedes({ onVolver }: { onVolver: () => void }) {
 
   const abrir = (c: string) => setPila((p) => [...p, c]);
   if (pila.length > 0) {
-    return <FichaActivo key={pila[pila.length - 1]} codigo={pila[pila.length - 1]} onAbrir={abrir}
+    return <FichaActivo key={pila[pila.length - 1]} codigo={pila[pila.length - 1]} onAbrir={abrir} onRegistrarIntervencion={onRegistrarIntervencion}
       rotuloVolver={pila.length > 1 ? `Volver a ${pila[pila.length - 2]}` : "Volver a la búsqueda"} onVolver={() => setPila((p) => p.slice(0, -1))} />;
   }
 

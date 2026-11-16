@@ -1,0 +1,42 @@
+/* Registrar intervención (Técnica · distribución, Corte 3a). Colores de la maqueta Intervencion.dc.html: azul para elegir, rojo cuando nace de un daño,
+   morado para la inversión. Celular primero (390 px); objetivos de 44 px o más; campos de 16 px. Reutiliza dano.css. */
+.itv-cabeza { background: #1f5fa8; }
+.itv-cabeza p { color: #dbe7f5; }
+.itv .dan-opcion[aria-pressed="true"] { background: #1f5fa8; border-color: #1f5fa8; }
+.itv .dan-opcion.itv-op-dano[aria-pressed="true"] { background: #8c2f1b; border-color: #8c2f1b; }
+.itv .dan-opcion.itv-op-inv[aria-pressed="true"] { background: #4b2a8a; border-color: #4b2a8a; }
+.itv .tec-tarjeta > .dan-rot { display: block; margin-top: 12px; margin-bottom: 6px; }
+.itv-danos { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.itv-dano { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; min-height: 52px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid #c9cdc5; background: #fff; font: inherit; font-size: 15px; cursor: pointer; color: #1b1f1d; overflow-wrap: anywhere; }
+.itv-dano span { font-size: 13px; color: #5b625d; }
+.itv-dano[aria-checked="true"] { border: 2px solid #8c2f1b; background: #fdf3f0; }
+.itv-dano:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.itv-nuevo { display: flex; flex-direction: column; gap: 8px; border-left: 4px solid #4b2a8a; padding-left: 12px; }
+.itv-elegido { border-color: #1f5fa8; }
+.itv-tambien { display: flex; flex-direction: column; gap: 8px; }
+.itv-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.itv-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 4px 0 12px; border-radius: 18px; background: #e8eff8; color: #12406f; font-weight: 600; font-size: 14px; }
+.itv-chip button { width: 36px; height: 36px; border: 0; background: transparent; font-size: 20px; cursor: pointer; color: inherit; }
+.itv-propuesto small { font-weight: 400; color: #5b625d; margin-left: 4px; }
+.itv-fin { display: flex; gap: 8px; }
+.itv-fin .dan-hora { flex: 1; }
+.itv-material { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #eceee9; }
+.itv-material input, .itv-material select, .itv-fuente input, .itv-valores input { height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; min-width: 0; box-sizing: border-box; background: #fff; }
+.itv-material input:first-child { grid-column: 1 / -1; }
+.itv-material .tec-enlace { justify-self: end; }
+@media (min-width: 560px) { .itv-material { grid-template-columns: minmax(0, 1fr) 110px 130px auto; } .itv-material input:first-child { grid-column: auto; } }
+.itv-fuente { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+.itv-fuente > input { width: 100%; }
+.itv-valores { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 8px; }
+.itv-valores input:last-child { grid-column: 1 / -1; }
+.itv-docs { margin: 6px 0 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; overflow-wrap: anywhere; }
+.itv-guardar { background: #1f5fa8; }
+.itv-listo h2 { color: #1e6b47; }
+.tec-campo input[type="file"] { font-size: 15px; min-height: 44px; }
+.itv-volver { margin: 12px 16px 0; }
+.itv-bandeja h2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.itv-etiqueta { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; background: #e8eff8; color: #12406f; }
+.itv-etiqueta-dano { background: #fdf3f0; color: #8c2f1b; }
+.itv-prop[aria-checked="true"] { border-color: #1f5fa8; background: #e8eff8; }
+.itv [role="tab"][aria-selected="true"] { background: #1f5fa8; color: #fff; border-color: #1f5fa8; }
