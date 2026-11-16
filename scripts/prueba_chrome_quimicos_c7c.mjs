@@ -227,7 +227,9 @@ for (const ancho of [390, 1280]) {
   // ===== A. El operador: entrada con la foto de la remisión =====
   let p = await abrir(ancho, "op2"); await tocarTarjeta(p, "entrada_quimicos");
   let t = await texto(p);
-  ok(`${tag} A1 «Entrada de químicos» ofrece la foto de la remisión, como opcional (dentro de «Datos de la remisión (opcionales)»)`, /Foto de la remisión/.test(t) && /Tomar la foto de la remisión/.test(t) && !!(await p.$("#fq-foto[accept='image/*'][capture=environment]")));
+  ok(`${tag} A1 «Entrada de químicos» ofrece la foto de la remisión, como opcional (dentro de «Datos de la remisión (opcionales)»)`, /Foto de la remisión/.test(t) && /Tomar o elegir la foto de la remisión/.test(t));
+  ok(`${tag} A1b (7c-bis) el selector acepta imágenes y NO lleva «capture»: el celular ofrece cámara, galería y archivos`,
+     (await p.evaluate(() => { const i = document.querySelector("#fq-foto"); return i && i.getAttribute("accept") === "image/*" && !i.hasAttribute("capture"); })) === true);
   await pulsar(p, "[data-quimico=pac]"); await poner(p, "#fq-cantidad", "1,5"); await poner(p, "#fq-remision", "R-0099");
   await (await p.$("#fq-foto")).uploadFile(FOTO); await p.waitForSelector(".fq-foto-vista img", { timeout: 20000 });
   const vista = await p.evaluate(() => { const i = document.querySelector(".fq-foto-vista img"); return { ancho: i.naturalWidth, alto: i.naturalHeight, texto: document.querySelector(".fq-foto-pie").innerText, dentro: i.getBoundingClientRect().right <= document.documentElement.clientWidth }; });
