@@ -1,0 +1,94 @@
+OK    [390] A1 en el modo Planta, «Entrada de químicos» y «Uso de químicos» son tarjetas que se abren (ya no «Próximamente»)
+OK    [390] A2 ninguna se abrió sola
+OK    [390] B1 se abre con «Volver» y su nombre; trae los químicos activos (PAC, cloro gaseoso e hipoclorito)
+OK    [390] B2 la unidad es toneladas o kilogramos (toneladas por omisión); nada de cilindros
+OK    [390] B3 el operador no ve el saldo de la bodega ni la dosis óptima
+OK    [390] B4 el día viene en hoy y solo deja hasta los días atrás que dice el servidor
+OK    [390] B5 sin datos no guarda: pide el químico y la cantidad
+OK    [390] B6 «1.500» es ambiguo y no se adivina
+OK    [390] B7 1,5 toneladas: la pantalla dice «Son 1.500 kg.»
+OK    [390] B8 campos y botones de al menos 44 px, sin desborde
+OK    [390] B9 guarda: «Entrada registrada: 1.500 kg de …» y el movimiento queda con toneladas, kg, proveedor, remisión, lote, vencimiento y el autor
+OK    [390] B10 después de guardar la cantidad y la remisión quedan en blanco (lista para otra entrada)
+OK    [390] B11 en kilogramos: 250 kg de hipoclorito, sin datos de remisión
+OK    [390] C1 «Uso de químicos»: en kilogramos (sin elegir unidad), con «¿Para qué se usó?» y las plantas; sin saldo ni dosis
+OK    [390] C2 para dosificar exige la planta
+OK    [390] C3 sin desborde y con botones de al menos 44 px
+OK    [390] C4 guarda el uso: 300 kg de PAC en Huaricha para dosificar (resta en la bodega)
+OK    [390] C5 limpieza sin planta: 2,5 kg de hipoclorito
+OK    [390] C6 «Cancelar» vuelve al inicio
+OK    [390] C7 las llamadas llevan su clave de envío y cada lectura quedó en la auditoría
+OK    [390] D1 el uso del operador entra en «esperado contra usado» del supervisor (PAC, Huaricha, hoy: usado 300 kg)
+OK    [390] E1 el operador de redes no tiene las tarjetas de químicos
+OK    [1280] A1 en el modo Planta, «Entrada de químicos» y «Uso de químicos» son tarjetas que se abren (ya no «Próximamente»)
+OK    [1280] A2 ninguna se abrió sola
+OK    [1280] B1 se abre con «Volver» y su nombre; trae los químicos activos (PAC, cloro gaseoso e hipoclorito)
+OK    [1280] B2 la unidad es toneladas o kilogramos (toneladas por omisión); nada de cilindros
+OK    [1280] B3 el operador no ve el saldo de la bodega ni la dosis óptima
+OK    [1280] B4 el día viene en hoy y solo deja hasta los días atrás que dice el servidor
+OK    [1280] B5 sin datos no guarda: pide el químico y la cantidad
+OK    [1280] B6 «1.500» es ambiguo y no se adivina
+OK    [1280] B7 1,5 toneladas: la pantalla dice «Son 1.500 kg.»
+OK    [1280] B8 campos y botones de al menos 44 px, sin desborde
+OK    [1280] B9 guarda: «Entrada registrada: 1.500 kg de …» y el movimiento queda con toneladas, kg, proveedor, remisión, lote, vencimiento y el autor
+OK    [1280] B10 después de guardar la cantidad y la remisión quedan en blanco (lista para otra entrada)
+OK    [1280] B11 en kilogramos: 250 kg de hipoclorito, sin datos de remisión
+OK    [1280] C1 «Uso de químicos»: en kilogramos (sin elegir unidad), con «¿Para qué se usó?» y las plantas; sin saldo ni dosis
+OK    [1280] C2 para dosificar exige la planta
+OK    [1280] C3 sin desborde y con botones de al menos 44 px
+OK    [1280] C4 guarda el uso: 300 kg de PAC en Huaricha para dosificar (resta en la bodega)
+OK    [1280] C5 limpieza sin planta: 2,5 kg de hipoclorito
+OK    [1280] C6 «Cancelar» vuelve al inicio
+OK    [1280] C7 las llamadas llevan su clave de envío y cada lectura quedó en la auditoría
+OK    [1280] D1 el uso del operador entra en «esperado contra usado» del supervisor (PAC, Huaricha, hoy: usado 300 kg)
+OK    [1280] E1 el operador de redes no tiene las tarjetas de químicos
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+----
+OK    [390] A1 en el modo Planta, «Entrada de químicos» y «Uso de químicos» son tarjetas que se abren (ya no «Próximamente»)
+OK    [390] A2 ninguna se abrió sola
+OK    [390] B1 se abre con «Volver» y su nombre; trae los químicos activos (PAC, cloro gaseoso e hipoclorito)
+OK    [390] B2 la unidad es toneladas o kilogramos (toneladas por omisión); nada de cilindros
+OK    [390] B3 el operador no ve el saldo de la bodega ni la dosis óptima
+OK    [390] B4 el día viene en hoy y solo deja hasta los días atrás que dice el servidor
+OK    [390] B5 sin datos no guarda: pide el químico y la cantidad
+OK    [390] B6 «1.500» es ambiguo y no se adivina
+OK    [390] B7 1,5 toneladas: la pantalla dice «Son 1.500 kg.»
+OK    [390] B8 campos y botones de al menos 44 px, sin desborde
+OK    [390] B9 guarda: «Entrada registrada: 1.500 kg de …» y el movimiento queda con toneladas, kg, proveedor, remisión, lote, vencimiento y el autor
+OK    [390] B10 después de guardar la cantidad y la remisión quedan en blanco (lista para otra entrada)
+OK    [390] B11 en kilogramos: 250 kg de hipoclorito, sin datos de remisión
+OK    [390] C1 «Uso de químicos»: en kilogramos (sin elegir unidad), con «¿Para qué se usó?» y las plantas; sin saldo ni dosis
+OK    [390] C2 para dosificar exige la planta
+OK    [390] C3 sin desborde y con botones de al menos 44 px
+OK    [390] C4 guarda el uso: 300 kg de PAC en Huaricha para dosificar (resta en la bodega)
+OK    [390] C5 limpieza sin planta: 2,5 kg de hipoclorito
+OK    [390] C6 «Cancelar» vuelve al inicio
+OK    [390] C7 las llamadas llevan su clave de envío y cada lectura quedó en la auditoría
+OK    [390] D1 el uso del operador entra en «esperado contra usado» del supervisor (PAC, Huaricha, hoy: usado 300 kg)
+OK    [390] E1 el operador de redes no tiene las tarjetas de químicos
+OK    [1280] A1 en el modo Planta, «Entrada de químicos» y «Uso de químicos» son tarjetas que se abren (ya no «Próximamente»)
+OK    [1280] A2 ninguna se abrió sola
+OK    [1280] B1 se abre con «Volver» y su nombre; trae los químicos activos (PAC, cloro gaseoso e hipoclorito)
+OK    [1280] B2 la unidad es toneladas o kilogramos (toneladas por omisión); nada de cilindros
+OK    [1280] B3 el operador no ve el saldo de la bodega ni la dosis óptima
+OK    [1280] B4 el día viene en hoy y solo deja hasta los días atrás que dice el servidor
+OK    [1280] B5 sin datos no guarda: pide el químico y la cantidad
+OK    [1280] B6 «1.500» es ambiguo y no se adivina
+OK    [1280] B7 1,5 toneladas: la pantalla dice «Son 1.500 kg.»
+OK    [1280] B8 campos y botones de al menos 44 px, sin desborde
+OK    [1280] B9 guarda: «Entrada registrada: 1.500 kg de …» y el movimiento queda con toneladas, kg, proveedor, remisión, lote, vencimiento y el autor
+OK    [1280] B10 después de guardar la cantidad y la remisión quedan en blanco (lista para otra entrada)
+OK    [1280] B11 en kilogramos: 250 kg de hipoclorito, sin datos de remisión
+OK    [1280] C1 «Uso de químicos»: en kilogramos (sin elegir unidad), con «¿Para qué se usó?» y las plantas; sin saldo ni dosis
+OK    [1280] C2 para dosificar exige la planta
+OK    [1280] C3 sin desborde y con botones de al menos 44 px
+OK    [1280] C4 guarda el uso: 300 kg de PAC en Huaricha para dosificar (resta en la bodega)
+OK    [1280] C5 limpieza sin planta: 2,5 kg de hipoclorito
+OK    [1280] C6 «Cancelar» vuelve al inicio
+OK    [1280] C7 las llamadas llevan su clave de envío y cada lectura quedó en la auditoría
+OK    [1280] D1 el uso del operador entra en «esperado contra usado» del supervisor (PAC, Huaricha, hoy: usado 300 kg)
+OK    [1280] E1 el operador de redes no tiene las tarjetas de químicos
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 46 de 46 — SIN FALLAS

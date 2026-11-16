@@ -1,0 +1,150 @@
+OK    [390] A1 operador de planta: un solo modo (Planta), SIN selector, con el nombre del modo como título
+OK    [390] A2 sus 5 tarjetas en orden: Entrada, Salida, Muestreo, Entrada de químicos y Uso de químicos
+OK    [390] A3 ningún formulario se abre solo al entrar (no se pidió ninguno)
+OK    [390] A4 tarjetas grandes: al menos 68 px de alto, con la inicial, el nombre y una línea de descripción; sin desborde
+OK    [390] A5 (7b) las cinco tarjetas se abren: los dos formularios de químicos ya tienen pantalla (ninguna «Próximamente»)
+OK    [390] A6 el color del modo Planta (#0a2540) en la inicial y el fondo #f2f5f8
+OK    [390] A7 (7b) «Entrada de químicos» se abre con «Volver» y su nombre
+OK    [390] A8 al tocar «Entrada» se abre en su pantalla, con «Volver» arriba y su nombre, y solo entonces se pide el formulario
+OK    [390] A9 «Volver» regresa al inicio con las mismas tarjetas
+OK    [390] A10 el operador de planta nunca pidió el geovisor
+OK    [390] B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención y el geovisor en solo lectura (tiene la casilla); sin ficha ni dashboards
+OK    [390] B2 el color del modo Redes (#0f3d2b)
+OK    [390] B3 el geovisor no se cargó al entrar (no se pidió su configuración ni hay mapa)
+OK    [390] B4 «Reportar daño o falla» se abre con «Volver» y su nombre
+OK    [390] B5 el geovisor carga solo al abrirlo
+OK    [390] C1 supervisor de planta: selector con Planta, Redes y Supervisión (botones reales con aria-selected, de 44 px o más), abre en Planta
+OK    [390] C2 el modo elegido lleva su color (Planta #0a2540)
+OK    [390] C3 en Redes solo tiene «Ficha de activos» (buscar); no tiene formularios de redes
+OK    [390] C4 en Supervisión: Dashboard PTAP y Geovisor técnico; sin Dashboard distribución ni «Ficha de activos (editar)»
+OK    [390] C5 se recuerda el último modo elegido (Supervisión) al volver a entrar
+OK    [390] C6 hasta aquí no se ha pedido el geovisor
+OK    [390] C7 del Dashboard PTAP se vuelve al inicio, en el mismo modo
+OK    [390] D1 supervisor de distribución (sin formularios de Técnica): entra al mismo inicio, con Redes y Supervisión, y la primera vez abre en Supervisión (David, 14:39); no se le abre el dashboard solo
+OK    [390] D1b en Redes solo tiene «Ficha de activos» (buscar)
+OK    [390] D2 su sesión dice «Supervisor de distribución»
+OK    [390] D3 en Supervisión: Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»; sin Dashboard PTAP
+OK    [390] D4 del Dashboard distribución se vuelve al inicio
+OK    [390] D5 «Ficha de activos (editar)» abre la ficha de activos
+OK    [390] E1 administrador: los tres modos; en Planta, los 5 formularios de planta en orden (aunque el servidor los mande revueltos)
+OK    [390] E2 en el celular el selector va debajo del título, a todo lo ancho, y las tarjetas en una columna
+OK    [390] E3 Redes: daño o falla, intervención y «Ficha de activos» (buscar)
+OK    [390] E4 Supervisión: Dashboard PTAP, Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»
+OK    [390] E5 el geovisor no se cargó al entrar ni al cambiar de modo
+OK    [390] E6 … y carga al abrirlo
+OK    [390] E7 del geovisor se vuelve al inicio, en Supervisión
+OK    [390] E8 «Registrar intervención» se abre con «Volver»
+OK    [1280] A1 operador de planta: un solo modo (Planta), SIN selector, con el nombre del modo como título
+OK    [1280] A2 sus 5 tarjetas en orden: Entrada, Salida, Muestreo, Entrada de químicos y Uso de químicos
+OK    [1280] A3 ningún formulario se abre solo al entrar (no se pidió ninguno)
+OK    [1280] A4 tarjetas grandes: al menos 68 px de alto, con la inicial, el nombre y una línea de descripción; sin desborde
+OK    [1280] A5 (7b) las cinco tarjetas se abren: los dos formularios de químicos ya tienen pantalla (ninguna «Próximamente»)
+OK    [1280] A6 el color del modo Planta (#0a2540) en la inicial y el fondo #f2f5f8
+OK    [1280] A7 (7b) «Entrada de químicos» se abre con «Volver» y su nombre
+OK    [1280] A8 al tocar «Entrada» se abre en su pantalla, con «Volver» arriba y su nombre, y solo entonces se pide el formulario
+OK    [1280] A9 «Volver» regresa al inicio con las mismas tarjetas
+OK    [1280] A10 el operador de planta nunca pidió el geovisor
+OK    [1280] B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención y el geovisor en solo lectura (tiene la casilla); sin ficha ni dashboards
+OK    [1280] B2 el color del modo Redes (#0f3d2b)
+OK    [1280] B3 el geovisor no se cargó al entrar (no se pidió su configuración ni hay mapa)
+OK    [1280] B4 «Reportar daño o falla» se abre con «Volver» y su nombre
+OK    [1280] B5 el geovisor carga solo al abrirlo
+OK    [1280] C1 supervisor de planta: selector con Planta, Redes y Supervisión (botones reales con aria-selected, de 44 px o más), abre en Planta
+OK    [1280] C2 el modo elegido lleva su color (Planta #0a2540)
+OK    [1280] C3 en Redes solo tiene «Ficha de activos» (buscar); no tiene formularios de redes
+OK    [1280] C4 en Supervisión: Dashboard PTAP y Geovisor técnico; sin Dashboard distribución ni «Ficha de activos (editar)»
+OK    [1280] C5 se recuerda el último modo elegido (Supervisión) al volver a entrar
+OK    [1280] C6 hasta aquí no se ha pedido el geovisor
+OK    [1280] C7 del Dashboard PTAP se vuelve al inicio, en el mismo modo
+OK    [1280] D1 supervisor de distribución (sin formularios de Técnica): entra al mismo inicio, con Redes y Supervisión, y la primera vez abre en Supervisión (David, 14:39); no se le abre el dashboard solo
+OK    [1280] D1b en Redes solo tiene «Ficha de activos» (buscar)
+OK    [1280] D2 su sesión dice «Supervisor de distribución»
+OK    [1280] D3 en Supervisión: Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»; sin Dashboard PTAP
+OK    [1280] D4 del Dashboard distribución se vuelve al inicio
+OK    [1280] D5 «Ficha de activos (editar)» abre la ficha de activos
+OK    [1280] E1 administrador: los tres modos; en Planta, los 5 formularios de planta en orden (aunque el servidor los mande revueltos)
+OK    [1280] E2 en escritorio el selector va a la derecha del título y las tarjetas en rejilla (varias columnas de 260 px o más, hasta 1.120 px)
+OK    [1280] E3 Redes: daño o falla, intervención y «Ficha de activos» (buscar)
+OK    [1280] E4 Supervisión: Dashboard PTAP, Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»
+OK    [1280] E5 el geovisor no se cargó al entrar ni al cambiar de modo
+OK    [1280] E6 … y carga al abrirlo
+OK    [1280] E7 del geovisor se vuelve al inicio, en Supervisión
+OK    [1280] E8 «Registrar intervención» se abre con «Volver»
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+----
+OK    [390] A1 operador de planta: un solo modo (Planta), SIN selector, con el nombre del modo como título
+OK    [390] A2 sus 5 tarjetas en orden: Entrada, Salida, Muestreo, Entrada de químicos y Uso de químicos
+OK    [390] A3 ningún formulario se abre solo al entrar (no se pidió ninguno)
+OK    [390] A4 tarjetas grandes: al menos 68 px de alto, con la inicial, el nombre y una línea de descripción; sin desborde
+OK    [390] A5 (7b) las cinco tarjetas se abren: los dos formularios de químicos ya tienen pantalla (ninguna «Próximamente»)
+OK    [390] A6 el color del modo Planta (#0a2540) en la inicial y el fondo #f2f5f8
+OK    [390] A7 (7b) «Entrada de químicos» se abre con «Volver» y su nombre
+OK    [390] A8 al tocar «Entrada» se abre en su pantalla, con «Volver» arriba y su nombre, y solo entonces se pide el formulario
+OK    [390] A9 «Volver» regresa al inicio con las mismas tarjetas
+OK    [390] A10 el operador de planta nunca pidió el geovisor
+OK    [390] B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención y el geovisor en solo lectura (tiene la casilla); sin ficha ni dashboards
+OK    [390] B2 el color del modo Redes (#0f3d2b)
+OK    [390] B3 el geovisor no se cargó al entrar (no se pidió su configuración ni hay mapa)
+OK    [390] B4 «Reportar daño o falla» se abre con «Volver» y su nombre
+OK    [390] B5 el geovisor carga solo al abrirlo
+OK    [390] C1 supervisor de planta: selector con Planta, Redes y Supervisión (botones reales con aria-selected, de 44 px o más), abre en Planta
+OK    [390] C2 el modo elegido lleva su color (Planta #0a2540)
+OK    [390] C3 en Redes solo tiene «Ficha de activos» (buscar); no tiene formularios de redes
+OK    [390] C4 en Supervisión: Dashboard PTAP y Geovisor técnico; sin Dashboard distribución ni «Ficha de activos (editar)»
+OK    [390] C5 se recuerda el último modo elegido (Supervisión) al volver a entrar
+OK    [390] C6 hasta aquí no se ha pedido el geovisor
+OK    [390] C7 del Dashboard PTAP se vuelve al inicio, en el mismo modo
+OK    [390] D1 supervisor de distribución (sin formularios de Técnica): entra al mismo inicio, con Redes y Supervisión, y la primera vez abre en Supervisión (David, 14:39); no se le abre el dashboard solo
+OK    [390] D1b en Redes solo tiene «Ficha de activos» (buscar)
+OK    [390] D2 su sesión dice «Supervisor de distribución»
+OK    [390] D3 en Supervisión: Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»; sin Dashboard PTAP
+OK    [390] D4 del Dashboard distribución se vuelve al inicio
+OK    [390] D5 «Ficha de activos (editar)» abre la ficha de activos
+OK    [390] E1 administrador: los tres modos; en Planta, los 5 formularios de planta en orden (aunque el servidor los mande revueltos)
+OK    [390] E2 en el celular el selector va debajo del título, a todo lo ancho, y las tarjetas en una columna
+OK    [390] E3 Redes: daño o falla, intervención y «Ficha de activos» (buscar)
+OK    [390] E4 Supervisión: Dashboard PTAP, Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»
+OK    [390] E5 el geovisor no se cargó al entrar ni al cambiar de modo
+OK    [390] E6 … y carga al abrirlo
+OK    [390] E7 del geovisor se vuelve al inicio, en Supervisión
+OK    [390] E8 «Registrar intervención» se abre con «Volver»
+OK    [1280] A1 operador de planta: un solo modo (Planta), SIN selector, con el nombre del modo como título
+OK    [1280] A2 sus 5 tarjetas en orden: Entrada, Salida, Muestreo, Entrada de químicos y Uso de químicos
+OK    [1280] A3 ningún formulario se abre solo al entrar (no se pidió ninguno)
+OK    [1280] A4 tarjetas grandes: al menos 68 px de alto, con la inicial, el nombre y una línea de descripción; sin desborde
+OK    [1280] A5 (7b) las cinco tarjetas se abren: los dos formularios de químicos ya tienen pantalla (ninguna «Próximamente»)
+OK    [1280] A6 el color del modo Planta (#0a2540) en la inicial y el fondo #f2f5f8
+OK    [1280] A7 (7b) «Entrada de químicos» se abre con «Volver» y su nombre
+OK    [1280] A8 al tocar «Entrada» se abre en su pantalla, con «Volver» arriba y su nombre, y solo entonces se pide el formulario
+OK    [1280] A9 «Volver» regresa al inicio con las mismas tarjetas
+OK    [1280] A10 el operador de planta nunca pidió el geovisor
+OK    [1280] B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención y el geovisor en solo lectura (tiene la casilla); sin ficha ni dashboards
+OK    [1280] B2 el color del modo Redes (#0f3d2b)
+OK    [1280] B3 el geovisor no se cargó al entrar (no se pidió su configuración ni hay mapa)
+OK    [1280] B4 «Reportar daño o falla» se abre con «Volver» y su nombre
+OK    [1280] B5 el geovisor carga solo al abrirlo
+OK    [1280] C1 supervisor de planta: selector con Planta, Redes y Supervisión (botones reales con aria-selected, de 44 px o más), abre en Planta
+OK    [1280] C2 el modo elegido lleva su color (Planta #0a2540)
+OK    [1280] C3 en Redes solo tiene «Ficha de activos» (buscar); no tiene formularios de redes
+OK    [1280] C4 en Supervisión: Dashboard PTAP y Geovisor técnico; sin Dashboard distribución ni «Ficha de activos (editar)»
+OK    [1280] C5 se recuerda el último modo elegido (Supervisión) al volver a entrar
+OK    [1280] C6 hasta aquí no se ha pedido el geovisor
+OK    [1280] C7 del Dashboard PTAP se vuelve al inicio, en el mismo modo
+OK    [1280] D1 supervisor de distribución (sin formularios de Técnica): entra al mismo inicio, con Redes y Supervisión, y la primera vez abre en Supervisión (David, 14:39); no se le abre el dashboard solo
+OK    [1280] D1b en Redes solo tiene «Ficha de activos» (buscar)
+OK    [1280] D2 su sesión dice «Supervisor de distribución»
+OK    [1280] D3 en Supervisión: Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»; sin Dashboard PTAP
+OK    [1280] D4 del Dashboard distribución se vuelve al inicio
+OK    [1280] D5 «Ficha de activos (editar)» abre la ficha de activos
+OK    [1280] E1 administrador: los tres modos; en Planta, los 5 formularios de planta en orden (aunque el servidor los mande revueltos)
+OK    [1280] E2 en escritorio el selector va a la derecha del título y las tarjetas en rejilla (varias columnas de 260 px o más, hasta 1.120 px)
+OK    [1280] E3 Redes: daño o falla, intervención y «Ficha de activos» (buscar)
+OK    [1280] E4 Supervisión: Dashboard PTAP, Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»
+OK    [1280] E5 el geovisor no se cargó al entrar ni al cambiar de modo
+OK    [1280] E6 … y carga al abrirlo
+OK    [1280] E7 del geovisor se vuelve al inicio, en Supervisión
+OK    [1280] E8 «Registrar intervención» se abre con «Volver»
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 74 de 74 — SIN FALLAS

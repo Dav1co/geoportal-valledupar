@@ -1,5 +1,6 @@
 import { supabase, FUNCTIONS_URL } from "../../lib/supabase";
 import { clasificar, ErrorCampo } from "../apiCampo";
+import { areaCampo } from "../area";
 import type { ConfigConstancia } from "./logica";
 
 // Cliente de la «Constancia por correo». Lectura de la configuración (cualquier capturista) y administración (solo administrador). Misma disciplina que apiFormatos: renueva la sesión una
@@ -50,7 +51,8 @@ export type EstadoConstancia = {
 export const apiConstancia = {
   /** Configuración del documento para quien captura: si envía constancia y el texto de autorización vigente. */
   config: (documento: string): Promise<ConfigConstancia> =>
-    documento === "acta_inspeccion" ? pedir("geoportal-acta", "config_constancia", "GET") : pedir("geoportal-campo", "config_constancia", "GET", undefined, `tipo=${encodeURIComponent(documento)}`),
+    areaCampo() ? Promise.reject(new ErrorCampo("permiso", "Desde Técnica no se envía constancia por correo.", 403))      // Corte 8: la sección no aparece
+    : documento === "acta_inspeccion" ? pedir("geoportal-acta", "config_constancia", "GET") : pedir("geoportal-campo", "config_constancia", "GET", undefined, `tipo=${encodeURIComponent(documento)}`),
   estado: () => pedir<EstadoConstancia>("geoportal-campo", "constancia_estado", "GET"),
   guardarConfig: (documento: string, habilitado: boolean, copias: string[]) => pedir<unknown>("geoportal-campo", "constancia_config", "POST", { documento, habilitado, copias }),
   nuevoTexto: (texto: string, borrador: boolean) => pedir<{ version: number; borrador: boolean }>("geoportal-campo", "constancia_texto", "POST", { texto, borrador }),

@@ -1,4 +1,5 @@
 import { supabase, FUNCTIONS_URL } from "../lib/supabase";
+import { areaCampo } from "./area";
 import type { CuerpoCercanos, RespuestaAnalisis, RespuestaCercanos } from "./analisis/tipos";
 
 // Cliente de la Edge Function geoportal-campo (contrato: edge_contrato.md del Paso A + límite de ritmo del Paso B). Aquí NO hay etiquetas de tipos ni de grupos: todo llega del catálogo del servidor.
@@ -72,6 +73,8 @@ export async function pedir<T>(accion: string, opciones: { qs?: Record<string, s
   const url = new URL(`${FUNCTIONS_URL}/geoportal-campo`);
   url.searchParams.set("accion", accion);
   for (const [k, v] of Object.entries(opciones.qs ?? {})) url.searchParams.set(k, v);
+  const area = areaCampo();      // Corte 8 de Técnica: la misma pantalla abierta desde Técnica (nulo = Comercial, sin cambios)
+  if (area) url.searchParams.set("area", area);
 
   // Un 401 puede ser solo un token vencido: se renueva la sesión UNA vez y se repite la misma petición (crear lleva reporte_id: repetirlo no duplica).
   for (let intento = 0; intento < 2; intento++) {

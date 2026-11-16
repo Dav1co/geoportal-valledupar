@@ -1,0 +1,56 @@
+OK    [380] Reportar anomalía: «crear» lleva inicio_dispositivo del momento de abrir
+OK    [380] Reportar anomalía: el inicio es anterior al envío
+OK    [380] «Hora de inicio» del papel nace con la hora de apertura (Bogotá) y la final vacía
+OK    [380] sin elegir Instalación o cambio, no aparece el medidor retirado
+OK    [380] con «Cambio de medidor» aparecen los datos del medidor retirado (lectura y R)
+OK    [380] con «Instalación de medidor» se ocultan
+OK    [380] hora final anterior a la de inicio: aviso claro
+OK    [380] el rechazo por la hora del celular se muestra con el texto de la base
+OK    [380] Instalación: el primer «crear» lleva el inicio de la apertura
+OK    [380] tras el rechazo y con el reloj corregido (−10 min), el segundo envío RECALCULA el inicio (hora corregida − tiempo transcurrido) y no manda el medidor retirado
+OK    [380] la hora de inicio del papel viaja en datos
+OK    [380] formularios sin desborde horizontal
+OK    [380] supervisor: pestañas Reportes, Indicadores, Catálogo, Parámetros y Personal
+OK    [380] lista: columnas Inicio y Duración, con «(celular)» y «30 min»; vacías en el reporte de antes
+OK    [380] Catálogo del supervisor: aviso de solo lectura, ve lo desactivado (Cambio de medidor) y NO hay botones de edición
+OK    [380] constancias del supervisor: solo lectura (sin campos ni botones) y sin pedir la ruta de administración
+OK    [380] Parámetros del supervisor: ve los valores (incluida la hora de inicio, 12 h) sin botón «Cambiar»
+OK    [380] Personal del supervisor: lista, cargo, formularios («Todos los activos» si no tiene) e historial; sin «Editar» ni «Revertir»
+OK    [380] supervisión sin desborde horizontal (correo largo incluido)
+OK    [380] administrador: el Catálogo conserva sus botones de edición y la administración de constancias
+OK    [380] administrador: Parámetros con «Cambiar»
+OK    [380] al quitar un formulario se pide el motivo y no se puede guardar sin él
+OK    [380] Guardar envía cargo, asignación y retiro (con motivo) como tres cambios
+OK    [380] aviso de cambios guardados
+OK    [380] el historial ofrece «Revertir» al administrador
+OK    [380] Revertir envía el cambio inverso (con «Reversión del cambio n.º …» si es un retiro)
+OK    [380] administrador sin desborde horizontal
+OK    [1280] Reportar anomalía: «crear» lleva inicio_dispositivo del momento de abrir
+OK    [1280] Reportar anomalía: el inicio es anterior al envío
+OK    [1280] «Hora de inicio» del papel nace con la hora de apertura (Bogotá) y la final vacía
+OK    [1280] sin elegir Instalación o cambio, no aparece el medidor retirado
+OK    [1280] con «Cambio de medidor» aparecen los datos del medidor retirado (lectura y R)
+OK    [1280] con «Instalación de medidor» se ocultan
+OK    [1280] hora final anterior a la de inicio: aviso claro
+OK    [1280] el rechazo por la hora del celular se muestra con el texto de la base
+OK    [1280] Instalación: el primer «crear» lleva el inicio de la apertura
+OK    [1280] tras el rechazo y con el reloj corregido (−10 min), el segundo envío RECALCULA el inicio (hora corregida − tiempo transcurrido) y no manda el medidor retirado
+OK    [1280] la hora de inicio del papel viaja en datos
+OK    [1280] formularios sin desborde horizontal
+OK    [1280] supervisor: pestañas Reportes, Indicadores, Catálogo, Parámetros y Personal
+OK    [1280] lista: columnas Inicio y Duración, con «(celular)» y «30 min»; vacías en el reporte de antes
+OK    [1280] Catálogo del supervisor: aviso de solo lectura, ve lo desactivado (Cambio de medidor) y NO hay botones de edición
+OK    [1280] constancias del supervisor: solo lectura (sin campos ni botones) y sin pedir la ruta de administración
+OK    [1280] Parámetros del supervisor: ve los valores (incluida la hora de inicio, 12 h) sin botón «Cambiar»
+OK    [1280] Personal del supervisor: lista, cargo, formularios («Todos los activos» si no tiene) e historial; sin «Editar» ni «Revertir»
+OK    [1280] supervisión sin desborde horizontal (correo largo incluido)
+OK    [1280] administrador: el Catálogo conserva sus botones de edición y la administración de constancias
+OK    [1280] administrador: Parámetros con «Cambiar»
+OK    [1280] al quitar un formulario se pide el motivo y no se puede guardar sin él
+OK    [1280] Guardar envía cargo, asignación y retiro (con motivo) como tres cambios
+OK    [1280] aviso de cambios guardados
+OK    [1280] el historial ofrece «Revertir» al administrador
+OK    [1280] Revertir envía el cambio inverso (con «Reversión del cambio n.º …» si es un retiro)
+OK    [1280] administrador sin desborde horizontal
+
+RESULTADO: 54 de 54 pruebas correctas — SIN FALLAS   (capturas en /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/d1dc9a04-7d97-4541-b040-ea3f55b7fa18/scratchpad/capc_prueba_chrome_p14)

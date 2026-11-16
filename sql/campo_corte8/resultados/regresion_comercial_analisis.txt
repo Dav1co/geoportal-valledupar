@@ -1,0 +1,145 @@
+OK    [390] lista: «Análisis de contrato» es una tarjeta activa (sin «Próximamente») con su descripción
+OK    [390] cabecera: «← Formularios de campo», título y campo numérico (inputmode numeric, máx. 12)
+OK    [390] el campo deja solo dígitos y máximo 12
+OK    [390] Enter consulta: GET analisis_contrato con el contrato
+OK    [390] sin límite diario de consultas: la pantalla no muestra ningún texto de cupo de consultas
+OK    [390] distancia en la tarjeta con el GPS simulado (0,001° al sur ≈ 111 m): «A 111 m» y botón «Buscar»
+OK    [390] tarjeta: contrato, estado, nombre con «dato personal»
+OK    [390] teléfonos como enlaces tel: con formato (300 000 0001 · 570 0001), celular primero, «dato personal» y «censo nov-2025»
+OK    [390] tarjeta: dirección · barrio, uso · estrato · ciclo, deuda con facturas y tramo, cortes visibles
+OK    [390] tarjeta: medidor «A00001 · 12 años» y último pago «18/09/2026 (hace 57 días)»
+OK    [390] MARCAS: submedición, corte facturado, PQR abierta, 2 predios y revisión que sugiere cambio
+OK    [390] submedición con la frase exacta y el botón «Instalación de medidor → Cambio»
+OK    [390] corte «hace 2 meses», PQR «(hace 1 mes)», «Este contrato está en 2 predios»
+OK    [390] «Consumo» abierto por defecto; gráfica con 5 barras y el hueco de 202606 rotulado «sin dato» (sin barra)
+OK    [390] el mes estimado (jul-2026) es una barra hueca y el de lectura va lleno
+OK    [390] líneas de estrato y barrio, cortadas en el mes sin dato (dos tramos cada una)
+OK    [390] leyenda y Máx · Mín · Prom
+OK    [390] tabla: 6 meses; jun-2026 «sin dato»; jul-2026 «estimado» con causal; promedios de estrato, barrio y uso
+OK    [390] cada sección lleva su corte («consumo a oct-2026», «ficha del 14/11/2026»)
+OK    [390] secciones: «Comercial y cartera», «Medidor», «Gestiones» y «Ubicación» cerradas; se abren y se cierran
+OK    [390] medidor: diámetro, fecha de instalación y la instalación registrada en el geoportal
+OK    [390] gestiones: corte facturado, corte del geoportal, PQR, reportes, actas y revisión pendiente (sin autor)
+OK    [390] «Fotos del predio» no aparece (fotos vacío)
+OK    [390] el mapa no se carga hasta abrir «Ubicación»
+OK    [390] Ubicación: mapa presente con un marcador por predio y «Abrir en Google Maps» correcto (_blank, noopener)
+OK    [390] atajos «Reportar anomalía», «Formato…» y «Reportar posible pérdida»
+OK    [390] sin desborde horizontal
+OK    [390] celular: una sola columna (la tarjeta encima de las secciones) con margen lateral
+OK    [390] repetir la consulta vuelve a ir al servidor (la respuesta no se guarda)
+OK    [390] no encontrado: «No encontramos ese contrato.» y nada del anterior
+OK    [390] comodín: «Contrato corporativo: no tiene análisis.»
+OK    [390] ficha sin calcular: aviso, lo diario visible (nombre, deuda, serial) y sin «censo nov-2025»
+OK    [390] ficha sin calcular: «Sin coordenadas en el catastro.» y sin enlace a Google Maps
+OK    [390] ficha sin calcular sin desborde
+OK    [390] 400: el mensaje del servidor en un aviso
+OK    [390] 403: el mensaje del servidor en un aviso
+OK    [390] nada personal en localStorage ni sessionStorage
+OK    [390] submedición: abre Instalación de medidor con «Cambio» marcado, el contrato cargado y los datos del medidor retirado a la vista
+OK    [390] submedición: «Cambio» solo prellena; la persona lo puede cambiar
+OK    [390] nada personal en el almacenamiento tras pasar al formato
+OK    [390] atajo «Reportar anomalía» con el contrato
+OK    [390] atajo «Formato…» abre el selector de formatos
+OK    [390] …y el formato elegido trae el contrato, SIN «Cambio» marcado (eso es solo del atajo de submedición)
+OK    [390] atajo «Reportar posible pérdida» deja el análisis y abre el acta (pide su catálogo)
+OK    [390] con Instalación de medidor inactiva no aparece «Instalación de medidor → Cambio» (la marca sí)
+OK    [390] cercanía: la posición NO se envió al servidor para medir la distancia
+OK    [390] «Actualizar» vuelve a medir: 0,01° al sur ≈ 1112 m → «A 1,1 km»
+OK    [390] precisión 120 m: «Precisión del GPS baja (± 120 m): la distancia es aproximada.»
+OK    [390] nada de la posición en localStorage/sessionStorage
+OK    [390] «Contratos cerca de mí»: POST con lat, lon y precision_m de la posición
+OK    [390] lista: 5 filas con contrato, dirección y distancia; «radio 300 m» y su cupo de búsquedas cercanas (sin texto de cupo de consultas)
+OK    [390] lista: sin nombre ni teléfono
+OK    [390] lista sin desborde a 390 (dirección larga incluida)
+OK    [390] tocar una fila abre ese contrato con la llamada normal (analisis_contrato) y lo deja escrito
+OK    [390] lista vacía: «No hay predios con contrato a menos de 300 m.»
+OK    [390] 429 de cercanos: el mensaje del servidor en un aviso
+OK    [390] 400 de cercanos: «La ubicación no viene en la forma esperada.»
+OK    [390] cercanía sin desborde a 390
+OK    [390] sin permiso de ubicación: la tarjeta explica cómo activarlo y el análisis se ve completo
+OK    [390] sin permiso: «Contratos cerca de mí» explica cómo activarlo y no llama al servidor
+OK    [390] sin permiso: la pantalla sigue funcionando (otra consulta)
+OK    [390] sin permiso sin desborde
+OK    [390] Buscar: pantalla completa con «Cerrar», 100 m en gris (lejos)
+OK    [390] Buscar: «Precisión ± 8 m» siempre visible
+OK    [390] sin brújula: aviso «sin brújula», marca N y la flecha apunta al rumbo respecto al norte (≈ 0°, «hacia el norte»)
+OK    [390] Google Maps a pie
+OK    [390] acercarse: la distancia baja y el color pasa a amarillo (cerca, < 50 m)
+OK    [390] brújula de iPhone (webkitCompassHeading 90°): flecha = rumbo − rumbo del celular (±1°) y sin el aviso «sin brújula»
+OK    [390] brújula absoluta (alpha 30° → rumbo 330°): la flecha gira al cambiar la orientación (±1°)
+OK    [390] precisión (60 m) peor que la distancia restante: «La señal no alcanza para afinar; busque la dirección»
+OK    [390] llegar (< 15 m): verde, «Llegó: el predio debería estar a la vista» y vibra una vez
+OK    [390] temblor del GPS (13 m → 18 m → 11 m): no vuelve a vibrar
+OK    [390] alejarse a más de 20 m y volver: vibra otra vez ([200, 100, 200])
+OK    [390] anuncio para lectores de pantalla (aria-live) con distancia y banda
+OK    [390] Buscar sin desborde
+OK    [390] «Cerrar»: apaga el GPS (clearWatch) y la brújula (quita los dos oyentes) y vuelve al análisis
+OK    [390] Buscar no llamó al servidor ni guardó la posición
+OK    [390] brújula negada (iPhone): sigue con distancia y flecha al norte, aviso «sin brújula», sin oyentes de orientación
+OK    [390] solo comercial: únicamente la tarjeta «Análisis de contrato» y NO se pidió el formulario de campo
+OK    [390] solo comercial: ve el análisis, sin atajos ni botón de cambio de medidor
+OK    [390] solo comercial sin desborde
+OK    [390] sin el permiso analisis_contrato la entrada no aparece
+OK    [390] Admin: la casilla aparece dentro de «Formatos de campo» cuando el servidor trae ver_analisis_contrato
+OK    [390] Admin: «Guardar» envía analisis_contrato: true y verifica (mensaje de éxito)
+OK    [390] Admin: sin el booleano en la lista, la casilla NO aparece
+OK    [390] Admin: sin el booleano, el cuerpo NO lleva analisis_contrato
+OK    [1280] lista: «Análisis de contrato» es una tarjeta activa (sin «Próximamente») con su descripción
+OK    [1280] cabecera: «← Formularios de campo», título y campo numérico (inputmode numeric, máx. 12)
+OK    [1280] el campo deja solo dígitos y máximo 12
+OK    [1280] Enter consulta: GET analisis_contrato con el contrato
+OK    [1280] sin límite diario de consultas: la pantalla no muestra ningún texto de cupo de consultas
+OK    [1280] distancia en la tarjeta con el GPS simulado (0,001° al sur ≈ 111 m): «A 111 m» y botón «Buscar»
+OK    [1280] tarjeta: contrato, estado, nombre con «dato personal»
+OK    [1280] teléfonos como enlaces tel: con formato (300 000 0001 · 570 0001), celular primero, «dato personal» y «censo nov-2025»
+OK    [1280] tarjeta: dirección · barrio, uso · estrato · ciclo, deuda con facturas y tramo, cortes visibles
+OK    [1280] tarjeta: medidor «A00001 · 12 años» y último pago «18/09/2026 (hace 57 días)»
+OK    [1280] MARCAS: submedición, corte facturado, PQR abierta, 2 predios y revisión que sugiere cambio
+OK    [1280] submedición con la frase exacta y el botón «Instalación de medidor → Cambio»
+OK    [1280] corte «hace 2 meses», PQR «(hace 1 mes)», «Este contrato está en 2 predios»
+OK    [1280] «Consumo» abierto por defecto; gráfica con 5 barras y el hueco de 202606 rotulado «sin dato» (sin barra)
+OK    [1280] el mes estimado (jul-2026) es una barra hueca y el de lectura va lleno
+OK    [1280] líneas de estrato y barrio, cortadas en el mes sin dato (dos tramos cada una)
+OK    [1280] leyenda y Máx · Mín · Prom
+OK    [1280] tabla: 6 meses; jun-2026 «sin dato»; jul-2026 «estimado» con causal; promedios de estrato, barrio y uso
+OK    [1280] cada sección lleva su corte («consumo a oct-2026», «ficha del 14/11/2026»)
+OK    [1280] secciones: «Comercial y cartera», «Medidor», «Gestiones» y «Ubicación» cerradas; se abren y se cierran
+OK    [1280] medidor: diámetro, fecha de instalación y la instalación registrada en el geoportal
+OK    [1280] gestiones: corte facturado, corte del geoportal, PQR, reportes, actas y revisión pendiente (sin autor)
+OK    [1280] «Fotos del predio» no aparece (fotos vacío)
+OK    [1280] el mapa no se carga hasta abrir «Ubicación»
+OK    [1280] Ubicación: mapa presente con un marcador por predio y «Abrir en Google Maps» correcto (_blank, noopener)
+OK    [1280] atajos «Reportar anomalía», «Formato…» y «Reportar posible pérdida»
+OK    [1280] sin desborde horizontal
+OK    [1280] escritorio: tarjeta a la izquierda (fija) y secciones a la derecha
+OK    [1280] repetir la consulta vuelve a ir al servidor (la respuesta no se guarda)
+OK    [1280] no encontrado: «No encontramos ese contrato.» y nada del anterior
+OK    [1280] comodín: «Contrato corporativo: no tiene análisis.»
+OK    [1280] ficha sin calcular: aviso, lo diario visible (nombre, deuda, serial) y sin «censo nov-2025»
+OK    [1280] ficha sin calcular: «Sin coordenadas en el catastro.» y sin enlace a Google Maps
+OK    [1280] ficha sin calcular sin desborde
+OK    [1280] 400: el mensaje del servidor en un aviso
+OK    [1280] 403: el mensaje del servidor en un aviso
+OK    [1280] nada personal en localStorage ni sessionStorage
+OK    [1280] submedición: abre Instalación de medidor con «Cambio» marcado, el contrato cargado y los datos del medidor retirado a la vista
+OK    [1280] submedición: «Cambio» solo prellena; la persona lo puede cambiar
+OK    [1280] nada personal en el almacenamiento tras pasar al formato
+OK    [1280] atajo «Reportar anomalía» con el contrato
+OK    [1280] atajo «Formato…» abre el selector de formatos
+OK    [1280] …y el formato elegido trae el contrato, SIN «Cambio» marcado (eso es solo del atajo de submedición)
+OK    [1280] atajo «Reportar posible pérdida» deja el análisis y abre el acta (pide su catálogo)
+OK    [1280] con Instalación de medidor inactiva no aparece «Instalación de medidor → Cambio» (la marca sí)
+OK    [1280] escritorio: «Contratos cerca de mí» lista 5 filas sin desborde
+OK    [1280] escritorio: «Buscar» abre la pantalla completa con la distancia
+OK    [1280] solo comercial: únicamente la tarjeta «Análisis de contrato» y NO se pidió el formulario de campo
+OK    [1280] solo comercial: ve el análisis, sin atajos ni botón de cambio de medidor
+OK    [1280] solo comercial sin desborde
+OK    [1280] sin el permiso analisis_contrato la entrada no aparece
+OK    [1280] Admin: la casilla aparece dentro de «Formatos de campo» cuando el servidor trae ver_analisis_contrato
+OK    [1280] Admin: «Guardar» envía analisis_contrato: true y verifica (mensaje de éxito)
+OK    [1280] Admin: sin el booleano en la lista, la casilla NO aparece
+OK    [1280] Admin: sin el booleano, el cuerpo NO lleva analisis_contrato
+OK    nada personal escrito en la consola del navegador
+OK    lo único que intentó salir de 127.0.0.1 fueron teselas de OpenStreetMap (bloqueadas): nada a Supabase ni a teselas comerciales
+
+RESULTADO: 143 de 143 pruebas correctas — SIN FALLAS   (capturas en /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/d1dc9a04-7d97-4541-b040-ea3f55b7fa18/scratchpad/capc_prueba_chrome_analisis)

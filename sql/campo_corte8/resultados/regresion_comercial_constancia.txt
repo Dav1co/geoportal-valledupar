@@ -1,0 +1,2 @@
+
+RESULTADO: 33 de 33 pruebas correctas — SIN FALLAS   (capturas en /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/d1dc9a04-7d97-4541-b040-ea3f55b7fa18/scratchpad/capc_prueba_ui_constancia)

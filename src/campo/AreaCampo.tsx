@@ -1,4 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useState } from "react";
+import { fijarAreaCampo } from "./area";
 import "../tecnica/tecnica.css";
 import "./campo.css";
 import { apiCampo, avisoDeError, ErrorCampo, type FormularioCampo } from "./apiCampo";
@@ -40,6 +41,7 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   const [valoresIniciales, setValoresIniciales] = useState<Record<string, unknown> | undefined>(undefined); // …y lo que trae marcado («Cambio»)
   const [version, setVersion] = useState(0);        // sube con cada «Hacer otro reporte»: el formulario nace limpio y se vuelve a leer la definición
 
+  useEffect(() => { fijarAreaCampo(null); }, []);      // Comercial: sin área (por si antes se abrió un reporte compartido desde Técnica)
   useEffect(() => {
     if (!campo) return;                  // solo acta: no hay formulario de campo que pedir
     let vivo = true;

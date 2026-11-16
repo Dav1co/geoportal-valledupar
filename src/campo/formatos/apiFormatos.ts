@@ -1,5 +1,6 @@
 import { supabase, FUNCTIONS_URL } from "../../lib/supabase";
 import { clasificar, ErrorCampo, type Preparacion } from "../apiCampo";
+import { areaCampo } from "../area";
 import type { ConfirmacionFormato, CuerpoCrearFormato } from "./tipos";
 
 // Extensión del cliente de geoportal-campo para los formatos del Paso D (apiCampo.ts no se toca). Reutiliza ErrorCampo y clasificar (mismos tipos de error y mismos avisos).
@@ -9,6 +10,8 @@ import type { ConfirmacionFormato, CuerpoCrearFormato } from "./tipos";
 async function pedir<T>(accion: string, cuerpo: unknown, timeoutMs: number): Promise<T> {
   const url = new URL(`${FUNCTIONS_URL}/geoportal-campo`);
   url.searchParams.set("accion", accion);
+  const area = areaCampo();      // Corte 8 de Técnica: nulo = Comercial, sin cambios
+  if (area) url.searchParams.set("area", area);
   for (let intento = 0; intento < 2; intento++) {
     const { data } = await supabase.auth.getSession();
     const t = data.session?.access_token;

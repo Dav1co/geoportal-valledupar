@@ -1,0 +1,21 @@
+OK    00 base local: campo de Comercial hasta la pasada del 14-nov (huellas vivas comprobadas al armarla), Corte 1 de Técnica y la vista vacía del 6b · 26 tipos
+OK    01 huellas antes: 2 «VIVA (sin cambiar)», 3 «FIRMA ESPERADA», 6 «NO EXISTE», columna «NO EXISTE», dominio «7 CLAVES», vista «VACÍA» · 1 campo.f_autorizar_reporte(text)=VIVA (sin cambiar) | 1 tecnica.f_formularios()=VIVA (sin cambiar) | 2 public.geoportal_campo_crear_reporte(text,uuid,text,text,text,text,numeric,numeric,numeric,boolean,text,jsonb,text,jsonb,text,text,uuid,timestamp with time zone)=FIRMA ESPERADA | 2 public.geoportal_campo_obtener_formulario(text,boolean)=FIRMA ESPERADA | 2 public.geoportal_campo_preparar_subida(text,integer,text,text,text)=FIRMA ESPERADA | 3 campo.f_tecnica_claves(text)=NO EXISTE (sin aplicar) 
+OK    02 ensayo: ERROR esperado, N de N SIN FALLAS · RESULTADO: 34 de 34 pruebas correctas — SIN FALLAS
+OK    03 el ensayo no deja rastro: funciones, columnas, dominio, vista y catálogo como estaban
+OK    04 migración
+OK    05 verificación: 9 OK y 2 INFO · INFO reportes en campo.reportes: total · de Técnica · en la capa del geovisor · tipos del catálogo|0 · 0 · 0 · 28 | INFO personas de Técnica con «Reportar anomalía» · con «Revisiones generales» (asignados en Personal)|0 · 0
+OK    06 guardia: migrar dos veces se niega · BEGIN
+OK    07 huellas después: 2 «CORTE 8 (reemplazada)», 6 «NUEVA», columna «EXISTE», «9 CLAVES», vista «CORTE 8», 28 tipos · RTE 8 (aplicada) | 7 tipo parecido: caja_medidor_danada=Caja de medidor dañada | 7 tipo parecido: dano_red_acueducto=Daño en la red (fuga visible) | 7 tipo parecido: fuga_acometida=Fuga en acometida | 7 tipo parecido: tapa_caja_acueducto=Tapa o caja de medidor o válvula rota o faltante | 7 tipos de campo: total · activos=28 · 17
+OK    08 los 26 tipos que había no cambiaron; los 2 nuevos van al final de «red_acueducto», activos
+OK    09 reversa vacía: funciones, columnas, dominio y vista exactamente como antes; los 2 tipos nuevos no se borran, quedan desactivados
+OK    10 migrar de nuevo después de la reversa: mismo resultado (los 2 tipos ya existen y no se duplican; siguen desactivados hasta reactivarlos en el Catálogo)
+OK    11 Edge (service_role, 30 s y 8 s): el formulario desde Técnica trae los tipos del reporte general, con los 2 nuevos, y ningún formato de actividad · 16 tipos · 38 ms
+OK    12 Edge: preparar la subida y crear «Fuga en acometida» desde Técnica: queda en campo.reportes con el área «tecnica» · 63 ms
+OK    13 Edge: la misma persona de Técnica, por la RPC de Comercial (otra transacción, sin la marca): 42501 · ERROR: ERROR:  42501: Sin permiso para esta función
+CONTEXTO:  PL/pgSQL function f_autorizar_reporte(text) line 7 at RAI
+OK    14 Edge: Comercial crea «Caja de medidor dañada» como siempre: área nula y la respuesta de antes (sin «area»)
+OK    15 la API no lee la vista del geovisor; por dentro trae los 2 reportes (Técnica sin contrato en rojo; Comercial con contrato en azul), sin el contrato ni la descripción · comercial:true:Caja de medidor dañada · tecnica:false:Fuga en acometida
+OK    16 verificación con datos: 9 OK · INFO reportes en campo.reportes: total · de Técnica · en la capa del geovisor · tipos del catálogo|2 · 1 · 2 · 28 | INFO personas de Técnica con «Reportar anomalía» · con «Revisiones generales» (asignados en Personal)|1 · 0
+OK    17 reversa con datos: se niega (ya hay reportes hechos desde Técnica) y no cambia nada · BEGIN
+
+RESULTADO: 18 de 18 — SIN FALLAS

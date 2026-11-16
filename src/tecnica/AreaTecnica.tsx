@@ -8,6 +8,7 @@ import { Dashboard } from "./Dashboard";
 import { ActivosRedes } from "./ActivosRedes";
 import { FormularioDano } from "./FormularioDano";
 import { FormularioQuimicos } from "./FormularioQuimicos";
+import { ReporteCompartido } from "./ReporteCompartido";
 import { FormularioIntervencion, type DesdeDano } from "./FormularioIntervencion";
 import { DashboardRedes } from "./DashboardRedes";
 import { Geovisor } from "./Geovisor";
@@ -17,8 +18,8 @@ import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
 // Formularios que ya tienen pantalla construida (el resto se muestra deshabilitado, «Próximamente»). Esta lista no contiene variables ni nombres de campos.
-const FORMULARIOS_CON_PANTALLA = new Set(["entrada", "salida", "muestreo", "danos_fallas", "mantenimiento", "entrada_quimicos", "uso_quimicos"]);   // Corte 7b: los dos de químicos   // mantenimiento = «Registrar intervención» (Corte 3a)      // danos_fallas: pantalla propia (Corte 2), no usa variables. Muestreo: con FormularioPorLugar (variables «por punto»), lista de puntos del servidor
-const PANTALLA_PROPIA = new Set(["danos_fallas", "mantenimiento", "entrada_quimicos", "uso_quimicos"]);      // formularios con pantalla propia, sin variables de planta (con_campos = false en el servidor)
+const FORMULARIOS_CON_PANTALLA = new Set(["entrada", "salida", "muestreo", "danos_fallas", "mantenimiento", "entrada_quimicos", "uso_quimicos", "anomalia_compartida", "revision_compartida"]);   // Corte 7b: los dos de químicos. Corte 8: los dos compartidos con Comercial   // mantenimiento = «Registrar intervención» (Corte 3a)      // danos_fallas: pantalla propia (Corte 2), no usa variables. Muestreo: con FormularioPorLugar (variables «por punto»), lista de puntos del servidor
+const PANTALLA_PROPIA = new Set(["danos_fallas", "mantenimiento", "entrada_quimicos", "uso_quimicos", "anomalia_compartida", "revision_compartida"]);      // formularios con pantalla propia, sin variables de planta (con_campos = false en el servidor)
 const ROTULO_PERFIL: Record<MisFormularios["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor técnico", operador: "Operador técnico" };
 
 // Corte 11 (render aprobado por David, 16-nov 13:30): el inicio de Técnica va por MODOS de trabajo (Planta, Redes y Supervisión), con tarjetas grandes.
@@ -26,12 +27,13 @@ const ROTULO_PERFIL: Record<MisFormularios["perfil"], string> = { admin: "Admini
 // con un solo modo no hay selector. Aquí no hay permisos nuevos: solo se reparte lo que ya llegaba.
 type Modo = "planta" | "redes" | "supervision";
 const MODOS: { clave: Modo; nombre: string }[] = [{ clave: "planta", nombre: "Planta" }, { clave: "redes", nombre: "Redes" }, { clave: "supervision", nombre: "Supervisión" }];
-const FORMULARIOS_REDES = new Set(["danos_fallas", "mantenimiento"]);      // los demás formularios asignados son de planta
-const ORDEN_FORM = ["entrada", "salida", "muestreo", "entrada_quimicos", "uso_quimicos", "danos_fallas", "mantenimiento"];
+const FORMULARIOS_REDES = new Set(["danos_fallas", "mantenimiento", "anomalia_compartida", "revision_compartida"]);      // Corte 8: los compartidos van en Redes      // los demás formularios asignados son de planta
+const ORDEN_FORM = ["entrada", "salida", "muestreo", "entrada_quimicos", "uso_quimicos", "danos_fallas", "mantenimiento", "anomalia_compartida", "revision_compartida"];
 const DESCRIPCION: Record<string, string> = {
   entrada: "El agua que llega a la planta", salida: "El agua tratada que sale a la red", muestreo: "Cloro y turbiedad en los puntos de la red",
   entrada_quimicos: "Lo que llega a la bodega, en toneladas o kg", uso_quimicos: "Lo que se gastó en la planta",
   danos_fallas: "Un daño o una falla en la red", mantenimiento: "Mantenimiento, reparación e inversión",
+  anomalia_compartida: "El mismo reporte de anomalías de Comercial", revision_compartida: "La misma revisión general de Comercial",
 };
 type Tarjeta = { clave: string; nombre: string; descripcion: string; estado: "lista" | "pronto" | "sin_campos"; abrir: () => void };
 const CLAVE_MODO = "tec_modo";
@@ -221,6 +223,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
         <span className="tec-volver-tit">{nombreElegido}</span>
       </div>
 
+      {elegido === "anomalia_compartida" || elegido === "revision_compartida" ? <ReporteCompartido key={elegido} formulario={elegido} correo={correo} onVolver={volverInicio} /> : null}
       {elegido === "entrada_quimicos" || elegido === "uso_quimicos" ? <FormularioQuimicos key={elegido} formulario={elegido} onSalir={volverInicio} /> : null}
       {elegido === "danos_fallas" ? <FormularioDano key={vezDano} correo={correo} activoInicial={activoDano} onSalir={() => { setActivoDano(null); setVezDano((v) => v + 1); }}
         onRegistrarReparacion={tieneItv || puedeSupervisar || puedeRedes ? (d) => abrirItv(d, null) : undefined} /> : null}

@@ -1,0 +1,74 @@
+OK    [390] A1 el operador con los formularios asignados ve, en el modo Redes, «Reportar anomalía» y «Revisiones generales» como tarjetas que se abren
+OK    [390] A2 con el nombre de siempre y diciendo que es el mismo de Comercial
+OK    [390] A3 al entrar no se pidió nada a la Edge de campo
+OK    [390] B1 se abre la pantalla de Comercial (su selector de grupo y tipo), con «Volver» arriba y el nombre del formulario
+OK    [390] B2 el formulario se pidió por la puerta de Técnica (geoportal_campo_tec_formulario) y no por la de Comercial
+OK    [390] B3 es el mismo catálogo: sin los grupos de formatos de actividad (cartera, PQR, facturación)
+OK    [390] B4 en «Red de acueducto» están los tipos de antes y los dos nuevos: «Fuga en acometida» y «Caja de medidor dañada»
+OK    [390] B5 sin desborde con la foto tomada
+OK    [390] B6 al guardar, el reporte queda en campo.reportes (la misma tabla) con el área «tecnica», su autor, el tipo y su foto
+OK    [390] B7 la foto subió al bucket de campo y todo fue por las RPC de Técnica (preparar y crear), nunca por las de Comercial
+OK    [390] B8 la persona ve la confirmación
+OK    [390] B9 el reporte ya está en la capa del geovisor (rojo: sin contrato), sin autor ni descripción
+OK    [390] C1 «Revisiones generales» abre el formato de Comercial con sus secciones y campos
+OK    [390] C2 desde Técnica no se ofrece la constancia por correo (ni se consulta su configuración)
+OK    [390] C3 sin desborde
+OK    [390] D1 un operador de Técnica sin los formularios compartidos no tiene las tarjetas
+OK    [390] D2 no se creó ningún reporte sin área por este camino y el total subió en uno solo
+OK    [1280] A1 el operador con los formularios asignados ve, en el modo Redes, «Reportar anomalía» y «Revisiones generales» como tarjetas que se abren
+OK    [1280] A2 con el nombre de siempre y diciendo que es el mismo de Comercial
+OK    [1280] A3 al entrar no se pidió nada a la Edge de campo
+OK    [1280] B1 se abre la pantalla de Comercial (su selector de grupo y tipo), con «Volver» arriba y el nombre del formulario
+OK    [1280] B2 el formulario se pidió por la puerta de Técnica (geoportal_campo_tec_formulario) y no por la de Comercial
+OK    [1280] B3 es el mismo catálogo: sin los grupos de formatos de actividad (cartera, PQR, facturación)
+OK    [1280] B4 en «Red de acueducto» están los tipos de antes y los dos nuevos: «Fuga en acometida» y «Caja de medidor dañada»
+OK    [1280] B5 sin desborde con la foto tomada
+OK    [1280] B6 al guardar, el reporte queda en campo.reportes (la misma tabla) con el área «tecnica», su autor, el tipo y su foto
+OK    [1280] B7 la foto subió al bucket de campo y todo fue por las RPC de Técnica (preparar y crear), nunca por las de Comercial
+OK    [1280] B8 la persona ve la confirmación
+OK    [1280] B9 el reporte ya está en la capa del geovisor (rojo: sin contrato), sin autor ni descripción
+OK    [1280] C1 «Revisiones generales» abre el formato de Comercial con sus secciones y campos
+OK    [1280] C2 desde Técnica no se ofrece la constancia por correo (ni se consulta su configuración)
+OK    [1280] C3 sin desborde
+OK    [1280] D1 un operador de Técnica sin los formularios compartidos no tiene las tarjetas
+OK    [1280] D2 no se creó ningún reporte sin área por este camino y el total subió en uno solo
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+----
+OK    [390] A1 el operador con los formularios asignados ve, en el modo Redes, «Reportar anomalía» y «Revisiones generales» como tarjetas que se abren
+OK    [390] A2 con el nombre de siempre y diciendo que es el mismo de Comercial
+OK    [390] A3 al entrar no se pidió nada a la Edge de campo
+OK    [390] B1 se abre la pantalla de Comercial (su selector de grupo y tipo), con «Volver» arriba y el nombre del formulario
+OK    [390] B2 el formulario se pidió por la puerta de Técnica (geoportal_campo_tec_formulario) y no por la de Comercial
+OK    [390] B3 es el mismo catálogo: sin los grupos de formatos de actividad (cartera, PQR, facturación)
+OK    [390] B4 en «Red de acueducto» están los tipos de antes y los dos nuevos: «Fuga en acometida» y «Caja de medidor dañada»
+OK    [390] B5 sin desborde con la foto tomada
+OK    [390] B6 al guardar, el reporte queda en campo.reportes (la misma tabla) con el área «tecnica», su autor, el tipo y su foto
+OK    [390] B7 la foto subió al bucket de campo y todo fue por las RPC de Técnica (preparar y crear), nunca por las de Comercial
+OK    [390] B8 la persona ve la confirmación
+OK    [390] B9 el reporte ya está en la capa del geovisor (rojo: sin contrato), sin autor ni descripción
+OK    [390] C1 «Revisiones generales» abre el formato de Comercial con sus secciones y campos
+OK    [390] C2 desde Técnica no se ofrece la constancia por correo (ni se consulta su configuración)
+OK    [390] C3 sin desborde
+OK    [390] D1 un operador de Técnica sin los formularios compartidos no tiene las tarjetas
+OK    [390] D2 no se creó ningún reporte sin área por este camino y el total subió en uno solo
+OK    [1280] A1 el operador con los formularios asignados ve, en el modo Redes, «Reportar anomalía» y «Revisiones generales» como tarjetas que se abren
+OK    [1280] A2 con el nombre de siempre y diciendo que es el mismo de Comercial
+OK    [1280] A3 al entrar no se pidió nada a la Edge de campo
+OK    [1280] B1 se abre la pantalla de Comercial (su selector de grupo y tipo), con «Volver» arriba y el nombre del formulario
+OK    [1280] B2 el formulario se pidió por la puerta de Técnica (geoportal_campo_tec_formulario) y no por la de Comercial
+OK    [1280] B3 es el mismo catálogo: sin los grupos de formatos de actividad (cartera, PQR, facturación)
+OK    [1280] B4 en «Red de acueducto» están los tipos de antes y los dos nuevos: «Fuga en acometida» y «Caja de medidor dañada»
+OK    [1280] B5 sin desborde con la foto tomada
+OK    [1280] B6 al guardar, el reporte queda en campo.reportes (la misma tabla) con el área «tecnica», su autor, el tipo y su foto
+OK    [1280] B7 la foto subió al bucket de campo y todo fue por las RPC de Técnica (preparar y crear), nunca por las de Comercial
+OK    [1280] B8 la persona ve la confirmación
+OK    [1280] B9 el reporte ya está en la capa del geovisor (rojo: sin contrato), sin autor ni descripción
+OK    [1280] C1 «Revisiones generales» abre el formato de Comercial con sus secciones y campos
+OK    [1280] C2 desde Técnica no se ofrece la constancia por correo (ni se consulta su configuración)
+OK    [1280] C3 sin desborde
+OK    [1280] D1 un operador de Técnica sin los formularios compartidos no tiene las tarjetas
+OK    [1280] D2 no se creó ningún reporte sin área por este camino y el total subió en uno solo
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 36 de 36 — SIN FALLAS
