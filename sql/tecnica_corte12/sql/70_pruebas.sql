@@ -267,9 +267,19 @@ begin
   perform pg_temp.reg('06.10 un activo marcado «por verificar» sube el aviso informativo en 1; verificado, vuelve',
      v_n1 = v_n0 + 1 and pg_temp.n(tecnica.f_avisos(false, true, null), 'por_verificar') = v_n0, v_n0 || ' → ' || v_n1);
   perform pg_temp.reg('06.11 nodos por clasificar: el conteo es el de la bandeja', pg_temp.n(tecnica.f_avisos(false, true, null), 'nodos_por_clasificar') = (select count(*) from redes.v_nodo_visible where clase_nodo = 'por_clasificar'));
-  perform pg_temp.reg('06.12 línea 116: sin el Corte 5d publicado no hay aviso (queda listo y apagado); con el 5d, el conteo es el de su tabla',
-     case when to_regclass('redes.l116_vigente') is null then pg_temp.av(tecnica.f_avisos(false, true, null), 'l116_registrado') is null
-          else pg_temp.n(tecnica.f_avisos(false, true, null), 'l116_registrado') >= 0 end);
+  -- 06.12 línea 116 (5d publicado): un reporte en «Registrado» hace 4 días avisa; uno de ayer, no. Sin la tabla, no hay aviso (queda apagado).
+  if to_regclass('redes.l116_vigente') is null then
+    perform pg_temp.reg('06.12 línea 116: sin la tabla del 5d no hay aviso (apagado)', pg_temp.av(tecnica.f_avisos(false, true, null), 'l116_registrado') is null);
+  else
+    v_n0 := pg_temp.n(tecnica.f_avisos(false, true, null), 'l116_registrado');
+    execute $s$insert into redes.l116_reportes (reporte, fecha_registro, servicio, causal, carga_id) values (991201, clock_timestamp() - interval '4 days', 'ZT12 Acueducto', 'ZT12 Fuga', $1), (991202, clock_timestamp() - interval '1 day', 'ZT12 Acueducto', 'ZT12 Fuga', $1)$s$ using v_carga;
+    execute $s$insert into redes.l116_vigente (reporte_id, reporte, fecha_registro, dia, servicio, causal, estado, estado_desde, metodo)
+                select r.id, r.reporte, r.fecha_registro, (r.fecha_registro at time zone 'America/Bogota')::date, r.servicio, r.causal, 'registrado', r.fecha_registro, 'sin_ubicar'
+                  from redes.l116_reportes r where r.reporte in (991201, 991202)$s$;
+    v_j := tecnica.f_avisos(false, true, null);
+    perform pg_temp.reg('06.12 línea 116 (5d publicado): el reporte en «Registrado» hace 4 días avisa y el de ayer no; lleva al Dashboard distribución',
+       pg_temp.n(v_j, 'l116_registrado') = v_n0 + 1 and pg_temp.av(v_j, 'l116_registrado') -> 'bandeja' ->> 'tablero' = 'distribucion', v_n0 || ' → ' || pg_temp.n(v_j, 'l116_registrado'));
+  end if;
 
   -- ===================== 07. Personal (los dos supervisores y el administrador) =====================
   v_j0 := tecnica.f_avisos(true, true, null);
