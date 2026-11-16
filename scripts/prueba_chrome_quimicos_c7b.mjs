@@ -105,7 +105,7 @@ const srv = http.createServer((req, res) => {
       if (fn === "geoportal_estado_acceso") return json(200, "ok");
       if (fn === "geoportal_log") return json(200, null);
       rpcs.push({ fn, a });
-      if (fn.startsWith("geoportal_redes_") || /^geoportal_tec_punto|^geoportal_tec_quimic/.test(fn)) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
+      if (fn.startsWith("geoportal_redes_") || /^geoportal_tec_punto|^geoportal_tec_quimic|^geoportal_tec_aviso/.test(fn)) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
       const r = rpcPlanta(fn, a);
       return r && typeof r.status === "number" && r.cuerpo ? json(r.status, r.cuerpo) : json(200, r);
     }

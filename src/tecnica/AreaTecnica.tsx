@@ -14,6 +14,9 @@ import { DashboardRedes } from "./DashboardRedes";
 import { Geovisor } from "./Geovisor";
 import { SelectorDashboards } from "./CabeceraDashboard";
 import { apiDash, type MiPerfilRedes } from "./apiRedes";
+import { pedirPestana } from "./CabeceraDashboard";
+import { AvisosContexto, PantallaAvisos, resolverBandeja, useAvisos } from "./Avisos";
+import type { Bandeja } from "./apiAvisos";
 import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
@@ -35,7 +38,7 @@ const DESCRIPCION: Record<string, string> = {
   danos_fallas: "Un daño o una falla en la red", mantenimiento: "Mantenimiento, reparación e inversión",
   anomalia_compartida: "El mismo reporte de anomalías de Comercial", revision_compartida: "La misma revisión general de Comercial",
 };
-type Tarjeta = { clave: string; nombre: string; descripcion: string; estado: "lista" | "pronto" | "sin_campos"; abrir: () => void };
+type Tarjeta = { clave: string; nombre: string; descripcion: string; estado: "lista" | "pronto" | "sin_campos"; abrir: () => void; contador?: { n: number; nivel: "rojo" | "naranja" | "info" } };
 const CLAVE_MODO = "tec_modo";
 function modoGuardado(): Modo | null {
   try { const m = window.localStorage.getItem(CLAVE_MODO); return m === "planta" || m === "redes" || m === "supervision" ? m : null; } catch { return null; }
@@ -55,7 +58,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [desdeDano, setDesdeDano] = useState<DesdeDano | null>(null);      // «Registrar la reparación» desde el daño recién guardado
   const [activoItv, setActivoItv] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // desde la ficha
   const [activoDano, setActivoDano] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // Corte 6a: desde el geovisor
-  const [vista, setVista] = useState<"inicio" | "captura" | "dashboard" | "activos" | "redes" | "geovisor">("inicio");      // Corte 11: se entra al inicio por modos
+  const [vista, setVista] = useState<"inicio" | "captura" | "dashboard" | "activos" | "redes" | "geovisor" | "avisos">("inicio");      // Corte 12: «avisos»      // Corte 11: se entra al inicio por modos
   const [modo, setModo] = useState<Modo | null>(modoGuardado);
   // Corte 6b (§30.2): un enlace compartido del geovisor (#geovisor=<código>) se consume una vez: se quita de la barra de direcciones y abre el geovisor
   const [vistaId, setVistaId] = useState<string | null>(() => /(?:^|[#&])geovisor=([a-z0-9]{10})(?:&|$)/.exec(window.location.hash)?.[1] ?? null);
@@ -75,6 +78,10 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
       .catch((e) => { if (vivo) setErrorMis(e instanceof ErrorTec ? e : new ErrorTec("servidor", "No se pudo cargar.", 0)); });
     return () => { vivo = false; };
   }, [intento]);
+
+  // Corte 12: los avisos (solo supervisores y administrador; el servidor decide qué áreas). Se piden cuando se sabe que la persona supervisa.
+  const supervisaAlgo = (mis?.perfil === "admin" || mis?.perfil === "supervisor") || redes?.dashboard_redes === true;
+  const avisos = useAvisos(supervisaAlgo);
 
   const cargarDef = useCallback((clave: string, silencioso: boolean) => {
     if (!silencioso) setDef(null);
@@ -126,8 +133,18 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const selector = puedeSupervisar && puedeRedes
     ? <SelectorDashboards actual={vista === "redes" ? "distribucion" : "ptap"} onElegir={(d) => setVista(d === "ptap" ? "dashboard" : "redes")} /> : null;
 
-  if (puedeSupervisar && vista === "dashboard") return <Dashboard correo={correo} rotuloPerfil={rotuloPerfil} selector={selector} onVolver={() => setVista("inicio")} />;
-  if (puedeRedes && vista === "redes") return <DashboardRedes correo={correo} selector={selector} onVolver={() => setVista("inicio")} onGeovisor={redes?.geovisor ? () => setVista("geovisor") : undefined} />;
+  // Corte 12: un aviso abre su bandeja (el dashboard y la pestaña que corresponde)
+  const abrirBandeja = (b: Bandeja) => {
+    const r = resolverBandeja(b, puedeRedes);
+    const tablero = r.tablero === "distribucion" && !puedeRedes ? "ptap" : r.tablero;
+    if (tablero === "ptap" && !puedeSupervisar) return;
+    pedirPestana(r.pestana);
+    setVista(tablero === "ptap" ? "dashboard" : "redes"); window.scrollTo?.(0, 0);
+  };
+  const ctxAvisos = (tablero: "ptap" | "distribucion") => ({ estado: avisos, tablero, tieneDistribucion: puedeRedes, onVer: () => setVista("avisos"), onAbrir: abrirBandeja });
+  if ((puedeSupervisar || puedeRedes) && vista === "avisos") return <PantallaAvisos estado={avisos} tieneDistribucion={puedeRedes} onAbrir={abrirBandeja} onVolver={() => setVista("inicio")} />;
+  if (puedeSupervisar && vista === "dashboard") return <AvisosContexto.Provider value={ctxAvisos("ptap")}><Dashboard correo={correo} rotuloPerfil={rotuloPerfil} selector={selector} onVolver={() => setVista("inicio")} /></AvisosContexto.Provider>;
+  if (puedeRedes && vista === "redes") return <AvisosContexto.Provider value={ctxAvisos("distribucion")}><DashboardRedes correo={correo} selector={selector} onVolver={() => setVista("inicio")} onGeovisor={redes?.geovisor ? () => setVista("geovisor") : undefined} /></AvisosContexto.Provider>;
   const tieneItv = formularios.some((f) => f.clave === "mantenimiento");
   const abrirItv = (d: DesdeDano | null, a: typeof activoItv) => { setDesdeDano(d); setActivoItv(a); setVezItv((v) => v + 1); setElegido("mantenimiento"); setVista("captura"); window.scrollTo?.(0, 0); };
   const tieneGeovisor = redes?.geovisor === true;                                    // Corte 6a: lo decide el servidor (redes.f_geovisor_lectura)
@@ -157,6 +174,9 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
       ...(tieneGeovisor && !supervisa ? [{ clave: "geovisor", nombre: "Geovisor técnico (solo lectura)", descripcion: "La red y las actividades de hoy en el mapa", estado: "lista" as const, abrir: () => setVista("geovisor") }] : []),
     ],
     supervision: [
+      ...(supervisa ? [{ clave: "avisos", nombre: "Avisos", estado: "lista" as const, abrir: () => setVista("avisos"),
+          descripcion: avisos.datos ? (avisos.datos.total === 0 ? "Nada pendiente por ahora" : `${avisos.datos.rojos} urgentes · ${avisos.datos.naranjas} de atención`) : "Lo que falta por hacer o pasó su plazo",
+          contador: avisos.datos ? { n: avisos.datos.total, nivel: avisos.datos.rojos > 0 ? "rojo" as const : avisos.datos.naranjas > 0 ? "naranja" as const : "info" as const } : undefined }] : []),
       ...(puedeSupervisar ? [{ clave: "dashboard_ptap", nombre: "Dashboard PTAP", descripcion: "Registros, gráficas, puntos y químicos de planta", estado: "lista" as const, abrir: () => setVista("dashboard") }] : []),
       ...(puedeRedes ? [{ clave: "dashboard_distribucion", nombre: "Dashboard distribución", descripcion: "Daños, intervenciones, personal y cargue de capas", estado: "lista" as const, abrir: () => setVista("redes") }] : []),
       ...(tieneGeovisor && supervisa ? [{ clave: "geovisor", nombre: "Geovisor técnico", descripcion: "La red, las actividades y los contratos en el mapa", estado: "lista" as const, abrir: () => setVista("geovisor") }] : []),
@@ -196,7 +216,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
               {porModo[modoActual].map((c) => c.estado === "lista" ? (
                 <button key={c.clave} type="button" className="tec-tarjeta-modo" data-tarjeta={c.clave} onClick={c.abrir}>
                   <span className="tec-tarjeta-ini" aria-hidden="true" data-ini={c.nombre.trim().charAt(0).toUpperCase()} />
-                  <span className="tec-tarjeta-txt"><span className="tec-tarjeta-nom">{c.nombre}</span><span className="tec-tarjeta-desc">{c.descripcion}</span></span>
+                  <span className="tec-tarjeta-txt"><span className="tec-tarjeta-nom">{c.nombre}{c.contador ? <span className={`tec-contador tec-contador-${c.contador.nivel}`} data-contador={c.contador.n} aria-label={`${c.contador.n} avisos`}>{c.contador.n}</span> : null}</span><span className="tec-tarjeta-desc">{c.descripcion}</span></span>
                 </button>
               ) : (
                 <div key={c.clave} className="tec-tarjeta-modo tec-tarjeta-pronto" data-tarjeta={c.clave} aria-disabled="true">

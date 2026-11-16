@@ -1,0 +1,70 @@
+/* Avisos de Técnica (Corte 12). Modo Supervisión: azul #1e5aa8. Niveles: rojo (urgente), naranja (atención), gris (para revisar). Sin degradados ni sombras. */
+.av-pagina { --av-modo: #1e5aa8; --av-rojo: #b3261e; --av-naranja: #c25e00; --av-info: #6b7a85; }
+.av-pagina > * { max-width: 1120px; }
+.av-cuerpo { padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box; }
+.av-resumen { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 15px; background: #fff; border: 1px solid #d5dde6; border-radius: 12px; padding: 10px 12px; }
+.av-hora { color: #52626f; font-size: 13px; }
+.av-n-rojo { color: var(--av-rojo); }
+.av-n-naranja { color: var(--av-naranja); }
+.av-nota { margin: 0; font-size: 13px; color: #52626f; }
+.av-error { margin: 0; padding: 10px 12px; border-radius: 10px; background: #fdecea; color: #8a1c1c; font-size: 14px; }
+.av-ok { margin: 0; padding: 10px 12px; border-radius: 10px; background: #e7f4ec; color: #1b5e20; font-size: 14px; }
+.av-area { display: flex; flex-direction: column; gap: 10px; }
+.av-area h2 { margin: 6px 0 0; font-size: 15px; font-weight: 700; color: #0a2540; }
+.av-vacio { margin: 0; font-size: 14px; color: #52626f; background: #fff; border: 1px solid #d5dde6; border-radius: 12px; padding: 12px; }
+.av-rejilla { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.av-aviso { background: #fff; border: 1px solid #d5dde6; border-left: 5px solid var(--av-info); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.av-aviso.av-rojo { border-left-color: var(--av-rojo); }
+.av-aviso.av-naranja { border-left-color: var(--av-naranja); }
+.av-cab { display: flex; flex-direction: column; gap: 4px; }
+.av-cab h3 { margin: 0; font-size: 16px; line-height: 1.3; color: #12263a; overflow-wrap: anywhere; }
+.av-nivel { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--av-info); }
+.av-rojo .av-nivel { color: var(--av-rojo); }
+.av-naranja .av-nivel { color: var(--av-naranja); }
+.av-detalle { margin: 0; font-size: 14px; color: #3c4b57; }
+.av-items { margin: 0; padding-left: 18px; font-size: 14px; color: #22313f; display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.av-mas { list-style: none; margin-left: -18px; color: #52626f; }
+.av-abrir, .av-boton, .av-boton-sec { min-height: 44px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; text-align: center; }
+.av-abrir, .av-boton-sec { border: 1px solid var(--av-modo, #1e5aa8); background: #fff; color: var(--av-modo, #1e5aa8); }
+.av-abrir { align-self: stretch; }
+.av-boton { border: none; background: var(--av-modo, #1e5aa8); color: #fff; }
+.av-boton:disabled, .av-boton-sec:disabled { opacity: .55; cursor: not-allowed; }
+.av-abrir:focus-visible, .av-boton:focus-visible, .av-boton-sec:focus-visible, .av-franja-item:focus-visible, .av-franja-ver:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.av-param-grupo { display: flex; flex-direction: column; gap: 8px; }
+.av-param-grupo h3 { margin: 4px 0 0; font-size: 14px; color: #3c4b57; }
+.av-param-tarjeta { background: #fff; border: 1px solid #d5dde6; border-left: 5px solid var(--av-modo); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.av-param-tarjeta h4 { margin: 0; font-size: 15px; }
+.av-param-valor { margin: 0; font-size: 15px; font-variant-numeric: tabular-nums; }
+.av-form { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #d5dde6; padding-top: 8px; }
+.av-campo { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; color: #22313f; }
+.av-campo input, .av-campo textarea { font: inherit; font-size: 16px; padding: 8px 10px; min-height: 44px; border: 1px solid #9aa9b5; border-radius: 8px; box-sizing: border-box; width: 100%; }
+.av-form-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.av-form-botones > button { flex: 1 1 140px; }
+@media (min-width: 760px) {
+  .av-cuerpo { padding: 16px; }
+  .av-rejilla { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+}
+
+/* Franja corta arriba de cada dashboard (debajo de su encabezado). Sin avisos no se dibuja. */
+.av-franja { --av-rojo: #b3261e; --av-naranja: #c25e00; --av-info: #6b7a85; background: #fff8ec; border-bottom: 1px solid #f0d3a8; color: #22313f; }
+.av-franja-roja { background: #fdf0ee; border-bottom-color: #efc1bb; }
+.av-franja-ancho { max-width: 1200px; margin: 0 auto; padding: 8px 24px; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.av-franja-tit { font-size: 14px; font-weight: 700; }
+.av-franja-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.av-franja-lista li { min-width: 0; max-width: 100%; }
+.av-franja-item { min-height: 44px; max-width: 100%; padding: 4px 10px; border-radius: 8px; border: 1px solid #d5dde6; border-left: 4px solid var(--av-info); background: #fff; font: inherit; font-size: 14px; color: #12263a;
+  text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.av-franja-item.av-rojo { border-left-color: var(--av-rojo); }
+.av-franja-item.av-naranja { border-left-color: var(--av-naranja); }
+.av-franja-ver { min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #1e5aa8; background: #fff; color: #1e5aa8; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+@media (max-width: 759px) {
+  .av-franja-ancho { padding: 8px 16px; }
+  .av-franja-lista { flex-direction: column; flex-basis: 100%; }
+  .av-franja-item { width: 100%; }
+}
+
+/* Contador de la tarjeta «Avisos» del inicio (modo Supervisión) */
+.tec-contador { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 24px; padding: 0 8px; margin-left: 8px; border-radius: 12px; background: #e3e9ee; color: #22313f;
+  font-size: 14px; font-weight: 700; vertical-align: 2px; font-variant-numeric: tabular-nums; }
+.tec-contador-naranja { background: #c25e00; color: #fff; }
+.tec-contador-rojo { background: #b3261e; color: #fff; }

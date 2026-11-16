@@ -111,7 +111,7 @@ const srv = http.createServer((req, res) => {
         const p = PERFIL[a.p_solicitante];
         return p ? json(200, { perfil: p, formularios: [{ clave: "danos_fallas", nombre: "Daño o falla", descripcion: "", con_campos: false }, { clave: "mantenimiento", nombre: "Registrar intervención", descripcion: "", con_campos: false }] }) : json(403, { code: "42501", message: "Sin permiso" });
       }
-      if (fn.startsWith("geoportal_redes_")) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
+      if (fn.startsWith("geoportal_redes_") || /^geoportal_tec_aviso/.test(fn)) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
       // Administración (Corte 4a): las funciones de permisos reales de la base local
       if (fn === "geoportal_pausa_estado") return json(200, { activa: false, afectados: 0 });
       if (fn === "geoportal_aislamiento_verificado") return json(200, true);
