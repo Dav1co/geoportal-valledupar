@@ -237,7 +237,7 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
         <div className="tec-lugares" role="group" aria-label={etiqueta}>
           {t.opciones.map((o) => (
             <button key={o.codigo} type="button" className="tec-planta tec-lugar" aria-pressed={lugar === o.codigo} disabled={bloqueado} onClick={() => setLugares((x) => ({ ...x, [t.id]: x[t.id] === o.codigo ? "" : o.codigo }))}>
-              <span>{lugar === o.codigo ? <span aria-hidden="true">✔ </span> : null}{o.nombre}</span>{o.codigo !== lugar && conDatos(t, o.codigo, textos) ? <span className="tec-con-datos">con datos</span> : null}
+              <span>{o.nombre}</span>{o.codigo !== lugar && conDatos(t, o.codigo, textos) ? <span className="tec-con-datos">con datos</span> : null}
             </button>
           ))}
           {lugar !== "" ? <span className="tec-ayuda tec-pista">Toque de nuevo para quitar</span> : null}
@@ -272,7 +272,7 @@ export function FormularioPorLugar({ def, uid, onGuardado }: { def: FormularioDe
         {tieneLugar(t, lugar) ? t.variables.map((v) => campo(t, v)) : null}
         {st ? (
           <div className={`tec-estado tec-estado-${st.tipo}`} role={st.tipo === "error" ? "alert" : "status"}>
-            <strong>{st.tipo === "ok" ? "✔ " : st.tipo === "error" ? "✖ " : "… "}{st.texto}</strong>
+            <strong>{st.texto}</strong>
             {st.detalle ? <div>{st.detalle}</div> : null}
             {st.tipo !== "ok" ? <button type="button" className="tec-boton-sec" disabled={bloqueado} onClick={() => reintentar(t)}>Reintentar</button> : null}
           </div>

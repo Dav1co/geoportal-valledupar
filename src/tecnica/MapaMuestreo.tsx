@@ -141,7 +141,7 @@ function GuardarUbicacion({ codigo, nombre, vigente, precisionMax, onCerrar, onG
         <>
           <p className="tec-sub">Párese junto a la llave o el grifo donde toma la muestra y espere a que la precisión baje a {precisionMax} m o menos.</p>
           <p className="mue-precision" role="status" data-testid="precision-gps">
-            {ubic.estado === "buscando" && !fix ? "Buscando el GPS…" : fix ? <>Precisión del GPS: <strong className={precisa ? "mue-ok" : "mue-mal"}>{Math.round(fix.precision_m)} m</strong>{precisa ? " ✔" : ` (se necesita ${precisionMax} m o menos)`}</> : null}
+            {ubic.estado === "buscando" && !fix ? "Buscando el GPS…" : fix ? <>Precisión del GPS: <strong className={precisa ? "mue-ok" : "mue-mal"}>{Math.round(fix.precision_m)} m</strong>{precisa ? " (suficiente)" : ` (se necesita ${precisionMax} m o menos)`}</> : null}
           </p>
           {ubic.mensaje ? <p className="tec-error-caja" role="alert">{ubic.mensaje} <button type="button" className="mue-enlace" onClick={ubic.actualizar}>Actualizar ubicación</button></p> : null}
           <div className="tec-acciones">

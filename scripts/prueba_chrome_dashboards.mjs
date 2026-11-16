@@ -223,7 +223,7 @@ for (const ancho of [390, 1280]) {
   const sinColor = (o) => (o ? { ...o, color: undefined } : o);
   const iguales = ["cab", "ancho", "h1", "sesion", "volver", "tab", "tabSel", "selOff", "cuerpo", "volverTexto"].filter((k) => JSON.stringify(eRed[k]) !== JSON.stringify(ePtap[k]))
     .concat(JSON.stringify(sinColor(eRed.selOn)) !== JSON.stringify(sinColor(ePtap.selOn)) ? ["selOn"] : []);
-  ok(`${tag} D2 encabezado, título, sesión, «Volver a mis formularios», pestañas, selector y cuerpo con los MISMOS estilos que el PTAP`, iguales.length === 0 && eRed.selector,
+  ok(`${tag} D2 encabezado, título, sesión, «Volver al inicio», pestañas, selector y cuerpo con los MISMOS estilos que el PTAP`, iguales.length === 0 && eRed.selector,
      iguales.map((k) => `${k}: PTAP ${JSON.stringify(ePtap[k])} / dist ${JSON.stringify(eRed[k])}`).join(" | "));
   ok(`${tag} D3 la única diferencia es el color: el PTAP azul oscuro y distribución verde oscuro`, ePtap.fondoCab === "rgb(10, 37, 64)" && /^rgb\((\d+), (\d+), (\d+)\)$/.test(eRed.fondoCab)
      && (() => { const [r, gg, b] = eRed.fondoCab.match(/\d+/g).map(Number); return gg > r && gg > b && gg < 90; })(), `${ePtap.fondoCab} / ${eRed.fondoCab}`);
@@ -244,10 +244,10 @@ for (const ancho of [390, 1280]) {
   const tarjPtap = await p.evaluate(() => { const e = [...document.querySelectorAll(".tdash-cuerpo .td-tarjeta, .tdash-cuerpo .tpers-tarjeta, .tdash-cuerpo .tec-tarjeta")].find((x) => x.offsetParent); if (!e) return null; const s = getComputedStyle(e); return [s.backgroundColor, s.borderRadius, s.borderTopColor, s.marginLeft].join("|"); });
   ok(`${tag} D5 los botones secundarios del contenido son iguales en los dos (letra, tamaño, peso, radio y alto)`, botDist && botDist === botPtap, `${botPtap} / ${botDist}`);
   ok(`${tag} D6 las tarjetas del contenido de distribución: blancas, borde gris claro, radio de 12 px y alineadas con el cuerpo del PTAP (sin margen propio)`,
-     tarjDist === "rgb(255, 255, 255)|12px|rgb(221, 229, 234)|0px", `${tarjPtap} / ${tarjDist}`);
-  const vuelta = await clicTexto(p, ".td-boton-claro", "← Volver a mis formularios");
+     tarjDist === "rgb(255, 255, 255)|12px|rgb(213, 221, 230)|0px"      /* Corte 13: el gris claro del token --t-borde */, `${tarjPtap} / ${tarjDist}`);
+  const vuelta = await clicTexto(p, ".td-boton-claro", "← Volver al inicio");
   await esperarTexto(p, /Sesión de/);
-  ok(`${tag} D7 «← Volver a mis formularios» vuelve a los formularios`, vuelta);
+  ok(`${tag} D7 «← Volver al inicio» vuelve al inicio`, vuelta);
   await p.close();
 }
 ok("Z1 sin errores de JavaScript ni de consola", errores.length === 0, errores.join(" | "));

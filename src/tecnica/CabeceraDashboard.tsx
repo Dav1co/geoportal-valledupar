@@ -27,7 +27,7 @@ export function CabeceraDashboard({ titulo, sesion, onVolver, selector, pestanas
         {selector}
         <div className="tdash-fila">
           <h1>{titulo}</h1>
-          <button type="button" className="td-boton-claro" onClick={onVolver}>← Volver a mis formularios</button>
+          <button type="button" className="td-boton-claro" onClick={onVolver}>← Volver al inicio</button>
           {onGeovisor ? <button type="button" className="td-boton-claro" onClick={onGeovisor}>Geovisor técnico</button> : null}
         </div>
         <div className="tdash-sesion">{sesion}</div>

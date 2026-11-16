@@ -201,7 +201,7 @@ for (const ancho of [390, 1280]) {
   // ===== A. Operador de planta: solo Planta, sin selector =====
   let p = await abrir(ancho, "op2"); await esperarTexto(p, /Entrada de químicos/);
   let i = await inicio(p);
-  ok(`${tag} A1 operador de planta: un solo modo (Planta), SIN selector, con el nombre del modo como título`, i.pestanas.length === 0 && i.modo === "planta" && i.unico === "Planta", JSON.stringify(i.pestanas) + i.unico);
+  ok(`${tag} A1 operador de planta: un solo modo (Planta), SIN selector, con el nombre del modo como título`, i.pestanas.length === 0 && i.modo === "planta" && i.unico === "Plantas", JSON.stringify(i.pestanas) + i.unico);
   ok(`${tag} A2 sus 5 tarjetas en orden: Entrada, Salida, Muestreo, Entrada de químicos y Uso de químicos`, claves(i) === PLANTA5.join(","), claves(i));
   ok(`${tag} A3 ningún formulario se abre solo al entrar (no se pidió ninguno)`, !i.hayForm && !rpcs.some((r) => r.fn === "geoportal_tec_obtener_formulario"));
   ok(`${tag} A4 tarjetas grandes: al menos 68 px de alto, con la inicial, el nombre y una línea de descripción; sin desborde`,
@@ -227,7 +227,7 @@ for (const ancho of [390, 1280]) {
   p = await abrir(ancho, "op"); await esperarTexto(p, /Reportar daño o falla/);
   i = await inicio(p);
   ok(`${tag} B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención, «Ficha de activos» en modo buscar (9a-bis: solo lectura) y el geovisor en solo lectura (tiene la casilla); sin dashboards`,
-     i.pestanas.length === 0 && i.unico === "Redes" && claves(i) === "danos_fallas,mantenimiento,ficha_buscar,geovisor" && /solo lectura/.test(i.tarjetas[3].nom) && !/Dashboard/.test(i.tarjetas.map((x) => x.nom).join()), i.unico + " " + claves(i));
+     i.pestanas.length === 0 && i.unico === "Distribución" && claves(i) === "danos_fallas,mantenimiento,ficha_buscar,geovisor" && /solo lectura/.test(i.tarjetas[3].nom) && !/Dashboard/.test(i.tarjetas.map((x) => x.nom).join()), i.unico + " " + claves(i));
   ok(`${tag} B2 el color del modo Redes (#0f3d2b)`, i.tarjetas[0].colorIni === COLOR.redes);
   ok(`${tag} B3 el geovisor no se cargó al entrar (no se pidió su configuración ni hay mapa)`, !pidio("geoportal_redes_geovisor", EMAILS.op) && !(await p.$(".geo-mapa")));
   await tocar(p, "ficha_buscar"); await p.waitForSelector("#red-codigo", { timeout: 20000 });

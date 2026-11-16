@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import "./tokens.css";      // Corte 13: los tokens de Técnica (colores por modo, fuente, tamaños, espacios y radios)
 import "./tecnica.css";
 import { apiTec, ErrorTec, type FormularioDef, type MisFormularios } from "./apiTecnica";
 import { FormularioCaptura, avisoDeError } from "./FormularioCaptura";
@@ -29,15 +30,18 @@ const ROTULO_PERFIL: Record<MisFormularios["perfil"], string> = { admin: "Admini
 // Ningún formulario se abre solo; cada persona ve solo los modos en los que tiene algo (lo decide el servidor: formularios asignados, dashboards y geovisor);
 // con un solo modo no hay selector. Aquí no hay permisos nuevos: solo se reparte lo que ya llegaba.
 type Modo = "planta" | "redes" | "supervision";
-const MODOS: { clave: Modo; nombre: string }[] = [{ clave: "planta", nombre: "Planta" }, { clave: "redes", nombre: "Redes" }, { clave: "supervision", nombre: "Supervisión" }];
+// Corte 13 (David, 16:30): «Planta» pasa a «Plantas» y «Redes» a «Distribución». Las claves internas no cambian (el modo recordado de cada persona sigue sirviendo).
+const MODOS: { clave: Modo; nombre: string }[] = [{ clave: "planta", nombre: "Plantas" }, { clave: "redes", nombre: "Distribución" }, { clave: "supervision", nombre: "Supervisión" }];
+const CLASE_MODO: Record<Modo, string> = { planta: "tec-modo-plantas", redes: "tec-modo-distribucion", supervision: "tec-modo-supervision" };
 const FORMULARIOS_REDES = new Set(["danos_fallas", "mantenimiento", "anomalia_compartida", "revision_compartida"]);      // Corte 8: los compartidos van en Redes      // los demás formularios asignados son de planta
 const ORDEN_FORM = ["entrada", "salida", "muestreo", "entrada_quimicos", "uso_quimicos", "danos_fallas", "mantenimiento", "anomalia_compartida", "revision_compartida"];
 const DESCRIPCION: Record<string, string> = {
   entrada: "El agua que llega a la planta", salida: "El agua tratada que sale a la red", muestreo: "Cloro y turbiedad en los puntos de la red",
   entrada_quimicos: "Lo que llega a la bodega, en toneladas o kg", uso_quimicos: "Lo que se gastó en la planta",
-  danos_fallas: "Un daño o una falla en la red", mantenimiento: "Mantenimiento, reparación e inversión",
+  danos_fallas: "Un daño o una falla en la red de acueducto o alcantarillado", mantenimiento: "Registrar una reparación, un mantenimiento o una obra",
   anomalia_compartida: "El mismo reporte de anomalías de Comercial", revision_compartida: "La misma revisión general de Comercial",
 };
+const DESCRIPCION_PROPIA = new Set(["danos_fallas", "mantenimiento"]);
 type Tarjeta = { clave: string; nombre: string; descripcion: string; estado: "lista" | "pronto" | "sin_campos"; abrir: () => void; contador?: { n: number; nivel: "rojo" | "naranja" | "info" } };
 const CLAVE_MODO = "tec_modo";
 function modoGuardado(): Modo | null {
@@ -149,16 +153,17 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const abrirItv = (d: DesdeDano | null, a: typeof activoItv) => { setDesdeDano(d); setActivoItv(a); setVezItv((v) => v + 1); setElegido("mantenimiento"); setVista("captura"); window.scrollTo?.(0, 0); };
   const tieneGeovisor = redes?.geovisor === true;                                    // Corte 6a: lo decide el servidor (redes.f_geovisor_lectura)
   const abrirDano = (a: typeof activoDano) => { setActivoDano(a); setVezDano((v) => v + 1); setElegido("danos_fallas"); setVista("captura"); window.scrollTo?.(0, 0); };
-  if (tieneGeovisor && vista === "geovisor") return <Geovisor vistaId={vistaId} onVolver={() => { setVistaId(null); setVista("inicio"); }} onReportarDano={(a) => abrirDano(a)} onRegistrarIntervencion={(a) => abrirItv(null, a)} />;
+  if (tieneGeovisor && vista === "geovisor") return <div className="tec-envoltura tec-modo-geovisor"><Geovisor vistaId={vistaId} onVolver={() => { setVistaId(null); setVista("inicio"); }} onReportarDano={(a) => abrirDano(a)} onRegistrarIntervencion={(a) => abrirItv(null, a)} /></div>;
   const fichaBuscar = redes?.ficha_buscar === true;      // 9a-bis (David, 16-nov): la Ficha de activos en modo buscar (solo lectura) también para el operador de redes; lo decide el servidor
-  if ((puedeSupervisar || puedeRedes || fichaBuscar) && vista === "activos") return <ActivosRedes onVolver={() => setVista("inicio")} onRegistrarIntervencion={tieneItv || puedeSupervisar || puedeRedes ? (a) => abrirItv(null, a) : undefined} />;
+  if ((puedeSupervisar || puedeRedes || fichaBuscar) && vista === "activos") return <div className="tec-envoltura tec-modo-distribucion"><ActivosRedes onVolver={() => setVista("inicio")} onRegistrarIntervencion={tieneItv || puedeSupervisar || puedeRedes ? (a) => abrirItv(null, a) : undefined} /></div>;
 
   // ----- las tarjetas de cada modo (solo lo que la persona ya tenía) -----
   const abrirForm = (clave: string) => { setElegido(clave); setVista("captura"); window.scrollTo?.(0, 0); };
   const tarjetaForm = (f: MisFormularios["formularios"][number]): Tarjeta => {
     const construido = FORMULARIOS_CON_PANTALLA.has(f.clave);
     const activo = (f.con_campos || PANTALLA_PROPIA.has(f.clave)) && construido;
-    return { clave: f.clave, nombre: f.nombre, descripcion: f.descripcion?.trim() || DESCRIPCION[f.clave] || "Formulario de Técnica",
+    // Corte 13: en los de distribución manda la descripción de aquí (la del servidor decía «Daños o fallas en la planta» y repetía el nombre de la intervención)
+    return { clave: f.clave, nombre: f.nombre, descripcion: (DESCRIPCION_PROPIA.has(f.clave) ? DESCRIPCION[f.clave] : null) || f.descripcion?.trim() || DESCRIPCION[f.clave] || "Formulario de Técnica",
              estado: !construido ? "pronto" : !activo ? "sin_campos" : "lista", abrir: () => abrirForm(f.clave) };
   };
   const orden = (c: string) => { const k = ORDEN_FORM.indexOf(c); return k < 0 ? ORDEN_FORM.length : k; };
@@ -210,7 +215,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
         {avisoEnlace ? <p className="tec-aviso tec-aviso-info" role="status">{avisoEnlace}</p> : null}
         {modoActual ? (
           <section id="tec-modo-panel" role={modosVisibles.length > 1 ? "tabpanel" : undefined} aria-labelledby={modosVisibles.length > 1 ? `tec-modo-${modoActual}` : undefined}
-            aria-label={modosVisibles.length > 1 ? undefined : MODOS.find((m) => m.clave === modoActual)?.nombre} className={`tec-tarjetas tec-tarjetas-${modoActual}`} data-modo-actual={modoActual}>
+            aria-label={modosVisibles.length > 1 ? undefined : MODOS.find((m) => m.clave === modoActual)?.nombre} className={`tec-tarjetas tec-tarjetas-${modoActual} ${CLASE_MODO[modoActual]}`} data-modo-actual={modoActual}>
             {modosVisibles.length === 1 ? <h2 className="tec-modo-unico">{MODOS.find((m) => m.clave === modoActual)?.nombre}</h2> : null}
             <div className="tec-rejilla">
               {porModo[modoActual].map((c) => c.estado === "lista" ? (
@@ -238,7 +243,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   }
 
   return (
-    <div className="tec-pagina">
+    <div className={`tec-pagina ${FORMULARIOS_REDES.has(elegido) ? "tec-modo-distribucion" : "tec-modo-plantas"}`} data-modo-form={FORMULARIOS_REDES.has(elegido) ? "distribucion" : "plantas"}>
       <div className="tec-volver-barra">
         <button type="button" className="tec-volver" onClick={volverInicio}><span aria-hidden="true">←</span> Volver</button>
         <span className="tec-volver-tit">{nombreElegido}</span>

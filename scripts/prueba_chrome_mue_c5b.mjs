@@ -214,8 +214,8 @@ for (const ancho of [390, 1280]) {
      && await p.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Guardar esta ubicación")?.disabled === true));
   await p.screenshot({ path: join(CAP, `operador_gps_impreciso_${ancho}.png`), fullPage: true });
   await p.setGeolocation({ ...gpsCerca, accuracy: 6 });
-  await p.waitForFunction(() => /Precisión del GPS: 6 m ✔/.test(document.body.innerText), { timeout: 10000 }).catch(() => {});
-  ok(`${tag} A8 con 6 m de precisión sí deja guardar`, /Precisión del GPS: 6 m ✔/.test(await texto(p)), (await texto(p)).match(/Precisión del GPS[^\n]*/)?.[0]);
+  await p.waitForFunction(() => /Precisión del GPS: 6 m \(suficiente\)/.test(document.body.innerText), { timeout: 10000 }).catch(() => {});
+  ok(`${tag} A8 con 6 m de precisión sí deja guardar`, /Precisión del GPS: 6 m \(suficiente\)/.test(await texto(p)), (await texto(p)).match(/Precisión del GPS[^\n]*/)?.[0]);
   await clicTexto(p, "button", "Guardar esta ubicación"); await esperarTexto(p, /Va a enviar la ubicación del GPS/);
   ok(`${tag} A9 la confirmación dice la precisión y la distancia a la ubicación aproximada (~40 m), y que nada cambia hasta que el supervisor apruebe`,
      /precisión 6 m\), a (3\d|4\d) m de la ubicación aproximada/.test(await texto(p)) && /hasta que el supervisor la apruebe/.test(await texto(p)), (await texto(p)).match(/Va a enviar[^\n]*/)?.[0]);

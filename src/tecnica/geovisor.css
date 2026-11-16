@@ -1,12 +1,13 @@
 /* Geovisor técnico (Técnica fase 1, Corte 6a). Pensado para 390 px y una mano; en escritorio el panel de capas va al lado derecho.
    Un solo bloque que llena el alto debajo de la barra de la app (flex: 1, min-height: 0), sin 100vh (Safari no cuenta las barras del navegador). */
-.geo { --geo-color: #0f3d2b; position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; background: #f3f6f8; color: #22313f; -webkit-text-size-adjust: 100%; }
+.geo { --geo-color: var(--t-geo, #6b6258);      /* Corte 13: geovisor neutro, gris tirando a sepia (no el color del modo) */
+   position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; background: var(--t-geo-claro, #f4f1ec); color: #22313f; -webkit-text-size-adjust: 100%; }
 .geo-msg { padding: 16px; overflow: auto; }
 .geo-barra { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--geo-color); color: #fff; flex: 0 0 auto; }
 .geo-volver { min-width: 44px; min-height: 44px; border: none; background: rgba(255, 255, 255, 0.12); color: #fff; border-radius: 10px; font-size: 20px; cursor: pointer; }
 .geo-titulo { flex: 1 1 auto; min-width: 0; }
 .geo-titulo h1 { margin: 0; font-size: 18px; line-height: 1.2; }
-.geo-titulo span { font-size: 13px; color: #c6dccf; }
+.geo-titulo span { font-size: 13px; color: #e4ddd3; }
 .geo-boton { min-height: 44px; padding: 0 16px; border-radius: 10px; border: 2px solid #fff; background: transparent; color: #fff; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
 .geo-boton[aria-expanded="true"] { background: #fff; color: var(--geo-color); }
 
@@ -24,7 +25,7 @@
 
 .geo-cuerpo { position: relative; flex: 1 1 auto; min-height: 0; }
 .geo-cuerpo > .geo-mapa { position: absolute; inset: 0; }      /* más específico que .maplibregl-map { position: relative } de MapLibre */
-.geo-aviso { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(15, 61, 43, 0.92); color: #fff; padding: 8px 14px; border-radius: 20px; font-size: 14px; white-space: nowrap; pointer-events: none; }
+.geo-aviso { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(78, 71, 63, 0.92); color: #fff; padding: 8px 14px; border-radius: 20px; font-size: 14px; white-space: nowrap; pointer-events: none; }
 .geo-aviso-suave { background: rgba(255, 255, 255, 0.92); color: #22313f; border: 1px solid #c8d3da; }
 .geo-avisos { position: absolute; top: 52px; left: 10px; right: 56px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
 .geo-avisos p { margin: 0; background: #fff7e6; border: 1px solid #f0c36d; color: #5b3d00; border-radius: 8px; padding: 6px 10px; font-size: 13.5px; }
@@ -48,7 +49,7 @@
 .geo-panel-cab { display: flex; justify-content: space-between; align-items: center; }
 .geo-panel-cab h2 { margin: 0; font-size: 18px; }
 .geo-omision { width: 100%; }
-.geo-grupo h3 { margin: 10px 0 2px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: #5b6b77; }
+.geo-grupo h3 { margin: 10px 0 2px; font-size: 14px; color: #5b6b77; }
 .geo-capa { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 6px 0; border-bottom: 1px solid #eef2f5; cursor: pointer; }
 .geo-capa input { width: 22px; height: 22px; margin: 2px 0 0; flex: 0 0 auto; accent-color: var(--geo-color); }
 .geo-capa-off { cursor: default; color: #6b7a85; }
@@ -60,7 +61,7 @@
 .geo-campo { display: flex; flex-direction: column; gap: 4px; font-size: 14px; margin-top: 6px; }
 .geo-campo select, .geo-campo textarea { font: inherit; font-size: 15px; border: 1px solid #b9c6cf; border-radius: 8px; padding: 8px; min-height: 44px; }
 
-.geo-ficha { position: absolute; inset: 0; z-index: 6; background: #f3f6f8; overflow: auto; }
+.geo-ficha { position: absolute; inset: 0; z-index: 6; background: var(--t-geo-claro, #f4f1ec); overflow: auto; }
 
 @media (min-width: 900px) {
   .geo-panel { left: auto; width: 360px; box-shadow: -4px 0 18px rgba(0, 0, 0, 0.12); }
@@ -84,8 +85,8 @@
 .geo-consumo-tit { margin: 0 0 4px; font-size: 13px; color: #5b6b77; }
 .geo-barras { display: flex; align-items: flex-end; gap: 6px; height: 92px; }
 .geo-barra-mes { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; min-width: 0; }
-.geo-barra-col { width: 100%; max-width: 34px; background: #1F5FA8; border-radius: 3px 3px 0 0; }
-.geo-barra-est { background: #9ab7da; }
+.geo-barra-col { width: 100%; max-width: 34px; background: var(--geo-color); border-radius: 3px 3px 0 0; }
+.geo-barra-est { background: #c9bfb2; }
 .geo-barra-val { font-size: 12px; }
 .geo-barra-per { font-size: 11px; color: #5b6b77; }
 .geo-compartir { position: absolute; left: 8px; right: 8px; top: 8px; z-index: 5; background: #fff; border-radius: 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
