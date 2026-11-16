@@ -1,6 +1,7 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 8 · 70 — PRUEBAS «N de N» (PROPUESTA). Se corre DESPUÉS de la migración, en la misma transacción.
 -- No supone conteos de la base: arma sus personas (prueba.tec8.*) y sus reportes (en un rincón de Valledupar, con el contrato de prueba 990000001301).
+-- No escribe en ninguna tabla ni vista de Comercial que no sea de solo inserción propia de la prueba: en particular, NO toca public.predios_comercial (vista materializada).
 -- Termina con un ERROR a propósito que deshace todo.
 --   Resultado esperado:  ERROR: PRUEBAS DE TÉCNICA · CORTE 8 … RESULTADO: N de N pruebas correctas — SIN FALLAS
 -- =====================================================================
@@ -85,7 +86,8 @@ begin
   perform pg_temp.err('03.08 el operador de Técnica sigue SIN entrar al formulario de Comercial por la puerta de Comercial', format($$select public.geoportal_campo_obtener_formulario(%L, false)$$, o1), '42501');
 
   -- ===================== 04. Crear desde Técnica: misma tabla, con el área =====================
-  insert into public.predios_comercial (id, cod_usuario) select 990000001301, C1 where not exists (select 1 from public.predios_comercial where cod_usuario = C1);
+  -- El contrato de prueba NO se crea en public.predios_comercial: en producción es una VISTA MATERIALIZADA (la refresca el cargador diario de Comercial) y no se escribe
+  -- en ella. El reporte lleva un contrato que no está en el catastro comercial: se guarda igual, como «no verificado» (el tipo lo pide «opcional»).
   v_r := public.geoportal_campo_tec_preparar_subida(o1, 1, '10.0.0.8', null);
   v_id := (v_r ->> 'reporte_id')::uuid;
   perform pg_temp.reg('04.01 preparar la subida desde Técnica: mismas rutas del bucket de campo (campo-fotos)', v_r ->> 'bucket' = 'campo-fotos' and jsonb_array_length(v_r -> 'fotos') = 1 and v_id is not null, v_r::text);
@@ -94,7 +96,9 @@ begin
   v_x := public.geoportal_campo_tec_crear_reporte(o1, v_id, v_gen, null, 'ZT8 fuga en la acometida, frente al predio', C1, 10.4400, -73.2600, 8, false, v_fotos, '10.0.0.8');
   perform pg_temp.reg('04.02 el operador de Técnica crea el reporte: queda en campo.reportes (la misma tabla), con el área «tecnica», su autor y origen «campo»',
      (v_x ->> 'id')::uuid = v_id and v_x ->> 'area' = 'tecnica'
-     and (select area || '|' || autor || '|' || origen || '|' || contrato from campo.reportes where id = v_id) = 'tecnica|' || o1 || '|campo|' || C1, v_x::text);
+     and (select area || '|' || autor || '|' || origen || '|' || contrato || '|' || contrato_verificado from campo.reportes where id = v_id) = 'tecnica|' || o1 || '|campo|' || C1 || '|false', v_x::text);
+  perform pg_temp.reg('04.02b la prueba no escribió en public.predios_comercial (vista materializada de Comercial): el contrato de prueba no está allí',
+     not exists (select 1 from public.predios_comercial where cod_usuario = C1));
   perform pg_temp.reg('04.03 con sus fotos, su evento inicial y su auditoría, como cualquier reporte de campo',
      (select count(*) from campo.reporte_fotos where reporte_id = v_id) = 1 and (select estado from campo.v_reportes_estado where id = v_id) = 'reportado'
      and exists (select 1 from public.geoportal_auditoria where accion = 'campo_crear_reporte' and email = o1));

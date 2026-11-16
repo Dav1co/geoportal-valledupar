@@ -54,6 +54,9 @@ subprocess.run(['sh', os.path.join(AQUI, 'rehacer_base.sh'), 'solo_base'], env=E
 antes = q(ESTADO)
 tipos0 = q("select count(*) || '|' || md5(string_agg(codigo || nombre || activo || orden, ',' order by id)) from campo.tipos_reporte")
 reg('00 base local: campo de Comercial hasta la pasada del 14-nov (huellas vivas comprobadas al armarla), Corte 1 de Técnica y la vista vacía del 6b', len(antes) == 32 and tipos0.startswith('26|'), f'{tipos0.split("|")[0]} tipos')
+reg('00b como producción: public.predios_comercial es una vista materializada y escribir en ella falla (así un ensayo que lo intente falla también en local)',
+    q("select relkind from pg_class where oid = 'public.predios_comercial'::regclass") == 'm'
+    and 'materialized view' in q("insert into public.predios_comercial (id, cod_usuario) values (1, 'x')"), q("insert into public.predios_comercial (id, cod_usuario) values (1, 'x')")[:120])
 h = huellas()
 reg('01 huellas antes: 2 «VIVA (sin cambiar)», 3 «FIRMA ESPERADA», 6 «NO EXISTE», columna «NO EXISTE», dominio «7 CLAVES», vista «VACÍA»',
     h.count('VIVA (sin cambiar)') == 2 and h.count('FIRMA ESPERADA') == 3 and h.count('NO EXISTE (sin aplicar)') == 7 and '7 CLAVES (sin aplicar)' in h and 'VACÍA (6b, sin aplicar)' in h
