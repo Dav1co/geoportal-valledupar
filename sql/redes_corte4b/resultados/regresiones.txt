@@ -1,0 +1,11 @@
+En la rama tecnica-corte4b. Las de redes, cada una sobre una base limpia (1a + carga + 2 + 3a + 3b + 4a + 4b, con zt.super, zt.planta y zt.dist):
+dashboard_c4a: RESULTADO: 43 de 43 — SIN FALLAS
+itv_c3a: RESULTADO: 76 de 76 — SIN FALLAS
+ficha_c3b: RESULTADO: 41 de 41 — SIN FALLAS
+dano_c2: RESULTADO: 60 de 60 — SIN FALLAS
+redes_c1b: RESULTADO: 60 de 60 — SIN FALLAS
+c0b: 68 de 68
+analisis: RESULTADO: 143 de 143 pruebas correctas — SIN FALLAS
+p14: RESULTADO: 54 de 54 pruebas correctas — SIN FALLAS
+areas: RESULTADO: 51 de 51 pruebas correctas — SIN FALLAS
+tsc y npm run build: sin errores

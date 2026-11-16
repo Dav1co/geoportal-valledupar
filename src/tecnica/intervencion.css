@@ -47,3 +47,37 @@
 .dash-motivo { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .dash-motivo input { height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; }
 .dash-motivo label { font-size: 15px; font-weight: 600; }
+/* Corte 4b: gestión del Dashboard distribución (Personal, Catálogo, Parámetros, Gráficas, Descargas y Nodos) */
+.gest-filtros { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.gest-correo { margin-top: -10px; overflow-wrap: anywhere; }
+.gest-datos { margin: 0; display: grid; grid-template-columns: 1fr; gap: 6px; }
+.gest-datos div { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 8px; }
+.gest-datos dt { font-size: 13px; color: #52626f; font-weight: 600; }
+.gest-datos dd { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+@media (min-width: 760px) { .gest-datos { grid-template-columns: 1fr 1fr; } }
+.gest-apagada { background: #f6f7f5; }
+.gest-editor { margin-top: 4px; }
+.gest-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; }
+.gest-check input { width: 22px; height: 22px; flex: 0 0 auto; }
+.gest-eventos { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; overflow-wrap: anywhere; }
+.gest-izq { align-self: flex-start; }
+.gest-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.gest-item { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 1px solid #eceee9; overflow-wrap: anywhere; }
+.gest-item:last-child { border-bottom: 0; }
+.gest-item code { font-size: 12.5px; }
+.gest-detalle summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.gest-detalle ul { margin: 0 0 8px; padding-left: 18px; font-size: 14.5px; }
+.gest-h3 { margin: 4px 0 0; font-size: 15px; color: #0a2540; }
+.gest-barras { display: flex; flex-direction: column; gap: 6px; }
+.gest-barra { display: grid; grid-template-columns: minmax(84px, 38%) minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 13.5px; min-height: 28px; }
+.gest-barra-et { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #22313f; }
+.gest-barra-pista { height: 14px; background: #eef2f5; border-radius: 0 4px 4px 0; overflow: hidden; }
+.gest-barra-relleno { display: block; height: 100%; min-width: 2px; background: #1f5fa8; border-radius: 0 4px 4px 0; }
+.gest-barra-val { font-variant-numeric: tabular-nums; color: #22313f; font-weight: 600; text-align: right; }
+.gest-tabla-caja { overflow-x: auto; max-width: 100%; }
+.gest-tabla { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.gest-tabla th, .gest-tabla td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eceee9; vertical-align: top; }
+.gest-tabla th { color: #52626f; font-weight: 600; }
+.gest-fechas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gest-grupos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; margin-bottom: 4px; }
+.gest-barra-cero { min-width: 0; }

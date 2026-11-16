@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type UsuarioAdmin, type EstadoPausa, type Accesos } from "../lib/api";
 import "./admin-tecnica.css";
+import { apiGestion, type PersonaRedes } from "../tecnica/apiRedes";
 
 type Props = { onVolver: () => void };
 
@@ -154,6 +155,22 @@ function BloquePermisos({ titulo, campos, borrador, onCambio, tecnico, campo, al
       {children}
     </section>
   );
+}
+
+// Técnica fase 1, Corte 4b (N-13 y §27.3): la casilla del geovisor del operador de distribución vive en Personal del Dashboard distribución.
+// Aquí solo se MUESTRA (una sola casilla, en un solo lugar). Se lee de geoportal-redes, que lo vuelve a verificar (el administrador puede).
+function GeovisorSoloLectura({ email }: { email: string }) {
+  const [p, setP] = useState<PersonaRedes | null | undefined>(undefined);
+  useEffect(() => {
+    let vivo = true; setP(undefined);
+    apiGestion.personal(email, "todas").then((r) => { if (vivo) setP(r.personas.find((x) => x.email === email.toLowerCase()) ?? null); }).catch(() => { if (vivo) setP(null); });
+    return () => { vivo = false; };
+  }, [email]);
+  if (p === undefined) return null;
+  const texto = !p ? "sin datos todavía (se ve cuando la persona tenga Registro técnico guardado)"
+    : p.geovisor === "por_permiso" ? "completo, por su permiso de supervisor" : p.geovisor === "si" ? "sí, en solo lectura" : "no";
+  return <p className="adm-aviso-tec" data-geovisor={p?.geovisor ?? "sin_dato"}>Geovisor de distribución: <strong>{texto}</strong>. Se cambia en Personal del Dashboard distribución
+    {p?.area ? ` · Área: ${p.area === "ambas" ? "planta y distribución" : p.area === "distribucion" ? "distribución" : "planta"}` : ""}.</p>;
 }
 
 export function Admin({ onVolver }: Props) {
@@ -741,6 +758,7 @@ export function Admin({ onVolver }: Props) {
                     <option value="supervisor">Supervisor técnico</option>
                     {conRedes && <option value="distribucion">Supervisor de distribución</option>}
                   </select>
+                  {conRedes && borrador.registro_tecnico && <GeovisorSoloLectura email={editando} />}
                   {(borrador.registro_tecnico || borrador.dashboard_tecnico || borrador.dashboard_redes) && (
                     <p className="adm-aviso-tec">
                       {CAMPOS_COMERCIAL.some(([c]) => borrador[c] === true)

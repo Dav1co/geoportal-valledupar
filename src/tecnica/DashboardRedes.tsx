@@ -6,14 +6,18 @@ import { apiDano, apiDash, apiItv, type DanoLista, type FormularioDano as DefDan
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 import { NoIdentificados, Recursos } from "./IntervencionesSupervisor";
+import { Catalogo, Descargas, Graficas, Nodos, Parametros, Personal } from "./DashboardGestion";
 
 // Dashboard distribución (Técnica fase 1, Corte 4a; §7 y §16 de la bitácora). Para el supervisor de distribución (ver_dashboard_redes) y el administrador:
 // el servidor lo vuelve a verificar en cada ruta. Pestañas de este corte: no identificados (asociar o crear el activo), intervenciones (recursos por completar,
 // ocultar o anular con motivo), daños y fallas (ocultar, reincluir o reabrir con motivo; el nombre del tercero con lectura auditada) y reportes del bot.
-// Personal, Catálogo, Parámetros, Gráficas y Cargue de capas llegan en el Corte 4b y el 5. Nada se borra: todo es un evento con motivo.
+// Corte 4b (DashboardGestion.tsx): Personal, Gráficas, Descargas, Catálogo, Parámetros y, solo para el administrador, Nodos por clasificar.
+// El Cargue de capas llega en el Corte 5. Nada se borra: todo es un evento con motivo.
 
-type Pestana = "no_identificados" | "intervenciones" | "danos" | "bot";
-const PESTANAS: { c: Pestana; n: string }[] = [{ c: "no_identificados", n: "No identificados" }, { c: "intervenciones", n: "Intervenciones" }, { c: "danos", n: "Daños y fallas" }, { c: "bot", n: "Reportes del bot" }];
+type Pestana = "no_identificados" | "intervenciones" | "danos" | "bot" | "graficas" | "descargas" | "personal" | "catalogo" | "parametros" | "nodos";
+const PESTANAS: { c: Pestana; n: string; admin?: boolean }[] = [{ c: "no_identificados", n: "No identificados" }, { c: "intervenciones", n: "Intervenciones" },
+  { c: "danos", n: "Daños y fallas" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
+  { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar", admin: true }];
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const ESTADO: Record<string, string> = { reportado: "Reportado", en_atencion: "En atención", atendido: "Atendido", oculto: "Oculto", cerrada: "Cerrada", anulada: "Anulada", oculta: "Oculta",
   recibido: "Recibido", descartado: "Descartado" };
@@ -22,6 +26,8 @@ const err = (e: unknown, sin: string) => (e instanceof ErrorTec && e.tipo === "p
 export function DashboardRedes({ selector, onVolver }: { selector?: React.ReactNode; onVolver: () => void }) {
   const [pestana, setPestana] = useState<Pestana>("no_identificados");
   const [ficha, setFicha] = useState<string | null>(null);
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => { apiDash.miPerfil().then((p) => setAdmin(p.perfil === "admin")).catch(() => {}); }, []);
   if (ficha) return <FichaActivo codigo={ficha} onAbrir={setFicha} onVolver={() => setFicha(null)} rotuloVolver="Volver al Dashboard distribución" />;
   return (
     <div className="dan itv dash-redes">
@@ -32,15 +38,21 @@ export function DashboardRedes({ selector, onVolver }: { selector?: React.ReactN
       {selector}
       <header className="dan-cabeza itv-cabeza">
         <h1>Dashboard distribución</h1>
-        <p>Redes de acueducto y alcantarillado: bandejas del supervisor de distribución.</p>
+        <p>Redes de acueducto y alcantarillado: bandejas, gráficas y gestión del supervisor de distribución.</p>
       </header>
       <div className="dan-fila dan-pad-x dash-pestanas" role="tablist" aria-label="Pestañas del Dashboard distribución">
-        {PESTANAS.map((p) => <button key={p.c} type="button" role="tab" className="dan-opcion" aria-selected={pestana === p.c} aria-pressed={pestana === p.c} onClick={() => setPestana(p.c)}>{p.n}</button>)}
+        {PESTANAS.filter((p) => !p.admin || admin).map((p) => <button key={p.c} type="button" role="tab" className="dan-opcion" aria-selected={pestana === p.c} aria-pressed={pestana === p.c} onClick={() => setPestana(p.c)}>{p.n}</button>)}
       </div>
       {pestana === "no_identificados" ? <NoIdentificados onFicha={setFicha} /> : null}
       {pestana === "intervenciones" ? <Intervenciones onFicha={setFicha} /> : null}
       {pestana === "danos" ? <Danos onFicha={setFicha} /> : null}
       {pestana === "bot" ? <ReportesBot /> : null}
+      {pestana === "graficas" ? <Graficas onFicha={setFicha} /> : null}
+      {pestana === "descargas" ? <Descargas /> : null}
+      {pestana === "personal" ? <Personal /> : null}
+      {pestana === "catalogo" ? <Catalogo /> : null}
+      {pestana === "parametros" ? <Parametros /> : null}
+      {pestana === "nodos" && admin ? <Nodos onFicha={setFicha} /> : null}
     </div>
   );
 }

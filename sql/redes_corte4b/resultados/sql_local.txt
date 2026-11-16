@@ -1,0 +1,22 @@
+OK    01 huellas antes: «CORTE 4a (listo para el 4b)», las 4 de permisos «CORTE 4a (sin cambiar)», 12 RPC y 2 tablas «NO EXISTE»
+OK    02 carga real (35.781 activos) y un daño de terceros con su reparación (con valor) reales en V85 · publicar 13.2 s, DAN-000001, ITV-000001
+OK    03 ensayo DESPUÉS de la carga real y con hechos reales: ERROR con «N de N … SIN FALLAS» · RESULTADO: 95 de 95 pruebas correctas — SIN FALLAS (3.9 s)
+OK    04 el ensayo no deja rastro (ni tablas, ni funciones, ni cambios en los parámetros)
+OK    05 migración _editor · 0.0 s
+OK    06 verificación: 9 OK
+OK    07 repetir la migración se rechaza (guardia)
+OK    08 huellas después: «CORTE 4b (aplicado)», las 4 de permisos igual, 12 «NUEVA» y 2 «EXISTE»
+OK    09 reversa sin datos: vuelve exactamente al 4a
+OK    10 tras la reversa, la verificación del 4a vuelve a dar 8 OK
+OK    11 una segunda reversa se niega
+OK    12 volver a migrar después de la reversa
+OK    13 Personal con la base real: el supervisor de distribución ve la lista · 6 personas, 0.03 s
+OK    14 área y geovisor del operador real
+OK    15 nodos por clasificar de la carga real: 783 (S 559, J 213, M 9, Modulo 1, Pila 1), en menos de 1 s · 783|S=559,J=213,M=5,Módulo=4,Modulo=1,Pila=1 (0.52 s)
+OK    16 crear el activo de un nodo J real: el nodo queda enlazado, el activo en la tabla materializada y la tesela sube de versión · J-309 → ACC-006347
+OK    17 gráficas con la base real (menos de 1 s): la reparación real cuenta en top_correctivos y en el valor por fuente · 0.03 s
+OK    18 descarga de daños de la base real: trae el daño de terceros sin la placa, y queda auditada · 0.03 s
+OK    19 un parámetro real cambia con su evento, y la RPC de daños cercanos lo usa
+OK    20 verificación con datos: 9 OK
+OK    21 la reversa se niega con fichas del personal (nada se borra)
+RESULTADO: 21 de 21 — SIN FALLAS

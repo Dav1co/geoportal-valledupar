@@ -1,0 +1,186 @@
+OK    el marcador es la línea 1 y es el del manifiesto
+OK    usa autorizar() de _shared/auth.ts tal cual y no lee el correo del cuerpo
+OK    no trae nada de contratos, nombres, teléfonos ni deuda
+OK    sin token: 401 de autorizar() y ninguna RPC
+OK    OPTIONS: 200 con CORS
+OK    activo: GET llama a geoportal_redes_activo con el correo del token y el código recortado (y nada más)
+OK    activo: acepta el código de la capa
+OK    activo: POST → 405 sin RPC
+OK    activo: sin código → 400 sin RPC
+OK    activo: código de más de 120 → 400
+OK    activo: caracteres de control → 400
+OK    cerca: POST con lat y lon → RPC con el correo del token, sistema y radio nulos y límite 10
+OK    cerca: sistema, radio y límite pasan tal cual
+OK    cerca: GET → 405 (la posición no va en la URL)
+OK    cerca: lat como texto → 400
+OK    cerca: sin lon → 400
+OK    cerca: lat fuera de rango → 400
+OK    cerca: sistema desconocido → 400
+OK    cerca: radio negativo → 400
+OK    cerca: límite 31 → 400
+OK    cerca: límite decimal → 400
+OK    cerca: JSON inválido → 400
+OK    cerca: una lista en vez de objeto → 400
+OK    cerca: cuerpo de más de 32 KB → 413
+OK    epicrisis: RPC con código, cursor nulo y límite 30
+OK    epicrisis: el cursor viaja solo con cuando, clase y ref_id
+OK    epicrisis: cursor mal formado → 400
+OK    epicrisis: límite 101 → 400
+OK    epicrisis: sin código → 400
+OK    epicrisis: GET → 405
+OK    RPC 42501 (sin Técnica o desactivado) → 403 con el texto fijo
+OK    RPC P0002 con msg_usuario (no existe) → 404 con su texto
+OK    RPC 22023 con msg_usuario → 400 con su texto
+OK    RPC 22023 SIN msg_usuario → 400 genérico (no se filtra el texto de la base)
+OK    RPC 28000 → 401
+OK    RPC con un código desconocido → 500 genérico
+OK    formulario_dano: GET llama a la RPC solo con el correo del token
+OK    formulario_dano: POST → 405
+OK    preparar_dano: reserva con 2 fotos y firma una URL de subida por ruta, sin caché
+OK    preparar_dano: 0 fotos → 400 sin RPC (Corte 4a, §25.8: siempre al menos una foto)
+OK    preparar_dano: -1 fotos → 400 sin RPC
+OK    preparar_dano: 11 fotos → 400 sin RPC
+OK    preparar_dano: fotos como texto → 400 sin RPC
+OK    preparar_dano: si la base devolviera una ruta con otro formato, NO se firma (500 genérico)
+OK    crear_dano: pasa p_id, los datos (las fotos solo con n, momento y ruta), el correo del token y la IP
+OK    crear_dano: sin dano_id → 400
+OK    crear_dano: dano_id que no es uuid → 400
+OK    crear_dano: un campo de más → 400
+OK    crear_dano: hora mal escrita → 400
+OK    crear_dano: lat como texto → 400
+OK    crear_dano: marcas con símbolos → 400
+OK    crear_dano: sin la lista de fotos → 400
+OK    crear_dano: descripción de más de 1.000 → 400
+OK    crear_dano: «sin evidencia fotográfica» → 400 con el mensaje claro (Corte 4a, §25.8)
+OK    crear_dano: el sector viaja como número entero (Corte 4a, §25.1)
+OK    crear_dano: sector 0 → 400
+OK    crear_dano: sector 101 → 400
+OK    crear_dano: sector 2,5 → 400
+OK    crear_dano: sector como texto → 400
+OK    crear_dano: la hora con zona «-05» es válida
+OK    activo_buscar: texto recortado, sistema y límite 10
+OK    activo_buscar: 1 letra → 400
+OK    activo_buscar: sistema desconocido → 400
+OK    tramo_nodos: GET con el código
+OK    tramo_nodos: sin código → 400
+OK    tesela: devuelve el MVT binario (decodificado del base64), con su tipo y caché privada de 5 min
+OK    tesela: vacía (bajo el zoom 15) → 204
+OK    tesela: sin sistema → 400 sin RPC
+OK    tesela: z de 23 → 400 sin RPC
+OK    tesela: x fuera de la grilla → 400 sin RPC
+OK    tesela: y negativa → 400 sin RPC
+OK    tesela: POST → 405
+OK    formulario_intervencion: GET con el correo del token y nada más
+OK    formulario_intervencion: POST → 405
+OK    danos_abiertos: con activo, la posición no viaja a la RPC
+OK    danos_abiertos: sin activo, por la posición
+OK    danos_abiertos: sin sistema → 400 sin RPC
+OK    danos_abiertos: sin activo ni posición → 400 sin RPC
+OK    danos_abiertos: lat como texto → 400 sin RPC
+OK    danos_abiertos: GET → 405 (la posición no va en la URL)
+OK    preparar_intervencion: 2 fotos y 1 PDF → 3 URL de subida firmadas (rutas .jpg y .pdf), sin caché
+OK    preparar_intervencion: 0 fotos → 400 sin RPC (Corte 4a, §25.8)
+OK    preparar_intervencion: 1 foto y sin documentos pasa a la RPC
+OK    crear_intervencion: «sin evidencia fotográfica» → 400 con el mensaje claro
+OK    preparar_intervencion: 21 fotos → 400 sin RPC
+OK    preparar_intervencion: 11 documentos → 400 sin RPC
+OK    preparar_intervencion: fotos decimales → 400 sin RPC
+OK    preparar_intervencion: una ruta con otro formato NO se firma (500 genérico, sin la ruta)
+OK    crear_intervencion: pasa p_id, los datos limpios (archivos solo con n, clase y ruta; fuentes con sus 5 claves), el correo del token y la IP
+OK    crear_intervencion: el activo nuevo viaja con sus puntos
+OK    crear_intervencion: «queda resuelto el daño» viaja como booleano
+OK    crear_intervencion: «queda resuelto» como texto → 400
+OK    crear_intervencion: sin intervencion_id → 400
+OK    crear_intervencion: un campo de más (autor) → 400
+OK    crear_intervencion: hora mal escrita → 400
+OK    crear_intervencion: descripción de más de 2.000 → 400
+OK    crear_intervencion: un material con un campo de más → 400
+OK    crear_intervencion: una fuente con un campo de más → 400
+OK    crear_intervencion: valor como texto → 400
+OK    crear_intervencion: sin la lista de archivos → 400
+OK    crear_intervencion: activo nuevo con un prefijo raro → 400
+OK    crear_intervencion: activo nuevo con un punto mal formado → 400
+OK    crear_intervencion: más de 30 también intervenidos → 400
+OK    intervenciones: GET con el filtro y límite 50
+OK    intervenciones: filtro desconocido → 400
+OK    intervencion_recursos: código, fuentes limpias y motivo nulo
+OK    intervencion_recursos: fuentes que no son lista → 400
+OK    no_identificados: GET con límite 50
+OK    asociar_activo: clase, código, activo y motivo
+OK    asociar_activo: clase desconocida → 400
+OK    asociar_activo: sin motivo → 400
+OK    asociar_activo: GET → 405
+OK    perfil: GET con el código; la foto principal sale con URL firmada de 60 s y sin la ruta
+OK    perfil: POST → 405
+OK    perfil: sin código → 400
+OK    galeria: firma cada foto y la principal (3 firmas de lectura), límite 30 y sin rutas en la respuesta
+OK    galeria: una ruta con otro formato NO se firma (500 genérico)
+OK    galeria: GET → 405
+OK    ficha_editar: código, cambios (lista cerrada) y motivo pasan a la RPC con el correo del token
+OK    ficha_editar: un campo que no corresponde (la geometría) → 400
+OK    ficha_editar: diámetro como texto → 400
+OK    ficha_editar: fecha mal escrita → 400
+OK    ficha_editar: atributos con una clave rara → 400
+OK    ficha_editar: origen con un campo de más → 400
+OK    ficha_editar: sin motivo → 400
+OK    foto_perfil_preparar: firma la subida de esa ruta exacta
+OK    foto_perfil_fijar: código, ruta y motivo a la RPC
+OK    foto_perfil_fijar: una ruta que no es de perfil → 400
+OK    RPC 23514 (regla de la tabla) → 400 con el campo legible, no 500
+OK    RPC 23514 de una regla sin columna → 400 legible
+OK    RPC 23502 (nulo) → 400 «Falta el dato …»
+OK    RPC 22001 (texto largo) → 400 sin repetir el valor
+OK    mi_perfil: GET con el correo del token
+OK    danos: filtro y límite 200
+OK    danos: filtro desconocido → 400
+OK    dano_evento: código, tipo y motivo
+OK    dano_evento: «borrar» no existe → 400 (nada se borra)
+OK    intervencion_evento: anular
+OK    intervencion_evento: tipo de daño → 400
+OK    dano_tercero: POST (no va en la URL) y sin caché
+OK    dano_tercero: GET → 405
+OK    reportes_bot: pendientes por omisión
+OK    reporte_convertir: id y datos limpios
+OK    reporte_convertir: un campo de más (teléfono) → 400
+OK    reporte_descartar: id que no es uuid → 400
+OK    crear_activo_bandeja: clase, código, tipo, nombre y motivo
+OK    crear_activo_bandeja: prefijo en minúsculas → 400
+OK    personal: GET con el correo del token, la búsqueda recortada y el filtro
+OK    personal: sin búsqueda → nulo y «todas»
+OK    personal: filtro desconocido → 400 sin RPC
+OK    personal: búsqueda de más de 80 → 400
+OK    personal_fijar: persona, tipo, valor y motivo
+OK    personal_fijar: valor nulo (quitar el cargo)
+OK    personal_fijar: un dato que no existe → 400
+OK    personal_fijar: valor que no es texto → 400
+OK    personal_fijar: GET → 405
+OK    personal_historial: persona, después de y límite 50
+OK    personal_historial: límite de más → 400
+OK    catalogo: GET
+OK    alias_fijar: tipo con su prefijo → la RPC del 1a
+OK    alias_fijar: nodo por su id, alias nulo
+OK    alias_fijar: prefijo en minúsculas → 400
+OK    alias_fijar: un nodo va por su id, no por el nombre → 400
+OK    alias_historial
+OK    cuadrilla_fijar: crear (sin id)
+OK    cuadrilla_fijar: desactivar
+OK    cuadrilla_fijar: id que no es entero → 400
+OK    parametros: GET
+OK    parametro_fijar: clave, valor numérico y motivo
+OK    parametro_fijar: valor en texto → 400
+OK    parametro_fijar: clave con forma rara → 400
+OK    graficas: meses
+OK    graficas: 12 por omisión
+OK    graficas: más de 24 → 400
+OK    descarga: POST, conjunto, rango, ocultos y la IP para la auditoría
+OK    descarga: conjunto desconocido → 400
+OK    descarga: fecha mal escrita → 400
+OK    descarga: GET → 405 (el rango no va en la URL)
+OK    nodos_por_clasificar: búsqueda, página y límite 50
+OK    nodos_por_clasificar: página rara → 400
+OK    nodo_crear_activo: nodo, tipo, clase y motivo
+OK    nodo_crear_activo: nodo en texto → 400
+OK    nodo_crear_activo: el rechazo de permiso de la RPC → 403 con el texto fijo
+OK    acción desconocida → 400 sin RPC
+
+RESULTADO: 184 de 184 comprobaciones correctas

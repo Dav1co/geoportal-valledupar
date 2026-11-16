@@ -177,3 +177,57 @@ export const apiDash = {
   crearActivoBandeja: (clase: "intervencion" | "dano", codigo: string, prefijo: string, clase_activo: string | null, nombre: string | null, motivo: string) =>
     pedir<{ codigo: string; activo: string }>("crear_activo_bandeja", { ...F, cuerpo: { clase, codigo, prefijo, clase_activo, nombre, motivo } }),
 };
+
+// ---------- Corte 4b: gestión del Dashboard distribución (Personal, Catálogo, Parámetros, Gráficas, Descargas y Nodos por clasificar) ----------
+export type Area = "planta" | "distribucion" | "ambas";
+export type PersonaRedes = {
+  email: string; nombre: string | null; perfil: "supervisor" | "operador"; dashboard_redes: boolean; dashboard_ptap: boolean; registro_tecnico: boolean;
+  area: Area | null; cargo: string | null; cuadrilla: { id: number; nombre: string; activa: boolean } | null; geovisor: "si" | "no" | "por_permiso";
+  formularios: string[]; activo_tecnica: boolean; ultimo_cambio: string | null;
+};
+export type PersonalRedes = { filtro: string; yo: string; formularios: { clave: string; nombre: string }[]; cuadrillas: { id: number; nombre: string }[]; personas: PersonaRedes[] };
+export type EventoFicha = { id: number; persona: string; persona_nombre: string | null; tipo: "area" | "cargo" | "cuadrilla" | "geovisor"; valor: string | null; valor_nombre: string | null;
+  motivo: string; autor: string; autor_nombre: string | null; creado_en: string };
+export type TipoCatalogo = { prefijo: string; nombre: string; nombre_visible: string; alias: string | null; sistema: string; geometria: string; es_base: boolean; activo: boolean; vigentes: number };
+export type CatalogoRedes = {
+  puede_editar: boolean; tipos: TipoCatalogo[];
+  materiales: (Opcion & { activo: boolean })[]; estados: (Opcion & { cuenta_vigente: boolean })[]; contratistas: (Opcion & { activo: boolean })[];
+  aportantes: (Opcion & { activo: boolean })[]; tipos_intervencion: (Opcion & { activo: boolean })[]; tipos_dano: (Opcion & { clase: string; activo: boolean })[];
+  causas: (Opcion & { activo: boolean })[]; cuadrillas: { id: number; nombre: string; activa: boolean; personas: number }[];
+};
+export type EventoAlias = { id: number; alias: string | null; motivo: string; autor: string; creado_en: string };
+export type Parametro = { clave: string; valor: number | null; unidad: string; minimo: number | null; maximo: number | null; estado: string; descripcion: string; entero: boolean; editable: boolean; ultimo_cambio: string | null };
+export type ParametrosRedes = { puede_editar: boolean; parametros: Parametro[]; historial: { id: number; clave: string; antes: number | null; despues: number | null; motivo: string; autor: string; creado_en: string }[] };
+export type GraficasRedes = {
+  meses: string[]; desde: string;
+  intervenciones_mes: { mes: string; tipo: string; tipo_nombre: string; sistema: string; n: number }[];
+  valor_fuente: { aportante: string; nombre: string; valor: number | null; intervenciones: number; sin_valor: number }[];
+  danos_causa: { clase: "dano" | "falla"; causa_clase: string; n: number; atendidos: number; respuesta_media_min: number | null; reparacion_media_min: number | null }[];
+  top_correctivos: { activo: string; tipo: string | null; n: number }[];
+};
+export type Descarga = { conjunto: "intervenciones" | "danos"; desde: string; hasta: string; incluir_ocultos: boolean; total: number; generado_en: string; generado_por: string; filas: Record<string, unknown>[] };
+export type NodoPorClasificar = { nodo_id: number; sistema: string; llave_modelo: string; nombre_modelo: string | null; nombre_visible: string; alias: string | null; lat: number; lon: number; tramos: number };
+export type NodosPorClasificar = {
+  grupos: { grupo: string; n: number }[]; total: number; items: NodoPorClasificar[]; siguiente: number | null;
+  tipos: { prefijo: string; nombre: string; sistema: string; pide_clase: boolean; clases: Opcion[] }[];
+};
+
+export const apiGestion = {
+  personal: (buscar: string, filtro: string) => pedir<PersonalRedes>("personal", { ...F, qs: { buscar, filtro } }),
+  personalFijar: (persona: string, tipo: EventoFicha["tipo"], valor: string | null, motivo: string) =>
+    pedir<{ evento_id: number; antes: string | null; despues: string | null }>("personal_fijar", { ...F, cuerpo: { persona, tipo, valor, motivo } }),
+  historial: (persona: string | null, despues_de: number | null) => pedir<{ total: number; eventos: EventoFicha[] }>("personal_historial", { ...F, cuerpo: { persona, despues_de } }),
+  catalogo: () => pedir<CatalogoRedes>("catalogo", F),
+  aliasFijar: (objeto: "tipo" | "nodo", ref: string, alias: string | null, motivo: string) => pedir<{ alias: string | null }>("alias_fijar", { ...F, cuerpo: { objeto, ref, alias, motivo } }),
+  aliasHistorial: (objeto: "tipo" | "nodo", ref: string) => pedir<{ eventos: EventoAlias[] }>("alias_historial", { ...F, cuerpo: { objeto, ref } }),
+  cuadrillaFijar: (id: number | null, nombre: string | null, activa: boolean | null, motivo: string) =>
+    pedir<{ id: number; nombre: string; activa: boolean; nueva: boolean }>("cuadrilla_fijar", { ...F, cuerpo: { id, nombre, activa, motivo } }),
+  parametros: () => pedir<ParametrosRedes>("parametros", F),
+  parametroFijar: (clave: string, valor: number, motivo: string) => pedir<{ antes: number | null; despues: number; unidad: string }>("parametro_fijar", { ...F, cuerpo: { clave, valor, motivo } }),
+  graficas: (meses: number) => pedir<GraficasRedes>("graficas", { ...F, qs: { meses: String(meses) } }),
+  descarga: (conjunto: "intervenciones" | "danos", desde: string, hasta: string, incluir_ocultos: boolean) =>
+    pedir<Descarga>("descarga", { ...F, cuerpo: { conjunto, desde, hasta, incluir_ocultos }, timeoutMs: 60000 }),
+  nodos: (buscar: string, despues_de: number | null) => pedir<NodosPorClasificar>("nodos_por_clasificar", { ...F, qs: { buscar, ...(despues_de ? { despues_de: String(despues_de) } : {}) } }),
+  nodoCrearActivo: (nodo: number, prefijo: string, clase_activo: string | null, nombre: string | null, motivo: string) =>
+    pedir<{ activo: string; tipo: string; nombre_modelo: string }>("nodo_crear_activo", { ...F, cuerpo: { nodo, prefijo, clase_activo, nombre, motivo } }),
+};
