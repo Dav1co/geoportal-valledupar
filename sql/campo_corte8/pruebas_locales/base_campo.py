@@ -20,6 +20,13 @@ con.execute("""
   -- como en producción: «Revisiones generales» está activa (campo/activar_formatos_d_y_revision_editor.sql)
   update campo.tipos_reporte set activo = true where codigo = 'revision_previa';
   update campo.grupos_reporte set activo = true where codigo = 'facturacion';
+  -- como en producción: public.predios_comercial es una VISTA MATERIALIZADA (la refresca el cargador diario de Comercial), no una tabla. El molde de campo la trae
+  -- como tabla; aquí se deja igual que en vivo para que un ensayo que intente escribir en ella falle también en local («cannot change materialized view»).
+  alter table public.predios_comercial rename to predios_comercial_fuente_local;
+  alter index public.predios_comercial_pkey rename to predios_comercial_fuente_local_pkey;
+  create materialized view public.predios_comercial as select * from public.predios_comercial_fuente_local;
+  create unique index predios_comercial_id_key on public.predios_comercial (id);
+  revoke all on table public.predios_comercial from public, anon, authenticated, service_role;
   -- doble de redes: la vista vacía que dejó el Corte 6b
   create schema if not exists redes;
   create view redes.v_reportes_comercial as

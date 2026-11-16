@@ -19,7 +19,7 @@ borra ningún registro existente de las tablas de campo: solo se agrega.
 1. `huellas_solo_lectura_tecnica_corte8_editor.sql`: 2 «VIVA (sin cambiar)», 3 «FIRMA ESPERADA», 6 «NO EXISTE», columna «NO EXISTE», «7 CLAVES», vista «VACÍA (6b)».
    **Si algo dice DISTINTA o FALTA, parar y avisar** (las huellas de `campo.f_autorizar_reporte` y `tecnica.f_formularios` salen de los paquetes locales; no se han
    comprobado contra la base viva). Las filas «7 …» muestran los tipos parecidos a los dos que se agregan: si ya existe uno equivalente con otro nombre, avisar antes de migrar.
-2. `ensayo_en_transaccion_tecnica_corte8_editor.sql`: ERROR con «**34 de 34** … SIN FALLAS».
+2. `ensayo_en_transaccion_tecnica_corte8_editor.sql`: ERROR con «**35 de 35** … SIN FALLAS».
 3. `migracion_tecnica_corte8_editor.sql`.
 4. `verificacion_tecnica_corte8_editor.sql`: 9 OK y 2 INFO.
 5. Huellas otra vez: 2 «CORTE 8 (reemplazada)», 6 «NUEVA», «EXISTE», «9 CLAVES», vista «CORTE 8».
@@ -27,7 +27,7 @@ borra ningún registro existente de las tablas de campo: solo se agrega.
    El SQL solo no cambia nada para nadie; la Edge vieja y el frontend viejo siguen funcionando igual.
 
 ## Pruebas
-- Ensayo 34 de 34. Arnés local 18 de 18 (`resultados/sql_local.txt`), con las RPC llamadas como la Edge (service_role, 30 s y 8 s) y la reversa exacta.
+- Ensayo 35 de 35. Arnés local 19 de 19 (`resultados/sql_local.txt`), con las RPC llamadas como la Edge (service_role, 30 s y 8 s) y la reversa exacta.
 - Edge simulada del Corte 8: 24 de 24; regresiones de la Edge de campo sin fallas.
 - Chrome real a 390 px y 1280 px: 36 de 36 (`resultados/chrome.txt`); regresiones de Comercial y de Técnica sin fallas (ver `ENTRADA_BITACORA.md`).
 
