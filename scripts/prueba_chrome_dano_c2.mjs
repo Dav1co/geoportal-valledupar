@@ -128,11 +128,43 @@ const nav = await puppeteer.launch({ executablePath: CHROME, headless: "new", ar
 await nav.defaultBrowserContext().overridePermissions(`http://127.0.0.1:${P_BASE}`, ["geolocation", "camera"]);
 const errores = [];
 const texto = (p) => p.evaluate(() => document.body.innerText);
-const esperarTexto = async (p, re, ms = 15000) => {
-  try { await p.waitForFunction((s) => new RegExp(s).test(document.body.innerText), { timeout: ms }, re.source); }
-  catch { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }); throw new Error(`no apareció /${re.source}/; pantalla: ${(await texto(p)).slice(0, 1500)} · edge: ${edgeLog.slice(-800)}`); }
+// ---- Corte 11: el inicio de Técnica va por modos (Planta, Redes y Supervisión) y ningún formulario se abre solo. Estos ayudantes buscan en cada modo.
+const TABS_MODO = '[role=tablist][aria-label="Modo de trabajo"] [role=tab]';
+const esperarTexto = async (p, re, ms = 30000) => {
+  const fin = Date.now() + ms;
+  for (;;) {
+    const esta = await p.evaluate(async (s, sel) => {
+      const r = new RegExp(s); if (r.test(document.body.innerText)) return true;
+      if (!document.querySelector("[data-modo-actual]")) return false;
+      for (const t of document.querySelectorAll(sel)) { t.click(); await new Promise((x) => setTimeout(x, 0)); if (r.test(document.body.innerText)) return true; }
+      return false; }, re.source, TABS_MODO).catch(() => false);
+    if (esta) return;
+    if (Date.now() > fin) { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }).catch(() => {}); throw new Error(`no apareció /${re.source}/; pantalla: ${(await texto(p)).slice(-1500)}`); }
+    await new Promise((x) => setTimeout(x, 150));
+  }
 };
-const clicTexto = (p, sel, t) => p.evaluate((sel, t) => { const b = [...document.querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled); if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, sel, t);
+const clicTexto = (p, sel, t, dentro = "body") => p.evaluate(async (sel, t, dentro, tabs) => {
+  const buscar = () => [...document.querySelector(dentro).querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled);
+  let b = buscar();
+  // pruebas anteriores al Corte 11: el inicio y el formulario estaban en la misma página; si el botón no está y hay un formulario abierto, se vuelve al inicio
+  if (!b && document.querySelector(".tec-volver")) { document.querySelector(".tec-volver").click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); }
+  if (!b && document.querySelector("[data-modo-actual]")) for (const m of document.querySelectorAll(tabs)) { m.click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); if (b) break; }
+  if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, sel, t, dentro, TABS_MODO);
+/** Todo lo que la persona tiene en el inicio (la suma de sus modos). */
+const textoInicio = (p) => p.evaluate(async (sel) => {
+  const tabs = [...document.querySelectorAll(sel)]; if (!tabs.length) return document.body.innerText;
+  let s = ""; for (const t of tabs) { t.click(); await new Promise((x) => setTimeout(x, 0)); s += document.body.innerText + "\n"; }
+  tabs[0].click(); await new Promise((x) => setTimeout(x, 0)); return s; }, TABS_MODO);
+/** Abre un formulario desde su tarjeta del inicio (antes el primero se abría solo). */
+const abrirFormulario = async (p, nombre) => { await esperarTexto(p, new RegExp(nombre)); if (!(await clicTexto(p, "button.tec-tarjeta-modo", nombre))) throw new Error("no está la tarjeta " + nombre); await p.waitForSelector(".tec-volver-barra"); };
+/** Pruebas anteriores al Corte 11: el formulario de daño se abría solo al entrar. Aquí se abre desde su tarjeta, si la persona la tiene. */
+const abrirDanoComoAntes = async (p) => {
+  await esperarTexto(p, /Sesión de/);
+  const hay = await p.evaluate(async (sel) => { const b = () => document.querySelector("button[data-tarjeta=danos_fallas]");
+    if (!b()) for (const m of document.querySelectorAll(sel)) { m.click(); await new Promise((x) => setTimeout(x, 0)); if (b()) break; }
+    if (!b()) return false; b().click(); return true; }, TABS_MODO);
+  if (hay) await esperarTexto(p, /1\. Activo y ubicación/);
+};
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const poner = (p, sel, valor) => p.evaluate((sel, valor) => { const el = document.querySelector(sel); const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, "value").set.call(el, valor); el.dispatchEvent(new Event("input", { bubbles: true })); return true; }, sel, valor);
 const elegirSelect = (p, sel, valor) => p.select(sel, valor);
@@ -151,7 +183,7 @@ async function abrir(ancho, rol, gps) {
   });
   if (gps) await p.setGeolocation({ latitude: gps[0], longitude: gps[1], accuracy: 6 });
   await p.goto(`http://127.0.0.1:${P_BASE}/?rol=${rol}`); await p.waitForFunction(() => window.__listo === true);
-  await esperarTexto(p, /1\. Activo y ubicación/); return p;
+  await abrirDanoComoAntes(p); return p;
 }
 /** Espera a que el minimapa tenga red dibujada. */
 const teselas = [];
@@ -190,7 +222,7 @@ for (const ancho of [390, 1280]) {
   let p = await abrir(ancho, "op", [Number(V85[1]), Number(V85[2])]);
   let t = await texto(p);
   ok(`${tag} el chip «Daño o falla» abre el formulario (sin «Próximamente») y pide primero el sistema`, /Daño o falla/.test(t) && /Elija primero el sistema/.test(t) && /1\. Activo y ubicación/.test(t) && /7\. Fotos|6\. Fotos/.test(t));
-  ok(`${tag} el operador no ve la entrada a la ficha de activos (David, 1b)`, !/Ficha de activos \(redes\)/.test(t));
+  ok(`${tag} el operador no ve la entrada a la ficha de activos (David, 1b)`, !/Ficha de activos/.test(t));
   const prep0 = rpcs.filter((r) => r.fn === "geoportal_redes_preparar_dano").length;
   await clicTexto(p, "button", "Guardar daño o falla"); await esperarTexto(p, /Falta completar/);
   t = await texto(p);

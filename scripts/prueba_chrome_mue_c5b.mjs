@@ -133,11 +133,35 @@ const nav = await puppeteer.launch({ executablePath: CHROME, headless: "new", ar
 await nav.defaultBrowserContext().overridePermissions(`http://127.0.0.1:${P_BASE}`, ["geolocation"]);
 const errores = [];
 const texto = (p) => p.evaluate(() => document.body.innerText);
-const esperarTexto = async (p, re, ms = 15000) => {
-  try { await p.waitForFunction((s) => new RegExp(s).test(document.body.innerText), { timeout: ms }, re.source); }
-  catch { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }); throw new Error(`no apareció /${re.source}/; pantalla: ${(await texto(p)).slice(0, 1500)} · edge: ${edgeLog.slice(-600)}`); }
+// ---- Corte 11: el inicio de Técnica va por modos (Planta, Redes y Supervisión) y ningún formulario se abre solo. Estos ayudantes buscan en cada modo.
+const TABS_MODO = '[role=tablist][aria-label="Modo de trabajo"] [role=tab]';
+const esperarTexto = async (p, re, ms = 30000) => {
+  const fin = Date.now() + ms;
+  for (;;) {
+    const esta = await p.evaluate(async (s, sel) => {
+      const r = new RegExp(s); if (r.test(document.body.innerText)) return true;
+      if (!document.querySelector("[data-modo-actual]")) return false;
+      for (const t of document.querySelectorAll(sel)) { t.click(); await new Promise((x) => setTimeout(x, 0)); if (r.test(document.body.innerText)) return true; }
+      return false; }, re.source, TABS_MODO).catch(() => false);
+    if (esta) return;
+    if (Date.now() > fin) { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }).catch(() => {}); throw new Error(`no apareció /${re.source}/; pantalla: ${(await texto(p)).slice(-1500)}`); }
+    await new Promise((x) => setTimeout(x, 150));
+  }
 };
-const clicTexto = (p, sel, t) => p.evaluate((sel, t) => { const b = [...document.querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled); if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, sel, t);
+const clicTexto = (p, sel, t, dentro = "body") => p.evaluate(async (sel, t, dentro, tabs) => {
+  const buscar = () => [...document.querySelector(dentro).querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled);
+  let b = buscar();
+  // pruebas anteriores al Corte 11: el inicio y el formulario estaban en la misma página; si el botón no está y hay un formulario abierto, se vuelve al inicio
+  if (!b && document.querySelector(".tec-volver")) { document.querySelector(".tec-volver").click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); }
+  if (!b && document.querySelector("[data-modo-actual]")) for (const m of document.querySelectorAll(tabs)) { m.click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); if (b) break; }
+  if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, sel, t, dentro, TABS_MODO);
+/** Todo lo que la persona tiene en el inicio (la suma de sus modos). */
+const textoInicio = (p) => p.evaluate(async (sel) => {
+  const tabs = [...document.querySelectorAll(sel)]; if (!tabs.length) return document.body.innerText;
+  let s = ""; for (const t of tabs) { t.click(); await new Promise((x) => setTimeout(x, 0)); s += document.body.innerText + "\n"; }
+  tabs[0].click(); await new Promise((x) => setTimeout(x, 0)); return s; }, TABS_MODO);
+/** Abre un formulario desde su tarjeta del inicio (antes el primero se abría solo). */
+const abrirFormulario = async (p, nombre) => { await esperarTexto(p, new RegExp(nombre)); if (!(await clicTexto(p, "button.tec-tarjeta-modo", nombre))) throw new Error("no está la tarjeta " + nombre); await p.waitForSelector(".tec-volver-barra"); };
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const poner = (p, sel, valor) => p.evaluate((sel, valor) => { const el = document.querySelector(sel); const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, "value").set.call(el, valor); el.dispatchEvent(new Event("input", { bubbles: true })); return true; }, sel, valor);
 const minimo = (p, sel) => p.evaluate((sel) => Math.min(...[...document.querySelectorAll(sel)].filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect().height)), sel);
@@ -169,7 +193,7 @@ for (const ancho of [390, 1280]) {
 
   // ===== A. el operador en Muestreo =====
   let p = await abrir(ancho, "op", gpsCerca);
-  await esperarTexto(p, /Muestreo/); await clicTexto(p, ".tec-chip-form", "Muestreo"); await esperarTexto(p, /Puntos de muestreo/);
+  await esperarTexto(p, /Muestreo/); await clicTexto(p, "button.tec-tarjeta-modo", "Muestreo"); await esperarTexto(p, /Puntos de muestreo/);
   const n = await esperarPuntos(p);
   ok(`${tag} A1 el minimapa de Muestreo dibuja los 27 puntos (sin pedir el GPS al abrir)`, n === 27 && !rpcs.some((r) => r.fn === "geoportal_tec_punto_ubicacion_proponer"), `dibujados ${n}`);
   ok(`${tag} A2 con la leyenda (verificada, aproximada y en revisión) y sin el aviso de puntos sin ubicación`, /Ubicación verificada/.test(await texto(p)) && /Aproximada \(centro del barrio\)/.test(await texto(p)) && !(await p.$("[data-testid=sin-ubicacion]")));
@@ -264,7 +288,7 @@ for (const ancho of [390, 1280]) {
 
   // ===== C. el operador después de la aprobación, y la base sin el SQL del 5b =====
   p = await abrir(ancho, "op");
-  await esperarTexto(p, /Muestreo/); await clicTexto(p, ".tec-chip-form", "Muestreo"); await esperarTexto(p, /Puntos de muestreo/); await esperarPuntos(p);
+  await esperarTexto(p, /Muestreo/); await clicTexto(p, "button.tec-tarjeta-modo", "Muestreo"); await esperarTexto(p, /Puntos de muestreo/); await esperarPuntos(p);
   await p.select("select[id^='tec-sel-punto']", "MUE-05");
   await esperarTexto(p, /Ubicación verificada \(GPS del operador/);
   ok(`${tag} C1 MUE-05 sale verificada (GPS del operador, aprobada) y ya no ofrece guardar`, !/Guardar la ubicación de este punto/.test(await texto(p))
@@ -274,7 +298,7 @@ for (const ancho of [390, 1280]) {
   await p.close();
   sinSql5b = true;
   p = await abrir(ancho, "op");
-  await esperarTexto(p, /Muestreo/); await clicTexto(p, ".tec-chip-form", "Muestreo"); await esperarTexto(p, /Puntos de muestreo/);
+  await esperarTexto(p, /Muestreo/); await clicTexto(p, "button.tec-tarjeta-modo", "Muestreo"); await esperarTexto(p, /Puntos de muestreo/);
   await esperarTexto(p, /No se pudo cargar el mapa de los puntos/);
   await p.select("select[id^='tec-sel-punto']", "MUE-07");
   ok(`${tag} C3 con la base sin el SQL del 5b: avisa que no cargó el mapa y la lista funciona como antes`, (await seleccionado(p)) === "MUE-07" && /Cloro libre · Don Carmelo/.test(await texto(p)));

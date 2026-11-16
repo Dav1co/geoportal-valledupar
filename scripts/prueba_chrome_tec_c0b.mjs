@@ -142,15 +142,42 @@ async function abrir(ancho, limpio = true) {
   p.on("pageerror", (e) => errores.push(`${ancho}: ${e.message}`));
   p.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource: the server responded with a status of 400/.test(m.text())) errores.push(`${ancho} consola: ${m.text()}`); });
   await p.goto(`http://127.0.0.1:${P_BASE}/?rol=op${limpio ? "&limpio=1" : ""}`); await p.waitForFunction(() => window.__listo === true);
-  await p.waitForSelector(".tec-chips"); return p;
+  await p.waitForSelector(".tec-inicio [data-tarjeta]"); return p;      // Corte 11: se entra al inicio por modos
 }
 const texto = (p) => p.evaluate(() => document.body.innerText);
-const clicTexto = (p, sel, t) => p.evaluate((sel, t) => { const b = [...document.querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t)); if (!b) return false; b.click(); return true; }, sel, t);
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
-const esperarTexto = (p, re, ms = 8000) => p.waitForFunction((s) => new RegExp(s).test(document.body.innerText), { timeout: ms }, re.source);
+// ---- Corte 11: el inicio de Técnica va por modos (Planta, Redes y Supervisión) y ningún formulario se abre solo. Estos ayudantes buscan en cada modo.
+const TABS_MODO = '[role=tablist][aria-label="Modo de trabajo"] [role=tab]';
+const esperarTexto = async (p, re, ms = 30000) => {
+  const fin = Date.now() + ms;
+  for (;;) {
+    const esta = await p.evaluate(async (s, sel) => {
+      const r = new RegExp(s); if (r.test(document.body.innerText)) return true;
+      if (!document.querySelector("[data-modo-actual]")) return false;
+      for (const t of document.querySelectorAll(sel)) { t.click(); await new Promise((x) => setTimeout(x, 0)); if (r.test(document.body.innerText)) return true; }
+      return false; }, re.source, TABS_MODO).catch(() => false);
+    if (esta) return;
+    if (Date.now() > fin) { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }).catch(() => {}); throw new Error(`no apareció /${re.source}/; pantalla: ${(await texto(p)).slice(-1500)}`); }
+    await new Promise((x) => setTimeout(x, 150));
+  }
+};
+const clicTexto = (p, sel, t, dentro = "body") => p.evaluate(async (sel, t, dentro, tabs) => {
+  const buscar = () => [...document.querySelector(dentro).querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled);
+  let b = buscar();
+  // pruebas anteriores al Corte 11: el inicio y el formulario estaban en la misma página; si el botón no está y hay un formulario abierto, se vuelve al inicio
+  if (!b && document.querySelector(".tec-volver")) { document.querySelector(".tec-volver").click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); }
+  if (!b && document.querySelector("[data-modo-actual]")) for (const m of document.querySelectorAll(tabs)) { m.click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); if (b) break; }
+  if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, sel, t, dentro, TABS_MODO);
+/** Todo lo que la persona tiene en el inicio (la suma de sus modos). */
+const textoInicio = (p) => p.evaluate(async (sel) => {
+  const tabs = [...document.querySelectorAll(sel)]; if (!tabs.length) return document.body.innerText;
+  let s = ""; for (const t of tabs) { t.click(); await new Promise((x) => setTimeout(x, 0)); s += document.body.innerText + "\n"; }
+  tabs[0].click(); await new Promise((x) => setTimeout(x, 0)); return s; }, TABS_MODO);
+/** Abre un formulario desde su tarjeta del inicio (antes el primero se abría solo). */
+const abrirFormulario = async (p, nombre) => { await esperarTexto(p, new RegExp(nombre)); if (!(await clicTexto(p, "button.tec-tarjeta-modo", nombre))) throw new Error("no está la tarjeta " + nombre); await p.waitForSelector(".tec-volver-barra"); };
 /** Pone el valor de un <input> como lo haría la persona (el setter nativo + evento input, para que React lo vea). */
 const poner = (p, sel, valor) => p.evaluate((sel, valor) => { const el = document.querySelector(sel); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(el, valor); el.dispatchEvent(new Event("input", { bubbles: true })); return true; }, sel, valor);
-async function abrirForm(p, nombre, re) { await clicTexto(p, ".tec-chip-form", nombre); await esperarTexto(p, re); }
+async function abrirForm(p, nombre, re) { await clicTexto(p, "button.tec-tarjeta-modo", nombre); await esperarTexto(p, re); }
 async function guardarYConfirmar(p) {
   await clicTexto(p, "button", "Guardar registro");
   try { await esperarTexto(p, /Va a guardar|Confirmar y guardar/); } catch (e) { await p.screenshot({ path: join(CAP, "fallo.png"), fullPage: true }); throw new Error("sin confirmación; la pantalla dice: " + (await texto(p)).slice(0, 1500)); }

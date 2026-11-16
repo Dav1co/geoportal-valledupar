@@ -78,6 +78,7 @@ const srv = http.createServer((req, res) => {
     const supervisa = rol === "sup";
     switch (accion) {
       case "mis_formularios": return json(200, MIS(rol));
+      case "mi_perfil": return json(200, { dashboard_redes: false, geovisor: false });      // Corte 4a: el perfil de redes (aquí, sin redes)
       case "formulario": return json(200, u.searchParams.get("formulario") === "muestreo" ? DEF_MUESTREO : { ...DEF_ENTRADA, formulario: { ...DEF_ENTRADA.formulario, clave: u.searchParams.get("formulario") } });
       case "resumen": return json(200, u.searchParams.get("formulario") === "muestreo" ? RESUMEN_MUESTREO : { formulario: u.searchParams.get("formulario"), ventana_horas: 24, filas: [] });
       case "quimicos": return json(200, { formulario: u.searchParams.get("formulario"), max_ppm: 500, max_nombre: 60, opciones: [] });
@@ -103,10 +104,21 @@ async function abrir(rol, ancho) {
   p.on("pageerror", (e) => errores.push(`${rol}/${ancho}: ${e.message}`));
   p.on("console", (m) => { if (m.type() === "error") errores.push(`${rol}/${ancho} consola: ${m.text()}`); });
   await p.goto(`http://127.0.0.1:${PUERTO}/?rol=${rol}`); await p.waitForFunction(() => window.__listo === true);
-  await p.waitForSelector(".tec-chips"); return p;
+  await p.waitForSelector(".tec-inicio [data-tarjeta]"); return p;      // Corte 11: se entra al inicio por modos
 }
-const chips = (p) => p.$$eval(".tec-chip-form", (bs) => bs.map((b) => ({ t: b.textContent.trim(), dis: b.disabled })));
-const clicTexto = (p, sel, texto) => p.evaluate((sel, texto) => { const b = [...document.querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(texto)); if (!b) return false; b.click(); return true; }, sel, texto);
+// Corte 11: los formularios son tarjetas del inicio por modos (se recorren todos los modos); «dis» = no se puede abrir (Próximamente o sin campos)
+const TABS_MODO = '[role=tablist][aria-label="Modo de trabajo"] [role=tab]';
+const chips = (p) => p.evaluate(async (sel) => {
+  const leer = () => [...document.querySelectorAll("[data-tarjeta]")].map((b) => ({ t: b.querySelector(".tec-tarjeta-nom").textContent.trim(), dis: b.tagName !== "BUTTON" }));
+  const tabs = [...document.querySelectorAll(sel)]; if (!tabs.length) return leer();
+  const todo = []; for (const m of tabs) { m.click(); await new Promise((x) => setTimeout(x, 0)); todo.push(...leer()); }
+  tabs[0].click(); await new Promise((x) => setTimeout(x, 0)); return todo; }, TABS_MODO);
+const clicTexto = (p, sel, texto) => p.evaluate(async (sel, texto, tabs) => {
+  const buscar = () => [...document.querySelectorAll(sel)].find((x) => x.textContent.trim().startsWith(texto) && !x.disabled);
+  let b = buscar();
+  if (!b && document.querySelector(".tec-volver")) { document.querySelector(".tec-volver").click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); }
+  if (!b && document.querySelector("[data-modo-actual]")) for (const m of document.querySelectorAll(tabs)) { m.click(); await new Promise((x) => setTimeout(x, 0)); b = buscar(); if (b) break; }
+  if (!b) return false; b.click(); return true; }, sel, texto, TABS_MODO);
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 
 for (const ancho of [390, 1280]) {
@@ -114,10 +126,10 @@ for (const ancho of [390, 1280]) {
   const p = await abrir("op", ancho);
   const c = await chips(p);
   ok(`[${ancho}] operador: Entrada, Salida y Muestreo habilitados`, ["Entrada", "Salida", "Muestreo"].every((n) => c.find((x) => x.t === n && !x.dis)), JSON.stringify(c));
-  ok(`[${ancho}] operador: Daños y fallas sigue «Próximamente»`, c.find((x) => x.t.startsWith("Daños") && x.dis && /Próximamente/.test(x.t)));
+  ok(`[${ancho}] operador: «Daños y fallas» ya tiene pantalla (desde el Corte 2): es una tarjeta que se abre`, c.find((x) => x.t.startsWith("Daños") && !x.dis), JSON.stringify(c));
   ok(`[${ancho}] operador: no ve «Dashboard PTAP»`, !(await p.evaluate(() => /Dashboard PTAP/.test(document.body.innerText))));
   ok(`[${ancho}] operador: ningún texto «Dashboard técnico» en pantalla`, !(await p.evaluate(() => /Dashboard t[eé]cnic/i.test(document.body.innerText))));
-  await clicTexto(p, ".tec-chip-form", "Muestreo");
+  await clicTexto(p, "button.tec-tarjeta-modo", "Muestreo");
   await p.waitForFunction(() => /Puntos de muestreo/.test(document.body.innerText));
   const sel = await p.$$eval("select", (ss) => ss.map((s) => s.options.length));
   ok(`[${ancho}] Muestreo: una lista con los 27 puntos (+ «Elija…»)`, sel.length === 1 && sel[0] === 28, JSON.stringify(sel));
