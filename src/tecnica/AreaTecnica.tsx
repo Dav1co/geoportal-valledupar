@@ -9,6 +9,7 @@ import { ActivosRedes } from "./ActivosRedes";
 import { FormularioDano } from "./FormularioDano";
 import { FormularioIntervencion, type DesdeDano } from "./FormularioIntervencion";
 import { DashboardRedes } from "./DashboardRedes";
+import { SelectorDashboards } from "./CabeceraDashboard";
 import { apiDash, type MiPerfilRedes } from "./apiRedes";
 import { supabase } from "../lib/supabase";
 
@@ -63,7 +64,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     const a = avisoDeError(errorMis);
     const sinAcceso = errorMis.tipo === "permiso" || errorMis.tipo === "denegado";
     // quien solo tiene el Dashboard distribución (sin formularios de Técnica) entra directo a él
-    if (sinAcceso && redes?.dashboard_redes) return <DashboardRedes onVolver={() => setIntento((i) => i + 1)} />;
+    if (sinAcceso && redes?.dashboard_redes) return <DashboardRedes correo={correo} onVolver={() => setIntento((i) => i + 1)} />;
     return (
       <div className="tec-pagina">
         <section className="tec-tarjeta" role="alert">
@@ -82,14 +83,12 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const puedeSupervisar = mis.perfil === "admin" || mis.perfil === "supervisor";      // Dashboard PTAP (planta)
   const puedeRedes = redes?.dashboard_redes === true;                                  // Dashboard distribución (Corte 4a)
   // selector arriba de cada dashboard, cuando la persona tiene los dos (§1 de la bitácora: no se solapan)
-  const selector = puedeSupervisar && puedeRedes ? (
-    <div className="tec-selector-dash" role="group" aria-label="Dashboard">
-      <button type="button" className="tec-chip-form" aria-pressed={vista === "dashboard"} onClick={() => setVista("dashboard")}>Dashboard PTAP</button>
-      <button type="button" className="tec-chip-form" aria-pressed={vista === "redes"} onClick={() => setVista("redes")}>Dashboard distribución</button>
-    </div>) : null;
+  // §34: va DENTRO del encabezado de cada dashboard (antes era un bloque aparte que partía la pantalla en dos)
+  const selector = puedeSupervisar && puedeRedes
+    ? <SelectorDashboards actual={vista === "redes" ? "distribucion" : "ptap"} onElegir={(d) => setVista(d === "ptap" ? "dashboard" : "redes")} /> : null;
 
-  if (puedeSupervisar && vista === "dashboard") return <>{selector ? <div className="tec-pagina tec-pagina-selector">{selector}</div> : null}<Dashboard correo={correo} rotuloPerfil={ROTULO_PERFIL[mis.perfil]} onVolver={() => setVista("captura")} /></>;
-  if (puedeRedes && vista === "redes") return <DashboardRedes selector={selector} onVolver={() => setVista("captura")} />;
+  if (puedeSupervisar && vista === "dashboard") return <Dashboard correo={correo} rotuloPerfil={ROTULO_PERFIL[mis.perfil]} selector={selector} onVolver={() => setVista("captura")} />;
+  if (puedeRedes && vista === "redes") return <DashboardRedes correo={correo} selector={selector} onVolver={() => setVista("captura")} />;
   const tieneItv = mis.formularios.some((f) => f.clave === "mantenimiento");
   const abrirItv = (d: DesdeDano | null, a: typeof activoItv) => { setDesdeDano(d); setActivoItv(a); setVezItv((v) => v + 1); setElegido("mantenimiento"); setVista("captura"); window.scrollTo?.(0, 0); };
   if ((puedeSupervisar || puedeRedes) && vista === "activos") return <ActivosRedes onVolver={() => setVista("captura")} onRegistrarIntervencion={tieneItv || puedeSupervisar || puedeRedes ? (a) => abrirItv(null, a) : undefined} />;

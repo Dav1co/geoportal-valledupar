@@ -102,5 +102,4 @@
 .tec-dosis-cuerpo { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 14px; }
 .tec-etiqueta { font-size: 15px; font-weight: 600; }
 /* Corte 4a: selector Dashboard PTAP | Dashboard distribución */
-.tec-selector-dash { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 16px 0; }
-.tec-pagina-selector { padding-bottom: 0; }
+/* §34: el selector PTAP | distribución pasó al encabezado común (dashboard.css, .tdash-selector). */

@@ -148,7 +148,7 @@ async function abrir(ancho, rol, gps) {
   return p;
 }
 async function alCargue(p) {
-  await esperarTexto(p, /Dashboard distribución/); await clicTexto(p, "button", "Dashboard distribución"); await esperarTexto(p, /Redes de acueducto y alcantarillado/);
+  await esperarTexto(p, /Dashboard distribución/); await clicTexto(p, "button", "Dashboard distribución"); await esperarTexto(p, /Dashboard distribución[\s\S]*No identificados/);     // §34: encabezado común (ya no hay subtítulo)
   await clicTexto(p, "[role=tab]", "Cargue de capas"); await esperarTexto(p, /capas en 5 grupos/);
 }
 const capaTxt = (p, c) => p.evaluate((c) => document.querySelector(`[data-testid=capa-${c}]`)?.innerText ?? "", c);

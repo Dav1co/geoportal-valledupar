@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import "./ficha.css";
 import "./dano.css";
 import "./intervencion.css";
+import "./dashboard.css";
+import { CabeceraDashboard } from "./CabeceraDashboard";
 import { apiDano, apiDash, apiItv, type DanoLista, type FormularioDano as DefDano, type IntervencionLista, type ReporteBot } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
@@ -24,26 +26,19 @@ const ESTADO: Record<string, string> = { reportado: "Reportado", en_atencion: "E
   recibido: "Recibido", descartado: "Descartado" };
 const err = (e: unknown, sin: string) => (e instanceof ErrorTec && e.tipo === "permiso" ? sin : e instanceof Error ? e.message : "No se pudo completar.");
 
-export function DashboardRedes({ selector, onVolver }: { selector?: React.ReactNode; onVolver: () => void }) {
+// §34: el mismo armado y estilo que el Dashboard PTAP (encabezado común, pestañas, cuerpo); la única diferencia es el color verde oscuro (tdash-verde).
+export function DashboardRedes({ correo, selector, onVolver }: { correo: string; selector?: React.ReactNode; onVolver: () => void }) {
   const [pestana, setPestana] = useState<Pestana>("no_identificados");
   const [ficha, setFicha] = useState<string | null>(null);
   const [admin, setAdmin] = useState(false);
-  useEffect(() => { apiDash.miPerfil().then((p) => setAdmin(p.perfil === "admin")).catch(() => {}); }, []);
+  const [rotulo, setRotulo] = useState("");
+  useEffect(() => { apiDash.miPerfil().then((p) => { setAdmin(p.perfil === "admin"); setRotulo(p.perfil === "admin" ? "Administrador" : "Supervisor de distribución"); }).catch(() => {}); }, []);
   if (ficha) return <FichaActivo codigo={ficha} onAbrir={setFicha} onVolver={() => setFicha(null)} rotuloVolver="Volver al Dashboard distribución" />;
   return (
-    <div className="dan itv dash-redes">
-      <button type="button" className="red-volver itv-volver" onClick={onVolver}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
-        Volver a Técnica
-      </button>
-      {selector}
-      <header className="dan-cabeza itv-cabeza">
-        <h1>Dashboard distribución</h1>
-        <p>Redes de acueducto y alcantarillado: bandejas, gráficas y gestión del supervisor de distribución.</p>
-      </header>
-      <div className="dan-fila dan-pad-x dash-pestanas" role="tablist" aria-label="Pestañas del Dashboard distribución">
-        {PESTANAS.filter((p) => !p.admin || admin).map((p) => <button key={p.c} type="button" role="tab" className="dan-opcion" aria-selected={pestana === p.c} aria-pressed={pestana === p.c} onClick={() => setPestana(p.c)}>{p.n}</button>)}
-      </div>
+    <div className="tdash tdash-verde">
+      <CabeceraDashboard titulo="Dashboard distribución" sesion={rotulo ? `${correo} · ${rotulo}` : correo} onVolver={onVolver} selector={selector} etiqueta="Pestañas del Dashboard distribución"
+        pestanas={PESTANAS.filter((p) => !p.admin || admin).map((p) => ({ clave: p.c, titulo: p.n }))} activa={pestana} onElegir={(c) => setPestana(c as Pestana)} />
+      <div className="tdash-cuerpo dan itv dash-redes">
       {pestana === "no_identificados" ? <NoIdentificados onFicha={setFicha} /> : null}
       {pestana === "intervenciones" ? <Intervenciones onFicha={setFicha} /> : null}
       {pestana === "danos" ? <Danos onFicha={setFicha} /> : null}
@@ -55,6 +50,7 @@ export function DashboardRedes({ selector, onVolver }: { selector?: React.ReactN
       {pestana === "catalogo" ? <Catalogo /> : null}
       {pestana === "parametros" ? <Parametros /> : null}
       {pestana === "nodos" && admin ? <Nodos onFicha={setFicha} /> : null}
+      </div>
     </div>
   );
 }

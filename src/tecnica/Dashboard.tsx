@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import "./dashboard.css";
 import { apiDash, textoError, type Catalogo } from "./apiDashboard";
 import { RegistrosRecientes } from "./RegistrosRecientes";
@@ -7,6 +7,7 @@ import { Resumen } from "./Resumen";
 import { Eventos } from "./Eventos";
 import { PuntosUbicacion } from "./PuntosUbicacion";
 import { supabase } from "../lib/supabase";
+import { CabeceraDashboard } from "./CabeceraDashboard";
 
 // Dashboard PTAP (antes «Dashboard técnico»; supervisor y administrador). Las secciones salen de este registro: agregar «Estado del servicio» o «Eventos» cuando existan es registrar una sección
 // con su componente; el resto de la pantalla no cambia. Las que aún no existen se muestran deshabilitadas, sin datos de ejemplo.
@@ -21,7 +22,8 @@ const SECCIONES: Seccion[] = [
   { clave: "reportes", titulo: "Reportes" },
 ];
 
-export function Dashboard({ correo, rotuloPerfil, onVolver }: { correo: string; rotuloPerfil: string; onVolver: () => void }) {
+// §34: el encabezado es el común (CabeceraDashboard), con el selector PTAP | distribución adentro.
+export function Dashboard({ correo, rotuloPerfil, onVolver, selector }: { correo: string; rotuloPerfil: string; onVolver: () => void; selector?: ReactNode }) {
   const [activa, setActiva] = useState("registros");
   const [catalogo, setCatalogo] = useState<Catalogo | null>(null);
   const [error, setError] = useState<{ texto: string; sesion: boolean } | null>(null);
@@ -32,20 +34,8 @@ export function Dashboard({ correo, rotuloPerfil, onVolver }: { correo: string; 
   const seccion = SECCIONES.find((s) => s.clave === activa);
   return (
     <div className="tdash">
-      <div className="tdash-cab">
-        <div className="tdash-ancho">
-          <div className="tdash-fila">
-            <h1>Dashboard PTAP</h1>
-            <button type="button" className="td-boton-claro" onClick={onVolver}>← Volver a mis formularios</button>
-          </div>
-          <div className="tdash-sesion">{correo} · {rotuloPerfil}</div>
-          <nav className="tdash-tabs" aria-label="Secciones del Dashboard PTAP">
-            {SECCIONES.map((s) => s.Componente
-              ? <button key={s.clave} type="button" className="tdash-tab" aria-current={activa === s.clave ? "page" : undefined} onClick={() => setActiva(s.clave)}>{s.titulo}</button>
-              : <button key={s.clave} type="button" className="tdash-tab tdash-tab-pronto" disabled aria-disabled="true" title="Próximamente">{s.titulo}<span className="td-pronto">Próximamente</span></button>)}
-          </nav>
-        </div>
-      </div>
+      <CabeceraDashboard titulo="Dashboard PTAP" sesion={`${correo} · ${rotuloPerfil}`} onVolver={onVolver} selector={selector} etiqueta="Secciones del Dashboard PTAP"
+        pestanas={SECCIONES.map((s) => ({ clave: s.clave, titulo: s.titulo, pronto: !s.Componente }))} activa={activa} onElegir={setActiva} />
       <div className="tdash-cuerpo">
         {error ? (
           <div className="td-aviso td-aviso-error" role="alert">{error.texto}{" "}

@@ -218,7 +218,7 @@ const minimosDash = (p) => p.evaluate(() => Math.min(...[...document.querySelect
 const ficha = (email) => sqlq(`select coalesce(area, '∅') || '|' || coalesce(cargo, '∅') || '|' || coalesce(cuadrilla_id::text, '∅') || '|' || geovisor from redes.v_personal_ficha where persona = '${email}'`);
 async function alDashboard(ancho, rol) {
   const p = await abrir(ancho, rol, null);
-  await clicTexto(p, "button", "Dashboard distribución"); await esperarTexto(p, /Redes de acueducto y alcantarillado/);
+  await clicTexto(p, "button", "Dashboard distribución"); await esperarTexto(p, /Dashboard distribución[\s\S]*No identificados/);     // §34: encabezado común (ya no hay subtítulo)
   return p;
 }
 function datosDeLaVuelta(ancho) {

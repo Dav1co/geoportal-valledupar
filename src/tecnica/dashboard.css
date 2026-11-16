@@ -1,6 +1,9 @@
 /* Dashboard técnico (supervisor y administrador): pantalla ancha primero, usable a 390 px (tabla con desplazamiento horizontal contenido, filtros plegables). Colores de la maqueta. */
-.tdash { flex: 1; overflow: auto; background: #f3f6f8; color: #22313f; -webkit-text-size-adjust: 100%; }
-.tdash-cab { background: #0a2540; color: #fff; }
+/* §34: los dos dashboards (PTAP y distribución) comparten este armado. La raíz llena el alto que queda debajo de la barra (flex: 1 dentro de .app) y desplaza su propio
+   contenido; min-height: 0 para que Safari no la estire más que la pantalla. Lo único que cambia entre los dos es el color del encabezado (--tdash-color). */
+.tdash { --tdash-color: #0a2540; position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; background: #f3f6f8; color: #22313f; -webkit-text-size-adjust: 100%; }
+.tdash-verde { --tdash-color: #0f3d2b; }      /* Dashboard distribución: verde oscuro */
+.tdash-cab { background: var(--tdash-color); color: #fff; }
 .tdash-ancho { max-width: 1200px; margin: 0 auto; padding: 12px 24px 0; box-sizing: border-box; }
 .tdash-fila { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
 .tdash-cab h1 { margin: 0; font-size: 20px; }
@@ -11,6 +14,10 @@
 .tdash-tab:focus-visible, .td-boton:focus-visible, .td-boton-sec:focus-visible, .td-boton-claro:focus-visible, .td-enlace:focus-visible, .td-campo select:focus-visible, .td-campo input:focus-visible, .td-campo textarea:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
 .tdash-tab-pronto, .tdash-tab:disabled { color: #8fa4b4; cursor: not-allowed; }
 .td-pronto { font-size: 11.5px; font-weight: 600; background: #fdf1e0; color: #8a4a06; padding: 2px 7px; border-radius: 10px; }
+.tdash-selector { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.tdash-sel { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.55); background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.tdash-sel[aria-pressed="true"] { background: #fff; color: var(--tdash-color); border-color: #fff; }
+.tdash-sel:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
 .td-boton-claro { min-height: 44px; padding: 0 14px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.55); color: #fff; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .tdash-cuerpo { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; }
 
@@ -164,3 +171,15 @@
 .tav-hist > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: #0f766e; }
 .tav-hist ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: #3a4a57; display: flex; flex-direction: column; gap: 4px; }
 @media (max-width: 700px) { .tav-planta .td-boton, .tav-planta .td-boton-sec { width: 100%; } }
+
+/* §34: el contenido del Dashboard distribución con los mismos botones, opciones y tarjetas que el PTAP (sus componentes usan las clases de los formularios
+   de Técnica: aquí se igualan, solo dentro del cuerpo del dashboard). */
+.tdash .dash-redes { padding-bottom: 24px; }
+.tdash .dash-redes .tec-tarjeta { margin: 0; background: #fff; border: 1px solid #dde5ea; border-radius: 12px; }
+.tdash .dash-redes .dan-pad-x, .tdash .dash-redes .dan-pad-x.dash-pestanas { margin: 0; }
+.tdash .dash-redes .dan-pad { padding: 0; }
+.tdash .dash-redes .tec-boton { min-height: 44px; padding: 0 16px; border-radius: 8px; border: none; background: #0f766e; color: #fff; font: inherit; font-size: 15px; font-weight: 700; }
+.tdash .dash-redes .tec-boton-sec { min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #0f766e; background: #fff; color: #0f766e; font: inherit; font-size: 15px; font-weight: 700; }
+.tdash .dash-redes .dan-opcion { min-height: 44px; border-radius: 8px; font-size: 15px; }
+.tdash .dash-redes .dan-opcion[aria-pressed="true"], .tdash .dash-redes [role="tab"][aria-selected="true"] { background: #0f766e; border-color: #0f766e; color: #fff; }
+.pto-tarjeta { border-color: #dde5ea; border-radius: 12px; }

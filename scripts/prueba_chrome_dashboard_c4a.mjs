@@ -255,9 +255,9 @@ for (const ancho of [390, 1280]) {
 
   // ===== B. Supervisor con los dos: selector y pestañas =====
   p = await abrir(ancho, "sup", null);
-  await clicTexto(p, "button", "Dashboard distribución"); await esperarTexto(p, /Redes de acueducto y alcantarillado/);
+  await clicTexto(p, "button", "Dashboard distribución"); await esperarTexto(p, /Dashboard distribución[\s\S]*No identificados/);     // §34: encabezado común (ya no hay subtítulo)
   t = await texto(p);
-  ok(`${tag} el selector PTAP | distribución aparece arriba (tiene los dos) y las 4 pestañas`, (await p.$$(".tec-selector-dash .tec-chip-form")).length === 2
+  ok(`${tag} el selector PTAP | distribución aparece arriba, dentro del encabezado (§34; tiene los dos) y las 4 pestañas`, (await p.$$(".tdash-cab .tdash-selector .tdash-sel")).length === 2
      && ["No identificados", "Intervenciones", "Daños y fallas", "Reportes del bot"].every((x) => t.includes(x)));
   // no identificados: crear el activo
   await esperarTexto(p, new RegExp(D.noIdent));
