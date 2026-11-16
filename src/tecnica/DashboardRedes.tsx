@@ -4,7 +4,7 @@ import "./dano.css";
 import "./intervencion.css";
 import "./dashboard.css";
 import { CabeceraDashboard } from "./CabeceraDashboard";
-import { apiDano, apiDash, apiItv, type DanoLista, type FormularioDano as DefDano, type IntervencionLista, type ReporteBot } from "./apiRedes";
+import { apiDano, apiDash, apiItv, type DanoLista, type FormularioDano as DefDano, type GrupoVerificar, type IntervencionLista, type ListaPorVerificar, type PorVerificar, type ReporteBot } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 import { NoIdentificados, Recursos } from "./IntervencionesSupervisor";
@@ -17,10 +17,10 @@ import { CargueCapas } from "./cargue/CargueCapas";
 // Corte 4b (DashboardGestion.tsx): Personal, Gráficas, Descargas, Catálogo, Parámetros y, solo para el administrador, Nodos por clasificar.
 // Corte 5c (cargue/CargueCapas.tsx): Cargue de capas (el supervisor lo lee; carga el administrador). Nada se borra: todo es un evento con motivo.
 
-type Pestana = "no_identificados" | "intervenciones" | "danos" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos";
+type Pestana = "no_identificados" | "intervenciones" | "danos" | "por_verificar" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos";
 const PESTANAS: { c: Pestana; n: string; admin?: boolean }[] = [{ c: "no_identificados", n: "No identificados" }, { c: "intervenciones", n: "Intervenciones" },
-  { c: "danos", n: "Daños y fallas" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
-  { c: "cargue", n: "Cargue de capas" }, { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar", admin: true }];
+  { c: "danos", n: "Daños y fallas" }, { c: "por_verificar", n: "Por verificar" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
+  { c: "cargue", n: "Cargue de capas" }, { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar" }];      // 9a-bis: también el supervisor de distribución (David, 16-nov)
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const ESTADO: Record<string, string> = { reportado: "Reportado", en_atencion: "En atención", atendido: "Atendido", oculto: "Oculto", cerrada: "Cerrada", anulada: "Anulada", oculta: "Oculta",
   recibido: "Recibido", descartado: "Descartado" };
@@ -42,6 +42,7 @@ export function DashboardRedes({ correo, selector, onVolver, onGeovisor }: { cor
       {pestana === "no_identificados" ? <NoIdentificados onFicha={setFicha} /> : null}
       {pestana === "intervenciones" ? <Intervenciones onFicha={setFicha} /> : null}
       {pestana === "danos" ? <Danos onFicha={setFicha} /> : null}
+      {pestana === "por_verificar" ? <PorVerificarLista onFicha={setFicha} /> : null}
       {pestana === "bot" ? <ReportesBot /> : null}
       {pestana === "graficas" ? <Graficas onFicha={setFicha} /> : null}
       {pestana === "descargas" ? <Descargas /> : null}
@@ -49,7 +50,7 @@ export function DashboardRedes({ correo, selector, onVolver, onGeovisor }: { cor
       {pestana === "cargue" ? <CargueCapas /> : null}
       {pestana === "catalogo" ? <Catalogo /> : null}
       {pestana === "parametros" ? <Parametros /> : null}
-      {pestana === "nodos" && admin ? <Nodos onFicha={setFicha} /> : null}
+      {pestana === "nodos" ? <Nodos onFicha={setFicha} admin={admin} /> : null}
       </div>
     </div>
   );
@@ -106,7 +107,7 @@ function Intervenciones({ onFicha }: { onFicha: (c: string) => void }) {
             <h2>{i.codigo} · {i.tipo} <span className="itv-etiqueta">{ESTADO[i.estado] ?? i.estado}</span></h2>
             <p className="red-texto">{i.activo ? <button type="button" className="tec-enlace" onClick={() => onFicha(i.activo!)}>{i.activo}</button> : <>«{i.no_identificado}» (no identificado)</>}
               {i.dano ? <> · atiende {i.dano}</> : null} · {i.ejecutor === "emdupar" ? "EMDUPAR" : `contratista${i.contratista ? ` ${i.contratista}` : ""}`}</p>
-            <p className="tec-ayuda">{fecha(i.t_fin)} · {i.autor} · {i.fotos} foto(s) · recursos {i.recursos === "completos" ? "completos" : "por completar"}</p>
+            <p className="tec-ayuda">{fecha(i.t_fin)} · {i.autor} · {i.fotos} foto(s) · recursos {i.recursos === "completos" ? "completos" : "por completar"}{i.sector_hidraulico ? ` · sector ${i.sector_hidraulico.sector}${i.sector_hidraulico.subsector ? ` (${i.sector_hidraulico.subsector})` : ""}` : ""}</p>
             <div className="dash-acciones">
               <ConMotivo rotulo="Ocultar" id={`oc-${i.codigo}`} avisar={setAviso} onEnviar={async (m) => { const r = await apiDash.intervencionEvento(i.codigo, "ocultar", m); setVez((v) => v + 1); return `${r.codigo} quedó oculta.`; }} />
               {i.estado === "cerrada" ? <ConMotivo rotulo="Anular" id={`an-${i.codigo}`} avisar={setAviso} onEnviar={async (m) => { const r = await apiDash.intervencionEvento(i.codigo, "anulada", m); setVez((v) => v + 1); return `${r.codigo} quedó anulada.${r.aviso ? " " + r.aviso : ""}`; }} /> : null}
@@ -116,7 +117,61 @@ function Intervenciones({ onFicha }: { onFicha: (c: string) => void }) {
   );
 }
 
+// ---------- Por verificar (Corte 9a) ----------
+// Activos con la marca «por verificar» vigente: lo que dejó el Plan Maestro 2014 (estado distinto en el modelo, válvulas por verificar en campo y pozos MHP, MH y
+// MHONE que no están en el catastro levantado) y los activos nuevos de una inversión. «Verificado» guarda lo que se encontró; la ficha se corrige aparte, en «Editar ficha».
+const GRUPO_PV: Record<GrupoVerificar, string> = { estado: "Estado distinto en el modelo", valvula: "Válvulas por verificar", pozo: "Pozos que no están en el catastro", otros: "Otros (activos nuevos)" };
+function PorVerificarLista({ onFicha }: { onFicha: (c: string) => void }) {
+  const [grupo, setGrupo] = useState<GrupoVerificar | null>(null);
+  const [d, setD] = useState<ListaPorVerificar | null>(null);
+  const [items, setItems] = useState<PorVerificar[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [vez, setVez] = useState(0);
+  const [aviso, setAviso] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    setD(null); setError(null);
+    apiDash.porVerificar(grupo, null).then((r) => { if (vivo) { setD(r); setItems(r.items); } }).catch((e) => { if (vivo) setError(err(e, "Solo el supervisor de distribución o el administrador ven los activos por verificar.")); });
+    return () => { vivo = false; };
+  }, [grupo, vez]);
+  if (error) return <section className="tec-tarjeta" role="alert"><p>{error}</p></section>;
+  return (
+    <>
+      <p className="tec-ayuda dan-pad-x">Activos que hay que confirmar en campo. Al marcar «Verificado» escriba lo que se encontró; si el dato de la ficha está mal, corríjalo en «Editar ficha» (la marca no cambia la ficha).</p>
+      {d ? (
+        <div className="dan-fila dan-pad-x" role="group" aria-label="Qué activos por verificar ver">
+          <button type="button" className="dan-opcion" aria-pressed={grupo === null} onClick={() => setGrupo(null)}>Todos: {d.grupos.reduce((s, g) => s + g.n, 0)}</button>
+          {d.grupos.map((g) => <button key={g.grupo} type="button" className="dan-opcion" aria-pressed={grupo === g.grupo} data-grupo={g.grupo} onClick={() => setGrupo(g.grupo)}>{GRUPO_PV[g.grupo] ?? g.grupo}: {g.n}</button>)}
+        </div>) : null}
+      {aviso ? <p className="tec-aviso tec-aviso-info dan-pad-x" role="status">{aviso} <button type="button" className="tec-enlace" onClick={() => setAviso(null)}>Cerrar</button></p> : null}
+      {!d ? <p className="tec-sub dan-pad" role="status">Cargando…</p>
+        : !items.length ? <section className="tec-tarjeta"><p className="red-vacio">No hay activos por verificar{grupo ? " en ese grupo" : ""}.</p></section>
+        : <>
+            {items.map((a) => (
+              <section key={a.codigo} className="tec-tarjeta itv-bandeja" aria-label={a.codigo}>
+                <h2>{a.codigo} · {a.tipo}{a.nombre ? ` · ${a.nombre}` : ""} <span className="itv-etiqueta">{a.estado}</span></h2>
+                <p className="pv-motivo">{a.motivo}</p>
+                <p className="tec-ayuda">{GRUPO_PV[a.grupo] ?? a.grupo} · marcado el {fecha(a.desde)} · {a.lat}, {a.lon}</p>
+                <div className="dash-acciones">
+                  <button type="button" className="tec-boton-sec" onClick={() => onFicha(a.codigo)}>Ver la ficha</button>
+                  <ConMotivo rotulo="Verificado" id={`pv-${a.codigo}`} avisar={setAviso} onEnviar={async (m) => { await apiDash.activoVerificar(a.codigo, m); setVez((v) => v + 1); return `${a.codigo} quedó verificado.`; }} />
+                </div>
+              </section>))}
+            {d.siguiente && items.length < d.total ? <div className="dan-pad-x"><button type="button" className="tec-boton-sec" onClick={() => apiDash.porVerificar(grupo, items[items.length - 1].activo_id)
+              .then((r) => { setItems([...items, ...r.items]); setD({ ...d, siguiente: r.siguiente }); }).catch(() => {})}>Cargar más ({d.total - items.length})</button></div> : null}
+          </>}
+    </>
+  );
+}
+
 // ---------- Daños y fallas ----------
+// 9a-bis (David, 16-nov): el sector hidráulico de la ubicación es el oficial; el número guardado (escrito o propuesto) va primero y, si no coincide, se avisa.
+function sectorDano(d: DanoLista): string {
+  const h = d.sector_hidraulico;
+  if (d.sector && h && d.sector !== h.sector) return ` · sector ${d.sector} (por la ubicación: ${h.sector}${h.subsector ? `, ${h.subsector}` : ""})`;
+  if (d.sector) return ` · sector ${d.sector}${h?.subsector ? ` (${h.subsector})` : ""}`;
+  return h ? ` · sector ${h.sector}${h.subsector ? ` (${h.subsector})` : ""} (por la ubicación)` : "";
+}
 const FILTROS_DANO = [{ c: "abiertos", n: "Abiertos" }, { c: "no_identificados", n: "No identificados" }, { c: "ocultos", n: "Ocultos" }, { c: "todos", n: "Todos" }] as const;
 function Danos({ onFicha }: { onFicha: (c: string) => void }) {
   const [filtro, setFiltro] = useState<(typeof FILTROS_DANO)[number]["c"]>("abiertos");
@@ -143,7 +198,7 @@ function Danos({ onFicha }: { onFicha: (c: string) => void }) {
           <section key={d.codigo} className="tec-tarjeta itv-bandeja" aria-label={d.codigo}>
             <h2><span className={`itv-etiqueta itv-etiqueta-dano`}>{d.clase === "dano" ? "Daño" : "Falla"}</span> {d.codigo} · {d.tipo} <span className="itv-etiqueta">{ESTADO[d.estado] ?? d.estado}</span></h2>
             <p className="red-texto">{d.activo ? <button type="button" className="tec-enlace" onClick={() => onFicha(d.activo!)}>{d.activo}</button> : <>«{d.no_identificado}» (no identificado)</>}
-              {" "}· {d.sistema} · riesgo {d.riesgo}{d.sector ? ` · sector ${d.sector}` : ""}</p>
+              {" "}· {d.sistema} · riesgo {d.riesgo}{sectorDano(d)}</p>
             <p className="tec-ayuda">Detectado {fecha(d.t_detectado)} · {d.autor} · {d.fotos} foto(s) · {d.intervenciones} intervención(es){d.origen === "bot" ? " · del bot" : ""}</p>
             {d.tiene_tercero ? (
               terceros[d.codigo] ? <p className="red-texto">Tercero: <strong>{terceros[d.codigo]}</strong> <span className="tec-ayuda">(dato personal; la lectura quedó registrada)</span></p>

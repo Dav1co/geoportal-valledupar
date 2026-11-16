@@ -5,7 +5,8 @@ import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 
 // Entrada a la ficha de activos de redes (Corte 1b): por código (del geoportal o de la capa) o «Activos cerca de mí».
-// En el 1b la abren supervisor y administrador desde Técnica. El operador llega a la ficha desde el minimapa de los formularios (Corte 2),
+// En el 1b la abren supervisor y administrador desde Técnica; desde el 9a-bis también el operador de redes, en modo buscar (solo lectura: el servidor no le
+// deja editar y no le manda el origen ni los datos del modelo; quién es «operador de redes» lo dice geoportal_redes_mi_perfil → ficha_buscar). El operador llega a la ficha desde el minimapa de los formularios (Corte 2),
 // y el geovisor (Corte 6) la abre tocando un elemento. La posición del celular solo viaja en el cuerpo de la consulta y no se guarda.
 
 type Sistema = "acueducto" | "alcantarillado" | null;

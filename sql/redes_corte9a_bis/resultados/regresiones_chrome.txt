@@ -1,0 +1,16 @@
+== Chrome del 9a-bis (scripts/prueba_chrome_plan_maestro_c9a_bis.mjs), con el parche de AreaTecnica.tsx aplicado solo para la prueba
+RESULTADO: 86 de 86 — SIN FALLAS
+== regresión gestión 4b (guion adaptado al inicio por modos y a la respuesta 1)
+RESULTADO: 59 de 59 — SIN FALLAS
+== regresión ficha 3b (guion adaptado al inicio por modos)
+RESULTADO: 41 de 41 — SIN FALLAS
+== regresión geovisor 6c (guion de Code A, copia temporal con el puerto de B)
+RESULTADO: 54 de 54 — SIN FALLAS
+== regresión dashboard 4a (guion de Code A, copia temporal)
+RESULTADO: 43 de 43 — SIN FALLAS
+== regresión inicio por modos, Corte 11 (guion de Code A, copia temporal, con el parche aplicado)
+FALLA [390] B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención y el geovisor en solo lectura (tiene la casilla); sin ficha ni dashboards → Redes danos_fallas,mantenimiento,ficha_buscar,geovisor
+FALLA [1280] B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención y el geovisor en solo lectura (tiene la casilla); sin ficha ni dashboards → Redes danos_fallas,mantenimiento,ficha_buscar,geovisor
+FALLA [390] B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención y el geovisor en solo lectura (tiene la casilla); sin ficha ni dashboards → Redes danos_fallas,mantenimiento,ficha_buscar,geovisor
+FALLA [1280] B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención y el geovisor en solo lectura (tiene la casilla); sin ficha ni dashboards → Redes danos_fallas,mantenimiento,ficha_buscar,geovisor
+RESULTADO: 72 de 74 — 2 FALLA(S)

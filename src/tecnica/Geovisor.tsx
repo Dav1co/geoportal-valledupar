@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./geovisor.css";
 import { CENTRO_VALLEDUPAR, FUENTE_BASE_CALLES } from "../lib/mapaBase";
 import { FUNCTIONS_URL, supabase } from "../lib/supabase";
-import { apiGeovisor, type CapaDatos, type CapaGeovisor, type ConfigGeovisor, type GrupoCapa, type PerfilGeovisor, type TarjetaContrato, type VistaAbierta } from "./apiGeovisor";
+import { apiGeovisor, type CapaDatos, type CapaGeovisor, type ConfigGeovisor, type GrupoCapa, type NivelPresion, type PerfilGeovisor, type SerieRef, type TarjetaContrato, type TarjetaRef, type VistaAbierta } from "./apiGeovisor";
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 
@@ -20,6 +20,9 @@ import { FichaActivo } from "./FichaActivo";
 //   turbiedad frente a los rangos de Salida; la capa de reportes de Comercial (azul con contrato, rojo posible clandestino) que se puede atenuar; y
 //   «Compartir» con un enlace (quien lo abre inicia sesión y ve solo las capas para las que tiene permiso).
 // · Fuera de la tarjeta del contrato, nada de nombres, descripciones ni el tercero de un daño.
+// · Corte 9a (Plan Maestro 2014): los sectores y subsectores PROYECTADOS por el Plan (activos SEC, encendidos al abrir) y las capas de REFERENCIA, apagadas al
+//   abrir y en tesela propia: válvulas propuestas (no instaladas), red pluvial existente, alternativa pluvial a 2043, presión de MODELO (no medida) y la campaña de
+//   presiones de 2014 (la única medida, con su gráfica). No son activos: su tarjeta dice de dónde salen y no ofrece reportar daño ni intervención.
 
 type ActivoTarjeta = { codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number };
 type Tarjeta = { capa: string; props: Record<string, unknown>; lat: number; lon: number };
@@ -52,6 +55,11 @@ const NOMBRE_ITV: Record<string, string> = { preventivo: "Preventivo", correctiv
 const ESTADO_DANO: Record<string, string> = { reportado: "Reportado", en_atencion: "En atención", atendido: "Atendido" };
 const ESTADO_CAPA: Record<string, string> = { por_conectar: "Por conectar", espera_dato: "Espera el dato" };
 const VACIO: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+// Corte 9a: colores de la presión frente a los umbrales de Parámetros (el nivel lo calcula el servidor) y de las capas de referencia
+const COLOR_NIVEL: Record<NivelPresion, string> = { baja_roja: "#C62828", baja_naranja: "#EF6C00", normal: "#2E7D32", alta_naranja: "#F9A825", alta_roja: "#6A1B9A", sin_dato: "#90A4AE" };
+const NOMBRE_NIVEL: Record<NivelPresion, string> = { baja_roja: "Baja (roja)", baja_naranja: "Baja (naranja)", normal: "Dentro del rango", alta_naranja: "Alta (naranja)", alta_roja: "Alta (roja)", sin_dato: "Sin dato" };
+const COLOR_REF: Record<string, string> = { plan_valvulas: "#E65100", pluvial: "#00838F", pluvial_2043: "#AD1457" };
+const CAPAS_PRESION = new Set(["presion_modelo", "campana_2014"]);
 const nf = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 1 });
 const fechaHora = (v: unknown) => (typeof v === "string" ? new Date(v).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Bogota" }) : "—");
 const texto = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v).replace(/_/g, " "));
@@ -112,6 +120,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
   const onRef = useRef(on);
   onRef.current = on;
   const teselas = cfg.capas.filter((c) => c.fuente === "tesela");
+  const referencias = cfg.capas.filter((c) => c.fuente === "referencia");
   const geojson = cfg.capas.filter((c) => c.fuente === "geojson");
   const hayPorFecha = geojson.some((c) => c.por_fecha && on.has(c.codigo));
 
@@ -129,10 +138,12 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
       for (const c of capasTesela) {
         const f = ["in", ["get", "prefijo"], ["literal", c.prefijos]];
         const vis = onRef.current.has(c.codigo) ? "visible" : "none";
+        // áreas (sectores hidráulicos, Corte 9a): el relleno suave solo en los subsectores (o en lo que no diga su clase), para que no se sume con el del sector;
+        // el borde del sector, grueso, y el del subsector, fino
         capas.push({ id: `t-${c.codigo}-a`, type: "fill", source: "red", "source-layer": "activos", filter: ["all", f, ["==", ["get", "forma"], "area"]] as unknown as maplibregl.FilterSpecification,
-                     layout: { visibility: vis }, paint: { "fill-color": COLOR_SISTEMA.tecnologia, "fill-opacity": 0.08 } });
+                     layout: { visibility: vis }, paint: { "fill-color": COLOR_SISTEMA.tecnologia, "fill-opacity": ["case", ["==", ["get", "clase"], "sector"], 0, 0.07] } });
         capas.push({ id: `t-${c.codigo}-ab`, type: "line", source: "red", "source-layer": "activos", filter: ["all", f, ["==", ["get", "forma"], "area"]] as unknown as maplibregl.FilterSpecification,
-                     layout: { visibility: vis }, paint: { "line-color": COLOR_SISTEMA.tecnologia, "line-width": 2, "line-opacity": 0.7 } });
+                     layout: { visibility: vis }, paint: { "line-color": COLOR_SISTEMA.tecnologia, "line-width": ["case", ["==", ["get", "clase"], "subsector"], 1, 2.6], "line-opacity": 0.75 } });
         capas.push({ id: `t-${c.codigo}-l`, type: "line", source: "red", "source-layer": "activos", filter: ["all", f, ["==", ["get", "forma"], "tramo"]] as unknown as maplibregl.FilterSpecification,
                      layout: { visibility: vis, "line-cap": "round" },
                      paint: { "line-color": COLOR_SISTEMA.acueducto, "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1.2, 16, 3, 19, 6],
@@ -156,6 +167,24 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
                      paint: { "circle-radius": c.codigo === "muestreo" ? 7 : 6.5, "circle-color": color as unknown as string,
                               "circle-stroke-color": borde as unknown as string, "circle-stroke-width": c.codigo === "muestreo" ? 2.5 : 2 } });
       }
+      // Corte 9a: capas de referencia, cada una con su fuente (solo pide teselas cuando está encendida)
+      const capasReferencia = capasRef.current.filter((c) => c.fuente === "referencia");
+      const fuentesRef: Record<string, maplibregl.SourceSpecification> = {};
+      for (const c of capasReferencia) {
+        fuentesRef[`r-${c.codigo}`] = { type: "vector", tiles: [`${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela_ref&capa=${c.codigo}&z={z}&x={x}&y={y}&v=${cfg.version}`], minzoom: cfg.zoom.min, maxzoom: 18 };
+        const vis = onRef.current.has(c.codigo) ? "visible" : "none";
+        const presion = CAPAS_PRESION.has(c.codigo);
+        const colorNivel = ["match", ["get", "nivel"], ...Object.entries(COLOR_NIVEL).flat(), COLOR_NIVEL.sin_dato] as unknown as string;
+        const color = COLOR_REF[c.codigo] ?? "#455A64";
+        capas.push({ id: `r-${c.codigo}-l`, type: "line", source: `r-${c.codigo}`, "source-layer": "ref", filter: ["==", ["get", "forma"], "tramo"], layout: { visibility: vis, "line-cap": "round" },
+                     paint: { "line-color": c.codigo === "pluvial_2043" ? ["match", ["get", "estado"], "Existente", "#78909C", color] as unknown as string : color,
+                              "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1.4, 16, 3, 19, 6], "line-opacity": 0.9, ...(c.codigo === "pluvial_2043" ? { "line-dasharray": [2, 1.5] } : {}) } });
+        capas.push({ id: `r-${c.codigo}-p`, type: "circle", source: `r-${c.codigo}`, "source-layer": "ref", filter: ["==", ["get", "forma"], "nodo"], layout: { visibility: vis },
+                     paint: c.codigo === "campana_2014" ? { "circle-radius": 9, "circle-color": colorNivel, "circle-stroke-color": "#1B1F1D", "circle-stroke-width": 2.5 }
+                       : presion ? { "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 2.5, 16, 5, 19, 8], "circle-color": colorNivel, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 0.8, "circle-opacity": 0.9 }
+                       : c.codigo === "plan_valvulas" ? { "circle-radius": ["interpolate", ["linear"], ["zoom"], 15, 4, 19, 8], "circle-color": "#FFFFFF", "circle-stroke-color": color, "circle-stroke-width": 2.5 }
+                       : { "circle-radius": ["interpolate", ["linear"], ["zoom"], 15, 3, 19, 7], "circle-color": color, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.2 } });
+      }
       const conContratos = capasRef.current.some((c) => c.fuente === "contratos");
       if (conContratos) {
         capas.push({ id: "c-contratos", type: "circle", source: "contratos", "source-layer": "contratos", layout: { visibility: onRef.current.has("contratos") ? "visible" : "none" },
@@ -168,6 +197,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
       m = new maplibregl.Map({
         container: cont.current, center: inicialRef.current ? [inicialRef.current.lon, inicialRef.current.lat] : CENTRO_VALLEDUPAR, zoom: inicialRef.current?.zoom ?? 14, maxZoom: 20, minZoom: 11, attributionControl: { compact: true },
         dragRotate: false, pitchWithRotate: false, touchPitch: false,
+        // «accion=geovisor_tesela» cubre también geovisor_tesela_contratos y geovisor_tesela_ref
         transformRequest: (url) => (url.includes("accion=geovisor_tesela") && token.current ? { url, headers: { Authorization: `Bearer ${token.current}` } } : { url }),
         style: {
           version: 8,
@@ -177,6 +207,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
             ...(conContratos ? { contratos: { type: "vector" as const, tiles: [`${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela_contratos&z={z}&x={x}&y={y}&v=${encodeURIComponent(cfg.hoy)}`],
                                               minzoom: cfg.zoom.contratos ?? 16, maxzoom: 18 } } : {}),
             ...fuentesGeo,
+            ...fuentesRef,
             sel: { type: "geojson", data: VACIO },
           },
           layers: capas,
@@ -189,13 +220,16 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
       m.on("click", (ev) => {
         if (!m) return;
         const caja: [maplibregl.PointLike, maplibregl.PointLike] = [[ev.point.x - 14, ev.point.y - 14], [ev.point.x + 14, ev.point.y + 14]];
-        const orden = [...capasGeo.map((c) => `g-${c.codigo}`), "c-contratos", ...capasTesela.map((c) => `t-${c.codigo}-p`), ...capasTesela.map((c) => `t-${c.codigo}-l`), ...capasTesela.map((c) => `t-${c.codigo}-a`)]
+        // primero lo puntual (actividades, campaña y demás referencias, contratos y nodos), luego los tramos y, al final, las áreas (sectores)
+        const orden = [...capasGeo.map((c) => `g-${c.codigo}`), ...capasReferencia.map((c) => `r-${c.codigo}-p`), "c-contratos", ...capasTesela.map((c) => `t-${c.codigo}-p`),
+                       ...capasTesela.map((c) => `t-${c.codigo}-l`), ...capasReferencia.map((c) => `r-${c.codigo}-l`), ...capasTesela.map((c) => `t-${c.codigo}-a`)]
           .filter((id) => m!.getLayer(id) && m!.getLayoutProperty(id, "visibility") !== "none");
         const feats = m.queryRenderedFeatures(caja, { layers: orden });
-        const f = orden.map((id) => feats.find((x) => x.layer.id === id)).find(Boolean);
+        // en las áreas, el subsector antes que el sector que lo contiene
+        const f = orden.map((id) => feats.filter((x) => x.layer.id === id).sort((a, b) => Number(b.properties?.clase === "subsector") - Number(a.properties?.clase === "subsector"))[0]).find(Boolean);
         if (!f) { setTarjeta(null); return; }
         const id = f.layer.id;
-        const capa = id.startsWith("g-") ? id.slice(2) : id === "c-contratos" ? "contrato" : "activo";
+        const capa = id.startsWith("g-") ? id.slice(2) : id.startsWith("r-") ? `ref:${id.slice(2, -2)}` : id === "c-contratos" ? "contrato" : "activo";
         const [lon, lat] = f.geometry.type === "Point" ? (f.geometry.coordinates as [number, number]) : [ev.lngLat.lng, ev.lngLat.lat];
         setTarjeta({ capa, props: f.properties as Record<string, unknown>, lat, lon });
       });
@@ -212,6 +246,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
       for (const c of teselas) for (const s of ["-a", "-ab", "-l", "-p"]) if (m.getLayer(`t-${c.codigo}${s}`)) m.setLayoutProperty(`t-${c.codigo}${s}`, "visibility", on.has(c.codigo) ? "visible" : "none");
       for (const c of geojson) if (m.getLayer(`g-${c.codigo}`)) m.setLayoutProperty(`g-${c.codigo}`, "visibility", on.has(c.codigo) ? "visible" : "none");
       if (m.getLayer("c-contratos")) m.setLayoutProperty("c-contratos", "visibility", on.has("contratos") ? "visible" : "none");
+      for (const c of referencias) for (const s of ["-l", "-p"]) if (m.getLayer(`r-${c.codigo}${s}`)) m.setLayoutProperty(`r-${c.codigo}${s}`, "visibility", on.has(c.codigo) ? "visible" : "none");
       for (const c of ATENUABLES) if (m.getLayer(`g-${c}`)) { const o = atenuadas.has(c) ? 0.3 : 1; m.setPaintProperty(`g-${c}`, "circle-opacity", o); m.setPaintProperty(`g-${c}`, "circle-stroke-opacity", o); }
     };
     if (m.getLayer("sel")) aplicar(); else m.once("styledata", aplicar);
@@ -293,6 +328,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
               : `${c.nombre}: se muestran los ${cfg.max_elementos} más recientes. Acorte el rango de fechas.`}</p>)}
           </div>) : null}
         {colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} /> : null}
+        {[...CAPAS_PRESION].some((c) => on.has(c)) ? <LeyendaPresion modelo={on.has("presion_modelo")} medida={on.has("campana_2014")} arriba={colores !== "tipo"} /> : null}
         {on.has("contratos") && zoom < (cfg.zoom.contratos ?? 16) && zoom >= cfg.zoom.min ? <div className="geo-aviso geo-aviso-suave geo-aviso-abajo" role="status">Acerque más para ver los contratos</div> : null}
         {avisoAbierto ? <div className="geo-vista-aviso" role="status"><span>{avisoAbierto}</span><button type="button" className="geo-cerrar" onClick={() => setAvisoAbierto(null)} aria-label="Cerrar el aviso">✕</button></div> : null}
         {compartir ? <Compartir cfg={cfg} mapa={mapa.current} on={on} colores={colores} periodo={periodo} atenuadas={atenuadas} onCerrar={() => setCompartir(false)} /> : null}
@@ -403,7 +439,11 @@ function TarjetaElemento({ t, cfg, onCerrar, onVerFicha, onReportarDano, onRegis
     if (typeof p.diametro === "number") filas.push(["Diámetro", `${nf.format(p.diametro)} mm`]);
     filas.push(["Edad", typeof p.edad === "number" ? `${p.edad} años` : "Sin fecha de instalación"]);
     filas.push(["Estado", cfg.estados?.[String(p.estado)] ?? texto(p.estado)]);
+    if (p.nombre) filas.unshift(["Nombre", texto(p.nombre)]);      // Corte 9a: sectores e instalaciones
+    if (p.prefijo === "SEC") filas.push(["Origen", "Plan Maestro 2014 · sectores con que se opera"]);      // 9a-bis (David, 16-nov): son los de hoy
     activo = String(p.codigo);
+  } else if (t.capa.startsWith("ref:")) {
+    return <TarjetaReferencia capa={t.capa.slice(4)} llave={String(p.llave)} nombre={texto(p.nombre)} cfg={cfg} onCerrar={onCerrar} onVerFicha={onVerFicha} />;
   } else if (t.capa === "danos") {
     sub = `${p.clase === "falla" ? "Falla" : "Daño"} · ${texto(p.tipo)}`;
     filas.push(["Estado", ESTADO_DANO[String(p.estado)] ?? texto(p.estado)], ["Detectado", fechaHora(p.cuando)], ["Riesgo", texto(p.riesgo)], ["Activo", texto(p.activo)]);
@@ -496,6 +536,77 @@ function EditarOmision({ cfg, onCerrar }: { cfg: ConfigGeovisor; onCerrar: (camb
   );
 }
 
+// Corte 9a. Leyenda de la presión: los colores salen de los umbrales de Parámetros (15, 10, 50 y 60 m.c.a. por omisión). La del modelo lleva su advertencia.
+function LeyendaPresion({ modelo, medida, arriba }: { modelo: boolean; medida: boolean; arriba: boolean }) {
+  return (
+    <div className={`geo-leyenda geo-leyenda-presion${arriba ? " geo-leyenda-2" : ""}`} aria-label="Colores de la presión">
+      <strong>Presión (m.c.a.)</strong>
+      {modelo ? <p className="geo-adv" role="note">Presión de modelo, no medida</p> : null}
+      {medida ? <p className="geo-leyenda-nota">Borde negro: medida en la campaña de 2014</p> : null}
+      <ul>{(["baja_roja", "baja_naranja", "normal", "alta_naranja", "alta_roja"] as NivelPresion[]).map((n) => <li key={n}><span className="geo-leyenda-punto" style={{ background: COLOR_NIVEL[n] }} aria-hidden="true" />{NOMBRE_NIVEL[n]}</li>)}</ul>
+    </div>
+  );
+}
+
+// Corte 9a. Tarjeta de un elemento de REFERENCIA (no es un activo): se pide al tocarlo. Dice de dónde sale y, si es presión, si es de modelo o medida.
+function TarjetaReferencia({ capa, llave, nombre, cfg, onCerrar, onVerFicha }: { capa: string; llave: string; nombre: string; cfg: ConfigGeovisor; onCerrar: () => void; onVerFicha: (c: string) => void }) {
+  const [d, setD] = useState<TarjetaRef | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    setD(null); setError(null);
+    apiGeovisor.referencia(capa, llave).then((r) => { if (vivo) setD(r); }).catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudo cargar."); });
+    return () => { vivo = false; };
+  }, [capa, llave]);
+  const nombreCapa = cfg.capas.find((c) => c.codigo === capa)?.nombre ?? "Capa de referencia";
+  return (
+    <section className="geo-tarjeta" aria-label={`Tarjeta de ${d?.titulo ?? nombre}`} data-capa={`ref-${capa}`}>
+      <div className="geo-tarjeta-cab">
+        <div><h2>{d?.titulo ?? nombre}</h2><p>{d ? d.subtitulo ?? nombreCapa : "Cargando…"}</p></div>
+        <button type="button" className="geo-cerrar" onClick={onCerrar} aria-label="Cerrar la tarjeta">✕</button>
+      </div>
+      {error ? <p className="tec-error-caja" role="alert">{error}</p> : null}
+      {d ? (
+        <>
+          {d.advertencia ? <p className={`geo-adv${capa === "campana_2014" ? " geo-adv-medida" : ""}`} role="note">{d.advertencia}</p> : null}
+          {d.nivel ? <p className="geo-nivel"><span className="geo-leyenda-punto" style={{ background: COLOR_NIVEL[d.nivel] }} aria-hidden="true" />{NOMBRE_NIVEL[d.nivel]}</p> : null}
+          {(d.series ?? []).some((s) => (s.puntos?.length ?? s.valores?.length ?? 0) > 1) ? <GraficaRef series={d.series!} /> : null}
+          <dl>{d.filas.map((f) => <div key={f.r}><dt>{f.r}</dt><dd>{typeof f.v === "number" ? nf.format(f.v) : f.v}{f.u ? ` ${f.u}` : ""}</dd></div>)}</dl>
+          {d.origen ? <p className="geo-origen">Origen: {d.origen}</p> : null}
+          {d.activo && cfg.ficha ? <div className="geo-tarjeta-acc"><button type="button" className="tec-boton-sec" onClick={() => onVerFicha(d.activo!)}>Ficha de {d.activo}</button></div> : null}
+        </>) : null}
+    </section>
+  );
+}
+
+// Gráfica de líneas en SVG (sin librerías): la serie de 15 min de la campaña (eje de tiempo) o el perfil horario del modelo (0 a 24 h). Las líneas de 15 y 10 m.c.a. de referencia.
+const COLOR_SERIE = ["#1F5FA8", "#AD1457", "#2E7D32"];
+function GraficaRef({ series }: { series: SerieRef[] }) {
+  const W = 340, H = 150, ml = 30, mr = 6, mt = 8, mb = 20;
+  const datos = series.map((s) => (s.eje === "hora" ? (s.valores ?? []).map((v, i) => [i, v] as [number, number]) : (s.puntos ?? []).map(([t, v]) => [Date.parse(t + ":00Z"), v] as [number, number])))
+    .filter((p) => p.length > 1);
+  if (!datos.length) return null;
+  const xs = datos.flat().map((p) => p[0]), ys = datos.flat().map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(0, ...ys), y1 = Math.max(16, ...ys) * 1.05;
+  const X = (x: number) => ml + ((x - x0) / Math.max(1, x1 - x0)) * (W - ml - mr), Y = (y: number) => mt + (1 - (y - y0) / Math.max(1e-9, y1 - y0)) * (H - mt - mb);
+  const hora = series[0].eje === "hora";
+  const marcasX = hora ? [0, 6, 12, 18, 24] : Array.from({ length: Math.floor((x1 - x0) / 86400000) + 2 }, (_, i) => (Math.floor(x0 / 86400000) + i) * 86400000).filter((t) => t >= x0 && t <= x1);
+  // las líneas de 0, 10 y 15 van siempre; un rótulo se calla si queda a menos de 11 px de uno ya puesto (0 y 15 mandan sobre el 10 y sobre los extremos)
+  const marcasY = [0, 15, 10, y0 < 0 ? Math.ceil(y0) : null, Math.floor(y1)].filter((v, i, a): v is number => v !== null && a.indexOf(v) === i && v >= y0 && v <= y1);
+  const conRotulo = marcasY.filter((v, i) => marcasY.slice(0, i).every((w) => Math.abs(Y(w) - Y(v)) >= 11));
+  return (
+    <figure className="geo-grafica">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${series.map((s) => s.nombre).join(" y ")}, en ${series[0].unidad}`} data-puntos={datos.reduce((n, p) => n + p.length, 0)}>
+        {marcasY.map((v) => <g key={`y${v}`}><line x1={ml} x2={W - mr} y1={Y(v)} y2={Y(v)} stroke={v === 15 ? "#EF6C00" : v === 10 ? "#C62828" : "#dbe3e8"} strokeDasharray={v === 15 || v === 10 ? "4 3" : undefined} strokeWidth="1" />
+          {conRotulo.includes(v) ? <text x={ml - 4} y={Y(v) + 4} textAnchor="end" fontSize="10" fill="#5b6b77">{v}</text> : null}</g>)}
+        {marcasX.map((v) => <text key={`x${v}`} x={X(v)} y={H - 5} textAnchor="middle" fontSize="10" fill="#5b6b77">{hora ? `${v} h` : new Date(v).toLocaleDateString("es-CO", { day: "numeric", month: "short", timeZone: "UTC" })}</text>)}
+        {datos.map((p, i) => <polyline key={i} fill="none" stroke={COLOR_SERIE[i % COLOR_SERIE.length]} strokeWidth="1.6" strokeLinejoin="round" points={p.map(([x, y]) => `${X(x).toFixed(1)},${Y(y).toFixed(1)}`).join(" ")} />)}
+      </svg>
+      <figcaption>{series.map((s, i) => <span key={s.nombre}><i style={{ background: COLOR_SERIE[i % COLOR_SERIE.length] }} aria-hidden="true" />{s.nombre}</span>)}<span className="geo-grafica-ref">Líneas punteadas: 15 y 10 m.c.a.</span></figcaption>
+    </figure>
+  );
+}
+
 // Tarjeta del contrato (§30.1). El nombre, la dirección y el barrio son DATO PERSONAL: se piden al tocar, viven solo en el estado de esta tarjeta y se
 // descartan al cerrarla. No se guardan, no se descargan ni se imprimen. Sin teléfono ni deuda. El servidor registra la lectura.
 function TarjetaDeContrato({ contrato, cfg, onCerrar, onVerFicha }: { contrato: string; cfg: ConfigGeovisor; onCerrar: () => void; onVerFicha: (c: string) => void }) {
@@ -534,6 +645,7 @@ function TarjetaDeContrato({ contrato, cfg, onCerrar, onVerFicha }: { contrato: 
           <dl>
             <div><dt>Medidor</dt><dd>{d.medidor_anios === null ? "Sin fecha real" : `${d.medidor_anios} años`}</dd></div>
             <div><dt>Tramo de acueducto</dt><dd>{d.tramo ?? "Sin enlazar"}</dd></div>
+            {d.sector_hidraulico ? <div><dt>Sector hidráulico</dt><dd>{d.sector_hidraulico.sector}{d.sector_hidraulico.subsector ? ` · subsector ${d.sector_hidraulico.subsector}` : ""}</dd></div> : null}
           </dl>
           {d.consumo ? (
             <div className="geo-consumo" aria-label="Perfil de consumo de 6 meses">

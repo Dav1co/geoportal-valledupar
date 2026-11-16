@@ -1,0 +1,127 @@
+OK    [390] A1 la lista de capas trae las 5 de referencia del Plan (apagadas al abrir) y los sectores (encendidos), con su nota de origen
+OK    [390] A2 con las capas de referencia apagadas no se pide ninguna de sus teselas
+OK    [390] A3 los sectores y subsectores del Plan se dibujan al abrir
+OK    [390] A4 tocar dentro de un subsector abre su tarjeta (el subsector antes que el sector): código SEC, nombre y «Proyectado por el Plan Maestro 2014»
+OK    [390] A5 la presión de modelo se dibuja, pedida con el token, y la leyenda advierte «Presión de modelo, no medida»
+OK    [390] A6 tocar un nodo abre su tarjeta de referencia: «Presión de MODELO, no medida», mediana, el perfil horario (2 series de 25 horas) y el origen
+OK    [390] A7 la tarjeta de referencia lleva a la ficha del activo del nodo y no ofrece reportar daño ni intervención
+OK    [390] A8 la campaña de 2014: tarjeta del punto 2 con «Presión MEDIDA», su gráfica de 15 min (661 lecturas), la dirección y la nota de calidad del dato
+OK    [390] A9 una válvula propuesta: «no está instalada, no es un activo y no entra en ninguna simulación»; sin ficha ni formularios
+OK    [390] A10 las válvulas propuestas no son activos: ninguna «S» del Plan tiene código VAL
+OK    [390] A11 la red pluvial existente se dibuja y su tarjeta dice qué es («Conducto pluvial») y que es una capa de referencia
+OK    [390] A12 la alternativa pluvial a 2043 se dibuja al encenderla
+OK    [390] A13 sin desborde horizontal y con botones de 40 px o más
+OK    [390] A14 la tarjeta del contrato trae el «Sector según el Plan» (el de su tramo de acueducto: 4)
+OK    [390] B1 el operador en solo lectura ve «Red pluvial existente» y los sectores, y no ve presión de modelo, campaña, válvulas propuestas ni la alternativa 2043
+OK    [390] C1 el daño conserva su sector escrito a mano (9) y al lado muestra el «sector según Plan» calculado por su ubicación (4, subsector 4.1)
+OK    [390] C2 la bandeja «Por verificar»: 1.746 activos en 3 grupos (43 con estado distinto, 63 válvulas y 1.640 pozos), cada uno con su motivo
+OK    [390] C3 el filtro «Válvulas por verificar» muestra la válvula con su motivo (modelo y catastro de 2014)
+OK    [390] C4 la ficha de la válvula: aviso «Por verificar en campo» con su motivo, el sector según el Plan y la sección «Referencia del Plan Maestro 2014» (datos de referencia, no de la ficha oficial)
+OK    [390] C5 el efecto de la válvula es SUGERIDO («Es una sugerencia…») y el «Efecto en la red» oficial sigue como estaba (sin_definir)
+OK    [390] C6 la ficha con la referencia no se desborda y la presión dice «de MODELO, no medida»
+OK    [390] C7 «Verificado» exige el motivo, guarda lo que se encontró (evento, sin cambiar la ficha) y saca el activo de la bandeja (62 válvulas)
+OK    [390] C8 el supervisor no tiene «Nodos por clasificar» (sigue siendo del administrador) y la bandeja no se desborda
+OK    [390] D1 la bandeja (782 nodos; el tanque La Popa ya es activo) muestra los grupos por sugerencia del modelo y, en cada nodo, lo que es y la sugerencia
+OK    [390] D2 el filtro por sugerencia deja solo esos nodos («Crear el activo»: la pila pública, hidrante en el modelo)
+OK    [390] D3 la ficha preliminar (solo lectura): minimapa con el punto y los 2 tramos que llegan, cada tramo con su código, material y diámetro
+OK    [390] D4 la ficha preliminar dice lo que es en el modelo, su sector según el Plan, la demanda y la presión «de modelo, no medida», con la sugerencia «no crear activo»
+OK    [390] D5 la ficha preliminar no se desborda a 390 px
+OK    [390] D6 «Confirmar la sugerencia» pide el motivo, deja el nodo como «propuesto por el Plan», lo saca de la bandeja y NO crea ningún activo
+OK    [1280] A1 la lista de capas trae las 5 de referencia del Plan (apagadas al abrir) y los sectores (encendidos), con su nota de origen
+OK    [1280] A2 con las capas de referencia apagadas no se pide ninguna de sus teselas
+OK    [1280] A3 los sectores y subsectores del Plan se dibujan al abrir
+OK    [1280] A4 tocar dentro de un subsector abre su tarjeta (el subsector antes que el sector): código SEC, nombre y «Proyectado por el Plan Maestro 2014»
+OK    [1280] A5 la presión de modelo se dibuja, pedida con el token, y la leyenda advierte «Presión de modelo, no medida»
+OK    [1280] A6 tocar un nodo abre su tarjeta de referencia: «Presión de MODELO, no medida», mediana, el perfil horario (2 series de 25 horas) y el origen
+OK    [1280] A7 la tarjeta de referencia lleva a la ficha del activo del nodo y no ofrece reportar daño ni intervención
+OK    [1280] A8 la campaña de 2014: tarjeta del punto 2 con «Presión MEDIDA», su gráfica de 15 min (661 lecturas), la dirección y la nota de calidad del dato
+OK    [1280] A9 una válvula propuesta: «no está instalada, no es un activo y no entra en ninguna simulación»; sin ficha ni formularios
+OK    [1280] A10 las válvulas propuestas no son activos: ninguna «S» del Plan tiene código VAL
+OK    [1280] A11 la red pluvial existente se dibuja y su tarjeta dice qué es («Conducto pluvial») y que es una capa de referencia
+OK    [1280] A12 la alternativa pluvial a 2043 se dibuja al encenderla
+OK    [1280] A13 sin desborde horizontal y con botones de 40 px o más
+OK    [1280] A14 la tarjeta del contrato trae el «Sector según el Plan» (el de su tramo de acueducto: 4)
+OK    [1280] B1 el operador en solo lectura ve «Red pluvial existente» y los sectores, y no ve presión de modelo, campaña, válvulas propuestas ni la alternativa 2043
+OK    [1280] C1 el daño conserva su sector escrito a mano (9) y al lado muestra el «sector según Plan» calculado por su ubicación (4, subsector 4.1)
+OK    [1280] C2 la bandeja «Por verificar»: 1.746 activos en 3 grupos (43 con estado distinto, 63 válvulas y 1.640 pozos), cada uno con su motivo
+OK    [1280] C3 el filtro «Válvulas por verificar» muestra la válvula con su motivo (modelo y catastro de 2014)
+OK    [1280] C4 la ficha de la válvula: aviso «Por verificar en campo» con su motivo, el sector según el Plan y la sección «Referencia del Plan Maestro 2014» (datos de referencia, no de la ficha oficial)
+OK    [1280] C5 el efecto de la válvula es SUGERIDO («Es una sugerencia…») y el «Efecto en la red» oficial sigue como estaba (sin_definir)
+OK    [1280] C6 la ficha con la referencia no se desborda y la presión dice «de MODELO, no medida»
+OK    [1280] C7 «Verificado» exige el motivo, guarda lo que se encontró (evento, sin cambiar la ficha) y saca el activo de la bandeja (62 válvulas)
+OK    [1280] C8 el supervisor no tiene «Nodos por clasificar» (sigue siendo del administrador) y la bandeja no se desborda
+OK    [1280] D1 la bandeja (782 nodos; el tanque La Popa ya es activo) muestra los grupos por sugerencia del modelo y, en cada nodo, lo que es y la sugerencia
+OK    [1280] D2 el filtro por sugerencia deja solo esos nodos («Crear el activo»: la pila pública, hidrante en el modelo)
+OK    [1280] D3 la ficha preliminar (solo lectura): minimapa con el punto y los 2 tramos que llegan, cada tramo con su código, material y diámetro
+OK    [1280] D4 la ficha preliminar dice lo que es en el modelo, su sector según el Plan, la demanda y la presión «de modelo, no medida», con la sugerencia «no crear activo»
+OK    [1280] D5 la ficha preliminar no se desborda a 1280 px
+OK    [1280] D6 «Confirmar la sugerencia» pide el motivo, deja el nodo como «propuesto por el Plan», lo saca de la bandeja y NO crea ningún activo
+OK    [1280] E1 las RPC del 9a responden con holgura bajo los topes de producción (la más lenta en local, con el arranque de psql: 119 ms)
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+OK    Z3 ninguna RPC de redes respondió con error de servidor
+----
+OK    [390] A1 la lista de capas trae las 5 de referencia del Plan (apagadas al abrir) y los sectores (encendidos), con su nota de origen
+OK    [390] A2 con las capas de referencia apagadas no se pide ninguna de sus teselas
+OK    [390] A3 los sectores y subsectores del Plan se dibujan al abrir
+OK    [390] A4 tocar dentro de un subsector abre su tarjeta (el subsector antes que el sector): código SEC, nombre y «Proyectado por el Plan Maestro 2014»
+OK    [390] A5 la presión de modelo se dibuja, pedida con el token, y la leyenda advierte «Presión de modelo, no medida»
+OK    [390] A6 tocar un nodo abre su tarjeta de referencia: «Presión de MODELO, no medida», mediana, el perfil horario (2 series de 25 horas) y el origen
+OK    [390] A7 la tarjeta de referencia lleva a la ficha del activo del nodo y no ofrece reportar daño ni intervención
+OK    [390] A8 la campaña de 2014: tarjeta del punto 2 con «Presión MEDIDA», su gráfica de 15 min (661 lecturas), la dirección y la nota de calidad del dato
+OK    [390] A9 una válvula propuesta: «no está instalada, no es un activo y no entra en ninguna simulación»; sin ficha ni formularios
+OK    [390] A10 las válvulas propuestas no son activos: ninguna «S» del Plan tiene código VAL
+OK    [390] A11 la red pluvial existente se dibuja y su tarjeta dice qué es («Conducto pluvial») y que es una capa de referencia
+OK    [390] A12 la alternativa pluvial a 2043 se dibuja al encenderla
+OK    [390] A13 sin desborde horizontal y con botones de 40 px o más
+OK    [390] A14 la tarjeta del contrato trae el «Sector según el Plan» (el de su tramo de acueducto: 4)
+OK    [390] B1 el operador en solo lectura ve «Red pluvial existente» y los sectores, y no ve presión de modelo, campaña, válvulas propuestas ni la alternativa 2043
+OK    [390] C1 el daño conserva su sector escrito a mano (9) y al lado muestra el «sector según Plan» calculado por su ubicación (4, subsector 4.1)
+OK    [390] C2 la bandeja «Por verificar»: 1.746 activos en 3 grupos (43 con estado distinto, 63 válvulas y 1.640 pozos), cada uno con su motivo
+OK    [390] C3 el filtro «Válvulas por verificar» muestra la válvula con su motivo (modelo y catastro de 2014)
+OK    [390] C4 la ficha de la válvula: aviso «Por verificar en campo» con su motivo, el sector según el Plan y la sección «Referencia del Plan Maestro 2014» (datos de referencia, no de la ficha oficial)
+OK    [390] C5 el efecto de la válvula es SUGERIDO («Es una sugerencia…») y el «Efecto en la red» oficial sigue como estaba (sin_definir)
+OK    [390] C6 la ficha con la referencia no se desborda y la presión dice «de MODELO, no medida»
+OK    [390] C7 «Verificado» exige el motivo, guarda lo que se encontró (evento, sin cambiar la ficha) y saca el activo de la bandeja (62 válvulas)
+OK    [390] C8 el supervisor no tiene «Nodos por clasificar» (sigue siendo del administrador) y la bandeja no se desborda
+OK    [390] D1 la bandeja (782 nodos; el tanque La Popa ya es activo) muestra los grupos por sugerencia del modelo y, en cada nodo, lo que es y la sugerencia
+OK    [390] D2 el filtro por sugerencia deja solo esos nodos («Crear el activo»: la pila pública, hidrante en el modelo)
+OK    [390] D3 la ficha preliminar (solo lectura): minimapa con el punto y los 2 tramos que llegan, cada tramo con su código, material y diámetro
+OK    [390] D4 la ficha preliminar dice lo que es en el modelo, su sector según el Plan, la demanda y la presión «de modelo, no medida», con la sugerencia «no crear activo»
+OK    [390] D5 la ficha preliminar no se desborda a 390 px
+OK    [390] D6 «Confirmar la sugerencia» pide el motivo, deja el nodo como «propuesto por el Plan», lo saca de la bandeja y NO crea ningún activo
+OK    [1280] A1 la lista de capas trae las 5 de referencia del Plan (apagadas al abrir) y los sectores (encendidos), con su nota de origen
+OK    [1280] A2 con las capas de referencia apagadas no se pide ninguna de sus teselas
+OK    [1280] A3 los sectores y subsectores del Plan se dibujan al abrir
+OK    [1280] A4 tocar dentro de un subsector abre su tarjeta (el subsector antes que el sector): código SEC, nombre y «Proyectado por el Plan Maestro 2014»
+OK    [1280] A5 la presión de modelo se dibuja, pedida con el token, y la leyenda advierte «Presión de modelo, no medida»
+OK    [1280] A6 tocar un nodo abre su tarjeta de referencia: «Presión de MODELO, no medida», mediana, el perfil horario (2 series de 25 horas) y el origen
+OK    [1280] A7 la tarjeta de referencia lleva a la ficha del activo del nodo y no ofrece reportar daño ni intervención
+OK    [1280] A8 la campaña de 2014: tarjeta del punto 2 con «Presión MEDIDA», su gráfica de 15 min (661 lecturas), la dirección y la nota de calidad del dato
+OK    [1280] A9 una válvula propuesta: «no está instalada, no es un activo y no entra en ninguna simulación»; sin ficha ni formularios
+OK    [1280] A10 las válvulas propuestas no son activos: ninguna «S» del Plan tiene código VAL
+OK    [1280] A11 la red pluvial existente se dibuja y su tarjeta dice qué es («Conducto pluvial») y que es una capa de referencia
+OK    [1280] A12 la alternativa pluvial a 2043 se dibuja al encenderla
+OK    [1280] A13 sin desborde horizontal y con botones de 40 px o más
+OK    [1280] A14 la tarjeta del contrato trae el «Sector según el Plan» (el de su tramo de acueducto: 4)
+OK    [1280] B1 el operador en solo lectura ve «Red pluvial existente» y los sectores, y no ve presión de modelo, campaña, válvulas propuestas ni la alternativa 2043
+OK    [1280] C1 el daño conserva su sector escrito a mano (9) y al lado muestra el «sector según Plan» calculado por su ubicación (4, subsector 4.1)
+OK    [1280] C2 la bandeja «Por verificar»: 1.746 activos en 3 grupos (43 con estado distinto, 63 válvulas y 1.640 pozos), cada uno con su motivo
+OK    [1280] C3 el filtro «Válvulas por verificar» muestra la válvula con su motivo (modelo y catastro de 2014)
+OK    [1280] C4 la ficha de la válvula: aviso «Por verificar en campo» con su motivo, el sector según el Plan y la sección «Referencia del Plan Maestro 2014» (datos de referencia, no de la ficha oficial)
+OK    [1280] C5 el efecto de la válvula es SUGERIDO («Es una sugerencia…») y el «Efecto en la red» oficial sigue como estaba (sin_definir)
+OK    [1280] C6 la ficha con la referencia no se desborda y la presión dice «de MODELO, no medida»
+OK    [1280] C7 «Verificado» exige el motivo, guarda lo que se encontró (evento, sin cambiar la ficha) y saca el activo de la bandeja (62 válvulas)
+OK    [1280] C8 el supervisor no tiene «Nodos por clasificar» (sigue siendo del administrador) y la bandeja no se desborda
+OK    [1280] D1 la bandeja (782 nodos; el tanque La Popa ya es activo) muestra los grupos por sugerencia del modelo y, en cada nodo, lo que es y la sugerencia
+OK    [1280] D2 el filtro por sugerencia deja solo esos nodos («Crear el activo»: la pila pública, hidrante en el modelo)
+OK    [1280] D3 la ficha preliminar (solo lectura): minimapa con el punto y los 2 tramos que llegan, cada tramo con su código, material y diámetro
+OK    [1280] D4 la ficha preliminar dice lo que es en el modelo, su sector según el Plan, la demanda y la presión «de modelo, no medida», con la sugerencia «no crear activo»
+OK    [1280] D5 la ficha preliminar no se desborda a 1280 px
+OK    [1280] D6 «Confirmar la sugerencia» pide el motivo, deja el nodo como «propuesto por el Plan», lo saca de la bandeja y NO crea ningún activo
+OK    [1280] E1 las RPC del 9a responden con holgura bajo los topes de producción (la más lenta en local, con el arranque de psql: 119 ms)
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+OK    Z3 ninguna RPC de redes respondió con error de servidor
+TIEMPOS: bandeja por verificar 52 ms · nodos por clasificar 96 ms · ficha de una válvula 119 ms · tarjeta de la campaña 49 ms · lista de daños 47 ms
+RESULTADO: 62 de 62 — SIN FALLAS

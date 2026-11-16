@@ -5,7 +5,8 @@ import { pedir } from "./apiTecnica";
 
 export type GrupoCapa = "acueducto" | "alcantarillado" | "tecnologia" | "actividades" | "calidad" | "reportes" | "comercial" | "analisis";
 export type CapaGeovisor = {
-  codigo: string; nombre: string; grupo: GrupoCapa; fuente: "tesela" | "geojson" | "preparada" | "contratos"; estado: "activa" | "por_conectar" | "espera_dato";
+  codigo: string; nombre: string; grupo: GrupoCapa; fuente: "tesela" | "geojson" | "preparada" | "contratos" | "referencia";      // «referencia» (Corte 9a): capas del Plan Maestro, en tesela propia; no son activos
+  estado: "activa" | "por_conectar" | "espera_dato";
   nota: string | null; prefijos: string[]; por_fecha: boolean; encendida: boolean;
 };
 export type PerfilGeovisor = "supervisor_distribucion" | "supervisor_planta" | "operador_distribucion";
@@ -26,6 +27,7 @@ export type TarjetaContrato = {
   datos_personales?: boolean;      // Corte 7a: false para el supervisor de planta (sin nombre ni dirección)
   consumo: { periodo_ultimo: string; promedio: number | null; meses_con_lectura: number; meses: { periodo: string; m3: number | null; sin_dato: boolean; lectura_real: boolean }[] } | null;
   medidor_anios: number | null; tramo: string | null;
+  sector_hidraulico?: { sector: number; subsector?: string | null } | null;      // Corte 9a: el sector del contrato es el de su tramo (por geometría); 9a-bis: el oficial
   suscriptor: { nombre: string | null; direccion: string | null; barrio: string | null };
   corte: string | null;
 };
@@ -33,8 +35,17 @@ export type VistaGuardada = { capas: string[]; colores: "tipo" | "material" | "e
   lon: number; lat: number; zoom: number; atenuadas: string[] };
 export type VistaAbierta = Omit<VistaGuardada, "periodo"> & { id: string; omitidas: string[]; creada_en: string; fechas_cambiadas: boolean; periodo: { modo: "hoy" | "semana" | "rango"; desde: string; hasta: string } };
 
+// Corte 9a. Tarjeta de un elemento de una capa de referencia (Plan Maestro 2014). Las filas llegan ya rotuladas; «series» trae la campaña medida de 2014
+// (puntos [fecha, m.c.a.]) o el perfil horario del modelo (25 valores, hora 0 a 24). La presión del modelo NO es una medición: «advertencia» lo dice.
+export type NivelPresion = "baja_roja" | "baja_naranja" | "normal" | "alta_naranja" | "alta_roja" | "sin_dato";
+export type FilaRef = { r: string; v: string | number; u?: string };
+export type SerieRef = { nombre: string; unidad: string; eje: "tiempo" | "hora"; escenario?: string; puntos?: [string, number][]; valores?: number[] };
+export type TarjetaRef = { capa: string; llave: string; titulo: string; subtitulo?: string; origen?: string; advertencia?: string; nivel?: NivelPresion; activo?: string;
+  filas: FilaRef[]; series?: SerieRef[] };
+
 const F = { funcion: "geoportal-redes" };
 export const apiGeovisor = {
+  referencia: (capa: string, llave: string) => pedir<TarjetaRef>("geovisor_referencia", { ...F, qs: { capa, llave } }),
   config: () => pedir<ConfigGeovisor>("geovisor", F),
   capa: (capa: string, desde?: string | null, hasta?: string | null) =>
     pedir<CapaDatos>("geovisor_capa", { ...F, qs: { capa, ...(desde ? { desde } : {}), ...(hasta ? { hasta } : {}) } }),
