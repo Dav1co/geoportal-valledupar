@@ -3,7 +3,7 @@
   · el ensayo (N de N … SIN FALLAS), la migración, la verificación (todas OK), que no se aplica dos veces y la reversa (vuelve la huella del 9a-bis);
   · public.predios_comercial es VISTA MATERIALIZADA, como en producción, y escribir en ella falla (nadie la toca);
   · como las ve producción: la carga completa (22.978 reportes sintéticos, contratos del catastro de la base) por las RPC, una llamada por petición, con el rol de la
-    API (service_role), statement_timeout 30 s y lock_timeout 8 s; mide cada paso y la capa del geovisor (12 meses);
+    API (service_role), statement_timeout 30 s y lock_timeout 8 s; mide cada paso (meta: resumen y publicación en menos de 10 s) y la capa del geovisor (12 meses);
   · la reversa se niega si ya hay cargas de la 116; pg-safeupdate (ninguna función con DELETE o UPDATE sin WHERE).
   · si existe el paquete de carga inicial generado desde el archivo real (carga_116.py), corre su ENSAYO y anota los tiempos (solo para medir).
 Uso: python3 -I correr_local.py"""
@@ -97,13 +97,14 @@ for k in range(0, N, 200):
     if e:
         errores.append(e)
 ok(f'11 los {N // 200 + 1} lotes como la Edge, cada uno en menos de 8 s (el más lento, con el arranque de psql: {peor} ms)', not errores and peor < 8000, errores[:2])
-ok('12 NOMBRE no llegó a la base (ninguna fila de la carga lo guarda)', q(f"select count(*) from redes.carga_filas where carga_id = {carga} and (atributos ? 'nombre' or atributos ? 'NOMBRE' or atributos::text like '%NOMBRE QUE NO%')") == '0')
+ok('12 NOMBRE, DIRECCION y BARRIO no llegaron a la base (ninguna fila de la carga los guarda)', q(f"select count(*) from redes.carga_filas where carga_id = {carga} and (atributos ? 'nombre' or atributos ? 'NOMBRE' or atributos ? 'direccion' or atributos ? 'barrio' or atributos::text like '%NOMBRE QUE NO%' or atributos::text like '%ZT5D DIR%')") == '0')
 ms_r, out, e = edge(f"select public.geoportal_redes_carga_resumen('{SD}', {carga})")
 r = json.loads(out) if not e else {}
-ok(f'13 el resumen como la Edge, en menos de 30 s ({ms_r} ms)', not e and r.get('lista_para_publicar') and ms_r < 30000, e or r.get('bloqueos'))
+ok(f'13 el resumen como la Edge, en menos de 10 s ({ms_r} ms; la meta, con el arranque de psql)', not e and r.get('lista_para_publicar') and ms_r < 10000, e or r.get('bloqueos'))
 ms_p, out, e = edge(f"select public.geoportal_redes_carga_publicar('{SD}', {carga}, 'ZT5D publicación del arnés')")
 pub = json.loads(out) if not e else {}
-ok(f'14 la publicación como la Edge, en menos de 30 s ({ms_p} ms): {pub.get("nuevos")} nuevos, ubicación {pub.get("ubicacion")}', not e and pub.get('nuevos') == N and ms_p < 30000, e)
+ok(f'14 la publicación como la Edge, en menos de 10 s ({ms_p} ms): {pub.get("nuevos")} nuevos, ubicación {pub.get("ubicacion")}; usa la revisión del resumen', not e and pub.get('nuevos') == N and ms_p < 10000
+   and q(f'select count(*) from redes.l116_revisiones where carga_id = {carga}') == '1' and set(pub.get('ubicacion', {})) == {'contrato', 'sin_ubicar'}, e)
 ms_c, out, e = edge(f"select public.geoportal_redes_geovisor_capa('{SD}', 'pqr_116', (current_date - interval '12 months')::date, current_date)")
 ms_h, out2, e2 = edge(f"select public.geoportal_redes_geovisor_capa('{SD}', 'pqr_116', null, null)")
 ok(f'15 la capa del geovisor (12 meses: {ms_c} ms; hoy: {ms_h} ms) en menos de 8 s, sin dirección, barrio ni nombre', not e and not e2 and max(ms_c, ms_h) < 8000
@@ -120,7 +121,7 @@ r2 = json.loads(out) if not e else {}
 ms_p2, out, e2 = edge(f"select public.geoportal_redes_carga_publicar('{SD}', {carga2}, 'ZT5D segunda publicación del arnés')")
 ok(f'16 la segunda carga completa reconoce todo por el número: 0 nuevos, 1.000 cambios de estado, {N - 1000} iguales (resumen {ms_r2} ms, publicar {ms_p2} ms)',
    not e and not e2 and r2.get('frente_a_vigente', {}).get('nuevo') == 0 and r2['frente_a_vigente'].get('estado') == 1000 and r2['frente_a_vigente'].get('igual') == N - 1000
-   and max(ms_r2, ms_p2) < 30000, e or e2 or r2.get('frente_a_vigente'))
+   and max(ms_r2, ms_p2) < 10000, e or e2 or r2.get('frente_a_vigente'))
 ok('17 los cambios de estado son eventos (nada se borra): 1.000 eventos «estado» y 22.978 «alta»',
    q("select count(*) filter (where tipo = 'estado') || '|' || count(*) filter (where tipo = 'alta') from redes.l116_eventos") == f'1000|{N}')
 

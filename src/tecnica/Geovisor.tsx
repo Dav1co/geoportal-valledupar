@@ -12,7 +12,7 @@ import { FichaActivo } from "./FichaActivo";
 // · Interruptores por grupo, encendidos al abrir según el perfil (lo decide el servidor) y «Volver a la vista por omisión». Encender o apagar no se guarda.
 // · Red en una tesela propia (activos vigentes, con material, diámetro, edad y estado); colores por tipo, por material o por edad.
 // · Corte 5d: la línea 116 («pqr_116», solo supervisores) por fecha, color por servicio y estado, los repetidos del mismo contrato, causal y día en un punto;
-//   sin nombre, dirección ni barrio; la leyenda dice cuántos del periodo no tienen ubicación.
+//   en el predio de su contrato (única forma de ubicar); sin nombre, dirección ni barrio; la leyenda dice cuántos del periodo no tienen ubicación.
 // · Daños, intervenciones y reportes del bot por fecha (hoy, últimos 7 días o un rango de hasta 12 meses); los puntos de muestreo, verificados o aproximados.
 // · Tocar un elemento abre su tarjeta. Desde un activo: «Ver ficha» (supervisores y administrador), «Reportar daño» y «Registrar intervención» (si tiene el formulario).
 // · El operador con la casilla del geovisor (N-13) ve solo lectura: la red y las actividades del día, sin ficha ni capas de supervisión.
@@ -54,7 +54,7 @@ const EDADES: [number, string, string][] = [[0, "#2E7D32", "Menos de 10 años"],
 // Corte 5d: la línea 116, color por servicio; lleno si sigue registrado, hueco si ya se atendió; más grande si agrupa varios reportes
 const COLOR_116: Record<string, string> = { acueducto: "#1565C0", alcantarillado: "#8D4E1E", otros: "#616161" };
 const NOMBRE_SERV_116: Record<string, string> = { acueducto: "Acueducto", alcantarillado: "Alcantarillado", otros: "Otros (incidentes externos, pluvial)" };
-const METODO_116: Record<string, string> = { contrato: "Por el contrato (punto del predio)", direccion: "Por la dirección (catastro)", barrio: "Aproximada (centro del barrio)" };
+const METODO_116: Record<string, string> = { contrato: "Por el contrato (punto del predio)" };
 const COLOR_DANO: Record<string, string> = { reportado: "#D32F2F", en_atencion: "#EF6C00", atendido: "#2E7D32" };
 const COLOR_ITV: Record<string, string> = { preventivo: "#0277BD", correctivo: "#EF6C00", reparacion: "#6A1B9A", reposicion: "#00838F", inversion: "#2E7D32" };
 const NOMBRE_ITV: Record<string, string> = { preventivo: "Preventivo", correctivo: "Correctivo", reparacion: "Reparación", reposicion: "Reposición", inversion: "Inversión" };
@@ -443,7 +443,7 @@ function Leyenda116({ derecha, sinUbicar }: { derecha: boolean; sinUbicar: numbe
       <strong>Línea 116</strong>
       <ul>{Object.entries(COLOR_116).map(([k, c]) => <li key={k}><span className="geo-leyenda-punto" style={{ background: c }} aria-hidden="true" />{NOMBRE_SERV_116[k]}</li>)}</ul>
       <p className="geo-leyenda-nota">Lleno: registrado · hueco: atendido · más grande: varios reportes del mismo contrato, causal y día</p>
-      {sinUbicar > 0 ? <p className="geo-leyenda-nota">{nf.format(sinUbicar)} del periodo sin ubicar (no están en el mapa)</p> : null}
+      {sinUbicar > 0 ? <p className="geo-leyenda-nota">{nf.format(sinUbicar)} del periodo sin ubicar (su contrato no está en el catastro; no están en el mapa)</p> : null}
     </div>
   );
 }

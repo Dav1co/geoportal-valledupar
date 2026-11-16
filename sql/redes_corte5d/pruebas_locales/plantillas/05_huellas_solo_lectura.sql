@@ -2,7 +2,7 @@
 -- TÉCNICA · FASE 1 · CORTE 5d · 05 — HUELLAS DE SOLO LECTURA (una sola consulta; apta para el editor SQL web). No escribe nada.
 -- Generada por pruebas_locales/generar.py.
 -- ANTES: «funciones de redes» dice «CORTE 9a-bis (listo para el 5d)»; las {{N_CAMBIADAS}} reemplazadas «CORTE 9a-bis (sin cambiar)»; las {{N_NUEVAS}} nuevas «NO EXISTE»;
---        «dominio de formularios» dice «CON LAS CLAVES DEL CORTE 8»; la capa pqr_116 «PREPARADA»; el catastro «CON DIRECCIÓN Y BARRIO».
+--        «dominio de formularios» dice «CON LAS CLAVES DEL CORTE 8»; la capa pqr_116 «PREPARADA»; el catastro «CON CONTRATO Y PUNTO».
 -- DESPUÉS: «CORTE 5d (aplicado)», {{N_CAMBIADAS}} «CORTE 5d (reemplazada)», {{N_NUEVAS}} «NUEVA» y la capa pqr_116 «ACTIVA (5d)».
 -- Cualquier «DISTINTA», «FALTA» o «SIN LAS CLAVES»: no aplique nada y avise (copie la huella que salió).
 -- =====================================================================
@@ -32,5 +32,5 @@ union all select '5 capa pqr_116 del geovisor', null,
           from redes.geovisor_capas where codigo = 'pqr_116')
 union all select '6 public.catastro_valledupar', null,
        case when (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'catastro_valledupar'
-                   and column_name in ('cod_usuario', 'geom', 'direccion', 'barrio')) = 4 then 'CON DIRECCIÓN Y BARRIO' else 'FALTA ALGUNA COLUMNA' end
+                   and column_name in ('cod_usuario', 'geom')) = 2 then 'CON CONTRATO Y PUNTO' else 'FALTA ALGUNA COLUMNA' end
 order by 1;

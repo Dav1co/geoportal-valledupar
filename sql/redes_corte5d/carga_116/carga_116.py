@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Corte 5d — carga inicial de la línea 116 (toda la historia desde 2020) por psql, por el MISMO motor del Cargue de capas (capa «linea_116»).
-Lee el Excel (primera hoja, o la que se diga) y escribe, FUERA del repositorio (lleva direcciones y barrios: no se versiona):
+Lee el Excel (hoja «Hoja1» o la primera) y escribe, FUERA del repositorio (lleva los reportes reales con su contrato: no se versiona):
   · ensayo_carga_116.sql   todo en UNA transacción que termina en ERROR a propósito («N de N … SIN FALLAS»): mide y no deja nada;
   · carga_116.sql          lo mismo, pero confirma si todas las comprobaciones dan bien (si una falla, ERROR y no queda nada).
-NOMBRE no se escribe en ningún archivo: el lector solo toma REPORTE, ESTADO, FECHA_REGISTRO, CONTRATO, DIRECCION, BARRIO, COMUNA, DESC_CAUSAL y SERVICIO.
+NOMBRE, DIRECCION y BARRIO no se escriben en ningún archivo: el lector solo toma REPORTE, ESTADO, FECHA_REGISTRO, CONTRATO, COMUNA, DESC_CAUSAL y SERVICIO
+(la ubicación es solo por el contrato cruzado con el catastro; David, 16-nov).
 Uso: python3 -I carga_116.py "<ruta del .xlsx>" [carpeta de salida]
      (por omisión, la salida va a ~/geoportal-consultas/tecnica/paquete_fase1/corte5d/carga_116/; necesita openpyxl)."""
 import collections
@@ -19,7 +20,7 @@ if len(sys.argv) < 2:
     raise SystemExit(__doc__)
 ARCHIVO = sys.argv[1]
 SALIDA = sys.argv[2] if len(sys.argv) > 2 else os.path.expanduser('~/geoportal-consultas/tecnica/paquete_fase1/corte5d/carga_116')
-COLUMNAS = ['REPORTE', 'ESTADO', 'FECHA_REGISTRO', 'CONTRATO', 'DIRECCION', 'BARRIO', 'COMUNA', 'DESC_CAUSAL', 'SERVICIO']      # NOMBRE no está: no se lee
+COLUMNAS = ['REPORTE', 'ESTADO', 'FECHA_REGISTRO', 'CONTRATO', 'COMUNA', 'DESC_CAUSAL', 'SERVICIO']      # NOMBRE, DIRECCION y BARRIO no están: no se leen
 
 
 def texto(v):
@@ -111,18 +112,18 @@ select paso, ms from _l116_t;
 create temp table _l116_r on commit drop as select * from (
   select 1 as n, '01 llegaron las {n} filas del archivo y la carga quedó publicada' as nombre,
          (select count(*) from redes.carga_filas where carga_id = :carga) = {n} and exists (select 1 from redes.v_cargas_estado where id = :carga and estado = 'publicada') as ok
-  union all select 2, '02 NOMBRE no está en la base: ninguna fila de la carga lo guarda y ninguna tabla de la 116 tiene esa columna',
-         not exists (select 1 from redes.carga_filas where carga_id = :carga and (atributos ? 'nombre' or atributos ? 'NOMBRE'))
-         and not exists (select 1 from information_schema.columns where table_schema = 'redes' and table_name like 'l116\\_%' and column_name ~ 'nombre|telefono')
+  union all select 2, '02 NOMBRE, DIRECCION y BARRIO no están en la base: ninguna fila de la carga los guarda y ninguna tabla de la 116 tiene esas columnas',
+         not exists (select 1 from redes.carga_filas where carga_id = :carga and (atributos ? 'nombre' or atributos ? 'NOMBRE' or atributos ? 'direccion' or atributos ? 'barrio'))
+         and not exists (select 1 from information_schema.columns where table_schema = 'redes' and table_name like 'l116\\_%' and column_name ~ 'nombre|telefono|direccion|barrio')
   union all select 3, '03 cada número de reporte del archivo está una sola vez ({n - len(rep)} distintos)',
          (select count(*) from redes.l116_reportes r where r.reporte in (select (f.atributos ->> 'reporte')::bigint from redes.carga_filas f where f.carga_id = :carga)) = {n - len(rep)}
   union all select 4, '04 los estados vigentes de los reportes del archivo cuadran con él (registrados {estados.get('registrado', 0)}, atendidos {estados.get('atendido', 0)})',
          (select count(*) filter (where v.estado = 'registrado') = {estados.get('registrado', 0)} and count(*) filter (where v.estado = 'atendido') = {estados.get('atendido', 0)}
             from redes.l116_vigente v where not v.oculto and v.reporte in (select (f.atributos ->> 'reporte')::bigint from redes.carga_filas f where f.carga_id = :carga))
-  union all select 5, '05 todo reporte nuevo tiene su método de ubicación (contrato, dirección, barrio o sin ubicar) y su evento de alta',
-         not exists (select 1 from redes.l116_reportes r left join redes.l116_eventos e on e.reporte_id = r.id and e.tipo = 'alta' where r.carga_id = :carga and e.metodo is null)
-  union all select 6, '06 la publicación y la capa del geovisor (12 meses) en menos de 30 s y 8 s',
-         (select ms from _l116_t where paso = 'publicar') < 30000 and (select ms from _l116_t where paso like 'capa%') < 8000
+  union all select 5, '05 todo reporte nuevo tiene su evento de alta, ubicado por su contrato o «sin ubicar» (ningún otro método)',
+         not exists (select 1 from redes.l116_reportes r left join redes.l116_eventos e on e.reporte_id = r.id and e.tipo = 'alta' where r.carga_id = :carga and (e.metodo is null or e.metodo not in ('contrato', 'sin_ubicar')))
+  union all select 6, '06 el resumen y la publicación en menos de 10 s cada uno (la meta) y la capa del geovisor (12 meses) en menos de 8 s',
+         (select ms from _l116_t where paso = 'resumen') < 10000 and (select ms from _l116_t where paso = 'publicar') < 10000 and (select ms from _l116_t where paso like 'capa%') < 8000
   union all select 7, '07 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE', not exists (select 1 from redes.f_funciones_sin_where())
 ) t;
 select n, case when ok then 'OK' else 'FALLA' end as resultado, nombre from _l116_r order by n;
@@ -147,10 +148,10 @@ for nombre, ensayo, titulo in (('ensayo_carga_116.sql', 'si', 'ENSAYO (no deja n
                                ('carga_116.sql', 'no', 'CARGA (confirma solo si todo da bien)')):
     open(os.path.join(SALIDA, nombre), 'w', encoding='utf-8').write(
         f"""-- =====================================================================
--- TÉCNICA · FASE 1 · CORTE 5d — CARGA INICIAL DE LA LÍNEA 116: {titulo}. Generado por carga_116/carga_116.py (no se versiona: lleva direcciones).
+-- TÉCNICA · FASE 1 · CORTE 5d — CARGA INICIAL DE LA LÍNEA 116: {titulo}. Generado por carga_116/carga_116.py (no se versiona: lleva los reportes reales).
 --   psql "$CADENA_EMDUPAR" -v ON_ERROR_STOP=1 -v solicitante=CORREO_DEL_ADMINISTRADOR -f {nombre}
 -- Archivo: {os.path.basename(ARCHIVO)} (md5 {md5_archivo}) · {n} reportes · {len(lotes)} lotes de 200 · sha256 de las filas {sha}
--- Sin NOMBRE: solo {', '.join(COLUMNAS)}.
+-- Sin NOMBRE, DIRECCION ni BARRIO: solo {', '.join(COLUMNAS)}.
 -- =====================================================================
 {CAB % nombre}\\set es_ensayo {ensayo}
 {cuerpo}""")

@@ -25,7 +25,7 @@ export type Resumen = {
   por_prefijo?: Record<string, number>; frente_a_vigente: Record<string, number>; retirados?: number; detalle?: Record<string, unknown>;
   avisos: string[]; bloqueos: string[]; lista_para_publicar: boolean; choques?: Choque[];
   desactivar?: { codigo: string; nombre: string }[]; puntos?: PuntoMue[];       // capa MUE
-  ubicacion?: { contrato: number; direccion: number; barrio: number; sin_ubicar: number }; con_sector?: number; sin_ubicar_muestra?: number[];      // línea 116 (Corte 5d)
+  ubicacion?: { contrato: number; sin_ubicar: number }; con_sector?: number; sin_ubicar_muestra?: number[];      // línea 116 (Corte 5d)
 };
 export type Muestra = { carga_id: number; capa: string; esperadas: number; recibidas: number; con_geometria: number; con_error: number;
   errores: { orden: number; llave: string | null; error: string }[]; caja: [number, number, number, number] | null; muestra: GeoJSON.FeatureCollection };

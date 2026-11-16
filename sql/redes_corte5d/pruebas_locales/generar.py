@@ -16,10 +16,10 @@ assert ENV['PGPORT'] != '55432', 'El puerto 55432 es de Code A'
 CONJ = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p "
         "where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%')")
 MD5_BASE = os.environ.get('MD5_BASE', '814eac39ac5deae2943751b8c190f969')      # producción desde la publicación del 9a-bis (16-nov)
-NUEVAS = ['redes.f_dir_norm(text)', 'redes.f_dir_base(text)', 'redes.f_barrio_norm(text)', 'redes.f_l116_atributos(jsonb)', 'redes.f_l116_fecha(text)',
+NUEVAS = ['redes.f_l116_atributos(jsonb)', 'redes.f_l116_fecha(text)',
           'redes.f_l116_candidatos(bigint)', 'redes.f_resumen_l116(bigint)', 'redes.f_publicar_l116(bigint,text,text)', 'redes.f_revertir_l116(text,text)',
           'public.geoportal_redes_l116_vincular_dano(text,bigint,text,text,text)']
-TABLAS = ['redes.l116_danos', 'redes.l116_vigente', 'redes.l116_eventos', 'redes.l116_reportes']
+TABLAS = ['redes.l116_revision_filas', 'redes.l116_revisiones', 'redes.l116_danos', 'redes.l116_vigente', 'redes.l116_eventos', 'redes.l116_reportes']
 MIG = ['10_esquema.sql', '20_funciones.sql', '26_rpc.sql', '25_reemplazos.sql', '40_permisos.sql']
 
 T = {}
@@ -30,7 +30,7 @@ T['redes.f_lote(bigint,jsonb)'] = [(
 """,
     """  select p_carga, (e ->> 'orden')::integer, nullif(btrim(a.atr ->> c.columna_llave), ''), a.atr, g.geom, g.error
     from jsonb_array_elements(p_filas) e
-    -- Corte 5d: de la línea 116 solo se guardan las columnas que se cargan (NOMBRE nunca llega a la base); no trae geometría (se ubica al revisar)
+    -- Corte 5d: de la línea 116 solo se guardan las columnas que se cargan (NOMBRE, DIRECCION y BARRIO nunca llegan a la base); no trae geometría (se ubica al revisar, por el contrato)
     cross join lateral (select case when c.capa_codigo = 'linea_116' then redes.f_l116_atributos(e -> 'atributos') else e -> 'atributos' end as atr) a
 """)]
 T['redes.f_resumen(bigint)'] = [(

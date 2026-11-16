@@ -1,6 +1,6 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 5d · 90 — REVERSA (PROPUESTA; no se ha ejecutado en la base real). Generada por pruebas_locales/generar.py.
--- Deja las funciones como estaban con el 9a-bis (texto exacto), quita las {{N_NUEVAS}} nuevas y las 4 tablas de la 116 (vacías), desactiva la capa «linea_116» del Cargue, devuelve la capa
+-- Deja las funciones como estaban con el 9a-bis (texto exacto), quita las {{N_NUEVAS}} nuevas y las 6 tablas de la 116 (vacías), desactiva la capa «linea_116» del Cargue, devuelve la capa
 -- «pqr_116» del geovisor a «preparada» y DESACTIVA (no borra) los dos formularios compartidos en distribución.
 -- SE NIEGA si alguna función cambió después de la migración o si ya hay cargas de la 116 (la reversa no borra datos: revierta las cargas en el Cargue y avise).
 -- Las asignaciones de esos formularios hechas en Personal no se tocan (son hechos de tecnica.personal_tecnico_eventos).
@@ -12,7 +12,7 @@ begin
        where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '{{MD5_5D}}' then
     raise exception 'Las funciones cambiaron después de la migración del Corte 5d: la reversa se niega a pisarlas; avise';
   end if;
-  if exists (select 1 from redes.cargas where capa_codigo = 'linea_116') or exists (select 1 from redes.l116_reportes) then
+  if exists (select 1 from redes.cargas where capa_codigo = 'linea_116') or exists (select 1 from redes.l116_reportes) or exists (select 1 from redes.l116_revisiones) then
     raise exception 'Ya hay cargas de la línea 116: la reversa no borra datos; apague la capa del geovisor y avise';
   end if;
 end $$;

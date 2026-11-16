@@ -28,7 +28,7 @@ begin
   insert into redes.carga_filas (carga_id, orden, llave, atributos, geom, error)
   select p_carga, (e ->> 'orden')::integer, nullif(btrim(a.atr ->> c.columna_llave), ''), a.atr, g.geom, g.error
     from jsonb_array_elements(p_filas) e
-    -- Corte 5d: de la línea 116 solo se guardan las columnas que se cargan (NOMBRE nunca llega a la base); no trae geometría (se ubica al revisar)
+    -- Corte 5d: de la línea 116 solo se guardan las columnas que se cargan (NOMBRE, DIRECCION y BARRIO nunca llegan a la base); no trae geometría (se ubica al revisar, por el contrato)
     cross join lateral (select case when c.capa_codigo = 'linea_116' then redes.f_l116_atributos(e -> 'atributos') else e -> 'atributos' end as atr) a
     cross join lateral redes.f_geo_desde_wkt(e ->> 'wkt', c.srid_origen) g
   on conflict (carga_id, orden) do nothing;

@@ -102,7 +102,7 @@ export function CargueCapas() {
                   <span className={`cg-est ${ESTADO[c.estado][1]}`}>{ESTADO[c.estado][0]}</span>
                 </div>
                 <p className="tec-ayuda">{GEOM[c.geometria] ?? c.geometria} · {c.fuente === "carga" ? formatosDe(c).map((f) => FMT[f] ?? f).join(", ") : c.derivada_de ? `sale de la capa ${datos.capas.find((x) => x.codigo === c.derivada_de)?.nombre ?? c.derivada_de}` : "—"}
-                  {c.lector === "linea_116" ? " · se reconoce por el número de reporte y se ubica por contrato, dirección o barrio" : c.columna_llave ? ` · llave ${c.columna_llave}` : c.lector === "generico" ? " · llave a elegir (o por geometría)" : ""}</p>
+                  {c.lector === "linea_116" ? " · se reconoce por el número de reporte y se ubica por su contrato" : c.columna_llave ? ` · llave ${c.columna_llave}` : c.lector === "generico" ? " · llave a elegir (o por geometría)" : ""}</p>
                 <p className="tec-ayuda">{c.version ? `Versión ${c.version} · ${fecha(c.ultima?.publicada_en)} · ${n(c.vigentes)} ${c.codigo === "muestreo" ? "puntos activos" : c.codigo === "linea_116" ? "reportes" : "vigentes"}` : c.fuente === "carga" ? "Todavía no se ha cargado" : `${n(c.vigentes)} vigentes`}</p>
                 {c.abierta ? <p className="tec-aviso tec-aviso-error cg-abierta">Hay una carga abierta (la {c.abierta.carga_id}, de {c.abierta.autor}, {fecha(c.abierta.creado_en)}): llegaron {n(c.abierta.recibidas)} de {n(c.abierta.filas)} filas.</p> : null}
                 <div className="dash-acciones">
@@ -640,13 +640,13 @@ function Masiva({ datos, onCerrar }: { datos: CapasResp; onCerrar: (aviso?: stri
 }
 
 // =====================================================================================================================
-// Corte 5d. La línea 116: CSV o Excel con REPORTE, ESTADO, FECHA_REGISTRO, CONTRATO, DIRECCION, BARRIO, COMUNA, DESC_CAUSAL y SERVICIO.
-// · NOMBRE (y cualquier otra columna) se descarta EN ESTE EQUIPO: al servidor solo van esas 9 (el servidor vuelve a filtrar). Dirección y barrio solo sirven
-//   para ubicar: no salen en el resumen ni en el geovisor.
-// · Sin columna llave ni coordenadas: el reporte se reconoce por su número y el servidor lo ubica (contrato → dirección → barrio → sin ubicar).
+// Corte 5d. La línea 116: CSV o Excel con REPORTE, ESTADO, FECHA_REGISTRO, CONTRATO, COMUNA, DESC_CAUSAL y SERVICIO.
+// · NOMBRE, DIRECCION, BARRIO (y cualquier otra columna) se descartan EN ESTE EQUIPO: al servidor solo van esas 7 (el servidor vuelve a filtrar).
+// · Sin columna llave ni coordenadas: el reporte se reconoce por su número y el servidor lo ubica SOLO por su contrato (el punto del predio en el catastro;
+//   David, 16-nov). El que no cruza queda «sin ubicar»: se guarda y se cuenta, y no sale en el mapa.
 // · Tres pasos: archivo → revisar (nuevos, con cambio de estado, iguales y cómo se ubicaron) → publicar. Nada se borra: un cambio de estado es un evento con fecha.
 // =====================================================================================================================
-const COLS_116 = ["REPORTE", "ESTADO", "FECHA_REGISTRO", "CONTRATO", "DIRECCION", "BARRIO", "COMUNA", "DESC_CAUSAL", "SERVICIO"];
+const COLS_116 = ["REPORTE", "ESTADO", "FECHA_REGISTRO", "CONTRATO", "COMUNA", "DESC_CAUSAL", "SERVICIO"];
 const OBLIG_116 = ["REPORTE", "ESTADO", "FECHA_REGISTRO", "DESC_CAUSAL", "SERVICIO"];
 const PASOS_116 = ["Elegir el archivo", "Revisar los cambios", "Publicar la carga"];
 function Asistente116({ capa, datos, onCerrar }: { capa: CapaCargue; datos: CapasResp; onCerrar: (aviso?: string) => void }) {
@@ -674,7 +674,7 @@ function Asistente116({ capa, datos, onCerrar }: { capa: CapaCargue; datos: Capa
       setLeida(cs[0]);
     } catch (e) { setMsg({ ok: false, t: err(e) }); } finally { setLeyendo(false); }
   }
-  /** Solo las 9 columnas, con el nombre en minúscula. NOMBRE nunca sale de este equipo. */
+  /** Solo las 7 columnas, con el nombre en minúscula. NOMBRE, DIRECCION y BARRIO nunca salen de este equipo. */
   function filas(): FilaLote[] {
     if (!leida) return [];
     return leida.filas.map((f, i) => ({ orden: i + 1, wkt: null,
@@ -728,8 +728,8 @@ function Asistente116({ capa, datos, onCerrar }: { capa: CapaCargue; datos: Capa
           <div className="tec-campo">
             <label htmlFor="cg116-archivo">Archivo (CSV o Excel)</label>
             <input id="cg116-archivo" type="file" accept=".csv,.txt,.xlsx" disabled={leyendo || ocupado} onChange={(e) => void elegir(e.target.files?.[0] ?? null)} />
-            <p className="tec-ayuda">Columnas: {COLS_116.join(", ")}. El archivo se lee en este equipo: el nombre del suscriptor y cualquier otra columna se descartan aquí y no se envían.
-              Cada reporte se reconoce por su número: si ya estaba, solo se guarda el cambio de estado.</p>
+            <p className="tec-ayuda">Columnas: {COLS_116.join(", ")}. El archivo se lee en este equipo: el nombre, la dirección, el barrio y cualquier otra columna se descartan aquí y no se envían.
+              Cada reporte se reconoce por su número: si ya estaba, solo se guarda el cambio de estado. En el mapa sale en el predio de su contrato.</p>
           </div>
           {leyendo ? <p className="tec-sub" role="status">Leyendo el archivo…</p> : null}
           {leida ? (
@@ -747,7 +747,7 @@ function Asistente116({ capa, datos, onCerrar }: { capa: CapaCargue; datos: Capa
             <Cifra t="Nuevos" v={f.nuevo} /><Cifra t="Cambian de estado" v={f.estado} /><Cifra t="Iguales" v={f.igual} /><Cifra t="Nuevos sin ubicar" v={u?.sin_ubicar} />
           </div>
           <p className="tec-ayuda">Llegaron {n(resumen.recibidas)} de {n(resumen.esperadas)} reportes{f.mostrar ? ` · ${n(f.mostrar)} vuelven a mostrarse (su carga se había revertido)` : ""}{f.error ? ` · ${n(f.error)} con error` : ""}.</p>
-          {u ? <p className="tec-ayuda" data-testid="ubicacion">Ubicación de los nuevos: {n(u.contrato)} por el contrato (punto del predio) · {n(u.direccion)} por la dirección (catastro) · {n(u.barrio)} aproximados por el barrio · {n(u.sin_ubicar)} sin ubicar
+          {u ? <p className="tec-ayuda" data-testid="ubicacion">Ubicación de los nuevos: {n(u.contrato)} en el predio de su contrato · {n(u.sin_ubicar)} sin ubicar (el contrato no está en el catastro; no salen en el mapa)
             {typeof resumen.con_sector === "number" ? ` · ${n(resumen.con_sector)} con sector hidráulico` : ""}.</p> : null}
           {resumen.bloqueos.length ? <div className="tec-aviso tec-aviso-error" role="alert"><strong>No se puede publicar todavía:</strong><ul>{resumen.bloqueos.map((b, i) => <li key={i}>{b}</li>)}</ul></div>
             : <p className="tec-aviso tec-aviso-info" role="status">Lista para publicar.</p>}

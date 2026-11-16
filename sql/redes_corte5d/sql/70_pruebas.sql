@@ -3,7 +3,8 @@
 -- No supone códigos ni conteos de la base: arma sus personas (prueba.redes15.*), sus predios de catastro (contratos 995150xx, en un rincón de Valledupar),
 -- su polígono de sector (número 95) y sus reportes sintéticos (números 99515xxxx y 9952xxxxx). Ningún dato real de la línea 116.
 -- Mide la carga completa con el volumen real (22.978 reportes sintéticos, contratos tomados del catastro de la base donde corre) y la capa del geovisor:
--- FALLA si un lote pasa de 8 s, si el resumen o la publicación pasan de 30 s, o si la capa pasa de 8 s.
+-- FALLA si un lote o la capa pasan de 8 s, o si el resumen o la publicación pasan de 10 s (la meta de David; el tope de la Edge es 30 s), con todo nuevo y
+-- con la carga de cada mes (todo el historial, pocos nuevos).
 -- Termina con un ERROR a propósito que deshace todo.
 --   Resultado esperado:  ERROR: PRUEBAS DE REDES · CORTE 5d … RESULTADO: N de N pruebas correctas — SIN FALLAS
 -- =====================================================================
@@ -80,7 +81,7 @@ declare
   a text := 'prueba.redes15.adm@emdupar.gov.co'; sd text := 'prueba.redes15.dist@emdupar.gov.co'; op text := 'prueba.redes15.op@emdupar.gov.co';
   C1 text := '99515001'; C2 text := '99515002'; C3 text := '99515003';
   v_base bigint := 995150000; v_r jsonb; v_x jsonb; v_c1 bigint; v_c2 bigint; v_c3 bigint; v_c4 bigint; v_g jsonb; v_dano text; v_sub text;
-  v_cods text[]; v_nc integer; v_n integer := 22978; v_lote jsonb; v_cv bigint; k integer;
+  v_cods text[]; v_nc integer; v_n integer := 22978; v_lote jsonb; v_cv bigint; v_cv2 bigint; v_c5 bigint; k integer; v_ahora timestamp; v_ms_res2 numeric; v_ms_pub2 numeric; v_ms_lote2 numeric := 0;
   v_t0 timestamptz; v_ms numeric; v_ms_lote numeric := 0; v_ms_res numeric; v_ms_pub numeric; v_ms_capa numeric; v_ms_capa_hoy numeric; v_ms_ini numeric;
   v_info text := ''; v_total integer; v_bien integer; v_fallas text; v_hoy date := (clock_timestamp() at time zone 'America/Bogota')::date;
 begin
@@ -90,46 +91,39 @@ begin
   insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values (op, 'asignar_formulario', 'danos_fallas', a);
 
   -- ===================== 01. Esquema, permisos y catálogo =====================
-  perform pg_temp.reg('01.01 las 9 funciones internas nuevas no las ejecuta la API; la RPC nueva, solo service_role (security definer)',
+  perform pg_temp.reg('01.01 las 6 funciones internas nuevas no las ejecuta la API; la RPC nueva, solo service_role (security definer)',
      not exists (select 1 from pg_proc p where p.pronamespace = 'redes'::regnamespace
-                   and p.proname in ('f_dir_norm', 'f_dir_base', 'f_barrio_norm', 'f_l116_atributos', 'f_l116_fecha', 'f_l116_candidatos', 'f_resumen_l116', 'f_publicar_l116', 'f_revertir_l116')
+                   and p.proname in ('f_l116_atributos', 'f_l116_fecha', 'f_l116_candidatos', 'f_resumen_l116', 'f_publicar_l116', 'f_revertir_l116')
                    and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('service_role', p.oid, 'execute')))
      and (select count(*) from pg_proc p where p.pronamespace = 'redes'::regnamespace
-            and p.proname in ('f_dir_norm', 'f_dir_base', 'f_barrio_norm', 'f_l116_atributos', 'f_l116_fecha', 'f_l116_candidatos', 'f_resumen_l116', 'f_publicar_l116', 'f_revertir_l116')) = 9
+            and p.proname in ('f_l116_atributos', 'f_l116_fecha', 'f_l116_candidatos', 'f_resumen_l116', 'f_publicar_l116', 'f_revertir_l116')) = 6
      and exists (select 1 from pg_proc p where p.oid = 'public.geoportal_redes_l116_vincular_dano(text,bigint,text,text,text)'::regprocedure and p.prosecdef
                    and has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute')));
   perform pg_temp.reg('01.02 pg-safeupdate: ninguna función de redes, tecnica, public.geoportal_redes_* ni geoportal_tec_* con DELETE o UPDATE sin WHERE',
      not exists (select 1 from redes.f_funciones_sin_where()), (select string_agg(funcion || ' → ' || sentencia, ' | ') from redes.f_funciones_sin_where()));
-  perform pg_temp.reg('01.03 las 4 tablas de la 116: ningún permiso para la API; reportes, eventos y daños con el disparador de solo agregar',
+  perform pg_temp.reg('01.03 las 6 tablas de la 116: ningún permiso para la API; reportes, eventos, daños y revisiones con el disparador de solo agregar',
      not has_table_privilege('service_role', 'redes.l116_reportes', 'select') and not has_table_privilege('anon', 'redes.l116_vigente', 'select')
      and not has_table_privilege('authenticated', 'redes.l116_eventos', 'select') and not has_table_privilege('service_role', 'redes.l116_danos', 'insert')
-     and (select count(*) from pg_trigger t where t.tgrelid in ('redes.l116_reportes'::regclass, 'redes.l116_eventos'::regclass, 'redes.l116_danos'::regclass) and t.tgfoid = 'tecnica.f_solo_agregar'::regproc) = 6);
-  perform pg_temp.reg('01.04 ninguna tabla de la 116 tiene columna de nombre ni de teléfono',
-     not exists (select 1 from information_schema.columns where table_schema = 'redes' and table_name like 'l116\_%' and column_name ~ 'nombre|telefono|celular'));
+     and not has_table_privilege('service_role', 'redes.l116_revisiones', 'select') and not has_table_privilege('authenticated', 'redes.l116_revision_filas', 'select')
+     and (select count(*) from pg_trigger t where t.tgrelid in ('redes.l116_reportes'::regclass, 'redes.l116_eventos'::regclass, 'redes.l116_danos'::regclass,
+                                                            'redes.l116_revisiones'::regclass, 'redes.l116_revision_filas'::regclass) and t.tgfoid = 'tecnica.f_solo_agregar'::regproc) = 10);
+  perform pg_temp.reg('01.04 ninguna tabla de la 116 tiene columna de nombre, teléfono, dirección ni barrio',
+     not exists (select 1 from information_schema.columns where table_schema = 'redes' and table_name like 'l116\_%' and column_name ~ 'nombre|telefono|celular|direccion|barrio'));
   perform pg_temp.reg('01.05 la capa «linea_116» del Cargue (CSV o Excel, llave «reporte», la carga el supervisor) y «pqr_116» en el geovisor (por fecha, solo supervisores)',
      exists (select 1 from redes.capas where codigo = 'linea_116' and fuente = 'carga' and activa and carga_supervisor and columna_llave = 'reporte' and formatos = '{csv,xlsx}')
      and exists (select 1 from redes.geovisor_capas where codigo = 'pqr_116' and fuente = 'geojson' and estado = 'activa' and por_fecha and solo_completo));
   perform pg_temp.reg('01.06 punto 8: «Reportar anomalía» y «Revisiones generales» están en los formularios de distribución',
      (select count(*) from redes.formularios_distribucion where clave in ('anomalia_compartida', 'revision_compartida') and activo) = 2);
 
-  -- ===================== 02. Dirección, barrio, fecha y columnas =====================
-  perform pg_temp.reg('02.01 la dirección se normaliza igual escrita de varias formas (Calle/CLL/CL, #, N°, No., guiones, ceros)',
-     redes.f_dir_norm('Calle 12 # 5-30') = 'CL 12 5 30' and redes.f_dir_norm('CLL 12 N° 5 - 30') = 'CL 12 5 30' and redes.f_dir_norm('cl. 12 no. 05-30') = 'CL 12 5 30'
-     and redes.f_dir_norm('Carrera 9 A No. 18-05') = 'CR 9A 18 5' and redes.f_dir_norm('KRA 9a 18 05') = 'CR 9A 18 5' and redes.f_dir_norm('Diagonal 21 Transversal 4') = 'DG 21 TV 4',
-     redes.f_dir_norm('Calle 12 # 5-30') || ' / ' || redes.f_dir_norm('CLL 12 N° 5 - 30') || ' / ' || redes.f_dir_norm('Carrera 9 A No. 18-05') || ' / ' || redes.f_dir_norm('KRA 9a 18 05'));
-  perform pg_temp.reg('02.02 «N» suelta (norte) se conserva; sin apartamento, local ni torre para el segundo intento; vacío → nulo',
-     redes.f_dir_norm('CL 9 N CR 9 - 9') = 'CL 9 N CR 9 9' and redes.f_dir_base(redes.f_dir_norm('Cra 9A # 18-05 Apto 201')) = 'CR 9A 18 5'
-     and redes.f_dir_base(redes.f_dir_norm('MZ 4 CASA 7 TORRE 2')) = 'MZ 4 CS 7' and redes.f_dir_norm('  - ') is null);
-  perform pg_temp.reg('02.03 el barrio se normaliza sin tildes, sin signos y sin «Barrio»/«Urbanización» delante',
-     redes.f_barrio_norm('Barrio Los Cortijos') = 'LOS CORTIJOS' and redes.f_barrio_norm('URB. los cortijos') = 'LOS CORTIJOS' and redes.f_barrio_norm('Villa Castro (II etapa)') = 'VILLA CASTRO II ETAPA');
+  -- ===================== 02. Fecha y columnas =====================
   perform pg_temp.reg('02.04 la fecha: AAAA-MM-DD, DD/MM/AAAA y el número de Excel, en hora de Bogotá; lo que no se entiende o es futuro, nulo',
      redes.f_l116_fecha('2026-01-01 11:21:28') = timestamptz '2026-01-01 11:21:28-05' and redes.f_l116_fecha('01/02/2026 08:30') = timestamptz '2026-02-01 08:30-05'
      and redes.f_l116_fecha('46023.5') = timestamptz '2026-01-01 12:00-05' and redes.f_l116_fecha('2026-01-01T07:05') = timestamptz '2026-01-01 07:05-05'
      and redes.f_l116_fecha('ayer') is null and redes.f_l116_fecha('2099-01-01') is null and redes.f_l116_fecha('31/02/2026') is null and redes.f_l116_fecha(null) is null);
-  perform pg_temp.reg('02.05 de cada fila solo pasan las 9 columnas que se cargan (con nombre en minúscula): NOMBRE no pasa',
+  perform pg_temp.reg('02.05 de cada fila solo pasan las 7 columnas que se cargan (con nombre en minúscula): NOMBRE, DIRECCION y BARRIO no pasan',
      (select array_agg(x.c order by x.c) from jsonb_object_keys(redes.f_l116_atributos((pg_temp.fila(1, 1, 'Atendido', '2026-01-01', '1', 'x', 'y', 'z', 'w') -> 'atributos')
                                                                                    || '{"Teléfono": "300", "nombre": "x"}')) x(c))
-       = array['barrio', 'comuna', 'contrato', 'desc_causal', 'direccion', 'estado', 'fecha_registro', 'reporte', 'servicio']);
+       = array['comuna', 'contrato', 'desc_causal', 'estado', 'fecha_registro', 'reporte', 'servicio']);
 
   -- ===================== 03. Los predios y el sector de prueba =====================
   insert into public.catastro_valledupar (cod_usuario, direccion, barrio, geom)
@@ -159,43 +153,46 @@ begin
       pg_temp.fila(8, v_base + 8, 'Atendido', pg_temp.hoy(8), C2, 'x', 'x', 'ZT15 REBOSE DE ALCANTARILLA', 'Alcantarillado'),
       pg_temp.fila(9, v_base + 9, 'Atendido', pg_temp.hoy(9), C2, 'x', 'x', 'ZT15 HUECO EN LA VÍA', 'Incidentes Externos'),
       pg_temp.fila(10, v_base + 11, 'Registrado', pg_temp.hoy(10), '99999999', 'Calle ZT15 1 # 2 - 3', 'ZT15 BARRIO UNO', 'ZT15 SIN AGUA', 'Acueducto')), md5('zt15-1') || md5('zt15-1b'));
-  perform pg_temp.reg('04.04 NOMBRE no llega a la base: la carga guarda solo las 9 columnas (ni la palabra en ninguna fila)',
-     not exists (select 1 from redes.carga_filas where carga_id = v_c1 and (atributos ? 'nombre' or atributos ? 'NOMBRE' or atributos::text like '%NOMBRE QUE NO SE GUARDA%'))
+  perform pg_temp.reg('04.04 NOMBRE, DIRECCION y BARRIO no llegan a la base: la carga guarda solo las 7 columnas (ni un texto de ellos en ninguna fila)',
+     not exists (select 1 from redes.carga_filas where carga_id = v_c1 and (atributos ? 'nombre' or atributos ? 'NOMBRE' or atributos ? 'direccion' or atributos ? 'barrio'
+                                                                 or atributos::text like '%NOMBRE QUE NO SE GUARDA%' or atributos::text like '%ZT15 BARRIO%' or atributos::text like '%CL ZT15%'))
      and (select count(*) from redes.carga_filas where carga_id = v_c1 and llave is not null) = 10);
   v_r := public.geoportal_redes_carga_resumen(sd, v_c1);
-  perform pg_temp.reg('04.05 el resumen: 10 nuevos, lista para publicar; ubicados 5 por contrato, 3 por dirección, 1 por barrio y 1 sin ubicar',
+  perform pg_temp.reg('04.05 el resumen: 10 nuevos, lista para publicar; 5 ubicados por su contrato y 5 sin ubicar (aunque su dirección o su barrio estén en el catastro)',
      (v_r ->> 'lista_para_publicar')::boolean and (v_r -> 'frente_a_vigente' ->> 'nuevo')::integer = 10
-     and v_r -> 'ubicacion' = '{"contrato": 5, "direccion": 3, "barrio": 1, "sin_ubicar": 1}'::jsonb, (v_r - 'tabla')::text);
-  perform pg_temp.reg('04.06 el resumen dice el sector de los ubicados dentro del polígono y avisa los sin ubicar; no trae direcciones, barrios ni nombres',
-     (v_r ->> 'con_sector')::integer = 7 and v_r -> 'sin_ubicar_muestra' = to_jsonb(array[v_base + 7]) and v_r::text not like '%ZT15 BARRIO%' and v_r::text not like '%NOMBRE%'
+     and v_r -> 'ubicacion' = '{"contrato": 5, "sin_ubicar": 5}'::jsonb, (v_r - 'tabla')::text);
+  perform pg_temp.reg('04.06 el resumen dice el sector de los ubicados y avisa los sin ubicar (sus números); no trae direcciones, barrios ni nombres',
+     (v_r ->> 'con_sector')::integer = 5 and v_r -> 'sin_ubicar_muestra' = to_jsonb(array[v_base + 4, v_base + 5, v_base + 6, v_base + 7, v_base + 11]) and v_r::text not like '%ZT15 BARRIO%' and v_r::text not like '%NOMBRE%'
      and v_r::text not like '%dirección sin catastro%', (v_r - 'tabla')::text);
   v_x := public.geoportal_redes_carga_publicar(sd, v_c1, 'ZT15 primera carga de la línea 116 de prueba');
   perform pg_temp.reg('04.07 publicar: 10 nuevos (versión 1); 10 reportes, 10 altas con método y 10 vigentes',
      (v_x ->> 'nuevos')::integer = 10 and (v_x ->> 'version_capa')::integer = 1
      and (select count(*) from redes.l116_reportes where carga_id = v_c1) = 10 and (select count(*) from redes.l116_eventos where carga_id = v_c1 and tipo = 'alta' and metodo is not null) = 10
      and (select count(*) from redes.l116_vigente v join redes.l116_reportes r on r.id = v.reporte_id where r.carga_id = v_c1) = 10, v_x::text);
-  perform pg_temp.reg('04.08 por contrato: el punto del predio (y el sector 95, subsector 95.1); el comodín 99999999 no ubica por contrato, sí por su dirección',
+  perform pg_temp.reg('04.07b la publicación usó la revisión que dejó el resumen (una sola revisión de la carga, con sus 10 filas): no volvió a leer el archivo ni a ubicar',
+     (select count(*) from redes.l116_revisiones where carga_id = v_c1) = 1
+     and (select count(*) from redes.l116_revision_filas f join redes.l116_revisiones r on r.id = f.revision_id where r.carga_id = v_c1) = 10
+     and (select detalle ->> 'revision_id' from redes.carga_eventos where carga_id = v_c1 and tipo = 'publicar') = (select id::text from redes.l116_revisiones where carga_id = v_c1));
+  perform pg_temp.reg('04.08 por contrato: el punto del predio (y el sector 95, subsector 95.1)',
      (select pg_temp.dist(geom, 0, 0) < 1 and metodo = 'contrato' and sector = 95 and subsector = '95.1' from redes.l116_vigente where reporte = v_base + 1)
-     and (select pg_temp.dist(geom, 30, 0) < 1 and metodo = 'contrato' from redes.l116_vigente where reporte = v_base + 8)
-     and (select pg_temp.dist(geom, 0, 0) < 1 and metodo = 'direccion' from redes.l116_vigente where reporte = v_base + 11));
-  perform pg_temp.reg('04.09 por dirección: el centro de los predios con esa dirección (a 100 m o menos); si está en dos sitios, la del mismo barrio',
-     (select pg_temp.dist(geom, 32, 2) < 2 and metodo = 'direccion' from redes.l116_vigente where reporte = v_base + 4)
-     and (select pg_temp.dist(geom, 900, 900) < 1 and metodo = 'direccion' and sector is null from redes.l116_vigente where reporte = v_base + 5),
-     (select string_agg(reporte || ' ' || metodo || ' ' || coalesce(ST_AsText(geom), '-'), ' | ') from redes.l116_vigente where reporte in (v_base + 4, v_base + 5)));
-  perform pg_temp.reg('04.10 por barrio: el centro de sus predios (aproximada); sin contrato, dirección ni barrio en el catastro: sin ubicar (sin punto)',
-     (select pg_temp.dist(geom, 910, 900) < 1 and metodo = 'barrio' from redes.l116_vigente where reporte = v_base + 6)
-     and (select geom is null and metodo = 'sin_ubicar' from redes.l116_vigente where reporte = v_base + 7));
+     and (select pg_temp.dist(geom, 30, 0) < 1 and metodo = 'contrato' from redes.l116_vigente where reporte = v_base + 8));
+  perform pg_temp.reg('04.09 SOLO por contrato (David, 16-nov): el contrato que no está en el catastro y el comodín 99999999 quedan «sin ubicar», sin punto, aunque traigan una dirección o un barrio del catastro',
+     (select count(*) from redes.l116_vigente where reporte in (v_base + 4, v_base + 5, v_base + 6, v_base + 7, v_base + 11) and metodo = 'sin_ubicar' and geom is null and sector is null) = 5
+     and not exists (select 1 from redes.l116_eventos where metodo not in ('contrato', 'sin_ubicar')));
+  perform pg_temp.reg('04.10 los sin ubicar se guardan igual (reporte, alta y vigente) y ninguna función de la 116 lee la dirección ni el barrio del catastro',
+     (select count(*) from redes.l116_reportes r join redes.l116_eventos e on e.reporte_id = r.id and e.tipo = 'alta' where r.reporte in (v_base + 4, v_base + 7, v_base + 11)) = 3
+     and not exists (select 1 from pg_proc p where p.pronamespace = 'redes'::regnamespace and p.proname like 'f\_%l116%' and p.prosrc ~* 'cv\.(direccion|barrio)|f_dir_|f_barrio'));
 
   -- ===================== 05. La capa del geovisor =====================
   v_g := public.geoportal_redes_geovisor_capa(sd, 'pqr_116', null, null);
-  perform pg_temp.reg('05.01 hoy: 8 puntos (los dos reportes del mismo contrato, causal y día van juntos) y 1 sin ubicar',
-     jsonb_array_length(v_g -> 'features') = 8 and (v_g ->> 'sin_ubicar')::integer = 1 and (pg_temp.punto(v_g, v_base + 1) ->> 'n')::integer = 2
+  perform pg_temp.reg('05.01 hoy: 4 puntos (los dos reportes del mismo contrato, causal y día van juntos) y 5 sin ubicar, que no se pintan',
+     jsonb_array_length(v_g -> 'features') = 4 and (v_g ->> 'sin_ubicar')::integer = 5 and (pg_temp.punto(v_g, v_base + 1) ->> 'n')::integer = 2
      and pg_temp.punto(v_g, v_base + 1) -> 'reportes' = to_jsonb(array[v_base + 1, v_base + 2]) and (pg_temp.punto(v_g, v_base + 3) ->> 'n')::integer = 1,
      jsonb_array_length(v_g -> 'features') || ' puntos · ' || coalesce(pg_temp.punto(v_g, v_base + 1)::text, '-'));
   perform pg_temp.reg('05.02 color por servicio (acueducto, alcantarillado, otros) y estado (registrado o atendido)',
      pg_temp.punto(v_g, v_base + 1) ->> 'grupo_servicio' = 'acueducto' and pg_temp.punto(v_g, v_base + 1) ->> 'estado' = 'registrado'
      and pg_temp.punto(v_g, v_base + 8) ->> 'grupo_servicio' = 'alcantarillado' and pg_temp.punto(v_g, v_base + 8) ->> 'estado' = 'atendido'
-     and pg_temp.punto(v_g, v_base + 9) ->> 'grupo_servicio' = 'otros' and pg_temp.punto(v_g, v_base + 4) ->> 'metodo' = 'direccion' and pg_temp.punto(v_g, v_base + 6) ->> 'metodo' = 'barrio');
+     and pg_temp.punto(v_g, v_base + 9) ->> 'grupo_servicio' = 'otros' and pg_temp.punto(v_g, v_base + 1) ->> 'metodo' = 'contrato' and pg_temp.punto(v_g, v_base + 4) is null);
   perform pg_temp.reg('05.03 la capa no trae nombre, dirección ni barrio (solo las propiedades previstas)',
      not exists (select 1 from jsonb_array_elements(v_g -> 'features') f, jsonb_object_keys(f -> 'properties') kk
                   where kk not in ('codigo', 'n', 'reportes', 'servicio', 'grupo_servicio', 'causal', 'estado', 'registrados', 'contrato', 'dia', 'cuando', 'ultimo', 'metodo', 'sector', 'subsector', 'danos'))
@@ -267,6 +264,20 @@ begin
      (select (c ->> 'vigentes')::integer from jsonb_array_elements(public.geoportal_redes_cargue_capas(sd) -> 'capas') c where c ->> 'codigo' = 'linea_116')
        = (select count(*) from redes.l116_vigente where not oculto));
 
+  -- si la 116 cambia entre la revisión y la publicación, la revisión ya no vale: se hace otra
+  v_c5 := pg_temp.subir(sd, jsonb_build_array(
+      pg_temp.fila(1, v_base + 1, 'Registrado', pg_temp.hoy(1), C1, 'CL ZT15 1 2 3', 'ZT15 BARRIO UNO', 'ZT15 FUGA EN ACOMETIDA', 'Acueducto'),
+      pg_temp.fila(2, v_base + 30, 'Registrado', pg_temp.hoy(30), C2, 'x', 'x', 'ZT15 SIN AGUA', 'Acueducto')), md5('zt15-5') || md5('zt15-5b'));
+  v_r := public.geoportal_redes_carga_resumen(sd, v_c5);
+  v_x := public.geoportal_redes_carga_resumen(sd, v_c5);
+  perform pg_temp.reg('07.07 pedir el resumen dos veces no repite el trabajo: la misma revisión (1 nuevo y 1 cambio de estado: el reporte está «atendido»)',
+     v_r = v_x and (select count(*) from redes.l116_revisiones where carga_id = v_c5) = 1 and (v_r -> 'frente_a_vigente' ->> 'estado')::integer = 1, (v_r - 'tabla')::text);
+  perform public.geoportal_redes_carga_revertir(sd, 'linea_116', 'ZT15 se revierte otra vez la carga anterior');      -- el reporte vuelve a «registrado»
+  v_x := public.geoportal_redes_carga_publicar(sd, v_c5, 'ZT15 publicación después de un cambio en la 116');
+  perform pg_temp.reg('07.08 si la 116 cambió después de la revisión (se revirtió otra carga), la publicación hace una revisión nueva: ya no hay cambio de estado que publicar',
+     (select count(*) from redes.l116_revisiones where carga_id = v_c5) = 2 and (v_x ->> 'nuevos')::integer = 1 and (v_x ->> 'cambios_estado')::integer = 0
+     and (select estado from redes.l116_vigente where reporte = v_base + 1) = 'registrado', v_x::text);
+
   -- ===================== 08. «Convertir en daño» (la RPC, sin botón) =====================
   v_dano := pg_temp.dano(op, jsonb_build_object('lat', pg_temp.lat(0), 'lon', pg_temp.lon(0), 'no_identificado', 'ZT15 tubería del reporte'));
   v_x := public.geoportal_redes_l116_vincular_dano(sd, v_base + 1, v_dano, 'ZT15 el reporte de la 116 resultó ser este daño');
@@ -291,18 +302,19 @@ begin
      and (v_r -> 'personas' -> 0 -> 'formularios') @> '["anomalia_compartida", "revision_compartida"]'::jsonb, (v_r -> 'personas' -> 0 -> 'formularios')::text);
 
   -- ===================== 10. Tiempos con el volumen real: 22.978 reportes sintéticos por el motor =====================
-  -- Contratos tomados del catastro de esta base (como en el archivo: ~86 % con predio; el resto con un contrato que no existe, una dirección y un barrio
-  -- de prueba que tampoco: así se mide el peor caso, la pasada por el catastro). Las fechas, repartidas en los últimos 12 meses.
+  -- Contratos tomados del catastro de esta base (como en el archivo: ~86 % con predio; el resto, con un contrato que no existe: quedan sin ubicar).
+  -- Las fechas, repartidas en los últimos 12 meses.
   select array_agg(cod_usuario) into v_cods from (select distinct cod_usuario from public.catastro_valledupar where cod_usuario ~ '^[0-9]{1,8}$' and cod_usuario not in ('0', '99999999')
                                                     and cod_usuario not like '995150%' order by cod_usuario limit 20000) x;
   v_nc := coalesce(cardinality(v_cods), 0);
+  v_ahora := date_trunc('second', clock_timestamp() at time zone 'America/Bogota');
   v_t0 := clock_timestamp();
   v_cv := (public.geoportal_redes_cargue_iniciar(sd, 'linea_116', md5('zt15-volumen') || md5('zt15-volumen-b'), 'xlsx', 4326, 'reporte', v_n, 'ZT15 volumen real') ->> 'carga_id')::bigint;
   v_ms_ini := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
   k := 0;
   while k < v_n loop
     select jsonb_agg(pg_temp.fila(i, 995200000 + i, case when i % 11 = 0 then 'Registrado' else 'Atendido' end,
-                                  to_char((clock_timestamp() at time zone 'America/Bogota') - make_interval(days => i % 360, mins => i % 1440), 'YYYY-MM-DD HH24:MI:SS'),
+                                  to_char(v_ahora - make_interval(days => i % 360, mins => i % 1440), 'YYYY-MM-DD HH24:MI:SS'),
                                   case when i % 7 = 0 or v_nc = 0 then '9952' || i else v_cods[1 + (i * 7919) % v_nc] end,
                                   'ZT15 DIR ' || i, 'ZT15 BARRIO ' || (i % 50), 'ZT15 CAUSAL ' || (i % 29),
                                   case when i % 3 = 0 then 'Alcantarillado' when i % 41 = 0 then 'Incidentes Externos' else 'Acueducto' end) order by i)
@@ -320,9 +332,35 @@ begin
                    v_n, v_nc, v_ms_ini, v_ms_lote, v_ms_res, v_ms_pub, v_ms_capa, jsonb_array_length(v_g -> 'features'), case when (v_g ->> 'recortada')::boolean then ', recortada' else '' end,
                    v_ms_capa_hoy, v_x -> 'ubicacion');
   perform pg_temp.reg('10.01 la carga completa se publica: 22.978 nuevos', (v_x ->> 'nuevos')::integer = v_n and (v_r ->> 'lista_para_publicar')::boolean, v_info);
-  perform pg_temp.reg('10.02 cada lote en menos de 8 s; el resumen y la publicación, cada uno en menos de 30 s (el tope de la Edge)',
-     v_ms_lote < 8000 and v_ms_res < 30000 and v_ms_pub < 30000, v_info);
+  perform pg_temp.reg('10.02 con los 22.978 nuevos: cada lote en menos de 8 s; el resumen y la publicación, cada uno en menos de 10 s (la meta; el tope de la Edge es 30 s)',
+     v_ms_lote < 8000 and v_ms_res < 10000 and v_ms_pub < 10000, v_info);
   perform pg_temp.reg('10.03 la capa del geovisor (12 meses y 7 días) en menos de 8 s', greatest(v_ms_capa, v_ms_capa_hoy) < 8000, v_info);
+
+  -- La carga de cada mes (decisión de David, 16-nov: el archivo trae SIEMPRE todo el historial): los mismos 22.978, con 1.000 que cambian de estado, y 300 nuevos.
+  v_cv2 := (public.geoportal_redes_cargue_iniciar(sd, 'linea_116', md5('zt15-mes') || md5('zt15-mes-b'), 'xlsx', 4326, 'reporte', v_n + 300, 'ZT15 historial completo del mes') ->> 'carga_id')::bigint;
+  k := 0;
+  while k < v_n + 300 loop
+    select jsonb_agg(pg_temp.fila(i, case when i <= v_n then 995200000 + i else 995300000 + i end,
+                                  case when (i % 11 = 0) <> (i <= 1000) then 'Registrado' else 'Atendido' end,
+                                  to_char(v_ahora - make_interval(days => i % 360, mins => i % 1440), 'YYYY-MM-DD HH24:MI:SS'),
+                                  case when i % 7 = 0 or v_nc = 0 then '9952' || i else v_cods[1 + (i * 7919) % v_nc] end,
+                                  'ZT15 DIR ' || i, 'ZT15 BARRIO ' || (i % 50), 'ZT15 CAUSAL ' || (i % 29),
+                                  case when i % 3 = 0 then 'Alcantarillado' when i % 41 = 0 then 'Incidentes Externos' else 'Acueducto' end) order by i)
+      into v_lote from generate_series(k + 1, least(k + 200, v_n + 300)) i;
+    v_t0 := clock_timestamp();
+    perform public.geoportal_redes_carga_lote(sd, v_cv2, v_lote);
+    v_ms_lote2 := greatest(v_ms_lote2, round(extract(epoch from clock_timestamp() - v_t0) * 1000));
+    k := k + 200;
+  end loop;
+  v_t0 := clock_timestamp(); v_r := public.geoportal_redes_carga_resumen(sd, v_cv2); v_ms_res2 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_t0 := clock_timestamp(); v_x := public.geoportal_redes_carga_publicar(sd, v_cv2, 'ZT15 carga del mes con todo el historial'); v_ms_pub2 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_info := v_info || format(E'\nTIEMPOS de la carga de cada mes (%s reportes: 300 nuevos, 1.000 con cambio de estado y %s iguales): lote más lento %s ms · resumen %s ms · publicar %s ms',
+                             v_n + 300, v_n - 1000, v_ms_lote2, v_ms_res2, v_ms_pub2);
+  perform pg_temp.reg('10.04 la carga de cada mes reconoce todo por el número: 300 nuevos, 1.000 con cambio de estado y los demás iguales (solo se ubican los nuevos)',
+     (v_r -> 'frente_a_vigente' ->> 'nuevo')::integer = 300 and (v_r -> 'frente_a_vigente' ->> 'estado')::integer = 1000 and (v_r -> 'frente_a_vigente' ->> 'igual')::integer = v_n - 1000
+     and (v_x ->> 'nuevos')::integer = 300 and (v_x ->> 'cambios_estado')::integer = 1000
+     and (select count(*) from redes.l116_revision_filas f where f.revision_id = (v_r ->> 'revision_id')::bigint) = 1300, (v_r - 'tabla')::text);
+  perform pg_temp.reg('10.05 la carga de cada mes: el resumen y la publicación, cada uno en menos de 10 s (la meta; el tope de la Edge es 30 s)', v_ms_res2 < 10000 and v_ms_pub2 < 10000, v_info);
 
   -- ---------- Resultado ----------
   select count(*), count(*) filter (where ok), coalesce(string_agg('  FALLA ' || nombre || ' → ' || coalesce(detalle, ''), E'\n' order by _r.n) filter (where not ok), '') into v_total, v_bien, v_fallas from _r;

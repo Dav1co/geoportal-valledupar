@@ -267,18 +267,18 @@ for (const ancho of ANCHOS) {
   // ===== A. Cargue de capas: el supervisor de distribución carga la línea 116 (Excel) =====
   p = await alDashboard(ancho, "dist"); await alCargue(p);
   t = await p.evaluate(() => document.querySelector("[data-testid=capa-linea_116]")?.innerText ?? "");
-  ok(`${tag} A1 la capa «Reportes de la línea 116» está en el Cargue (CSV o Excel; se reconoce por el número y se ubica por contrato, dirección o barrio), sin cargar todavía`,
-     /CSV, Excel/.test(t) && /se reconoce por el número de reporte/.test(t) && /Todavía no se ha cargado/.test(t), t);
+  ok(`${tag} A1 la capa «Reportes de la línea 116» está en el Cargue (CSV o Excel; se reconoce por el número y se ubica por su contrato), sin cargar todavía`,
+     /CSV, Excel/.test(t) && /se reconoce por el número de reporte y se ubica por su contrato/.test(t) && /Todavía no se ha cargado/.test(t), t);
   await cargar116(p, XLSX);
   t = await texto(p);
-  ok(`${tag} A2 al elegir el Excel: 4 reportes y «No se envían: NOMBRE» (se descarta en el equipo)`, /4\s*reportes/.test(t) && /No se envían: NOMBRE/.test(t), t.slice(0, 600));
+  ok(`${tag} A2 al elegir el Excel: 4 reportes y «No se envían: NOMBRE, DIRECCION, BARRIO» (se descartan en el equipo)`, /4\s*reportes/.test(t) && /No se envían: NOMBRE, DIRECCION, BARRIO/.test(t), t.slice(0, 600));
   await p.screenshot({ path: join(CAP, `cargue_archivo_${ancho}.png`), fullPage: true });
   await clicTexto(p, "button", "Subir y revisar"); await p.waitForSelector("[data-testid=resumen]");
   t = await p.evaluate(() => document.querySelector("[data-testid=resumen]").innerText);
-  ok(`${tag} A3 la revisión: 4 nuevos, 0 cambian de estado, cómo se ubicaron (2+1 por contrato) y «Lista para publicar»`,
-     /Nuevos\s*4/.test(t) && /Cambian de estado\s*0/.test(t) && /3 por el contrato/.test(t) && /Lista para publicar/.test(t), t);
-  ok(`${tag} A4 el nombre no salió de la página: ningún lote lleva NOMBRE ni el nombre de prueba, y el resumen no trae direcciones ni barrios`,
-     sinNombre() && rpcs.some((r) => r.fn === "geoportal_redes_carga_lote") && !/ZT5D DIR|ZT5D BARRIO/.test(t));
+  ok(`${tag} A3 la revisión: 4 nuevos, 0 cambian de estado, 3 en el predio de su contrato y 1 sin ubicar, y «Lista para publicar»`,
+     /Nuevos\s*4/.test(t) && /Cambian de estado\s*0/.test(t) && /3 en el predio de su contrato · 1 sin ubicar/.test(t) && /Lista para publicar/.test(t), t);
+  ok(`${tag} A4 ni el nombre, ni la dirección ni el barrio salieron de la página (ningún lote los lleva), y el resumen tampoco los trae`,
+     sinNombre() && !rpcs.some((r) => /ZT5D DIR|ZT5D BARRIO|"direccion"|"barrio"/i.test(JSON.stringify(r.a))) && rpcs.some((r) => r.fn === "geoportal_redes_carga_lote") && !/ZT5D DIR|ZT5D BARRIO/.test(t));
   await p.screenshot({ path: join(CAP, `cargue_revisar_${ancho}.png`), fullPage: true });
   await clicTexto(p, "button", "Siguiente"); await p.waitForSelector("#cg116-nota");
   await clicTexto(p, "button", "Publicar"); await esperarTexto(p, /Escriba la nota de la carga/);
@@ -309,7 +309,7 @@ for (const ancho of ANCHOS) {
   await p.evaluate((lon, lat) => document.querySelector(".geo-mapa").__mapa.jumpTo({ center: [lon, lat], zoom: 17 }), Number(C1[1]), Number(C1[2]));
   const hay = await esperarDibujo(p, "g-pqr_116");
   const ley = await p.evaluate(() => document.querySelector("[data-testid=leyenda-116]")?.innerText ?? "");
-  ok(`${tag} B2 la capa se dibuja (hoy) y su leyenda dice los colores por servicio, lleno/hueco por estado, y que 1 reporte del periodo no tiene ubicación`,
+  ok(`${tag} B2 la capa se dibuja (hoy) y su leyenda dice los colores por servicio, lleno/hueco por estado, y que 1 reporte del periodo no tiene ubicación (su contrato no está en el catastro)`,
      hay && /Acueducto/.test(ley) && /Alcantarillado/.test(ley) && /Lleno: registrado · hueco: atendido/.test(ley) && /1 del periodo sin ubicar/.test(ley), ley);
   await p.screenshot({ path: join(CAP, `geovisor_116_${ancho}.png`) });
   await tocar(p, Number(C1[1]), Number(C1[2]), 18);

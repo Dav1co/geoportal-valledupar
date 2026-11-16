@@ -5,7 +5,8 @@
 --   «revision_compartida» en el dominio tecnica.formulario_clave).
 -- · Los reportes de la línea 116 entran por el Cargue de capas (capa «linea_116», CSV o Excel) o por el paquete de psql (carga_116/). Se reconocen por su número:
 --   la primera vez se guarda el reporte (solo se agrega) y su ubicación; después, cada cambio de estado es un evento con fecha. Nada se borra.
--- · NOMBRE no se guarda nunca (ni en la carga). Dirección y barrio se guardan solo para ubicar: no salen en el geovisor, ni en descargas, listados ni PDF.
+-- · NOMBRE, DIRECCION y BARRIO no se guardan nunca (ni en la carga). La ubicación es SOLO por el contrato cruzado con el catastro (David, 16-nov): el reporte
+--   cuyo contrato no cruza queda «sin ubicar» (se guarda y se cuenta; no se pinta en el mapa).
 -- · Punto 8 (pedido del Code A): los dos formularios compartidos con Comercial entran a los formularios de distribución.
 -- =====================================================================
 do $$
@@ -21,8 +22,8 @@ begin
   if not exists (select 1 from redes.geovisor_capas where codigo = 'pqr_116' and fuente = 'preparada') then
     raise exception 'La capa «pqr_116» del geovisor no está como la dejó el Corte 6a (preparada): deténgase y avise';
   end if;
-  if (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'catastro_valledupar' and column_name in ('cod_usuario', 'geom', 'direccion', 'barrio')) <> 4 then
-    raise exception 'public.catastro_valledupar no tiene cod_usuario, geom, direccion y barrio: deténgase y avise';
+  if (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'catastro_valledupar' and column_name in ('cod_usuario', 'geom')) <> 2 then
+    raise exception 'public.catastro_valledupar no tiene cod_usuario y geom: deténgase y avise';
   end if;
   if exists (select 1 from redes.capas where codigo = 'linea_116' and activa) then raise exception 'Ya existe la capa linea_116: deténgase y avise'; end if;
   if exists (select 1 from redes.formularios_distribucion where clave in ('anomalia_compartida', 'revision_compartida') and activo) then
@@ -41,11 +42,9 @@ create table redes.l116_reportes (
   causal text not null check (length(btrim(causal)) between 1 and 120),
   comuna text check (comuna is null or length(comuna) <= 60),
   contrato text check (contrato is null or contrato ~ '^[0-9]{1,15}$'),
-  direccion text check (direccion is null or length(direccion) <= 200),      -- solo para ubicar
-  barrio text check (barrio is null or length(barrio) <= 120),               -- solo para ubicar
   carga_id bigint not null references redes.cargas(id),
   creado_en timestamptz not null default clock_timestamp());
-comment on table redes.l116_reportes is 'Corte 5d: reportes de la línea 116 (uno por número de reporte). Sin nombre. Dirección y barrio solo para ubicar: nunca en geovisor, descargas, listados ni PDF.';
+comment on table redes.l116_reportes is 'Corte 5d: reportes de la línea 116 (uno por número de reporte). Sin nombre, dirección ni barrio: se ubican solo por el contrato (punto del predio).';
 create index ix_l116_rep_carga on redes.l116_reportes (carga_id);
 
 -- ---------------------------------------------------------------------
@@ -57,7 +56,7 @@ create table redes.l116_eventos (
   tipo text not null check (tipo in ('alta', 'estado', 'ocultar', 'mostrar')),
   estado text check (estado in ('registrado', 'atendido')),
   estado_antes text check (estado_antes in ('registrado', 'atendido')),
-  metodo text check (metodo in ('contrato', 'direccion', 'barrio', 'sin_ubicar')),
+  metodo text check (metodo in ('contrato', 'sin_ubicar')),
   geom geometry(Point, 4326),
   sector smallint, subsector text,
   carga_id bigint references redes.cargas(id),
@@ -81,7 +80,7 @@ create table redes.l116_vigente (
   servicio text not null, causal text not null, contrato text,
   estado text not null check (estado in ('registrado', 'atendido')),
   estado_desde timestamptz not null,
-  metodo text not null check (metodo in ('contrato', 'direccion', 'barrio', 'sin_ubicar')),
+  metodo text not null check (metodo in ('contrato', 'sin_ubicar')),
   geom geometry(Point, 4326),
   sector smallint, subsector text,
   oculto boolean not null default false,
@@ -100,6 +99,31 @@ create table redes.l116_danos (
   creado_en timestamptz not null default clock_timestamp(),
   unique (reporte_id, dano_id));
 
+-- ---------------------------------------------------------------------
+-- 4b. La revisión de una carga (lo que el resumen ya calculó: lo nuevo, lo que cambia de estado y lo que vuelve, con su ubicación). La publicación la usa tal
+--     cual: no vuelve a leer el archivo ni a ubicar. Solo se agrega (una carga puede tener varias revisiones; vale la última si la 116 no cambió desde entonces).
+-- ---------------------------------------------------------------------
+create table redes.l116_revisiones (
+  id bigint generated always as identity primary key,
+  carga_id bigint not null references redes.cargas(id),
+  ultimo_evento bigint not null,      -- el último evento de la 116 cuando se revisó: si después hubo otro, la revisión ya no vale
+  resumen jsonb not null,
+  creado_en timestamptz not null default clock_timestamp());
+create index ix_l116_rev_carga on redes.l116_revisiones (carga_id, id);
+create table redes.l116_revision_filas (
+  revision_id bigint not null references redes.l116_revisiones(id),
+  orden integer not null,
+  accion text not null check (accion in ('nuevo', 'estado', 'mostrar')),
+  reporte bigint not null, reporte_id bigint,
+  fecha timestamptz not null, estado text not null, estado_vigente text,
+  servicio text not null, causal text not null, comuna text, contrato text,
+  metodo text, geom geometry(Point, 4326), sector smallint, subsector text,
+  primary key (revision_id, orden));
+create trigger t_solo_agregar before update or delete on redes.l116_revisiones for each row execute function tecnica.f_solo_agregar();
+create trigger t_solo_agregar_trunc before truncate on redes.l116_revisiones for each statement execute function tecnica.f_solo_agregar();
+create trigger t_solo_agregar before update or delete on redes.l116_revision_filas for each row execute function tecnica.f_solo_agregar();
+create trigger t_solo_agregar_trunc before truncate on redes.l116_revision_filas for each statement execute function tecnica.f_solo_agregar();
+
 create trigger t_solo_agregar before update or delete on redes.l116_reportes for each row execute function tecnica.f_solo_agregar();
 create trigger t_solo_agregar_trunc before truncate on redes.l116_reportes for each statement execute function tecnica.f_solo_agregar();
 create trigger t_solo_agregar before update or delete on redes.l116_eventos for each row execute function tecnica.f_solo_agregar();
@@ -107,8 +131,8 @@ create trigger t_solo_agregar_trunc before truncate on redes.l116_eventos for ea
 create trigger t_solo_agregar before update or delete on redes.l116_danos for each row execute function tecnica.f_solo_agregar();
 create trigger t_solo_agregar_trunc before truncate on redes.l116_danos for each statement execute function tecnica.f_solo_agregar();
 
-revoke all on table redes.l116_reportes, redes.l116_eventos, redes.l116_vigente, redes.l116_danos from public, anon, authenticated, service_role;
-revoke all on sequence redes.l116_reportes_id_seq, redes.l116_eventos_id_seq, redes.l116_danos_id_seq from public, anon, authenticated, service_role;
+revoke all on table redes.l116_reportes, redes.l116_eventos, redes.l116_vigente, redes.l116_danos, redes.l116_revisiones, redes.l116_revision_filas from public, anon, authenticated, service_role;
+revoke all on sequence redes.l116_reportes_id_seq, redes.l116_eventos_id_seq, redes.l116_danos_id_seq, redes.l116_revisiones_id_seq from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------
 -- 5. Catálogo: la capa del Cargue, la del geovisor y los formularios de distribución
@@ -119,7 +143,7 @@ on conflict (codigo) do update set nombre = excluded.nombre, grupo = excluded.gr
   formatos = excluded.formatos, periodicidad_dias = excluded.periodicidad_dias, activa = true, orden = excluded.orden, carga_supervisor = excluded.carga_supervisor;      -- si una reversa la desactivó
 
 update redes.geovisor_capas set fuente = 'geojson', estado = 'activa', por_fecha = true, solo_completo = true, nombre = 'Línea 116 (reportes)',
-       nota = 'Por fecha de registro. Color por servicio (acueducto, alcantarillado, otros); lleno si está registrado, hueco si ya se atendió. Los repetidos del mismo contrato, causal y día van juntos'
+       nota = 'Por fecha de registro, en el predio de su contrato. Color por servicio (acueducto, alcantarillado, otros); lleno si está registrado, hueco si ya se atendió. Los repetidos del mismo contrato, causal y día van juntos'
  where codigo = 'pqr_116';
 
 -- Punto 8 (pedido del Code A, Corte 8): el supervisor de distribución asigna los dos formularios compartidos con Comercial desde Personal
