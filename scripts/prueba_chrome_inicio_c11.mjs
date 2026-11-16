@@ -226,10 +226,13 @@ for (const ancho of [390, 1280]) {
   // ===== B. Operador de redes =====
   p = await abrir(ancho, "op"); await esperarTexto(p, /Reportar daño o falla/);
   i = await inicio(p);
-  ok(`${tag} B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención y el geovisor en solo lectura (tiene la casilla); sin ficha ni dashboards`,
-     i.pestanas.length === 0 && i.unico === "Redes" && claves(i) === "danos_fallas,mantenimiento,geovisor" && /solo lectura/.test(i.tarjetas[2].nom), i.unico + " " + claves(i));
+  ok(`${tag} B1 operador de redes: un solo modo (Redes), sin selector: daño, intervención, «Ficha de activos» en modo buscar (9a-bis: solo lectura) y el geovisor en solo lectura (tiene la casilla); sin dashboards`,
+     i.pestanas.length === 0 && i.unico === "Redes" && claves(i) === "danos_fallas,mantenimiento,ficha_buscar,geovisor" && /solo lectura/.test(i.tarjetas[3].nom) && !/Dashboard/.test(i.tarjetas.map((x) => x.nom).join()), i.unico + " " + claves(i));
   ok(`${tag} B2 el color del modo Redes (#0f3d2b)`, i.tarjetas[0].colorIni === COLOR.redes);
   ok(`${tag} B3 el geovisor no se cargó al entrar (no se pidió su configuración ni hay mapa)`, !pidio("geoportal_redes_geovisor", EMAILS.op) && !(await p.$(".geo-mapa")));
+  await tocar(p, "ficha_buscar"); await p.waitForSelector("#red-codigo", { timeout: 20000 });
+  ok(`${tag} B1b (9a-bis) la «Ficha de activos» del operador de redes abre la búsqueda`, !!(await p.$("#red-codigo")));
+  await clicTexto(p, "button.red-volver", ""); await p.waitForSelector("[data-tarjeta=danos_fallas]");
   await tocar(p, "danos_fallas"); await p.waitForSelector(".tec-volver-barra"); await esperarTexto(p, /daño/i);
   ok(`${tag} B4 «Reportar daño o falla» se abre con «Volver» y su nombre`, (await p.evaluate(() => document.querySelector(".tec-volver-tit").textContent)) === "Reportar daño o falla" && (await sinDesborde(p)));
   await clicTexto(p, ".tec-volver-barra button", "←"); await p.waitForSelector("[data-tarjeta=geovisor]");

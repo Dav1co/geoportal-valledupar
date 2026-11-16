@@ -133,7 +133,8 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const tieneGeovisor = redes?.geovisor === true;                                    // Corte 6a: lo decide el servidor (redes.f_geovisor_lectura)
   const abrirDano = (a: typeof activoDano) => { setActivoDano(a); setVezDano((v) => v + 1); setElegido("danos_fallas"); setVista("captura"); window.scrollTo?.(0, 0); };
   if (tieneGeovisor && vista === "geovisor") return <Geovisor vistaId={vistaId} onVolver={() => { setVistaId(null); setVista("inicio"); }} onReportarDano={(a) => abrirDano(a)} onRegistrarIntervencion={(a) => abrirItv(null, a)} />;
-  if ((puedeSupervisar || puedeRedes) && vista === "activos") return <ActivosRedes onVolver={() => setVista("inicio")} onRegistrarIntervencion={tieneItv || puedeSupervisar || puedeRedes ? (a) => abrirItv(null, a) : undefined} />;
+  const fichaBuscar = redes?.ficha_buscar === true;      // 9a-bis (David, 16-nov): la Ficha de activos en modo buscar (solo lectura) también para el operador de redes; lo decide el servidor
+  if ((puedeSupervisar || puedeRedes || fichaBuscar) && vista === "activos") return <ActivosRedes onVolver={() => setVista("inicio")} onRegistrarIntervencion={tieneItv || puedeSupervisar || puedeRedes ? (a) => abrirItv(null, a) : undefined} />;
 
   // ----- las tarjetas de cada modo (solo lo que la persona ya tenía) -----
   const abrirForm = (clave: string) => { setElegido(clave); setVista("captura"); window.scrollTo?.(0, 0); };
@@ -145,7 +146,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   };
   const orden = (c: string) => { const k = ORDEN_FORM.indexOf(c); return k < 0 ? ORDEN_FORM.length : k; };
   const ordenados = [...formularios].sort((x, y) => orden(x.clave) - orden(y.clave));
-  const veFicha = puedeSupervisar || puedeRedes;                       // la ficha de activos (el servidor lo vuelve a verificar)
+  const veFicha = puedeSupervisar || puedeRedes || fichaBuscar;        // la ficha de activos (el servidor lo vuelve a verificar)
   const editaFicha = perfil === "admin" || puedeRedes;                 // quién edita la ficha: administrador y supervisor de distribución (Corte 4a)
   const supervisa = puedeSupervisar || puedeRedes;
   const porModo: Record<Modo, Tarjeta[]> = {
