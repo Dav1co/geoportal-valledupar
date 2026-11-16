@@ -1,0 +1,20 @@
+OK    00 base local con el 7a publicado (huella de redes 79f184a4…; en producción, con el 9a del Code B, es 4a46069f…: este corte no toca redes)
+OK    01 huellas antes: 2 «CORTE 7a (sin cambiar)», 5 funciones y 3 objetos «NO EXISTE» · 1 public.geoportal_tec_quimico_entrada(text,jsonb,text)=CORTE 7a (sin cambiar) | 1 public.geoportal_tec_quimico_historial(text,text)=CORTE 7a (sin cambiar) | 2 public.geoportal_tec_quimico_parametro_fijar(text,text,numeric,text)=NO EXISTE (sin aplicar) | 2 public.geoportal_tec_quimico_parametros(tex
+OK    02 ensayo: ERROR esperado, N de N SIN FALLAS · RESULTADO: 31 de 31 pruebas correctas — SIN FALLAS
+OK    03 el ensayo no deja rastro
+OK    04 migración
+OK    05 verificación: 8 OK y 2 INFO · INFO huella del conjunto de funciones de redes (este corte no la cambia: debe ser la misma de antes de migrar; 4a46069f… con el 9a publicado)|79f184a4fe37ed2baa67dac7f3dd9b3c | INFO parámetros (desvío % · marca · días atrás uso · días atrás entrada) · cambios hechos · entradas con foto de la remisió
+OK    06 guardia: migrar dos veces se niega
+OK    07 huellas después: 2 «CORTE 7c (reemplazada)», 5 «NUEVA» y 3 «EXISTE» · 1 public.geoportal_tec_quimico_entrada(text,jsonb,text)=CORTE 7c (reemplazada) | 1 public.geoportal_tec_quimico_historial(text,text)=CORTE 7c (reemplazada) | 2 public.geoportal_tec_quimico_parametro_fijar(text,text,numeric,text)=NUEVA (aplicada) | 2 public.geoportal_tec_quimico_parametros(text)=NUEV
+OK    08 la huella de las funciones de redes no cambió con la migración
+OK    09 reversa vacía: funciones y columnas de tecnica exactamente como en el 7a
+OK    10 migrar de nuevo después de la reversa: mismo resultado
+OK    11 Edge (service_role, 30 s y 8 s): el operador reserva la foto y registra la entrada con ella · 59 ms
+OK    12 Edge: el historial del supervisor trae la ruta de la foto de esa entrada · 28 ms
+OK    13 Edge: el supervisor cambia el desvío a 35 % (un UPDATE con WHERE: pasa por pg-safeupdate) y la lista lo muestra con su último cambio · 27 ms
+OK    14 Edge: el operador no cambia parámetros (42501)
+OK    15 la API no lee las tablas nuevas
+OK    16 verificación con datos: 8 OK · INFO parámetros (desvío % · marca · días atrás uso · días atrás entrada) · cambios hechos · entradas con foto de la remisión|35 · 1 · 7 · 7 · 1 · 1
+OK    17 reversa con datos: se niega y no cambia nada
+
+RESULTADO: 18 de 18 — SIN FALLAS

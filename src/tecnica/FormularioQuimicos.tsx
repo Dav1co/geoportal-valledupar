@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./quimicos.css";
 import { ErrorTec } from "./apiTecnica";
-import { apiQuimicos, type FormularioQuimicos as Def } from "./apiQuimicos";
+import { apiQuimicos, reducirFoto, subirRemision, type FormularioQuimicos as Def } from "./apiQuimicos";
 import { interpretarNumero, formatearNumero } from "./numeros";
 import { fmtFecha } from "./formato";
 
@@ -33,6 +33,10 @@ export function FormularioQuimicos({ formulario, onSalir }: { formulario: "entra
   const [lote, setLote] = useState("");
   const [vence, setVence] = useState("");
   const [clave, setClave] = useState(claveNueva);
+  // Corte 7c: foto de la remisión (opcional, solo en la entrada). Vive en memoria; se sube al guardar. Si la entrada falla después de subirla, la ruta se conserva para reintentar.
+  const [foto, setFoto] = useState<{ blob: Blob; url: string } | null>(null);
+  const [fotoRuta, setFotoRuta] = useState<string | null>(null);
+  const [errorFoto, setErrorFoto] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [intentado, setIntentado] = useState(false);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
@@ -75,15 +79,25 @@ export function FormularioQuimicos({ formulario, onSalir }: { formulario: "entra
   if (!def) return <p className="tec-sub" role="status" style={{ padding: "16px" }}>Cargando el formulario…</p>;
 
   const nombreQuimico = def.quimicos.find((q) => q.codigo === quimico)?.nombre ?? "";
-  const limpiar = () => { setCantidad(""); setProveedor(""); setRemision(""); setLote(""); setVence(""); setIntentado(false); setErrorEnvio(null); setClave(claveNueva()); };
+  const quitarFoto = () => { if (foto) URL.revokeObjectURL(foto.url); setFoto(null); setFotoRuta(null); setErrorFoto(null); };
+  const elegirFoto = async (archivo: File | undefined) => {
+    if (!archivo) return;
+    setErrorFoto(null);
+    try { const blob = await reducirFoto(archivo); if (foto) URL.revokeObjectURL(foto.url); setFoto({ blob, url: URL.createObjectURL(blob) }); setFotoRuta(null); }
+    catch (e) { setErrorFoto(e instanceof Error ? e.message : "No se pudo leer la foto."); }
+  };
+  const limpiar = () => { setCantidad(""); setProveedor(""); setRemision(""); setLote(""); setVence(""); setIntentado(false); setErrorEnvio(null); setClave(claveNueva()); quitarFoto(); };
   const enviar = async () => {
     setIntentado(true); setErrorEnvio(null); setListo(null);
     if (Object.keys(errores).length > 0 || num.tipo !== "ok") return;
     setEnviando(true);
     try {
       if (esEntrada) {
-        const r = await apiQuimicos.entrada({ quimico, cantidad: num.valor, unidad, dia, proveedor: proveedor.trim() || null, remision: remision.trim() || null, lote: lote.trim() || null, vence: vence || null }, clave);
-        setListo(`Entrada registrada: ${kg(Math.abs(r.cantidad_kg))} de ${nombreQuimico}, el ${fmtFecha(dia)}.`);
+        let ruta = fotoRuta;
+        if (foto && !ruta) { ruta = await subirRemision(foto.blob); setFotoRuta(ruta); }
+        const r = await apiQuimicos.entrada({ quimico, cantidad: num.valor, unidad, dia, proveedor: proveedor.trim() || null, remision: remision.trim() || null, lote: lote.trim() || null, vence: vence || null,
+          ...(ruta ? { foto: ruta } : {}) }, clave);
+        setListo(`Entrada registrada: ${kg(Math.abs(r.cantidad_kg))} de ${nombreQuimico}, el ${fmtFecha(dia)}${ruta ? ", con la foto de la remisión" : ""}.`);
       } else {
         const r = await apiQuimicos.uso({ quimico, cantidad: num.valor, unidad: "kg", dia, para_que: paraQue, planta: planta || null }, clave);
         setListo(`Uso registrado: ${kg(Math.abs(r.cantidad_kg))} de ${nombreQuimico}, el ${fmtFecha(dia)}.`);
@@ -162,6 +176,20 @@ export function FormularioQuimicos({ formulario, onSalir }: { formulario: "entra
               <div className="tec-campo"><label htmlFor="fq-remision">Número de la remisión</label><input id="fq-remision" type="text" maxLength={60} value={remision} onChange={(e) => setRemision(e.target.value)} /></div>
               <div className="tec-campo"><label htmlFor="fq-lote">Lote del fabricante</label><input id="fq-lote" type="text" maxLength={60} value={lote} onChange={(e) => setLote(e.target.value)} /></div>
               <div className="tec-campo"><label htmlFor="fq-vence">Fecha de vencimiento</label><input id="fq-vence" type="date" value={vence} onChange={(e) => setVence(e.target.value)} /></div>
+              <div className="tec-campo fq-foto">
+                <span className="fq-rotulo" id="fq-l-foto">Foto de la remisión</span>
+                {foto ? (
+                  <div className="fq-foto-vista">
+                    <img src={foto.url} alt="Foto de la remisión tomada" />
+                    <div className="fq-foto-pie"><span className="tec-ayuda">{Math.round(foto.blob.size / 1024)} KB · se sube al guardar</span>
+                      <button type="button" className="tec-boton-sec tec-boton-corto" onClick={quitarFoto} disabled={enviando}>Quitar la foto</button></div>
+                  </div>
+                ) : (
+                  <label className="tec-boton-sec fq-foto-boton" htmlFor="fq-foto">Tomar la foto de la remisión
+                    <input id="fq-foto" type="file" accept="image/*" capture="environment" aria-labelledby="fq-l-foto" onChange={(e) => { void elegirFoto(e.target.files?.[0]); e.target.value = ""; }} /></label>
+                )}
+                {errorFoto ? <span className="tec-error">{errorFoto}</span> : null}
+              </div>
             </div>
           ) : null}
 

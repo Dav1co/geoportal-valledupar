@@ -1,0 +1,78 @@
+OK    [390] A1 «Entrada de químicos» ofrece la foto de la remisión, como opcional (dentro de «Datos de la remisión (opcionales)»)
+OK    [390] A2 la foto se achica antes de subir (lado mayor de 1.600 px, JPEG): de 2627 KB a 395 KB, se ve en la pantalla y dice que se sube al guardar
+OK    [390] A3 nada se subió todavía (ni se reservó la foto)
+OK    [390] A4 sin desborde y con botones de al menos 44 px
+OK    [390] A5 al guardar: «Entrada registrada … con la foto de la remisión» y la entrada queda con su foto
+OK    [390] A6 la foto quedó en el bucket privado de Técnica, como JPEG y dentro del tamaño; se reservó y se subió una sola vez
+OK    [390] A7 después de guardar, la pantalla queda sin foto, lista para otra entrada
+OK    [390] A8 «Quitar la foto» la descarta y la foto es opcional: la segunda entrada se guarda sin foto
+OK    [390] B1 en el historial del PAC, la entrada con remisión R-0099 tiene «Ver la foto de la remisión» (una URL firmada de lectura) y la otra entrada no
+OK    [390] B2 sin desborde en el historial
+OK    [390] C1 «Parámetros» muestra los 4 que se editan con su valor: desvío 25 %, marca encendida y 7 días atrás
+OK    [390] C2 cada uno dice su rango y que no tiene cambios
+OK    [390] C3 un valor fuera del rango no se deja guardar y dice el rango
+OK    [390] C4 sin motivo tampoco
+OK    [390] C5 formulario sin desborde, con campos y botones de 44 px o más
+OK    [390] C6 guarda el cambio: el aviso «de 25 a 30», la tarjeta con 30 y su último cambio (motivo y quién)
+OK    [390] C7 «Esperado contra usado» ya trabaja con el 30 %
+OK    [390] D1 el operador nunca pidió parámetros ni historial
+OK    [1280] A1 «Entrada de químicos» ofrece la foto de la remisión, como opcional (dentro de «Datos de la remisión (opcionales)»)
+OK    [1280] A2 la foto se achica antes de subir (lado mayor de 1.600 px, JPEG): de 2627 KB a 395 KB, se ve en la pantalla y dice que se sube al guardar
+OK    [1280] A3 nada se subió todavía (ni se reservó la foto)
+OK    [1280] A4 sin desborde y con botones de al menos 44 px
+OK    [1280] A5 al guardar: «Entrada registrada … con la foto de la remisión» y la entrada queda con su foto
+OK    [1280] A6 la foto quedó en el bucket privado de Técnica, como JPEG y dentro del tamaño; se reservó y se subió una sola vez
+OK    [1280] A7 después de guardar, la pantalla queda sin foto, lista para otra entrada
+OK    [1280] A8 «Quitar la foto» la descarta y la foto es opcional: la segunda entrada se guarda sin foto
+OK    [1280] B1 en el historial del PAC, la entrada con remisión R-0099 tiene «Ver la foto de la remisión» (una URL firmada de lectura) y la otra entrada no
+OK    [1280] B2 sin desborde en el historial
+OK    [1280] C1 «Parámetros» muestra los 4 que se editan con su valor: desvío 25 %, marca encendida y 7 días atrás
+OK    [1280] C2 cada uno dice su rango y que no tiene cambios
+OK    [1280] C3 un valor fuera del rango no se deja guardar y dice el rango
+OK    [1280] C4 sin motivo tampoco
+OK    [1280] C5 formulario sin desborde, con campos y botones de 44 px o más
+OK    [1280] C6 guarda el cambio: el aviso «de 25 a 30», la tarjeta con 30 y su último cambio (motivo y quién)
+OK    [1280] C7 «Esperado contra usado» ya trabaja con el 30 %
+OK    [1280] D1 el operador nunca pidió parámetros ni historial
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+----
+OK    [390] A1 «Entrada de químicos» ofrece la foto de la remisión, como opcional (dentro de «Datos de la remisión (opcionales)»)
+OK    [390] A2 la foto se achica antes de subir (lado mayor de 1.600 px, JPEG): de 2627 KB a 395 KB, se ve en la pantalla y dice que se sube al guardar
+OK    [390] A3 nada se subió todavía (ni se reservó la foto)
+OK    [390] A4 sin desborde y con botones de al menos 44 px
+OK    [390] A5 al guardar: «Entrada registrada … con la foto de la remisión» y la entrada queda con su foto
+OK    [390] A6 la foto quedó en el bucket privado de Técnica, como JPEG y dentro del tamaño; se reservó y se subió una sola vez
+OK    [390] A7 después de guardar, la pantalla queda sin foto, lista para otra entrada
+OK    [390] A8 «Quitar la foto» la descarta y la foto es opcional: la segunda entrada se guarda sin foto
+OK    [390] B1 en el historial del PAC, la entrada con remisión R-0099 tiene «Ver la foto de la remisión» (una URL firmada de lectura) y la otra entrada no
+OK    [390] B2 sin desborde en el historial
+OK    [390] C1 «Parámetros» muestra los 4 que se editan con su valor: desvío 25 %, marca encendida y 7 días atrás
+OK    [390] C2 cada uno dice su rango y que no tiene cambios
+OK    [390] C3 un valor fuera del rango no se deja guardar y dice el rango
+OK    [390] C4 sin motivo tampoco
+OK    [390] C5 formulario sin desborde, con campos y botones de 44 px o más
+OK    [390] C6 guarda el cambio: el aviso «de 25 a 30», la tarjeta con 30 y su último cambio (motivo y quién)
+OK    [390] C7 «Esperado contra usado» ya trabaja con el 30 %
+OK    [390] D1 el operador nunca pidió parámetros ni historial
+OK    [1280] A1 «Entrada de químicos» ofrece la foto de la remisión, como opcional (dentro de «Datos de la remisión (opcionales)»)
+OK    [1280] A2 la foto se achica antes de subir (lado mayor de 1.600 px, JPEG): de 2627 KB a 395 KB, se ve en la pantalla y dice que se sube al guardar
+OK    [1280] A3 nada se subió todavía (ni se reservó la foto)
+OK    [1280] A4 sin desborde y con botones de al menos 44 px
+OK    [1280] A5 al guardar: «Entrada registrada … con la foto de la remisión» y la entrada queda con su foto
+OK    [1280] A6 la foto quedó en el bucket privado de Técnica, como JPEG y dentro del tamaño; se reservó y se subió una sola vez
+OK    [1280] A7 después de guardar, la pantalla queda sin foto, lista para otra entrada
+OK    [1280] A8 «Quitar la foto» la descarta y la foto es opcional: la segunda entrada se guarda sin foto
+OK    [1280] B1 en el historial del PAC, la entrada con remisión R-0099 tiene «Ver la foto de la remisión» (una URL firmada de lectura) y la otra entrada no
+OK    [1280] B2 sin desborde en el historial
+OK    [1280] C1 «Parámetros» muestra los 4 que se editan con su valor: desvío 25 %, marca encendida y 7 días atrás
+OK    [1280] C2 cada uno dice su rango y que no tiene cambios
+OK    [1280] C3 un valor fuera del rango no se deja guardar y dice el rango
+OK    [1280] C4 sin motivo tampoco
+OK    [1280] C5 formulario sin desborde, con campos y botones de 44 px o más
+OK    [1280] C6 guarda el cambio: el aviso «de 25 a 30», la tarjeta con 30 y su último cambio (motivo y quién)
+OK    [1280] C7 «Esperado contra usado» ya trabaja con el 30 %
+OK    [1280] D1 el operador nunca pidió parámetros ni historial
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 38 de 38 — SIN FALLAS

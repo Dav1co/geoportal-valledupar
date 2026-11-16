@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./quimicos.css";
 import { textoError, type Catalogo as CatalogoDash } from "./apiDashboard";
-import { apiQuimicos, subirFicha, type Catalogo, type Comparacion, type Historial, type Quimico } from "./apiQuimicos";
+import { apiQuimicos, subirFicha, type Catalogo, type Comparacion, type Historial, type ParametroQuimico, type Quimico } from "./apiQuimicos";
 
 // Dashboard PTAP · pestaña «Químicos» (Técnica fase 1, Corte 7a; §29). Solo planta: supervisor de planta y administrador.
 // · Bodega (una sola; todo en kg): cada químico con su saldo, su dosis óptima, si es de potabilización y su ficha técnica en PDF (URL firmada de 60 s).
@@ -21,14 +21,15 @@ const fecha = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-CO
 const kg = (v: number | null) => (v === null ? "—" : `${nf.format(v)} kg`);
 
 export function QuimicosPTAP(_: { catalogo: CatalogoDash }) {
-  const [vista, setVista] = useState<"bodega" | "comparacion">("bodega");
+  const [vista, setVista] = useState<"bodega" | "comparacion" | "parametros">("bodega");
   return (
     <div className="qm">
       <div className="qm-seg" role="tablist" aria-label="Químicos">
         <button type="button" role="tab" aria-selected={vista === "bodega"} onClick={() => setVista("bodega")}>Bodega</button>
         <button type="button" role="tab" aria-selected={vista === "comparacion"} onClick={() => setVista("comparacion")}>Esperado contra usado</button>
+        <button type="button" role="tab" aria-selected={vista === "parametros"} onClick={() => setVista("parametros")}>Parámetros</button>
       </div>
-      {vista === "bodega" ? <Bodega /> : <ComparacionVista />}
+      {vista === "bodega" ? <Bodega /> : vista === "comparacion" ? <ComparacionVista /> : <ParametrosVista />}
     </div>
   );
 }
@@ -198,6 +199,54 @@ function FormAjuste({ q, onListo, onCerrar }: { q: Quimico; onListo: (t: string)
   );
 }
 
+// Corte 7c: parámetros de químicos editables (el jefe de planta ajusta el desvío). Cada cambio pide motivo y queda en el historial.
+const NOMBRE_PARAM: Record<string, { nombre: string; unidad: string }> = {
+  desvio_pct: { nombre: "Desvío para la marca de esperado contra usado", unidad: "%" }, marca_esperado_usado: { nombre: "Marca de esperado contra usado", unidad: "1 = encendida · 0 = apagada" },
+  dias_atras_uso: { nombre: "Días atrás para registrar un uso", unidad: "días" }, dias_atras_entrada: { nombre: "Días atrás para registrar una entrada", unidad: "días" },
+};
+function ParametrosVista() {
+  const [ps, setPs] = useState<ParametroQuimico[] | null>(null); const [error, setError] = useState<string | null>(null);
+  const [vez, setVez] = useState(0); const [aviso, setAviso] = useState<string | null>(null); const [abierto, setAbierto] = useState<string | null>(null);
+  useEffect(() => { let vivo = true; setError(null);
+    apiQuimicos.parametros().then((d) => { if (vivo) setPs(d.parametros); }).catch((e) => { if (vivo) setError(textoError(e).texto); });
+    return () => { vivo = false; }; }, [vez]);
+  if (error) return <div className="td-aviso td-aviso-error" role="alert">{error} <button type="button" className="td-enlace" onClick={() => setVez((x) => x + 1)}>Reintentar</button></div>;
+  if (!ps) return <p className="td-sub" role="status">Cargando los parámetros…</p>;
+  return (
+    <>
+      <p className="td-sub">Cada cambio pide su motivo y queda en el historial, con quién lo hizo.</p>
+      {aviso ? <div className="td-aviso td-aviso-ok" role="status">{aviso}</div> : null}
+      <div className="qm-lista">
+        {ps.map((p) => (
+          <article key={p.clave} className="qm-tarjeta" data-parametro={p.clave}>
+            <div className="qm-cab"><h3>{NOMBRE_PARAM[p.clave]?.nombre ?? p.clave}</h3></div>
+            <p className="qm-param-valor"><strong>{nf.format(p.valor)}</strong> <span className="td-sub">{NOMBRE_PARAM[p.clave]?.unidad ?? ""} · entre {nf.format(p.minimo)} y {nf.format(p.maximo)}</span></p>
+            <p className="td-sub">{p.ultimo ? `Último cambio: de ${nf.format(p.ultimo.antes)} a ${nf.format(p.ultimo.despues)} · «${p.ultimo.motivo}» · ${p.ultimo.autor} · ${fecha(p.ultimo.creado_en)}` : "Sin cambios: tiene el valor inicial."}</p>
+            {abierto === p.clave
+              ? <FormParametro p={p} onCerrar={() => setAbierto(null)} onListo={(t) => { setAbierto(null); setAviso(t); setVez((v) => v + 1); }} />
+              : <div className="qm-botones"><button type="button" className="td-boton-sec" onClick={() => { setAviso(null); setAbierto(p.clave); }}>Cambiar…</button></div>}
+          </article>))}
+      </div>
+    </>
+  );
+}
+function FormParametro({ p, onListo, onCerrar }: { p: ParametroQuimico; onListo: (t: string) => void; onCerrar: () => void }) {
+  const [v, setV] = useState(String(p.valor).replace(".", ",")); const [motivo, setMotivo] = useState("");
+  const { enviando, error, enviar } = useEnvio();
+  const n = Number(v.replace(",", "."));
+  const enRango = v.trim() !== "" && Number.isFinite(n) && n >= p.minimo && n <= p.maximo;
+  const listo = enRango && n !== p.valor && motivo.trim().length >= 10;
+  return (
+    <section className="qm-form" aria-label={`Cambiar ${NOMBRE_PARAM[p.clave]?.nombre ?? p.clave}`} data-form="parametro">
+      <label className="td-campo" htmlFor={`qm-p-${p.clave}`}>Valor nuevo<input id={`qm-p-${p.clave}`} type="text" inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} aria-invalid={!enRango} /></label>
+      {!enRango ? <p className="td-sub">Debe estar entre {nf.format(p.minimo)} y {nf.format(p.maximo)}.</p> : null}
+      <Motivo id={`qm-p-m-${p.clave}`} valor={motivo} onCambiar={setMotivo} />
+      <Pie enviando={enviando} error={error} listo={listo} rotulo="Guardar el cambio" onCerrar={onCerrar}
+        onGuardar={() => void enviar(async () => { const r = await apiQuimicos.fijarParametro(p.clave, n, motivo); onListo(`${NOMBRE_PARAM[p.clave]?.nombre ?? p.clave}: de ${nf.format(r.antes)} a ${nf.format(r.valor)}.`); })} />
+    </section>
+  );
+}
+
 function VerHistorial({ q, onCerrar }: { q: Quimico; onCerrar: () => void }) {
   const [h, setH] = useState<Historial | null>(null); const [error, setError] = useState<string | null>(null);
   useEffect(() => { apiQuimicos.historial(q.codigo).then(setH).catch((e) => setError(textoError(e).texto)); }, [q.codigo]);
@@ -215,7 +264,7 @@ function VerHistorial({ q, onCerrar }: { q: Quimico; onCerrar: () => void }) {
             <ul className="qm-historial">{h.movimientos.map((m, i) => (
               <li key={i}><strong>{TIPO_MOV[m.tipo] ?? m.tipo}</strong> · {m.dia} · {kg(m.cantidad_kg)}{m.unidad === "t" ? ` (${nf.format(m.cantidad)} t)` : ""}
                 {m.planta ? ` · ${m.planta}` : ""}{m.para_que ? ` · ${m.para_que}` : ""}{m.dosis_optima_ppm !== null ? ` · dosis ${nf.format(m.dosis_optima_ppm)} ppm` : ""}
-                {m.remision ? ` · remisión ${m.remision}` : ""}<br /><span className="td-sub">{m.motivo ? `«${m.motivo}» · ` : ""}{m.autor} · {fecha(m.registrado_en)}</span></li>))}</ul>)}
+                {m.remision ? ` · remisión ${m.remision}` : ""}{m.remision_foto ? <> · <a href={m.remision_foto.url} target="_blank" rel="noreferrer" data-remision-foto>Ver la foto de la remisión</a></> : null}<br /><span className="td-sub">{m.motivo ? `«${m.motivo}» · ` : ""}{m.autor} · {fecha(m.registrado_en)}</span></li>))}</ul>)}
         </>)}
       <div className="qm-botones"><button type="button" className="td-boton-sec" onClick={onCerrar}>Cerrar</button></div>
     </section>
