@@ -24,5 +24,5 @@ union all select '7 pg-safeupdate: ninguna función de redes, tecnica, geoportal
 union all select '8 el conjunto de funciones de redes no cambió (informativo si ya se publicó otro corte de redes): ' || (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
         where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')),
      case when (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-        where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) = '814eac39ac5deae2943751b8c190f969' then 'OK' else 'OTRO (avise)' end
+        where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) = '5fd6d00efdaa1a798e2628a2cde23c61' then 'OK' else 'OTRO (avise)' end
 order by 1;

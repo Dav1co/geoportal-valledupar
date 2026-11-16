@@ -53,12 +53,12 @@ ESTADO = ("select md5((select string_agg(pg_get_functiondef(p.oid), E'\\n' order
           "(select string_agg(table_schema || '.' || table_name || '.' || column_name, ',' order by table_schema, table_name, column_name) from information_schema.columns where table_schema = 'tecnica'))")
 REDES = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p "
          "where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%')")
-HUELLA_PROD = '814eac39ac5deae2943751b8c190f969'
+HUELLA_PROD = '5fd6d00efdaa1a798e2628a2cde23c61'      # con el 5d del Code B publicado
 ADM, SP, SD, OP = 'zt.admin@emdupar.gov.co', 'zt.planta@emdupar.gov.co', 'zt.dist@emdupar.gov.co', 'zt.oper@emdupar.gov.co'
 
 subprocess.run(['sh', os.path.join(AQUI, 'rehacer_base.sh'), 'sin_12'], env=ENV, check=True, capture_output=True)
 antes = q(ESTADO)
-reg('00 base local como producción (7a + 9a + 9a-bis + 7c): huella de redes ' + HUELLA_PROD[:8] + '…', q(REDES) == HUELLA_PROD)
+reg('00 base local como producción (7a + 9a + 9a-bis + 7c + 8 + 5d): huella de redes ' + HUELLA_PROD[:8] + '…', q(REDES) == HUELLA_PROD)
 h = huellas()
 reg('01 huellas antes: las 2 de redes «SIN CAMBIAR»; 16 funciones, 6 objetos y el rol «NO EXISTE»', h.count('SIN CAMBIAR') == 2 and h.count('NO EXISTE (sin aplicar)') == 23 and 'DISTINTA' not in h and 'FALTA' not in h
     and 'IGUAL AL DEL ENCARGO' in h, h.replace('\n', ' | ')[:300])
