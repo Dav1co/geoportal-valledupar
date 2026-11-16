@@ -55,6 +55,7 @@
 .geo-capa-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .geo-capa-nom { font-size: 15px; }
 .geo-capa-nota { font-size: 13px; color: #6b7a85; }
+.geo-capa-corte { display: block; font-size: 12px; font-style: italic; }
 .geo-est { margin-left: 6px; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: #eef2f5; color: #3c4b57; white-space: nowrap; }
 .geo-campo { display: flex; flex-direction: column; gap: 4px; font-size: 14px; margin-top: 6px; }
 .geo-campo select, .geo-campo textarea { font: inherit; font-size: 15px; border: 1px solid #b9c6cf; border-radius: 8px; padding: 8px; min-height: 44px; }

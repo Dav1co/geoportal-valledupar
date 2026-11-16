@@ -2,18 +2,19 @@
 -- TÉCNICA · FASE 1 · CORTE 7a · 10 — GUARDIA, RESPUESTAS AL 6b Y QUÍMICOS DE PLANTA (catálogo con historial, movimientos, bucket y parámetros)
 -- PROPUESTA. No se ha ejecutado en la base real (solo en el PostGIS local de Homebrew). Generado por pruebas_locales/generar.py.
 -- Fuente: §29 de la bitácora (químicos), respuestas de David al 6b (16-nov), plan 02 (Corte 7), 01 sección F y D-17.
--- · Presupone el 6b aplicado (huella del conjunto de funciones de redes) y el paquete vivo «químicos y dosis» (tecnica.quimicos y tecnica.uso_quimicos).
--- · ⚠ redes: se reemplazan 2 funciones del 6b (redes.f_estado_contrato y geoportal_redes_contrato_tarjeta) y se amplía el CHECK de estado de redes.contratos_capa.
+-- · REGENERADO sobre el Corte 6c (16-nov): presupone el 6c aplicado (huella del conjunto de funciones de redes) y el paquete vivo «químicos y dosis» (tecnica.quimicos y tecnica.uso_quimicos).
+-- · ⚠ redes: se reemplazan 4 funciones del 6c (redes.f_estado_contrato, redes.f_funciones_sin_where, geoportal_redes_contrato_tarjeta y geoportal_redes_geovisor). Ya no hay copia de contratos
+--   (el 6c la retiró): la tesela y la tarjeta toman los estados nuevos solas, sin rehacer nada.
 -- · ⚠ tecnica.quimicos (viva): se amplía el CHECK de «rol» con «auxiliar», se le agrega un candado de identidad (el nombre no cambia) y una fila (hipoclorito de
 --   calcio). tecnica.uso_quimicos (la dosis en ppm) NO se toca.
 -- · Bucket nuevo «tecnica-evidencias» (privado, PDF y JPEG, 5 MB), sin políticas: todo por URL firmada desde la Edge, como en redes.
 -- =====================================================================
 do $$
 begin
-  if to_regclass('redes.vistas_compartidas') is null then raise exception 'Falta el Corte 6b: aplíquelo antes'; end if;
+  if to_regprocedure('redes.f_funciones_sin_where()') is null then raise exception 'Falta el Corte 6c: aplíquelo antes'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'fca28bf695d1fcfa153f1113ce821528' then
-    raise exception 'Las funciones de redes no son las del Corte 6b (o el Corte 7a ya está aplicado): deténgase y avise';
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '2c2658002d114d755f19a7b5f5dfe542' then
+    raise exception 'Las funciones de redes no son las del Corte 6c (o el Corte 7a ya está aplicado): deténgase y avise';
   end if;
   if to_regclass('tecnica.quimico_movimientos') is not null or to_regclass('tecnica.quimico_ficha_eventos') is not null then
     raise exception 'Las tablas del 7a ya existen: el Corte 7a parece aplicado';
@@ -41,13 +42,10 @@ end $$;
 
 -- ---------------------------------------------------------------------
 -- 1. RESPUESTAS DE DAVID AL 6b
---    (2) un color por estado del contrato: activo, suspendido, cortado, retirado y otro (más «sin dato»). La capa se rehace en la próxima apertura del geovisor.
+--    (2) un color por estado del contrato: activo, suspendido, cortado, retirado y otro (más «sin dato»): en 25 (redes.f_estado_contrato); sin copia que rehacer.
 --    (3) el muestreo se pinta hasta 35 días (parámetro editable), con su evento.
 --    (1) nombre y dirección del contrato: en 25 (la RPC de la tarjeta).
 -- ---------------------------------------------------------------------
-alter table redes.contratos_capa drop constraint contratos_capa_estado_check;
-alter table redes.contratos_capa add constraint contratos_capa_estado_check check (estado in ('activo', 'suspendido', 'cortado', 'retirado', 'otro', 'sin_dato'));
-update redes.contratos_capa_estado set firma = 'rehacer: estados del Corte 7a' where id = 1;
 insert into redes.parametro_eventos (clave, antes, despues, motivo, autor)
 select clave, valor, 35, 'David (respuesta 3 al 6b): el muestreo se pinta hasta 35 días', 'migracion@tecnica_corte7a' from redes.parametros where clave = 'geovisor_muestreo_dias' and valor <> 35;
 update redes.parametros set valor = 35 where clave = 'geovisor_muestreo_dias';

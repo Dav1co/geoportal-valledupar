@@ -3,18 +3,19 @@ begin;
 -- TÉCNICA · FASE 1 · CORTE 7a · 10 — GUARDIA, RESPUESTAS AL 6b Y QUÍMICOS DE PLANTA (catálogo con historial, movimientos, bucket y parámetros)
 -- PROPUESTA. No se ha ejecutado en la base real (solo en el PostGIS local de Homebrew). Generado por pruebas_locales/generar.py.
 -- Fuente: §29 de la bitácora (químicos), respuestas de David al 6b (16-nov), plan 02 (Corte 7), 01 sección F y D-17.
--- · Presupone el 6b aplicado (huella del conjunto de funciones de redes) y el paquete vivo «químicos y dosis» (tecnica.quimicos y tecnica.uso_quimicos).
--- · ⚠ redes: se reemplazan 2 funciones del 6b (redes.f_estado_contrato y geoportal_redes_contrato_tarjeta) y se amplía el CHECK de estado de redes.contratos_capa.
+-- · REGENERADO sobre el Corte 6c (16-nov): presupone el 6c aplicado (huella del conjunto de funciones de redes) y el paquete vivo «químicos y dosis» (tecnica.quimicos y tecnica.uso_quimicos).
+-- · ⚠ redes: se reemplazan 4 funciones del 6c (redes.f_estado_contrato, redes.f_funciones_sin_where, geoportal_redes_contrato_tarjeta y geoportal_redes_geovisor). Ya no hay copia de contratos
+--   (el 6c la retiró): la tesela y la tarjeta toman los estados nuevos solas, sin rehacer nada.
 -- · ⚠ tecnica.quimicos (viva): se amplía el CHECK de «rol» con «auxiliar», se le agrega un candado de identidad (el nombre no cambia) y una fila (hipoclorito de
 --   calcio). tecnica.uso_quimicos (la dosis en ppm) NO se toca.
 -- · Bucket nuevo «tecnica-evidencias» (privado, PDF y JPEG, 5 MB), sin políticas: todo por URL firmada desde la Edge, como en redes.
 -- =====================================================================
 do $$
 begin
-  if to_regclass('redes.vistas_compartidas') is null then raise exception 'Falta el Corte 6b: aplíquelo antes'; end if;
+  if to_regprocedure('redes.f_funciones_sin_where()') is null then raise exception 'Falta el Corte 6c: aplíquelo antes'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'fca28bf695d1fcfa153f1113ce821528' then
-    raise exception 'Las funciones de redes no son las del Corte 6b (o el Corte 7a ya está aplicado): deténgase y avise';
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '2c2658002d114d755f19a7b5f5dfe542' then
+    raise exception 'Las funciones de redes no son las del Corte 6c (o el Corte 7a ya está aplicado): deténgase y avise';
   end if;
   if to_regclass('tecnica.quimico_movimientos') is not null or to_regclass('tecnica.quimico_ficha_eventos') is not null then
     raise exception 'Las tablas del 7a ya existen: el Corte 7a parece aplicado';
@@ -42,13 +43,10 @@ end $$;
 
 -- ---------------------------------------------------------------------
 -- 1. RESPUESTAS DE DAVID AL 6b
---    (2) un color por estado del contrato: activo, suspendido, cortado, retirado y otro (más «sin dato»). La capa se rehace en la próxima apertura del geovisor.
+--    (2) un color por estado del contrato: activo, suspendido, cortado, retirado y otro (más «sin dato»): en 25 (redes.f_estado_contrato); sin copia que rehacer.
 --    (3) el muestreo se pinta hasta 35 días (parámetro editable), con su evento.
 --    (1) nombre y dirección del contrato: en 25 (la RPC de la tarjeta).
 -- ---------------------------------------------------------------------
-alter table redes.contratos_capa drop constraint contratos_capa_estado_check;
-alter table redes.contratos_capa add constraint contratos_capa_estado_check check (estado in ('activo', 'suspendido', 'cortado', 'retirado', 'otro', 'sin_dato'));
-update redes.contratos_capa_estado set firma = 'rehacer: estados del Corte 7a' where id = 1;
 insert into redes.parametro_eventos (clave, antes, despues, motivo, autor)
 select clave, valor, 35, 'David (respuesta 3 al 6b): el muestreo se pinta hasta 35 días', 'migracion@tecnica_corte7a' from redes.parametros where clave = 'geovisor_muestreo_dias' and valor <> 35;
 update redes.parametros set valor = 35 where clave = 'geovisor_muestreo_dias';
@@ -385,6 +383,7 @@ begin
   if coalesce(p_formulario, '') not in ('entrada_quimicos', 'uso_quimicos') then perform tecnica.f_error('Ese formulario no es de químicos'); end if;
   v_email := tecnica.f_autorizar_captura(p_solicitante, p_formulario);
   return jsonb_build_object('formulario', p_formulario, 'hoy', (clock_timestamp() at time zone 'America/Bogota')::date,
+    'unidades', '["t", "kg"]'::jsonb,      -- David (16-nov): la entrada va en toneladas o kg; nunca por cilindros ni tanques
     'dias_atras', tecnica.f_qparam(case p_formulario when 'uso_quimicos' then 'dias_atras_uso' else 'dias_atras_entrada' end),
     'quimicos', coalesce((select jsonb_agg(jsonb_build_object('codigo', v.codigo, 'nombre', v.nombre, 'potabilizacion', v.potabilizacion) order by v.potabilizacion desc, v.nombre)
                             from tecnica.v_quimico_vigente v where v.activo), '[]'::jsonb),
@@ -500,9 +499,11 @@ begin
 end $$;
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 7a · 25 — REEMPLAZOS (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
--- cada uno es el texto del 6b con cambios exactos, aplicados una sola vez (respuestas de David al 6b):
+-- cada uno es el texto del 6c con cambios exactos, aplicados una sola vez (respuestas de David al 6b y al 6c):
 --   · redes.f_estado_contrato: suspendido y cortado como estados propios;
---   · geoportal_redes_contrato_tarjeta: nombre y dirección solo para el administrador y el supervisor de distribución; «datos_personales» en la respuesta.
+--   · geoportal_redes_contrato_tarjeta: nombre y dirección solo para el administrador y el supervisor de distribución; «datos_personales» en la respuesta;
+--   · redes.f_funciones_sin_where: cubre también public.geoportal_tec_* (las RPC de planta y de químicos);
+--   · geoportal_redes_geovisor: «contratos_corte», la fecha del último corte de la cartera (nota pequeña de la capa de contratos).
 -- =====================================================================
 -- redes.f_estado_contrato(text)
 CREATE OR REPLACE FUNCTION redes.f_estado_contrato(p text)
@@ -522,15 +523,16 @@ CREATE OR REPLACE FUNCTION public.geoportal_redes_contrato_tarjeta(p_solicitante
  SECURITY DEFINER
  SET search_path TO 'public', 'redes', 'tecnica', 'bi_interno', 'pg_temp'
 AS $function$
-declare a record; c redes.contratos_capa%rowtype; cs record; pr record; f record; v_c text := btrim(coalesce(p_contrato, '')); v_personal boolean;
+declare a record; cs record; pr record; f record; v_c text := btrim(coalesce(p_contrato, '')); v_personal boolean;
 begin
   select * into a from redes.f_geovisor_acceso(p_solicitante);
   if not a.completo then raise exception 'La tarjeta del contrato es para supervisores' using errcode = '42501'; end if;
   -- Corte 7a (respuesta 1 de David al 6b): nombre y dirección solo para el administrador y el supervisor de distribución (su permiso, o área distribución o las dos)
   v_personal := a.admin or public.geoportal_puede(a.email, 'dashboard_redes') or coalesce(redes.f_area(a.email) in ('distribucion', 'ambas'), false);
   if v_c !~ '^[0-9]{1,12}$' then perform tecnica.f_error('Escriba solo los números del contrato'); end if;
-  select * into c from redes.contratos_capa where contrato = v_c;
-  if not found then perform tecnica.f_error('Ese contrato no está en la capa de contratos', 'P0002'); end if;
+  if v_c in ('0', '99999999') or not exists (select 1 from public.catastro_valledupar cv where cv.cod_usuario = v_c and cv.geom is not null) then
+    perform tecnica.f_error('Ese contrato no está en la capa de contratos', 'P0002');
+  end if;
   select s.nombre, s.estado, s.categoria, s.direccion, s.barrio, s.periodo_carga into cs
     from public.cartera_suscripcion s where s.contrato = v_c order by s.periodo_carga desc nulls last limit 1;
   select cv.direccion, cv.barrio into pr from public.catastro_valledupar cv where cv.cod_usuario = v_c order by cv.id limit 1;
@@ -539,8 +541,8 @@ begin
   perform tecnica.f_auditar(a.email, 'redes_contrato_tarjeta', v_c, jsonb_build_object('datos', case when v_personal then 'nombre, dirección y barrio' else 'sin nombre ni dirección' end, 'desde', 'geovisor'), p_ip);
   return jsonb_build_object(
     'contrato', v_c,
-    'estado', c.estado, 'estado_texto', nullif(btrim(cs.estado), ''),
-    'uso', c.uso,
+    'estado', redes.f_estado_contrato(cs.estado), 'estado_texto', nullif(btrim(cs.estado), ''),
+    'uso', redes.f_contrato_uso(f.uso, cs.categoria),
     'consumo', case when f.periodo_ultimo is not null then jsonb_build_object(
         'periodo_ultimo', f.periodo_ultimo, 'promedio', f.cons_prom, 'meses_con_lectura', f.meses_con_lectura,
         'meses', (select coalesce(jsonb_agg(jsonb_build_object('periodo', m ->> 'periodo', 'm3', m -> 'm3', 'sin_dato', coalesce((m ->> 'sin_dato')::boolean, false),
@@ -555,6 +557,66 @@ begin
     'datos_personales', v_personal,
     'corte', cs.periodo_carga);
 end $function$;
+
+-- public.geoportal_redes_geovisor(text)
+CREATE OR REPLACE FUNCTION public.geoportal_redes_geovisor(p_solicitante text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'redes', 'tecnica', 'extensions', 'pg_temp'
+AS $function$
+declare a record;
+begin
+  select * into a from redes.f_geovisor_acceso(p_solicitante);
+  return jsonb_build_object(
+    'perfil', case when a.admin then 'admin' when a.completo then 'supervisor' else 'operador' end,
+    'completo', a.completo, 'perfiles', to_jsonb(a.perfiles),
+    'hoy', (clock_timestamp() at time zone 'America/Bogota')::date,
+    'rango_meses', floor(redes.f_param('geovisor_rango_meses'))::integer,
+    'max_elementos', floor(redes.f_param('geovisor_max_elementos'))::integer,
+    'zoom', jsonb_build_object('min', redes.f_param('geovisor_zoom_min'), 'red_completa', redes.f_param('geovisor_zoom_red_completa'),
+                               'nodos', redes.f_param('geovisor_zoom_nodos'), 'accesorios', redes.f_param('geovisor_zoom_acc'),
+                               'contratos', redes.f_param('geovisor_zoom_contratos')),
+    'version', (select coalesce(sum(version), 0) from redes.tesela_version),
+    'formularios', jsonb_build_object('danos_fallas', redes.f_puede_formulario(a.email, 'danos_fallas'),
+                                      'mantenimiento', redes.f_puede_formulario(a.email, 'mantenimiento')),
+    'ficha', a.completo, 'compartir', a.completo,
+    'contratos_corte', case when a.completo then (select max(s.periodo_carga) from public.cartera_suscripcion s) end,      -- Corte 7a: fecha (AAAAMMDD) del último corte de la cartera
+    'capas', coalesce((
+      select jsonb_agg(jsonb_build_object('codigo', g.codigo, 'nombre', g.nombre, 'grupo', g.grupo, 'fuente', g.fuente, 'estado', g.estado, 'nota', g.nota,
+                                          'prefijos', to_jsonb(g.prefijos), 'por_fecha', g.por_fecha,
+                                          'encendida', exists (select 1 from redes.capas_por_perfil c where c.capa = g.codigo and c.encendida and c.perfil = any (a.perfiles)))
+             order by g.orden)
+        from redes.geovisor_capas g where g.activa and (a.completo or not g.solo_completo)), '[]'::jsonb),
+    'tipos', coalesce((select jsonb_object_agg(t.prefijo, t.nombre_visible) from redes.v_tipo_visible t), '{}'::jsonb),
+    'estados', coalesce((select jsonb_object_agg(e.codigo, e.nombre) from redes.estados_activo e), '{}'::jsonb),
+    'materiales', coalesce((select jsonb_agg(jsonb_build_object('codigo', m.codigo, 'nombre', m.nombre) order by m.codigo) from redes.materiales m), '[]'::jsonb),
+    -- solo el administrador: la tabla de capas por omisión, para editarla (N-11)
+    'por_perfil', case when a.admin then coalesce((
+      select jsonb_agg(jsonb_build_object('perfil', c.perfil, 'capa', c.capa, 'encendida', c.encendida, 'actualizado_en', c.actualizado_en, 'actualizado_por', c.actualizado_por)
+             order by c.perfil, c.capa) from redes.capas_por_perfil c), '[]'::jsonb) end);
+end $function$;
+
+-- redes.f_funciones_sin_where()
+CREATE OR REPLACE FUNCTION redes.f_funciones_sin_where()
+ RETURNS TABLE(funcion text, sentencia text)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  with f as (
+    select p.oid::regprocedure::text as funcion,
+           regexp_replace(regexp_replace(lower(p.prosrc), '--[^\n]*', '', 'g'), '\mdo\s+update\M', 'do_update', 'g') as src
+      from pg_proc p join pg_language l on l.oid = p.prolang
+     where l.lanname in ('plpgsql', 'sql') and p.prokind in ('f', 'p')
+       and (p.pronamespace in (select n.oid from pg_namespace n where n.nspname in ('redes', 'tecnica'))
+            or (p.pronamespace = 'public'::regnamespace and (p.proname like 'geoportal\_redes\_%' or p.proname like 'geoportal\_tec\_%')))),
+  s as (select f.funcion, btrim(regexp_replace(x, '\s+', ' ', 'g')) as st from f, regexp_split_to_table(f.src, ';') x)
+  select s.funcion, left(s.st, 200) from s
+   where (s.st ~ '\mdelete\s+from\M' and substring(s.st from '\mdelete\s+from\M.*$') !~ '\mwhere\M')
+      or (s.st ~ '\mupdate\s+(only\s+)?[a-z_][a-z0-9_."]*(\s+(as\s+)?[a-z_][a-z0-9_]*)?\s+set\M'
+          and substring(s.st from '\mupdate\s+(?:only\s+)?[a-z_][a-z0-9_."]*(?:\s+(?:as\s+)?[a-z_][a-z0-9_]*)?\s+set\M.*$') !~ '\mwhere\M')
+   order by 1, 2 $function$;
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 7a · 40 — PERMISOS: revoke all a public, anon, authenticated y service_role ANTES de dar permisos.
 -- Tablas y vistas nuevas: nadie de la API. Las 11 RPC nuevas: solo execute a service_role (la Edge geoportal-tecnica). Las funciones internas: nadie.
@@ -578,5 +640,5 @@ end $$;
 insert into public.geoportal_auditoria (email, accion, referencia, detalle, ip)
 values ('migracion@tecnica_corte7a', 'migracion_tecnica_corte7a', null, jsonb_build_object('tablas', jsonb_build_array('tecnica.quimico_ficha_eventos', 'tecnica.quimico_ficha_preparaciones',
         'tecnica.quimico_movimientos', 'tecnica.quimico_parametros'), 'vistas', jsonb_build_array('tecnica.v_quimico_vigente', 'tecnica.v_quimico_saldo'), 'rpc_nuevas', 11,
-        'reemplazadas', jsonb_build_array('redes.f_estado_contrato', 'public.geoportal_redes_contrato_tarjeta'), 'bucket', 'tecnica-evidencias'), null);
+        'reemplazadas', jsonb_build_array('redes.f_estado_contrato', 'public.geoportal_redes_contrato_tarjeta', 'public.geoportal_redes_geovisor', 'redes.f_funciones_sin_where'), 'base', 'corte 6c', 'bucket', 'tecnica-evidencias'), null);
 commit;

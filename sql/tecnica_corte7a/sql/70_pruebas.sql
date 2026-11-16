@@ -35,7 +35,7 @@ declare
   op text := 'prueba.tec7.op@emdupar.gov.co'; op2 text := 'prueba.tec7.op2@emdupar.gov.co'; sv2 text := 'prueba.tec7.planta2@emdupar.gov.co';
   C1 text := '990000001201';
   hoy date := (clock_timestamp() at time zone 'America/Bogota')::date;
-  v_r jsonb; v_x jsonb; v_cod text; v_ruta text; v_n integer; v_qi numeric; v_esp numeric;
+  v_r jsonb; v_x jsonb; v_cod text; v_pl text; v_t0 timestamptz; v_ms numeric; v_ruta text; v_n integer; v_qi numeric; v_esp numeric;
   v_total integer; v_bien integer; v_fallas text;
 begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (a, 'ZT7 Admin', 'admin', 'sin_restriccion', 'todos');
@@ -56,8 +56,10 @@ begin
                                           facturas_pendientes, deuda_total, saldo_pendiente, saldo_a_favor, valor_reclamo, saldo_financiado, serial_medidor, ruta, periodo_carga)
   values (C1, 'SUSPENDIDO', 'DOC-PRUEBA-7', 'NOMBRE DE PRUEBA SIETE', null, '3007770000', 'CRA ZT7 1', 'ZT7 BARRIO', '1 Residencial', '2 Estrato 2', '7', 1, 1000, 0, 0, 0, 0, null, '0701', '29991231');
   insert into public.catastro_valledupar (cod_usuario, direccion, barrio, geom) values (C1, 'CRA ZT7 1 CATASTRO', 'ZT7 BARRIO', ST_SetSRID(ST_MakePoint(-73.30, 10.42), 4326));
-  perform redes.f_refrescar_contratos_capa();
-  perform pg_temp.reg('01.03 la capa de contratos clasifica el suspendido como «suspendido»', (select estado from redes.contratos_capa where contrato = C1) = 'suspendido');
+  perform pg_temp.reg('01.03 sin rehacer nada (6c), la tesela de contratos trae el suspendido como «suspendido»',
+     coalesce(position(convert_to('suspendido', 'UTF8') in decode(nullif(public.geoportal_redes_geovisor_mvt_contratos(sd, 17, floor((-73.30 + 180) / 360 * 131072)::integer,
+              floor((1 - ln(tan(radians(10.42)) + 1 / cos(radians(10.42))) / pi()) / 2 * 131072)::integer), ''), 'base64')) > 0, false)
+     and public.geoportal_redes_contrato_tarjeta(a, C1) ->> 'estado' = 'suspendido' and to_regclass('redes.contratos_capa') is null);
   v_r := public.geoportal_redes_contrato_tarjeta(sv, C1);
   perform pg_temp.reg('01.04 el supervisor de planta ve la tarjeta SIN nombre ni dirección (sí el barrio) y la auditoría lo dice',
      not (v_r ->> 'datos_personales')::boolean and v_r -> 'suscriptor' ->> 'nombre' is null and v_r -> 'suscriptor' ->> 'direccion' is null and v_r -> 'suscriptor' ->> 'barrio' = 'ZT7 BARRIO'
@@ -70,6 +72,17 @@ begin
   perform public.geoportal_redes_personal_fijar(sd, sv2, 'area', 'ambas', 'ZT7 trabaja en planta y en la red');
   v_r := public.geoportal_redes_contrato_tarjeta(sv2, C1);
   perform pg_temp.reg('01.07 un supervisor de planta con área «las dos» en Personal sí los ve', (v_r ->> 'datos_personales')::boolean and v_r -> 'suscriptor' ->> 'nombre' = 'NOMBRE DE PRUEBA SIETE');
+  -- respuesta de David al 6c: la capa de contratos muestra la fecha del último corte de la cartera
+  v_r := public.geoportal_redes_geovisor(sd);
+  perform pg_temp.reg('01.08 la configuración del supervisor trae la fecha del último corte de la cartera (el más reciente: el de la prueba, 29991231)', v_r ->> 'contratos_corte' = '29991231', v_r ->> 'contratos_corte');
+  perform public.geoportal_redes_personal_fijar(sd, op, 'geovisor', 'si', 'ZT7 necesita ver la red en la calle');
+  perform pg_temp.reg('01.09 el operador en solo lectura no la recibe (no ve contratos) y la configuración sigue de solo lectura (STABLE)', public.geoportal_redes_geovisor(op) -> 'contratos_corte' = 'null'::jsonb
+     and (select provolatile = 's' from pg_proc where oid = 'public.geoportal_redes_geovisor(text)'::regprocedure));
+  v_t0 := clock_timestamp(); perform public.geoportal_redes_geovisor(sd); v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  perform pg_temp.reg('01.09b la configuración del geovisor, con la fecha del corte (lee toda la cartera diaria), responde en menos de 2 s con los datos de esta base', v_ms < 2000, v_ms || ' ms');
+  perform pg_temp.reg('01.10 pg-safeupdate: ninguna función de redes, tecnica, geoportal_redes_* ni geoportal_tec_* (las de químicos incluidas) con DELETE o UPDATE sin WHERE',
+     not exists (select 1 from redes.f_funciones_sin_where()), (select string_agg(funcion || ' → ' || sentencia, ' | ') from redes.f_funciones_sin_where()));
+  perform pg_temp.reg('01.11 la comprobación sí mira las RPC de químicos (public.geoportal_tec_*)', (select prosrc from pg_proc where oid = 'redes.f_funciones_sin_where()'::regprocedure) like '%geoportal\\_tec\\_%');
 
   -- ===================== 02. Catálogo e identidad =====================
   perform pg_temp.reg('02.01 hipoclorito de calcio en el catálogo (auxiliar, no de potabilización); PAC y cloro gaseoso de potabilización',
@@ -137,6 +150,10 @@ begin
   perform pg_temp.err('05.16 los movimientos no se cambian', $$update tecnica.quimico_movimientos set cantidad = 1$$, '42501');
   perform pg_temp.err('05.17 la regla de la tabla: los kg cuadran con las toneladas', format($$insert into tecnica.quimico_movimientos (tipo, quimico_id, cantidad, unidad, cantidad_kg, dia, autor)
      select 'entrada', id, 1, 't', 900, current_date, 'x' from tecnica.quimicos where codigo = %L$$, v_cod), '23514');
+  perform pg_temp.err('05.10b la entrada nunca va por cilindros: solo toneladas o kg', format($$select public.geoportal_tec_quimico_entrada(%L, '{"quimico": %s, "cantidad": 2, "unidad": "cilindros"}', null)$$, op, to_jsonb(v_cod)), '22023', 'unidad');
+  perform pg_temp.err('05.10c ni la tabla lo admite', format($$insert into tecnica.quimico_movimientos (tipo, quimico_id, cantidad, unidad, cantidad_kg, dia, autor)
+     select 'entrada', id, 1, 'cilindro', 68, current_date, 'x' from tecnica.quimicos where codigo = %L$$, v_cod), '23514');
+  perform pg_temp.reg('05.10d el formulario de entrada dice sus unidades: toneladas o kg', public.geoportal_tec_quimicos_formulario(op, 'entrada_quimicos') -> 'unidades' = '["t", "kg"]'::jsonb);
   v_x := public.geoportal_tec_quimicos_formulario(op, 'uso_quimicos');
   perform pg_temp.reg('05.18 el formulario del operador: químicos activos (sin saldo), plantas, para qué y días atrás',
      exists (select 1 from jsonb_array_elements(v_x -> 'quimicos') x where x ->> 'codigo' = v_cod) and not (v_x::text like '%saldo%') and (v_x ->> 'dias_atras')::numeric = 7
@@ -157,6 +174,14 @@ begin
   perform pg_temp.reg('06.01 hoy en Huaricha: volumen = Qi promedio × 86,4; esperado = 20 ppm (la del uso) × volumen / 1.000; usado 200 kg',
      (v_x ->> 'dosis_optima_ppm')::numeric = 20 and (v_x ->> 'esperado_kg')::numeric = v_esp and (v_x ->> 'usado_kg')::numeric = 200, coalesce(v_x::text, 'sin fila') || ' · esperado ' || v_esp);
   perform pg_temp.reg('06.02 la marca sale si se aparta más del 25 %', (v_x ->> 'marca')::boolean = (abs(200 - v_esp) > v_esp * 0.25) and (v_r ->> 'marca_activa')::boolean);
+  -- David (16-nov, respuesta 2 al 7a): un día con dosis y caudal pero SIN uso registrado sigue visible, con usado 0 y la marca
+  select p.codigo into v_pl from tecnica.plantas p where p.activa and p.codigo <> 'huaricha' order by p.id limit 1;      -- otra planta: hoy tiene caudal y dosis vigente, y ningún uso
+  insert into tecnica.registros (lote_id, formulario, variable_id, planta_id, valor, fecha_muestra, hora_muestra, autor)
+  select gen_random_uuid(), 'entrada', v.id, p.id, 500, hoy, make_time(h, 0, 0), op from tecnica.variables v, tecnica.plantas p, generate_series(3, 5) h where v.codigo = 'caudal_qi' and p.codigo = v_pl;
+  v_x := pg_temp.fila(public.geoportal_tec_quimicos_comparacion(sv, hoy - 2, hoy), v_cod, v_pl);
+  perform pg_temp.reg('06.02b un día con dosis y caudal sin uso registrado sigue visible: usado 0, desvío −100 % y la marca', (v_x ->> 'usado_kg')::numeric = 0 and (v_x ->> 'esperado_kg')::numeric > 0
+     and (v_x ->> 'marca')::boolean and (v_x ->> 'desvio_pct')::numeric = -100, coalesce(v_x::text, 'sin fila'));
+  perform pg_temp.reg('06.02c el desvío para la marca queda en 25 % (David, 16-nov) y se puede ajustar dentro de su rango', (select valor = 25 and minimo <= 25 and maximo >= 25 from tecnica.quimico_parametros where clave = 'desvio_pct'));
   perform pg_temp.reg('06.03 la dosis nueva (30) cuenta para un uso nuevo', (public.geoportal_tec_quimico_uso(op, jsonb_build_object('quimico', v_cod, 'cantidad', 10, 'para_que', 'dosificacion', 'planta', 'huaricha'), null) ->> 'dosis_optima_ppm')::numeric = 30);
   perform pg_temp.err('06.04 el operador no ve la comparación', format($$select public.geoportal_tec_quimicos_comparacion(%L, null, null)$$, op), '42501');
   perform pg_temp.err('06.05 un rango de más de 3 meses', format($$select public.geoportal_tec_quimicos_comparacion(%L, %L, %L)$$, sv, hoy - 200, hoy), '22023', '3 meses');
@@ -175,6 +200,6 @@ begin
 
   -- ---------- Resultado ----------
   select count(*), count(*) filter (where ok), coalesce(string_agg('  FALLA ' || nombre || ' → ' || coalesce(detalle, ''), E'\n' order by _r.n) filter (where not ok), '') into v_total, v_bien, v_fallas from _r;
-  raise exception E'PRUEBAS DE TÉCNICA · CORTE 7a (esperado: este ERROR deshace todo lo de la prueba)\n%\nRESULTADO: % de % pruebas correctas — %', v_fallas, v_bien, v_total, case when v_bien = v_total then 'SIN FALLAS' else (v_total - v_bien) || ' FALLA(S)' end;
+  raise exception E'PRUEBAS DE TÉCNICA · CORTE 7a (esperado: este ERROR deshace todo lo de la prueba)\n%\nTIEMPOS: configuración del geovisor con la fecha del último corte de la cartera: % ms\nRESULTADO: % de % pruebas correctas — %', v_fallas, v_ms, v_bien, v_total, case when v_bien = v_total then 'SIN FALLAS' else (v_total - v_bien) || ' FALLA(S)' end;
 end
 $prueba$;

@@ -310,7 +310,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
               return (
                 <section key={g.c} className="geo-grupo" aria-labelledby={`geo-g-${g.c}`}>
                   <h3 id={`geo-g-${g.c}`}>{g.n}</h3>
-                  {cs.map((c) => <FilaCapa key={c.codigo} c={c} encendida={on.has(c.codigo)} onConmutar={() => conmutar(c.codigo)}
+                  {cs.map((c) => <FilaCapa key={c.codigo} c={c} encendida={on.has(c.codigo)} onConmutar={() => conmutar(c.codigo)} corte={c.codigo === "contratos" ? fechaCorte(cfg.contratos_corte) : null}
                     atenuada={ATENUABLES.has(c.codigo) ? atenuadas.has(c.codigo) : undefined}
                     onAtenuar={() => setAtenuadas((s) => { const n = new Set(s); if (n.has(c.codigo)) n.delete(c.codigo); else n.add(c.codigo); return n; })} />)}
                 </section>);
@@ -330,7 +330,14 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
   );
 }
 
-function FilaCapa({ c, encendida, onConmutar, atenuada, onAtenuar }: { c: CapaGeovisor; encendida: boolean; onConmutar: () => void; atenuada?: boolean; onAtenuar?: () => void }) {
+// Corte 7a (David, 16-nov): la capa de contratos dice de qué día es la cartera de la que sale el estado del contrato. «20261114» → «14-nov-2026».
+const MESES_CORTE = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+export function fechaCorte(c?: string | null): string | null {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(c ?? "");
+  return m && MESES_CORTE[Number(m[2]) - 1] ? `${Number(m[3])}-${MESES_CORTE[Number(m[2]) - 1]}-${m[1]}` : null;
+}
+
+function FilaCapa({ c, encendida, onConmutar, atenuada, onAtenuar, corte }: { c: CapaGeovisor; encendida: boolean; onConmutar: () => void; atenuada?: boolean; onAtenuar?: () => void; corte?: string | null }) {
   const preparada = c.fuente === "preparada";
   return (
     <div className="geo-capa-fila">
@@ -339,6 +346,7 @@ function FilaCapa({ c, encendida, onConmutar, atenuada, onAtenuar }: { c: CapaGe
       <span className="geo-capa-txt">
         <span className="geo-capa-nom">{c.nombre}{c.estado !== "activa" ? <span className="geo-est">{ESTADO_CAPA[c.estado]}</span> : null}</span>
         {c.nota ? <span className="geo-capa-nota">{c.nota}</span> : null}
+        {corte ? <span className="geo-capa-nota geo-capa-corte" data-corte={c.codigo}>Estado según la cartera del {corte}</span> : null}
       </span>
     </label>
     {atenuada !== undefined && encendida ? <button type="button" className="geo-atenuar" aria-pressed={atenuada} onClick={onAtenuar} data-atenuar={c.codigo}>{atenuada ? "Atenuada" : "Atenuar"}</button> : null}

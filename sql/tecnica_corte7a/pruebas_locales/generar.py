@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Arma el paquete SQL del Corte 7a con las huellas reales de la base local:
-  1) rehace redes_local con lo del 6b (y el doble de planta del 7a); toma sus huellas y el texto vivo de las funciones que cambian;
+  1) rehace redes_local con lo del 6c (6b + hotfix de safeupdate + 6c, y el doble de planta del 7a); toma sus huellas y el texto vivo de las funciones que cambian;
   2) escribe sql/25_reemplazos.sql (texto vivo con cambios exactos, cada uno una sola vez), sql/10_esquema.sql (guardia) y los _editor de migración y ensayo;
   3) aplica la migración, toma las huellas del 7a y escribe 05, 80 y 90 (y sus _editor).
 Uso: python3 -I generar.py   (PostGIS local en localhost:55432)."""
@@ -19,7 +19,7 @@ NUEVAS_RPC = ['geoportal_tec_quimicos_catalogo', 'geoportal_tec_quimico_historia
 NUEVAS_INTERNAS = ['tecnica.f_qparam(text)', 'tecnica.f_quimico_por_codigo(text)', 'tecnica.f_ficha_subida(text,text)', 'tecnica.f_dosis_optima_en(bigint,timestamp with time zone)',
                    'tecnica.f_dia_movimiento(date,numeric)']      # f_quimico_identidad la borra la plantilla, después de su trigger
 MIG = ['10_esquema.sql', '26_rpc.sql', '25_reemplazos.sql', '40_permisos.sql']      # 26 antes que 25: los reemplazos llaman a las funciones nuevas
-MD5_5C = 'fca28bf695d1fcfa153f1113ce821528'      # (nombre heredado: es la huella del 6b)
+MD5_5C = '2c2658002d114d755f19a7b5f5dfe542'      # (nombre heredado: es la huella del 6c, la de producción desde el 16-nov 13:36)
 
 T = {}
 # ---- respuesta 2 de David al 6b: un color por estado del contrato (activo, suspendido, cortado, retirado, otro)
@@ -43,6 +43,16 @@ T['public.geoportal_redes_contrato_tarjeta(text,text,text)'] = [
       'direccion', case when v_personal then coalesce(nullif(btrim(pr.direccion), ''), nullif(btrim(cs.direccion), '')) end,"""),
     ("""    'corte', cs.periodo_carga);""", """    'datos_personales', v_personal,
     'corte', cs.periodo_carga);""")]
+# ---- respuesta de David al 6c (16-nov 13:36): la capa de contratos muestra la fecha del último corte de la cartera (de ahí sale el estado del contrato)
+T['public.geoportal_redes_geovisor(text)'] = [
+    ("""    'ficha', a.completo, 'compartir', a.completo,\n""",
+     """    'ficha', a.completo, 'compartir', a.completo,
+    'contratos_corte', case when a.completo then (select max(s.periodo_carga) from public.cartera_suscripcion s) end,      -- Corte 7a: fecha (AAAAMMDD) del último corte de la cartera
+""")]
+# ---- la comprobación estática de pg-safeupdate cubre también las RPC de planta (public.geoportal_tec_*): las de químicos entran por la API
+T['redes.f_funciones_sin_where()'] = [
+    ("""or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%'))),""",
+     """or (p.pronamespace = 'public'::regnamespace and (p.proname like 'geoportal\\_redes\\_%' or p.proname like 'geoportal\\_tec\\_%')))),""")]
 
 CAMBIADAS = list(T)
 
@@ -70,17 +80,19 @@ def plantilla(nombre, val):
 fdef = lambda f: q(f"select pg_get_functiondef('{f}'::regprocedure)").rstrip()  # noqa: E731
 fmd5 = lambda f: q(f"select md5(pg_get_functiondef('{f}'::regprocedure))")  # noqa: E731
 
-subprocess.run(['sh', os.path.join(AQUI, 'rehacer_base.sh'), 'solo_6b'], env=ENV, check=True, capture_output=True)
+subprocess.run(['sh', os.path.join(AQUI, 'rehacer_base.sh'), 'solo_6c'], env=ENV, check=True, capture_output=True)
 md5_5c = q(CONJ)
-assert md5_5c == MD5_5C, md5_5c          # la huella del 6b que dice la bitácora
+assert md5_5c == MD5_5C, md5_5c          # la huella del 6c que dice la bitácora
 textos_5c = {f: fdef(f) for f in CAMBIADAS}
 md5_cam_5c = {f: fmd5(f) for f in CAMBIADAS}
 
 partes = ["""-- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 7a · 25 — REEMPLAZOS (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
--- cada uno es el texto del 6b con cambios exactos, aplicados una sola vez (respuestas de David al 6b):
+-- cada uno es el texto del 6c con cambios exactos, aplicados una sola vez (respuestas de David al 6b y al 6c):
 --   · redes.f_estado_contrato: suspendido y cortado como estados propios;
---   · geoportal_redes_contrato_tarjeta: nombre y dirección solo para el administrador y el supervisor de distribución; «datos_personales» en la respuesta.
+--   · geoportal_redes_contrato_tarjeta: nombre y dirección solo para el administrador y el supervisor de distribución; «datos_personales» en la respuesta;
+--   · redes.f_funciones_sin_where: cubre también public.geoportal_tec_* (las RPC de planta y de químicos);
+--   · geoportal_redes_geovisor: «contratos_corte», la fecha del último corte de la cartera (nota pequeña de la capa de contratos).
 -- ====================================================================="""]
 for f in CAMBIADAS:
     t = textos_5c[f]
@@ -90,7 +102,7 @@ for f in CAMBIADAS:
     partes.append(f'\n-- {f}\n{t};\n')
 escribir(os.path.join(RAIZ, 'sql', '25_reemplazos.sql'), ''.join(partes))
 
-v = {'{{MD5_CORTE_6B}}': md5_5c}
+v = {'{{MD5_CORTE_6C}}': md5_5c}
 escribir(os.path.join(RAIZ, 'sql', '10_esquema.sql'), plantilla('10_esquema.sql', v))
 escribir(os.path.join(RAIZ, 'migracion_tecnica_corte7a_editor.sql'), 'begin;\n' + ''.join(leer(n) for n in MIG) + 'commit;\n')
 escribir(os.path.join(RAIZ, 'ensayo_en_transaccion_tecnica_corte7a_editor.sql'), 'begin;\n' + ''.join(leer(n) for n in MIG) + leer('70_pruebas.sql') + 'rollback;\n')
@@ -105,7 +117,7 @@ v.update({'{{MD5_CORTE_7A}}': md5_6a,
           '{{CAMBIADAS}}': ', '.join(f"('{f}', '{md5_cam_5c[f]}', '{md5_cam_6a[f]}')" for f in CAMBIADAS),
           '{{CAMBIADAS_7A}}': ', '.join(f"('{f}', '{md5_cam_6a[f]}')" for f in CAMBIADAS),
           '{{N_CAMBIADAS}}': str(len(CAMBIADAS)),
-          '{{TEXTOS_6B}}': '\n'.join(f'{textos_5c[f]};\nrevoke all on function {f} from public, anon, authenticated, service_role;\n'
+          '{{TEXTOS_6C}}': '\n'.join(f'{textos_5c[f]};\nrevoke all on function {f} from public, anon, authenticated, service_role;\n'
                                      + (f'grant execute on function {f} to service_role;\n' if f.startswith('public.') else '') for f in CAMBIADAS),
           '{{DROPS}}': '\n'.join([f'drop function {firma_nueva[n]};' for n in NUEVAS_RPC] + [f'drop function {f};' for f in NUEVAS_INTERNAS])})
 for n in ('05_huellas_solo_lectura.sql', '80_verificacion.sql', '90_reversa.sql'):
@@ -113,4 +125,4 @@ for n in ('05_huellas_solo_lectura.sql', '80_verificacion.sql', '90_reversa.sql'
 escribir(os.path.join(RAIZ, 'huellas_solo_lectura_tecnica_corte7a_editor.sql'), leer('05_huellas_solo_lectura.sql'))
 escribir(os.path.join(RAIZ, 'verificacion_tecnica_corte7a_editor.sql'), leer('80_verificacion.sql'))
 escribir(os.path.join(RAIZ, 'reversa_tecnica_corte7a_editor.sql'), 'begin;\n' + leer('90_reversa.sql') + 'commit;\n')
-print('huella 6b', md5_5c, '· huella 7a', md5_6a)
+print('huella 6c', md5_5c, '· huella 7a', md5_6a)

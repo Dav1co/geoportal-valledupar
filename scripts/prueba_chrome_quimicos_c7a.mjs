@@ -3,7 +3,7 @@
 // nombre para el supervisor de planta; un color por estado).
 // A 390 px (táctil) y 1280 px.
 // · Las Edges geoportal-tecnica y geoportal-redes corren DE VERDAD en Deno; las RPC de redes van a la base local REAL (PostGIS de Homebrew con la carga real,
-//   la MUE, el 6a, el 6b y 111.950 contratos SINTÉTICOS); lo de planta (mis formularios) se simula como en el 5c.
+//   la MUE, hasta el 6c y 111.950 contratos SINTÉTICOS); lo de planta (mis formularios) se simula como en el 5c.
 // · Antes de cada ancho, la base se rehace (base_chrome.sh) y se siembra la casilla del geovisor para zt.oper.
 // Uso: node scripts/prueba_chrome_quimicos_c7a.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> <psql> <base_chrome.sh> [capturas]
 import { createRequire } from "node:module";
@@ -62,7 +62,8 @@ const rpcs = [], desconocidas = [], subidas = [], firmasLectura = [];
 function rpcBase(fn, a) {
   const args = Object.entries(a).map(([k, val]) => `${k} => ${lit(val)}`).join(", ");
   try {
-    const t = execFileSync(PSQL, ["-AtX", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose", "-c", `select public.${fn}(${args})`], { env: PGENV, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 }).trim();
+    // Como las ve producción (regla del 6c): rol de la API (service_role), statement_timeout 30 s y lock_timeout 8 s.
+    const t = execFileSync(PSQL, ["-AtqX", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose", "-c", "set role service_role", "-c", "set statement_timeout = '30s'", "-c", "set lock_timeout = '8s'", "-c", `select public.${fn}(${args})`], { env: PGENV, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 }).trim();
     return { status: 200, cuerpo: /_mvt($|_)/.test(fn) ? t : JSON.parse(t) };
   } catch (e) {
     const t = String(e.stderr || "");
@@ -266,8 +267,7 @@ for (const ancho of [390, 1280]) {
   await p.close();
 
   // ===== H. Respuestas al 6b en el geovisor =====
-  sqlq("select redes.f_refrescar_contratos_capa()");
-  const [C, CLON, CLAT] = sqlq("select c.contrato || '|' || ST_X(c.geom) || '|' || ST_Y(c.geom) from redes.contratos_capa c where c.estado = 'activo' order by c.geom <-> ST_SetSRID(ST_MakePoint(-73.2532, 10.4631), 4326) limit 1").split("|");
+  const [C, CLON, CLAT] = sqlq("select c.cod_usuario || '|' || ST_X(c.geom) || '|' || ST_Y(c.geom) from public.catastro_valledupar c where c.cod_usuario ~ '^[1-9][0-9]+$' and c.cod_usuario <> '99999999' and c.id = (select min(c2.id) from public.catastro_valledupar c2 where c2.cod_usuario = c.cod_usuario) and (select s.estado from public.cartera_suscripcion s where s.contrato = c.cod_usuario order by s.periodo_carga desc limit 1) = 'ACTIVO' order by c.geom <-> ST_SetSRID(ST_MakePoint(-73.2532, 10.4631), 4326) limit 1").split("|");
   const NOMBRE = sqlq(`select nombre from public.cartera_suscripcion where contrato = '${C}' order by periodo_carga desc limit 1`);
   p = await abrir(ancho, "planta"); await alGeovisor(p);
   await clicTexto(p, ".geo-barra button", "Capas"); await p.waitForSelector(".geo-panel");

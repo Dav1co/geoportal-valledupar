@@ -164,8 +164,11 @@ async function tocarEn(p, lon, lat, zoom = 17.5) {
 }
 
 const fuente = (p, s) => p.evaluate((s) => document.querySelector(".geo-mapa").__mapa.getSource(s)?.serialize().data ?? null, s);
+let notaCorte = null;      // Corte 7a: la nota de la capa de contratos con la fecha del último corte de la cartera
 async function encender(p, capa) {
   await clicTexto(p, ".geo-barra button", "Capas"); await p.waitForSelector(".geo-panel");
+  if (capa === "contratos") await p.screenshot({ path: join(CAP, `capas_nota_corte_${p.viewport().width}.png`) });
+  if (capa === "contratos") notaCorte = await p.evaluate(() => { const e = document.querySelector(".geo-panel [data-corte=contratos]"); return e ? { txt: e.innerText, px: parseFloat(getComputedStyle(e).fontSize), ancho: e.getBoundingClientRect().right <= document.documentElement.clientWidth } : null; });
   await p.evaluate((c) => { const i = document.querySelector(`.geo-panel [data-capa=${c}] input`); if (!i.checked) i.click(); }, capa);
   await clicTexto(p, ".geo-panel button", "✕");
 }
@@ -177,6 +180,7 @@ for (const ancho of [390, 1280]) {
   // un contrato sintético activo, con ficha, en el centro
   const [C, CLON, CLAT] = sqlq("select c.cod_usuario || '|' || ST_X(c.geom) || '|' || ST_Y(c.geom) from public.catastro_valledupar c join bi_interno.ficha_contrato f on f.contrato = c.cod_usuario where c.cod_usuario ~ '^[1-9][0-9]+$' and c.cod_usuario <> '99999999' and c.id = (select min(c2.id) from public.catastro_valledupar c2 where c2.cod_usuario = c.cod_usuario) and (select s.estado from public.cartera_suscripcion s where s.contrato = c.cod_usuario order by s.periodo_carga desc limit 1) = 'ACTIVO' order by c.geom <-> ST_SetSRID(ST_MakePoint(-73.2532, 10.4631), 4326) limit 1").split("|");
   const NOMBRE = sqlq(`select nombre from public.cartera_suscripcion where contrato = '${C}' order by periodo_carga desc limit 1`);
+  const CORTE = sqlq("select max(periodo_carga) from public.cartera_suscripcion");
 
   // ===== A. Contratos y su tarjeta (administrador) =====
   let p = await abrir(ancho, "adm");
@@ -187,6 +191,9 @@ for (const ancho of [390, 1280]) {
   if (process.env.DIAG) { console.log(JSON.stringify({ mvt: rpcs.filter((r) => r.fn.includes("contratos")).map((r) => r.a), vis: await visibilidad(p, "c-contratos"),
     capa: await p.evaluate(() => { const m = document.querySelector(".geo-mapa").__mapa; return { z: m.getZoom(), src: !!m.getSource("contratos"), lay: !!m.getLayer("c-contratos"), style: m.getStyle().layers.map((l) => l.id).slice(-8) }; }),
     edge: edgeLog.slice(-500) })); process.exit(0); }
+  { const [aa, mm, dd] = [CORTE.slice(0, 4), CORTE.slice(4, 6), CORTE.slice(6, 8)]; const esperado = `${Number(dd)}-${["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][Number(mm) - 1]}-${aa}`;
+    ok(`${tag} A0 (7a) la capa de contratos trae una nota pequeña con la fecha del último corte de la cartera («Estado según la cartera del ${esperado}»), dentro de la pantalla`,
+       notaCorte && notaCorte.txt === `Estado según la cartera del ${esperado}` && notaCorte.px <= 13 && notaCorte.ancho, JSON.stringify(notaCorte)); }
   ok(`${tag} A1 la capa de contratos se dibuja (desde el zoom 16), pedida con el token, sin nombres en la tesela`, pinta && rpcs.some((r) => r.fn === "geoportal_redes_geovisor_mvt_contratos" && r.a.p_solicitante === EMAILS.adm)
      && !(await p.evaluate(() => JSON.stringify(document.querySelector(".geo-mapa").__mapa.queryRenderedFeatures({ layers: ["c-contratos"] }).map((f) => f.properties)).includes("SUSCRIPTOR"))));
   await p.waitForFunction(() => document.querySelector(".geo-tarjeta")?.dataset.capa === "contrato", { timeout: 15000 }).catch(() => {});
@@ -271,6 +278,7 @@ for (const ancho of [390, 1280]) {
   // ===== F. El operador: sin contratos =====
   p = await abrir(ancho, "op"); await alGeovisor(p, "Geovisor técnico (solo lectura)");
   await clicTexto(p, ".geo-barra button", "Capas");
+  ok(`${tag} F0 (7a) el operador no ve la nota del corte de la cartera`, (await p.evaluate(() => document.querySelector(".geo-panel [data-corte]"))) === null);
   ok(`${tag} F1 el operador no tiene la capa de contratos ni «Compartir»`, (await marcada(p, "contratos")) === null && !/Compartir/.test(await p.evaluate(() => document.querySelector(".geo-barra").innerText)));
   ok(`${tag} F2 nunca pidió la tesela ni la tarjeta de contratos`, !rpcs.some((r) => ["geoportal_redes_geovisor_mvt_contratos", "geoportal_redes_contrato_tarjeta"].includes(r.fn) && r.a.p_solicitante === EMAILS.op));
   await p.close();

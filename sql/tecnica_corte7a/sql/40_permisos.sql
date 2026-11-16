@@ -21,4 +21,4 @@ end $$;
 insert into public.geoportal_auditoria (email, accion, referencia, detalle, ip)
 values ('migracion@tecnica_corte7a', 'migracion_tecnica_corte7a', null, jsonb_build_object('tablas', jsonb_build_array('tecnica.quimico_ficha_eventos', 'tecnica.quimico_ficha_preparaciones',
         'tecnica.quimico_movimientos', 'tecnica.quimico_parametros'), 'vistas', jsonb_build_array('tecnica.v_quimico_vigente', 'tecnica.v_quimico_saldo'), 'rpc_nuevas', 11,
-        'reemplazadas', jsonb_build_array('redes.f_estado_contrato', 'public.geoportal_redes_contrato_tarjeta'), 'bucket', 'tecnica-evidencias'), null);
+        'reemplazadas', jsonb_build_array('redes.f_estado_contrato', 'public.geoportal_redes_contrato_tarjeta', 'public.geoportal_redes_geovisor', 'redes.f_funciones_sin_where'), 'base', 'corte 6c', 'bucket', 'tecnica-evidencias'), null);

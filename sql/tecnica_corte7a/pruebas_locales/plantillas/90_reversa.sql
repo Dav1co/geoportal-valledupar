@@ -1,7 +1,7 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 7a · 90 — REVERSA (PROPUESTA; no se ha ejecutado en la base real). Generada por pruebas_locales/generar.py.
--- Deja las 2 funciones de redes como las dejó el 6b, quita las RPC y funciones nuevas, las tablas y las vistas de químicos (el bucket, vacío, se queda), el candado de identidad y
--- el rol «auxiliar»; los estados del contrato vuelven a los del 6b. El hipoclorito de calcio se DESACTIVA (los químicos no se borran) y los parámetros se quedan.
+-- Deja las 4 funciones de redes como las dejó el 6c, quita las RPC y funciones nuevas, las tablas y las vistas de químicos (el bucket, vacío, se queda), el candado de identidad y
+-- el rol «auxiliar»; los estados del contrato vuelven a los del 6c (el suspendido y el cortado salen como «otro»). El hipoclorito de calcio se DESACTIVA (los químicos no se borran) y los parámetros se quedan.
 -- SE NIEGA si ya hay movimientos, eventos de ficha que no sean los de la migración, archivos en el bucket o químicos «auxiliar» distintos del hipoclorito.
 -- =====================================================================
 do $$
@@ -19,8 +19,8 @@ begin
   end if;
 end $$;
 
--- 1. las funciones de redes reemplazadas, con su texto del 6b
-{{TEXTOS_6B}}
+-- 1. las funciones de redes reemplazadas, con su texto del 6c
+{{TEXTOS_6C}}
 -- 2. lo nuevo
 {{DROPS}}
 drop view tecnica.v_quimico_saldo;
@@ -35,14 +35,11 @@ drop function tecnica.f_quimico_identidad();
 update tecnica.quimicos set activo = false, rol = 'desinfectante' where codigo = 'hipoclorito_calcio';
 alter table tecnica.quimicos drop constraint quimicos_rol_check;
 alter table tecnica.quimicos add constraint quimicos_rol_check check (rol = any (array['coagulante', 'desinfectante', 'otro']));
-update redes.contratos_capa set estado = 'otro' where estado in ('suspendido', 'cortado');
-alter table redes.contratos_capa drop constraint contratos_capa_estado_check;
-alter table redes.contratos_capa add constraint contratos_capa_estado_check check (estado in ('activo', 'retirado', 'otro', 'sin_dato'));
 
 do $$
 begin
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '{{MD5_CORTE_6B}}' then
-    raise exception 'La reversa no dejó la base como en el 6b';
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '{{MD5_CORTE_6C}}' then
+    raise exception 'La reversa no dejó la base como en el 6c';
   end if;
 end $$;

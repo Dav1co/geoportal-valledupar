@@ -190,6 +190,7 @@ begin
   if coalesce(p_formulario, '') not in ('entrada_quimicos', 'uso_quimicos') then perform tecnica.f_error('Ese formulario no es de químicos'); end if;
   v_email := tecnica.f_autorizar_captura(p_solicitante, p_formulario);
   return jsonb_build_object('formulario', p_formulario, 'hoy', (clock_timestamp() at time zone 'America/Bogota')::date,
+    'unidades', '["t", "kg"]'::jsonb,      -- David (16-nov): la entrada va en toneladas o kg; nunca por cilindros ni tanques
     'dias_atras', tecnica.f_qparam(case p_formulario when 'uso_quimicos' then 'dias_atras_uso' else 'dias_atras_entrada' end),
     'quimicos', coalesce((select jsonb_agg(jsonb_build_object('codigo', v.codigo, 'nombre', v.nombre, 'potabilizacion', v.potabilizacion) order by v.potabilizacion desc, v.nombre)
                             from tecnica.v_quimico_vigente v where v.activo), '[]'::jsonb),
