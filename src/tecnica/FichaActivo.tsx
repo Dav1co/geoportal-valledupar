@@ -1,5 +1,14 @@
-import { useEffect, useState } from "react";
-import { apiRedes, type ActivoCorto, type Epicrisis, type EventoEpicrisis, type Ficha } from "./apiRedes";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { apiPerfil, apiRedes, type ActivoCorto, type Epicrisis, type EventoEpicrisis, type Ficha, type FotoFirmada, type Galeria, type Perfil } from "./apiRedes";
+import { FichaEditar, FotoPerfilCambiar } from "./FichaEditar";
+
+// Corte 3b: la ficha como «perfil» del activo (§22 y §23): minimapa estático arriba, alias propio y placa, foto principal, galería (supervisor y
+// administrador; la lectura queda auditada) y la epicrisis como muro (daños, intervenciones y cambios de la ficha). Editar la ficha y su foto, por ahora
+// solo el administrador (el servidor lo decide y manda «editable»).
+const MiniMapaEstatico = lazy(() => import("./MiniMapaEstatico").then((m) => ({ default: m.MiniMapaEstatico })));
+const ORIGEN_FOTO: Record<string, string> = { perfil: "Foto de perfil", dano: "Daño", intervencion: "Intervención" };
+const CLASE_FOTO: Record<string, string> = { dano: "el daño", entorno: "entorno", reparado: "reparado", antes: "antes", durante: "durante", despues: "después", perfil: "" };
+const pieFoto = (f: FotoFirmada) => [ORIGEN_FOTO[f.origen], f.codigo, CLASE_FOTO[f.clase ?? ""] || null].filter(Boolean).join(" · ");
 import { ErrorTec } from "./apiTecnica";
 
 // Ficha del activo (solo lectura), como la maqueta Ficha.dc.html: datos del activo con el nombre visible del tipo (alias, N-12),
@@ -58,6 +67,13 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
   const [errorEpi, setErrorEpi] = useState<string | null>(null);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [intento, setIntento] = useState(0);
+  const [perfil, setPerfil] = useState<Perfil | null>(null);
+  const [modo, setModo] = useState<"ver" | "editar" | "foto">("ver");
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [galeria, setGaleria] = useState<Galeria | null>(null);
+  const [errorGal, setErrorGal] = useState<string | null>(null);
+  const [cargandoGal, setCargandoGal] = useState(false);
+  const [grande, setGrande] = useState<FotoFirmada | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -65,6 +81,8 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
     apiRedes.activo(codigo)
       .then((f) => { if (vivo) setFicha(f); })
       .catch((e) => { if (vivo) setError(e instanceof ErrorTec ? e : new ErrorTec("servidor", "No se pudo cargar la ficha.", 0)); });
+    setPerfil(null); setGaleria(null); setErrorGal(null);
+    apiPerfil.perfil(codigo).then((p) => { if (vivo) setPerfil(p); }).catch(() => {});      // sin perfil, la ficha se ve igual (como en el 1b)
     apiRedes.epicrisis(codigo)
       .then((r) => { if (vivo) setEpi(r); })
       .catch((e) => { if (vivo) setErrorEpi(e instanceof Error ? e.message : "No se pudo cargar la epicrisis."); });
@@ -103,8 +121,15 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
 
   const a = ficha.activo;
   const claves = new Set(a.campos.map((c) => c.clave));
-  const hechos = (epi?.items ?? []).filter((e) => e.grupo === "hecho");
-  const registro = (epi?.items ?? []).filter((e) => e.grupo === "registro");
+  // el muro (§22): daños, fallas, intervenciones y cambios de la ficha; lo demás del registro (alta, versiones de carga, retiros, componentes) va plegado
+  const enMuro = (e: EventoEpicrisis) => e.grupo === "hecho" || e.clase === "ficha";
+  const hechos = (epi?.items ?? []).filter(enMuro);
+  const registro = (epi?.items ?? []).filter((e) => !enMuro(e));
+  const verGaleria = () => {
+    setCargandoGal(true); setErrorGal(null);
+    apiPerfil.galeria(codigo).then(setGaleria).catch((e) => setErrorGal(e instanceof Error ? e.message : "No se pudo cargar la galería.")).finally(() => setCargandoGal(false));
+  };
+  const listo = (msg: string) => { setModo("ver"); setAviso(msg); setIntento((i) => i + 1); window.scrollTo?.(0, 0); };
   const modelo = ficha.modelo ? Object.entries(ficha.modelo).filter(([, v]) => v !== null && v !== "") : [];
 
   return (
@@ -113,18 +138,44 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
         {volver}
         <span className="red-ceja">{a.sistema_nombre} · {ETAPAS[a.etapa] ?? a.etapa}</span>
         <h1 className="red-codigo">{a.codigo}</h1>
+        {perfil?.alias ? <span className="red-alias">{perfil.alias}</span> : null}
         <span className="red-tipo">{a.tipo}{a.clase ? ` · ${a.clase}` : ""}{a.nombre ? ` · ${a.nombre}` : ""}</span>
         <div className="red-chips">
           <span className={`red-chip ${tonoEstado(a)}`}>{a.retirado ? "Retirado" : a.estado}</span>
           {a.codigo_anterior ? <span className="red-chip red-chip-suave">Código anterior: {a.codigo_anterior}</span> : null}
           {a.por_verificar ? <span className="red-chip red-chip-suave">Por verificar</span> : null}
+          {perfil?.placa ? <span className="red-chip red-chip-placa">Placa: {perfil.placa}</span> : null}
         </div>
+        {perfil?.editable && modo === "ver" ? (
+          <div className="red-acciones-edicion">
+            <button type="button" className="tec-boton-sec" onClick={() => { setAviso(null); setModo("editar"); }}>Editar ficha</button>
+            <button type="button" className="tec-boton-sec" onClick={() => { setAviso(null); setModo("foto"); }}>Cambiar foto principal</button>
+          </div>
+        ) : null}
         {onRegistrarIntervencion && !a.retirado && (a.sistema === "acueducto" || a.sistema === "alcantarillado") ? (
           <button type="button" className="tec-boton red-accion" onClick={() => onRegistrarIntervencion({ codigo: a.codigo, sistema: a.sistema as "acueducto" | "alcantarillado", lat: a.lat, lon: a.lon })}>Registrar intervención</button>
         ) : null}
       </header>
 
+      {(a.sistema === "acueducto" || a.sistema === "alcantarillado") || perfil?.foto_principal ? (
+        <div className="red-portada">
+          {a.sistema === "acueducto" || a.sistema === "alcantarillado" ? (
+            <Suspense fallback={<div className="red-minimapa red-minimapa-cargando" role="status">Cargando el mapa…</div>}>
+              <MiniMapaEstatico sistema={a.sistema} codigo={a.codigo} lat={a.lat} lon={a.lon} />
+            </Suspense>) : null}
+          {perfil?.foto_principal ? (
+            <figure className="red-foto-principal">
+              <button type="button" onClick={() => setGrande(perfil.foto_principal!)} aria-label="Ver la foto principal en grande">
+                <img src={perfil.foto_principal.url} alt={`Foto principal de ${a.codigo}`} />
+              </button>
+              <figcaption>{pieFoto(perfil.foto_principal)} · {fecha(perfil.foto_principal.cuando)}</figcaption>
+            </figure>) : null}
+        </div>) : null}
+
       <div className="red-cuerpo">
+        {aviso ? <p className="tec-aviso tec-aviso-info red-aviso" role="status">{aviso}</p> : null}
+        {modo === "editar" && perfil?.edicion ? <FichaEditar codigo={a.codigo} edicion={perfil.edicion} onCancelar={() => setModo("ver")} onGuardado={listo} /> : null}
+        {modo === "foto" && perfil?.edicion ? <FotoPerfilCambiar codigo={a.codigo} maxBytes={perfil.edicion.max_bytes_foto} onCancelar={() => setModo("ver")} onGuardado={listo} /> : null}
         {a.retirado ? <p className="tec-aviso tec-aviso-error red-aviso">Este activo está retirado: no vino en la última carga de su capa. Su hoja de vida se conserva.</p> : null}
         {!a.retirado && a.punteado ? <p className="tec-aviso tec-aviso-info red-aviso">Estado «{a.estado}»: se dibuja punteado y no cuenta como activo vigente en los indicadores.</p> : null}
 
@@ -193,14 +244,32 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
           ) : null}
         </section>
 
+        {perfil?.fotos !== undefined ? (
+          <section className="red-seccion" aria-labelledby="red-t-gal">
+            <div className="red-tit-fila"><h2 id="red-t-gal">Galería</h2><span className="red-cuenta">{perfil.fotos}</span></div>
+            {perfil.fotos === 0 ? <p className="red-texto red-sin-dato">Todavía no hay fotos de daños, intervenciones ni de perfil.</p>
+              : !galeria ? <button type="button" className="tec-boton-sec" disabled={cargandoGal} onClick={verGaleria}>{cargandoGal ? "Cargando…" : `Ver las fotos (${perfil.fotos})`}</button> : null}
+            {errorGal ? <p className="tec-error-caja">{errorGal}</p> : null}
+            {galeria ? (
+              <>
+                <div className="red-galeria">{galeria.fotos.map((f) => (
+                  <figure key={f.url} className="red-gal-foto">
+                    <button type="button" onClick={() => setGrande(f)} aria-label={`Ver en grande: ${pieFoto(f)}`}><img src={f.url} alt={pieFoto(f)} loading="lazy" /></button>
+                    <figcaption>{pieFoto(f)}<br />{fecha(f.cuando)}</figcaption>
+                  </figure>))}</div>
+                <p className="red-nota">Los enlaces de las fotos vencen al minuto. {galeria.total > galeria.fotos.length ? `Se muestran las ${galeria.fotos.length} más recientes de ${galeria.total}.` : ""}</p>
+              </>) : null}
+          </section>
+        ) : null}
+
         <section className="red-seccion" aria-labelledby="red-t-epi">
           <div>
             <h2 id="red-t-epi">Epicrisis del activo</h2>
-            <span className="red-nota">Daños, fallas e intervenciones, en orden.</span>
+            <span className="red-nota">El muro del activo: daños, fallas, intervenciones y cambios de la ficha, del más reciente al más antiguo.</span>
           </div>
           {errorEpi ? <p className="tec-error-caja">{errorEpi}</p> : null}
           {!epi && !errorEpi ? <p className="tec-sub" role="status">Cargando…</p> : null}
-          {epi && hechos.length === 0 ? <p className="red-vacio">Todavía no hay daños, fallas ni intervenciones registrados para este activo.</p> : null}
+          {epi && hechos.length === 0 ? <p className="red-vacio">Todavía no hay daños, fallas, intervenciones ni cambios de la ficha para este activo.</p> : null}
           {hechos.length > 0 ? <ol className="red-linea">{hechos.map((e) => <EventoItem key={`${e.clase}-${e.ref_id}`} e={e} />)}</ol> : null}
           {registro.length > 0 ? (
             <details className="red-registro">
@@ -211,19 +280,25 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
           ) : null}
         </section>
 
+        {grande ? (
+          <div className="red-visor" role="dialog" aria-modal="true" aria-label={pieFoto(grande)} onClick={() => setGrande(null)}>
+            <img src={grande.url} alt={pieFoto(grande)} />
+            <p>{pieFoto(grande)} · {fecha(grande.cuando)}</p>
+            <button type="button" className="tec-boton" onClick={() => setGrande(null)}>Cerrar</button>
+          </div>) : null}
         <p className="red-nota red-pie">Versión {a.version} de la ficha · {fecha(a.version_creada_en)} · {a.lat.toFixed(5)}, {a.lon.toFixed(5)}</p>
       </div>
     </div>
   );
 }
 
-const ROTULO_CLASE: Record<string, string> = { dano: "Daño", falla: "Falla", intervencion: "Intervención", alta: "Alta", version: "Nueva versión", evento_retirar: "Retiro", evento_reactivar: "Reactivación", evento_ocultar: "Oculto", evento_reincluir: "Reincluido",
+const ROTULO_CLASE: Record<string, string> = { dano: "Daño", falla: "Falla", intervencion: "Intervención", ficha: "Cambio de la ficha", alta: "Alta", version: "Nueva versión", evento_retirar: "Retiro", evento_reactivar: "Reactivación", evento_ocultar: "Oculto", evento_reincluir: "Reincluido",
   evento_verificar: "Verificado", evento_por_verificar: "Por verificar", componente_agregar: "Componente agregado", componente_quitar: "Componente quitado",
   es_componente_agregar: "Pasa a ser componente", es_componente_quitar: "Deja de ser componente" };
 
 function EventoItem({ e }: { e: EventoEpicrisis }) {
   return (
-    <li className={`red-evento${e.estado === "revertida" ? " red-evento-revertido" : ""}${e.grupo === "hecho" ? ` red-evento-${e.clase}` : ""}`}>
+    <li className={`red-evento${e.estado === "revertida" ? " red-evento-revertido" : ""}${e.grupo === "hecho" || e.clase === "ficha" ? ` red-evento-${e.clase}` : ""}`}>
       <span className="red-evento-punto" aria-hidden="true" />
       <div className="red-evento-txt">
         <span className="red-nota">{fecha(e.cuando)}{e.estado === "revertida" ? " · revertida" : e.grupo === "hecho" && e.estado ? ` · ${e.estado}` : ""}</span>

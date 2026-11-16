@@ -1,0 +1,31 @@
+Repo: /Users/ddiaz/geoportal-web-tec-c3b/supabase/functions
+Declaradas: 18 · carpetas en el repo: 18 · desplegadas: no consultadas
+
+funcion                     permiso declarado                           estado            guardias                                      marcador
+geoportal-tiles             sin_modo                                    pendiente_fase2   completo                                      si
+geoportal-buscar            sin_modo                                    pendiente_fase2   completo                                      si
+geoportal-predio            sin_modo                                    pendiente_fase2   completo                                      si
+geoportal-barrios           sin_modo                                    pendiente_fase2   completo                                      si
+geoportal-buscar-barrio     sin_modo                                    pendiente_fase2   completo                                      si
+geoportal-buscar-direccion  sin_modo                                    pendiente_fase2   completo                                      si
+geoportal-buscar-medidor    sin_modo                                    pendiente_fase2   completo                                      si
+geoportal-causales          sin_modo                                    pendiente_fase2   completo                                      si
+geoportal-bi                modo:dashboard                              implementado      completo                                      no
+geoportal-exportar          modo:comercial                              implementado      completo                                      no
+geoportal-ruta              modo:rutas                                  implementado      completo                                      no
+geoportal-rutas-lista       modo:rutas                                  implementado      completo                                      no
+geoportal-admin             perfil:autenticado + resto:solo_admin       implementado      completo                                      no
+geoportal-tecnica           modo:registro_tecnico|dashboard_tecnico     implementado      completo                                      si
+geoportal-campo             modo:campo|dashboard_campo|analisis_contratoimplementado      completo                                      si
+geoportal-acta              modo:acta|dashboard_acta                    implementado      completo                                      si
+geoportal-aseo              modo:aseo|dashboard_aseo                    implementado      completo                                      si
+geoportal-redes             modo:registro_tecnico|dashboard_tecnico|dashboard_redesplaneada_corte2   completo                                      si
+
+== ERRORES: 0
+== PENDIENTES (fase 2): 0
+== AVISOS: 5
+  - geoportal-bi: sin marcador @permiso (funcion heredada; se exige solo en las nuevas)
+  - geoportal-exportar: sin marcador @permiso (funcion heredada; se exige solo en las nuevas)
+  - geoportal-ruta: sin marcador @permiso (funcion heredada; se exige solo en las nuevas)
+  - geoportal-rutas-lista: sin marcador @permiso (funcion heredada; se exige solo en las nuevas)
+  - geoportal-admin: sin marcador @permiso (funcion heredada; se exige solo en las nuevas)

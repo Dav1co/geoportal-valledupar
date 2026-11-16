@@ -182,7 +182,7 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} tanque: «Datos del activo» con Capacidad «Sin dato», Fecha de instalación «Sin dato» y Barrio o sector «Sin dato»`, /Capacidad\s*Sin dato/.test(t) && /Fecha de instalación\s*Sin dato/.test(t) && /Barrio o sector\s*Sin dato/.test(t));
   ok(`${tag} tanque: Origen visible para el supervisor, con EMDUPAR marcado`, /Origen/.test(t) && (await p.evaluate(() => document.querySelector(".red-opcion-sel")?.textContent)) === "EMDUPAR");
   ok(`${tag} tanque: Componentes 1 con ${MAC}`, /Componentes\s*1/.test(t) && t.includes(MAC));
-  ok(`${tag} tanque: epicrisis vacía con su aviso y «Cambios del registro (2)» (alta y componente agregado)`, /Todavía no hay daños, fallas ni intervenciones/.test(t) && /Cambios del registro \(2\)/.test(t), t.slice(-600));
+  ok(`${tag} tanque: epicrisis vacía con su aviso y «Cambios del registro (2)» (alta y componente agregado)`, /Todavía no hay daños, fallas, intervenciones ni cambios de la ficha/.test(t) && /Cambios del registro \(2\)/.test(t), t.slice(-600));
   ok(`${tag} tanque: sin desborde y filas de 44 px o más`, (await sinDesborde(p)) && (await tamanoMin(p, ".red-fila, .red-volver")) >= 44);
   await p.screenshot({ path: join(CAP, `ficha_tanque_${ancho}.png`), fullPage: true });
   await p.evaluate(() => { const d = document.querySelector(".red-registro"); if (d) d.open = true; });

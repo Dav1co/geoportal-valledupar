@@ -1,0 +1,42 @@
+OK    [390] buscar «V85» (código de la capa) abre la ficha de VAL-000001
+OK    [390] minimapa estático arriba, con VAL-000001 resaltado en su red (sin interacción)
+OK    [390] foto principal: la «después» de ITV-000001, con su URL firmada
+OK    [390] el administrador ve «Editar ficha» y «Cambiar foto principal»
+OK    [390] galería: la foto del daño DAN-000001 y la de la intervención, cargadas
+OK    [390] tocar una foto la abre en grande y «Cerrar» vuelve
+OK    [390] la ficha (portada, galería) no desborda y sus botones miden 44 px o más
+OK    [390] la vista previa dice qué cambia, de A a B
+OK    [390] sin motivo no guarda
+OK    [390] guardado: versión nueva hecha en la ficha, con el diámetro, el alias y la placa; la cabecera los muestra
+OK    [390] el muro trae el cambio de la ficha («de A a B» y el motivo) junto al daño y la intervención
+OK    [390] la foto subida (PNG convertido a JPEG, menos de 1,5 MB) queda como principal
+OK    [390] buscar la placa (en minúsculas) abre la ficha de VAL-000001
+OK    [390] buscar por el alias lista la válvula con su alias y su placa
+OK    [390] el supervisor ve la foto principal y la galería, pero no «Editar ficha» (por ahora solo el administrador)
+OK    [390] el operador ve el minimapa estático, el alias y el muro con el cambio de la ficha
+OK    [390] el operador no ve la foto principal, ni la galería, ni los botones de edición
+OK    [390] la ficha del operador no desborda
+OK    [1280] buscar «V85» (código de la capa) abre la ficha de VAL-000001
+OK    [1280] minimapa estático arriba, con VAL-000001 resaltado en su red (sin interacción)
+OK    [1280] foto principal: la de perfil subida antes (gana a la de la intervención), con su URL firmada
+OK    [1280] el administrador ve «Editar ficha» y «Cambiar foto principal»
+OK    [1280] galería: la foto del daño DAN-000001 y la de la intervención, cargadas
+OK    [1280] tocar una foto la abre en grande y «Cerrar» vuelve
+OK    [1280] la ficha (portada, galería) no desborda y sus botones miden 44 px o más
+OK    [1280] la vista previa dice qué cambia, de A a B
+OK    [1280] sin motivo no guarda
+OK    [1280] guardado: versión nueva hecha en la ficha, con el diámetro, el alias y la placa; la cabecera los muestra
+OK    [1280] el muro trae el cambio de la ficha («de A a B» y el motivo) junto al daño y la intervención
+OK    [1280] la foto subida (PNG convertido a JPEG, menos de 1,5 MB) queda como principal
+OK    [1280] buscar la placa (en minúsculas) abre la ficha de VAL-000001
+OK    [1280] buscar por el alias lista la válvula con su alias y su placa
+OK    [1280] el supervisor ve la foto principal y la galería, pero no «Editar ficha» (por ahora solo el administrador)
+OK    [1280] el operador ve el minimapa estático, el alias y el muro con el cambio de la ficha
+OK    [1280] el operador no ve la foto principal, ni la galería, ni los botones de edición
+OK    [1280] la ficha del operador no desborda
+OK    ediciones guardadas: 2 por ancho (los datos y la foto)
+OK    la galería se leyó con URL firmadas de lectura y quedó auditada
+OK    sin errores de JavaScript ni de consola
+
+RESULTADO: 39 de 39 — SIN FALLAS
+Capturas: /private/tmp/claude-502/-Users-ddiaz-geoportal-emdupar/b95dd3c6-2438-41f3-aa49-7e903eb7f038/scratchpad/cap_ficha_c3b

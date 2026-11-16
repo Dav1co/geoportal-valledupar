@@ -1,6 +1,6 @@
 import { useState } from "react";
 import "./ficha.css";
-import { apiRedes, type ActivoCorto } from "./apiRedes";
+import { apiPerfil, apiRedes, type ActivoCorto, type ActivoUbicado } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 
@@ -19,6 +19,7 @@ export function ActivosRedes({ onVolver, onRegistrarIntervencion }: { onVolver: 
   const [cerca, setCerca] = useState<{ activos: ActivoCorto[]; radio: number } | null>(null);
   const [estado, setEstado] = useState<"" | "gps" | "buscando">("");
   const [aviso, setAviso] = useState<string | null>(null);
+  const [encontrados, setEncontrados] = useState<(ActivoUbicado & { alias?: string; placa?: string })[] | null>(null);   // Corte 3b: por placa o alias
 
   const abrir = (c: string) => setPila((p) => [...p, c]);
   if (pila.length > 0) {
@@ -30,8 +31,16 @@ export function ActivosRedes({ onVolver, onRegistrarIntervencion }: { onVolver: 
     e.preventDefault();
     let c = codigo.trim();
     if (!c) { setAviso("Escriba el código del activo."); return; }
-    if (/^[a-z]{3}-\d{6}$/i.test(c)) c = c.toUpperCase();          // código del geoportal: siempre en mayúsculas (el de la capa se deja como se escribió)
-    setAviso(null); abrir(c);
+    setAviso(null); setEncontrados(null);
+    if (/^[a-z]{3}-\d{6}$/i.test(c)) { abrir(c.toUpperCase()); return; }          // código del geoportal: siempre en mayúsculas
+    if (c.length < 2) { abrir(c); return; }
+    // Corte 3b: código de la capa, placa (o número de inventario) o alias. Una sola coincidencia exacta abre la ficha; si no, la lista.
+    apiPerfil.buscar(c).then((r) => {
+      const exacto = r.activos.filter((x) => x.codigo_anterior?.toLowerCase() === c.toLowerCase() || x.placa?.toLowerCase() === c.toLowerCase());
+      if (exacto.length === 1) abrir(exacto[0].codigo);
+      else if (r.activos.length) setEncontrados(r.activos);
+      else abrir(c);
+    }).catch(() => abrir(c));
   };
 
   const buscarCerca = (radio = 30) => {
@@ -66,11 +75,22 @@ export function ActivosRedes({ onVolver, onRegistrarIntervencion }: { onVolver: 
         <form className="red-seccion" onSubmit={buscarCodigo} aria-labelledby="red-t-cod">
           <h2 id="red-t-cod">Por código</h2>
           <div className="tec-campo">
-            <label htmlFor="red-codigo">Código del activo o de la capa</label>
+            <label htmlFor="red-codigo">Código del activo o de la capa, placa o alias</label>
             <input id="red-codigo" type="text" inputMode="text" autoCapitalize="characters" autoComplete="off" maxLength={120}
-              placeholder="RED-000123, V85, P1902…" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+              placeholder="RED-000123, V85, INV-0012, Tanque…" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
           </div>
           <button type="submit" className="tec-boton">Abrir la ficha</button>
+          {encontrados ? (
+            <div className="red-lista" aria-label="Activos encontrados">
+              {encontrados.map((x) => (
+                <button key={x.codigo} type="button" className="red-fila" onClick={() => abrir(x.codigo)}>
+                  <span className="red-icono" aria-hidden="true" />
+                  <span className="red-fila-txt">
+                    <span className="red-fila-cod">{x.codigo}{x.alias ? ` · ${x.alias}` : ""}</span>
+                    <span className="red-fila-sub">{x.tipo}{x.placa ? ` · placa ${x.placa}` : ""}{x.codigo_anterior ? ` · ${x.codigo_anterior}` : ""}</span>
+                  </span>
+                </button>))}
+            </div>) : null}
         </form>
 
         <section className="red-seccion" aria-labelledby="red-t-cerca">

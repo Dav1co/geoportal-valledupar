@@ -1,0 +1,21 @@
+OK    01 huellas antes: «CORTE 3a (listo para el 3b)», 5 RPC «NO EXISTE», activo_buscar y v_epicrisis «CORTE 3a (sin cambiar)»
+OK    02 carga real (35.781 activos), predios, y un daño y una reparación reales en V85 con fotos (Cortes 2 y 3a) · publicar 12.9 s, DAN-000001, ITV-000001
+OK    03 ensayo DESPUÉS de la carga real y con hechos reales: ERROR con «N de N … SIN FALLAS» · RESULTADO: 54 de 54 pruebas correctas — SIN FALLAS (7.2 s)
+OK    04 el ensayo no deja rastro (ni tablas, ni funciones, ni activos retirados, ni versiones nuevas)
+OK    05 migración _editor · 0.1 s
+OK    06 verificación sin ediciones: 10 OK
+OK    07 repetir la migración se rechaza (guardia)
+OK    08 huellas después: «CORTE 3b (aplicado)», 5 «NUEVA (aplicada)» y 2 «CORTE 3b (reemplazada)»
+OK    09 reversa sin ediciones: vuelve exactamente al 3a (funciones y epicrisis)
+OK    10 tras la reversa, la verificación del 3a vuelve a dar 11 OK
+OK    11 una segunda reversa se niega
+OK    12 volver a migrar después de la reversa
+OK    13 editar la ficha real de V85 (por su código de la capa): versión 2, sin carga · {"codigo": "VAL-000001", "cambios": [{"antes": null, "campo": "diametro_mm", "rotulo": "Diámetro (mm)", "despues": "110"}, {"antes": null, "campo": "observaciones", "rotulo": "Observaciones", "despues": "Revisada en campo"}, {"antes": null, "campo": "alias", "rotulo": "Alias", "despues": "Válvula de
+OK    14 la tabla vigente sigue con 35.781 activos y la fila de V85 refrescada (sin recalcularla entera)
+OK    15 buscar por la placa y por el alias encuentra V85
+OK    16 galería de V85: la foto del daño y la de la reparación; la principal es la de «después» · {"fotos": [{"ruta": "intervenciones/2026-11/a8b69017-c428-4e30-9768-ce72650563af/1.jpg", "clase": "despues", "codigo": "ITV-000001", "cuando": "2026-11-15T18:19:55-05:00", "origen": "intervencion"}, {"ruta": "danos/2026-11/0b6647c3-3f8a-41d1-b61a-b45feb712cf4/1.jpg", "clase": "dano", "codigo": "DAN-
+OK    17 la epicrisis de V85 trae el cambio de la ficha («Diámetro (mm): de … a «110»» y el motivo), el daño y la reparación · {"items": [{"clase": "ficha", "grupo": "registro", "cuando": "2026-11-15T19:20:03.355327-05:00", "ref_id": 1, "resumen": "Diámetro (mm): de «sin dato» a «110»; Observaciones: de «sin dato» a «Revisada en campo»; Alias: de «sin dato» a «Válvula de la glorieta»; Placa o número de inventario: de «sin dato» a «INV-2026-0085» · Revisión de la válvula en campo"}, {"clase": "alta", "grupo": "registro", "
+OK    18 editar la ficha en la base real tarda menos de 1 s (con psql) · 0.04 s
+OK    19 verificación con datos: 10 OK
+OK    20 la reversa se niega con datos (nada se borra)
+RESULTADO: 20 de 20 — SIN FALLAS

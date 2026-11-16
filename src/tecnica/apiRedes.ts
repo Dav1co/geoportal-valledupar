@@ -132,3 +132,27 @@ export async function subirArchivo(url: string, archivo: Blob, tipo: "image/jpeg
   if (r.status === 400 || r.status === 401 || r.status === 403) throw new Error("vencida");
   throw new Error("El servicio de archivos no está disponible. Intente de nuevo.");
 }
+
+// ---------- Corte 3b: la ficha como «perfil» (alias, placa, foto principal, galería y edición con versiones) ----------
+export type FotoFirmada = { origen: "perfil" | "dano" | "intervencion"; codigo?: string | null; clase?: string; cuando: string; url: string; expira_en: string };
+export type EdicionFicha = {
+  valores: Record<string, string | number | null | undefined>;
+  campos_tipo: { clave: string; rotulo: string; tipo: string; unidad?: string; valor?: string | number | null }[];
+  lleva: { diametro_mm: boolean; capacidad: boolean; profundidad_m: boolean; clase: boolean; efecto: boolean };
+  estados: Opcion[]; materiales: Opcion[]; clases: Opcion[]; efectos: Opcion[]; aportantes: Opcion[]; max_bytes_foto: number;
+};
+export type Perfil = { codigo: string; alias?: string; placa?: string; sistema: string; geometria: string; perfil: "admin" | "supervisor" | "operador"; editable: boolean;
+  foto_principal?: FotoFirmada; fotos?: number; edicion?: EdicionFicha };
+export type Galeria = { codigo: string; total: number; principal: FotoFirmada | null; fotos: FotoFirmada[] };
+export type CambiosFicha = Record<string, unknown>;
+
+export const apiPerfil = {
+  perfil: (codigo: string) => pedir<Perfil>("perfil", { ...F, qs: { codigo } }),
+  galeria: (codigo: string) => pedir<Galeria>("galeria", { ...F, cuerpo: { codigo } }),
+  editar: (codigo: string, cambios: CambiosFicha, motivo: string) =>
+    pedir<{ codigo: string; version: number; version_nueva: boolean; cambios: { campo: string; rotulo: string; antes?: string | null; despues?: string | null }[] }>("ficha_editar", { ...F, cuerpo: { codigo, cambios, motivo } }),
+  fotoPreparar: (codigo: string) => pedir<{ ruta: string; tipo_mime: string; max_bytes_foto: number; url_subida: string; token: string }>("foto_perfil_preparar", { ...F, cuerpo: { codigo } }),
+  // búsqueda en toda la red: código del geoportal o de la capa, placa (o número de inventario) y alias
+  buscar: (texto: string) => pedir<{ activos: (ActivoUbicado & { alias?: string; placa?: string })[] }>("activo_buscar", { ...F, qs: { texto } }),
+  fotoFijar: (codigo: string, ruta: string, motivo: string) => pedir<{ codigo: string; repetido: boolean }>("foto_perfil_fijar", { ...F, cuerpo: { codigo, ruta, motivo } }),
+};

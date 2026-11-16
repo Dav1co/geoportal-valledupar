@@ -1,0 +1,7 @@
+En la rama tecnica-corte3b, cada una sobre una base limpia (1a + carga + 2 + 3a + 3b):
+itv_c3a: RESULTADO: 76 de 76 — SIN FALLAS
+dano_c2: RESULTADO: 60 de 60 — SIN FALLAS
+redes_c1b: RESULTADO: 60 de 60 — SIN FALLAS
+c0b: 68 de 68 
+áreas: 51 de 51 — SIN FALLAS
+tsc y npm run build: sin errores
