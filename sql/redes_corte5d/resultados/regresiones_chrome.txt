@@ -1,0 +1,15 @@
+== Regresiones de Chrome del 5d, segunda entrega (main cc5de61 + 5d; base de Code B con el 5d; copias temporales con el puerto de B para los guiones de Code A)
+== 9a-bis
+RESULTADO: 86 de 86 — SIN FALLAS
+== 4b
+RESULTADO: 59 de 59 — SIN FALLAS
+== 3b
+RESULTADO: 41 de 41 — SIN FALLAS
+== geovisor_c6c
+RESULTADO: 54 de 54 — SIN FALLAS
+== dashboard_c4a
+RESULTADO: 43 de 43 — SIN FALLAS
+== inicio_c11
+RESULTADO: 76 de 76 — SIN FALLAS
+FIN
+(El guion del 6b ya no corre en ninguna base: llama a redes.f_refrescar_contratos_capa(), que retiró el 6c. Lo cubre el 6c.)

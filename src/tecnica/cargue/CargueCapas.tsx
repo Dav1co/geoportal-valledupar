@@ -24,7 +24,6 @@ const GRUPOS: { c: CapaCargue["grupo"]; n: string; color: string }[] = [
 // Capas de la maqueta que no son de este corte (no son activos ni puntos de muestreo): se muestran con su estado, sin cargar.
 const OTRAS: { grupo: CapaCargue["grupo"]; nombre: string; geometria: string; nota: string }[] = [
   { grupo: "calidad_pqr", nombre: "PQR técnicas", geometria: "Punto (por dirección)", nota: "Se carga por CSV o Excel y se ubica por dirección cuando llegue el archivo real" },
-  { grupo: "calidad_pqr", nombre: "Reportes de la línea 116", geometria: "Punto (por dirección)", nota: "Igual que las PQR, cuando llegue el archivo real" },
   { grupo: "base", nombre: "Barrios", geometria: "Polígono", nota: "Viene de la base cartográfica del geoportal" },
   { grupo: "base", nombre: "Área de prestación del servicio (APS)", geometria: "Polígono", nota: "Viene de la base cartográfica del geoportal" },
   { grupo: "base", nombre: "Predios y contratos", geometria: "Punto", nota: "Viene del catastro comercial" }];
@@ -57,7 +56,7 @@ export function CargueCapas() {
 
   if (error) return <section className="tec-tarjeta" role="alert"><p>{error}</p></section>;
   if (!datos) return <p className="tec-sub dan-pad" role="status">Cargando las capas…</p>;
-  if (vista.tipo === "carga") return <Asistente capa={vista.capa} datos={datos} onCerrar={volver} />;
+  if (vista.tipo === "carga") return vista.capa.lector === "linea_116" ? <Asistente116 capa={vista.capa} datos={datos} onCerrar={volver} /> : <Asistente capa={vista.capa} datos={datos} onCerrar={volver} />;
   if (vista.tipo === "masiva") return <Masiva datos={datos} onCerrar={volver} />;
   if (vista.tipo === "historial") return <Historial capa={vista.capa} puede={vista.capa.puede_cargar ?? datos.puede_cargar} onCerrar={volver} />;
 
@@ -103,8 +102,8 @@ export function CargueCapas() {
                   <span className={`cg-est ${ESTADO[c.estado][1]}`}>{ESTADO[c.estado][0]}</span>
                 </div>
                 <p className="tec-ayuda">{GEOM[c.geometria] ?? c.geometria} · {c.fuente === "carga" ? formatosDe(c).map((f) => FMT[f] ?? f).join(", ") : c.derivada_de ? `sale de la capa ${datos.capas.find((x) => x.codigo === c.derivada_de)?.nombre ?? c.derivada_de}` : "—"}
-                  {c.columna_llave ? ` · llave ${c.columna_llave}` : c.lector === "generico" ? " · llave a elegir (o por geometría)" : ""}</p>
-                <p className="tec-ayuda">{c.version ? `Versión ${c.version} · ${fecha(c.ultima?.publicada_en)} · ${n(c.vigentes)} ${c.codigo === "muestreo" ? "puntos activos" : "vigentes"}` : c.fuente === "carga" ? "Todavía no se ha cargado" : `${n(c.vigentes)} vigentes`}</p>
+                  {c.lector === "linea_116" ? " · se reconoce por el número de reporte y se ubica por su contrato" : c.columna_llave ? ` · llave ${c.columna_llave}` : c.lector === "generico" ? " · llave a elegir (o por geometría)" : ""}</p>
+                <p className="tec-ayuda">{c.version ? `Versión ${c.version} · ${fecha(c.ultima?.publicada_en)} · ${n(c.vigentes)} ${c.codigo === "muestreo" ? "puntos activos" : c.codigo === "linea_116" ? "reportes" : "vigentes"}` : c.fuente === "carga" ? "Todavía no se ha cargado" : `${n(c.vigentes)} vigentes`}</p>
                 {c.abierta ? <p className="tec-aviso tec-aviso-error cg-abierta">Hay una carga abierta (la {c.abierta.carga_id}, de {c.abierta.autor}, {fecha(c.abierta.creado_en)}): llegaron {n(c.abierta.recibidas)} de {n(c.abierta.filas)} filas.</p> : null}
                 <div className="dash-acciones">
                   {(c.puede_cargar ?? datos.puede_cargar) && c.fuente === "carga" && c.lector ? <button type="button" className="tec-boton-sec" onClick={() => setVista({ tipo: "carga", capa: c })}>{c.abierta ? "Seguir o anular la carga" : "Cargar versión"}</button> : null}
@@ -527,7 +526,7 @@ function Masiva({ datos, onCerrar }: { datos: CapasResp; onCerrar: (aviso?: stri
   const [ocupado, setOcupado] = useState(false);
   const [fase, setFase] = useState<"elegir" | "revisar" | "hecho">("elegir");
   const [nota, setNota] = useState("");
-  const cargables = datos.capas.filter((c) => c.fuente === "carga" && c.lector && c.codigo !== "muestreo" && (c.puede_cargar ?? true));      // Corte 6a: solo las que esta persona carga
+  const cargables = datos.capas.filter((c) => c.fuente === "carga" && c.lector && c.codigo !== "muestreo" && c.lector !== "linea_116" && (c.puede_cargar ?? true));      // Corte 6a: solo las que esta persona carga
   const destinoDe = (nombre: string) => { const k = normalizarNombre(nombre); return cargables.find((c) => c.codigo === k || normalizarNombre(c.nombre) === k || (ALIAS[c.codigo] ?? []).includes(k))?.codigo ?? ""; };
   const llaveDe = (destino: string, l: CapaLeida) => { const c = cargables.find((x) => x.codigo === destino); if (!c) return ""; return c.columna_llave ?? proponerLlave(l) ?? SIN_LLAVE; };
   const poner = (i: number, cambio: Partial<ItemMasiva>) => setItems((xs) => xs && xs.map((x, k) => (k === i ? { ...x, ...cambio } : x)));
@@ -636,6 +635,146 @@ function Masiva({ datos, onCerrar }: { datos: CapasResp; onCerrar: (aviso?: stri
         {fase === "elegir" ? <button type="button" className="tec-boton" disabled={!items?.some((x) => x.destino) || ocupado} aria-busy={ocupado} onClick={() => void subirTodas()}>{ocupado ? "Subiendo…" : "Subir y revisar todas"}</button> : null}
         {fase === "revisar" ? <button type="button" className="tec-boton" disabled={!listas || ocupado} aria-busy={ocupado} onClick={() => void publicarTodas()}>{ocupado ? "Publicando…" : `Publicar las ${listas} listas`}</button> : null}
       </div>
+    </section>
+  );
+}
+
+// =====================================================================================================================
+// Corte 5d. La línea 116: CSV o Excel con REPORTE, ESTADO, FECHA_REGISTRO, CONTRATO, COMUNA, DESC_CAUSAL y SERVICIO.
+// · NOMBRE, DIRECCION, BARRIO (y cualquier otra columna) se descartan EN ESTE EQUIPO: al servidor solo van esas 7 (el servidor vuelve a filtrar).
+// · Sin columna llave ni coordenadas: el reporte se reconoce por su número y el servidor lo ubica SOLO por su contrato (el punto del predio en el catastro;
+//   David, 16-nov). El que no cruza queda «sin ubicar»: se guarda y se cuenta, y no sale en el mapa.
+// · Tres pasos: archivo → revisar (nuevos, con cambio de estado, iguales y cómo se ubicaron) → publicar. Nada se borra: un cambio de estado es un evento con fecha.
+// =====================================================================================================================
+const COLS_116 = ["REPORTE", "ESTADO", "FECHA_REGISTRO", "CONTRATO", "COMUNA", "DESC_CAUSAL", "SERVICIO"];
+const OBLIG_116 = ["REPORTE", "ESTADO", "FECHA_REGISTRO", "DESC_CAUSAL", "SERVICIO"];
+const PASOS_116 = ["Elegir el archivo", "Revisar los cambios", "Publicar la carga"];
+function Asistente116({ capa, datos, onCerrar }: { capa: CapaCargue; datos: CapasResp; onCerrar: (aviso?: string) => void }) {
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [leida, setLeida] = useState<CapaLeida | null>(null);
+  const [leyendo, setLeyendo] = useState(false);
+  const [paso, setPaso] = useState(1);
+  const [subida, setSubida] = useState<Subida | null>(null);
+  const [resumen, setResumen] = useState<Resumen | null>(null);
+  const [nota, setNota] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [publicada, setPublicada] = useState<Publicada | null>(null);
+  const col = useMemo(() => Object.fromEntries(COLS_116.map((c) => [c, leida?.columnas.find((k) => k.trim().toUpperCase() === c) ?? null])) as Record<string, string | null>, [leida]);
+  const faltan = leida ? OBLIG_116.filter((c) => !col[c]) : [];
+  const descartadas = leida ? leida.columnas.filter((k) => !COLS_116.includes(k.trim().toUpperCase())) : [];
+
+  async function elegir(f: File | null) {
+    setArchivo(f); setLeida(null); setMsg(null);
+    if (!f) return;
+    setLeyendo(true);
+    try {
+      const cs = await leerArchivo(f);
+      if (!cs[0]?.tabla) throw new Error("La línea 116 se carga con un CSV o un Excel (.xlsx).");
+      setLeida(cs[0]);
+    } catch (e) { setMsg({ ok: false, t: err(e) }); } finally { setLeyendo(false); }
+  }
+  /** Solo las 7 columnas, con el nombre en minúscula. NOMBRE, DIRECCION y BARRIO nunca salen de este equipo. */
+  function filas(): FilaLote[] {
+    if (!leida) return [];
+    return leida.filas.map((f, i) => ({ orden: i + 1, wkt: null,
+      atributos: Object.fromEntries(COLS_116.filter((c) => col[c]).map((c) => [c.toLowerCase(), f.atributos[col[c]!] ?? null])) }));
+  }
+  async function subirYRevisar() {
+    if (!leida || !archivo) return;
+    setOcupado(true); setMsg(null); setResumen(null);
+    try {
+      const fs = filas();
+      if (fs.length > datos.max_filas) throw new Error(`El archivo trae ${n(fs.length)} reportes y una carga admite ${n(datos.max_filas)}.`);
+      const huella = await sha256Hex(`${await sha256Hex(await archivo.arrayBuffer())}|linea_116|${leida.nombre}`);
+      const ini = await apiCargue.iniciar({ capa: capa.codigo, sha256: huella, formato: leida.formato, srid: 4326, columna_llave: "reporte", filas: fs.length, nota: archivo.name.slice(0, 500) });
+      setSubida({ carga: ini.carga_id, total: fs.length, enviadas: Math.min(ini.recibidas, fs.length) });
+      let enviadas = 0;
+      for (const lote of enLotes(fs, datos.lote_max_filas || 200)) {
+        const r = await apiCargue.lote(ini.carga_id, lote);
+        enviadas += lote.length;
+        setSubida({ carga: ini.carga_id, total: fs.length, enviadas: Math.max(enviadas, r.recibidas) });
+      }
+      setResumen(await apiCargue.resumen(ini.carga_id));
+      setPaso(2);
+    } catch (e) { setMsg({ ok: false, t: err(e) }); } finally { setOcupado(false); }
+  }
+  async function publicar() {
+    if (!subida) return;
+    if (nota.trim().length < 10) { setMsg({ ok: false, t: "Escriba la nota de la carga (10 caracteres o más): de qué fecha a qué fecha y de dónde salió." }); return; }
+    setOcupado(true); setMsg(null);
+    try { setPublicada(await apiCargue.publicar(subida.carga, nota.trim())); }
+    catch (e) { setMsg({ ok: false, t: err(e) }); } finally { setOcupado(false); }
+  }
+
+  if (publicada) return (
+    <section className="tec-tarjeta cg-asistente" data-testid="publicada">
+      <h2>{capa.nombre}: carga {publicada.version_capa} publicada</h2>
+      <p>{n(publicada.nuevos)} nuevos · {n(publicada.cambios_estado ?? publicada.cambiados)} con cambio de estado · {n(publicada.iguales)} iguales{publicada.reactivados ? ` · ${n(publicada.reactivados)} vuelven a mostrarse` : ""}</p>
+      <p className="tec-ayuda">El geovisor técnico ya los muestra en la capa «Línea 116», por fecha de registro. Si algo quedó mal, desde el historial se vuelve atrás la última carga.</p>
+      <button type="button" className="tec-boton" onClick={() => onCerrar(`${capa.nombre}: carga ${publicada.version_capa} publicada.`)}>Volver a las capas</button>
+    </section>
+  );
+  const f = resumen?.frente_a_vigente ?? {}, u = resumen?.ubicacion;
+  return (
+    <section className="tec-tarjeta cg-asistente" aria-labelledby="cg116-tit" data-testid="asistente-116">
+      <div className="cg-pasos" aria-hidden="true">{PASOS_116.map((_, i) => <span key={i} className={i < paso ? "cg-paso-si" : ""} />)}</div>
+      <p className="tec-ayuda">Paso {paso} de 3</p>
+      <h2 id="cg116-tit">{capa.nombre} · {PASOS_116[paso - 1]}</h2>
+      {capa.abierta && !subida && paso === 1 ? <CargaAbierta capa={capa} onAnulada={() => onCerrar(`Se anuló la carga abierta de ${capa.nombre}.`)} /> : null}
+
+      {paso === 1 ? (
+        <>
+          <div className="tec-campo">
+            <label htmlFor="cg116-archivo">Archivo (CSV o Excel)</label>
+            <input id="cg116-archivo" type="file" accept=".csv,.txt,.xlsx" disabled={leyendo || ocupado} onChange={(e) => void elegir(e.target.files?.[0] ?? null)} />
+            <p className="tec-ayuda">Columnas: {COLS_116.join(", ")}. El archivo se lee en este equipo: el nombre, la dirección, el barrio y cualquier otra columna se descartan aquí y no se envían.
+              Cada reporte se reconoce por su número: si ya estaba, solo se guarda el cambio de estado. En el mapa sale en el predio de su contrato.</p>
+          </div>
+          {leyendo ? <p className="tec-sub" role="status">Leyendo el archivo…</p> : null}
+          {leida ? (
+            <div className="cg-leida" data-testid="leida">
+              <p><strong>{n(leida.filas.length)}</strong> reportes · {FMT[leida.formato]}</p>
+              {descartadas.length ? <p className="tec-aviso tec-aviso-info" data-testid="descartadas">No se envían: {descartadas.join(", ")}.</p> : null}
+              {faltan.length ? <p className="tec-aviso tec-aviso-error" role="alert">Al archivo le faltan las columnas {faltan.join(", ")}.</p> : null}
+            </div>) : null}
+        </>
+      ) : null}
+
+      {paso === 2 && resumen ? (
+        <div className="cg-revisar" data-testid="resumen">
+          <div className="cg-cifras">
+            <Cifra t="Nuevos" v={f.nuevo} /><Cifra t="Cambian de estado" v={f.estado} /><Cifra t="Iguales" v={f.igual} /><Cifra t="Nuevos sin ubicar" v={u?.sin_ubicar} />
+          </div>
+          <p className="tec-ayuda">Llegaron {n(resumen.recibidas)} de {n(resumen.esperadas)} reportes{f.mostrar ? ` · ${n(f.mostrar)} vuelven a mostrarse (su carga se había revertido)` : ""}{f.error ? ` · ${n(f.error)} con error` : ""}.</p>
+          {u ? <p className="tec-ayuda" data-testid="ubicacion">Ubicación de los nuevos: {n(u.contrato)} en el predio de su contrato · {n(u.sin_ubicar)} sin ubicar (el contrato no está en el catastro; no salen en el mapa)
+            {typeof resumen.con_sector === "number" ? ` · ${n(resumen.con_sector)} con sector hidráulico` : ""}.</p> : null}
+          {resumen.bloqueos.length ? <div className="tec-aviso tec-aviso-error" role="alert"><strong>No se puede publicar todavía:</strong><ul>{resumen.bloqueos.map((b, i) => <li key={i}>{b}</li>)}</ul></div>
+            : <p className="tec-aviso tec-aviso-info" role="status">Lista para publicar.</p>}
+          {resumen.avisos.length ? <div className="tec-aviso tec-aviso-info"><strong>Avisos:</strong><ul>{resumen.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul></div> : null}
+          {resumen.sin_ubicar_muestra?.length ? <p className="tec-ayuda">Sin ubicar (primeros números): {resumen.sin_ubicar_muestra.join(", ")}.</p> : null}
+        </div>
+      ) : null}
+
+      {paso === 3 && resumen ? (
+        <>
+          <p>{n(f.nuevo)} nuevos · {n(f.estado)} cambian de estado · {n(f.igual)} iguales</p>
+          <div className="tec-campo">
+            <label htmlFor="cg116-nota">Nota de la carga (obligatoria)</label>
+            <input id="cg116-nota" type="text" maxLength={1000} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="De qué fecha a qué fecha y de dónde salió (10 caracteres o más)" />
+          </div>
+        </>
+      ) : null}
+
+      {subida && ocupado && paso === 1 ? <Progreso s={subida} /> : null}
+      {msg ? <p className={`tec-aviso ${msg.ok ? "tec-aviso-info" : "tec-aviso-error"}`} role={msg.ok ? "status" : "alert"}>{msg.t}</p> : null}
+      <div className="tec-acciones cg-nav">
+        <button type="button" className="tec-boton-sec" disabled={ocupado} onClick={() => (paso === 1 || paso === 2 ? onCerrar() : setPaso(paso - 1))}>{paso === 1 ? "Cancelar" : paso === 2 ? "Salir (la carga queda abierta)" : "Atrás"}</button>
+        {paso === 1 ? <button type="button" className="tec-boton" disabled={!leida || faltan.length > 0 || leyendo || ocupado} aria-busy={ocupado} onClick={() => void subirYRevisar()}>{ocupado ? "Subiendo…" : "Subir y revisar"}</button> : null}
+        {paso === 2 ? <button type="button" className="tec-boton" disabled={!resumen?.lista_para_publicar} onClick={() => { setMsg(null); setPaso(3); }}>Siguiente</button> : null}
+        {paso === 3 ? <button type="button" className="tec-boton" disabled={ocupado} aria-busy={ocupado} onClick={() => void publicar()}>{ocupado ? "Publicando…" : "Publicar"}</button> : null}
+      </div>
+      {subida && paso >= 2 ? <ConMotivo rotulo="Anular esta carga" onEnviar={async (m) => { await apiCargue.anular(subida.carga, m); onCerrar(`Se anuló la carga de ${capa.nombre}: no cambió nada.`); }} /> : null}
     </section>
   );
 }
