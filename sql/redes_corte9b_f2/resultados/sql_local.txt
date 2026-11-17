@@ -1,0 +1,23 @@
+OK    01 el ensayo termina en el ERROR esperado: 32 de 32 … SIN FALLAS
+   TIEMPOS: alertas de presión con 7006 nodos 70 ms · bandeja de sensibles 1 ms · afectación de un daño (simulación sobre la red de esta base) 225 ms · sensores 1 ms · propuesta de sensibles sobre la cartera de esta base (223900 filas; solo por psql o editor) 1812 ms
+OK    02 … y no deja nada (sigue la huella del 9b, no hay tablas de la Fase 2 y la capa de cortes sigue visible)
+OK    03 las huellas antes: «9b 1a + 1b (listo para la Fase 2)» y las 12 nuevas no existen
+OK    04 la migración se aplica
+OK    05 la Fase 2 SOLO AGREGA: tecnica.f_avisos y las funciones del 9b (1a + 1b) quedan con el mismo texto
+OK    06 las huellas después: «FASE 2 (aplicada)», 12 nuevas y las tablas
+OK    07 la verificación: las 7 filas OK
+OK    08 una segunda migración se niega
+OK    09 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
+OK    10 la propuesta de usuarios sensibles sobre la cartera local (por psql; 1751 ms): 0 propuestos; la segunda vez, 0; ninguna palabra guardada es un nombre completo
+OK    11 la bandeja de sensibles como la Edge (43 ms; tope local 167 ms): {}
+OK    12 alertas de presión como la Edge, 7.000 nodos amarrados a la red real (64 ms, 31 kB; tope local 167 ms): {'alta_roja': 2175, 'baja_roja': 1750, 'alta_naranja': 625, 'baja_naranja': 525}; por material 64
+OK    13 las alertas de presión son del supervisor
+OK    14 la afectación de un daño como la Edge, por simulación (360 ms; tope local 833 ms): 3–101698 contratos
+OK    15 con sus 2 válvulas cerradas (el 1b sigue funcionando con la Fase 2): la afectación es la real (30 ms; tope local 167 ms): 3 contratos, 1 zona
+OK    16 los sensores como la Edge (40 ms)
+OK    17 la API no ve las tablas ni la vista de la Fase 2
+OK    18 con usuarios sensibles guardados, la reversa se niega (no borra datos)
+OK    19 la reversa (sin datos) se aplica: vuelve la huella del 9b, la capa de cortes vuelve a la lista y tecnica.f_avisos no cambia
+OK    20 una segunda reversa se niega
+
+RESULTADO: 20 de 20 — SIN FALLAS
