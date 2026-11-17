@@ -50,6 +50,8 @@ export const apiGeovisor = {
   config: () => pedir<ConfigGeovisor>("geovisor", F),
   capa: (capa: string, desde?: string | null, hasta?: string | null) =>
     pedir<CapaDatos>("geovisor_capa", { ...F, qs: { capa, ...(desde ? { desde } : {}), ...(hasta ? { hasta } : {}) } }),
+  /** Corte 9b (ajuste final): TODOS los daños abiertos o en atención, sin límite de fecha, para el modo «Afectaciones» (solo supervisores y administrador). */
+  danosAbiertos: () => pedir<GeoJSON.FeatureCollection & { capa: string; total: number; recortada: boolean }>("afectaciones_danos", F),
   tarjetaContrato: (contrato: string) => pedir<TarjetaContrato>("contrato_tarjeta", { ...F, qs: { contrato } }),
   compartir: (v: VistaGuardada) => pedir<{ id: string }>("vista_compartir", { ...F, cuerpo: v }),
   abrirVista: (id: string) => pedir<VistaAbierta>("vista_abrir", { ...F, qs: { id } }),

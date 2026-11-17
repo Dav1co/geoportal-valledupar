@@ -36,7 +36,8 @@ export const apiCierre = {
 
 // ---------- Fase 2: alertas de presión (MODELO, no medida) y usuarios sensibles (supervisores y administrador) ----------
 export type NivelAlerta = "baja_roja" | "baja_naranja" | "alta_naranja" | "alta_roja";
-export type AlertasPresion = { cargado: boolean; aviso: string; fuente: string; escenario: "existente" | "futura"; nodos: number; niveles: Partial<Record<NivelAlerta, number>>;
+export type AlertasPresion = { cargado: boolean; aviso: string; fuente: string; horas_excluidas?: number[]; nota_horas?: string | null;      // ajuste final del 9b: horas en que el modelo no es confiable
+  escenario: "existente" | "futura"; nodos: number; niveles: Partial<Record<NivelAlerta, number>>;
   umbrales: Record<NivelAlerta, number>; peores: { nodo: string; zona: string | null; nivel: NivelAlerta; p_min: number; p_max: number; lat: number; lon: number }[];
   por_material: { n: number; nota: string; nodos: { nodo: string; material?: string; p_max?: number; presion_trabajo?: number }[] } };
 export type EstadoSensible = "por_confirmar" | "confirmado" | "descartado";
