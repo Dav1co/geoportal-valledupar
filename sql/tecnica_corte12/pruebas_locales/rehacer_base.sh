@@ -11,6 +11,8 @@ sh ../tecnica_corte7c/pruebas_locales/base_chrome_integrada.sh >/dev/null
 $PSQL -q -X -d redes_local -c "drop role if exists dell_avisos" >/dev/null
 # 5d (Code B) ya publicado en producción (huella de redes 5fd6d00e…): la base lo lleva antes del 12
 $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f pruebas_locales/dominio_corte8.sql >/dev/null
+# las reglas de producción de las tablas de tecnica que usan las pruebas (el doble de planta no las traía; falla del ensayo del 16-nov)
+$PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f pruebas_locales/reglas_tecnica_produccion.sql >/dev/null
 $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f ../redes_corte5d/migracion_redes_corte5d_editor.sql >/dev/null
 if [ "$1" != "sin_12" ]; then
   $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f migracion_tecnica_corte12_editor.sql >/dev/null

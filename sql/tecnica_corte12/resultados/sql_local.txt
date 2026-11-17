@@ -1,6 +1,6 @@
 OK    00 base local como producción (7a + 9a + 9a-bis + 7c + 8 + 5d): huella de redes 5fd6d00e…
 OK    01 huellas antes: las 2 de redes «SIN CAMBIAR»; 16 funciones, 6 objetos y el rol «NO EXISTE» · 0 conjunto de funciones de redes=IGUAL AL DEL ENCARGO | 1 redes.f_muestreo_calidad(bigint)=SIN CAMBIAR | 1 redes.f_param(text)=SIN CAMBIAR | 2 public.geoportal_tec_aviso_parametro_fijar(text,text,numeric,text)=NO EXISTE (sin aplicar) | 2 public.geoportal_tec_avisos(text)=NO EXISTE (sin aplicar) | 2 
-OK    02 ensayo: ERROR esperado, N de N SIN FALLAS (con TIEMPOS) · RESULTADO: 91 de 91 pruebas correctas — SIN FALLAS · TIEMPOS: avisos del administrador 106 ms, del supervisor de planta 4 ms, del de distribución 36 ms (tope 1.000 ms; el peor de 3)
+OK    02 ensayo: ERROR esperado, N de N SIN FALLAS (con TIEMPOS) · RESULTADO: 91 de 91 pruebas correctas — SIN FALLAS · TIEMPOS: avisos del administrador 59 ms, del supervisor de planta 4 ms, del de distribución 35 ms (tope 1.000 ms; el peor de 3)
 OK    03 el ensayo no deja rastro (ni el rol del Dell)
 OK    04 migración
 OK    05 verificación: todas OK · 1 las 16 funciones nuevas con su huella=OK | 2 las 5 tablas y la vista=OK | 3 los 15 plazos y mínimos con los valores de David=OK | 4 nada de prueba quedó: eventos, mínimos y cola vacíos=OK | 5 permisos: service_role solo las 5 RPC; anon y authenticated nada; nadie de la API lee las tablas=OK | 6 rol dell_avisos: sin login, 2 conexiones, solo tomar, marcar y liberar=OK | 7 pg-safeupdate: ninguna f
@@ -11,7 +11,7 @@ OK    07 huellas después: 2 «SIN CAMBIAR», 16 «NUEVA», 6 «EXISTE» y el ro
 OK    08 la huella de redes no cambió
 OK    09 reversa sin datos: deja la base como estaba (y sin el rol)
 OK    10 migrar de nuevo después de la reversa
-OK    11 administrador (service_role, 30 s / 8 s): avisos de planta, distribución y personal · 8 avisos, 79 ms con psql
+OK    11 administrador (service_role, 30 s / 8 s): avisos de planta, distribución y personal · 8 avisos, 77 ms con psql
 OK    12 supervisor de planta: sin avisos de distribución
 OK    13 supervisor de distribución: sin avisos de planta
 OK    14 operador: 42501 · ERROR: ERROR:  42501: Solo los supervisores y el administrador ven los avisos
@@ -27,14 +27,14 @@ OK    18 la API no lee las tablas de los avisos · ERROR: ERROR:  42501: permiss
 LÍNEA 1: select count(*) from tecnica.aviso_parametros
                               ^
 UBICACIÓN:  ac
-OK    19 el Dell (rol dell_avisos, search_path pg_catalog, 15 s) toma el aviso del daño alto nuevo · 81e454cc-dc5a-4ef0-bd3a-44e44e7cf953|1b6f1929-f1bd-40f5-b91c-d95e6c472e87|DAN-991299
+OK    19 el Dell (rol dell_avisos, search_path pg_catalog, 15 s) toma el aviso del daño alto nuevo · e6e9e022-9bc1-49f0-b72b-87684ebbd925|4823214c-588d-4be9-a6a0-74c26d914b61|DAN-991299
 OK    20 el Dell lo marca enviado · enviado
 OK    21 el Dell no puede leer los avisos de pantalla · ERROR: ERROR:  42501: permission denied for function geoportal_tec_avisos
 UBICACIÓN:  aclcheck_error, aclchk.c:2845
 OK    22 el Dell no lee las tablas · ERROR: ERROR:  42501: permission denied for table avisos_salida
 UBICACIÓN:  aclcheck_error, aclchk.c:2845
-OK    23 TIEMPO: todos los avisos del administrador con 6000 eventos de activos, 2001 daños, 35781 activos (producción: ≈1.750 por verificar y pocos daños): menos de 170 ms en local (producción ~6× más lenta: tope 1 s) · 145 ms (el peor de 3, medido en la base)
-OK    24 TIEMPO: el Dell encola y toma con 2.000 daños abiertos en menos de 15 s (su tope) · 155 ms con psql · 20
+OK    23 TIEMPO: todos los avisos del administrador con 6000 eventos de activos, 2001 daños, 35781 activos (producción: ≈1.750 por verificar y pocos daños): menos de 170 ms en local (producción ~6× más lenta: tope 1 s) · 133 ms (el peor de 3, medido en la base)
+OK    24 TIEMPO: el Dell encola y toma con 2.000 daños abiertos en menos de 15 s (su tope) · 145 ms con psql · 20
 OK    25 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
 OK    26 reversa con datos: se niega (nada se borra) · _tecnica_corte12_editor.sql:17: ERROR:  Ya hay cambios de plazos, saldos mínimos o avisos de salida: la reversa se niega (nada se borra)
 CONTEXTO:  PL/pgSQL function inline_code_block line 5 at RAISE
