@@ -66,3 +66,12 @@
 /* Toda Técnica en la fuente del geoportal */
 .tec-pagina, .tdash, .tec-envoltura, .geo, .red-ficha, .cg { font-family: var(--t-fuente); }
 .tec-codigo { font-family: var(--t-fuente-codigo); }
+/* Ícono de cámara de los botones de foto (IconoCamara.tsx): del color del texto del botón, 18 px, delante del texto */
+.tec-icono-camara { flex: 0 0 auto; display: inline-block; vertical-align: -3px; margin-right: 8px; }
+.tec-boton-sec > .tec-icono-camara, .tec-boton > .tec-icono-camara { margin-right: 0; }
+/* Botón de foto (BotonFoto.tsx): un campo de archivo con aspecto de botón; el campo cubre el botón y es invisible (se toca el botón entero) */
+.tec-boton-foto { position: relative; overflow: hidden; cursor: pointer; }
+.tec-boton-foto > input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+.tec-boton-foto:focus-within { outline: 3px solid var(--t-foco); outline-offset: 2px; }
+.tec-boton-foto-off { color: var(--t-texto-2) !important; border-color: #c3ced6 !important; background: var(--t-suave) !important; cursor: not-allowed; }
+.tec-boton-foto-off > input[type="file"] { cursor: not-allowed; }
