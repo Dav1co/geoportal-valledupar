@@ -15,8 +15,9 @@ OK    geovisor_tesela: la respuesta lleva «Vary: Authorization» (el navegador 
 OK    la ruta «valoracion» está una sola vez y no hay ninguna ruta que escriba la valoración (se carga por psql)
 ---- 15 de 15 — SIN FALLAS
 == regresión prueba_redes_simulada: RESULTADO: 189 de 189 comprobaciones correctas
-== regresión prueba_cargue_simulada: RESULTADO: 53 de 53
+== regresión prueba_cargue_simulada: RESULTADO: 52 de 53
 == regresión prueba_geovisor_simulada: RESULTADO: 38 de 38 — SIN FALLAS
 == regresión prueba_geovisor_6b_simulada: RESULTADO: 34 de 34 — SIN FALLAS
 == regresión prueba_plan_maestro_9a_simulada: RESULTADO: 44 de 44 — SIN FALLAS
 == regresión prueba_l116_5d_simulada: RESULTADO: 13 de 13 — SIN FALLAS
+(prueba_cargue_simulada da 52 de 53 también en main sin el Corte 10: su primera comprobación espera el marcador anterior de geoportal-tecnica, que el Corte 12 del Code A amplió con dashboard_redes.)

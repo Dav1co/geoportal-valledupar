@@ -1,4 +1,4 @@
-== Regresiones de Chrome del Corte 10 (main c4fd313 + 10; base de Code B con el 10 y la valoración cargada; copias temporales con el puerto de B para los guiones de Code A)
+== Regresiones de Chrome del Corte 10 (ramas tecnica-corte10 ya unidas con main: frontend 5b36933 y Edges 44fbbca, con los Cortes 12 y 13 del Code A; base de Code B con el 10 y la valoración cargada; copias temporales con el puerto de B para los guiones de Code A)
 == 5d
 RESULTADO: 34 de 34 — SIN FALLAS
 == 9a-bis
@@ -13,5 +13,7 @@ RESULTADO: 54 de 54 — SIN FALLAS
 RESULTADO: 43 de 43 — SIN FALLAS
 == inicio_c11
 RESULTADO: 76 de 76 — SIN FALLAS
-(El guion del inicio c11 inserta en tecnica.personal_tecnico_eventos sin «autor»; con los CHECK de producción en la base local eso falla, así que la copia temporal lleva el autor. Es del Code A: conviene que lo corrija en su guion.)
+FIN
+(Inicio c11: el guion del Code A inserta en tecnica.personal_tecnico_eventos sin «autor»; con los CHECK de producción en la base local eso falla, así que la copia temporal lleva el autor.)
+(9a-bis y Corte 10: desde el Corte 12 el inicio pide geoportal_tec_avisos; los dos guiones lo responden «sin avisos», porque esta base no tiene el 12.)
 (El guion del 6b ya no corre en ninguna base: lo cubre el 6c.)
