@@ -205,7 +205,7 @@ const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth
   ok("entrada: la tarjeta de supervisión es un botón activo (no «Próximamente»)", await p.evaluate(() => [...document.querySelectorAll("button.campo-formato-activo")].some((b) => /Supervisión y dashboard/.test(b.textContent))));
   await clic(p, "button.campo-formato-activo", "Supervisión y dashboard"); await p.waitForSelector(".tdash");
   t = await T(p);
-  ok("cascarón: título, 5 pestañas y «Volver a Aseo»", /Supervisión y dashboard/.test(t) && ["Resumen", "Auditorías", "No conformidades", "Indicadores", "Personal"].every((x) => t.includes(x)) && /Volver a Aseo/.test(t));
+  ok("cascarón: título, 5 pestañas y «Volver al inicio»", /Supervisión y dashboard/.test(t) && ["Resumen", "Auditorías", "No conformidades", "Indicadores", "Personal"].every((x) => t.includes(x)) && /Volver al inicio/.test(t));
   await p.waitForSelector("[data-testid=nc-pendientes]");
   ok("resumen: 2 no conformidades pendientes, con marca roja de tipo", (await p.$eval("[data-testid=nc-pendientes]", (e) => e.textContent)) === "2" && await p.evaluate(() => document.querySelectorAll(".tr-aviso .td-marca-alerta").length >= 2));
   await esperar(p, () => document.querySelectorAll(".tr-aviso").length === 2);
@@ -276,7 +276,7 @@ const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth
   await p.type(".td-dialogo textarea", "desactivada por la prueba de Chrome"); await clic(p, ".td-dialogo button", "Desactivar"); await esperar(p, () => /Desactivada en Aseo/.test(document.body.innerText));
   ok("personal: desactivar se registra", E.eventos.some((e) => e.tipo === "desactivar_aseo" && /prueba de Chrome/.test(e.motivo)));
   // Volver
-  await clic(p, "button", "Volver a Aseo"); await esperar(p, () => /Interventoría de Aseo/.test(document.body.innerText)); ok("volver a Aseo desde el cascarón", true);
+  await clic(p, "button", "Volver al inicio"); await esperar(p, () => /Interventoría de Aseo/.test(document.body.innerText)); ok("volver a Aseo desde el cascarón", true);
   await p.close();
 }
 // =====================================================================  3) SUPERVISOR en celular (sin desborde)
@@ -377,7 +377,11 @@ for (const ancho of [390, 1280]) {
     ok(`${tag}: las tarjetas del inicio son blancas, con borde izquierdo de 5 px del color de Aseo y radio de 12 a 14 px`, await p.evaluate((c) => [...document.querySelectorAll("button.campo-formato-activo")].every((b) => { const e = getComputedStyle(b);
       return e.borderLeftColor === c && e.borderLeftWidth === "5px" && e.backgroundColor === "rgb(255, 255, 255)" && parseFloat(e.borderTopLeftRadius) >= 12 && parseFloat(e.borderTopLeftRadius) <= 14 && b.getBoundingClientRect().height >= 68; }), ASEO_RGB));
   }
+  if (!ANTES) ok(`${tag}: cada tarjeta del inicio lleva el cuadro con su inicial (44 px, color de Aseo, letra blanca) y el texto del botón no cambia`, await p.evaluate((c) => [...document.querySelectorAll(".campo-formatos > .campo-formato")].every((b) => { const i = b.firstElementChild, e = i && getComputedStyle(i);
+    const letra = i && getComputedStyle(i, "::before").content.replace(/"/g, ""); return !!i && i.matches(".aseo-tarjeta-ini[aria-hidden=true]") && Math.round(i.getBoundingClientRect().width) === 44 && e.backgroundColor === c && e.color === "rgb(255, 255, 255)"
+      && letra === b.querySelector("strong").textContent.trim().charAt(0).toUpperCase() && b.textContent.trim().startsWith(b.querySelector("strong").textContent); }), ASEO_RGB));
   await clic(p, ".campo-formato-activo", "Barrido"); await esperar(p, () => /Elija la modalidad/.test(document.body.innerText)); await foto("02_modalidad");
+  if (!ANTES) ok(`${tag}: el botón de volver dice «← Volver al inicio»`, await p.evaluate(() => document.querySelector(".campo-cab button").textContent.trim() === "← Volver al inicio"));
   if (!ANTES) ok(`${tag}: el encabezado de la sección es una barra del color de Aseo con el texto blanco`, await css(p, ".campo-cab", "backgroundColor") === ASEO_RGB && await css(p, ".campo-cab h1", "color") === "rgb(255, 255, 255)");
   await clic(p, ".campo-formato-activo", "Manual"); await p.waitForSelector("#aseo-q"); await foto("03_rutas");
   E.mapaAbierto = true;      // el mapa pide su fondo a internet y la prueba no tiene red: sus errores de consola no cuentan
@@ -401,7 +405,7 @@ for (const ancho of [390, 1280]) {
   await clic(p, ".campo-formato-activo", "Administración de rutas"); await p.waitForSelector(".aseo-pestanas");
   for (const [i, n] of ["Plan operativo", "Capa de rutas", "Barrios", "Historial"].entries()) { await clic(p, ".aseo-pestana", n); await esp(500); await foto(`1${i}_admin_${n.toLowerCase().replace(/ /g, "_")}`); }
   if (!ANTES) ok(`${tag}: la pestaña elegida de la administración va en el color de Aseo`, await css(p, ".aseo-pestana-on", "color") === ASEO_RGB);
-  await clic(p, ".campo-cab button", "Aseo"); await esperar(p, () => /Supervisión y dashboard/.test(document.body.innerText));
+  await clic(p, ".campo-cab button", "Volver al inicio"); await esperar(p, () => /Supervisión y dashboard/.test(document.body.innerText));
   await clic(p, "button.campo-formato-activo", "Supervisión y dashboard"); await p.waitForSelector(".tdash"); await esperar(p, () => !!document.querySelector(".tr-aviso, .tr-vacio"), 8000); await foto("20_supervision_resumen");
   if (!ANTES) ok(`${tag}: el encabezado de Supervisión y dashboard es del color de Aseo y sus botones principales también`, await css(p, ".tdash-cab", "backgroundColor") === ASEO_RGB);
   await clic(p, ".tdash-tab", "Auditorías"); await p.waitForSelector("table.td-tabla tbody tr[data-auditoria]"); await foto("21_supervision_auditorias");

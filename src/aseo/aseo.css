@@ -27,6 +27,13 @@
 .aseo-modulo .campo-formato-activo:active { background: var(--t-modo-suave); }
 .aseo-modulo .campo-formato-gestion strong { color: var(--t-titulo); }
 .aseo-modulo .campo-formato-proximo { border: 2px dashed var(--t-borde-campo); background: var(--t-suave); }
+/* Tarjetas del inicio: el cuadro con la inicial en el color del módulo, y al lado el nombre y la descripción (como el inicio de Técnica) */
+.aseo-modulo.aseo-inicio .campo-formato { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; }
+.aseo-tarjeta-ini { flex: 0 0 var(--t-toque); width: var(--t-toque); height: var(--t-toque); border-radius: var(--t-radio-tarjeta); background: var(--t-modo); color: #fff; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.aseo-modulo .campo-formato .aseo-tarjeta-ini { color: #fff; }
+.aseo-tarjeta-ini::before { content: attr(data-ini); }
+.aseo-tarjeta-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.aseo-modulo .campo-formato-proximo .aseo-tarjeta-ini { background: var(--t-texto-2); }
 /* Secciones del formulario: cada una es una tarjeta con su título */
 .aseo-modulo .campo-fieldset, .aseo-modulo .aseo-hoja > .campo-auto, .aseo-modulo .aseo-hoja > .campo-campo, .aseo-modulo .aseo-hoja > .aseo-admin, .aseo-modulo .aseo-hoja > .aseo-selector {
   background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); padding: var(--t-esp-4); box-sizing: border-box; }

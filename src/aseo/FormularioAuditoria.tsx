@@ -126,7 +126,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
   return (
     <div className="aseo-modulo tec-pagina campo-pagina">
       <section className="tec-tarjeta aseo-hoja">
-        <div className="campo-cab"><button type="button" className="tec-boton-sec" onClick={pedirCancelar} disabled={dis}>‹ Rutas</button><h1>{actividad.nombre} · {modalidad.nombre}</h1>
+        <div className="campo-cab"><button type="button" className="tec-boton-sec" onClick={pedirCancelar} disabled={dis}>← Rutas</button><h1>{actividad.nombre} · {modalidad.nombre}</h1>
           <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={dis}>Cancelar</button></div>
         {cancelando ? (
           <ConfirmarCancelar titulo="¿Cancelar este registro?"
