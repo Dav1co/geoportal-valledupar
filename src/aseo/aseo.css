@@ -1,62 +1,114 @@
-/* Interventoría de Aseo (Torre C). Hereda las clases tec-* de tecnica.css y campo-* de campo.css; aquí solo lo propio: selector de ruta, mapa, opciones, acta y administración. Pensado para celular. */
-.aseo-entrada { width: 100%; box-sizing: border-box; min-height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 16px; background: #fff; }
-.aseo-entrada:focus-visible, .aseo-ruta:focus-visible, .aseo-opcion:focus-within, .aseo-pestana:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+/* Interventoría de Aseo (Torre C). Hereda las clases tec-* de tecnica.css y campo-* de campo.css; aquí lo propio (selector de ruta, mapa, opciones, acta y
+   administración) y, desde «aseo-estilo» (17-nov-2026), el modelo visual del geoportal con el color de Aseo: todo sale de los tokens de tokens.css. Pensado para celular. */
+@import "./tokens.css";
+
+/* ---------- Modelo visual (guía visual, §5): fuente única, tarjetas con borde izquierdo del color de Aseo, botones de 44 px o más ---------- */
+.aseo-modulo button, .aseo-modulo input, .aseo-modulo select, .aseo-modulo textarea { font-family: var(--t-fuente); }
+.aseo-modulo .mono { font-family: var(--t-fuente-codigo); }
+.aseo-modulo .tec-icono-camara { flex: 0 0 auto; display: inline-block; vertical-align: -3px; margin-right: var(--t-esp-2); }
+.aseo-modulo .tec-boton, .aseo-modulo .tec-boton-sec { min-height: var(--t-toque); }
+/* Hoja: la sección que contiene una pantalla deja de ser una tarjeta grande; adentro, cada sección es su propia tarjeta */
+.aseo-modulo .tec-tarjeta.aseo-hoja { background: transparent; border: none; border-radius: 0; padding: 0; gap: var(--t-esp-3); }
+.aseo-modulo .tec-tarjeta.aseo-hoja > h1 { font-size: var(--t-titulo-1); }
+/* Encabezado de sección: barra del color del módulo con el botón de volver y el título */
+.aseo-modulo .campo-cab { background: var(--t-modo); color: #fff; border-radius: var(--t-radio-tarjeta); padding: var(--t-esp-2) var(--t-esp-3); }
+.aseo-modulo .campo-cab h1 { color: #fff; font-size: 20px; }
+.aseo-modulo .campo-cab .tec-boton-sec { border-color: #fff; }
+.aseo-modulo .campo-sub, .aseo-modulo .campo-etiqueta small, .aseo-modulo .campo-check small, .aseo-modulo .campo-auto dt { color: var(--t-texto-2); }
+.aseo-modulo .campo-texto { border-color: var(--t-borde-campo); border-radius: var(--t-radio); color: var(--t-texto); }
+.aseo-modulo .campo-enlace { color: var(--t-modo); }
+/* Tarjetas de entrada (inicio y modalidades): blancas, borde gris claro y borde izquierdo grueso del color de Aseo */
+.aseo-modulo .campo-formatos { grid-template-columns: 1fr; gap: var(--t-esp-3); }
+.aseo-modulo .campo-formato { border-radius: 14px; padding: var(--t-esp-3) 14px; min-height: 68px; justify-content: center; font-size: 14px; box-sizing: border-box; }
+.aseo-modulo .campo-formato strong { font-size: var(--t-txt-grande); color: var(--t-titulo); }
+.aseo-modulo .campo-formato span { color: var(--t-texto-2); }
+.aseo-modulo .campo-formato-activo, .aseo-modulo .campo-formato-activo.campo-formato-gestion { background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); color: var(--t-texto); min-height: 68px; }
+.aseo-modulo .campo-formato-activo:hover { border-color: var(--t-modo); }
+.aseo-modulo .campo-formato-activo:active { background: var(--t-modo-suave); }
+.aseo-modulo .campo-formato-gestion strong { color: var(--t-titulo); }
+.aseo-modulo .campo-formato-proximo { border: 2px dashed var(--t-borde-campo); background: var(--t-suave); }
+/* Tarjetas del inicio: el cuadro con la inicial en el color del módulo, y al lado el nombre y la descripción (como el inicio de Técnica) */
+.aseo-modulo.aseo-inicio .campo-formato { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; }
+.aseo-tarjeta-ini { flex: 0 0 var(--t-toque); width: var(--t-toque); height: var(--t-toque); border-radius: var(--t-radio-tarjeta); background: var(--t-modo); color: #fff; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.aseo-modulo .campo-formato .aseo-tarjeta-ini { color: #fff; }
+.aseo-tarjeta-ini::before { content: attr(data-ini); }
+.aseo-tarjeta-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.aseo-modulo .campo-formato-proximo .aseo-tarjeta-ini { background: var(--t-texto-2); }
+/* Secciones del formulario: cada una es una tarjeta con su título */
+.aseo-modulo .campo-fieldset, .aseo-modulo .aseo-hoja > .campo-auto, .aseo-modulo .aseo-hoja > .campo-campo, .aseo-modulo .aseo-hoja > .aseo-admin, .aseo-modulo .aseo-hoja > .aseo-selector {
+  background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); padding: var(--t-esp-4); box-sizing: border-box; }
+.aseo-modulo .aseo-hoja > .campo-campo { display: flex; flex-direction: column; gap: var(--t-esp-2); }
+.aseo-modulo .campo-fieldset .campo-fieldset { border-left-width: 1px; }
+.aseo-modulo .campo-fieldset > legend { float: left; width: 100%; padding: 0; font-size: var(--t-txt-grande); color: var(--t-titulo); }
+.aseo-modulo .campo-foto { border-color: var(--t-borde); border-radius: var(--t-radio); }
+.aseo-modulo .campo-check { border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio); }
+.aseo-modulo .campo-error { border: 1px solid var(--t-rojo); background: var(--t-rojo-suave); color: var(--t-texto); border-radius: var(--t-radio); }
+/* Rejilla del inicio: una columna en el celular, cuatro en el PC */
+.aseo-modulo.aseo-inicio > * { max-width: 1120px; }
+@media (min-width: 760px) { .aseo-modulo.aseo-inicio .campo-formatos { grid-template-columns: repeat(2, minmax(0, 1fr)); } .aseo-modulo.aseo-inicio .campo-formato { min-height: 84px; } }
+@media (min-width: 1000px) { .aseo-modulo.aseo-inicio .campo-formatos { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* ---------- Lo propio de Aseo ---------- */
+.aseo-entrada { width: 100%; box-sizing: border-box; min-height: 48px; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio); padding: 10px 12px; font: inherit; font-size: var(--t-txt-campo); color: var(--t-texto); background: var(--t-tarjeta); }
+.aseo-entrada:focus-visible, .aseo-ruta:focus-visible, .aseo-opcion:focus-within, .aseo-pestana:focus-visible { outline: 3px solid var(--t-foco); outline-offset: 2px; }
 .aseo-ancho { width: 100%; min-height: 52px; }
-.aseo-corto { min-height: 44px; padding: 6px 12px; font-size: 14px; }
-.aseo-selector { display: flex; flex-direction: column; gap: 12px; }
-.aseo-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.aseo-ruta { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; border: 2px solid #c3ced6; border-radius: 10px; background: #fff; padding: 12px; font: inherit; cursor: pointer; min-height: 64px; }
-.aseo-ruta:active { background: #eef6ff; }
-.aseo-ruta-cab { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 15px; }
-.aseo-ruta-cab em { margin-left: auto; font-style: normal; font-weight: 700; color: #0b5cab; }
-.aseo-ruta-sec { font-size: 14px; color: #1f2d38; line-height: 1.35; word-break: break-word; }
-.aseo-ruta-pie { font-size: 13px; color: #3d4d5a; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
-.aseo-marca { font-weight: 600; font-size: 12px; padding: 2px 8px; border-radius: 99px; background: #e7eef5; color: #1f3b55; }
-.aseo-marca-ok { background: #dcf3e4; color: #14532d; } .aseo-marca-no { background: #fdf1d6; color: #7a4a00; }
-.aseo-mapa-caja { position: relative; border: 1px solid #c3ced6; border-radius: 10px; overflow: hidden; }
+.aseo-corto { min-height: var(--t-toque); padding: 6px 12px; font-size: 14px; }
+.aseo-selector { display: flex; flex-direction: column; gap: var(--t-esp-3); }
+.aseo-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--t-esp-2); }
+.aseo-ruta { display: flex; flex-direction: column; gap: var(--t-esp-1); width: 100%; text-align: left; border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); background: var(--t-tarjeta); color: var(--t-texto); padding: var(--t-esp-3); font: inherit; cursor: pointer; min-height: 64px; }
+.aseo-ruta:hover { border-color: var(--t-modo); }
+.aseo-ruta:active { background: var(--t-modo-suave); }
+.aseo-ruta-cab { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: var(--t-txt); }
+.aseo-ruta-cab em { margin-left: auto; font-style: normal; font-weight: 700; color: var(--t-modo); }
+.aseo-ruta-sec { font-size: 14px; color: var(--t-texto); line-height: 1.35; word-break: break-word; }
+.aseo-ruta-pie { font-size: var(--t-txt-chico); color: var(--t-texto-2); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.aseo-marca { font-weight: 600; font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--t-suave); color: var(--t-texto); }
+.aseo-marca-ok { background: var(--t-ok-suave); color: var(--t-ok); } .aseo-marca-no { background: var(--t-naranja-suave); color: var(--t-texto); }
+/* Mapa de rutas: fondo neutro (guía, §6); el color de Aseo, solo en los controles */
+.aseo-mapa-caja { position: relative; border: 1px solid var(--t-borde); border-radius: var(--t-radio-tarjeta); overflow: hidden; }
 .aseo-mapa { height: min(58vh, 460px); min-height: 280px; width: 100%; }
 .aseo-mapa-ctl { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
-.aseo-aviso { margin: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #e0b84c; background: #fff8e1; color: #5c4400; font-size: 14px; line-height: 1.4; }
-.aseo-mal { color: #7a1a10; font-weight: 600; }
-.aseo-opciones { display: flex; gap: 8px; flex-wrap: wrap; }
-.aseo-opcion { flex: 1 1 90px; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border: 2px solid #c3ced6; border-radius: 10px; font-size: 18px; font-weight: 600; cursor: pointer; background: #fff; }
-.aseo-opcion input { width: 22px; height: 22px; accent-color: #0b5cab; }
-.aseo-opcion-on { border-color: #0b5cab; background: #e8f1fc; }
-.campo-fieldset { border: 1px solid #dde5ea; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 12px; margin: 0; min-width: 0; }
+.aseo-aviso { margin: 0; padding: 10px 12px; border-radius: var(--t-radio); border: 1px solid var(--t-naranja); background: var(--t-naranja-suave); color: var(--t-texto); font-size: 14px; line-height: 1.4; }
+.aseo-mal { color: var(--t-rojo); font-weight: 600; }
+.aseo-opciones { display: flex; gap: var(--t-esp-2); flex-wrap: wrap; }
+.aseo-opcion { flex: 1 1 90px; display: flex; align-items: center; justify-content: center; gap: var(--t-esp-2); min-height: 56px; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio); font-size: var(--t-txt-grande); font-weight: 600; cursor: pointer; background: var(--t-tarjeta); }
+.aseo-opcion input { width: 22px; height: 22px; accent-color: var(--t-modo); }
+.aseo-opcion-on { border: 2px solid var(--t-modo); background: var(--t-modo-suave); }
+.campo-fieldset { border: 1px solid var(--t-borde); border-radius: var(--t-radio-tarjeta); padding: var(--t-esp-3); display: flex; flex-direction: column; gap: var(--t-esp-3); margin: 0; min-width: 0; }
 .campo-fieldset legend { padding: 0 6px; }
-.aseo-miniaturas { display: flex; flex-wrap: wrap; gap: 8px; }
-.aseo-mini { display: flex; flex-direction: column; gap: 4px; align-items: center; max-width: 110px; font-size: 12px; text-align: center; }
-.aseo-mini img { width: 100px; height: 76px; object-fit: cover; border-radius: 6px; background: #0b1620; }
-.aseo-quitar { min-height: 36px; padding: 2px 10px; font-size: 13px; }
-.aseo-faltan { margin: 0; padding: 10px 12px 10px 28px; border-radius: 8px; background: #eef2f5; font-size: 14px; line-height: 1.45; }
+.aseo-miniaturas { display: flex; flex-wrap: wrap; gap: var(--t-esp-2); }
+.aseo-mini { display: flex; flex-direction: column; gap: var(--t-esp-1); align-items: center; max-width: 110px; font-size: 12px; text-align: center; }
+.aseo-mini img { width: 100px; height: 76px; object-fit: cover; border-radius: 6px; background: var(--t-texto); }
+.aseo-quitar { min-height: var(--t-toque); padding: 2px 10px; font-size: var(--t-txt-chico); }
+.aseo-faltan { margin: 0; padding: 10px 12px 10px 28px; border-radius: var(--t-radio); background: var(--t-suave); font-size: 14px; line-height: 1.45; }
 .aseo-faltan li:first-child { list-style: none; margin-left: -16px; }
 .aseo-acta-membrete { display: flex; justify-content: flex-end; }
-.aseo-consecutivo { font-size: 26px; font-weight: 800; letter-spacing: .02em; margin: 0; }
+.aseo-consecutivo { font-size: 26px; font-weight: 800; letter-spacing: .02em; margin: 0; color: var(--t-titulo); }
 .aseo-sello { font-size: 12px; word-break: break-all; }
-.aseo-acciones { display: flex; flex-direction: column; gap: 8px; }
+.aseo-acciones { display: flex; flex-direction: column; gap: var(--t-esp-2); }
 .aseo-firma-imprimir { display: none; }
-.aseo-pestanas { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 2px solid #dde5ea; }
-.aseo-pestana { min-height: 44px; padding: 8px 14px; border: none; background: none; font: inherit; font-weight: 600; cursor: pointer; color: #3d4d5a; border-bottom: 3px solid transparent; }
-.aseo-pestana-on { color: #0b5cab; border-bottom-color: #0b5cab; }
-.aseo-admin { display: flex; flex-direction: column; gap: 12px; }
-.aseo-previa, .aseo-resultado { display: flex; flex-direction: column; gap: 10px; border: 1px solid #dde5ea; border-radius: 10px; padding: 12px; background: #fafcfd; }
+.aseo-pestanas { display: flex; gap: var(--t-esp-1); flex-wrap: wrap; border-bottom: 2px solid var(--t-borde); }
+.aseo-pestana { min-height: var(--t-toque); padding: 8px 14px; border: none; background: none; font: inherit; font-weight: 600; cursor: pointer; color: var(--t-texto-2); border-bottom: 3px solid transparent; }
+.aseo-pestana-on { color: var(--t-modo); border-bottom-color: var(--t-modo); }
+.aseo-admin { display: flex; flex-direction: column; gap: var(--t-esp-3); }
+.aseo-previa, .aseo-resultado { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--t-borde); border-radius: var(--t-radio); padding: var(--t-esp-3); background: var(--t-suave); }
 .aseo-previa ul, .aseo-resultado ul { margin: 0; padding-left: 20px; line-height: 1.5; font-size: 14px; }
-.aseo-barrio { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; border: 1px solid #dde5ea; border-radius: 8px; padding: 8px 10px; }
+.aseo-barrio { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; border: 1px solid var(--t-borde); border-radius: var(--t-radio); padding: 8px 10px; }
 @media print {
   .barra, .barra-areas, .aseo-acciones, .tec-boton, .tec-boton-sec { display: none !important; }
   .aseo-firma-imprimir { display: block; margin-top: 40px; }
-  .tec-tarjeta { box-shadow: none; border: none; }
+  .tec-tarjeta, .aseo-modulo .tec-tarjeta { box-shadow: none; border: none; }
   .aseo-acta { max-width: none; }
 }
 @media (min-width: 700px) { .aseo-acciones { flex-direction: row; flex-wrap: wrap; } }
 
-/* Firmas del acta (FirmaPad y sección de firmas del formulario) */
-.aseo-firma-capa { position: fixed; inset: 0; z-index: 3000; background: #f4f7f9; display: flex; flex-direction: column; gap: 8px; padding: 8px; box-sizing: border-box; touch-action: none; }
-.aseo-firma-cab { font-size: 15px; } .aseo-firma-giro { color: #7a4a00; }
-.aseo-firma-lienzo { flex: 1; min-height: 120px; width: 100%; background: #fff; border: 2px dashed #7b8b99; border-radius: 10px; touch-action: none; cursor: crosshair; }
+/* Firmas del acta (FirmaPad y sección de firmas del formulario). El lienzo no cambia: solo el color del borde y de los botones. */
+.aseo-firma-capa { position: fixed; inset: 0; z-index: 3000; background: var(--t-fondo); display: flex; flex-direction: column; gap: 8px; padding: 8px; box-sizing: border-box; touch-action: none; }
+.aseo-firma-cab { font-size: var(--t-txt); } .aseo-firma-giro { color: var(--t-texto-2); }
+.aseo-firma-lienzo { flex: 1; min-height: 120px; width: 100%; background: #fff; border: 2px dashed var(--t-borde-campo); border-radius: 10px; touch-action: none; cursor: crosshair; }
 .aseo-firma-acc { display: flex; gap: 8px; justify-content: flex-end; } .aseo-firma-acc button { min-height: 52px; min-width: 110px; }
-.aseo-firma-error { margin: 0; color: #7a1a10; font-weight: 600; font-size: 14px; }
+.aseo-firma-error { margin: 0; color: var(--t-rojo); font-weight: 600; font-size: 14px; }
 .aseo-firma-mini { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.aseo-firma-mini img { max-width: 220px; max-height: 90px; background: #fff; border: 1px solid #c3ced6; border-radius: 6px; }
-.aseo-nota-rostro { margin: 0; padding: 8px 12px; border-radius: 8px; background: #eef2f5; font-size: 14px; font-weight: 600; }
-.aseo-camara-nota { display: block; font-weight: 600; font-size: 13px; }
+.aseo-firma-mini img { max-width: 220px; max-height: 90px; background: #fff; border: 1px solid var(--t-borde); border-radius: 6px; }
+.aseo-nota-rostro { margin: 0; padding: 8px 12px; border-radius: var(--t-radio); background: var(--t-suave); font-size: 14px; font-weight: 600; }
+.aseo-camara-nota { display: block; font-weight: 600; font-size: var(--t-txt-chico); }
