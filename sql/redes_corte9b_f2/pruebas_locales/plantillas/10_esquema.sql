@@ -27,8 +27,9 @@ create table redes.tipos_sensible (
 insert into redes.tipos_sensible (codigo, nombre, patron, orden) values
   ('hospital', 'Hospital', '\m(HOSPITAL|HOSPITALARIO)\M', 10),
   ('clinica', 'Clínica o centro de salud', '\m(CLINICA|CENTRO DE SALUD|PUESTO DE SALUD|UNIDAD RENAL|DIALISIS|CENTRO MEDICO)\M', 20),
-  ('colegio', 'Colegio o institución educativa', '\m(COLEGIO|ESCUELA|INSTITUCION EDUCATIVA|INST EDUCATIVA|JARDIN INFANTIL|HOGAR INFANTIL|UNIVERSIDAD|SENA)\M', 30),
-  ('otro', 'Otro (cárcel, bomberos, hogar de ancianos…)', '\m(BOMBEROS|CARCEL|PENITENCIARI[AO]|ANCIANATO|HOGAR GERIATRICO|ASILO|BATALLON)\M', 40);
+  ('colegio', 'Colegio, institución educativa u hogar infantil', '\m(COLEGIO|ESCUELA|INSTITUCION EDUCATIVA|INST EDUCATIVA|JARDIN INFANTIL|HOGAR INFANTIL|CDI|UNIVERSIDAD|SENA)\M', 30),
+  ('otro', 'Otro (cárcel, bomberos, policía, hogar geriátrico…)', '\m(BOMBEROS|POLICIA|CARCEL|PENITENCIARI[AO]|ANCIANATO|HOGAR GERIATRICO|ASILO|BATALLON)\M', 40),
+  ('sede_propia', 'Sede de EMDUPAR', '\m(ACUEDUCTO|EMDUPAR)\M', 50);      -- David, 17-nov: las sedes propias. «IPS» y «E.S.E.» quedan fuera (muchos falsos positivos)
 create table redes.usuarios_sensibles (
   contrato  text primary key check (contrato ~ '^[0-9]{1,15}$'),
   tipo      text not null references redes.tipos_sensible (codigo),

@@ -28,8 +28,9 @@ create table redes.tipos_sensible (
 insert into redes.tipos_sensible (codigo, nombre, patron, orden) values
   ('hospital', 'Hospital', '\m(HOSPITAL|HOSPITALARIO)\M', 10),
   ('clinica', 'Clínica o centro de salud', '\m(CLINICA|CENTRO DE SALUD|PUESTO DE SALUD|UNIDAD RENAL|DIALISIS|CENTRO MEDICO)\M', 20),
-  ('colegio', 'Colegio o institución educativa', '\m(COLEGIO|ESCUELA|INSTITUCION EDUCATIVA|INST EDUCATIVA|JARDIN INFANTIL|HOGAR INFANTIL|UNIVERSIDAD|SENA)\M', 30),
-  ('otro', 'Otro (cárcel, bomberos, hogar de ancianos…)', '\m(BOMBEROS|CARCEL|PENITENCIARI[AO]|ANCIANATO|HOGAR GERIATRICO|ASILO|BATALLON)\M', 40);
+  ('colegio', 'Colegio, institución educativa u hogar infantil', '\m(COLEGIO|ESCUELA|INSTITUCION EDUCATIVA|INST EDUCATIVA|JARDIN INFANTIL|HOGAR INFANTIL|CDI|UNIVERSIDAD|SENA)\M', 30),
+  ('otro', 'Otro (cárcel, bomberos, policía, hogar geriátrico…)', '\m(BOMBEROS|POLICIA|CARCEL|PENITENCIARI[AO]|ANCIANATO|HOGAR GERIATRICO|ASILO|BATALLON)\M', 40),
+  ('sede_propia', 'Sede de EMDUPAR', '\m(ACUEDUCTO|EMDUPAR)\M', 50);      -- David, 17-nov: las sedes propias. «IPS» y «E.S.E.» quedan fuera (muchos falsos positivos)
 create table redes.usuarios_sensibles (
   contrato  text primary key check (contrato ~ '^[0-9]{1,15}$'),
   tipo      text not null references redes.tipos_sensible (codigo),
@@ -541,7 +542,11 @@ begin
      (select tipo || ':' || palabra from redes.f_sensible_tipo('Hospital Rosario Pumarejo')) = 'hospital:HOSPITAL'
      and (select tipo from redes.f_sensible_tipo('CLÍNICA DEL CESAR S.A.')) = 'clinica' and (select tipo from redes.f_sensible_tipo('institución educativa loperena')) = 'colegio'
      and (select tipo from redes.f_sensible_tipo('CUERPO DE BOMBEROS')) = 'otro' and not exists (select 1 from redes.f_sensible_tipo('JUAN PEREZ ESCUELAS'))
-     and not exists (select 1 from redes.f_sensible_tipo(null)));
+     and not exists (select 1 from redes.f_sensible_tipo(null))
+     and (select tipo from redes.f_sensible_tipo('CDI Los Pequeñitos')) = 'colegio' and (select tipo from redes.f_sensible_tipo('Estación de Policía Centro')) = 'otro'
+     and (select tipo from redes.f_sensible_tipo('Unidad de diálisis')) = 'clinica' and (select tipo from redes.f_sensible_tipo('EMDUPAR S.A. E.S.P. SEDE')) = 'sede_propia'
+     and (select tipo from redes.f_sensible_tipo('Hogar geriátrico San José')) = 'otro'
+     and not exists (select 1 from redes.f_sensible_tipo('IPS SALUD TOTAL')) and not exists (select 1 from redes.f_sensible_tipo('E.S.E. DEL NORTE')));
   perform pg_temp.err('03.02 la propuesta por el nombre solo la corre un administrador', format('select redes.f_sensibles_proponer(%L)', sd), '42501');
   v_t0 := clock_timestamp(); v_n := redes.f_sensibles_proponer(a); v_ms5 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
   perform pg_temp.reg('03.03 la propuesta recorre la cartera de esta base y es repetible: la segunda vez no agrega nada; nunca guarda un nombre',
@@ -553,7 +558,7 @@ begin
   j := public.geoportal_redes_sensibles(sd, 'por_confirmar', null, 500);
   perform pg_temp.reg('03.04 la bandeja del supervisor: los tres por confirmar, con su tipo, la palabra y su tramo; sin nombres',
      (select count(*) from jsonb_array_elements(j -> 'items') x where x ->> 'contrato' in (c1, c2, c3) and x ->> 'estado' = 'por_confirmar' and x ->> 'tramo' is not null) = 3
-     and jsonb_array_length(j -> 'tipos') = 4 and (j -> 'totales' ->> 'por_confirmar')::integer >= 3, left(j::text, 300));
+     and jsonb_array_length(j -> 'tipos') = 5 and (j -> 'totales' ->> 'por_confirmar')::integer >= 3, left(j::text, 300));
   perform pg_temp.err('03.05 la bandeja es del supervisor (42501 al operador)', format('select public.geoportal_redes_sensibles(%L)', op), '42501');
   j := public.geoportal_redes_sensible_fijar(sd, c1, 'confirmar');
   v_p := public.geoportal_redes_sensible_fijar(sd, c1, 'confirmar');
