@@ -246,7 +246,7 @@ const modo = async (p, n) => { await clicTexto(p, ".geo-seg button", n); await p
 const franja = (p) => p.evaluate(() => { const f = document.querySelector("[data-testid=franja-cortes]"); return f ? { txt: f.innerText, botones: [...f.querySelectorAll("button")].map((b) => b.textContent.trim()), alto: Math.min(...[...f.querySelectorAll("button")].map((b) => b.getBoundingClientRect().height)) } : null; });
 const pintura = (p, capa, prop) => p.evaluate((c, pr) => { const m = document.querySelector(".geo-mapa").__mapa; return m.getLayer(c) ? JSON.stringify(m.getPaintProperty(c, pr)) : null; }, capa, prop);
 const panel = (p) => p.evaluate(() => { const s = document.querySelector("[data-testid=panel-cierre]"); return s ? { txt: s.innerText, botones: [...s.querySelectorAll("button")].map((b) => b.textContent.trim()),
-  alto: Math.min(...[...s.querySelectorAll("button:not(.tec-enlace)")].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect().height)), valvulas: [...s.querySelectorAll("[data-testid=cie-resultado] [data-valvula]")].map((x) => x.dataset.valvula) } : null; });
+  alto: Math.min(...[...s.querySelectorAll("button:not(.tec-enlace)")].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect().height)), valvulas: [...s.querySelectorAll("[data-testid=cie-resultado] li[data-valvula]")].map((x) => x.dataset.valvula) } : null; });
 const enPanel = (p, t, dentro = "[data-testid=panel-cierre]") => p.evaluate((t, d) => { const b = [...document.querySelectorAll(`${d} button`)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled); if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, t, dentro);
 const esperarPanel = (p, re, ms = 40000) => p.waitForFunction((s) => new RegExp(s).test(document.querySelector("[data-testid=panel-cierre]")?.innerText ?? ""), { timeout: ms }, re.source).then(() => true).catch(() => false);
 const campoLocal = (min) => { const d = new Date(Date.now() + min * 60000), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; };
@@ -315,7 +315,7 @@ for (const ancho of ANCHOS) {
   await p.waitForSelector("[data-testid=panel-cierre]"); await verPanel(p);
   await enPanel(p, "¿Qué válvulas cierro?"); await esperarPanel(p, /Contratos sin agua/); s = await panel(p);
   ok(`${tag} C1 con el daño elegido (${DAN}), cada válvula del resultado trae «Válvula cerrada», y está «Guardar esta simulación»`, s.botones.filter((b) => b === "Válvula cerrada").length === 2 && s.botones.includes("Guardar esta simulación"), s.botones.join(" | "));
-  await enPanel(p, "Válvula cerrada", `[data-testid=panel-cierre] [data-valvula="${VALV[0]}"]`); await p.waitForSelector("[data-testid=cie-pedir]");
+  await enPanel(p, "Válvula cerrada", `[data-testid=panel-cierre] li[data-valvula="${VALV[0]}"]`); await p.waitForSelector("[data-testid=cie-pedir]");
   t = await p.evaluate(() => document.querySelector("[data-testid=cie-pedir]").innerText);
   ok(`${tag} C2 «Válvula cerrada» pide la hora (vacía si fue ahora) y la hora estimada de regreso (opcional)`, new RegExp(`Válvula ${VALV[0]} cerrada`).test(t) && /¿A qué hora\?/.test(t) && /Regreso estimado del servicio/.test(t), t);
   await poner(p, "#cie-regreso", campoLocal(180));
@@ -323,7 +323,7 @@ for (const ancho of ANCHOS) {
   r = sqlq(`select m.tipo || '|' || (m.dano_id is not null) || '|' || (m.regreso_estimado is not null) || '|' || m.autor from redes.valvula_maniobras m join redes.activos a on a.id = m.valvula_id where a.codigo = '${VALV[0]}'`);
   ok(`${tag} C3 queda la maniobra «cerrar» con el daño, la hora de regreso y quien la hizo; el panel la muestra «Cerrada» y en «Válvulas cerradas por ${DAN}»`, r === `cerrar|true|true|${EMAILS.op}`
      && new RegExp(`Válvulas cerradas por ${DAN}`).test(s.txt) && /Cerrada desde/.test(s.txt) && /regreso estimado/.test(s.txt) && s.botones.includes("Válvula abierta"), r + " · " + s.txt.slice(0, 400));
-  await enPanel(p, "Válvula cerrada", `[data-testid=panel-cierre] [data-valvula="${VALV[1]}"]`); await p.waitForSelector("[data-testid=cie-pedir]");
+  await enPanel(p, "Válvula cerrada", `[data-testid=panel-cierre] li[data-valvula="${VALV[1]}"]`); await p.waitForSelector("[data-testid=cie-pedir]");
   await enPanel(p, "Confirmar", "[data-testid=cie-pedir]"); await esperarPanel(p, new RegExp(`Válvula ${VALV[1]} cerrada \\([\\s\\S]*1 zona sin agua, 160 contratos`)); s = await panel(p);
   ok(`${tag} C4 con las dos cerradas el aviso dice «1 zona sin agua, 160 contratos»`, new RegExp(`Válvula ${VALV[1]} cerrada \\([\\s\\S]*En este momento: 1 zona sin agua, 160 contratos`).test(s.txt), s.txt.slice(0, 500));
   await enPanel(p, "Guardar esta simulación"); await esperarPanel(p, new RegExp(`Simulación guardada con ${DAN}`));

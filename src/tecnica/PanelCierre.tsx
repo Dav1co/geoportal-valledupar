@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import "./cierre.css";
 import { apiCierre, horaClara, instanteDeCampo, nContratos, type Simulacion, type ValvulaCerrada, type ValvulaSim } from "./apiCierre";
 
@@ -6,6 +6,7 @@ import { apiCierre, horaClara, instanteDeCampo, nContratos, type Simulacion, typ
 //   · Sin daño ni intervención guardados (el formulario a medio llenar): solo la simulación.
 //   · Con su código (DAN-… o ITV-…): además «Válvula cerrada» en cada válvula del resultado, «Válvula abierta» en las que cerró este registro y
 //     «Guardar esta simulación». Quién puede lo decide el servidor; lo que se muestra son conteos, sin datos de suscriptores.
+const MiniMapaCierre = lazy(() => import("./MiniMapaCierre").then((m) => ({ default: m.MiniMapaCierre })));
 const nf = new Intl.NumberFormat("es-CO");
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : "No se pudo completar. Intente de nuevo.");
 
@@ -78,7 +79,7 @@ export function PanelCierre({ activo, punto, registro }: { activo?: string | nul
       {pedir ? <PedirHora valvula={pedir.valvula} tipo={pedir.tipo} ocupado={ocupado} onCancelar={() => setPedir(null)} onConfirmar={(h, r) => void maniobrar(pedir.valvula, pedir.tipo, h, r)} /> : null}
       <p className="tec-ayuda">Según la red registrada en el geoportal: dice qué válvulas cerrar para aislar el daño y cuántos contratos quedan sin agua.</p>
       <button type="button" className="tec-boton" disabled={!ref || !!ocupado} onClick={() => void simular()}>{ocupado === "Calculando…" ? ocupado : "¿Qué válvulas cierro?"}</button>
-      {!ref ? <p className="tec-ayuda">Elija primero el activo o marque el punto en el mapa.</p> : null}
+      {!ref ? <p className="tec-ayuda">{registro ? "Este registro no tiene activo seleccionado: la simulación no se puede hacer desde aquí." : "Elija primero el activo o marque el punto en el mapa."}</p> : null}
       {!registro && sim ? <p className="tec-ayuda" data-testid="cie-sin-registro">Para marcar una válvula como cerrada, guarde primero este registro.</p> : null}
       {error ? <p className="tec-aviso tec-aviso-error" role="alert">{error}</p> : null}
       {aviso ? <p className="tec-aviso tec-aviso-ok" role="status">{aviso}</p> : null}
@@ -90,6 +91,9 @@ export function PanelCierre({ activo, punto, registro }: { activo?: string | nul
               <p className="cie-texto">{e.valvulas_total === 1 ? "Cierre esta válvula:" : `Cierre estas ${e.valvulas_total} válvulas, de la más cercana a la más lejana:`}</p>
               <ol className="cie-lista">{e.valvulas.map(filaValvula)}</ol>
               {e.valvulas_total > e.valvulas.length ? <p className="tec-ayuda">Se muestran las {e.valvulas.length} más cercanas de {e.valvulas_total}.</p> : null}
+              <Suspense fallback={<p className="tec-sub" role="status">Cargando el mapa…</p>}>
+                <MiniMapaCierre activo={sim.activo.codigo} lat={sim.activo.lat} lon={sim.activo.lon} valvulas={e.valvulas} />
+              </Suspense>
             </>)}
           <dl className="cie-cifras">
             <div><dt>Tramos sin agua</dt><dd>{nf.format(e.tramos_sin_agua)}</dd></div>

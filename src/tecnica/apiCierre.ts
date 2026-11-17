@@ -30,6 +30,35 @@ export const apiCierre = {
       cuerpo: { valvula, tipo, ...(o.registro ? { registro: o.registro } : {}), ...(o.motivo ? { motivo: o.motivo } : {}), ...(o.hecho_en ? { hecho_en: o.hecho_en } : {}), ...(o.regreso ? { regreso: o.regreso } : {}) } }),
   regreso: (valvula: string, regreso: string, motivo?: string) => pedir<{ maniobra: number; regreso_estimado: string }>("corte_regreso", { ...F, cuerpo: { valvula, regreso, ...(motivo ? { motivo } : {}) } }),
   vigentes: () => pedir<CortesVigentes>("cortes_vigentes", F),
+  /** El supervisor rehace la foto de las afectaciones (si la red cambió después del último cierre). */
+  recalcular: (motivo: string) => pedir<{ foto: number; zonas: number; valvulas_cerradas: number; contratos: number }>("cortes_recalcular", { ...F, cuerpo: { motivo }, timeoutMs: 25000 }),
+};
+
+// ---------- Fase 2: alertas de presión (MODELO, no medida) y usuarios sensibles (supervisores y administrador) ----------
+export type NivelAlerta = "baja_roja" | "baja_naranja" | "alta_naranja" | "alta_roja";
+export type AlertasPresion = { cargado: boolean; aviso: string; fuente: string; escenario: "existente" | "futura"; nodos: number; niveles: Partial<Record<NivelAlerta, number>>;
+  umbrales: Record<NivelAlerta, number>; peores: { nodo: string; zona: string | null; nivel: NivelAlerta; p_min: number; p_max: number; lat: number; lon: number }[];
+  por_material: { n: number; nota: string; nodos: { nodo: string; material?: string; p_max?: number; presion_trabajo?: number }[] } };
+export type EstadoSensible = "por_confirmar" | "confirmado" | "descartado";
+export type Sensible = { contrato: string; tipo: string; tipo_nombre: string; palabra: string | null; origen: string; estado: EstadoSensible; desde: string; tramo: string | null; lat: number | null; lon: number | null };
+export type Sensibles = { tipos: { codigo: string; nombre: string }[]; totales: Partial<Record<EstadoSensible, number>>; items: Sensible[]; siguiente: string | null };
+export const apiFase2 = {
+  alertas: (escenario: "existente" | "futura") => pedir<AlertasPresion>("alertas_presion", { ...F, qs: { escenario } }),
+  sensibles: (estado: EstadoSensible | "", despuesDe?: string | null) => pedir<Sensibles>("sensibles", { ...F, qs: { ...(estado ? { estado } : {}), ...(despuesDe ? { despues_de: despuesDe } : {}), limite: "50" } }),
+  /** Confirmar (con o sin corregir el tipo), descartar (con motivo) o agregar a mano (confirmar un contrato que no está en la lista, con tipo y motivo). Nunca viaja el nombre. */
+  fijar: (contrato: string, accion: "confirmar" | "descartar", o: { tipo?: string | null; motivo?: string } = {}) =>
+    pedir<{ contrato: string; estado: EstadoSensible; tipo: string | null; cambio: boolean }>("sensible_fijar", { ...F, cuerpo: { contrato, accion, ...(o.tipo ? { tipo: o.tipo } : {}), ...(o.motivo ? { motivo: o.motivo } : {}) } }),
+};
+
+// ---------- Fase 3: capa «Flujo del agua (modelo)» ----------
+export type FlujoInfo = { cargado: boolean; rotulo: string; origen: string; nota: string; version: number; horas: { cual: "mayor" | "menor"; hora: number; texto: string; consumo_lps: number }[];
+  leyenda: { titulo: string; unidad: string; clases: { clase: number; texto: string }[]; sin_flujo: string; sin_dato: string };
+  cobertura: { con_tramo: number; sin_tramo: number; tramos_red: number; tubos_modelo: number } };
+export type FlujoTramo = { rotulo: string; en_modelo: boolean; cambia_de_sentido?: boolean; tramo: { codigo: string; tipo: string; codigo_anterior?: string | null };
+  horas?: { cual: "mayor" | "menor"; hora: number; sentido: string; caudal_lps: number; velocidad_mps: number }[] };
+export const apiFlujo = {
+  info: () => pedir<FlujoInfo>("flujo_modelo", F),
+  tramo: (codigo: string) => pedir<FlujoTramo>("flujo_tramo", { ...F, qs: { codigo } }),
 };
 
 /** «9:40 a. m.» si es de hoy; si no, «16 nov, 9:40 a. m.» (hora de Bogotá). */

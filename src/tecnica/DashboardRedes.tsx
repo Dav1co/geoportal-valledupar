@@ -4,6 +4,8 @@ import "./dano.css";
 import "./intervencion.css";
 import "./dashboard.css";
 import { CabeceraDashboard } from "./CabeceraDashboard";
+import { PanelCierre } from "./PanelCierre";
+import { AlertasPresion, UsuariosSensibles } from "./PresionSensibles";      // Corte 9b, Fase 2
 import { apiDano, apiDash, apiItv, type DanoLista, type FormularioDano as DefDano, type GrupoVerificar, type IntervencionLista, type ListaPorVerificar, type PorVerificar, type ReporteBot } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
@@ -18,9 +20,9 @@ import { InventarioRegulatorio } from "./InventarioRegulatorio";
 // Corte 4b (DashboardGestion.tsx): Personal, Gráficas, Descargas, Catálogo, Parámetros y, solo para el administrador, Nodos por clasificar.
 // Corte 5c (cargue/CargueCapas.tsx): Cargue de capas (el supervisor lo lee; carga el administrador). Nada se borra: todo es un evento con motivo.
 
-type Pestana = "no_identificados" | "intervenciones" | "danos" | "por_verificar" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos" | "regulatorio";
+type Pestana = "no_identificados" | "intervenciones" | "danos" | "por_verificar" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos" | "regulatorio" | "presion" | "sensibles";
 const PESTANAS: { c: Pestana; n: string; admin?: boolean }[] = [{ c: "no_identificados", n: "No identificados" }, { c: "intervenciones", n: "Intervenciones" },
-  { c: "danos", n: "Daños y fallas" }, { c: "por_verificar", n: "Por verificar" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
+  { c: "danos", n: "Daños y fallas" }, { c: "presion", n: "Alertas de presión" }, { c: "sensibles", n: "Usuarios sensibles" }, { c: "por_verificar", n: "Por verificar" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
   { c: "cargue", n: "Cargue de capas" }, { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar" },
   { c: "regulatorio", n: "Inventario regulatorio", admin: true }];      // Corte 10: la conciliación con la Valoración Técnica 2019, solo el administrador      // 9a-bis: también el supervisor de distribución (David, 16-nov)
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -44,6 +46,8 @@ export function DashboardRedes({ correo, selector, onVolver, onGeovisor }: { cor
       {pestana === "no_identificados" ? <NoIdentificados onFicha={setFicha} /> : null}
       {pestana === "intervenciones" ? <Intervenciones onFicha={setFicha} /> : null}
       {pestana === "danos" ? <Danos onFicha={setFicha} /> : null}
+      {pestana === "presion" ? <AlertasPresion /> : null}
+      {pestana === "sensibles" ? <UsuariosSensibles /> : null}
       {pestana === "por_verificar" ? <PorVerificarLista onFicha={setFicha} /> : null}
       {pestana === "bot" ? <ReportesBot /> : null}
       {pestana === "graficas" ? <Graficas onFicha={setFicha} /> : null}
@@ -183,6 +187,7 @@ function Danos({ onFicha }: { onFicha: (c: string) => void }) {
   const [vez, setVez] = useState(0);
   const [terceros, setTerceros] = useState<Record<string, string>>({});
   const [aviso, setAviso] = useState<string | null>(null);
+  const [cierre, setCierre] = useState<string | null>(null);      // Corte 9b: el daño que tiene abierto su «Cierre de válvulas»
 
   useEffect(() => {
     setLista(null); setError(null);
@@ -211,7 +216,10 @@ function Danos({ onFicha }: { onFicha: (c: string) => void }) {
               {d.estado !== "oculto" ? <ConMotivo rotulo="Ocultar" id={`do-${d.codigo}`} avisar={setAviso} onEnviar={async (m) => { await apiDash.danoEvento(d.codigo, "ocultar", m); refrescar(); return `${d.codigo} quedó oculto.`; }} />
                 : <ConMotivo rotulo="Reincluir" id={`dr-${d.codigo}`} avisar={setAviso} onEnviar={async (m) => { await apiDash.danoEvento(d.codigo, "reincluir", m); refrescar(); return `${d.codigo} volvió a estar visible.`; }} />}
               {d.estado === "atendido" ? <ConMotivo rotulo="Reabrir" id={`da-${d.codigo}`} avisar={setAviso} onEnviar={async (m) => { await apiDash.danoEvento(d.codigo, "reabrir", m); refrescar(); return `${d.codigo} quedó en atención.`; }} /> : null}
+              {d.sistema === "acueducto" && d.estado !== "oculto" ? <button type="button" className="tec-boton-sec" aria-expanded={cierre === d.codigo} data-cierre={d.codigo}
+                onClick={() => setCierre((c) => (c === d.codigo ? null : d.codigo))}>{cierre === d.codigo ? "Ocultar el cierre de válvulas" : "¿Qué válvulas cierro?"}</button> : null}
             </div>
+            {cierre === d.codigo ? <PanelCierre registro={d.codigo} activo={d.activo} /> : null}
           </section>))}
     </>
   );

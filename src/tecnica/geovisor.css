@@ -124,3 +124,19 @@
 .geo-tarjeta-corte { border-left: 5px solid var(--t-corte-cerrado); }
 .geo-tarjeta-corte .cie-pedir { margin-top: 10px; }
 @media (min-width: 900px) { .geo-franja { padding: 8px 16px; } }
+
+/* ---------- Corte 9b (segundo pase): daños abiertos en «Afectaciones», cierre del supervisor, volver a calcular y «Flujo del agua (modelo)» ---------- */
+.geo-leyenda li .geo-corte-dano { height: 9px; box-sizing: border-box; border-top: 2px solid var(--t-titulo, #0a2540); border-bottom: 2px solid var(--t-titulo, #0a2540); border-radius: 0; background: none; }
+.geo-tarjeta-dano { border-left: 5px solid var(--t-titulo, #0a2540); }
+.geo-leyenda-accion { margin-top: 6px; min-height: 44px; width: 100%; border-radius: 8px; border: 1px solid var(--t-borde-campo, #7b8b99); background: #fff; color: var(--t-texto, #22313f); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.geo-leyenda-accion:focus-visible { outline: 3px solid var(--t-foco, #4a90d9); outline-offset: 2px; }
+.geo-cierre-sup { margin-top: 10px; }
+.geo-tarjeta .cie-pedir input[type="text"] { height: 48px; border: 1px solid var(--t-borde-campo, #7b8b99); border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; width: 100%; min-width: 0; box-sizing: border-box; }
+.geo-tarjeta-corte .tec-campo input[type="text"] { height: 48px; border: 1px solid var(--t-borde-campo, #7b8b99); border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; width: 100%; min-width: 0; box-sizing: border-box; }
+.geo-leyenda-flujo { max-width: 230px; }
+.geo-leyenda-flujo li span { border-radius: 0; }
+.geo-herr .geo-seg[data-testid="hora-flujo"] button { min-height: 44px; }
+.geo-leyenda-plegar { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 0; border: none; background: none; font: inherit; font-size: 13px; font-weight: 700; color: inherit; text-align: left; cursor: pointer; }
+.geo-leyenda-plegar::after { content: "▾"; flex: 0 0 auto; }
+.geo-leyenda-plegar[aria-expanded="true"]::after { content: "▴"; }
+.geo-leyenda-plegar:focus-visible { outline: 3px solid var(--t-foco, #4a90d9); outline-offset: 2px; }

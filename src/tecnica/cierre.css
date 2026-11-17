@@ -22,3 +22,27 @@
 .cie-cifras dd { margin: 0; font-size: var(--t-txt-grande); font-weight: 700; color: var(--t-titulo); }
 .cie-nocierra { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: var(--t-esp-1); font-size: var(--t-txt-chico); }
 .cie-nota { margin: 0; font-size: var(--t-txt-chico); color: var(--t-texto-2); }
+.cie-mapa { margin: 0; display: flex; flex-direction: column; gap: var(--t-esp-1); }
+.cie-mapa-lienzo { height: 220px; border: 1px solid var(--t-borde); border-radius: var(--t-radio); overflow: hidden; }
+.cie-mapa figcaption { font-size: var(--t-txt-chico); color: var(--t-texto-2); }
+.cie-mapa-num { width: 24px; height: 24px; border-radius: 50%; background: var(--t-modo); color: #fff; border: 2px solid #fff; font-size: var(--t-txt-chico); font-weight: 700; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+@media (min-width: 760px) { .cie-mapa-lienzo { height: 280px; } }
+
+/* ---------- Corte 9b, Fase 2: alertas de presión (modelo) y usuarios sensibles, en el Dashboard distribución (PresionSensibles.tsx). Solo tokens. ---------- */
+.ps-niveles { margin: 0; display: grid; grid-template-columns: 1fr; gap: var(--t-esp-2); }
+.ps-niveles > div { display: flex; align-items: center; justify-content: space-between; gap: var(--t-esp-3); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-borde-campo); border-radius: var(--t-radio); padding: var(--t-esp-2) var(--t-esp-3); background: var(--t-tarjeta); }
+.ps-niveles > .ps-rojo { border-left-color: var(--t-rojo); } .ps-niveles > .ps-naranja { border-left-color: var(--t-naranja); }
+.ps-niveles dt { font-size: var(--t-txt); font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
+.ps-niveles dt span { font-size: var(--t-txt-chico); font-weight: 400; color: var(--t-texto-2); }
+.ps-niveles dd { margin: 0; font-size: var(--t-titulo-1); font-weight: 700; color: var(--t-titulo); font-variant-numeric: tabular-nums; }
+.ps-tabla-caja { overflow-x: auto; max-width: 100%; border: 1px solid var(--t-borde); border-radius: var(--t-radio); }
+.ps-tabla { border-collapse: collapse; width: 100%; font-size: var(--t-txt-chico); }
+.ps-tabla th, .ps-tabla td { text-align: left; padding: var(--t-esp-2) var(--t-esp-3); border-bottom: 1px solid var(--t-borde); white-space: nowrap; }
+.ps-tabla thead th { background: var(--t-suave); font-weight: 600; }
+.ps-marca { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: var(--t-radio); background: var(--t-suave); color: var(--t-texto); }
+.ps-marca.ps-rojo { background: var(--t-rojo-suave); color: var(--t-rojo); } .ps-marca.ps-naranja { background: var(--t-naranja-suave); color: var(--t-texto); }
+.ps-acciones { align-items: flex-end; }
+.ps-tipo { display: flex; flex-direction: column; gap: var(--t-esp-1); font-size: var(--t-txt-chico); font-weight: 600; color: var(--t-texto-2); flex: 1 1 200px; }
+.ps-tipo select, .ps-form select, .ps-form input { height: 44px; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio); padding: 0 var(--t-esp-3); font: inherit; font-size: var(--t-txt-campo); color: var(--t-texto); background: var(--t-tarjeta); width: 100%; min-width: 0; box-sizing: border-box; }
+.ps-form { display: grid; grid-template-columns: 1fr; gap: var(--t-esp-3); }
+@media (min-width: 760px) { .ps-niveles { grid-template-columns: repeat(4, minmax(0, 1fr)); } .ps-niveles > div { flex-direction: column; align-items: flex-start; } .ps-form { grid-template-columns: 1fr 1fr; } .ps-form-ancho { grid-column: 1 / -1; } }
