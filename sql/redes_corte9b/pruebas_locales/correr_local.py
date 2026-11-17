@@ -71,13 +71,16 @@ ok('05 ningún archivo del paquete escribe ni refresca predios_comercial',
 # 3. huellas, migración, verificación, segunda vez
 filas = psql('-AtF', '|', '-f', os.path.join(RAIZ, 'huellas_solo_lectura_redes_corte9b_editor.sql')).stdout.strip().splitlines()
 ok('06 las huellas antes de aplicar: «CORTE 10 (listo para el 9b)», la reemplazada sin cambiar, las nuevas no existen',
-   any('CORTE 10 (listo para el 9b)' in f for f in filas) and any('CORTE 10 (sin cambiar)' in f for f in filas)
-   and sum('NO EXISTE (sin aplicar)' in f for f in filas) == 10 and not any('DISTINTA' in f or 'FALTA' in f for f in filas), '\n'.join(filas))
+   any('CORTE 10 (listo para el 9b)' in f for f in filas) and sum('PRODUCCIÓN (sin cambiar)' in f for f in filas) == 2
+   and sum('NO EXISTE (sin aplicar)' in f for f in filas) == 18 and any('NO EXISTEN (sin aplicar)' in f for f in filas) and not any('DISTINTA' in f or 'FALTA' in f for f in filas), '\n'.join(filas))
+AV = "select md5(tecnica.f_avisos(true, true, '2026-11-17 15:00:00-05')::text)"
+avisos_antes = q(AV)
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', os.path.join(RAIZ, 'migracion_redes_corte9b_editor.sql'))
 ok('07 la migración se aplica', p.returncode == 0, p.stderr)
+ok('07b Avisos del 12: sin válvulas cerradas, tecnica.f_avisos devuelve exactamente lo mismo que antes de la migración', q(AV) == avisos_antes)
 filas = psql('-AtF', '|', '-f', os.path.join(RAIZ, 'huellas_solo_lectura_redes_corte9b_editor.sql')).stdout.strip().splitlines()
-ok('08 las huellas después: «CORTE 9b (aplicado)», reemplazada y 9 nuevas', any('CORTE 9b (aplicado)' in f for f in filas)
-   and any('CORTE 9b (reemplazada)' in f for f in filas) and sum('NUEVA (aplicada)' in f for f in filas) == 9, '\n'.join(filas))
+ok('08 las huellas después: «CORTE 9b (aplicado)», 2 reemplazadas, 18 nuevas y las 6 tablas', any('CORTE 9b (aplicado)' in f for f in filas)
+   and sum('CORTE 9b (reemplazada)' in f for f in filas) == 2 and sum('NUEVA (aplicada)' in f for f in filas) == 18 and any('EXISTEN (9b)' in f for f in filas), '\n'.join(filas))
 filas = psql('-AtF', '|', '-f', os.path.join(RAIZ, 'verificacion_redes_corte9b_editor.sql')).stdout.strip().splitlines()
 ok(f'09 la verificación: las {sum(1 for f in filas if not f.startswith("INFO"))} filas OK',
    filas and all(f.endswith('|OK') for f in filas if not f.split('|')[0].startswith('INFO')), '\n'.join(filas))
@@ -118,10 +121,40 @@ ok('14 alguien sin Técnica no simula; el supervisor sí', 'Acceso' in edge(f"se
 ok('15 la API no ve la tabla ni las funciones internas', 'permission denied' in edge('select count(*) from redes.simulaciones_cierre')[2]
    and 'permission denied' in edge("select redes.f_simular_cierre(1)")[2])
 
-# 5. reversa
-q("delete from public.geoportal_lista_blanca where email like 'zt9b.arnes.%'")
+# 4b. Fase 1b: el cierre real como lo ve producción (una llamada por petición; el supervisor cierra las válvulas de 3 tramos reales entre dos válvulas)
+TOPE_LECTURA = 1000 / 6
+vals = q("""select string_agg(distinct v.codigo, ',') from (select tn.activo_id, tn.nodo_ini, tn.nodo_fin from redes.tramo_nodos tn
+   join redes.activo_vigente_mat m on m.activo_id = tn.activo_id and m.version = tn.version and m.cuenta_vigente and not m.retirado
+   join redes.nodos a1 on a1.id = tn.nodo_ini join redes.activo_vigente_mat b1 on b1.activo_id = a1.activo_id and b1.prefijo = 'VAL'
+   join redes.nodos a2 on a2.id = tn.nodo_fin join redes.activo_vigente_mat b2 on b2.activo_id = a2.activo_id and b2.prefijo = 'VAL'
+   order by md5(tn.activo_id::text) limit 3) t join redes.nodos n on n.id in (t.nodo_ini, t.nodo_fin) join redes.activo_vigente_mat v on v.activo_id = n.activo_id""").split(',')
+man = []
+for c in vals:
+    ms, out, e = edge(f"select public.geoportal_redes_valvula_maniobra('{SD}', '{c}', 'cerrar', null, 'ZT9B arnés: prueba del cierre real')")
+    man.append((c, ms, e[:150], json.loads(out)['vigente'] if not e else None))
+ok(f'19 {len(man)} cierres reales como la Edge (cada uno saca la foto del corte): el más lento {max(m[1] for m in man)} ms (tope local {TOPE_LOCAL:.0f} ms)',
+   all(not m[2] for m in man) and max(m[1] for m in man) < TOPE_LOCAL, man)
+ms_v, out, e = edge(f"select public.geoportal_redes_cortes_vigentes('{SD}')")
+cv = json.loads(out) if not e else {}
+ok(f'20 cortes vigentes como la Edge ({ms_v} ms, tope local {TOPE_LECTURA:.0f} ms): {cv.get("resumen")}; {len(cv.get("zonas", []))} zonas; sin correos ni datos de suscriptores',
+   not e and ms_v < TOPE_LECTURA and cv['hay'] and len(cv['valvulas']) == len(man) and '@' not in out and 'suscriptor' not in out, e or out[:300])
+z = (cv.get('zonas') or [{'lat': 10.46, 'lon': -73.25}])[0]
+tes = q(f"select floor(({z['lon']} + 180) / 360 * (1 << 15))::int || ',' || floor((1 - ln(tan(radians({z['lat']})) + 1 / cos(radians({z['lat']}))) / pi()) / 2 * (1 << 15))::int")
+ms_t, out, e = edge(f"select public.geoportal_redes_geovisor_mvt_cortes('{SD}', 15, {tes})")
+ok(f'21 la tesela del modo Afectaciones como la Edge ({ms_t} ms, {len(out) * 3 // 4} bytes; tope local {TOPE_LECTURA:.0f} ms)', not e and ms_t < TOPE_LECTURA and (len(out) > 0 or not cv.get('zonas')), e)
+ms_a, out, e = edge(f"select public.geoportal_tec_avisos('{ADM}')")
+ok(f'22 los Avisos completos del administrador como la Edge, con las válvulas cerradas ({ms_a} ms; tope local {TOPE_LECTURA:.0f} ms)', not e and ms_a < TOPE_LECTURA, e)
+ok('23 el operador sin el geovisor no ve los cortes; la API no ve las tablas de maniobras ni de fotos',
+   edge(f"select public.geoportal_redes_cortes_vigentes('{OP}')")[2] != '' and 'permission denied' in edge('select count(*) from redes.valvula_maniobras')[2]
+   and 'permission denied' in edge('select count(*) from redes.corte_foto_tramos')[2])
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', os.path.join(RAIZ, 'reversa_redes_corte9b_editor.sql'))
-ok('16 la reversa se aplica y vuelve la huella del 10', p.returncode == 0 and q(CONJ) == MD5_10 and q("select to_regclass('redes.simulaciones_cierre')") == '', p.stderr)
+ok('24 con maniobras guardadas, la reversa se niega (no borra datos)', p.returncode != 0 and 'no borra datos' in p.stderr, p.stderr)
+
+# 5. reversa (sobre una base recién migrada, sin datos)
+rehacer('con_9b')
+p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', os.path.join(RAIZ, 'reversa_redes_corte9b_editor.sql'))
+ok('16 la reversa se aplica: vuelve la huella del 10 y tecnica.f_avisos del 12; no quedan tablas del 9b', p.returncode == 0 and q(CONJ) == MD5_10
+   and q("select to_regclass('redes.simulaciones_cierre')::text || to_regclass('redes.valvula_maniobras')::text") == '' and q(AV) == avisos_antes, p.stderr)
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', os.path.join(RAIZ, 'reversa_redes_corte9b_editor.sql'))
 ok('17 una segunda reversa se niega', p.returncode != 0 and 'No hay nada que revertir' in p.stderr, p.stderr)
 rehacer('con_9b')

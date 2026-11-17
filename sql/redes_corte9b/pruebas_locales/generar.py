@@ -18,15 +18,41 @@ MD5_BASE = os.environ.get('MD5_BASE', 'aad5952c27e13cc3ad45623279ba7085')      #
 NUEVAS = ['redes.f_sim_grafo()', 'redes.f_sim_llenar_agua()', 'redes.f_sim_escenario(bigint[],bigint,boolean,bigint[],geometry,integer)',
           'redes.f_simular_cierre(bigint)', 'redes.f_sim_tramo_cercano(numeric,numeric)', 'redes.f_sim_autorizar(text)',
           'public.geoportal_redes_simulacion_cierre(text,text,numeric,numeric)', 'public.geoportal_redes_simulacion_guardar(text,text,text)',
-          'public.geoportal_redes_simulaciones(text,text)']
-TABLAS = ['redes.simulaciones_cierre']
-PARAMS = ['sim_segmento_grande_tramos', 'sim_segmento_grande_contratos', 'sim_no_cierra_max', 'sim_valvulas_lista_max', 'sim_contratos_guardar_max', 'sim_guardadas_max']
-MIG = ['10_esquema.sql', '20_funciones.sql', '25_reemplazos.sql', '26_rpc.sql', '40_permisos.sql']
+          'public.geoportal_redes_simulaciones(text,text)',
+          # Fase 1b: el cierre real
+          'redes.f_cierres_vigentes()', 'redes.f_cierre_regreso(bigint)', 'redes.f_cortes_foto(bigint,text,text)',
+          'redes.f_cortes_para_avisos(timestamp with time zone,numeric,numeric)',
+          'public.geoportal_redes_valvula_maniobra(text,text,text,text,text,text,text)', 'public.geoportal_redes_corte_regreso(text,text,text,text)',
+          'public.geoportal_redes_cortes_vigentes(text)', 'public.geoportal_redes_cortes_recalcular(text,text)',
+          'public.geoportal_redes_geovisor_mvt_cortes(text,integer,integer,integer)']
+TABLAS = ['redes.simulaciones_cierre', 'redes.corte_foto_valvulas', 'redes.corte_foto_tramos', 'redes.corte_foto_zonas', 'redes.corte_fotos', 'redes.valvula_maniobras']
+PARAMS = ['sim_segmento_grande_tramos', 'sim_segmento_grande_contratos', 'sim_no_cierra_max', 'sim_valvulas_lista_max', 'sim_contratos_guardar_max', 'sim_guardadas_max',
+          'corte_horas_atras_max']
+AVISOS = 'tecnica.f_avisos(boolean,boolean,timestamp with time zone)'
+MIG = ['10_esquema.sql', '20_funciones.sql', '21_cortes.sql', '25_reemplazos.sql', '26_rpc.sql', '40_permisos.sql']
 
 T = {}
 # ---- las unidades de los parámetros nuevos son números enteros
 T['redes.f_param_entero(text)'] = [(
     """'filas', 'bytes', 'zoom', 'hoja')""", """'filas', 'bytes', 'zoom', 'hoja', 'tramos', 'contratos', 'válvulas', 'simulaciones')""")]
+# ---- Fase 1b: Avisos del 12 (distribución): «válvula cerrada hace más de X horas» (6 h naranja, 12 h rojo; parámetros). Lee la tabla de maniobras (no recalcula nada)
+T[AVISOS] = [(
+    """  -- ===================== PERSONAL (los dos supervisores y el administrador) =====================""",
+    """  -- D10 (Corte 9b, Fase 1b). Válvulas cerradas (sin «abrir») hace más de X horas: naranja desde valvula_cerrada_naranja_h, rojo desde valvula_cerrada_rojo_h
+  if p_distribucion then
+    for r in select c.nivel, count(*) as n, min(c.hecho_en) as desde,
+                    (array_to_json((array_agg(c.codigo || coalesce(' · ' || c.registro, '') || ' · hace ' || tecnica.f_texto_horas(c.horas) order by c.hecho_en))[1:5]))::jsonb as items
+               from redes.f_cortes_para_avisos(v_ahora, tecnica.f_aparam('valvula_cerrada_naranja_h'), tecnica.f_aparam('valvula_cerrada_rojo_h')) c
+              group by c.nivel loop
+      v_av := v_av || jsonb_build_object('clave', 'valvulas_cerradas_' || r.nivel, 'area', 'distribucion', 'nivel', r.nivel, 'orden', case r.nivel when 'rojo' then 102 else 103 end,
+                'titulo', format('%s hace más de %s', tecnica.f_cuantos(r.n, 'válvula cerrada', 'válvulas cerradas'),
+                                 tecnica.f_texto_horas(tecnica.f_aparam(case r.nivel when 'rojo' then 'valvula_cerrada_rojo_h' else 'valvula_cerrada_naranja_h' end))),
+                'detalle', 'Abra la válvula cuando vuelva el servicio, o ajuste la hora estimada de regreso.',
+                'n', r.n, 'items', r.items, 'bandeja', jsonb_build_object('tablero', 'distribucion', 'pestana', null), 'desde', r.desde);
+    end loop;
+  end if;
+
+  -- ===================== PERSONAL (los dos supervisores y el administrador) =====================""")]
 CAMBIADAS = list(T)
 
 
@@ -61,7 +87,8 @@ md5_antes = {f: fmd5(f) for f in CAMBIADAS}
 partes = ["""-- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b (Fase 1) · 25 — REEMPLAZOS (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
 -- cada uno es el texto vivo (el del Corte 10 publicado) con cambios exactos, aplicados una sola vez.
---   · redes.f_param_entero: las unidades «tramos», «contratos», «válvulas» y «simulaciones» son números enteros (parámetros de la simulación).
+--   · redes.f_param_entero: las unidades «tramos», «contratos», «válvulas» y «simulaciones» son números enteros (parámetros de la simulación);
+--   · tecnica.f_avisos (Corte 12): el aviso D10 «válvula cerrada hace más de X horas» (Fase 1b). Solo agrega el bloque; lo demás queda igual.
 -- ====================================================================="""]
 for f in CAMBIADAS:
     t = antes[f]
@@ -71,7 +98,7 @@ for f in CAMBIADAS:
     partes.append(f'\n-- {f}\n{t};\n')
 escribir(os.path.join(RAIZ, 'sql', '25_reemplazos.sql'), ''.join(partes))
 
-v = {'{{MD5_BASE}}': MD5_BASE}
+v = {'{{MD5_BASE}}': MD5_BASE, '{{MD5_AVISOS}}': md5_antes[AVISOS]}
 escribir(os.path.join(RAIZ, 'sql', '10_esquema.sql'), plantilla('10_esquema.sql', v))
 escribir(os.path.join(RAIZ, 'migracion_redes_corte9b_editor.sql'), 'begin;\n' + ''.join(leer(n) for n in MIG) + 'commit;\n')
 escribir(os.path.join(RAIZ, 'ensayo_en_transaccion_redes_corte9b_editor.sql'), 'begin;\n' + ''.join(leer(n) for n in MIG) + leer('70_pruebas.sql') + 'rollback;\n')

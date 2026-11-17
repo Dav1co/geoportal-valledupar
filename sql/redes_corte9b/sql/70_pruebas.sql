@@ -1,5 +1,5 @@
 -- =====================================================================
--- TÉCNICA · FASE 1 · CORTE 9b (Fase 1: simulación de cierre) · 70 — PRUEBAS «N de N» (PROPUESTA). Se corre DESPUÉS de 10, 20, 25, 26 y 40, en la misma transacción.
+-- TÉCNICA · FASE 1 · CORTE 9b (Fase 1a: simulación de cierre; 1b: cierre real) · 70 — PRUEBAS «N de N» (PROPUESTA). Se corre DESPUÉS de 10, 20, 25, 26 y 40, en la misma transacción.
 -- No supone códigos ni conteos de la base: arma sus personas (prueba.redes9b.*), su red de prueba (ZT9B, en un rincón de la caja de Valledupar, lejos de la red)
 -- con sus contratos (números de 15 cifras que empiezan por 99999), su daño y su intervención. Ninguna cifra de la red real se da por supuesta.
 -- La red de prueba (x, y en metros):
@@ -73,6 +73,11 @@ create function pg_temp.cod(p_nombre text) returns text language sql as $$ selec
 create function pg_temp.cods(p jsonb) returns text language sql as $$ select coalesce(string_agg(x ->> 'codigo', ',' order by o), '') from jsonb_array_elements(p) with ordinality y(x, o) $$;
 create function pg_temp.ncods(p text) returns text language sql as $$
   select coalesce(string_agg(pg_temp.cod(btrim(x)), ',' order by o), '') from unnest(string_to_array(p, ',')) with ordinality u(x, o) $$;
+-- la tesela (z, x, y) que contiene un punto
+create function pg_temp.tx(g geometry, z integer) returns integer language sql as $$ select floor((ST_X(g) + 180) / 360 * (1 << z))::integer $$;
+create function pg_temp.ty(g geometry, z integer) returns integer language sql as $$
+  select floor((1 - ln(tan(radians(ST_Y(g))) + 1 / cos(radians(ST_Y(g)))) / pi()) / 2 * (1 << z))::integer $$;
+create function pg_temp.foto() returns redes.corte_fotos language sql as $$ select * from redes.corte_fotos order by id desc limit 1 $$;
 create function pg_temp.archivo(p_ruta text) returns void language sql as $$
   insert into storage.objects (bucket_id, name, metadata) values ('redes-evidencias', p_ruta, jsonb_build_object('size', 300000, 'mimetype', 'image/jpeg')) $$;
 create function pg_temp.iso(p interval) returns text language sql as $$ select to_char(clock_timestamp() + p, 'YYYY-MM-DD"T"HH24:MI:SSOF') $$;
@@ -82,7 +87,7 @@ declare
   a text := 'prueba.redes9b.adm@emdupar.gov.co'; sd text := 'prueba.redes9b.dist@emdupar.gov.co'; op text := 'prueba.redes9b.op@emdupar.gov.co';
   op2 text := 'prueba.redes9b.mant@emdupar.gov.co'; op3 text := 'prueba.redes9b.op3@emdupar.gov.co'; na text := 'prueba.redes9b.nada@emdupar.gov.co';
   v_carga bigint; j jsonb; j2 jsonb; v_p jsonb; v_dan text; v_itv text; v_h1 text; v_h2 text; v_s jsonb; v_n integer; r record;
-  v_t0 timestamptz; v_ms numeric; v_max numeric := 0; v_tiempos text := ''; v_peq integer := 0; v_info text := ''; v_total integer; v_bien integer; v_fallas text;
+  v_t0 timestamptz; v_ms numeric; v_max numeric := 0; v_max_m numeric; v_nm integer; v_ms_v numeric; v_ms_t numeric; v_ms_a numeric; v_tiempos text := ''; v_peq integer := 0; v_info text := ''; v_total integer; v_bien integer; v_fallas text;
 begin
   -- ---------- personas de prueba ----------
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (a, 'ZT9B Admin', 'admin', 'sin_restriccion', 'todos');
@@ -225,6 +230,71 @@ begin
   perform pg_temp.err('05.11 solo agregar: no se cambia una simulación guardada', 'update redes.simulaciones_cierre set valvulas = 0 where id = (select min(id) from redes.simulaciones_cierre)');
   perform pg_temp.err('05.12 solo agregar: no se borra una simulación guardada', 'delete from redes.simulaciones_cierre where id = (select min(id) from redes.simulaciones_cierre)');
 
+  -- ===================== 08. Fase 1b: el cierre real sobre la red de prueba =====================
+  -- (antes de la sección 06, que deja V1 fuera de servicio). El daño v_dan y la intervención v_itv son sobre T4.
+  j := public.geoportal_redes_valvula_maniobra(op, pg_temp.cod('V1'), 'cerrar', v_dan, null, null, pg_temp.iso('3 hours'));
+  perform pg_temp.reg('08.01 el operador de daños cierra V1 con su daño (y la hora estimada de regreso): queda cerrada, con la foto del corte',
+     j ->> 'estado' = 'cerrada' and (j -> 'vigente' ->> 'valvulas_cerradas')::integer = 1
+     and (select m.dano_id = (select id from redes.danos where codigo = v_dan) and m.autor = op and m.regreso_estimado is not null
+            from redes.valvula_maniobras m where m.id = (j ->> 'maniobra')::bigint), j::text);
+  perform pg_temp.err('08.02 cerrar otra vez una válvula cerrada: «ya está cerrada»', format('select public.geoportal_redes_valvula_maniobra(%L, %L, %L, %L)', op, pg_temp.cod('V1'), 'cerrar', v_dan), null, 'ya está cerrada');
+  j := public.geoportal_redes_valvula_maniobra(op, pg_temp.cod('V2'), 'cerrar', v_dan);
+  perform pg_temp.reg('08.03 con V1 y V2 cerradas: 1 zona; T3, T4, T8, T9, T10 y T11 son «tubería cerrada» (el sector del daño); nada afectado; 6 contratos',
+     (pg_temp.foto()).zonas = 1 and (pg_temp.foto()).tramos_cerrados = 6 and (pg_temp.foto()).tramos_afectados = 0 and (pg_temp.foto()).contratos_cerrados = 6
+     and (select string_agg(a.codigo, ',' order by a.codigo) from redes.corte_foto_tramos ft join redes.activos a on a.id = ft.activo_id where ft.foto_id = (pg_temp.foto()).id and ft.papel = 'cerrado')
+         = (select string_agg(pg_temp.cod(t), ',' order by pg_temp.cod(t)) from unnest(array['T3', 'T4', 'T8', 'T9', 'T10', 'T11']) t), row_to_json(pg_temp.foto())::text);
+  j := public.geoportal_redes_valvula_maniobra(sd, pg_temp.cod('V3'), 'cerrar', v_itv, null, null, pg_temp.iso('5 hours'));
+  perform pg_temp.reg('08.04 el supervisor cierra V3 con la intervención: T7 queda «sin agua» (afectado, 2 contratos) en una segunda zona',
+     (pg_temp.foto()).zonas = 2 and (pg_temp.foto()).tramos_afectados = 1 and (pg_temp.foto()).contratos_afectados = 2 and (pg_temp.foto()).tramos_cerrados = 6
+     and (select ft.papel = 'afectado' from redes.corte_foto_tramos ft where ft.foto_id = (pg_temp.foto()).id and ft.activo_id = pg_temp.id('T7')), row_to_json(pg_temp.foto())::text);
+  perform pg_temp.err('08.05b quien no tiene el geovisor técnico no ve los cortes vigentes (42501)', format('select public.geoportal_redes_cortes_vigentes(%L)', op), '42501');
+  perform public.geoportal_redes_personal_fijar(sd, op, 'geovisor', 'si', 'ZT9B prueba: el operador con el geovisor');
+  v_s := public.geoportal_redes_cortes_vigentes(op);
+  perform pg_temp.reg('08.05 lo que ve el geovisor: 2 zonas (la de 6 contratos primero, por el daño; la otra por «trabajo programado», con su regreso estimado), 3 válvulas con quién y desde cuándo, leyenda sencilla',
+     (v_s ->> 'hay')::boolean and (v_s -> 'resumen' ->> 'zonas')::integer = 2 and (v_s -> 'resumen' ->> 'contratos')::integer = 8
+     and (v_s -> 'zonas' -> 0 ->> 'contratos')::integer = 6 and v_s -> 'zonas' -> 0 -> 'por' -> 0 ->> 'registro' = v_dan
+     and v_s -> 'zonas' -> 1 -> 'por' -> 0 ->> 'que' = 'trabajo programado' and v_s -> 'zonas' -> 1 ->> 'regreso_estimado' is not null
+     and jsonb_array_length(v_s -> 'valvulas') = 3 and (select bool_and(x ->> 'quien' like 'ZT9B%' and x ->> 'desde' is not null) from jsonb_array_elements(v_s -> 'valvulas') x)
+     and (select string_agg(x ->> 'texto', ',' order by o) from jsonb_array_elements(v_s -> 'leyenda') with ordinality y(x, o)) = 'Sin agua,Tubería cerrada,Válvula cerrada'
+     and v_s::text !~* 'suscriptor|tel[eé]fono|direcci[oó]n|@emdupar', left(v_s::text, 600));
+  perform pg_temp.reg('08.06 la tesela del modo «Afectaciones» trae la zona (z 16 en T4) y nada lejos de ella',
+     length(public.geoportal_redes_geovisor_mvt_cortes(op, 16, pg_temp.tx(pg_temp.pt(350, 0), 16), pg_temp.ty(pg_temp.pt(350, 0), 16))) > 0
+     and public.geoportal_redes_geovisor_mvt_cortes(op, 16, pg_temp.tx(pg_temp.pt(5000, 5000), 16), pg_temp.ty(pg_temp.pt(5000, 5000), 16)) = '');
+  perform pg_temp.err('08.07 el operador de mantenimiento no cierra con un daño (no tiene ese formulario)', format('select public.geoportal_redes_valvula_maniobra(%L, %L, %L, %L)', op2, pg_temp.cod('V4'), 'cerrar', v_dan), '42501');
+  perform pg_temp.err('08.08 sin daño ni intervención, el operador no cierra (solo el supervisor)',
+     format('select public.geoportal_redes_valvula_maniobra(%L, %L, %L, null, %L)', op, pg_temp.cod('V4'), 'cerrar', 'ZT9B maniobra de operación'), '42501');
+  perform pg_temp.err('08.09 sin daño ni intervención, el supervisor debe escribir el motivo', format('select public.geoportal_redes_valvula_maniobra(%L, %L, %L)', sd, pg_temp.cod('V4'), 'cerrar'), null, 'motivo');
+  perform pg_temp.err('08.10 abrir una válvula que no está cerrada', format('select public.geoportal_redes_valvula_maniobra(%L, %L, %L)', op, pg_temp.cod('V4'), 'abrir'), null, 'no está cerrada');
+  perform pg_temp.err('08.11 una maniobra en el futuro se niega', format('select public.geoportal_redes_valvula_maniobra(%L, %L, %L, %L, null, %L)', op, pg_temp.cod('V4'), 'cerrar', v_dan, pg_temp.iso('2 hours')), null, 'futura');
+  perform pg_temp.err('08.12 una maniobra de hace más de 48 h se niega', format('select public.geoportal_redes_valvula_maniobra(%L, %L, %L, %L, null, %L)', op, pg_temp.cod('V4'), 'cerrar', v_dan, pg_temp.iso('-50 hours')), null, 'más de');
+  perform pg_temp.err('08.13 abrir antes de la hora en que se cerró se niega', format('select public.geoportal_redes_valvula_maniobra(%L, %L, %L, null, null, %L)', op, pg_temp.cod('V1'), 'abrir', pg_temp.iso('-2 hours')), null, 'antes de la hora');
+  perform pg_temp.err('08.14 la hora de regreso la ajusta quien cerró o el supervisor: otro operador no (42501)',
+     format('select public.geoportal_redes_corte_regreso(%L, %L, %L)', op3, pg_temp.cod('V1'), pg_temp.iso('6 hours')), '42501');
+  j := public.geoportal_redes_corte_regreso(sd, pg_temp.cod('V1'), pg_temp.iso('8 hours'), 'ZT9B la cuadrilla pidió más tiempo');
+  perform pg_temp.reg('08.15 el supervisor ajusta la hora de regreso: vale la última, la anterior queda guardada',
+     (select redes.f_cierre_regreso(c.cierre_id) = (j ->> 'regreso_estimado')::timestamptz from redes.f_cierres_vigentes() c where c.valvula_id = pg_temp.id('V1'))
+     and (select count(*) from redes.valvula_maniobras m where m.valvula_id = pg_temp.id('V1') and m.regreso_estimado is not null) = 2);
+  perform pg_temp.reg('08.16 Avisos (distribución): a las 7 h, «3 válvulas cerradas hace más de 6 h» en naranja; a las 13 h, en rojo',
+     (select (av ->> 'n')::integer >= 3 and av ->> 'titulo' like '%válvulas cerradas hace más de 6 h' from jsonb_array_elements(tecnica.f_avisos(false, true, clock_timestamp() + interval '7 hours')) av
+       where av ->> 'clave' = 'valvulas_cerradas_naranja')
+     and exists (select 1 from jsonb_array_elements(tecnica.f_avisos(false, true, clock_timestamp() + interval '13 hours')) av where av ->> 'clave' = 'valvulas_cerradas_rojo')
+     and not exists (select 1 from jsonb_array_elements(tecnica.f_avisos(false, true, clock_timestamp() + interval '1 hour')) av where av ->> 'clave' like 'valvulas_cerradas%'));
+  j := public.geoportal_redes_valvula_maniobra(op, pg_temp.cod('V2'), 'abrir');
+  perform pg_temp.reg('08.17 abrir V2 (con el mismo daño): el sector del daño vuelve a tener agua por C; solo T7 sigue sin agua (1 zona, afectado)',
+     j ->> 'estado' = 'abierta' and (pg_temp.foto()).zonas = 1 and (pg_temp.foto()).tramos_cerrados = 0 and (pg_temp.foto()).tramos_afectados = 1
+     and (select m.dano_id = (select id from redes.danos where codigo = v_dan) from redes.valvula_maniobras m where m.id = (j ->> 'maniobra')::bigint), row_to_json(pg_temp.foto())::text);
+  perform pg_temp.err('08.18 solo agregar: no se cambia una maniobra', 'update redes.valvula_maniobras set motivo = ''ZT9B cambio indebido'' where id = (select min(id) from redes.valvula_maniobras)');
+  perform pg_temp.err('08.19 solo agregar: no se borra una foto', 'delete from redes.corte_foto_tramos where foto_id = (select min(foto_id) from redes.corte_foto_tramos)');
+  perform pg_temp.err('08.20 recalcular los cortes es del supervisor', format('select public.geoportal_redes_cortes_recalcular(%L, %L)', op, 'ZT9B la red cambió'), '42501');
+  perform pg_temp.reg('08.21 el supervisor recalcula (la red cambió): foto nueva, mismo resultado',
+     (public.geoportal_redes_cortes_recalcular(sd, 'ZT9B la red cambió') ->> 'zonas')::integer = 1 and (pg_temp.foto()).maniobra_id is null);
+  perform public.geoportal_redes_valvula_maniobra(op, pg_temp.cod('V1'), 'abrir');
+  perform public.geoportal_redes_valvula_maniobra(sd, pg_temp.cod('V3'), 'abrir');
+  perform pg_temp.reg('08.22 con todo abierto: el geovisor no muestra nada (ni franja) y no hay aviso',
+     not (public.geoportal_redes_cortes_vigentes(op) ->> 'hay')::boolean and (pg_temp.foto()).valvulas_cerradas = 0
+     and public.geoportal_redes_geovisor_mvt_cortes(op, 16, pg_temp.tx(pg_temp.pt(350, 0), 16), pg_temp.ty(pg_temp.pt(350, 0), 16)) = ''
+     and not exists (select 1 from jsonb_array_elements(tecnica.f_avisos(false, true, clock_timestamp() + interval '13 hours')) av where av ->> 'clave' like 'valvulas_cerradas%'));
+
   -- ===================== 06. Lo que cambia la ficha cambia la simulación =====================
   v_h1 := public.geoportal_redes_simulacion_cierre(op, pg_temp.cod('T4')) -> 'red' ->> 'huella';
   v_h2 := public.geoportal_redes_simulacion_cierre(op, pg_temp.cod('T4')) -> 'red' ->> 'huella';
@@ -280,11 +350,34 @@ begin
     end;
     v_max := greatest(v_max, v_ms); v_n := coalesce(v_n, 0) + 1;
   end loop;
+  -- cierre real con la red real: el supervisor cierra 12 válvulas reales (las dos de cada uno de 6 tramos entre dos válvulas), una por una; cada maniobra saca la foto
+  for r in (select v.codigo from (select distinct v1.codigo, v1.activo_id from redes.tramo_nodos tn join redes.activo_vigente_mat m on m.activo_id = tn.activo_id and m.version = tn.version
+              join redes.nodos n1 on n1.id in (tn.nodo_ini, tn.nodo_fin) join redes.activo_vigente_mat v1 on v1.activo_id = n1.activo_id and v1.prefijo = 'VAL' and not v1.retirado
+             where m.sistema = 'acueducto' and m.prefijo = 'RED' and m.cuenta_vigente and not m.retirado and m.activo_id not in (select activo_id from _zt where activo_id is not null)
+               and tn.activo_id in (select tn2.activo_id from redes.tramo_nodos tn2
+                                      join redes.nodos a1 on a1.id = tn2.nodo_ini join redes.activo_vigente_mat b1 on b1.activo_id = a1.activo_id and b1.prefijo = 'VAL'
+                                      join redes.nodos a2 on a2.id = tn2.nodo_fin join redes.activo_vigente_mat b2 on b2.activo_id = a2.activo_id and b2.prefijo = 'VAL'
+                                     order by md5(tn2.activo_id::text) limit 6)) v order by md5(v.activo_id::text) limit 12) loop
+    v_t0 := clock_timestamp();
+    perform public.geoportal_redes_valvula_maniobra(a, r.codigo, 'cerrar', null, 'ZT9B prueba de tiempos con la red real');
+    v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000); v_max_m := greatest(coalesce(v_max_m, 0), v_ms); v_nm := coalesce(v_nm, 0) + 1;
+  end loop;
+  v_t0 := clock_timestamp(); v_s := public.geoportal_redes_cortes_vigentes(a); v_ms_v := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_t0 := clock_timestamp();
+  perform public.geoportal_redes_geovisor_mvt_cortes(a, 15, pg_temp.tx(ST_SetSRID(ST_MakePoint((v_s -> 'zonas' -> 0 ->> 'lon')::float8, (v_s -> 'zonas' -> 0 ->> 'lat')::float8), 4326), 15),
+                                                     pg_temp.ty(ST_SetSRID(ST_MakePoint((v_s -> 'zonas' -> 0 ->> 'lon')::float8, (v_s -> 'zonas' -> 0 ->> 'lat')::float8), 4326), 15))
+   where (v_s ->> 'hay')::boolean and jsonb_array_length(v_s -> 'zonas') > 0;
+  v_ms_t := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_t0 := clock_timestamp(); perform tecnica.f_avisos(true, true, clock_timestamp() + interval '13 hours'); v_ms_a := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_tiempos := v_tiempos || format(' · CIERRE REAL: %s maniobras, la más lenta %s ms (con la foto; quedan %s zonas, %s contratos) · cortes vigentes %s ms · tesela %s ms · avisos completos %s ms',
+                                   v_nm, v_max_m, v_s -> 'resumen' ->> 'zonas', v_s -> 'resumen' ->> 'contratos', v_ms_v, v_ms_t, v_ms_a);
   v_info := format('TIEMPOS de la simulación sobre la red de esta base (%s tramos en operación, %s contratos con tramo): máximo %s ms%s',
                    (select count(*) from redes.activo_vigente_mat where sistema = 'acueducto' and prefijo in ('RED', 'CON') and cuenta_vigente and not retirado),
                    (select count(*) from redes.contrato_tramo), v_max, v_tiempos);
   perform pg_temp.reg('07.01 TIEMPOS: ' || coalesce(v_n, 0) || ' simulaciones sobre la red real (' || v_peq || ' con sector pequeño y «si no cierra»), cada una en menos de 5 s (el tope de la Edge es 30 s)',
      v_n >= 1 and v_max < 5000, v_info);
+  perform pg_temp.reg('07.03 TIEMPOS del cierre real con la red real: cada maniobra (con su foto) en menos de 5 s; cortes vigentes, tesela y avisos en menos de 1 s',
+     v_nm >= 1 and v_max_m < 5000 and v_ms_v < 1000 and v_ms_t < 1000 and v_ms_a < 1000, v_info);
   perform pg_temp.reg('07.02 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE', not exists (select 1 from redes.f_funciones_sin_where()));
 
   -- ---------- Resultado ----------
