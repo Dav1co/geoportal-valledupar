@@ -12,9 +12,9 @@ const num = (n: number | undefined) => (n ?? 0).toLocaleString("es-CO");
 export function AdminAseo({ onVolver }: { onVolver: () => void }) {
   const [pestana, setPestana] = useState<Pestana>("plan");
   return (
-    <div className="tec-pagina campo-pagina">
-      <section className="tec-tarjeta">
-        <div className="campo-cab"><button type="button" className="tec-boton-sec" onClick={onVolver}>‹ Aseo</button><h1>Administración de rutas</h1></div>
+    <div className="aseo-modulo tec-pagina campo-pagina">
+      <section className="tec-tarjeta aseo-hoja">
+        <div className="campo-cab"><button type="button" className="tec-boton-sec" onClick={onVolver}>← Volver al inicio</button><h1>Administración de rutas</h1></div>
         <div className="aseo-pestanas" role="tablist">
           {([["plan", "Plan operativo"], ["capa", "Capa de rutas"], ["barrios", "Barrios"], ["historial", "Historial"]] as const).map(([k, n]) => (
             <button key={k} type="button" role="tab" aria-selected={pestana === k} className={`aseo-pestana${pestana === k ? " aseo-pestana-on" : ""}`} onClick={() => setPestana(k)}>{n}</button>))}

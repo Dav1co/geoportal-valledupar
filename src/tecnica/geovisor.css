@@ -108,3 +108,19 @@
 .geo-grafica figcaption { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: #3c4b57; }
 .geo-grafica figcaption i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
 .geo-grafica-ref { color: #5b6b77; }
+
+/* ---------- Corte 9b: modo «Afectaciones» (franja, leyenda y tarjetas). Colores de los cortes aprobados por David el 17-nov: los de --t-rojo y --t-naranja ---------- */
+.geo { --t-corte-cerrado: var(--t-rojo, #b3261e); --t-corte-afectado: var(--t-naranja, #c25e00); }
+.geo-franja { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px; background: var(--t-rojo-suave, #fdecea); border-bottom: 1px solid var(--t-corte-cerrado); color: var(--t-texto, #22313f); font-size: 15px; }
+.geo-franja strong { color: var(--t-corte-cerrado); }
+.geo-franja-zonas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1 1 200px; min-width: 0; }
+.geo-franja-zona { min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--t-borde-campo, #7b8b99); background: #fff; color: var(--t-texto, #22313f); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.geo-franja-ver { min-height: 44px; padding: 0 14px; border-radius: 8px; border: none; background: var(--t-corte-cerrado); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.geo-franja-zona:focus-visible, .geo-franja-ver:focus-visible { outline: 3px solid var(--t-foco, #4a90d9); outline-offset: 2px; }
+.geo-franja-mas { font-size: 13px; color: var(--t-texto-2, #52626f); }
+.geo-leyenda li .geo-corte-afectado { height: 0; border-top: 3px dashed var(--t-corte-afectado); border-radius: 0; background: none; }
+.geo-leyenda li .geo-corte-cerrado { height: 5px; background: var(--t-corte-cerrado); }
+.geo-leyenda li .geo-corte-valvula { width: 10px; height: 10px; background: var(--t-corte-cerrado); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--t-corte-cerrado); }
+.geo-tarjeta-corte { border-left: 5px solid var(--t-corte-cerrado); }
+.geo-tarjeta-corte .cie-pedir { margin-top: 10px; }
+@media (min-width: 900px) { .geo-franja { padding: 8px 16px; } }

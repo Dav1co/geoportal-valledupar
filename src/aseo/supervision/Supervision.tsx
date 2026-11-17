@@ -22,9 +22,9 @@ export function Supervision({ def, correo, onVolver }: { def: FormularioAseo; co
   const datos = useCallback((r: ResumenT) => setCat({ turnos: r.turnos, auditores: r.auditores }), []);
   const rotulo = def.perfil === "admin" ? "Administrador" : "Supervisor de aseo";
   return (
-    <div className="tdash">
+    <div className="tdash aseo-modulo">
       <div className="tdash-cab"><div className="tdash-ancho">
-        <div className="tdash-fila"><h1>Supervisión y dashboard</h1><button type="button" className="td-boton-claro" onClick={onVolver}>← Volver a Aseo</button></div>
+        <div className="tdash-fila"><h1>Supervisión y dashboard</h1><button type="button" className="td-boton-claro" onClick={onVolver}>← Volver al inicio</button></div>
         <div className="tdash-sesion">{correo} · {rotulo}</div>
         <nav className="tdash-tabs" aria-label="Secciones de Supervisión y dashboard">
           {SECCIONES.map((s) => <button key={s.clave} type="button" className="tdash-tab" aria-current={activa === s.clave ? "page" : undefined} onClick={() => { setActiva(s.clave); setAbrir(null); }}>{s.titulo}</button>)}

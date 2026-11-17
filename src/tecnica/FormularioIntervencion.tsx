@@ -10,6 +10,7 @@ import { useUbicacion, UMBRAL_PRECISION_MALA_M } from "../campo/ubicacion";
 import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "../campo/inicio";
 import { CamaraActa } from "../campo/acta/CamaraActa";
 import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
+import { PanelCierre } from "./PanelCierre";
 import { FichaActivo } from "./FichaActivo";
 import type { Eleccion } from "./MiniMapaRed";
 
@@ -280,6 +281,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
 
   if (guardado) {
     return (
+      <>
       <section className="tec-tarjeta dan-listo itv-listo" role="status">
         <h2>Intervención guardada: {guardado.codigo}</h2>
         <p>Estado: <strong>Cerrada</strong>{guardado.activo ? <> · activo <strong>{guardado.activo}</strong>{guardado.activo_creado ? " (nuevo, queda por verificar)" : ""} (va a su epicrisis)</> : <> · activo no identificado (va a la bandeja del supervisor)</>}.</p>
@@ -294,6 +296,9 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
           <button type="button" className="tec-boton" onClick={() => onSalir?.()}>Registrar otra intervención</button>
         </div>
       </section>
+      {/* Corte 9b: con la intervención guardada se marcan las válvulas cerradas y abiertas (solo acueducto) */}
+      {sistema === "acueducto" ? <PanelCierre registro={guardado.codigo} activo={guardado.activo} /> : null}
+      </>
     );
   }
 
@@ -443,6 +448,10 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
           </>
         )}
       </section>
+
+      {/* Corte 9b: «¿Qué válvulas cierro?»; si la intervención atiende un daño ya elegido, las válvulas se marcan con ese daño */}
+      {sistema === "acueducto" && (activoSel || eleccion?.tipo === "punto")
+        ? <PanelCierre activo={activoSel?.codigo ?? null} punto={!activoSel && eleccion?.tipo === "punto" ? { lat: eleccion.lat, lon: eleccion.lon } : null} registro={nace === "dano" && dano ? dano : null} /> : null}
 
       <section className="tec-tarjeta" aria-labelledby="itv-t3">
         <h2 id="itv-t3">3. Fecha y hora</h2>

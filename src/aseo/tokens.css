@@ -1,0 +1,60 @@
+/* =====================================================================
+   Aseo · TOKENS (rama «aseo-estilo», 17-nov-2026; guía visual del geoportal, §3, §4 y §8)
+   Los mismos nombres y valores que src/tecnica/tokens.css, salvo el color del módulo: sepia tirando a naranja #8a4a1f
+   (texto blanco encima: contraste 6,8 a 1) y su fondo suave #f6ece3 (el color del módulo encima: 5,8 a 1).
+   Una sola fuente: la del geoportal (--sans: Arial / Helvetica). La monoespaciada, solo para códigos.
+   Toda pantalla de Aseo lleva la clase «aseo-modulo» en su raíz (también la cámara y la firma, que van a pantalla completa):
+   ahí se fijan los tokens, para que no dependan de que Técnica se haya abierto antes y para que las clases tec-*, td-* y campo-*
+   que Aseo comparte tomen el color de Aseo sin tocar sus hojas.
+   ===================================================================== */
+:root {
+  --aseo: #8a4a1f;              /* color del módulo: encabezado de sección, botón principal, borde de tarjeta */
+  --aseo-suave: #f6ece3;        /* fondo suave derivado del color del módulo */
+}
+.aseo-modulo {
+  --t-fuente: var(--sans, Arial, Helvetica, "Helvetica Neue", sans-serif);
+  --t-fuente-codigo: var(--mono, "Courier New", Courier, monospace);
+
+  /* módulo */
+  --t-modo: var(--aseo);
+  --t-modo-suave: var(--aseo-suave);
+
+  /* superficies y texto */
+  --t-fondo: #f2f5f8;
+  --t-tarjeta: #ffffff;
+  --t-borde: #d5dde6;
+  --t-borde-campo: #7b8b99;
+  --t-suave: #eef2f5;
+  --t-texto: #22313f;
+  --t-texto-2: #52626f;
+  --t-titulo: #0a2540;
+
+  /* estados */
+  --t-rojo: #b3261e;
+  --t-rojo-suave: #fdecea;
+  --t-naranja: #c25e00;
+  --t-naranja-suave: #fff4e5;
+  --t-ok: #1b6b3a;
+  --t-ok-suave: #e7f4ec;
+  --t-info-suave: #eaf2fb;
+  --t-foco: #4a90d9;
+
+  /* tamaños, espacios, radios */
+  --t-txt-chico: 13px;
+  --t-txt: 15px;
+  --t-txt-campo: 16px;
+  --t-txt-grande: 17px;
+  --t-titulo-1: 22px;
+  --t-titulo-2: 18px;
+  --t-esp-1: 4px;
+  --t-esp-2: 8px;
+  --t-esp-3: 12px;
+  --t-esp-4: 16px;
+  --t-esp-5: 24px;
+  --t-radio: 8px;
+  --t-radio-tarjeta: 12px;
+  --t-toque: 44px;
+  --t-borde-modo: 5px;
+
+  font-family: var(--t-fuente);
+}

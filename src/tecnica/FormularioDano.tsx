@@ -8,6 +8,7 @@ import { useUbicacion, UMBRAL_PRECISION_MALA_M } from "../campo/ubicacion";
 import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "../campo/inicio";
 import { CamaraActa } from "../campo/acta/CamaraActa";
 import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
+import { PanelCierre } from "./PanelCierre";
 import { FichaActivo } from "./FichaActivo";
 import type { Eleccion } from "./MiniMapaRed";
 
@@ -208,6 +209,7 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
 
   if (guardado) {
     return (
+      <>
       <section className="tec-tarjeta dan-listo" role="status">
         <h2>{clase === "dano" ? "Daño" : "Falla"} guardado: {guardado.codigo}</h2>
         <p>Estado: <strong>{guardado.estado === "reportado" ? "Reportado" : guardado.estado === "en_atencion" ? "En atención" : "Atendido"}</strong>{guardado.activo ? <> · activo <strong>{guardado.activo}</strong> (va a su epicrisis)</> : <> · activo no identificado (va a la bandeja del supervisor)</>}.</p>
@@ -221,6 +223,9 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
           <button type="button" className="tec-boton" onClick={() => onSalir?.()}>Reportar otro daño o falla</button>
         </div>
       </section>
+      {/* Corte 9b: con el daño guardado ya se pueden marcar las válvulas cerradas y abiertas (solo acueducto) */}
+      {sistema === "acueducto" ? <PanelCierre registro={guardado.codigo} activo={guardado.activo} punto={ubicGuardada.current} /> : null}
+      </>
     );
   }
 
@@ -287,6 +292,10 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
           </>
         )}
       </section>
+
+      {/* Corte 9b: «¿Qué válvulas cierro?» desde el activo o el punto elegido (solo la simulación; las válvulas se marcan con el daño guardado) */}
+      {sistema === "acueducto" && (eleccion?.tipo === "activo" || eleccion?.tipo === "punto")
+        ? <PanelCierre activo={eleccion.tipo === "activo" ? eleccion.activo.codigo : null} punto={eleccion.tipo === "punto" ? { lat: eleccion.lat, lon: eleccion.lon } : null} /> : null}
 
       <section className="tec-tarjeta" aria-labelledby="dan-t2">
         <h2 id="dan-t2">2. Qué pasó</h2>
