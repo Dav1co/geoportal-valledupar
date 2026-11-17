@@ -1,0 +1,7 @@
+Segmentos de aislamiento de modeloV1 (análisis segmento-válvula, §17) — Corte 9b, Fase 0
+Red: 8035 nodos de consumo, 9580 tubos, 729 válvulas (21 cerradas en el modelo), 4 fuentes (tanques y embalses). Demanda base total 2196 L/s.
+Segmentos (lo mínimo que se aísla cerrando las válvulas que lo rodean): 346; con demanda: 95.
+  · el más grande lleva 1388 L/s (63 % de la demanda); los 5 más grandes, 90 %; mediana de los que tienen demanda 1.00 L/s
+  · segmentos sin ninguna válvula alrededor ni fuente (no se pueden aislar con válvulas del modelo): 4
+Válvulas cerradas una a una (las demás como en el modelo): 279 «cierran» (dejan demanda sin camino a una fuente), 429 «derivan» (el agua llega por otro lado), 21 cerradas en el modelo, 0 en paralelo
+Las 5 más críticas (demanda que dejan sin agua): V7322 (54.3 L/s, 133 nodos), V6749 (35.2 L/s, 48 nodos), V7165 (23.3 L/s, 121 nodos), V7202 (19.1 L/s, 17 nodos), V7006 (13.0 L/s, 21 nodos)
