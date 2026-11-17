@@ -1,0 +1,35 @@
+OK    01 el ensayo termina en el ERROR esperado: 35 de 35 … SIN FALLAS
+   TIEMPOS de la simulación sobre la red de esta base (10089 tramos en operación, 104344 contratos con tramo): máximo 506 ms · tramo RED-003342 222 ms (95856–101698 contratos, 589 válvulas, segmento grande) · tramo RED-005252 214 ms (95856–101698 contratos, 589 válvulas, segmento grande) · tramo RED-010416 207 ms (95856–101698 contratos, 589 válvulas, segmento grande) · tramo RED-006619 202 ms (95856–101698 contratos, 589 válvulas, segmento grande) · tramo junto a una válvula RED-003655 407 ms (95856–101698 contratos, 589 válvulas, segmento grande) · tramo junto a una válvula RED-005865 254 ms (95856–101698 contratos, 589 válvulas, segmento grande) · tramo entre dos válvulas RED-003976 506 ms (3–101698 contratos, 2 válvulas) · tramo entre dos válvulas RED-000794 338 ms (42–101698 contratos, 2 válvulas) · válvula VAL-000482 227 ms (95856–101698 contratos, 588 válvulas, segmento grande) · tan
+OK    02 … y no deja nada (sigue la huella del 10 y no hay tabla de simulaciones)
+OK    03 la base local tiene los CHECK de producción en los dobles (lista blanca, auditoría y personal de Técnica)
+OK    04 public.predios_comercial: si está en la base, es vista materializada como en producción (aquí: no está; este corte no la lee ni la escribe)
+OK    05 ningún archivo del paquete escribe ni refresca predios_comercial
+OK    06 las huellas antes de aplicar: «CORTE 10 (listo para el 9b)», la reemplazada sin cambiar, las nuevas no existen
+OK    07 la migración se aplica
+OK    08 las huellas después: «CORTE 9b (aplicado)», reemplazada y 9 nuevas
+OK    09 la verificación: las 7 filas OK
+OK    10 una segunda migración se niega
+OK    11 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
+OK    12 14 simulaciones como la Edge (service_role, 30 s / 8 s) sobre la red real, sin errores: la más lenta 364 ms (tope local 833 ms = 5 s / 6)
+   RED-003342: 291 ms · 95856–101698 contratos · 589 válvulas · segmento grande · 11 kB 
+   RED-005252: 259 ms · 95856–101698 contratos · 589 válvulas · segmento grande · 11 kB 
+   RED-010416: 275 ms · 95856–101698 contratos · 589 válvulas · segmento grande · 11 kB 
+   RED-006619: 260 ms · 95856–101698 contratos · 589 válvulas · segmento grande · 11 kB 
+   RED-003655: 254 ms · 95856–101698 contratos · 589 válvulas · segmento grande · 11 kB 
+   RED-004847: 253 ms · 95856–101698 contratos · 589 válvulas · segmento grande · 11 kB 
+   RED-003976: 353 ms · 3–101698 contratos · 2 válvulas · 18 kB 
+   RED-000794: 310 ms · 42–101698 contratos · 2 válvulas · 11 kB 
+   RED-005472: 364 ms · 1–101698 contratos · 2 válvulas · 18 kB 
+   RED-007452: 242 ms · 0–24 contratos · 2 válvulas · 2 kB 
+   VAL-000482: 272 ms · 95856–101698 contratos · 588 válvulas · segmento grande · 11 kB 
+   VAL-000389: 286 ms · 95856–101698 contratos · 588 válvulas · segmento grande · 11 kB 
+   VAL-000591: 267 ms · 95856–101698 contratos · 588 válvulas · segmento grande · 11 kB 
+   VAL-000180: 266 ms · 95856–101698 contratos · 589 válvulas · segmento grande · 11 kB 
+OK    13 ninguna respuesta pasa de 64 kB (las listas tienen tope) ni trae la lista interna de contratos
+OK    14 alguien sin Técnica no simula; el supervisor sí
+OK    15 la API no ve la tabla ni las funciones internas
+OK    16 la reversa se aplica y vuelve la huella del 10
+OK    17 una segunda reversa se niega
+OK    18 con simulaciones guardadas, la reversa se niega (no borra datos)
+
+RESULTADO: 18 de 18 — SIN FALLAS
