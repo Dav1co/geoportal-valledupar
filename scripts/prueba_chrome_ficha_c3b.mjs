@@ -247,6 +247,11 @@ for (const ancho of [390, 1280]) {
      && (ancho === 390 ? new RegExp(`Intervención · ${ITV} · después`) : /Foto de perfil/).test(await texto(p)));
   let t = await texto(p);
   ok(`${tag} el administrador ve «Editar ficha» y «Cambiar foto principal»`, /Editar ficha/.test(t) && /Cambiar foto principal/.test(t));
+  // 17-nov: el botón lleva el ícono de cámara de los formularios (IconoCamara), delante del texto y sin cambiar el rótulo
+  ok(`${tag} «Cambiar foto principal» lleva el ícono de cámara (18 px) delante del texto, y «Editar ficha» no`, await p.evaluate(() => {
+    const bot = (r) => [...document.querySelectorAll(".red-acciones-edicion button")].find((x) => r.test(x.innerText)); const i = bot(/^Cambiar foto principal$/)?.firstElementChild;
+    return !!i && i.matches("svg[data-icono=camara][aria-hidden=true]") && Math.round(i.getBoundingClientRect().width) === 18 && !bot(/^Editar ficha$/)?.querySelector("svg"); }));
+  await (await p.$(".red-acciones-edicion")).screenshot({ path: join(CAP, `camara_boton_${ancho}.png`) });
   await clicTexto(p, "button", "Ver las fotos"); await p.waitForSelector(".red-gal-foto img");
   ok(`${tag} galería: la foto del daño ${DANO} y la de la intervención, cargadas`, await imagenCargada(p, ".red-gal-foto:nth-child(2) img") && (await p.$$(".red-gal-foto")).length >= 2
      && new RegExp(`Daño · ${DANO}`).test(await texto(p)) && /vencen al minuto/.test(await texto(p)));
@@ -276,7 +281,12 @@ for (const ancho of [390, 1280]) {
      && t.includes(ITV) && t.includes(DANO), t);
   // foto principal
   await clicTexto(p, "button", "Cambiar foto principal"); await p.waitForSelector("#fp-archivo");
+  ok(`${tag} el campo «Foto» lleva el ícono de cámara en su rótulo; el campo de archivo sigue igual (JPEG o PNG, sin «capture»)`, await p.evaluate(() => {
+    const r = document.querySelector("label[for=fp-archivo]"), c = document.querySelector("#fp-archivo"), i = r?.firstElementChild;
+    return !!i && i.matches("svg[data-icono=camara][aria-hidden=true]") && r.innerText.trim() === "Foto" && c.type === "file" && c.accept === "image/jpeg,image/png" && !c.hasAttribute("capture") && !c.multiple; }));
   await (await p.$("#fp-archivo")).uploadFile(PNG); await p.waitForSelector(".red-foto-vista");
+  ok(`${tag} el diálogo de la foto no desborda`, await sinDesborde(p));
+  await (await p.$(".red-editar")).screenshot({ path: join(CAP, `camara_campo_foto_${ancho}.png`) });
   await poner(p, "#fp-motivo", "Foto de la válvula en la visita");
   const s0 = subidas.length;
   await clicTexto(p, "button", "Guardar foto"); await esperarTexto(p, /Foto principal guardada\./);

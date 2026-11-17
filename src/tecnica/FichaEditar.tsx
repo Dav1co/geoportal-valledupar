@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import "./dano.css";
+import { IconoCamara } from "./IconoCamara";
 import { apiPerfil, subirArchivo, type CambiosFicha, type EdicionFicha, type Opcion } from "./apiRedes";
 
 // Editar la ficha del activo (Corte 3b, §22 y §23). El administrador y, desde el Corte 4a, el supervisor de distribución (§26.2); el origen, solo el
@@ -172,7 +173,7 @@ export function FotoPerfilCambiar({ codigo, maxBytes, onCancelar, onGuardado }: 
   return (
     <section className="red-seccion red-editar" aria-labelledby="fp-tit">
       <h2 id="fp-tit">Cambiar la foto principal</h2>
-      <div className="tec-campo"><label htmlFor="fp-archivo">Foto</label><input id="fp-archivo" type="file" accept="image/jpeg,image/png" onChange={(e) => void elegir(e.target.files?.[0])} /></div>
+      <div className="tec-campo"><label htmlFor="fp-archivo"><IconoCamara />Foto</label><input id="fp-archivo" type="file" accept="image/jpeg,image/png" onChange={(e) => void elegir(e.target.files?.[0])} /></div>
       {vista ? <img className="red-foto-vista" src={vista} alt="Vista previa de la foto principal" /> : null}
       <div className="tec-campo"><label htmlFor="fp-motivo">Motivo del cambio</label><input id="fp-motivo" type="text" maxLength={1000} value={motivo} onChange={(e) => setMotivo(e.target.value)} /></div>
       {error ? <p className="tec-aviso tec-aviso-error" role="alert">{error}</p> : null}
