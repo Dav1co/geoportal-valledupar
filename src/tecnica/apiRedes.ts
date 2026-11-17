@@ -30,11 +30,12 @@ export type Ficha = {
   componentes: ActivoCorto[]; parte_de: ActivoCorto[]; admite_componentes: boolean;
   epicrisis: { hechos: number; registro: number };
 };
+// «aparte»: el activo tiene fila, pero está fuera de servicio o es obra de un tercero (SIVA): no remunerado (David, 16-nov).
 // Corte 10 (inventario regulatorio): la fila de la Valoración Técnica 2019 a la que está amarrado el activo. Los valores son DE LA FILA (activos agregados).
 export type FilaRegulatoria = { hoja: string; n: number; nombre: string; clase: string; caracteristica?: string; diametro_pulg?: number; cantidad?: number; unidad?: string; activos: number;
   anio_operacion?: number; fecha_operacion?: string; vida_util?: number; vida_remanente_hoy?: number; fin_vida_util?: string;
   valor_total?: number; valor_remanente?: number; depreciacion_anual?: number; aporte: number; nota?: string };
-export type Regulatorio = { fuente: string; archivo: string; cargada_en: string; remunerado: boolean; situacion: "con_fila" | "sin_fila" | "proyectado" | "fuera"; texto?: string; nota?: string;
+export type Regulatorio = { fuente: string; archivo: string; cargada_en: string; remunerado: boolean; situacion: "con_fila" | "aparte" | "sin_fila" | "proyectado" | "fuera"; texto?: string; nota?: string;
   filas?: FilaRegulatoria[] };
 export type Cursor = { cuando: string; clase: string; ref_id: number };
 export type EventoEpicrisis = { cuando: string; clase: string; ref_id: number; grupo: "hecho" | "registro"; resumen: string; estado?: string; autor?: string };

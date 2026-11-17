@@ -79,7 +79,7 @@ ok('09 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE', q('select
 q(f"insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, ver_dashboard_redes, horario, dias) values ('{SD}', 'ZT10 arnés supervisor', 'consulta', true, true, 'sin_restriccion', 'todos')")
 q(f"insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, horario, dias) values ('{OP}', 'ZT10 arnés operador', 'consulta', true, 'sin_restriccion', 'todos')")
 q(f"insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values ('{OP}', 'asignar_formulario', 'danos_fallas', '{ADM}')")
-cod = q("select codigo from redes.activo_vigente_mat where prefijo = 'RED' and not retirado and estado_codigo = 'en_operacion' order by activo_id limit 1")
+cod = 'RED-000435'      # un tramo en operación que el análisis dejó «con fila» (el mismo que usa la carga en su comprobación 11)
 ms, out, e = edge(f"select public.geoportal_redes_valoracion('{ADM}')")
 ok('10 antes de cargar: la conciliación dice «sin cargar» y la ficha no trae la sección', not e and json.loads(out)['cargada'] is False
    and 'regulatorio' not in json.loads(edge(f"select public.geoportal_redes_activo('{ADM}', '{cod}')")[1]), e)
@@ -122,7 +122,8 @@ out_sd = edge(f"select public.geoportal_redes_activo('{SD}', '{cod}')")[1]
 out_op = edge(f"select public.geoportal_redes_activo('{OP}', '{cod}')")[1]
 ok('21 el supervisor de distribución ve la sección; el operador no recibe nada de ella (sin términos tarifarios)',
    'regulatorio' in json.loads(out_sd) and 'regulatorio' not in json.loads(out_op) and not re.search(r'remunerad|valoraci|depreciaci|tarif|regulator', out_op, re.I))
-for letra, nombre, sql_cod in (('a', 'un tramo proyectado', "am.situacion = 'proyectado'"), ('b', 'un tramo sin fila', "am.situacion = 'sin_fila' and a.prefijo = 'RED'")):
+for letra, nombre, sql_cod in (('a', 'un tramo proyectado', "am.situacion = 'proyectado'"), ('b', 'un tramo sin fila', "am.situacion = 'sin_fila' and a.prefijo = 'RED'"),
+                               ('c', 'un tramo de obra SIVA (con fila, marcado aparte)', "am.situacion = 'aparte_siva'"), ('d', 'un tramo fuera de servicio (con fila, marcado aparte)', "am.situacion = 'aparte_fuera_servicio'")):
     c2 = q(f"select a.codigo from redes.val_amarre am join redes.activos a on a.id = am.activo_id where am.hoja = 'acueducto' and {sql_cod} order by a.id limit 1")
     f2 = json.loads(edge(f"select public.geoportal_redes_activo('{ADM}', '{c2}')")[1]).get('regulatorio', {})
     ok(f'22{letra} {nombre} ({c2}): no remunerado, «{f2.get("texto", "")[:60]}…»', f2.get('remunerado') is False and f2.get('texto'), f2)

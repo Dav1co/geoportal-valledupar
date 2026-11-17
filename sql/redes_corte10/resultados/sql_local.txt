@@ -11,18 +11,20 @@ OK    10 antes de cargar: la conciliación dice «sin cargar» y la ficha no tra
 OK    11 el ENSAYO de la carga (la valoración real y los amarres): 14 de 14 … SIN FALLAS
 OK    12 … y no deja nada cargado
 OK    13 la carga se niega a quien no es administrador
-OK    14 la carga real: 14 de 14 comprobaciones, SIN FALLAS (1261 ms en total)
+OK    14 la carga real: 14 de 14 comprobaciones, SIN FALLAS (960 ms en total)
 OK    15 la verificación de la carga: las 4 filas OK
 OK    16 una segunda carga del mismo archivo se niega (no duplica)
 OK    17 ningún activo cambió de versión ni tuvo eventos por la carga (la ficha oficial no se toca)
-OK    18 la conciliación como la Edge (132 ms, 77 kB): 166 filas; BCR0 {'acueducto': 101061, 'alcantarillado': 138548, 'alcantarillado_2': 176452}; tuberías que calzan {'acueducto': (26, 33), 'alcantarillado': (4, 34), 'alcantarillado_2': (27, 63)}
+OK    18 la conciliación como la Edge (106 ms, 75 kB): 166 filas; BCR0 {'acueducto': 101061, 'alcantarillado': 138548, 'alcantarillado_2': 176452}; tuberías que calzan {'acueducto': (26, 33), 'alcantarillado': (4, 34), 'alcantarillado_2': (27, 63)}
 OK    19 la conciliación solo la ve el administrador (supervisor y operador: 42501)
-OK    20 la ficha de RED-000001 como la Edge (84 ms): remunerado, fila «TUBERIA PVC 8», valoración «propuesta»
+OK    20 la ficha de RED-000435 como la Edge (61 ms): remunerado, fila «TUBERIA PVC 3», valoración «propuesta»
 OK    21 el supervisor de distribución ve la sección; el operador no recibe nada de ella (sin términos tarifarios)
 OK    22a un tramo proyectado (RED-000094): no remunerado, «Proyectado por el Plan Maestro: no entra en la valoración 20…»
 OK    22b un tramo sin fila (RED-000013): no remunerado, «Sin fila en la valoración 2019: ninguna fila corresponde a s…»
+OK    22c un tramo de obra SIVA (con fila, marcado aparte) (RED-000001): no remunerado, «Tiene fila en la valoración 2019, pero es obra de un tercero…»
+OK    22d un tramo fuera de servicio (con fila, marcado aparte) (CON-000001): no remunerado, «Tiene fila en la valoración 2019, pero está fuera de servici…»
 OK    23 la planta trae sus dos filas (Huaricha y Gota Fría) y La Popa la suya
-OK    24 seis teselas del geovisor alrededor de la más cargada (14/4857/7712) como la Edge: la más lenta 150 ms, la mayor 206 kB; menos de 5 s
+OK    24 seis teselas del geovisor alrededor de la más cargada (14/4857/7712) como la Edge: la más lenta 72 ms, la mayor 206 kB; menos de 5 s
 OK    25 la misma tesela: la del administrador trae la edad regulatoria (281264 caracteres) y la del operador no (261844)
 OK    26 con la carga hecha, las teselas subieron de versión (el navegador las pide de nuevo)
 OK    27 al cambiar el parámetro, vale la otra hoja sin recargar nada: COL-000001 pasa de «ALCANTARILLADO (2)» a «ALCANTARILLADO»
@@ -31,6 +33,6 @@ OK    29 sin cargar, la reversa deja la huella del 5d y quita las tablas
 OK    30 las huellas después de la reversa dicen «listo para el 10» y nada «DISTINTA»
 OK    31 y se puede migrar de nuevo después de la reversa (los parámetros vuelven a quedar vigentes)
 ----
-TIEMPOS DEL ENSAYO SQL: TIEMPOS con 29739 amarres (todos los tramos, conductos, hidrantes y válvulas de esta base): conciliación 113 ms · ficha de RED-000001 5 ms · tesela más cargada 14/4857/7712 27 ms (206 kB) · tesela 13/2428/3856 43 ms (65 kB)
-TIEMPOS DE LA CARGA: TIEMPOS: conciliación 89 ms · ficha de RED-000435 41 ms · tesela 14/4857/7712 55 ms (206 kB)
-RESULTADO: 32 de 32 — SIN FALLAS
+TIEMPOS DEL ENSAYO SQL: TIEMPOS con 29739 amarres (todos los tramos, conductos, hidrantes y válvulas de esta base): conciliación 78 ms · ficha de RED-000001 4 ms · tesela más cargada 14/4857/7712 24 ms (206 kB) · tesela 13/2428/3856 22 ms (65 kB)
+TIEMPOS DE LA CARGA: TIEMPOS: conciliación 75 ms · ficha de RED-000435 31 ms · tesela 14/4857/7712 48 ms (206 kB)
+RESULTADO: 34 de 34 — SIN FALLAS

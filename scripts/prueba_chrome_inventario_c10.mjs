@@ -235,6 +235,7 @@ const TR = sqlq(`select m.codigo || '|' || ST_X(ST_LineInterpolatePoint(ST_Geome
   from redes.activo_vigente_mat m where m.prefijo = 'RED' and m.estado_codigo = 'en_operacion' and not m.retirado and m.longitud_m between 120 and 200 and m.fecha_instalacion is null
    and m.diametro_mm >= 150 ${ANTES ? "" : "and exists (select 1 from redes.val_amarre am where am.activo_id = m.activo_id and am.situacion = 'con_fila')"} order by m.activo_id limit 1`).split("|");
 const [TRAMO, TLON, TLAT] = [TR[0], Number(TR[1]), Number(TR[2])];
+const SIVA = ANTES ? "" : sqlq("select a.codigo from redes.val_amarre am join redes.activos a on a.id = am.activo_id where am.situacion = 'aparte_siva' order by a.id limit 1");
 const seccionReg = (p) => p.evaluate(() => document.querySelector("[data-testid=ficha-regulatorio]")?.innerText ?? null);
 async function porEdad(p) { await clicTexto(p, ".geo-seg button", "Edad"); await p.waitForSelector('.geo-leyenda[aria-label="Colores por edad"]'); return p.evaluate(() => document.querySelector('.geo-leyenda[aria-label="Colores por edad"]').innerText); }
 async function tarjetaTramo(p) {
@@ -325,6 +326,14 @@ for (const ancho of ANCHOS) {
      /Remunerado vía tarifa\s*Sí/.test(t) && /Fila \d+ · TUBERIA [A-Z ]+ de [0-9,]+ pulgadas/.test(t) && /En la fila\s*[0-9.,]+ m · [0-9.]+ activos amarrados/.test(t) && /01\/07\/1989/.test(t), t.slice(0, 700));
   ok(`${tag} B7 la ficha con la sección no se desborda`, await sinDesborde(p));
   await p.evaluate((s) => document.querySelector(s)?.scrollIntoView({ block: "start" }), "[data-testid=ficha-regulatorio]"); await new Promise((r) => setTimeout(r, 250)); await p.screenshot({ path: join(CAP, `ficha_tramo_${ancho}.png`) });
+  await p.close();
+  // un tramo de obra SIVA: tiene fila, pero no se remunera (decisión de David, 16-nov)
+  p = await abrir(ancho, "adm"); await esperarTexto(p, /Ficha de activos/); await clicTexto(p, "button.tec-tarjeta-modo", "Ficha de activos"); await esperarTexto(p, /Por código/);
+  await poner(p, "#red-codigo", SIVA); await clicTexto(p, "button", "Abrir la ficha"); await esperarTexto(p, /Datos del activo/); await p.waitForSelector("[data-testid=ficha-regulatorio]");
+  t = await seccionReg(p);
+  ok(`${tag} B8 un tramo de obra SIVA (${SIVA}): remunerado vía tarifa «No», dice por qué y sigue mostrando su fila`,
+     /Remunerado vía tarifa\s*No/.test(t) && /obra de un tercero \(SIVA\)[\s\S]*no se remunera vía tarifa/.test(t) && /Fila \d+ · TUBERIA/.test(t), t.slice(0, 500));
+  await p.evaluate((s) => document.querySelector(s)?.scrollIntoView({ block: "start" }), "[data-testid=ficha-regulatorio]"); await new Promise((r) => setTimeout(r, 250)); await p.screenshot({ path: join(CAP, `ficha_tramo_siva_${ancho}.png`) });
   await p.close();
 
   // ===== C. El operador de redes: nada de esto =====

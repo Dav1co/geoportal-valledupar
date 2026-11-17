@@ -151,8 +151,9 @@ begin
      and not (public.geoportal_redes_activo(op, pg_temp.cod(t1)) ? 'regulatorio')
      and public.geoportal_redes_activo(op, pg_temp.cod(t1))::text !~* 'remunerad|valoraci|depreciaci|tarif|regulator');
   v_f := public.geoportal_redes_activo(a, pg_temp.cod(t2)) -> 'regulatorio';
-  perform pg_temp.reg('04.05 un tramo «marcado aparte» (obra de un tercero) tiene fila y lleva su nota',
-     (v_f ->> 'remunerado')::boolean and v_f -> 'filas' -> 0 ->> 'nota' = 'ZT10 obra de un tercero', v_f::text);
+  perform pg_temp.reg('04.05 un tramo «marcado aparte» (obra de un tercero): NO remunerado, pero muestra su fila y su nota (decisión de David, 16-nov)',
+     not (v_f ->> 'remunerado')::boolean and v_f ->> 'situacion' = 'aparte' and v_f ->> 'texto' like '%obra de un tercero (SIVA)%no se remunera%'
+     and jsonb_array_length(v_f -> 'filas') = 1 and v_f -> 'filas' -> 0 ->> 'nota' = 'ZT10 obra de un tercero', v_f::text);
   v_f := public.geoportal_redes_activo(a, pg_temp.cod(t3)) -> 'regulatorio';
   perform pg_temp.reg('04.06 un tramo proyectado: no remunerado, «no entra en la valoración»',
      not (v_f ->> 'remunerado')::boolean and v_f ->> 'situacion' = 'proyectado' and v_f ->> 'texto' like 'Proyectado%' and not (v_f ? 'filas'), v_f::text);

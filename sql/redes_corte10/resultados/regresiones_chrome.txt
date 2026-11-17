@@ -1,4 +1,4 @@
-== Regresiones de Chrome del Corte 10 (ramas tecnica-corte10 ya unidas con main: frontend 5b36933 y Edges 44fbbca, con los Cortes 12 y 13 del Code A; base de Code B con el 10 y la valoración cargada; copias temporales con el puerto de B para los guiones de Code A)
+== Regresiones de Chrome del Corte 10 (ramas tecnica-corte10 ya unidas con main: frontend f5bf6a6 y Edges 44fbbca, con los Cortes 12 y 13 y el ícono de cámara del Code A; segunda entrega, huella aad5952c…; base de Code B con el 10 y la valoración cargada; copias temporales con el puerto de B para los guiones de Code A)
 == 5d
 RESULTADO: 34 de 34 — SIN FALLAS
 == 9a-bis

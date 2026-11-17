@@ -7,7 +7,7 @@ do $$
 begin
   if to_regclass('redes.val_filas') is null then raise exception 'No hay nada que revertir: el Corte 10 no está aplicado'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'e5cbeadc954a9e0f237e2c4583d85051' then
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'aad5952c27e13cc3ad45623279ba7085' then
     raise exception 'Las funciones cambiaron después de la migración del Corte 10: la reversa se niega a pisarlas; avise';
   end if;
   if exists (select 1 from redes.val_hojas) or exists (select 1 from redes.val_filas) or exists (select 1 from redes.val_amarre)

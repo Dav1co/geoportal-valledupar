@@ -112,6 +112,12 @@ for hoja, nombre_hoja, servicio, d in HOJAS:
         else:
             clase, unidad = 'otro', ('un' if cant is not None else None)
         n = int(r[0])
+        if hoja == 'acueducto' and mayus.startswith('TANQUE AGUAS CLARAS'):      # respuesta de David (16-nov)
+            notas[(hoja, n)] = ('Sin amarrar. En la PTAP hay dos tanques (uno nuevo, después del balance, y otro antes): si Aguas Claras queda dentro de la planta, es uno de esos dos; '
+                                'si queda fuera, es un tanque de compensación. No se puede saber con certeza')
+        if hoja == 'acueducto' and clase == 'valvula':      # respuesta de David (16-nov)
+            notas[(hoja, n)] = ('Amarrada a las válvulas de cierre del modelo de ese diámetro (decisión de David, 16-nov). '
+                                + ('De 3 a 8 pulgadas la cantidad de la valoración trae decimales y el precio por metro de la tubería: parece metros, no unidades' if (diam or 99) <= 8 else 'La valoración la llama «válvula de cheque»'))
         nota = notas.get((hoja, n)) or (notas.get(('alcantarillado_2', n + 29)) if hoja == 'alcantarillado' and clase != 'tuberia' and clase != 'terreno' else None)
         filas.append(dict(hoja=hoja, n=n, nombre=nombre, subsistema=limpio(r[3 + d]), actividad=limpio(r[4 + d]), tipo_activo=limpio(r[5 + d]), vida_util=numero(r[6 + d]),
                           caracteristica=car, cantidad=cant, unidad=unidad, precio_unitario=numero(r[9 + d]), valor_total=numero(r[10 + d]),

@@ -114,15 +114,18 @@ create function redes.f_val_prefijos() returns text[] language sql immutable set
   select array['RED', 'CON', 'ADU', 'COL', 'INT', 'TOR', 'HID', 'VAL', 'TAN', 'PTA', 'PTR', 'CAP', 'DES'] $$;
 
 -- La sección «Inventario regulatorio» de la ficha (solo la piden supervisor y administrador: lo decide redes.f_ficha).
+-- «Remunerado vía tarifa»: sí solo si tiene fila en la hoja que vale y no está marcado aparte (fuera de servicio u obra SIVA).
 -- Los valores son DE LA FILA (agregados): no se reparten por activo. «Vida útil remanente a hoy» = vida útil − años desde la entrada en operación regulatoria.
 create function redes.f_ficha_regulatorio(p_activo bigint, p_prefijo text) returns jsonb
 language plpgsql stable set search_path to 'redes', 'public', 'pg_temp' as $$
 declare v_val bigint := redes.f_ref_vigente('valoracion'); v_am bigint; v_hoja text; c redes.ref_cargas%rowtype;
-        v_hoy date := (clock_timestamp() at time zone 'America/Bogota')::date; v_filas jsonb; v_sit text; v_nota text; v_n integer;
+        v_hoy date := (clock_timestamp() at time zone 'America/Bogota')::date; v_filas jsonb; v_sit text; v_nota text; v_n integer; v_rem boolean; v_aparte text;
 begin
   if v_val is null then return null; end if;      -- todavía no se ha cargado la valoración
   v_am := redes.f_ref_vigente('val_amarre'); v_hoja := redes.f_val_hoja_alc();
-  select count(*), min(am.situacion) filter (where am.n is null), min(am.nota) filter (where am.n is null) into v_n, v_sit, v_nota
+  select count(*), min(am.situacion) filter (where am.n is null), min(am.nota) filter (where am.n is null),
+         coalesce(bool_or(am.situacion = 'con_fila'), false), min(am.situacion) filter (where am.situacion like 'aparte\_%')
+    into v_n, v_sit, v_nota, v_rem, v_aparte
     from redes.val_amarre am where am.activo_id = p_activo and am.carga_id = v_am and am.val_carga_id = v_val and am.hoja in ('acueducto', v_hoja);
   if v_n = 0 and not (p_prefijo = any (redes.f_val_prefijos())) then return null; end if;
   select * into c from redes.ref_cargas where id = v_val;
@@ -141,13 +144,16 @@ begin
     join redes.val_filas f on f.carga_id = am.val_carga_id and f.hoja = am.hoja and f.n = am.n
     join redes.val_hojas h on h.carga_id = f.carga_id and h.hoja = f.hoja
    where am.activo_id = p_activo and am.carga_id = v_am and am.val_carga_id = v_val and am.hoja in ('acueducto', v_hoja);
-  if v_filas is null then v_sit := case when v_n = 0 then 'fuera' else coalesce(v_sit, 'sin_fila') end; else v_sit := 'con_fila'; end if;
+  -- Decisión de David (16-nov): un activo fuera de servicio o de obra de un tercero (SIVA) tiene fila, pero NO se remunera («aparte», con su nota)
+  if v_filas is null then v_sit := case when v_n = 0 then 'fuera' else coalesce(v_sit, 'sin_fila') end; elsif v_rem then v_sit := 'con_fila'; else v_sit := 'aparte'; end if;
   return jsonb_strip_nulls(jsonb_build_object(
     'fuente', 'Valoración técnica 2019 (Res. CRA 688 de 2014), propuesta',
     'archivo', c.archivo, 'cargada_en', c.creado_en,
-    'remunerado', v_filas is not null,
+    'remunerado', v_rem,
     'situacion', v_sit,
     'texto', case v_sit when 'con_fila' then null
+                        when 'aparte' then case v_aparte when 'aparte_siva' then 'Tiene fila en la valoración 2019, pero es obra de un tercero (SIVA) en el modelo del Plan Maestro: no se remunera vía tarifa.'
+                                                         else 'Tiene fila en la valoración 2019, pero está fuera de servicio en el modelo del Plan Maestro: no se remunera vía tarifa.' end
                         when 'fuera' then 'Fuera de la valoración 2019: el activo no estaba en la red con que se amarró la valoración (por ejemplo, uno nuevo de una inversión). Queda así hasta que haya una valoración nueva.'
                         when 'proyectado' then 'Proyectado por el Plan Maestro: no entra en la valoración 2019.'
                         else 'Sin fila en la valoración 2019: ninguna fila corresponde a su material y diámetro.' end,
@@ -582,8 +588,9 @@ begin
      and not (public.geoportal_redes_activo(op, pg_temp.cod(t1)) ? 'regulatorio')
      and public.geoportal_redes_activo(op, pg_temp.cod(t1))::text !~* 'remunerad|valoraci|depreciaci|tarif|regulator');
   v_f := public.geoportal_redes_activo(a, pg_temp.cod(t2)) -> 'regulatorio';
-  perform pg_temp.reg('04.05 un tramo «marcado aparte» (obra de un tercero) tiene fila y lleva su nota',
-     (v_f ->> 'remunerado')::boolean and v_f -> 'filas' -> 0 ->> 'nota' = 'ZT10 obra de un tercero', v_f::text);
+  perform pg_temp.reg('04.05 un tramo «marcado aparte» (obra de un tercero): NO remunerado, pero muestra su fila y su nota (decisión de David, 16-nov)',
+     not (v_f ->> 'remunerado')::boolean and v_f ->> 'situacion' = 'aparte' and v_f ->> 'texto' like '%obra de un tercero (SIVA)%no se remunera%'
+     and jsonb_array_length(v_f -> 'filas') = 1 and v_f -> 'filas' -> 0 ->> 'nota' = 'ZT10 obra de un tercero', v_f::text);
   v_f := public.geoportal_redes_activo(a, pg_temp.cod(t3)) -> 'regulatorio';
   perform pg_temp.reg('04.06 un tramo proyectado: no remunerado, «no entra en la valoración»',
      not (v_f ->> 'remunerado')::boolean and v_f ->> 'situacion' = 'proyectado' and v_f ->> 'texto' like 'Proyectado%' and not (v_f ? 'filas'), v_f::text);

@@ -77,7 +77,7 @@ export function InventarioRegulatorio({ onFicha }: { onFicha: (codigo: string) =
           ["Amarre", d.amarre ? `${d.amarre.archivo} (md5 ${d.amarre.md5}), cargado el ${fecha(d.amarre.cargado_en)}. Tramos y conductos por material y diámetro; puntuales uno a uno.` : "Sin amarre vigente"],
           ["Hoja de alcantarillado que vale", `${nom.get(d.hoja_alcantarillado)?.nombre ?? d.hoja_alcantarillado}. La otra va como referencia (columna «Vale»).`],
           ["Totales por hoja", hojas.map((x) => `${x.nombre}: ${x.filas} filas, BCR0 ${millones(x.bcr0)}`).join(" · ")],
-          ["Cantidad en la red", "Suma de los activos vigentes amarrados a la fila (metros de tubería o unidades), sin los retirados ni los ocultos. «Marcada aparte»: fuera de servicio u obra de un tercero en el modelo."],
+          ["Cantidad en la red", "Suma de los activos vigentes amarrados a la fila (metros de tubería o unidades), sin los retirados ni los ocultos. «Marcada aparte»: fuera de servicio u obra de un tercero (SIVA) en el modelo; tiene fila, pero no se remunera vía tarifa."],
           ["Calza", `La diferencia no pasa del ${nf.format(d.tolerancia_pct)} % de la cantidad de la valoración. Plantas, tanques y terrenos no se comparan por cantidad.`],
           ["Activos sin fila", "Agrupados por tipo, material y diámetro. «Fuera de la valoración 2019»: activos creados después del amarre (por ejemplo, de una inversión)."],
           ["Valores", "El valor y la depreciación son de toda la fila (activos agregados): no se reparten por tramo. Sin datos de personas."],
@@ -132,7 +132,7 @@ export function InventarioRegulatorio({ onFicha }: { onFicha: (codigo: string) =
                   <td className="reg-num">{cantidad(f.cantidad, f.unidad)}</td>
                   <td className="reg-num">{f.comparable ? cantidad(f.red, f.unidad) : f.codigos
                     ? f.codigos.split(", ").map((c) => <button key={c} type="button" className="tec-enlace" onClick={() => onFicha(c)}>{c}</button>) : "Sin activo"}
-                    {f.comparable && f.aparte ? <span className="reg-nota">{nf.format(f.aparte)} marcados aparte</span> : null}</td>
+                    {f.comparable && f.aparte ? <span className="reg-nota">{nf.format(f.aparte)} marcados aparte (no remunerados)</span> : null}</td>
                   <td className="reg-num">{f.diferencia === undefined ? "—" : `${f.diferencia > 0 ? "+" : ""}${nf.format(f.diferencia)}`}</td>
                   <td className="reg-num">{f.pct === undefined ? "—" : `${nf.format(f.pct)} %`}</td>
                   <td className="reg-num">{nf0.format(f.activos)}</td>

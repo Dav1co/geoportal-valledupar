@@ -12,7 +12,7 @@ rcam as (
          case when to_regprocedure(c.firma) is null then 'FALTA' when md5(pg_get_functiondef(to_regprocedure(c.firma))) = c.antes then 'CORTE 5d (sin cambiar)'
               when md5(pg_get_functiondef(to_regprocedure(c.firma))) = c.despues then 'CORTE 10 (reemplazada)' else 'DISTINTA' end as estado
     from cam c),
-nue(firma, nueva) as (values ('redes.f_val_hoja_alc()', '12f0e8528d072329237d2487b7e0225a'), ('redes.f_val_prefijos()', '96809e8a00089c8142dfc1c1a6b7e7a2'), ('redes.f_ficha_regulatorio(bigint,text)', '13e3f14717adf29c78557f756ac13064'), ('public.geoportal_redes_valoracion(text)', 'ec88cca4eea304ad4310015c2a386b4a')),
+nue(firma, nueva) as (values ('redes.f_val_hoja_alc()', '12f0e8528d072329237d2487b7e0225a'), ('redes.f_val_prefijos()', '96809e8a00089c8142dfc1c1a6b7e7a2'), ('redes.f_ficha_regulatorio(bigint,text)', '4260a4611f540b87566ee145729e0737'), ('public.geoportal_redes_valoracion(text)', 'ec88cca4eea304ad4310015c2a386b4a')),
 rnue as (
   select '3 ' || n.firma, md5(pg_get_functiondef(to_regprocedure(n.firma))),
          case when to_regprocedure(n.firma) is null then 'NO EXISTE (sin aplicar)' when md5(pg_get_functiondef(to_regprocedure(n.firma))) = n.nueva then 'NUEVA (aplicada)' else 'DISTINTA' end
@@ -21,7 +21,7 @@ conj as (
   select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) as m from pg_proc p
    where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%'))
 select '0 funciones de redes (conjunto)' as objeto, (select m from conj) as md5,
-       case (select m from conj) when '5fd6d00efdaa1a798e2628a2cde23c61' then 'CORTE 5d (listo para el 10)' when 'e5cbeadc954a9e0f237e2c4583d85051' then 'CORTE 10 (aplicado)' else 'DISTINTA' end as estado
+       case (select m from conj) when '5fd6d00efdaa1a798e2628a2cde23c61' then 'CORTE 5d (listo para el 10)' when 'aad5952c27e13cc3ad45623279ba7085' then 'CORTE 10 (aplicado)' else 'DISTINTA' end as estado
 union all select * from rcam
 union all select * from rnue
 union all select '4 tablas de referencia del 9a (ref_cargas, pm_valvulas)', null,
