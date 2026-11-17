@@ -14,6 +14,7 @@ export type ConfigGeovisor = {
   perfil: "admin" | "supervisor" | "operador"; completo: boolean; perfiles: PerfilGeovisor[]; hoy: string; rango_meses: number; max_elementos: number;
   zoom: { min: number; red_completa: number; nodos: number; accesorios: number; contratos?: number }; version: number;
   formularios: { danos_fallas: boolean; mantenimiento: boolean }; ficha: boolean;
+  remuneracion?: number | null;      // Corte 14: la persona tiene el modo «Remuneración» (supervisor de distribución y administrador); vale la versión del amarre
   edad_ref?: boolean | null;      // Corte 10: hay amarre con la valoración (la edad de los activos sin fecha de instalación sale de la fecha regulatoria); solo supervisores
   contratos_corte?: string | null;      // Corte 7a: AAAAMMDD del último corte de la cartera diaria (solo supervisores)
   compartir?: boolean;      // Corte 6b. Corte 6c: ya no hay «contratos_capa»: la tesela de contratos se arma al vuelo, siempre al día
@@ -52,9 +53,18 @@ export const apiGeovisor = {
     pedir<CapaDatos>("geovisor_capa", { ...F, qs: { capa, ...(desde ? { desde } : {}), ...(hasta ? { hasta } : {}) } }),
   /** Corte 9b (ajuste final): TODOS los daños abiertos o en atención, sin límite de fecha, para el modo «Afectaciones» (solo supervisores y administrador). */
   danosAbiertos: () => pedir<GeoJSON.FeatureCollection & { capa: string; total: number; recortada: boolean }>("afectaciones_danos", F),
+  /** Corte 14, modo «Remuneración»: la leyenda con los conteos, y la tarjeta de un activo. Solo supervisor de distribución y administrador. */
+  remuneracion: () => pedir<InfoRemuneracion>("remuneracion", F),
+  remuneracionTarjeta: (codigo: string) => pedir<TarjetaRemun>("remuneracion_tarjeta", { ...F, qs: { codigo } }),
   tarjetaContrato: (contrato: string) => pedir<TarjetaContrato>("contrato_tarjeta", { ...F, qs: { contrato } }),
   compartir: (v: VistaGuardada) => pedir<{ id: string }>("vista_compartir", { ...F, cuerpo: v }),
   abrirVista: (id: string) => pedir<VistaAbierta>("vista_abrir", { ...F, qs: { id } }),
   fijar: (perfil: PerfilGeovisor, capa: string, encendida: boolean, motivo: string) =>
     pedir<{ cambio: boolean }>("geovisor_capas_fijar", { ...F, cuerpo: { perfil, capa, encendida, motivo } }),
 };
+
+// Corte 14, Etapa 3: modo «Remuneración» (término tarifario: nunca llega al operador)
+export type EstadoRemun = "remunerado" | "no_remunerado" | "sin_fila" | "proyectado";
+export type InfoRemuneracion = { cargado: boolean; version: number | null; rotulo: string; nota: string; conteos: Partial<Record<EstadoRemun, number>>; leyenda: { clave: EstadoRemun; nombre: string; significa: string }[] };
+export type TarjetaRemun = { codigo: string; tipo: string; sistema: string; cargado: boolean; estado: EstadoRemun | "no_aplica"; remunerado: boolean; rotulo: string; motivo?: string;
+  filas?: { hoja: string; n: number; nombre: string; caracteristica?: string; cantidad?: number; unidad?: string; anio_operacion?: number }[] };

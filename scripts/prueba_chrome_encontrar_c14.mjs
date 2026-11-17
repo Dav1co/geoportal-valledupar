@@ -31,9 +31,9 @@ const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: proces
 if (PGENV.PGPORT === "55432") { console.error("El puerto 55432 es de Code A: no se toca"); process.exit(2); }
 const sqlq = (s) => execFileSync(PSQL, ["-AtX", "-v", "ON_ERROR_STOP=1", "-c", s], { env: PGENV, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trim();
 const lit = (v) => (v === null || v === undefined ? "null" : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : typeof v === "object" ? `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb` : `'${String(v).replace(/'/g, "''")}'`);
-const EMAILS = { adm: "zt.admin@emdupar.gov.co", dist: "zt.dist@emdupar.gov.co", op: "zt.oper@emdupar.gov.co", op2: "zt.oper.sinform@emdupar.gov.co", campo: "zt.campo@emdupar.gov.co", nada: "zt.nada@emdupar.gov.co" };
-const PERFIL = { [EMAILS.adm]: "admin", [EMAILS.dist]: "operador", [EMAILS.op]: "operador", [EMAILS.op2]: "operador" };
-const FORMS = { [EMAILS.adm]: ["danos_fallas", "mantenimiento"], [EMAILS.dist]: [], [EMAILS.op]: ["danos_fallas"], [EMAILS.op2]: ["danos_fallas"] };
+const EMAILS = { adm: "zt.admin@emdupar.gov.co", dist: "zt.dist@emdupar.gov.co", op: "zt.oper@emdupar.gov.co", op2: "zt.oper.sinform@emdupar.gov.co", planta: "zt.planta@emdupar.gov.co", campo: "zt.campo@emdupar.gov.co", nada: "zt.nada@emdupar.gov.co" };
+const PERFIL = { [EMAILS.adm]: "admin", [EMAILS.dist]: "operador", [EMAILS.op]: "operador", [EMAILS.op2]: "operador", [EMAILS.planta]: "supervisor" };
+const FORMS = { [EMAILS.adm]: ["danos_fallas", "mantenimiento"], [EMAILS.dist]: [], [EMAILS.op]: ["danos_fallas"], [EMAILS.op2]: ["danos_fallas"], [EMAILS.planta]: [] };
 const NOMBRE = { danos_fallas: "Reportar daño o falla", mantenimiento: "Registrar intervención" };
 // cada ancho arranca de una copia limpia de la plantilla, con la persona de Comercial y el formulario asignado al operador (como lo haría el supervisor en Personal)
 function rehacer() {
@@ -96,6 +96,7 @@ function rpcBase(fn, a) {
 function rpcOtras(fn, a) {
   switch (fn) {
     case "geoportal_tec_mis_formularios": { const p = PERFIL[a.p_solicitante]; return p ? { perfil: p, formularios: FORMS[a.p_solicitante].map((c) => ({ clave: c, nombre: NOMBRE[c], descripcion: "", con_campos: false })) } : { status: 403, cuerpo: { code: "42501", message: "Sin permiso" } }; }
+    case "geoportal_tec_catalogo_filtros": return { formularios: [], plantas: [], zonas: [], puntos: [], descarga_max_filas: 50000, descarga_pagina_max: 5000, motivo_min: 10, motivo_max: 500 };
     case "geoportal_tec_avisos": if (a.p_solicitante === EMAILS.dist) {      // Etapa 2: los avisos de distribución salen de la base (tecnica.f_avisos con el bloque del Corte 14)
       const av = JSON.parse(sqlq("select tecnica.f_avisos(false, true)"));
       return { areas: { planta: false, distribucion: true, personal: true }, admin: false, avisos: av, total: av.length, rojos: av.filter((x) => x.nivel === "rojo").length, naranjas: av.filter((x) => x.nivel === "naranja").length, calculado_en: new Date().toISOString(), ms: 1 };
@@ -455,7 +456,7 @@ for (const ancho of ANCHOS) {
   await p.waitForFunction((c) => !document.querySelector(`[data-testid=lev-bandeja] [data-levantar="${c}"]`), { timeout: 20000 }, lev3).catch(() => {});
   ok(A("K2 el supervisor confirma: queda «levantado» con ese activo"), sqlq(`select estado || '|' || (select codigo from redes.activos a where a.id = p.activo_id) from redes.v_levantar_punto p where codigo = '${lev3}'`) === `levantado|${nuevo}`);
   // ----- Etapa 2: el aviso y la capa del geovisor -----
-  await p.evaluate(() => [...document.querySelectorAll("button")].find((b) => /Volver al inicio/.test(b.textContent))?.click());
+  await p.reload(); await p.waitForFunction(() => window.__listo === true, { timeout: 15000 });      // los avisos se leen al abrir (y cada minuto): se abre de nuevo para verlos al día
   await esperarTexto(p, /Avisos/);
   await clicTexto(p, "button.tec-tarjeta-modo", "Avisos"); await p.waitForSelector('[data-aviso="activos_por_levantar"]', { timeout: 30000 });
   ok(A("L1 Avisos: «1 activo reportado por levantar», informativo, con su lista"), await p.evaluate((c) => { const a = document.querySelector('article[data-aviso="activos_por_levantar"]'); return a.dataset.nivel === "info" && /1 activo reportado por levantar/.test(a.innerText) && a.innerText.includes(c) && /Por verificar/.test(a.innerText); }, lev2),
@@ -470,11 +471,40 @@ for (const ancho of ANCHOS) {
   await p.evaluate(() => { const i = document.querySelector(".geo-panel [data-capa=por_levantar] input"); i.scrollIntoView({ block: "center" }); if (!i.checked) i.click(); });
   ok(A("M2 … y al encenderla trae el punto que sigue por levantar (el naranja de estado)"), await p.waitForFunction(() => { const m = document.querySelector(".geo-mapa").__mapa; const s = m.getSource("g-por_levantar"); return s && s._data && s._data.features && s._data.features.length === 1 && m.getPaintProperty("g-por_levantar", "circle-color") === "#c25e00"; }, { timeout: 30000 }).then(() => true).catch(() => false));
   await clicTexto(p, ".geo-panel button", "✕"); await captura(p, `despues_geovisor_por_levantar_${ancho}.png`, false);
+  // ----- Etapa 3: modo «Remuneración» -----
+  ok(A("N1 geovisor del supervisor de distribución: el selector trae el quinto modo, «Remuneración»"), await p.evaluate(() => [...document.querySelectorAll("[data-colores]")].map((b) => b.textContent).join() === "Tipo,Material,Edad,Afectaciones,Remuneración"));
+  await p.evaluate((lon, lat) => document.querySelector(".geo-mapa").__mapa.jumpTo({ center: [lon, lat], zoom: 17 }), LUGAR.lon, LUGAR.lat);
+  await clic(p, '[data-colores="remuneracion"]'); await p.waitForSelector("[data-testid=leyenda-remuneracion]");
+  if (ancho < 500) await p.evaluate(() => { const b = document.querySelector("[data-testid=leyenda-remuneracion] .geo-leyenda-plegar"); if (b.getAttribute("aria-expanded") !== "true") b.click(); });
+  await p.waitForFunction(() => /Remunerado: [\d.]+/.test(document.querySelector("[data-testid=leyenda-remuneracion]").innerText), { timeout: 30000 }).catch(() => {});
+  ok(A("N2 la leyenda: Remunerado, No remunerado, Sin fila y Proyectado, con sus conteos y el rótulo «Valoración técnica 2019, propuesta»"), await p.evaluate(() => { const l = document.querySelector("[data-testid=leyenda-remuneracion]");
+    return [...l.querySelectorAll("[data-remun]")].map((x) => x.dataset.remun).join() === "remunerado,no_remunerado,sin_fila,proyectado" && /Remunerado: [\d.]+/.test(l.innerText) && /Sin fila: \d+/.test(l.innerText)
+      && l.querySelector("[data-testid=remun-rotulo]").textContent === "Valoración técnica 2019, propuesta"; }), await p.evaluate(() => document.querySelector("[data-testid=leyenda-remuneracion]").innerText));
+  const dibRem = await p.waitForFunction(() => { const m = document.querySelector(".geo-mapa").__mapa; return m.getLayer("m-rem-l") && m.getLayoutProperty("m-rem-l", "visibility") === "visible" && m.queryRenderedFeatures({ layers: ["m-rem-l"] }).length > 0; }, { timeout: 60000 }).then(() => true).catch(() => false);
+  ok(A("N3 la red se pinta por remuneración (tesela aparte) y la red de siempre queda de fondo"), dibRem && await p.evaluate(() => { const m = document.querySelector(".geo-mapa").__mapa;
+    const fs = m.queryRenderedFeatures({ layers: ["m-rem-l", "m-rem-lp", "m-rem-p"] }); return fs.every((f) => ["remunerado", "no_remunerado", "sin_fila", "proyectado"].includes(f.properties.rem)) && m.getPaintProperty("t-acu_tramos-l", "line-color") === "#d5dde6"; }));
+  if (ancho < 500) await p.evaluate(() => document.querySelector("[data-testid=leyenda-remuneracion] .geo-leyenda-plegar").click());
+  await new Promise((r) => setTimeout(r, 500));
+  { const pt = await p.evaluate((lon, lat) => { const m = document.querySelector(".geo-mapa").__mapa; const r = document.querySelector(".geo-mapa").getBoundingClientRect(); const q = m.project([lon, lat]); return { x: r.left + q.x, y: r.top + q.y }; }, LUGAR.lon, LUGAR.lat);
+    if (ancho < 500) await p.touchscreen.tap(pt.x, pt.y); else await p.mouse.click(pt.x, pt.y); }
+  await p.waitForFunction(() => /Remunerado vía tarifa/.test(document.querySelector('.geo-tarjeta[data-capa="remuneracion"]')?.innerText ?? "") , { timeout: 30000 }).catch(() => {});
+  const tr = await p.evaluate(() => { const c = document.querySelector('.geo-tarjeta[data-capa="remuneracion"]'); return c ? { cod: c.querySelector("h2").textContent, estado: c.dataset.estado, txt: c.innerText.replace(/\s+/g, " "), dentro: c.getBoundingClientRect().right <= document.documentElement.clientWidth + 1 } : null; });
+  const esperado = tr ? JSON.parse(sqlq(`select public.geoportal_redes_remuneracion_tarjeta('${EMAILS.dist}', '${tr.cod}')`)) : null;
+  ok(A("N4 al tocar un activo: «Remunerado vía tarifa: Sí / No», su estado, la fila de la valoración (si la tiene) y el rótulo; lo mismo que dice la base"), tr && tr.estado === esperado.estado && new RegExp(`Remunerado vía tarifa ${esperado.remunerado ? "Sí" : "No"}`).test(tr.txt)
+    && /Valoración técnica 2019, propuesta/.test(tr.txt) && (!esperado.filas || /Fila de la valoración .* fila \d+/.test(tr.txt)) && tr.dentro, JSON.stringify(tr));
+  await captura(p, `despues_remuneracion_${ancho}.png`, false);
+  await clic(p, '[data-colores="tipo"]');
+  ok(A("N5 al salir del modo, la red vuelve a sus colores y la tarjeta se cierra"), await p.evaluate(() => { const m = document.querySelector(".geo-mapa").__mapa; return m.getLayoutProperty("m-rem-l", "visibility") === "none" && !document.querySelector('.geo-tarjeta[data-capa="remuneracion"]') && !document.querySelector("[data-testid=leyenda-remuneracion]"); }));
   await clic(p, ".geo-volver"); await esperarTexto(p, /Dashboard distribución/);
   await clicTexto(p, "button.tec-tarjeta-modo", "Dashboard distribución"); await esperarTexto(p, /Por verificar/);
   await clicTexto(p, "[role=tab]", "Personal"); await esperarTexto(p, /Encontrar o reportar activo/);
   ok(A("H12 Personal de distribución: el formulario «Encontrar o reportar activo» es uno más de los asignables"), /Encontrar o reportar activo/.test(await texto(p)));
   await captura(p, `despues_personal_${ancho}.png`);
+  await p.close();
+  // el supervisor de planta tiene el geovisor completo, pero NO el modo «Remuneración» (término tarifario)
+  p = await abrir(ancho, "planta");
+  await esperarTexto(p, /Geovisor técnico/); await clicTexto(p, "button.tec-tarjeta-modo", "Geovisor técnico"); await p.waitForFunction(() => !!document.querySelector(".geo-mapa")?.__mapa, { timeout: 30000 });
+  ok(A("N6 el supervisor de planta NO ve el modo «Remuneración» (ni su tesela se pide)"), await p.evaluate(() => [...document.querySelectorAll("[data-colores]")].map((b) => b.textContent).join() === "Tipo,Material,Edad,Afectaciones" && !document.querySelector(".geo-mapa").__mapa.getSource("remun")));
   await p.close();
 }
 
@@ -518,6 +548,17 @@ if (!ANTES) {
     && r.cuerpo.puntos.every((x, i) => x.n === i + 1 && /token=/.test(x.foto_url) && !("foto" in x) && !("quien" in x)) && (await edgeF("op", "levantar_hoja", { cuerpo: {} })).status === 403
     && (await edgeF("campo", "levantar_hoja", { cuerpo: {} })).status === 403 && (await edgeF("dist", "levantar_hoja", { cuerpo: { estado: "levantado" } })).status === 400 && (await edgeF("dist", "levantar_hoja")).status === 405, JSON.stringify(r.cuerpo).slice(0, 300));
   ok("I13 la capa «por_levantar» va por geovisor_capa: al supervisor, GeoJSON; al operador, 403", await edgeF("dist", "geovisor_capa", { qs: { capa: "por_levantar" } }).then((x) => x.status === 200 && Array.isArray(x.cuerpo.features)) && (await edgeF("op", "geovisor_capa", { qs: { capa: "por_levantar" } })).status === 403);
+  r = await edgeF("dist", "remuneracion");
+  ok("I14 remuneracion (GET): leyenda y conteos, sin caché; al operador, al supervisor de planta y a Comercial, 403", r.status === 200 && r.cuerpo.leyenda.length === 4 && r.cuerpo.cargado === true && r.cache === "no-store"
+    && (await edgeF("op", "remuneracion")).status === 403 && (await edgeF("planta", "remuneracion")).status === 403 && (await edgeF("campo", "remuneracion")).status === 403);
+  r = await edgeF("dist", "remuneracion_tarjeta", { qs: { codigo: LUGAR.val } });
+  ok("I15 remuneracion_tarjeta (GET): estado, «remunerado» y rótulo; sin código, 400; un activo que no existe, 404; al supervisor de planta, 403", r.status === 200 && typeof r.cuerpo.remunerado === "boolean" && /propuesta/.test(r.cuerpo.rotulo)
+    && (await edgeF("dist", "remuneracion_tarjeta")).status === 400 && (await edgeF("dist", "remuneracion_tarjeta", { qs: { codigo: "RED-99999999" } })).status === 404 && (await edgeF("planta", "remuneracion_tarjeta", { qs: { codigo: LUGAR.val } })).status === 403);
+  { const z = 15, x = Math.floor((LUGAR.lon + 180) / 360 * 2 ** z), y = Math.floor((1 - Math.asinh(Math.tan(LUGAR.lat * Math.PI / 180)) / Math.PI) / 2 * 2 ** z);
+    const f = (rol, qs) => fetch(`http://127.0.0.1:${P_EDGE}/functions/v1/geoportal-redes?accion=geovisor_tesela_remuneracion&${new URLSearchParams(qs)}`, { headers: { Authorization: `Bearer tok-${rol}` } });
+    const t1 = await f("dist", { z, x, y, v: 1 }); const n1 = (await t1.arrayBuffer()).byteLength;
+    ok("I16 geovisor_tesela_remuneracion: MVT con caché privada y por sesión; tesela fuera de rango, 400; al supervisor de planta y al operador, 403", t1.status === 200 && /mapbox-vector-tile/.test(t1.headers.get("content-type")) && /private/.test(t1.headers.get("cache-control")) && /Authorization/.test(t1.headers.get("vary") ?? "")
+      && n1 > 500 && (await f("dist", { z: 40, x: 1, y: 1 })).status === 400 && (await f("planta", { z, x, y })).status === 403 && (await f("op", { z, x, y })).status === 403, `${t1.status} ${t1.headers.get("content-type")} ${t1.headers.get("cache-control")} vary=${t1.headers.get("vary")} bytes=${n1} fuera=${(await f("dist", { z: 40, x: 1, y: 1 })).status} planta=${(await f("planta", { z, x, y })).status} op=${(await f("op", { z, x, y })).status}`); }
   ok("I11 el perfil de redes trae «activo_campo»: sí al operador con el formulario y al supervisor; no al operador sin él", (await edgeF("op", "mi_perfil")).cuerpo.activo_campo === true && (await edgeF("dist", "mi_perfil")).cuerpo.activo_campo === true && (await edgeF("op2", "mi_perfil")).cuerpo.activo_campo === false);
   ok("Z1 sin errores de JavaScript ni de consola", errores.length === 0, errores.join(" | "));
   ok("Z2 ninguna RPC sin simular", desconocidas.length === 0, [...new Set(desconocidas)].join(", "));

@@ -140,3 +140,9 @@
 .geo-leyenda-plegar::after { content: "▾"; flex: 0 0 auto; }
 .geo-leyenda-plegar[aria-expanded="true"]::after { content: "▴"; }
 .geo-leyenda-plegar:focus-visible { outline: 3px solid var(--t-foco, #4a90d9); outline-offset: 2px; }
+
+/* Corte 14, Etapa 3: modo «Remuneración» (solo supervisor de distribución y administrador). Tokens de la guía: verde de estado, gris, naranja de estado y punteado. */
+.geo-leyenda-remun li { align-items: flex-start; }
+.geo-leyenda-remun li > span:first-child { margin-top: 6px; }
+.geo-leyenda li .geo-remun-proyectado { height: 0; border-top: 2px dashed var(--t-texto-2); border-radius: 0; background: none; }
+.geo-leyenda li .geo-remun-txt { width: auto; height: auto; border-radius: 0; flex: 1 1 auto; font-size: var(--t-txt-chico); line-height: 1.3; }

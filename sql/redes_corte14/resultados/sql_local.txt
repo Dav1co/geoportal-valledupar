@@ -1,35 +1,65 @@
-# Corte 14, Etapa 1 · base local de Code B (emdupar_b14, huella de partida a327aa51…)
+# Corte 14 completo (etapas 1, 2 y 3) · base local de Code B (emdupar_b14, huella de partida a327aa51…)
 ## huellas ANTES
 0 funciones de redes (conjunto)|CORTE 9b completo (listo para el 14)
 2 campo.f_formularios_personal()|ANTES DEL 14 (sin cambiar)
+2 public.geoportal_redes_geovisor(text)|ANTES DEL 14 (sin cambiar)
+2 public.geoportal_redes_geovisor_capa(text,text,date,date)|ANTES DEL 14 (sin cambiar)
 2 public.geoportal_redes_mi_perfil(text)|ANTES DEL 14 (sin cambiar)
+2 tecnica.f_avisos(boolean,boolean,timestamptz)|ANTES DEL 14 (sin cambiar)
+3 public.geoportal_redes_geovisor_mvt_remuneracion(text,integer,integer,integer)|NO EXISTE (sin aplicar)
 3 public.geoportal_redes_levantar_cerca(text,numeric,numeric,numeric,text)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_levantar_crear(text,uuid,jsonb,text)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_levantar_evento(text,text,text,text,text,text)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_levantar_ficha(text,text)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_levantar_fotos(text,text,text)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_levantar_hoja(text,text,text)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_levantar_inicio(text)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_levantar_lista(text,text,text,integer)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_levantar_preparar(text,integer)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_remuneracion(text)|NO EXISTE (sin aplicar)
+3 public.geoportal_redes_remuneracion_tarjeta(text,text)|NO EXISTE (sin aplicar)
+3 redes.f_levantar_acceso(text)|NO EXISTE (sin aplicar)
+3 redes.f_levantar_estado_nombre(text)|NO EXISTE (sin aplicar)
+3 redes.f_levantar_puede(text)|NO EXISTE (sin aplicar)
+3 redes.f_levantar_quien(text)|NO EXISTE (sin aplicar)
+3 redes.f_levantar_tipo_nombre(text)|NO EXISTE (sin aplicar)
+3 redes.f_remuneracion_estado(boolean,boolean,boolean)|NO EXISTE (sin aplicar)
+4 dominio tecnica.formulario_clave|9 CLAVES (listo)
+5 CHECK de campo.personal_eventos.formulario|PASADA 14-NOV (listo)
+6 tablas de los puntos por levantar (4)|NO EXISTEN (sin aplicar)
+7 formulario activo_campo en redes.formularios_distribucion|NO ESTÁ (sin aplicar)
 ## ensayo
-TIEMPOS con 36306 activos vigentes en esta base: cercanos en el lugar más cargado (10.503233, -73.285244; radio 30 m; 65 activos, 10 kB) 3 ms · cercanos de alcantarillado (15 m; 0 activos) 0 ms · bandeja del supervisor 1 ms · preparar y crear un punto 1 ms
-RESULTADO: 56 de 56 pruebas correctas — SIN FALLAS
+TIEMPOS con 36307 activos vigentes en esta base: cercanos en el lugar más cargado (10.503233, -73.285244; radio 30 m; 65 activos, 10 kB) 2 ms · cercanos de alcantarillado (15 m; 0 activos) 0 ms · bandeja del supervisor 1 ms · preparar y crear un punto 1 ms · hoja de levantamiento y avisos de distribución 42 ms
+TIEMPOS de «Remuneración» (valoración cargada): tesela más cargada 14/4857/7712 43 ms (157 kB) · tesela 13/2428/3856 36 ms · leyenda con conteos 38 ms
+RESULTADO: 80 de 80 pruebas correctas — SIN FALLAS
 ## después del ensayo sigue la huella de partida
 0 funciones de redes (conjunto)|a327aa51f43bb5cc2112a6db089718ed|CORTE 9b completo (listo para el 14)
 ## migración + verificación
-01 las RPC nuevas y la reemplazada: security definer, search_path fijo, solo service_role|OK
+01 las RPC nuevas y las reemplazadas: security definer, search_path fijo, solo service_role|OK
 02 ninguna función interna de redes la ejecuta la API (incluidas las nuevas)|OK
-03 huellas md5 de las 2 reemplazadas, de las 13 nuevas y del conjunto de funciones de redes del 14|OK
+03 huellas md5 de las 5 reemplazadas, de las 18 nuevas y del conjunto de funciones de redes del 14|OK
 04 pg-safeupdate: ninguna función de redes, tecnica, public.geoportal_redes_* ni geoportal_tec_* con DELETE o UPDATE sin WHERE|OK
 05 las 4 tablas de los puntos por levantar: nadie de la API las lee ni las escribe; son de solo agregar (con su disparador)|OK
 06 ninguna tabla de los puntos por levantar tiene columnas de suscriptores (nombre, contrato, teléfono, dirección)|OK
 07 los parámetros del 14 y el consecutivo LEV|OK
 08 el formulario «Encontrar o reportar activo»: en el dominio de Técnica, en Personal de distribución y en la lista de Personal de Comercial|OK
 09 la lista de Personal de Comercial conserva los formularios que tenía (solo se sumó uno)|OK
+10 Etapa 2: la capa «Por levantar» del geovisor (GeoJSON, solo geovisor completo) y el parámetro del aviso (levantar_naranja_dias)|OK
+11 tecnica.f_avisos sigue sin permisos para la API (la llama la RPC de avisos)|OK
 INFO puntos por levantar: reportados · asignados · levantados · descartados|0 · 0 · 0 · 0
 INFO personas de Técnica con el formulario «Encontrar o reportar activo» asignado|0
+## huellas DESPUÉS
+28
+0 funciones de redes (conjunto)|1a9ef250a74fb01962f463d98834cc4a|CORTE 14 (aplicado)
 ## segunda migración (debe negarse)
-psql:migracion_redes_corte14_editor.sql:36: ERROR:  El Corte 14 ya está aplicado: deténgase y avise
+psql:migracion_redes_corte14_editor.sql:39: ERROR:  El Corte 14 ya está aplicado: deténgase y avise
 ## reversa y huella
-0 funciones de redes (conjunto)|CORTE 9b completo (listo para el 14)
-2 campo.f_formularios_personal()|ANTES DEL 14 (sin cambiar)
-2 public.geoportal_redes_mi_perfil(text)|ANTES DEL 14 (sin cambiar)
+0 funciones de redes (conjunto)|a327aa51f43bb5cc2112a6db089718ed|CORTE 9b completo (listo para el 14)
+## migración otra vez después de la reversa
+11
 ## md5 de los archivos
-8ec16bb705aff7de16997fc10770180c ensayo_en_transaccion_redes_corte14_editor.sql
-b7ec01274995736619b2962461028035 huellas_solo_lectura_redes_corte14_editor.sql
-5fb444b6747147ec6a0b1a56bc84c7ba migracion_redes_corte14_editor.sql
-7277d239423183cacbc705c7bb545661 reversa_redes_corte14_editor.sql
-9cabf256b173b5bdd55ee5a619e496c3 verificacion_redes_corte14_editor.sql
+3f032d2b46a99bebfa7f8c0376b47002 ensayo_en_transaccion_redes_corte14_editor.sql
+afcad77a6bd513b23da4468ff470e412 huellas_solo_lectura_redes_corte14_editor.sql
+cb4f2510119b6833f054fc2c4f9748a0 migracion_redes_corte14_editor.sql
+107350eb68fa7330a48bde984515fefc reversa_redes_corte14_editor.sql
+d14bae4d086a58a6aa379507f87cc992 verificacion_redes_corte14_editor.sql

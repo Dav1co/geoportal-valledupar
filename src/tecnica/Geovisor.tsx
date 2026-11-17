@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./geovisor.css";
 import { CENTRO_VALLEDUPAR, FUENTE_BASE_CALLES } from "../lib/mapaBase";
 import { FUNCTIONS_URL, supabase } from "../lib/supabase";
-import { apiGeovisor, type CapaDatos, type CapaGeovisor, type ConfigGeovisor, type GrupoCapa, type NivelPresion, type PerfilGeovisor, type SerieRef, type TarjetaContrato, type TarjetaRef, type VistaAbierta } from "./apiGeovisor";
+import { apiGeovisor, type EstadoRemun, type InfoRemuneracion, type TarjetaRemun, type CapaDatos, type CapaGeovisor, type ConfigGeovisor, type GrupoCapa, type NivelPresion, type PerfilGeovisor, type SerieRef, type TarjetaContrato, type TarjetaRef, type VistaAbierta } from "./apiGeovisor";
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 import { apiCierre, apiFlujo, horaClara, instanteDeCampo, nContratos, type CortesVigentes, type FlujoInfo, type FlujoTramo, type ValvulaCerrada, type ZonaCorte } from "./apiCierre";
@@ -31,7 +31,8 @@ import { PedirHora } from "./PanelCierre";
 type ActivoTarjeta = { codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number };
 type Tarjeta = { capa: string; props: Record<string, unknown>; lat: number; lon: number };
 type Periodo = { modo: "hoy" | "semana" | "rango"; desde: string; hasta: string };
-type Colores = "tipo" | "material" | "edad" | "afectaciones";      // Corte 9b: «Afectaciones» es el cuarto modo (no una capa que se enciende)
+type Colores = "tipo" | "material" | "edad" | "afectaciones" | "remuneracion";      // Corte 14: «Remuneración», quinto modo (solo supervisor de distribución y administrador)
+type ColoresRed = "tipo" | "material" | "edad";      // Corte 9b: «Afectaciones» es el cuarto modo (no una capa que se enciende)
 type CorteSel = { tipo: "zona"; zona: number } | { tipo: "valvula"; codigo: string } | { tipo: "dano"; codigo: string } | { tipo: "recalcular" };
 type DanoAbierto = { codigo: string; clase: string; tipo: string; sistema: string; estado: string; activo: string | null; cuando: string; riesgo: string; lat: number; lon: number };
 
@@ -69,6 +70,11 @@ function flecha(): ImageData {
   return x.getImageData(0, 0, n, n);
 }
 const NODO_EXPR = ["match", ["get", "prefijo"], ...Object.entries(COLOR_NODO).flat(), "#1B1F1D"] as unknown as string;
+// Corte 14, modo «Remuneración»: verde (estado «bien» de la guía), gris, naranja de estado y punteado. Sin colores nuevos: tokens de tokens.css
+const COLOR_REMUN: Record<string, string> = { remunerado: "#1b6b3a", no_remunerado: "#7b8b99", sin_fila: "#c25e00", proyectado: "#52626f" };
+const CAPAS_REMUN = ["m-rem-p", "m-rem-l", "m-rem-lp", "m-rem-a"];      // en este orden se busca lo que se toca
+const REMUN_EXPR = ["match", ["get", "rem"], ...Object.entries(COLOR_REMUN).flat(), "#7b8b99"] as unknown as string;
+const teselaRemun = (v: number) => `${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela_remuneracion&z={z}&x={x}&y={y}&v=${v}`;
 const teselaCortes = (v: number) => `${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela_cortes&z={z}&x={x}&y={y}&v=${v}`;
 const MIN_REFRESCO_CORTES = 3;      // minutos entre lecturas de las afectaciones vigentes
 const SIN_FECHA = "#C9B79C";      // respuesta 2 de David al 6a: «sin fecha» con un gris propio (cálido), distinto del «sin dato» del material
@@ -144,6 +150,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
   const [tarjeta, setTarjeta] = useState<Tarjeta | null>(null);
   const [cortes, setCortes] = useState<CortesVigentes | null>(null);      // Corte 9b: las afectaciones vigentes (franja, tarjetas y leyenda)
   const [corteSel, setCorteSel] = useState<CorteSel | null>(null);
+  const [remSel, setRemSel] = useState<string | null>(null);      // Corte 14: el activo tocado en el modo «Remuneración»
   const [danosAb, setDanosAb] = useState<DanoAbierto[] | null>(null);      // daños abiertos (reportados o en atención) para el modo «Afectaciones»
   const [flujo, setFlujo] = useState<FlujoInfo | null>(null);      // Fase 3: rótulo, horas y leyenda de «Flujo del agua (modelo)»
   const [horaFlujo, setHoraFlujo] = useState<"mayor" | "menor">("mayor");
@@ -253,6 +260,16 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
                    paint: { "line-color": COLOR_CORTE.cerrado, "line-width": 5 } });
       capas.push({ id: "x-corte-valvula", type: "circle", source: "cortes", "source-layer": "corte_valvulas", layout: { visibility: "none" },
                    paint: { "circle-radius": 5, "circle-color": COLOR_CORTE.cerrado, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 2 } });
+      // Corte 14: el modo «Remuneración» (su tesela es aparte y solo se pide en ese modo; la fuente existe solo para quien tiene el modo)
+      if (cfg.remuneracion) {
+        capas.push({ id: "m-rem-a", type: "fill", source: "remun", "source-layer": "remuneracion", filter: ["==", ["get", "forma"], "area"], layout: { visibility: "none" }, paint: { "fill-color": REMUN_EXPR, "fill-opacity": 0.35 } });
+        capas.push({ id: "m-rem-l", type: "line", source: "remun", "source-layer": "remuneracion", filter: ["all", ["==", ["get", "forma"], "tramo"], ["!=", ["get", "rem"], "proyectado"]], layout: { visibility: "none", "line-cap": "round" },
+                     paint: { "line-color": REMUN_EXPR, "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1.5, 17, 3.5] as unknown as number } });
+        capas.push({ id: "m-rem-lp", type: "line", source: "remun", "source-layer": "remuneracion", filter: ["all", ["==", ["get", "forma"], "tramo"], ["==", ["get", "rem"], "proyectado"]], layout: { visibility: "none" },
+                     paint: { "line-color": COLOR_REMUN.proyectado, "line-width": 2, "line-dasharray": [2, 2] } });
+        capas.push({ id: "m-rem-p", type: "circle", source: "remun", "source-layer": "remuneracion", filter: ["==", ["get", "forma"], "nodo"], layout: { visibility: "none" },
+                     paint: { "circle-radius": 4.5, "circle-color": REMUN_EXPR, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.2 } });
+      }
       // … y los daños abiertos: el contorno del activo del daño (sale de la tesela de la red) y el punto del daño encima de todo
       capas.push({ id: "x-dano-activo-l", type: "line", source: "red", "source-layer": "activos", filter: NINGUNO, layout: { visibility: "none", "line-cap": "round" },
                    paint: { "line-color": COLOR_DANO_CONTORNO, "line-width": 2, "line-gap-width": 7 } });
@@ -276,6 +293,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
             ...fuentesGeo,
             ...fuentesRef,
             cortes: { type: "vector", tiles: [teselaCortes(0)], minzoom: 10, maxzoom: 18 },
+            ...(cfg.remuneracion ? { remun: { type: "vector" as const, tiles: [teselaRemun(cfg.remuneracion)], minzoom: 10, maxzoom: 18 } } : {}),
             "x-danos": { type: "geojson", data: VACIO },
             flujo: { type: "vector", tiles: [teselaFlujo("mayor", 0)], minzoom: cfg.zoom.min, maxzoom: 18 },
             sel: { type: "geojson", data: VACIO },
@@ -292,6 +310,12 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
       m.on("click", (ev) => {
         if (!m) return;
         const caja: [maplibregl.PointLike, maplibregl.PointLike] = [[ev.point.x - 14, ev.point.y - 14], [ev.point.x + 14, ev.point.y + 14]];
+        if (coloresRef.current === "remuneracion") {      // Corte 14: en «Remuneración» se toca un activo y sale su tarjeta de remuneración
+          const fr = m.queryRenderedFeatures(caja, { layers: CAPAS_REMUN.filter((id) => m!.getLayer(id)) });
+          const r = CAPAS_REMUN.map((id) => fr.find((x) => x.layer.id === id)).find(Boolean);
+          setTarjeta(null); setRemSel(r ? String(r.properties?.codigo) : null);
+          return;
+        }
         if (coloresRef.current === "afectaciones") {      // Corte 9b: en «Afectaciones» se toca una válvula cerrada o una zona sin agua
           const fc = m.queryRenderedFeatures(caja, { layers: CAPAS_CORTE.filter((id) => m!.getLayer(id)) });
           const c = CAPAS_CORTE.map((id) => fc.find((x) => x.layer.id === id)).find(Boolean);
@@ -344,16 +368,18 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
     const expr = colores === "material" ? ["match", ["get", "material"], ...materiales.flatMap((x) => [x.codigo, x.color]), SIN_DATO]
       : colores === "edad" ? ["case", ["!", ["has", "edad"]], SIN_FECHA, ["step", ["get", "edad"], EDADES[0][1], EDADES[1][0], EDADES[1][1], EDADES[2][0], EDADES[2][1], EDADES[3][0], EDADES[3][1]]]
       : ["match", ["get", "sistema"], "alcantarillado", COLOR_SISTEMA.alcantarillado, "tecnologia", COLOR_SISTEMA.tecnologia, COLOR_SISTEMA.acueducto];
-    const afect = colores === "afectaciones";
+    const afect = colores === "afectaciones", remun = colores === "remuneracion", fondo = afect || remun;
     const aplicar = () => {
       for (const c of teselas) {
-        if (m.getLayer(`t-${c.codigo}-l`)) m.setPaintProperty(`t-${c.codigo}-l`, "line-color", afect ? COLOR_CORTE.fondo : expr as unknown as string);
-        if (m.getLayer(`t-${c.codigo}-p`)) { m.setPaintProperty(`t-${c.codigo}-p`, "circle-color", afect ? COLOR_CORTE.fondo : NODO_EXPR); m.setPaintProperty(`t-${c.codigo}-p`, "circle-stroke-width", afect ? 0 : 1.2); }
+        if (m.getLayer(`t-${c.codigo}-l`)) m.setPaintProperty(`t-${c.codigo}-l`, "line-color", fondo ? COLOR_CORTE.fondo : expr as unknown as string);
+        if (m.getLayer(`t-${c.codigo}-p`)) { m.setPaintProperty(`t-${c.codigo}-p`, "circle-color", fondo ? COLOR_CORTE.fondo : NODO_EXPR); m.setPaintProperty(`t-${c.codigo}-p`, "circle-stroke-width", fondo ? 0 : 1.2); }
       }
       for (const id of [...CAPAS_CORTE, ...CAPAS_DANO]) if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", afect ? "visible" : "none");
+      for (const id of CAPAS_REMUN) if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", remun ? "visible" : "none");
     };
     if (m.getLayer("sel")) aplicar(); else m.once("styledata", aplicar);
     if (!afect) setCorteSel(null); else setTarjeta(null);
+    if (!remun) setRemSel(null); else setTarjeta(null);
   }, [colores, listo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- Corte 9b: las afectaciones vigentes (al abrir y cada pocos minutos; la tesela cambia con el número de la foto) ----------
@@ -463,7 +489,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
 
       <div className="geo-herr">
         <div className="geo-seg" role="group" aria-label="Colores de la red">
-          {(["tipo", "material", "edad", "afectaciones"] as Colores[]).map((k) => <button key={k} type="button" aria-pressed={colores === k} onClick={() => setColores(k)}>{k === "tipo" ? "Tipo" : k === "material" ? "Material" : k === "edad" ? "Edad" : "Afectaciones"}</button>)}
+          {(["tipo", "material", "edad", "afectaciones", ...(cfg.remuneracion ? ["remuneracion"] : [])] as Colores[]).map((k) => <button key={k} type="button" aria-pressed={colores === k} data-colores={k} onClick={() => setColores(k)}>{k === "tipo" ? "Tipo" : k === "material" ? "Material" : k === "edad" ? "Edad" : k === "afectaciones" ? "Afectaciones" : "Remuneración"}</button>)}
         </div>
         {hayPorFecha ? <SelectorPeriodo cfg={cfg} periodo={periodo} onCambiar={setPeriodo} /> : null}
         {flujoOn ? (
@@ -493,13 +519,14 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
               : `${c.nombre}: se muestran los ${cfg.max_elementos} más recientes. Acorte el rango de fechas.`}</p>)}
           </div>) : null}
         {flujoOn ? <LeyendaFlujo info={flujo} derecha={colores !== "tipo"} /> : null}
-        {colores === "afectaciones" ? <LeyendaCortes cortes={cortes} danos={danosAb} hoy={!cfg.completo} onRecalcular={cfg.completo && cortes?.hay ? () => { setTarjeta(null); setCorteSel({ tipo: "recalcular" }); } : undefined} /> : colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} edadRef={cfg.edad_ref === true} /> : null}
+        {colores === "afectaciones" ? <LeyendaCortes cortes={cortes} danos={danosAb} hoy={!cfg.completo} onRecalcular={cfg.completo && cortes?.hay ? () => { setTarjeta(null); setCorteSel({ tipo: "recalcular" }); } : undefined} /> : colores === "remuneracion" ? <LeyendaRemuneracion /> : colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} edadRef={cfg.edad_ref === true} /> : null}
         {on.has("pqr_116") ? <Leyenda116 derecha={colores !== "tipo" || [...CAPAS_PRESION].some((c) => on.has(c))}
           sinUbicar={(() => { const d = datos.pqr_116; return d && d !== "cargando" && !("error" in d) ? (d as { sin_ubicar?: number }).sin_ubicar ?? 0 : 0; })()} /> : null}
         {[...CAPAS_PRESION].some((c) => on.has(c)) ? <LeyendaPresion modelo={on.has("presion_modelo")} medida={on.has("campana_2014")} arriba={colores !== "tipo"} /> : null}
         {on.has("contratos") && zoom < (cfg.zoom.contratos ?? 16) && zoom >= cfg.zoom.min ? <div className="geo-aviso geo-aviso-suave geo-aviso-abajo" role="status">Acerque más para ver los contratos</div> : null}
         {avisoAbierto ? <div className="geo-vista-aviso" role="status"><span>{avisoAbierto}</span><button type="button" className="geo-cerrar" onClick={() => setAvisoAbierto(null)} aria-label="Cerrar el aviso">✕</button></div> : null}
-        {compartir ? <Compartir cfg={cfg} mapa={mapa.current} on={on} colores={colores === "afectaciones" ? "tipo" : colores} periodo={periodo} atenuadas={atenuadas} onCerrar={() => setCompartir(false)} /> : null}
+        {compartir ? <Compartir cfg={cfg} mapa={mapa.current} on={on} colores={colores === "afectaciones" || colores === "remuneracion" ? "tipo" : colores} periodo={periodo} atenuadas={atenuadas} onCerrar={() => setCompartir(false)} /> : null}
+        {remSel && colores === "remuneracion" ? <TarjetaRemuneracion codigo={remSel} onCerrar={() => setRemSel(null)} onVerFicha={cfg.ficha ? (c) => setFicha([c]) : undefined} /> : null}
         {tarjeta && tarjeta.capa === "flujo" ? <TarjetaFlujo codigo={String(tarjeta.props.codigo)} onCerrar={() => setTarjeta(null)} />
           : tarjeta ? <TarjetaElemento t={tarjeta} cfg={cfg} onCerrar={() => setTarjeta(null)} onVerFicha={(c) => setFicha([c])}
           onReportarDano={onReportarDano} onRegistrarIntervencion={onRegistrarIntervencion} cortes={cortes}
@@ -589,7 +616,7 @@ function SelectorPeriodo({ cfg, periodo, onCambiar }: { cfg: ConfigGeovisor; per
   );
 }
 
-function Leyenda({ colores, materiales, edadRef }: { colores: Exclude<Colores, "afectaciones">; materiales: { codigo: string; nombre: string; color: string }[]; edadRef?: boolean }) {
+function Leyenda({ colores, materiales, edadRef }: { colores: ColoresRed; materiales: { codigo: string; nombre: string; color: string }[]; edadRef?: boolean }) {
   const items = colores === "material" ? [...materiales.map((x) => [x.color, x.nombre]), [SIN_DATO, "Sin dato"]] : [...EDADES.map((e) => [e[1], e[2]]), [SIN_FECHA, "Sin fecha de instalación"]];
   return (
     <div className="geo-leyenda" aria-label={colores === "material" ? "Colores por material" : "Colores por edad"}>
@@ -643,6 +670,50 @@ function LeyendaFlujo({ info, derecha }: { info: FlujoInfo | null; derecha: bool
 }
 
 // Corte 9b, Fase 3. Tarjeta de un tramo de «Flujo del agua (modelo)»: caudal y velocidad en las dos horas
+// Corte 14, Etapa 3: modo «Remuneración». Solo llega a quien tiene el modo (supervisor de distribución y administrador): el operador no ve ni el botón ni la leyenda.
+const NOMBRE_REMUN: Record<string, string> = { remunerado: "Remunerado", no_remunerado: "No remunerado", sin_fila: "Sin fila", proyectado: "Proyectado", no_aplica: "No entra en la valoración" };
+function LeyendaRemuneracion() {
+  const [d, setD] = useState<InfoRemuneracion | null>(null);
+  const [abierta, setAbierta] = useState(() => typeof window === "undefined" || window.innerWidth >= 700);      // en el celular llega plegada (deja libre el mapa)
+  useEffect(() => { let vivo = true; apiGeovisor.remuneracion().then((r) => { if (vivo) setD(r); }).catch(() => {}); return () => { vivo = false; }; }, []);
+  const nf = new Intl.NumberFormat("es-CO");
+  return (
+    <div className="geo-leyenda geo-leyenda-remun" aria-label="Remuneración vía tarifa" data-testid="leyenda-remuneracion">
+      <button type="button" className="geo-leyenda-plegar" aria-expanded={abierta} onClick={() => setAbierta((x) => !x)}>Remuneración vía tarifa</button>
+      {abierta ? (
+        <ul>
+          {(d?.leyenda ?? (Object.keys(COLOR_REMUN) as EstadoRemun[]).map((clave) => ({ clave, nombre: NOMBRE_REMUN[clave], significa: "" }))).map((l) => (
+            <li key={l.clave} data-remun={l.clave} title={l.significa}><span className={l.clave === "proyectado" ? "geo-remun-proyectado" : undefined} style={l.clave === "proyectado" ? undefined : { background: COLOR_REMUN[l.clave], height: 5 }} aria-hidden="true" />
+              <span className="geo-remun-txt"><strong>{l.nombre}</strong>{d?.conteos[l.clave] !== undefined ? `: ${nf.format(d.conteos[l.clave] ?? 0)}` : ""}{l.significa ? <><br />{l.significa}</> : null}</span></li>))}
+        </ul>) : null}
+      <p className="geo-adv tec-aviso tec-aviso-info" data-testid="remun-rotulo">{d?.rotulo ?? "Valoración técnica 2019, propuesta"}</p>
+    </div>
+  );
+}
+function TarjetaRemuneracion({ codigo, onCerrar, onVerFicha }: { codigo: string; onCerrar: () => void; onVerFicha?: (codigo: string) => void }) {
+  const [d, setD] = useState<TarjetaRemun | null>(null); const [error, setError] = useState<string | null>(null);
+  useEffect(() => { let vivo = true; setD(null); setError(null); apiGeovisor.remuneracionTarjeta(codigo).then((r) => { if (vivo) setD(r); }).catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudo cargar."); }); return () => { vivo = false; }; }, [codigo]);
+  const nf = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
+  return (
+    <section className="geo-tarjeta" aria-label={`Remuneración de ${codigo}`} data-capa="remuneracion" data-estado={d?.estado}>
+      <div className="geo-tarjeta-cab"><div><h2>{codigo}</h2><p>{d ? d.tipo : "Remuneración vía tarifa"}</p></div><button type="button" className="geo-cerrar" onClick={onCerrar} aria-label="Cerrar la tarjeta">✕</button></div>
+      {error ? <p className="tec-aviso tec-aviso-error" role="alert">{error}</p> : !d ? <p className="tec-sub" role="status">Cargando…</p> : (
+        <>
+          <dl>
+            <div><dt>Remunerado vía tarifa</dt><dd><strong>{d.remunerado ? "Sí" : "No"}</strong></dd></div>
+            <div><dt>Estado</dt><dd>{NOMBRE_REMUN[d.estado] ?? d.estado}</dd></div>
+            {(d.filas ?? []).map((f) => (
+              <div key={`${f.hoja}-${f.n}`}><dt>Fila de la valoración</dt>
+                <dd>{f.hoja} · fila {f.n} · {f.nombre}{f.caracteristica ? ` ${f.caracteristica}` : ""}{f.cantidad !== undefined ? ` · ${nf.format(f.cantidad)} ${f.unidad ?? ""}` : ""}{f.anio_operacion ? ` · en operación desde ${f.anio_operacion}` : ""}</dd></div>))}
+          </dl>
+          {d.motivo ? <p className="tec-ayuda" data-testid="remun-motivo">{d.motivo}</p> : null}
+          {onVerFicha ? <div className="geo-tarjeta-acc"><button type="button" className="tec-boton-sec" onClick={() => onVerFicha(codigo)}>Ver la ficha</button></div> : null}
+        </>)}
+      <p className="geo-adv tec-aviso tec-aviso-info">{d?.rotulo ?? "Valoración técnica 2019, propuesta"}</p>
+    </section>
+  );
+}
+
 function TarjetaFlujo({ codigo, onCerrar }: { codigo: string; onCerrar: () => void }) {
   const [d, setD] = useState<FlujoTramo | null>(null); const [error, setError] = useState<string | null>(null);
   useEffect(() => { let vivo = true; setD(null); setError(null); apiFlujo.tramo(codigo).then((r) => { if (vivo) setD(r); }).catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudo cargar."); }); return () => { vivo = false; }; }, [codigo]);
@@ -1059,7 +1130,7 @@ function TarjetaDeContrato({ contrato, cfg, onCerrar, onVerFicha }: { contrato: 
 
 // «Compartir» (§30.2): guarda la vista (capas, colores, fechas, centro y zoom; nada personal) y da un enlace. Quien lo abre inicia sesión y ve solo lo que puede.
 function Compartir({ cfg, mapa, on, colores, periodo, atenuadas, onCerrar }: {
-  cfg: ConfigGeovisor; mapa: maplibregl.Map | null; on: Set<string>; colores: Exclude<Colores, "afectaciones">; periodo: Periodo; atenuadas: Set<string>; onCerrar: () => void;
+  cfg: ConfigGeovisor; mapa: maplibregl.Map | null; on: Set<string>; colores: ColoresRed; periodo: Periodo; atenuadas: Set<string>; onCerrar: () => void;
 }) {
   const [enlace, setEnlace] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
