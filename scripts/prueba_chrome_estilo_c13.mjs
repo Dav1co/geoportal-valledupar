@@ -225,7 +225,7 @@ const modoA = async (p, m) => { await p.evaluate((m) => document.querySelector(`
 for (const ancho of [390, 1280]) {
   const tag = `[${ancho}]`;
   rehacer(); rpcs.length = 0;
-  sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario) values ('${EMAILS.op2}', 'asignar_formulario', 'uso_quimicos'), ('${EMAILS.op2}', 'asignar_formulario', 'entrada_quimicos')`);
+  sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values ('${EMAILS.op2}', 'asignar_formulario', 'uso_quimicos', '${EMAILS.adm}'), ('${EMAILS.op2}', 'asignar_formulario', 'entrada_quimicos', '${EMAILS.adm}')`);
 
   // ===== A. Inicio por modos: nombres y colores =====
   let p = await abrir(ancho, "adm"); await p.waitForSelector("[data-modo-actual]");
