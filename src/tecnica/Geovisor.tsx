@@ -7,6 +7,8 @@ import { FUNCTIONS_URL, supabase } from "../lib/supabase";
 import { apiGeovisor, type CapaDatos, type CapaGeovisor, type ConfigGeovisor, type GrupoCapa, type NivelPresion, type PerfilGeovisor, type SerieRef, type TarjetaContrato, type TarjetaRef, type VistaAbierta } from "./apiGeovisor";
 import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
+import { apiCierre, horaClara, instanteDeCampo, nContratos, type CortesVigentes, type ValvulaCerrada, type ZonaCorte } from "./apiCierre";
+import { PedirHora } from "./PanelCierre";
 
 // Geovisor técnico (Técnica fase 1, Corte 6a; 01 sección D, N-11, N-13 y N-14).
 // · Interruptores por grupo, encendidos al abrir según el perfil (lo decide el servidor) y «Volver a la vista por omisión». Encender o apagar no se guarda.
@@ -29,7 +31,8 @@ import { FichaActivo } from "./FichaActivo";
 type ActivoTarjeta = { codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number };
 type Tarjeta = { capa: string; props: Record<string, unknown>; lat: number; lon: number };
 type Periodo = { modo: "hoy" | "semana" | "rango"; desde: string; hasta: string };
-type Colores = "tipo" | "material" | "edad";
+type Colores = "tipo" | "material" | "edad" | "afectaciones";      // Corte 9b: «Afectaciones» es el cuarto modo (no una capa que se enciende)
+type CorteSel = { tipo: "zona"; zona: number } | { tipo: "valvula"; codigo: string };
 
 const GRUPOS: { c: GrupoCapa; n: string }[] = [
   { c: "acueducto", n: "Acueducto" }, { c: "alcantarillado", n: "Alcantarillado" }, { c: "tecnologia", n: "Tecnología y pérdidas" }, { c: "actividades", n: "Actividades registradas" },
@@ -43,6 +46,13 @@ const COLOR_NODO: Record<string, string> = { VAL: "#C2410C", TOR: "#0F766E", HID
   DES: "#0A2540", EBA: "#0A2540", POZ: "#8A5A2B", SUM: "#A16207", VER: "#5B21B6", EBR: "#5B21B6", PTR: "#5B21B6", SEN: "#6D28D9", SCA: "#6D28D9" };
 const PALETA = ["#1F77B4", "#D62728", "#2CA02C", "#9467BD", "#FF7F0E", "#8C564B", "#E377C2", "#17BECF", "#BCBD22", "#393B79", "#AD494A", "#637939"];
 const SIN_DATO = "#A7ADA9";
+// Corte 9b, modo «Afectaciones» (colores aprobados por David el 17-nov; son los de --t-rojo, --t-naranja y --t-borde de la guía):
+// tubería cerrada, rojo continuo de 5 px; sin agua, naranja punteado de 3 px; válvula cerrada, punto rojo con borde blanco; la red, de fondo en gris claro
+const COLOR_CORTE = { cerrado: "#b3261e", afectado: "#c25e00", fondo: "#d5dde6" };
+const CAPAS_CORTE = ["x-corte-valvula", "x-corte-cerrado", "x-corte-afectado"];
+const NODO_EXPR = ["match", ["get", "prefijo"], ...Object.entries(COLOR_NODO).flat(), "#1B1F1D"] as unknown as string;
+const teselaCortes = (v: number) => `${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela_cortes&z={z}&x={x}&y={y}&v=${v}`;
+const MIN_REFRESCO_CORTES = 3;      // minutos entre lecturas de las afectaciones vigentes
 const SIN_FECHA = "#C9B79C";      // respuesta 2 de David al 6a: «sin fecha» con un gris propio (cálido), distinto del «sin dato» del material
 const COLOR_CALIDAD: Record<string, string> = { dentro: "#2E7D32", fuera: "#C62828", sin_rango: "#90A4AE", sin_muestra: "#90A4AE" };
 const NOMBRE_CALIDAD: Record<string, string> = { dentro: "Dentro del rango", fuera: "Fuera del rango", sin_rango: "Sin rango", sin_muestra: "Sin muestra reciente" };
@@ -114,6 +124,10 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
     inicial.fechas_cambiadas ? "Se muestran las actividades de hoy (su geovisor es de solo lectura)." : ""].filter(Boolean).join(" ") : null));
   const [panel, setPanel] = useState<"" | "capas" | "omision">("");
   const [tarjeta, setTarjeta] = useState<Tarjeta | null>(null);
+  const [cortes, setCortes] = useState<CortesVigentes | null>(null);      // Corte 9b: las afectaciones vigentes (franja, tarjetas y leyenda)
+  const [corteSel, setCorteSel] = useState<CorteSel | null>(null);
+  const coloresRef = useRef(colores);
+  coloresRef.current = colores;
   const [ficha, setFicha] = useState<string[]>([]);
   const [zoom, setZoom] = useState(14);
   const [datos, setDatos] = useState<Record<string, CapaDatos | { error: string } | "cargando">>({});
@@ -202,6 +216,13 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
         const i = capas.findIndex((x) => x.id.startsWith("g-"));
         if (i > 0) capas.splice(i, 0, capas.pop()!);      // debajo de las actividades y del muestreo
       }
+      // Corte 9b: las afectaciones (solo se ven en su modo; la fuente no pide teselas mientras sus capas están apagadas)
+      capas.push({ id: "x-corte-afectado", type: "line", source: "cortes", "source-layer": "corte_tramos", filter: ["==", ["get", "papel"], "afectado"], layout: { visibility: "none", "line-cap": "butt" },
+                   paint: { "line-color": COLOR_CORTE.afectado, "line-width": 3, "line-dasharray": [2, 1.5] } });
+      capas.push({ id: "x-corte-cerrado", type: "line", source: "cortes", "source-layer": "corte_tramos", filter: ["==", ["get", "papel"], "cerrado"], layout: { visibility: "none", "line-cap": "round" },
+                   paint: { "line-color": COLOR_CORTE.cerrado, "line-width": 5 } });
+      capas.push({ id: "x-corte-valvula", type: "circle", source: "cortes", "source-layer": "corte_valvulas", layout: { visibility: "none" },
+                   paint: { "circle-radius": 5, "circle-color": COLOR_CORTE.cerrado, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 2 } });
       capas.push({ id: "sel", type: "circle", source: "sel", paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#D6336C", "circle-stroke-width": 3.5 } });
       m = new maplibregl.Map({
         container: cont.current, center: inicialRef.current ? [inicialRef.current.lon, inicialRef.current.lat] : CENTRO_VALLEDUPAR, zoom: inicialRef.current?.zoom ?? 14, maxZoom: 20, minZoom: 11, attributionControl: { compact: true },
@@ -217,6 +238,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
                                               minzoom: cfg.zoom.contratos ?? 16, maxzoom: 18 } } : {}),
             ...fuentesGeo,
             ...fuentesRef,
+            cortes: { type: "vector", tiles: [teselaCortes(0)], minzoom: 10, maxzoom: 18 },
             sel: { type: "geojson", data: VACIO },
           },
           layers: capas,
@@ -229,6 +251,13 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
       m.on("click", (ev) => {
         if (!m) return;
         const caja: [maplibregl.PointLike, maplibregl.PointLike] = [[ev.point.x - 14, ev.point.y - 14], [ev.point.x + 14, ev.point.y + 14]];
+        if (coloresRef.current === "afectaciones") {      // Corte 9b: en «Afectaciones» se toca una válvula cerrada o una zona sin agua
+          const fc = m.queryRenderedFeatures(caja, { layers: CAPAS_CORTE.filter((id) => m!.getLayer(id)) });
+          const c = CAPAS_CORTE.map((id) => fc.find((x) => x.layer.id === id)).find(Boolean);
+          setTarjeta(null);
+          setCorteSel(!c ? null : c.layer.id === "x-corte-valvula" ? { tipo: "valvula", codigo: String(c.properties?.codigo) } : { tipo: "zona", zona: Number(c.properties?.zona) });
+          return;
+        }
         // primero lo puntual (actividades, campaña y demás referencias, contratos y nodos), luego los tramos y, al final, las áreas (sectores)
         const orden = [...capasGeo.map((c) => `g-${c.codigo}`), ...capasReferencia.map((c) => `r-${c.codigo}-p`), "c-contratos", ...capasTesela.map((c) => `t-${c.codigo}-p`),
                        ...capasTesela.map((c) => `t-${c.codigo}-l`), ...capasReferencia.map((c) => `r-${c.codigo}-l`), ...capasTesela.map((c) => `t-${c.codigo}-a`)]
@@ -269,9 +298,38 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
     const expr = colores === "material" ? ["match", ["get", "material"], ...materiales.flatMap((x) => [x.codigo, x.color]), SIN_DATO]
       : colores === "edad" ? ["case", ["!", ["has", "edad"]], SIN_FECHA, ["step", ["get", "edad"], EDADES[0][1], EDADES[1][0], EDADES[1][1], EDADES[2][0], EDADES[2][1], EDADES[3][0], EDADES[3][1]]]
       : ["match", ["get", "sistema"], "alcantarillado", COLOR_SISTEMA.alcantarillado, "tecnologia", COLOR_SISTEMA.tecnologia, COLOR_SISTEMA.acueducto];
-    const aplicar = () => { for (const c of teselas) if (m.getLayer(`t-${c.codigo}-l`)) m.setPaintProperty(`t-${c.codigo}-l`, "line-color", expr as unknown as string); };
+    const afect = colores === "afectaciones";
+    const aplicar = () => {
+      for (const c of teselas) {
+        if (m.getLayer(`t-${c.codigo}-l`)) m.setPaintProperty(`t-${c.codigo}-l`, "line-color", afect ? COLOR_CORTE.fondo : expr as unknown as string);
+        if (m.getLayer(`t-${c.codigo}-p`)) { m.setPaintProperty(`t-${c.codigo}-p`, "circle-color", afect ? COLOR_CORTE.fondo : NODO_EXPR); m.setPaintProperty(`t-${c.codigo}-p`, "circle-stroke-width", afect ? 0 : 1.2); }
+      }
+      for (const id of CAPAS_CORTE) if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", afect ? "visible" : "none");
+    };
     if (m.getLayer("sel")) aplicar(); else m.once("styledata", aplicar);
+    if (!afect) setCorteSel(null); else setTarjeta(null);
   }, [colores, listo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---------- Corte 9b: las afectaciones vigentes (al abrir y cada pocos minutos; la tesela cambia con el número de la foto) ----------
+  const leerCortes = useMemo(() => () => { apiCierre.vigentes().then(setCortes).catch(() => { /* sin la lista, el geovisor sigue: no hay franja */ }); }, []);
+  useEffect(() => { leerCortes(); const r = window.setInterval(leerCortes, MIN_REFRESCO_CORTES * 60000); return () => window.clearInterval(r); }, [leerCortes]);
+  const fotoCortes = cortes?.foto?.id ?? 0;
+  const fotoPuesta = useRef(0);
+  useEffect(() => {
+    const m = mapa.current;
+    if (!m || !listo) return;
+    if (fotoPuesta.current === fotoCortes) return;      // solo si cambió la foto: reponer la fuente corta las teselas que vienen en camino
+    const poner = () => { fotoPuesta.current = fotoCortes; (m.getSource("cortes") as maplibregl.VectorTileSource | undefined)?.setTiles([teselaCortes(fotoCortes)]); };
+    if (m.getLayer("sel")) poner(); else m.once("styledata", poner);
+  }, [fotoCortes, listo]);
+  const zonas = cortes?.hay ? cortes.zonas : [];
+  const irACaja = (c: [number, number, number, number]) => mapa.current?.fitBounds([[c[0], c[1]], [c[2], c[3]]], { padding: 70, maxZoom: 17, duration: 0 });
+  const verAfectaciones = (z?: ZonaCorte) => {
+    setColores("afectaciones"); setPanel("");
+    const cs = z ? [z.caja] : zonas.map((x) => x.caja);
+    if (cs.length) irACaja([Math.min(...cs.map((c) => c[0])), Math.min(...cs.map((c) => c[1])), Math.max(...cs.map((c) => c[2])), Math.max(...cs.map((c) => c[3]))]);
+    window.setTimeout(() => setCorteSel(z ? { tipo: "zona", zona: z.zona } : null), 0);      // después del cambio de modo (que cierra lo elegido)
+  };
 
   // ---------- capas en GeoJSON: se piden al encenderlas y al cambiar el período ----------
   const clavePeriodo = `${periodo.desde}|${periodo.hasta}`;
@@ -322,10 +380,20 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
 
       <div className="geo-herr">
         <div className="geo-seg" role="group" aria-label="Colores de la red">
-          {(["tipo", "material", "edad"] as Colores[]).map((k) => <button key={k} type="button" aria-pressed={colores === k} onClick={() => setColores(k)}>{k === "tipo" ? "Tipo" : k === "material" ? "Material" : "Edad"}</button>)}
+          {(["tipo", "material", "edad", "afectaciones"] as Colores[]).map((k) => <button key={k} type="button" aria-pressed={colores === k} onClick={() => setColores(k)}>{k === "tipo" ? "Tipo" : k === "material" ? "Material" : k === "edad" ? "Edad" : "Afectaciones"}</button>)}
         </div>
         {hayPorFecha ? <SelectorPeriodo cfg={cfg} periodo={periodo} onCambiar={setPeriodo} /> : null}
       </div>
+
+      {zonas.length ? (
+        <div className="geo-franja" role="status" data-testid="franja-cortes">
+          <strong>{zonas.length === 1 ? "1 zona sin agua en este momento" : `${zonas.length} zonas sin agua en este momento`}</strong>
+          <div className="geo-franja-zonas">
+            {zonas.slice(0, 6).map((z, i) => <button key={z.zona} type="button" className="geo-franja-zona" onClick={() => verAfectaciones(z)}>Zona {i + 1} · {nContratos(z.contratos)}</button>)}
+            {zonas.length > 6 ? <span className="geo-franja-mas">y {zonas.length - 6} más</span> : null}
+          </div>
+          <button type="button" className="geo-franja-ver" onClick={() => verAfectaciones()}>Ver afectaciones</button>
+        </div>) : null}
 
       <div className="geo-cuerpo">
         <div ref={cont} className="geo-mapa" role="application" aria-label="Mapa del geovisor técnico" data-zoom={zoom.toFixed(1)} />
@@ -336,15 +404,17 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
             {avisos.map(({ c, d }) => <p key={c.codigo}>{d === "cargando" ? `Cargando ${c.nombre.toLowerCase()}…` : d && "error" in d ? `${c.nombre}: ${d.error}`
               : `${c.nombre}: se muestran los ${cfg.max_elementos} más recientes. Acorte el rango de fechas.`}</p>)}
           </div>) : null}
-        {colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} edadRef={cfg.edad_ref === true} /> : null}
+        {colores === "afectaciones" ? <LeyendaCortes cortes={cortes} /> : colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} edadRef={cfg.edad_ref === true} /> : null}
         {on.has("pqr_116") ? <Leyenda116 derecha={colores !== "tipo" || [...CAPAS_PRESION].some((c) => on.has(c))}
           sinUbicar={(() => { const d = datos.pqr_116; return d && d !== "cargando" && !("error" in d) ? (d as { sin_ubicar?: number }).sin_ubicar ?? 0 : 0; })()} /> : null}
         {[...CAPAS_PRESION].some((c) => on.has(c)) ? <LeyendaPresion modelo={on.has("presion_modelo")} medida={on.has("campana_2014")} arriba={colores !== "tipo"} /> : null}
         {on.has("contratos") && zoom < (cfg.zoom.contratos ?? 16) && zoom >= cfg.zoom.min ? <div className="geo-aviso geo-aviso-suave geo-aviso-abajo" role="status">Acerque más para ver los contratos</div> : null}
         {avisoAbierto ? <div className="geo-vista-aviso" role="status"><span>{avisoAbierto}</span><button type="button" className="geo-cerrar" onClick={() => setAvisoAbierto(null)} aria-label="Cerrar el aviso">✕</button></div> : null}
-        {compartir ? <Compartir cfg={cfg} mapa={mapa.current} on={on} colores={colores} periodo={periodo} atenuadas={atenuadas} onCerrar={() => setCompartir(false)} /> : null}
+        {compartir ? <Compartir cfg={cfg} mapa={mapa.current} on={on} colores={colores === "afectaciones" ? "tipo" : colores} periodo={periodo} atenuadas={atenuadas} onCerrar={() => setCompartir(false)} /> : null}
         {tarjeta ? <TarjetaElemento t={tarjeta} cfg={cfg} onCerrar={() => setTarjeta(null)} onVerFicha={(c) => setFicha([c])}
           onReportarDano={onReportarDano} onRegistrarIntervencion={onRegistrarIntervencion} /> : null}
+        {corteSel && cortes?.hay ? <TarjetaCorte sel={corteSel} cortes={cortes} zonas={zonas} puede={cfg.completo || cfg.formularios.danos_fallas || cfg.formularios.mantenimiento}
+          onElegir={setCorteSel} onCerrar={() => setCorteSel(null)} onCambio={leerCortes} /> : null}
 
         {panel === "capas" ? (
           <aside className="geo-panel" aria-label="Capas del geovisor">
@@ -426,7 +496,7 @@ function SelectorPeriodo({ cfg, periodo, onCambiar }: { cfg: ConfigGeovisor; per
   );
 }
 
-function Leyenda({ colores, materiales, edadRef }: { colores: Colores; materiales: { codigo: string; nombre: string; color: string }[]; edadRef?: boolean }) {
+function Leyenda({ colores, materiales, edadRef }: { colores: Exclude<Colores, "afectaciones">; materiales: { codigo: string; nombre: string; color: string }[]; edadRef?: boolean }) {
   const items = colores === "material" ? [...materiales.map((x) => [x.color, x.nombre]), [SIN_DATO, "Sin dato"]] : [...EDADES.map((e) => [e[1], e[2]]), [SIN_FECHA, "Sin fecha de instalación"]];
   return (
     <div className="geo-leyenda" aria-label={colores === "material" ? "Colores por material" : "Colores por edad"}>
@@ -434,6 +504,86 @@ function Leyenda({ colores, materiales, edadRef }: { colores: Colores; materiale
       <ul>{items.map(([c, n]) => <li key={n}><span style={{ background: c }} aria-hidden="true" />{n}</li>)}</ul>
       {colores === "edad" && edadRef ? <p className="geo-leyenda-nota" data-testid="leyenda-edad-reg">Si el activo no tiene fecha de instalación, la edad sale de la fecha regulatoria, no de instalación.</p> : null}
     </div>
+  );
+}
+
+// Corte 9b. Leyenda del modo «Afectaciones», en palabras sencillas (los textos vienen del servidor), y cuántas válvulas y contratos hay ahora
+function LeyendaCortes({ cortes }: { cortes: CortesVigentes | null }) {
+  const texto = (k: string, t: string) => cortes?.leyenda?.find((x) => x.clave === k)?.texto ?? t;
+  return (
+    <div className="geo-leyenda geo-leyenda-cortes" aria-label="Afectaciones" data-testid="leyenda-cortes">
+      <strong>Afectaciones</strong>
+      <ul>
+        <li><span className="geo-corte-afectado" aria-hidden="true" />{texto("afectado", "Sin agua")}</li>
+        <li><span className="geo-corte-cerrado" aria-hidden="true" />{texto("cerrado", "Tubería cerrada")}</li>
+        <li><span className="geo-leyenda-punto geo-corte-valvula" aria-hidden="true" />{texto("valvula", "Válvula cerrada")}</li>
+      </ul>
+      {cortes?.hay && cortes.resumen
+        ? <p className="geo-leyenda-nota">{cortes.resumen.valvulas_cerradas === 1 ? "1 válvula cerrada" : `${cortes.resumen.valvulas_cerradas} válvulas cerradas`} · {nContratos(cortes.resumen.contratos)} sin agua</p>
+        : <p className="geo-leyenda-nota">{cortes ? "No hay válvulas cerradas en este momento." : "Cargando…"}</p>}
+    </div>
+  );
+}
+
+// Corte 9b. Tarjetas del modo «Afectaciones», en lenguaje claro: la zona sin agua y la válvula cerrada. Solo conteos; «quién» es el funcionario.
+function TarjetaCorte({ sel, cortes, zonas, puede, onElegir, onCerrar, onCambio }: {
+  sel: CorteSel; cortes: CortesVigentes; zonas: ZonaCorte[]; puede: boolean; onElegir: (s: CorteSel) => void; onCerrar: () => void; onCambio: () => void;
+}) {
+  const [accion, setAccion] = useState<"" | "abrir" | "regreso">("");
+  const [regreso, setRegreso] = useState(""); const [ocupado, setOcupado] = useState<string | null>(null); const [error, setError] = useState<string | null>(null);
+  const clave = sel.tipo === "zona" ? `z${sel.zona}` : `v${sel.codigo}`;
+  useEffect(() => { setAccion(""); setError(null); setRegreso(""); }, [clave]);
+  const cab = (titulo: string, sub: string) => (
+    <div className="geo-tarjeta-cab"><div><h2>{titulo}</h2><p>{sub}</p></div><button type="button" className="geo-cerrar" onClick={onCerrar} aria-label="Cerrar la tarjeta">✕</button></div>);
+  if (sel.tipo === "zona") {
+    const i = zonas.findIndex((z) => z.zona === sel.zona), z = zonas[i];
+    if (!z) return null;
+    const valvulas = cortes.valvulas.filter((v) => v.zona === z.zona);
+    return (
+      <section className="geo-tarjeta geo-tarjeta-corte" aria-label={`Zona ${i + 1} sin agua`} data-capa="corte_zona">
+        {cab(`Zona ${i + 1} sin agua`, z.desde ? `Sin agua desde ${horaClara(z.desde).includes(",") ? "el" : "las"} ${horaClara(z.desde)}` : "Sin agua")}
+        <dl>
+          <div><dt>Por</dt><dd>{z.por.length ? z.por.map((x) => [x.que, x.registro].filter(Boolean).join(" · ")).join("; ") : "—"}</dd></div>
+          <div><dt>Contratos afectados</dt><dd>{new Intl.NumberFormat("es-CO").format(z.contratos)}</dd></div>
+          {z.regreso_estimado ? <div><dt>Regreso estimado del servicio</dt><dd>{horaClara(z.regreso_estimado)}</dd></div> : null}
+        </dl>
+        {valvulas.length ? <div className="geo-tarjeta-acc">{valvulas.map((v) => <button key={v.codigo} type="button" className="tec-boton-sec" onClick={() => onElegir({ tipo: "valvula", codigo: v.codigo })}>Válvula {v.nombre || v.codigo}</button>)}</div> : null}
+      </section>);
+  }
+  const v: ValvulaCerrada | undefined = cortes.valvulas.find((x) => x.codigo === sel.codigo);
+  if (!v) return null;
+  const hacer = async (f: () => Promise<unknown>, texto: string) => {
+    setOcupado(texto); setError(null);
+    try { await f(); setAccion(""); onCambio(); } catch (e) { setError(e instanceof Error ? e.message : "No se pudo completar. Intente de nuevo."); } finally { setOcupado(null); }
+  };
+  return (
+    <section className="geo-tarjeta geo-tarjeta-corte" aria-label={`Válvula cerrada ${v.codigo}`} data-capa="corte_valvula">
+      {cab(`Válvula cerrada ${v.codigo}`, v.nombre && v.nombre !== v.codigo ? v.nombre : "Válvula de acueducto")}
+      <dl>
+        <div><dt>Cerrada desde</dt><dd>{horaClara(v.desde)}</dd></div>
+        <div><dt>Por</dt><dd>{v.quien}</dd></div>
+        <div><dt>Daño o intervención</dt><dd>{v.registro ?? "Maniobra del supervisor"}</dd></div>
+        {v.regreso_estimado ? <div><dt>Regreso estimado del servicio</dt><dd>{horaClara(v.regreso_estimado)}</dd></div> : null}
+      </dl>
+      {!v.en_red ? <p className="tec-ayuda">Esta válvula no está en la red en operación: su cierre no deja tramos sin agua en el cálculo.</p> : null}
+      {error ? <p className="tec-aviso tec-aviso-error" role="alert">{error}</p> : null}
+      {accion === "abrir" ? <PedirHora valvula={v.codigo} tipo="abrir" ocupado={ocupado} onCancelar={() => setAccion("")}
+        onConfirmar={(h) => void hacer(() => apiCierre.maniobra(v.codigo, "abrir", { hecho_en: instanteDeCampo(h) }), "Registrando la apertura…")} /> : null}
+      {accion === "regreso" ? (
+        <div className="cie-pedir" role="group" aria-label="Ajustar la hora de regreso">
+          <div className="tec-campo"><label htmlFor="geo-regreso">Regreso estimado del servicio</label>
+            <input id="geo-regreso" type="datetime-local" value={regreso} onChange={(e) => setRegreso(e.target.value)} /></div>
+          <div className="cie-pedir-acc">
+            <button type="button" className="tec-boton" disabled={!!ocupado || !instanteDeCampo(regreso)} onClick={() => void hacer(() => apiCierre.regreso(v.codigo, instanteDeCampo(regreso)!), "Guardando…")}>{ocupado ?? "Guardar la hora"}</button>
+            <button type="button" className="tec-boton-sec" disabled={!!ocupado} onClick={() => setAccion("")}>Cancelar</button>
+          </div>
+        </div>) : null}
+      {puede && !accion ? (
+        <div className="geo-tarjeta-acc">
+          <button type="button" className="tec-boton-sec" onClick={() => setAccion("abrir")}>Válvula abierta</button>
+          <button type="button" className="tec-boton-sec" onClick={() => setAccion("regreso")}>Ajustar hora de regreso</button>
+        </div>) : null}
+    </section>
   );
 }
 
@@ -704,7 +854,7 @@ function TarjetaDeContrato({ contrato, cfg, onCerrar, onVerFicha }: { contrato: 
 
 // «Compartir» (§30.2): guarda la vista (capas, colores, fechas, centro y zoom; nada personal) y da un enlace. Quien lo abre inicia sesión y ve solo lo que puede.
 function Compartir({ cfg, mapa, on, colores, periodo, atenuadas, onCerrar }: {
-  cfg: ConfigGeovisor; mapa: maplibregl.Map | null; on: Set<string>; colores: Colores; periodo: Periodo; atenuadas: Set<string>; onCerrar: () => void;
+  cfg: ConfigGeovisor; mapa: maplibregl.Map | null; on: Set<string>; colores: Exclude<Colores, "afectaciones">; periodo: Periodo; atenuadas: Set<string>; onCerrar: () => void;
 }) {
   const [enlace, setEnlace] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

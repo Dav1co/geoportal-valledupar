@@ -1,0 +1,24 @@
+/* Corte 9b: «¿Qué válvulas cierro?» y el cierre real en los formularios de daño e intervención (PanelCierre.tsx). Solo tokens de tokens.css (guía visual);
+   toma el color del modo (Distribución) por --t-modo. Los colores de los cortes son los aprobados por David el 17-nov (rojo: cerrada; naranja: sin agua). */
+.cie { --t-corte-cerrado: var(--t-rojo); --t-corte-afectado: var(--t-naranja); }
+.cie-rot { margin: 0; font-size: var(--t-txt); font-weight: 700; color: var(--t-titulo); }
+.cie-texto { margin: 0; font-size: var(--t-txt); }
+.cie-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--t-esp-2); }
+.cie-valvula { display: flex; align-items: center; gap: var(--t-esp-3); flex-wrap: wrap; border: 1px solid var(--t-borde); border-radius: var(--t-radio); padding: var(--t-esp-2) var(--t-esp-3); background: var(--t-tarjeta); }
+.cie-orden { flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; background: var(--t-modo); color: #fff; font-size: var(--t-txt-chico); font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.cie-punto { flex: 0 0 14px; width: 14px; height: 14px; border-radius: 50%; background: var(--t-corte-cerrado); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--t-corte-cerrado); }
+.cie-valvula-txt { flex: 1 1 150px; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--t-txt); overflow-wrap: anywhere; }
+.cie-valvula-txt span { font-size: var(--t-txt-chico); color: var(--t-texto-2); }
+.cie-valvula .tec-boton-sec { flex: 0 0 auto; }
+.cie-estado { font-size: var(--t-txt-chico); font-weight: 700; color: var(--t-corte-cerrado); background: var(--t-rojo-suave); border-radius: var(--t-radio); padding: var(--t-esp-1) var(--t-esp-2); }
+.cie-cerradas, .cie-resultado, .cie-pedir { display: flex; flex-direction: column; gap: var(--t-esp-3); }
+.cie-cerradas { background: var(--t-rojo-suave); border-radius: var(--t-radio); padding: var(--t-esp-3); }
+.cie-pedir { background: var(--t-suave); border: 1px solid var(--t-borde); border-radius: var(--t-radio); padding: var(--t-esp-3); }
+.cie-pedir input[type="datetime-local"] { height: 48px; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio); padding: 0 var(--t-esp-3); font: inherit; font-size: var(--t-txt-campo); color: var(--t-texto); background: var(--t-tarjeta); width: 100%; min-width: 0; box-sizing: border-box; }
+.cie-pedir-acc { display: flex; flex-wrap: wrap; gap: var(--t-esp-2); }
+.cie-pedir-acc > button { flex: 1 1 130px; }
+.cie-cifras { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--t-esp-3); background: var(--t-suave); border-radius: var(--t-radio); padding: var(--t-esp-3); }
+.cie-cifras dt { font-size: var(--t-txt-chico); color: var(--t-texto-2); }
+.cie-cifras dd { margin: 0; font-size: var(--t-txt-grande); font-weight: 700; color: var(--t-titulo); }
+.cie-nocierra { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: var(--t-esp-1); font-size: var(--t-txt-chico); }
+.cie-nota { margin: 0; font-size: var(--t-txt-chico); color: var(--t-texto-2); }
