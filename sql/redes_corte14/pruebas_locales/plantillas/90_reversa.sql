@@ -30,6 +30,7 @@ drop view redes.v_levantar_punto;
 alter table campo.personal_eventos drop constraint personal_eventos_formulario_check;
 alter table campo.personal_eventos add constraint personal_eventos_formulario_check {{DEF_CHECK_CAMPO_SQL}};
 update redes.formularios_distribucion set activo = false where clave = 'activo_campo';
+update redes.geovisor_capas set activa = false where codigo = 'por_levantar';      -- la capa del geovisor se desactiva (no se borra); el parámetro del aviso queda sin uso
 -- 4. los parámetros y el consecutivo no se borran: quedan marcados sin uso
 update redes.parametros set descripcion = 'Sin uso (reversa del Corte 14)' where clave in ({{PARAMETROS}});
 insert into public.geoportal_auditoria (email, accion, referencia, detalle, ip)

@@ -29,6 +29,9 @@ begin
   if to_regprocedure('campo.f_formularios_personal()') is null or md5(pg_get_functiondef('campo.f_formularios_personal()'::regprocedure)) <> '51b26c1209ae8403560888ca29902fb5' then
     raise exception 'campo.f_formularios_personal no es la de la pasada del 14-nov (huella 51b26c1209ae8403560888ca29902fb5): deténgase y avise';
   end if;
+  if md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamptz)'::regprocedure)) <> '2a7989bead5fd35d3a4d0c4e45bcb92b' then
+    raise exception 'tecnica.f_avisos no es la de la Fase 2 del 9b (huella 2a7989bead5fd35d3a4d0c4e45bcb92b): deténgase y avise';
+  end if;
   if (select pg_get_constraintdef(c.oid) from pg_constraint c where c.conrelid = 'campo.personal_eventos'::regclass and c.conname = 'personal_eventos_formulario_check') is distinct from 'CHECK (((formulario IS NULL) OR (formulario ~ ''^(reporte_general|acta|tipo:[a-z][a-z0-9_]{1,59})$''::text)))' then
     raise exception 'El CHECK de campo.personal_eventos.formulario no es el esperado (pasada del 14-nov): deténgase y avise';
   end if;
@@ -77,15 +80,15 @@ comment on table redes.levantar_fotos is 'Corte 14: fotos del punto por levantar
 create table redes.levantar_eventos (
   id        bigint generated always as identity primary key,
   punto_id  uuid not null references redes.levantar_puntos (id),
-  tipo      text not null check (tipo in ('asignado', 'levantado', 'descartado', 'reabierto', 'propuesto')),
-  activo_id bigint references redes.activos (id),      -- el activo nuevo (levantado) o el que el sistema propone (propuesto)
+  tipo      text not null check (tipo in ('asignado', 'levantado', 'descartado', 'reabierto')),
+  activo_id bigint references redes.activos (id),      -- el activo nuevo con el que quedó levantado
   motivo    text check (motivo is null or length(btrim(motivo)) between 3 and 500),
   autor     text not null check (autor = lower(autor) and position('@' in autor) > 1),
   creado_en timestamptz not null default clock_timestamp(),
-  check ((tipo in ('levantado', 'propuesto')) = (activo_id is not null)),
+  check ((tipo = 'levantado') = (activo_id is not null)),
   check (tipo not in ('descartado', 'reabierto') or motivo is not null)
 );
-comment on table redes.levantar_eventos is 'Corte 14: eventos de un punto por levantar, de solo agregar. Estado vigente = el último que no es «propuesto» (sin eventos o «reabierto» = reportado). «propuesto» = el sistema cree que ya se levantó (lo confirma el supervisor).';
+comment on table redes.levantar_eventos is 'Corte 14: eventos de un punto por levantar, de solo agregar. Estado vigente = el último (sin eventos o «reabierto» = reportado). El «posiblemente levantado» no se guarda: se calcula al leer la bandeja (un activo NUEVO a pocos metros) y lo confirma el supervisor.';
 create index ix_levantar_eventos_punto on redes.levantar_eventos (punto_id, id desc);
 
 do $$
@@ -109,7 +112,7 @@ select p.id, p.codigo, p.servicio, p.tipo, p.observacion, p.lat, p.lon, p.geom, 
        (select count(*) from redes.levantar_fotos f where f.punto_id = p.id)::integer as fotos
   from redes.levantar_puntos p
   left join lateral (select e.tipo, e.creado_en, e.autor, e.motivo, e.activo_id from redes.levantar_eventos e
-                      where e.punto_id = p.id and e.tipo <> 'propuesto' order by e.id desc limit 1) u on true;
+                      where e.punto_id = p.id order by e.id desc limit 1) u on true;
 revoke all on table redes.v_levantar_punto from public, anon, authenticated, service_role;
 
 -- ---------- 2. Consecutivo, parámetros y el formulario asignable ----------
@@ -118,7 +121,9 @@ insert into redes.parametros (clave, valor, unidad, minimo, maximo, descripcion)
   ('levantar_radio_min_m', 15, 'm', 5, 50, 'Encontrar o reportar activo (Corte 14): radio mínimo de búsqueda alrededor de la persona. El radio es el mayor entre este y la precisión del GPS'),
   ('levantar_radio_max_m', 30, 'm', 10, 100, 'Encontrar o reportar activo (Corte 14): tope del radio de búsqueda y de la precisión del GPS. Con peor precisión la pantalla avisa «señal débil» y el punto queda «precisión baja»'),
   ('levantar_duplicado_m', 10, 'm', 1, 50, 'Reportar activo (Corte 14): si ya hay un punto por levantar a menos de esta distancia, se muestra antes de crear otro'),
-  ('levantar_lista_max', 30, 'activos', 5, 100, 'Encontrar activo (Corte 14): cuántos activos cercanos se listan como máximo (los más cercanos primero)')
+  ('levantar_lista_max', 30, 'activos', 5, 100, 'Encontrar activo (Corte 14): cuántos activos cercanos se listan como máximo (los más cercanos primero)'),
+  ('levantar_propuesta_m', 5, 'm', 1, 50, 'Cierre casi automático (Corte 14): un activo NUEVO (cargado después del reporte) a menos de esta distancia de un punto por levantar se propone como «posiblemente levantado»; lo confirma el supervisor'),
+  ('levantar_hoja_max', 60, 'activos', 5, 200, 'Hoja de levantamiento en PDF (Corte 14): cuántos puntos caben como máximo en una hoja (los más antiguos primero)')
 on conflict (clave) do update set estado = 'vigente', descripcion = excluded.descripcion;
 
 do $$
@@ -136,3 +141,13 @@ on conflict (clave) do update set activo = true, nombre = excluded.nombre;
 alter table campo.personal_eventos drop constraint personal_eventos_formulario_check;
 alter table campo.personal_eventos add constraint personal_eventos_formulario_check
   check (formulario is null or formulario ~ '^(reporte_general|acta|activo_campo|tipo:[a-z][a-z0-9_]{1,59})$');
+
+-- ---------- 3. Etapa 2: el aviso (Corte 12) y la capa «Por levantar» del geovisor ----------
+insert into tecnica.aviso_parametros (clave, area, valor, minimo, maximo, unidad, orden, nombre, descripcion) values
+  ('levantar_naranja_dias', 'distribucion', 30, 1, 365, 'días', 180, 'Activos por levantar: naranja',
+   'Los activos reportados por levantar salen como aviso informativo; pasa a naranja si alguno lleva más de estos días sin levantar.')
+on conflict (clave) do nothing;
+insert into redes.geovisor_capas (codigo, nombre, grupo, fuente, estado, prefijos, por_fecha, solo_completo, nota, orden, activa) values
+  ('por_levantar', 'Por levantar (activos reportados)', 'actividades', 'geojson', 'activa', '{}', false, true,
+   'Activos encontrados en la calle que no están en la red («Encontrar o reportar activo»). Solo los que siguen por levantar. Supervisores y administrador', 42, true)
+on conflict (codigo) do update set activa = true, estado = 'activa';

@@ -12,6 +12,7 @@ begin
   select * into a from redes.f_levantar_acceso(p_solicitante);
   return jsonb_build_object('perfil', a.perfil, 'area', a.area,
     'ficha_completa', a.area = 'tecnica',                                            -- en Técnica se abre la ficha de siempre (la edita quien ya podía)
+    'reporta_dano', a.area = 'tecnica' and redes.f_puede_formulario(a.email, 'danos_fallas'),      -- «Reportar daño en este activo» (quien tiene el formulario de daños)
     'radio_min_m', redes.f_param('levantar_radio_min_m'), 'radio_max_m', redes.f_param('levantar_radio_max_m'), 'duplicado_m', redes.f_param('levantar_duplicado_m'),
     'min_fotos', 1, 'max_fotos', 3,
     'servicios', jsonb_build_array(jsonb_build_object('codigo', 'acueducto', 'nombre', 'Acueducto'), jsonb_build_object('codigo', 'alcantarillado', 'nombre', 'Alcantarillado')),
@@ -184,7 +185,7 @@ end $$;
 create function public.geoportal_redes_levantar_lista(p_solicitante text, p_estado text default 'abiertos', p_despues_de text default null, p_limite integer default 50) returns jsonb
 language plpgsql stable security definer set search_path to 'public', 'redes', 'tecnica', 'extensions', 'pg_temp' as $$
 declare v_email text := redes.f_supervisor(p_solicitante, 've los activos por levantar'); v_lim integer := coalesce(p_limite, 50); v_est text := coalesce(p_estado, 'abiertos');
-        v_desp text := nullif(upper(btrim(coalesce(p_despues_de, ''))), ''); v_items jsonb; v_cont jsonb;
+        v_desp text := nullif(upper(btrim(coalesce(p_despues_de, ''))), ''); v_items jsonb; v_cont jsonb; v_prop numeric := redes.f_param('levantar_propuesta_m');
 begin
   if v_lim < 1 or v_lim > 200 then perform tecnica.f_error('Se piden de 1 a 200'); end if;
   if v_est not in ('abiertos', 'reportado', 'asignado', 'levantado', 'descartado', 'todos') then perform tecnica.f_error('Ese estado no existe'); end if;
@@ -195,6 +196,13 @@ begin
            'quien', redes.f_levantar_quien(p.autor), 'estado', p.estado, 'estado_nombre', redes.f_levantar_estado_nombre(p.estado), 'estado_desde', p.estado_desde,
            'estado_motivo', p.estado_motivo, 'estado_quien', case when p.estado_autor is not null then redes.f_levantar_quien(p.estado_autor) end,
            'activo', (select m.codigo from redes.activos m where m.id = p.activo_id), 'fotos', p.fotos,
+           -- cierre casi automático (regla 4): un activo NUEVO (creado después del reporte) del mismo servicio a pocos metros; el supervisor confirma
+           'propuesta', case when p.estado in ('reportado', 'asignado') then (
+              select jsonb_build_object('activo', m.codigo, 'tipo', redes.f_tipo_nombre(m.prefijo), 'distancia_m', round(ST_Distance(m.geom::geography, p.geom::geography)::numeric, 1), 'cargado_en', a.creado_en)
+                from redes.activo_vigente_mat m join redes.activos a on a.id = m.activo_id
+               where not m.retirado and not m.oculto and m.sistema = p.servicio and a.creado_en > p.registrado_en
+                 and m.geom && ST_Expand(p.geom, (v_prop + 5) / 100000.0) and ST_DWithin(m.geom::geography, p.geom::geography, v_prop)
+               order by ST_Distance(m.geom::geography, p.geom::geography), m.codigo limit 1) end,
            'sector', (select s.nombre from redes.f_sector_de(p.geom) s)) order by p.codigo desc), '[]'::jsonb)
     into v_items
     from (select x.* from redes.v_levantar_punto x
@@ -248,4 +256,126 @@ begin
   select coalesce(jsonb_agg(jsonb_build_object('n', f.n, 'ruta', f.ruta_storage, 'creado_en', f.creado_en) order by f.n), '[]'::jsonb) into v_fotos from redes.levantar_fotos f where f.punto_id = v_id;
   perform tecnica.f_auditar(v_email, 'redes_levantar_fotos', v_cod, jsonb_build_object('fotos', jsonb_array_length(v_fotos)), p_ip);
   return jsonb_build_object('codigo', v_cod, 'fotos', v_fotos);
+end $$;
+
+-- ---------- Supervisor: la hoja de levantamiento (PDF con la hoja membretada): los puntos numerados EN EL ORDEN DEL RECORRIDO ----------
+-- Empieza por el punto más al norte y sigue siempre al más cercano que falte. Trae la primera foto de cada punto (la Edge firma la lectura) y la observación
+-- (David, 17-nov: en este PDF sí va, le sirve a la cuadrilla). Sin quién reportó y sin datos de suscriptores. La descarga queda en la auditoría.
+create function public.geoportal_redes_levantar_hoja(p_solicitante text, p_estado text default 'abiertos', p_ip text default null) returns jsonb
+language plpgsql security definer set search_path to 'public', 'redes', 'tecnica', 'extensions', 'pg_temp' as $$
+declare v_email text := redes.f_supervisor(p_solicitante, 'descargan la hoja de levantamiento'); v_est text := coalesce(p_estado, 'abiertos');
+        v_max integer := redes.f_param('levantar_hoja_max')::integer; v_ids uuid[]; v_orden uuid[] := '{}'; v_act uuid; v_total integer; v_puntos jsonb;
+begin
+  if v_est not in ('abiertos', 'reportado', 'asignado') then perform tecnica.f_error('La hoja de levantamiento es de los puntos por levantar'); end if;
+  select count(*) into v_total from redes.v_levantar_punto x where (v_est = 'abiertos' and x.estado in ('reportado', 'asignado')) or x.estado = v_est;
+  select array_agg(y.id order by y.lat desc, y.lon, y.codigo) into v_ids
+    from (select x.id, x.lat, x.lon, x.codigo from redes.v_levantar_punto x
+           where (v_est = 'abiertos' and x.estado in ('reportado', 'asignado')) or x.estado = v_est order by x.codigo limit v_max) y;
+  if v_ids is not null then
+    v_act := v_ids[1];
+    loop
+      v_orden := v_orden || v_act;
+      exit when cardinality(v_orden) >= cardinality(v_ids);
+      select q.id into v_act from redes.levantar_puntos q, redes.levantar_puntos c
+       where c.id = v_act and q.id = any (v_ids) and q.id <> all (v_orden) order by q.geom <-> c.geom, q.codigo limit 1;
+    end loop;
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('n', o.n, 'codigo', p.codigo, 'tipo_nombre', redes.f_levantar_tipo_nombre(p.tipo), 'servicio', p.servicio, 'registrado_en', p.registrado_en,
+           'lat', p.lat, 'lon', p.lon, 'precision_m', p.precision_m, 'precision_baja', p.precision_baja, 'observacion', p.observacion, 'estado_nombre', redes.f_levantar_estado_nombre(p.estado),
+           'sector', (select s.nombre from redes.f_sector_de(p.geom) s),
+           'foto', (select f.ruta_storage from redes.levantar_fotos f where f.punto_id = p.id order by f.n limit 1)) order by o.n), '[]'::jsonb)
+    into v_puntos from unnest(v_orden) with ordinality o(id, n) join redes.v_levantar_punto p on p.id = o.id;
+  perform tecnica.f_auditar(v_email, 'redes_levantar_hoja', null, jsonb_build_object('estado', v_est, 'puntos', jsonb_array_length(v_puntos), 'total', v_total), p_ip);
+  return jsonb_build_object('generado_en', clock_timestamp(), 'estado', v_est, 'total', v_total, 'recortada', v_total > jsonb_array_length(v_puntos), 'puntos', v_puntos);
+end $$;
+
+-- =====================================================================
+-- ETAPA 3 · Parte 2: modo «Remuneración» del geovisor (antes «10-bis»). SOLO supervisor de distribución y administrador (es término tarifario: el operador
+-- y el supervisor de planta no ven el modo, ni su leyenda, ni su tesela). Fuente: el amarre del Corte 10 (redes.val_amarre, con la hoja de alcantarillado
+-- vigente por el parámetro) y la misma regla de redes.f_ficha_regulatorio. Nada nuevo se carga.
+--   remunerado: tiene fila en la valoración vigente · no_remunerado: tiene fila, pero está fuera de servicio o es obra de un tercero (SIVA) ·
+--   sin_fila: en la red, sin amarre a la valoración (o sin fila que le corresponda) · proyectado: del Plan, no construido.
+-- =====================================================================
+create function redes.f_remuneracion_estado(p_con boolean, p_aparte boolean, p_proyectado boolean) returns text
+language sql immutable set search_path to 'pg_catalog' as $$
+  select case when p_con then 'remunerado' when p_aparte then 'no_remunerado' when p_proyectado then 'proyectado' else 'sin_fila' end
+$$;
+
+-- La leyenda y los conteos del modo (y si hay amarre cargado)
+create function public.geoportal_redes_remuneracion(p_solicitante text) returns jsonb
+language plpgsql stable security definer set search_path to 'public', 'redes', 'tecnica', 'pg_temp' as $$
+declare v_email text := redes.f_supervisor(p_solicitante, 'ven el modo «Remuneración»'); v_am bigint := redes.f_ref_vigente('val_amarre'); v_val bigint := redes.f_ref_vigente('valoracion');
+        v_hoja text := redes.f_val_hoja_alc(); v_pref text[] := redes.f_val_prefijos(); v_cont jsonb;
+begin
+  if v_am is not null and v_val is not null then
+    select coalesce(jsonb_object_agg(g.estado, g.n), '{}'::jsonb) into v_cont from (
+      select redes.f_remuneracion_estado(coalesce(r.con, false), coalesce(r.aparte, false), coalesce(r.proy, false) or m.estado_codigo = 'proyectado') as estado, count(*) as n
+        from redes.activo_vigente_mat m
+        left join (select am.activo_id, bool_or(am.situacion = 'con_fila') as con, bool_or(am.situacion like 'aparte\_%') as aparte, bool_or(am.situacion = 'proyectado') as proy
+                     from redes.val_amarre am where am.carga_id = v_am and am.val_carga_id = v_val and am.hoja in ('acueducto', v_hoja) group by am.activo_id) r on r.activo_id = m.activo_id
+       where not m.retirado and not m.oculto and (m.prefijo = any (v_pref) or r.activo_id is not null) group by 1) g;
+  end if;
+  return jsonb_build_object('cargado', v_am is not null and v_val is not null, 'version', v_am,
+    'rotulo', 'Valoración técnica 2019, propuesta',
+    'nota', 'Remuneración vía tarifa según la Valoración Técnica de 2019 (Res. CRA 688 de 2014), que es una PROPUESTA: su adopción no está confirmada.',
+    'conteos', coalesce(v_cont, '{}'::jsonb),
+    'leyenda', jsonb_build_array(
+      jsonb_build_object('clave', 'remunerado', 'nombre', 'Remunerado', 'significa', 'Tiene fila en la valoración vigente'),
+      jsonb_build_object('clave', 'no_remunerado', 'nombre', 'No remunerado', 'significa', 'Tiene fila, pero está fuera de servicio o es obra de un tercero (SIVA)'),
+      jsonb_build_object('clave', 'sin_fila', 'nombre', 'Sin fila', 'significa', 'En la red, sin amarre a la valoración'),
+      jsonb_build_object('clave', 'proyectado', 'nombre', 'Proyectado', 'significa', 'Del Plan, no construido')));
+end $$;
+
+-- La tesela del modo (aparte de la del geovisor, que no se toca): la misma red, con el estado de remuneración de cada activo
+create function public.geoportal_redes_geovisor_mvt_remuneracion(p_solicitante text, p_z integer, p_x integer, p_y integer) returns text
+language plpgsql stable security definer set search_path to 'public', 'redes', 'tecnica', 'extensions', 'pg_temp' as $$
+declare v_email text := redes.f_supervisor(p_solicitante, 'ven el modo «Remuneración»'); v_am bigint := redes.f_ref_vigente('val_amarre'); v_val bigint := redes.f_ref_vigente('valoracion');
+        v_hoja text := redes.f_val_hoja_alc(); v_pref text[] := redes.f_val_prefijos(); v_env geometry; v_env4326 geometry; v bytea;
+        z_min numeric := redes.f_param('geovisor_zoom_min'); z_red numeric := redes.f_param('geovisor_zoom_red_completa'); z_nod numeric := redes.f_param('geovisor_zoom_nodos');
+        d_acu numeric := redes.f_param('geovisor_diam_principal_acu_mm'); d_alc numeric := redes.f_param('geovisor_diam_principal_alc_mm');
+begin
+  if p_z is null or p_x is null or p_y is null or p_z < 0 or p_z > 22 or p_x < 0 or p_y < 0 or p_x >= (1 << p_z) or p_y >= (1 << p_z) then perform tecnica.f_error('Tesela fuera de rango'); end if;
+  if p_z < z_min or v_am is null or v_val is null then return ''; end if;
+  v_env := ST_TileEnvelope(p_z, p_x, p_y);
+  v_env4326 := ST_Transform(v_env, 4326);
+  select ST_AsMVT(t, 'remuneracion', 4096, 'geom') into v from (
+    select ST_AsMVTGeom(ST_Transform(m.geom, 3857), v_env, 4096, 64, true) as geom, m.codigo, m.prefijo, m.sistema,
+           case GeometryType(m.geom) when 'POINT' then 'nodo' when 'POLYGON' then 'area' when 'MULTIPOLYGON' then 'area' else 'tramo' end as forma,
+           redes.f_remuneracion_estado(coalesce(r.con, false), coalesce(r.aparte, false), coalesce(r.proy, false) or m.estado_codigo = 'proyectado') as rem
+      from redes.activo_vigente_mat m
+      left join lateral (select count(*) as n, bool_or(am.situacion = 'con_fila') as con, bool_or(am.situacion like 'aparte\_%') as aparte, bool_or(am.situacion = 'proyectado') as proy
+                           from redes.val_amarre am
+                          where am.activo_id = m.activo_id and am.carga_id = v_am and am.val_carga_id = v_val and am.hoja in ('acueducto', v_hoja)) r on true
+     where not m.retirado and not m.oculto and m.geom && v_env4326 and (m.prefijo = any (v_pref) or r.n > 0)
+       and case
+             when m.prefijo in ('TAN', 'PTA', 'CAP', 'DES', 'PTR') then true
+             when GeometryType(m.geom) = 'POINT' then p_z >= z_nod
+             when p_z >= z_red then true
+             else m.prefijo in ('CON', 'ADU', 'INT')
+                  or (m.sistema = 'acueducto' and m.diametro_mm >= d_acu) or (m.sistema = 'alcantarillado' and m.diametro_mm >= d_alc)
+           end) t
+   where t.geom is not null;
+  return replace(encode(coalesce(v, ''::bytea), 'base64'), E'\n', '');
+end $$;
+
+-- La tarjeta del activo en este modo: «Remunerado vía tarifa: sí / no», el motivo y la fila (o filas) de la valoración. La misma regla de la ficha.
+create function public.geoportal_redes_remuneracion_tarjeta(p_solicitante text, p_codigo text) returns jsonb
+language plpgsql stable security definer set search_path to 'public', 'redes', 'tecnica', 'extensions', 'pg_temp' as $$
+declare v_email text := redes.f_supervisor(p_solicitante, 'ven el modo «Remuneración»'); v_cod text := upper(btrim(coalesce(p_codigo, ''))); m redes.activo_vigente_mat%rowtype; j jsonb; v_sit text;
+begin
+  if v_cod !~ '^[A-Z]{3}-[0-9]{1,8}$' then perform tecnica.f_error('Ese código de activo no es válido'); end if;
+  select * into m from redes.activo_vigente_mat x where x.codigo = v_cod and not x.retirado and not x.oculto;
+  if not found then perform tecnica.f_error('Ese activo no existe', 'P0002'); end if;
+  j := redes.f_ficha_regulatorio(m.activo_id, m.prefijo);
+  v_sit := j ->> 'situacion';
+  return jsonb_strip_nulls(jsonb_build_object('codigo', m.codigo, 'tipo', redes.f_tipo_nombre(m.prefijo), 'sistema', m.sistema,
+    'cargado', redes.f_ref_vigente('val_amarre') is not null,
+    'estado', case when j is null then 'no_aplica' when v_sit = 'con_fila' then 'remunerado' when v_sit = 'aparte' then 'no_remunerado'
+                   when v_sit = 'proyectado' or m.estado_codigo = 'proyectado' then 'proyectado' else 'sin_fila' end,
+    'remunerado', coalesce((j ->> 'remunerado')::boolean, false),
+    'rotulo', 'Valoración técnica 2019, propuesta',
+    'motivo', case when j is null then 'Este tipo de activo no entra en la valoración.' else j ->> 'texto' end,
+    'filas', (select jsonb_agg(jsonb_build_object('hoja', f ->> 'hoja', 'n', (f ->> 'n')::integer, 'nombre', f ->> 'nombre', 'caracteristica', f ->> 'caracteristica',
+                                'cantidad', (f ->> 'cantidad')::numeric, 'unidad', f ->> 'unidad', 'anio_operacion', (f ->> 'anio_operacion')::integer) order by (f ->> 'n')::integer)
+                from jsonb_array_elements(j -> 'filas') f)));
 end $$;

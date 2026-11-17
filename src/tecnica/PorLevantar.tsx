@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import "./encontrar.css";
 import { apiLev, type FiltroLevantar, type FotoLevantar, type ListaLevantar, type PuntoLevantar } from "./apiLevantar";
 import { ErrorTec } from "./apiTecnica";
+import { HojaLevantamiento } from "./HojaLevantamiento";
+
 
 // Dashboard distribución → Por verificar → «Otros activos por levantamiento» (Corte 14). Los activos que alguien encontró en la calle y no están en la red.
 // Estados, de solo agregar: reportado → asignado a levantamiento → levantado (con el activo nuevo) | descartado con motivo. «Reabrir» lo devuelve a reportado.
@@ -24,6 +26,7 @@ export function PorLevantarLista({ onFicha, onConteo }: { onFicha: (c: string) =
   const [error, setError] = useState<string | null>(null);
   const [vez, setVez] = useState(0);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [hoja, setHoja] = useState(false);
   useEffect(() => {
     let vivo = true; setD(null); setError(null);
     apiLev.lista(filtro, null).then((r) => { if (vivo) { setD(r); setItems(r.items); onConteo?.(r.abiertos); } }).catch((e) => { if (vivo) setError(err(e)); });
@@ -37,6 +40,8 @@ export function PorLevantarLista({ onFicha, onConteo }: { onFicha: (c: string) =
       <div className="dan-fila dan-pad-x" role="group" aria-label="Qué activos por levantar ver">
         {FILTROS.map((f) => <button key={f.c} type="button" className="dan-opcion" aria-pressed={filtro === f.c} data-filtro-lev={f.c} onClick={() => setFiltro(f.c)}>{f.n}{n(f.c) !== null ? `: ${n(f.c)}` : ""}</button>)}
       </div>
+      {filtro === "abiertos" && d && d.abiertos > 0 ? <div className="dan-pad-x lev-pdf"><button type="button" className="tec-boton-sec" data-testid="lev-pdf" onClick={() => setHoja(true)}>Descargar en PDF (hoja de levantamiento)</button></div> : null}
+      {hoja ? <HojaLevantamiento estado="abiertos" onCerrar={() => setHoja(false)} /> : null}
       {aviso ? <p className="tec-aviso tec-aviso-info dan-pad-x" role="status">{aviso} <button type="button" className="tec-enlace" onClick={() => setAviso(null)}>Cerrar</button></p> : null}
       {!d ? <p className="tec-sub dan-pad" role="status">Cargando…</p>
         : !items.length ? <section className="tec-tarjeta"><p className="red-vacio">No hay activos {filtro === "abiertos" ? "por levantar" : "en ese estado"}.</p></section>
@@ -75,6 +80,12 @@ function Punto({ p, onFicha, onCambio }: { p: PuntoLevantar; onFicha: (c: string
       {p.observacion ? <p className="pv-motivo">{p.observacion}</p> : null}
       <p className="tec-ayuda">Reportado el {fechaHora(p.registrado_en)} por {p.quien} ({p.area === "comercial" ? "Comercial" : "Técnica"}) · precisión ± {Math.round(p.precision_m)} m · {p.lat}, {p.lon}{p.sector ? ` · ${p.sector}` : ""}</p>
       {p.estado !== "reportado" ? <p className="tec-ayuda">{p.estado_nombre} el {fechaHora(p.estado_desde)}{p.estado_quien ? ` por ${p.estado_quien}` : ""}{p.activo ? <> · activo <strong>{p.activo}</strong></> : null}{p.estado_motivo ? ` · ${p.estado_motivo}` : ""}</p> : null}
+      {p.propuesta && abierto ? (
+        <p className="tec-aviso tec-aviso-info lev-propuesta" role="status" data-testid="lev-propuesta"><strong>Posiblemente levantado:</strong> {p.propuesta.activo} ({p.propuesta.tipo}), a {String(p.propuesta.distancia_m).replace(".", ",")} m, cargado el {fechaHora(p.propuesta.cargado_en)}.{" "}
+          <button type="button" className="tec-boton-sec" disabled={enviando} data-testid="lev-confirmar-propuesta" onClick={async () => { setEnviando(true); setError(null);
+            try { const r = await apiLev.evento(p.codigo, "levantado", { activo: p.propuesta!.activo, motivo: "Confirmado: es el activo nuevo de la capa" }); onCambio(`${p.codigo} quedó «levantado» (${r.activo}).`); } catch (e) { setError(err(e)); setEnviando(false); } }}>Confirmar: es {p.propuesta.activo}</button></p>
+      ) : null}
+      {error && !accion ? <p className="tec-aviso tec-aviso-error" role="alert">{error}</p> : null}
       <div className="dash-acciones">
         <button type="button" className="tec-boton-sec" data-accion-lev="fotos" onClick={() => { setErrorFotos(null); apiLev.fotos(p.codigo).then((r) => setFotos(r.fotos)).catch((e) => setErrorFotos(err(e))); }}>Ver {p.fotos === 1 ? "la foto" : `las ${p.fotos} fotos`}</button>
         {p.activo ? <button type="button" className="tec-boton-sec" onClick={() => onFicha(p.activo!)}>Ver la ficha de {p.activo}</button> : null}

@@ -54,8 +54,8 @@ do $prueba$
 declare
   a text := 'prueba.redes14.adm@emdupar.gov.co'; sd text := 'prueba.redes14.sd@emdupar.gov.co'; op text := 'prueba.redes14.op@emdupar.gov.co'; op2 text := 'prueba.redes14.op2@emdupar.gov.co';
   pl text := 'prueba.redes14.pl@emdupar.gov.co'; co text := 'prueba.redes14.co@emdupar.gov.co'; na text := 'prueba.redes14.nada@emdupar.gov.co';
-  j jsonb; j2 jsonb; v_val text; v_red text; v_col text; v_lev text; v_lev2 text; v_id uuid; v_n integer; v_n2 integer;
-  v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_ms3 numeric; v_ms4 numeric; v_lat numeric; v_lon numeric; v_info text; v_total integer; v_bien integer; v_fallas text;
+  j jsonb; j2 jsonb; v_val text; v_red text; v_col text; v_lev text; v_lev2 text; v_nuevo text; v_carg boolean; v_n3 integer; v_n4 integer; v_z integer; v_tx integer; v_ty integer; v_txt text; v_info2 text; v_id uuid; v_n integer; v_n2 integer;
+  v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_ms3 numeric; v_ms4 numeric; v_ms5 numeric; v_lat numeric; v_lon numeric; v_info text; v_total integer; v_bien integer; v_fallas text;
 begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (a, 'ZT14 Admin', 'admin', 'sin_restriccion', 'todos');
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, ver_dashboard_redes, horario, dias) values (sd, 'ZT14 Supervisor de distribución', 'consulta', true, true, 'sin_restriccion', 'todos');
@@ -216,7 +216,107 @@ begin
     format('insert into campo.personal_eventos (persona, tipo_evento, formulario, autor) values (%L, %L, %L, %L)', co, 'asignar_formulario', 'zt14_inventado', a), '23514');
   perform pg_temp.reg('06.05 en Comercial la asignación solo se registra: quien tiene Formularios de campo entra igual', (public.geoportal_redes_levantar_inicio(co) ->> 'perfil') = 'comercial');
 
-  -- ===================== 07. Tiempos con el volumen real =====================
+  -- ===================== 08. Etapa 2: cierre casi automático, hoja de levantamiento, aviso y capa del geovisor =====================
+  v_nuevo := pg_temp.activo('hidrante nuevo', 'HID', pg_temp.pt(203, 200));      -- un activo NUEVO (cargado después del reporte) a 3 m del primer punto
+  j2 := pg_temp.punto(co, 2, 0, 5, jsonb_build_object('tipo', 'caja'));           -- y un punto nuevo a 2 m de la válvula y del tramo, que YA estaban en la red
+  j := public.geoportal_redes_levantar_lista(sd, 'abiertos', null, 200);
+  perform pg_temp.reg('08.01 «posiblemente levantado»: al punto con un activo nuevo a 3 m se le propone ese activo, con su distancia y cuándo se cargó',
+    (select i -> 'propuesta' ->> 'activo' = v_nuevo and (i -> 'propuesta' ->> 'distancia_m')::numeric between 2 and 4 and i -> 'propuesta' ->> 'cargado_en' is not null
+       from jsonb_array_elements(j -> 'items') i where i ->> 'codigo' = v_lev), (select i::text from jsonb_array_elements(j -> 'items') i where i ->> 'codigo' = v_lev));
+  perform pg_temp.reg('08.02 … y un activo que ya estaba en la red antes del reporte NO se propone (aunque esté a 2 m)',
+    (select i -> 'propuesta' = 'null'::jsonb or not i ? 'propuesta' from jsonb_array_elements(j -> 'items') i where i ->> 'codigo' = j2 ->> 'codigo'), j2::text);
+  select count(*) into v_n from jsonb_array_elements(j -> 'items') i;
+  j := public.geoportal_redes_levantar_hoja(sd, 'abiertos', '127.0.0.1');
+  perform pg_temp.reg('08.03 la hoja de levantamiento: todos los puntos por levantar, numerados 1, 2, 3… con su primera foto, coordenadas, precisión y observación; sin quién reportó',
+    jsonb_array_length(j -> 'puntos') = v_n and (j ->> 'total')::integer = v_n and not (j ->> 'recortada')::boolean
+    and (select bool_and((x.i ->> 'n')::bigint = x.o and x.i ->> 'foto' like 'levantar/%/1.jpg' and x.i ? 'lat' and x.i ? 'precision_m' and x.i ? 'observacion' and not x.i ? 'quien' and not x.i ? 'autor')
+           from jsonb_array_elements(j -> 'puntos') with ordinality x(i, o)), left(j::text, 400));
+  perform pg_temp.reg('08.04 … en el orden del recorrido: empieza por el más al norte y sigue siempre al más cercano que falta',
+    (j -> 'puntos' -> 0 ->> 'lat')::numeric = (select max((i ->> 'lat')::numeric) from jsonb_array_elements(j -> 'puntos') i)
+    and (select bool_and(d.sig <= d.min_resto + 0.01) from (
+           select ST_Distance(ST_MakePoint((pa.i ->> 'lon')::float8, (pa.i ->> 'lat')::float8)::geography, ST_MakePoint((pb.i ->> 'lon')::float8, (pb.i ->> 'lat')::float8)::geography) as sig,
+                  (select min(ST_Distance(ST_MakePoint((pa.i ->> 'lon')::float8, (pa.i ->> 'lat')::float8)::geography, ST_MakePoint((pc.i ->> 'lon')::float8, (pc.i ->> 'lat')::float8)::geography))
+                     from jsonb_array_elements(j -> 'puntos') with ordinality pc(i, o) where pc.o > pa.o) as min_resto
+             from jsonb_array_elements(j -> 'puntos') with ordinality pa(i, o) join jsonb_array_elements(j -> 'puntos') with ordinality pb(i, o) on pb.o = pa.o + 1) d),
+    (select string_agg(i ->> 'codigo', ' → ') from jsonb_array_elements(j -> 'puntos') i));
+  perform pg_temp.reg('08.05 la descarga de la hoja queda en la auditoría', exists (select 1 from public.geoportal_auditoria where accion = 'redes_levantar_hoja' and email = sd and (detalle ->> 'puntos')::integer = v_n));
+  perform pg_temp.err('08.06 el operador no descarga la hoja', format('select public.geoportal_redes_levantar_hoja(%L)', op), '42501');
+  perform pg_temp.err('08.07 la hoja es solo de puntos por levantar (no de levantados ni descartados)', format('select public.geoportal_redes_levantar_hoja(%L, %L)', sd, 'levantado'), '22023');
+  j := (select av from jsonb_array_elements(tecnica.f_avisos(false, true)) av where av ->> 'clave' = 'activos_por_levantar');
+  perform pg_temp.reg('08.08 el aviso (Corte 12): los activos por levantar salen como INFORMATIVO al supervisor de distribución, con su bandeja (Por verificar)',
+    j ->> 'nivel' = 'info' and (j ->> 'n')::integer = v_n and j ->> 'area' = 'distribucion' and j -> 'bandeja' ->> 'pestana' = 'por_verificar' and j -> 'bandeja' ->> 'filtro' = 'levantar'
+    and j ->> 'titulo' like '% por levantar' and jsonb_array_length(j -> 'items') between 1 and 5, j::text);
+  j := (select av from jsonb_array_elements(tecnica.f_avisos(false, true, clock_timestamp() + interval '31 days')) av where av ->> 'clave' = 'activos_por_levantar');
+  perform pg_temp.reg('08.09 … y pasa a NARANJA cuando alguno lleva más de 30 días sin levantar (parámetro levantar_naranja_dias)',
+    j ->> 'nivel' = 'naranja' and j ->> 'detalle' like '%más de 30 días sin levantar%', j::text);
+  perform pg_temp.reg('08.10 … y sin la parte de distribución no sale', not exists (select 1 from jsonb_array_elements(tecnica.f_avisos(false, false)) av where av ->> 'clave' = 'activos_por_levantar'));
+  j := public.geoportal_redes_geovisor_capa(sd, 'por_levantar', null, null);
+  perform pg_temp.reg('08.11 la capa «Por levantar» del geovisor: los puntos que siguen por levantar (sin el descartado), con tipo, servicio, estado y precisión',
+    jsonb_array_length(j -> 'features') = v_n and not exists (select 1 from jsonb_array_elements(j -> 'features') f where f -> 'properties' ->> 'codigo' = v_lev2)
+    and (select bool_and(f -> 'properties' ? 'tipo' and f -> 'properties' ? 'precision_m' and f -> 'geometry' ->> 'type' = 'Point') from jsonb_array_elements(j -> 'features') f), left(j::text, 300));
+  perform pg_temp.reg('08.12 … está en la lista de capas del supervisor (solo geovisor completo) y las demás capas siguen saliendo',
+    exists (select 1 from jsonb_array_elements(public.geoportal_redes_geovisor(sd) -> 'capas') c where c ->> 'codigo' = 'por_levantar')
+    and (select g.solo_completo and g.fuente = 'geojson' and not g.por_fecha from redes.geovisor_capas g where g.codigo = 'por_levantar')
+    and jsonb_typeof(public.geoportal_redes_geovisor_capa(sd, 'danos', null, null) -> 'features') = 'array');
+  j := public.geoportal_redes_levantar_evento(sd, v_lev, 'levantado', v_nuevo, null);
+  perform pg_temp.reg('08.13 el supervisor confirma la propuesta: queda «levantado» con ese activo', j ->> 'estado' = 'levantado' and j ->> 'activo' = v_nuevo, j::text);
+  insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values (op, 'asignar_formulario', 'danos_fallas', a), (op, 'asignar_formulario', 'activo_campo', a);
+  perform pg_temp.reg('08.14 «Reportar daño en este activo»: se ofrece a quien tiene el formulario de daños (y al supervisor); a Comercial no',
+    (public.geoportal_redes_levantar_inicio(op) ->> 'reporta_dano')::boolean and (public.geoportal_redes_levantar_inicio(sd) ->> 'reporta_dano')::boolean
+    and not (public.geoportal_redes_levantar_inicio(co) ->> 'reporta_dano')::boolean);
+
+  -- ===================== 10. Etapa 3: modo «Remuneración» del geovisor (solo supervisor de distribución y administrador) =====================
+  v_carg := redes.f_ref_vigente('val_amarre') is not null and redes.f_ref_vigente('valoracion') is not null;      -- ¿ya está cargada la valoración con su amarre (Corte 10)?
+  perform pg_temp.err('10.01 el operador no ve el modo «Remuneración» (ni su leyenda)', format('select public.geoportal_redes_remuneracion(%L)', op), '42501');
+  perform pg_temp.err('10.02 … ni el supervisor de planta (la tesela)', format('select public.geoportal_redes_geovisor_mvt_remuneracion(%L, 14, 4857, 7714)', pl), '42501');
+  perform pg_temp.err('10.03 … ni Comercial (la tarjeta)', format('select public.geoportal_redes_remuneracion_tarjeta(%L, %L)', co, v_red), '42501');
+  j := public.geoportal_redes_remuneracion(sd);
+  perform pg_temp.reg('10.04 la leyenda: Remunerado, No remunerado, Sin fila y Proyectado, con el rótulo «valoración técnica 2019, propuesta»',
+    (select string_agg(l ->> 'clave', ',' order by o) from jsonb_array_elements(j -> 'leyenda') with ordinality x(l, o)) = 'remunerado,no_remunerado,sin_fila,proyectado'
+    and j ->> 'rotulo' = 'Valoración técnica 2019, propuesta' and (j ->> 'cargado')::boolean = v_carg and j ->> 'nota' like '%PROPUESTA%', (j - 'leyenda')::text);
+  perform pg_temp.reg('10.05 la configuración del geovisor dice quién tiene el modo: el supervisor de distribución y el administrador (si hay amarre); el de planta, no',
+    (public.geoportal_redes_geovisor(sd) -> 'remuneracion' is not null and public.geoportal_redes_geovisor(sd) -> 'remuneracion' <> 'null'::jsonb) = v_carg
+    and (public.geoportal_redes_geovisor(a) -> 'remuneracion' is not null and public.geoportal_redes_geovisor(a) -> 'remuneracion' <> 'null'::jsonb) = v_carg
+    and coalesce(public.geoportal_redes_geovisor(pl) -> 'remuneracion', 'null'::jsonb) = 'null'::jsonb and public.geoportal_redes_geovisor(pl) ? 'capas');
+  j := public.geoportal_redes_remuneracion_tarjeta(sd, lower(v_red));
+  perform pg_temp.reg('10.06 la tarjeta de un tramo que no está en el amarre: «Remunerado vía tarifa: no», «sin fila» y el motivo (con la valoración cargada)',
+    not (j ->> 'remunerado')::boolean and j ->> 'rotulo' = 'Valoración técnica 2019, propuesta' and j ->> 'codigo' = v_red
+    and case when v_carg then j ->> 'estado' = 'sin_fila' and j ->> 'motivo' like 'Fuera de la valoración 2019%' else j ->> 'estado' = 'no_aplica' end, j::text);
+  -- con la valoración cargada: la tarjeta dice lo mismo que la regla de la ficha y que la tesela, en una muestra de activos de cada situación
+  select count(*), count(*) filter (where s.esperado is distinct from public.geoportal_redes_remuneracion_tarjeta(sd, s.codigo) ->> 'estado'),
+         count(*) filter (where s.esperado = 'remunerado' and (not (public.geoportal_redes_remuneracion_tarjeta(sd, s.codigo) ->> 'remunerado')::boolean
+                                                                or jsonb_array_length(public.geoportal_redes_remuneracion_tarjeta(sd, s.codigo) -> 'filas') < 1)),
+         count(distinct s.esperado)
+    into v_n, v_n2, v_n3, v_n4
+    from (select y.codigo, y.esperado from (
+            select m.codigo, redes.f_remuneracion_estado(coalesce(r.con, false), coalesce(r.aparte, false), coalesce(r.proy, false) or m.estado_codigo = 'proyectado') as esperado,
+                   row_number() over (partition by redes.f_remuneracion_estado(coalesce(r.con, false), coalesce(r.aparte, false), coalesce(r.proy, false) or m.estado_codigo = 'proyectado') order by m.activo_id) as rn
+              from redes.activo_vigente_mat m
+              join (select am.activo_id, bool_or(am.situacion = 'con_fila') as con, bool_or(am.situacion like 'aparte\_%') as aparte, bool_or(am.situacion = 'proyectado') as proy
+                      from redes.val_amarre am where am.carga_id = redes.f_ref_vigente('val_amarre') and am.val_carga_id = redes.f_ref_vigente('valoracion')
+                       and am.hoja in ('acueducto', redes.f_val_hoja_alc()) group by am.activo_id) r on r.activo_id = m.activo_id
+             where not m.retirado and not m.oculto) y where y.rn <= 15) s;
+  perform pg_temp.reg('10.07 la tarjeta coincide con la regla del amarre en una muestra de cada estado (y todo «remunerado» trae su fila de la valoración)',
+    v_n2 = 0 and v_n3 = 0 and (not v_carg or v_n > 0), format('%s activos de %s estados; %s distintos; %s remunerados sin fila', v_n, v_n4, v_n2, v_n3));
+  -- la tesela del rincón de prueba (la válvula y el tramo ZT14, que no están en el amarre)
+  v_z := 16; v_tx := floor((pg_temp.lon(0) + 180) / 360 * (1 << v_z))::integer;
+  v_ty := floor((1 - ln(tan(radians(pg_temp.lat(0)::float8)) + 1 / cos(radians(pg_temp.lat(0)::float8))) / pi()) / 2 * (1 << v_z))::integer;
+  perform pg_temp.reg('10.08 la tesela del modo: con la valoración cargada trae la red (los activos sin amarre van «sin fila»); sin cargar, vacía',
+    (length(public.geoportal_redes_geovisor_mvt_remuneracion(sd, v_z, v_tx, v_ty)) > 0) = v_carg, length(public.geoportal_redes_geovisor_mvt_remuneracion(sd, v_z, v_tx, v_ty))::text);
+  perform pg_temp.err('10.09 una tesela fuera de rango se rechaza', format('select public.geoportal_redes_geovisor_mvt_remuneracion(%L, 14, 99999, 1)', sd), '22023');
+  -- tiempos: la tesela más cargada de la red real, al zoom de la red completa y uno antes
+  v_z := floor(redes.f_param('geovisor_zoom_red_completa'))::integer;
+  select tt.x, tt.y into v_tx, v_ty from (select floor((ST_X(ST_PointOnSurface(m.geom)) + 180) / 360 * (1 << v_z))::integer as x,
+           floor((1 - ln(tan(radians(ST_Y(ST_PointOnSurface(m.geom)))) + 1 / cos(radians(ST_Y(ST_PointOnSurface(m.geom))))) / pi()) / 2 * (1 << v_z))::integer as y
+      from redes.activo_vigente_mat m where not m.retirado and not m.oculto and m.prefijo in ('RED', 'COL')) tt group by tt.x, tt.y order by count(*) desc limit 1;
+  v_t0 := clock_timestamp(); v_txt := public.geoportal_redes_geovisor_mvt_remuneracion(sd, v_z, v_tx, v_ty); v_ms1 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_t0 := clock_timestamp(); perform public.geoportal_redes_geovisor_mvt_remuneracion(sd, v_z - 1, v_tx / 2, v_ty / 2); v_ms2 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_t0 := clock_timestamp(); perform public.geoportal_redes_remuneracion(sd); v_ms3 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_info2 := format('TIEMPOS de «Remuneración» (valoración %s): tesela más cargada %s/%s/%s %s ms (%s kB) · tesela %s/%s/%s %s ms · leyenda con conteos %s ms',
+                    case when v_carg then 'cargada' else 'SIN cargar' end, v_z, v_tx, v_ty, v_ms1, round(length(v_txt) * 0.75 / 1024), v_z - 1, v_tx / 2, v_ty / 2, v_ms2, v_ms3);
+  perform pg_temp.reg('10.10 TIEMPOS: la tesela y la leyenda de «Remuneración», cada una en menos de 1 s', greatest(v_ms1, v_ms2, v_ms3) < 1000, v_info2);
+
+  -- ===================== 09. Tiempos con el volumen real =====================
   -- el lugar con más activos de la base donde corre (celda de ~100 m); allí se buscan los cercanos con el radio máximo
   select c.lat, c.lon into v_lat, v_lon
     from (select round(avg(ST_Y(ST_PointOnSurface(m.geom)))::numeric, 6) as lat, round(avg(ST_X(ST_PointOnSurface(m.geom)))::numeric, 6) as lon, count(*) as n
@@ -227,13 +327,14 @@ begin
   v_t0 := clock_timestamp(); j := public.geoportal_redes_levantar_cerca(co, v_lat, v_lon, 30, 'acueducto'); v_ms1 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
   v_t0 := clock_timestamp(); j2 := public.geoportal_redes_levantar_cerca(co, v_lat, v_lon, 5, 'alcantarillado'); v_ms2 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
   v_t0 := clock_timestamp(); perform public.geoportal_redes_levantar_lista(sd, 'todos', null, 200); v_ms3 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_t0 := clock_timestamp(); perform public.geoportal_redes_levantar_hoja(sd); perform tecnica.f_avisos(false, true); v_ms5 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
   v_t0 := clock_timestamp(); perform pg_temp.punto(co, 900, 900, 8); v_ms4 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
-  v_info := format('TIEMPOS con %s activos vigentes en esta base: cercanos en el lugar más cargado (%s, %s; radio 30 m; %s activos, %s kB) %s ms · cercanos de alcantarillado (15 m; %s activos) %s ms · bandeja del supervisor %s ms · preparar y crear un punto %s ms',
-                   v_n, v_lat, v_lon, j ->> 'total', round(length(j::text) / 1024.0), v_ms1, j2 ->> 'total', v_ms2, v_ms3, v_ms4);
-  perform pg_temp.reg('07.01 TIEMPOS: buscar los cercanos, la bandeja y crear un punto, cada uno en menos de 1 s', greatest(v_ms1, v_ms2, v_ms3, v_ms4) < 1000, v_info);
-  perform pg_temp.reg('07.02 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE', not exists (select 1 from redes.f_funciones_sin_where()));
+  v_info := format('TIEMPOS con %s activos vigentes en esta base: cercanos en el lugar más cargado (%s, %s; radio 30 m; %s activos, %s kB) %s ms · cercanos de alcantarillado (15 m; %s activos) %s ms · bandeja del supervisor %s ms · preparar y crear un punto %s ms · hoja de levantamiento y avisos de distribución %s ms',
+                   v_n, v_lat, v_lon, j ->> 'total', round(length(j::text) / 1024.0), v_ms1, j2 ->> 'total', v_ms2, v_ms3, v_ms4, v_ms5);
+  perform pg_temp.reg('09.01 TIEMPOS: buscar los cercanos, la bandeja, crear un punto y la hoja con los avisos, cada uno en menos de 1 s', greatest(v_ms1, v_ms2, v_ms3, v_ms4, v_ms5) < 1000, v_info);
+  perform pg_temp.reg('09.02 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE', not exists (select 1 from redes.f_funciones_sin_where()));
 
   select count(*), count(*) filter (where ok), coalesce(string_agg('  FALLA ' || nombre || ' → ' || coalesce(detalle, ''), E'\n' order by _r.n) filter (where not ok), '') into v_total, v_bien, v_fallas from _r;
-  raise exception E'PRUEBAS DE REDES · CORTE 14 (esperado: este ERROR deshace todo lo de la prueba)\n%\n%\nRESULTADO: % de % pruebas correctas — %', v_fallas, v_info, v_bien, v_total, case when v_bien = v_total then 'SIN FALLAS' else (v_total - v_bien) || ' FALLA(S)' end;
+  raise exception E'PRUEBAS DE REDES · CORTE 14 (esperado: este ERROR deshace todo lo de la prueba)\n%\n%\n%\nRESULTADO: % de % pruebas correctas — %', v_fallas, v_info, v_info2, v_bien, v_total, case when v_bien = v_total then 'SIN FALLAS' else (v_total - v_bien) || ' FALLA(S)' end;
 end
 $prueba$;

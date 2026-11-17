@@ -160,7 +160,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
 
   // Corte 14: «Encontrar o reportar activo» (lo decide el servidor: administrador, supervisores y el operador con el formulario asignado en Personal)
   const encontrar = redes?.activo_campo === true;
-  if (encontrar && vista === "encontrar") return <EncontrarActivo onVolver={() => setVista("inicio")} />;
+  if (encontrar && vista === "encontrar") return <EncontrarActivo onVolver={() => setVista("inicio")} onReportarDano={(a) => abrirDano(a)} />;
   const tarjetaEncontrar = { clave: "activo_campo", nombre: "Encontrar o reportar activo", descripcion: "Los activos que tiene cerca, o reportar uno que no está en la red", estado: "lista" as const, abrir: () => { setVista("encontrar"); window.scrollTo?.(0, 0); } };
 
   // ----- las tarjetas de cada modo (solo lo que la persona ya tenía) -----

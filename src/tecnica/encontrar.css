@@ -57,4 +57,10 @@
 .lev-form { display: flex; flex-direction: column; gap: var(--t-esp-2); margin-top: var(--t-esp-2); padding: var(--t-esp-3); background: var(--t-suave); border-radius: var(--t-radio); }
 .lev-form label { font-size: var(--t-txt); font-weight: 600; color: var(--t-texto); }
 .lev-form input { min-height: var(--t-toque); font: inherit; font-size: var(--t-txt-campo); padding: 0 var(--t-esp-3); border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio); }
+/* etapa 2 */
+.lev-pdf { margin-top: var(--t-esp-2); margin-bottom: var(--t-esp-2); }
+.lev-propuesta { display: block; text-align: left; }
+.lev-propuesta .tec-boton-sec { display: block; margin-top: var(--t-esp-2); }
+.enc-accion-ficha { margin: var(--t-esp-3) var(--t-esp-4); }
+.enc-barra-dano { flex: 0 0 auto; padding: 0; overflow: visible; }
 @media (min-width: 760px) { .enc-mapa-lienzo { height: 380px; } .enc-dl { grid-template-columns: 1fr 1fr; column-gap: var(--t-esp-5); } }

@@ -14,6 +14,7 @@ import { Catalogo, Descargas, Graficas, Nodos, Parametros, Personal } from "./Da
 import { CargueCapas } from "./cargue/CargueCapas";
 import { InventarioRegulatorio } from "./InventarioRegulatorio";
 import { PorLevantarLista } from "./PorLevantar";      // Corte 14
+import { tomarPedidoLevantar } from "./pedidoLevantar";
 import { apiLev } from "./apiLevantar";
 
 // Dashboard distribución (Técnica fase 1, Corte 4a; §7 y §16 de la bitácora). Para el supervisor de distribución (ver_dashboard_redes) y el administrador:
@@ -137,7 +138,8 @@ function PorVerificarLista({ onFicha }: { onFicha: (c: string) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [vez, setVez] = useState(0);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [levantar, setLevantar] = useState(false);                 // Corte 14: el filtro «Otros activos por levantamiento»
+  const [levantar, setLevantar] = useState(tomarPedidoLevantar);   // Corte 14: el filtro «Otros activos por levantamiento» (un aviso puede pedirlo)
+  useEffect(() => { const f = () => { if (tomarPedidoLevantar()) setLevantar(true); }; window.addEventListener("lev-pedir", f); return () => window.removeEventListener("lev-pedir", f); }, []);
   const [nLevantar, setNLevantar] = useState<number | null>(null);
   useEffect(() => { let vivo = true; apiLev.lista("abiertos", null).then((r) => { if (vivo) setNLevantar(r.abiertos); }).catch(() => {}); return () => { vivo = false; }; }, []);
   useEffect(() => {

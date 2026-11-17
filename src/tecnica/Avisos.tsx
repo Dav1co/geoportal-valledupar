@@ -1,3 +1,4 @@
+import { pedirLevantar } from "./pedidoLevantar";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import "./avisos.css";
 import { apiAvisos, type AreaAviso, type Aviso, type Avisos, type Bandeja, type ParametroAviso } from "./apiAvisos";
@@ -65,7 +66,7 @@ function TarjetaAviso({ a, tieneDistribucion, onAbrir }: { a: Aviso; tieneDistri
       {a.items.length > 0 ? (
         <ul className="av-items">{a.items.map((t, i) => <li key={i}>{t}</li>)}{a.n > a.items.length ? <li className="av-mas">y {nf.format(a.n - a.items.length)} más</li> : null}</ul>
       ) : null}
-      <button type="button" className="av-abrir" onClick={() => onAbrir(a.bandeja)}>Abrir {rotuloBandeja(a.bandeja, tieneDistribucion)}</button>
+      <button type="button" className="av-abrir" onClick={() => { if (a.bandeja.filtro === "levantar") pedirLevantar(); onAbrir(a.bandeja); }}>Abrir {rotuloBandeja(a.bandeja, tieneDistribucion)}</button>
     </article>
   );
 }
@@ -126,6 +127,7 @@ export function FranjaAvisos({ onElegir, pestanas }: { onElegir: (clave: string)
   const rojos = propias.filter((a) => a.nivel === "rojo").length;
   const abrir = (a: Aviso) => {
     const r = resolverBandeja(a.bandeja, ctx.tieneDistribucion);
+    if (a.bandeja.filtro === "levantar") pedirLevantar();      // Corte 14
     if (r.tablero === ctx.tablero && r.pestana && pestanas.includes(r.pestana)) onElegir(r.pestana); else ctx.onAbrir(a.bandeja);
   };
   return (

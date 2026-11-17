@@ -17,7 +17,7 @@ CONJ = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pro
         "where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%')")
 MD5_BASE = os.environ.get('MD5_BASE', 'a327aa51f43bb5cc2112a6db089718ed')      # HUELLA FINAL del 9b (después de la Fase 3), la que dio el Code A el 17-nov (ORDEN_DE_PUBLICACION.md, 41d086c)
 TABLAS = ['redes.levantar_fotos', 'redes.levantar_eventos', 'redes.levantar_preparaciones', 'redes.levantar_puntos']
-PARAMETROS = ['levantar_radio_min_m', 'levantar_radio_max_m', 'levantar_duplicado_m', 'levantar_lista_max']
+PARAMETROS = ['levantar_radio_min_m', 'levantar_radio_max_m', 'levantar_duplicado_m', 'levantar_lista_max', 'levantar_propuesta_m', 'levantar_hoja_max']
 MIG = ['10_esquema.sql', '20_funciones.sql', '26_rpc.sql', '25_reemplazos.sql', '40_permisos.sql']
 DOM = "select pg_get_constraintdef(c.oid) from pg_constraint c where c.contypid = 'tecnica.formulario_clave'::regtype and c.conname = 'formulario_clave_ck'"
 CHK = "select pg_get_constraintdef(c.oid) from pg_constraint c where c.conrelid = 'campo.personal_eventos'::regclass and c.conname = 'personal_eventos_formulario_check'"
@@ -37,6 +37,52 @@ T['campo.f_formularios_personal()'] = [(
   select 'acta', 'Reportar posible pérdida', 'Reportar posible pérdida', 2000000000
   union all      -- Corte 14 de Técnica: «Encontrar o reportar activo» (lo usa quien tiene Formularios de campo; aquí solo se registra a quién se le asigna)
   select 'activo_campo', 'Encontrar o reportar activo', 'Activos de la red', 2000000001
+""")]
+# ---- Etapa 2: la capa «Por levantar» del geovisor (GeoJSON; solo supervisores y administrador: lo dice su fila de redes.geovisor_capas)
+T['public.geoportal_redes_geovisor_capa(text,text,date,date)'] = [(
+    """  elsif p_capa = 'muestreo' then
+""",
+    """  elsif p_capa = 'por_levantar' then      -- Corte 14: activos encontrados en la calle que siguen por levantar
+    select coalesce(jsonb_agg(f order by o), '[]'::jsonb), count(*) into v_f, v_n from (
+      select jsonb_build_object('type', 'Feature', 'geometry', jsonb_build_object('type', 'Point', 'coordinates', jsonb_build_array(p.lon, p.lat)),
+               'properties', jsonb_build_object('codigo', p.codigo, 'tipo', redes.f_levantar_tipo_nombre(p.tipo), 'servicio', p.servicio, 'estado', p.estado,
+                                                'cuando', p.registrado_en, 'precision_m', p.precision_m, 'precision_baja', p.precision_baja)) as f, p.codigo as o
+        from redes.v_levantar_punto p
+       where p.estado in ('reportado', 'asignado')
+       order by p.codigo limit v_max + 1) x;
+  elsif p_capa = 'muestreo' then
+""")]
+# ---- Etapa 2: el aviso (Corte 12). Cada activo por levantar sale como informativo al supervisor de distribución; naranja si alguno pasa de los días del parámetro
+T['tecnica.f_avisos(boolean,boolean,timestamptz)'] = [(
+    """  -- ===================== PERSONAL (los dos supervisores y el administrador) =====================
+""",
+    """  -- D14 (Corte 14). Activos por levantar («Encontrar o reportar activo»): informativo; naranja si alguno lleva más de levantar_naranja_dias sin levantar
+  if p_distribucion then
+    v_dias := floor(coalesce(tecnica.f_aparam('levantar_naranja_dias'), 30))::integer;
+    select count(*), min(s.registrado_en), count(*) filter (where s.registrado_en < v_ahora - make_interval(days => v_dias)),
+           coalesce(jsonb_agg(s.txt order by s.registrado_en, s.codigo) filter (where s.rn <= 5), '[]'::jsonb)
+      into v_n, v_desde, v_x, v_items
+      from (select p.codigo, p.registrado_en, row_number() over (order by p.registrado_en, p.codigo) as rn,
+                   p.codigo || ' · ' || redes.f_levantar_tipo_nombre(p.tipo) || ' de ' || p.servicio as txt
+              from redes.v_levantar_punto p where p.estado in ('reportado', 'asignado') and p.registrado_en <= v_ahora) s;
+    if v_n > 0 then
+      v_av := v_av || jsonb_build_object('clave', 'activos_por_levantar', 'area', 'distribucion', 'nivel', case when v_x > 0 then 'naranja' else 'info' end, 'orden', 180,
+                'titulo', format('%s por levantar', tecnica.f_cuantos(v_n, 'activo reportado', 'activos reportados')),
+                'detalle', case when v_x > 0 then format('%s más de %s días sin levantar.', case when v_x = 1 then '1 lleva' else v_x::integer || ' llevan' end, v_dias)
+                                else 'Encontrados en la calle y no están en la red: asígnelos a levantamiento.' end,
+                'n', v_n, 'items', v_items, 'bandeja', jsonb_build_object('tablero', 'distribucion', 'pestana', 'por_verificar', 'filtro', 'levantar'), 'desde', v_desde);
+    end if;
+  end if;
+
+  -- ===================== PERSONAL (los dos supervisores y el administrador) =====================
+""")]
+# ---- Etapa 3: la configuración del geovisor dice si la persona tiene el modo «Remuneración» (supervisor de distribución y administrador) y la versión del amarre
+T['public.geoportal_redes_geovisor(text)'] = [(
+    """    'edad_ref', case when a.completo and redes.f_ref_vigente('val_amarre') is not null then true end,      -- Corte 10: hay amarre con la valoración
+""",
+    """    'edad_ref', case when a.completo and redes.f_ref_vigente('val_amarre') is not null then true end,      -- Corte 10: hay amarre con la valoración
+    -- Corte 14: el modo «Remuneración» (término tarifario): solo supervisor de distribución y administrador, y solo si hay amarre. Vale la versión del amarre
+    'remuneracion', case when a.admin or 'supervisor_distribucion' = any (a.perfiles) then redes.f_ref_vigente('val_amarre') end,
 """)]
 CAMBIADAS = list(T)
 
@@ -76,6 +122,9 @@ partes = ["""-- ================================================================
 -- cada uno es el texto vivo (el de producción al publicar) con cambios exactos, aplicados una sola vez.
 --   · geoportal_redes_mi_perfil: «activo_campo» (la persona tiene «Encontrar o reportar activo»), para la tarjeta del inicio de Técnica;
 --   · campo.f_formularios_personal: una fila más, «Encontrar o reportar activo», en la lista de Personal de Comercial.
+--   · geoportal_redes_geovisor_capa: la capa «por_levantar» (los puntos que siguen por levantar; solo supervisores y administrador);
+--   · tecnica.f_avisos: el aviso «activos por levantar» (informativo; naranja si alguno pasa de levantar_naranja_dias);
+--   · geoportal_redes_geovisor: «remuneracion» (la versión del amarre), solo para supervisor de distribución y administrador.
 -- ====================================================================="""]
 for f in CAMBIADAS:
     t = antes[f]
@@ -85,7 +134,7 @@ for f in CAMBIADAS:
     partes.append(f'\n-- {f}\n{t};\n')
 escribir(os.path.join(RAIZ, 'sql', '25_reemplazos.sql'), ''.join(partes))
 
-v = {'{{MD5_BASE}}': MD5_BASE, '{{DEF_DOMINIO}}': lit(dom_antes), '{{DEF_CHECK_CAMPO}}': lit(chk_antes), '{{MD5_CAMPO_FORM}}': md5_antes['campo.f_formularios_personal()'],
+v = {'{{MD5_BASE}}': MD5_BASE, '{{DEF_DOMINIO}}': lit(dom_antes), '{{DEF_CHECK_CAMPO}}': lit(chk_antes), '{{MD5_CAMPO_FORM}}': md5_antes['campo.f_formularios_personal()'], '{{MD5_AVISOS}}': md5_antes['tecnica.f_avisos(boolean,boolean,timestamptz)'],
      '{{DEF_DOMINIO_14}}': lit(dom_antes.replace("'revision_compartida'::text]", "'revision_compartida'::text, 'activo_campo'::text]"))}
 assert v['{{DEF_DOMINIO_14}}'] != v['{{DEF_DOMINIO}}']
 escribir(os.path.join(RAIZ, 'sql', '10_esquema.sql'), plantilla('10_esquema.sql', v))
@@ -97,11 +146,11 @@ if p.returncode != 0:
 assert q(DOM) == v['{{DEF_DOMINIO_14}}'].replace("''", "'"), q(DOM)
 md5_14 = q(CONJ)
 NUEVAS = q("select string_agg(p.oid::regprocedure::text, '|' order by p.pronamespace::regnamespace::text, p.proname) from pg_proc p where (p.pronamespace = 'redes'::regnamespace "
-           "and p.proname like 'f\\_levantar\\_%') or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_levantar\\_%')").split('|')
+           "and (p.proname like 'f\\_levantar\\_%' or p.proname = 'f_remuneracion_estado')) or (p.pronamespace = 'public'::regnamespace and (p.proname like 'geoportal\\_redes\\_levantar\\_%' or p.proname like 'geoportal\\_redes\\_%remuneracion%'))").split('|')
 NUEVAS = [n if '.' in n.split('(')[0] else 'public.' + n for n in NUEVAS]
 md5_despues = {f: fmd5(f) for f in CAMBIADAS}
 md5_nuevas = {f: fmd5(f) for f in NUEVAS}
-n_rpc = sum(1 for f in NUEVAS if f.startswith('public.')) + 1
+n_rpc = sum(1 for f in NUEVAS if f.startswith('public.')) + sum(1 for f in CAMBIADAS if f.startswith('public.'))
 v.update({'{{MD5_14}}': md5_14,
           '{{CAMBIADAS}}': ', '.join(f"('{f}', '{md5_antes[f]}', '{md5_despues[f]}')" for f in CAMBIADAS),
           '{{CAMBIADAS_14}}': ', '.join(f"('{f}', '{md5_despues[f]}')" for f in CAMBIADAS),

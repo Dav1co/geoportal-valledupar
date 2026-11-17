@@ -204,6 +204,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
           : c.codigo === "intervenciones" ? ["match", ["get", "tipo_codigo"], ...Object.entries(COLOR_ITV).flat(), "#455A64"]
           : c.codigo === "muestreo" ? ["case", ["==", ["get", "exactitud"], "verificada"], ["match", ["get", "calidad"], ...Object.entries(COLOR_CALIDAD).flat(), "#90A4AE"], "rgba(255,255,255,0.9)"]
           : c.codigo === "reportes_comercial" ? ["case", ["get", "con_contrato"], "#1565C0", "#C62828"]
+          : c.codigo === "por_levantar" ? "#c25e00"      // Corte 14: el naranja de estado de la guía (por levantar)
           : c.codigo === "pqr_116" ? ["case", ["==", ["get", "estado"], "registrado"], ["match", ["get", "grupo_servicio"], ...Object.entries(COLOR_116).flat(), "#616161"], "#FFFFFF"] : "#7B1FA2";
         const borde = c.codigo === "muestreo" ? ["match", ["get", "calidad"], ...Object.entries(COLOR_CALIDAD).flat(), "#90A4AE"]
           : c.codigo === "pqr_116" ? ["match", ["get", "grupo_servicio"], ...Object.entries(COLOR_116).flat(), "#616161"] : "#FFFFFF";
@@ -832,6 +833,10 @@ function TarjetaElemento({ t, cfg, onCerrar, onVerFicha, onReportarDano, onRegis
       const rango = x.rango ? ` · rango ${x.min ?? "—"} a ${x.max ?? "—"} (${x.rango === "salida" ? "Salida" : "Muestreo"})` : " · sin rango";
       filas.push([x.nombre, `${nf.format(x.valor)} ${x.unidad}${rango} · ${fechaHora(x.cuando)}${x.reciente ? "" : " (vieja)"}`]);
     }
+  } else if (t.capa === "por_levantar") {      // Corte 14: un activo encontrado en la calle que sigue por levantar
+    sub = `Por levantar · ${texto(p.tipo)} de ${texto(p.servicio)}`;
+    filas.push(["Estado", p.estado === "asignado" ? "Asignado a levantamiento" : "Reportado"], ["Reportado", fechaHora(p.cuando)],
+               ["Precisión del GPS", `± ${Math.round(Number(p.precision_m))} m${p.precision_baja === true || p.precision_baja === "true" ? " (precisión baja)" : ""}`]);
   } else if (t.capa === "reportes_comercial") {
     sub = `Reporte de Comercial · ${texto(p.tipo)}`;
     filas.push(["Contrato", p.con_contrato === true || p.con_contrato === "true" ? "Con código de contrato" : "Sin contrato (posible clandestino)"], ["Subtipo", texto(p.subtipo)],

@@ -24,9 +24,12 @@ import { supabase } from "../lib/supabase";
 const fechaLarga = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" });
 const SENAL_DEBIL = "Señal débil: espere unos segundos o acérquese a cielo abierto.";
 type Foto = { blob: Blob; url: string };
-type Vista = { v: "encontrar" } | { v: "ficha"; codigo: string } | { v: "reportar"; noEsDuplicado: boolean } | { v: "listo"; codigo: string; precisionBaja: boolean };
+type Vista = { v: "encontrar" } | { v: "ficha"; codigo: string; activo?: { sistema: Servicio; lat: number; lon: number } } | { v: "reportar"; noEsDuplicado: boolean } | { v: "listo"; codigo: string; precisionBaja: boolean };
 
-export function EncontrarActivo({ onVolver, rotuloVolver = "Volver" }: { onVolver: () => void; rotuloVolver?: string }) {
+type ActivoDano = { codigo: string; sistema: Servicio; lat: number; lon: number };
+export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarDano }: { onVolver: () => void; rotuloVolver?: string;
+  /** «Reportar daño en este activo»: abre el formulario de daño con el activo ya escogido (solo en Técnica, para quien tiene ese formulario: lo dice el servidor). */
+  onReportarDano?: (a: ActivoDano) => void }) {
   const [inicio, setInicio] = useState<InicioLevantar | null>(null);
   const [errorInicio, setErrorInicio] = useState<ErrorTec | null>(null);
   const [intento, setIntento] = useState(0);
@@ -102,8 +105,11 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver" }: { onVolve
 
   if (vista.v === "ficha") {
     const volver = () => setVista({ v: "encontrar" });
+    const a = vista.activo;
+    const dano = onReportarDano && inicio.reporta_dano && a
+      ? <div className="enc-accion-ficha"><button type="button" className="tec-boton" data-testid="enc-dano" onClick={() => onReportarDano({ codigo: vista.codigo, ...a })}>Reportar daño en este activo</button></div> : null;
     return inicio.ficha_completa
-      ? <div className="tec-envoltura tec-modo-distribucion" data-testid="enc-ficha"><FichaActivo key={vista.codigo} codigo={vista.codigo} onVolver={volver} onAbrir={(c) => setVista({ v: "ficha", codigo: c })} rotuloVolver="Volver a los activos cercanos" /></div>
+      ? <div className="tec-envoltura tec-modo-distribucion" data-testid="enc-ficha">{dano ? <div className="tec-pagina tec-modo-distribucion enc enc-barra-dano">{dano}</div> : null}<FichaActivo key={vista.codigo} codigo={vista.codigo} onVolver={volver} onAbrir={(c) => setVista({ v: "ficha", codigo: c })} rotuloVolver="Volver a los activos cercanos" /></div>
       : <div className="tec-pagina tec-modo-distribucion enc"><Barra onVolver={volver} rotulo="Volver a la lista" /><FichaSoloLectura codigo={vista.codigo} /></div>;
   }
 
@@ -153,7 +159,7 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver" }: { onVolve
               : (
                 <>
                   <ol className="enc-lista" data-testid="enc-lista">
-                    {actual.activos.map((a) => <FilaActivo key={a.codigo} a={a} servicio={servicio} onAbrir={() => setVista({ v: "ficha", codigo: a.codigo })} />)}
+                    {actual.activos.map((a) => <FilaActivo key={a.codigo} a={a} servicio={servicio} onAbrir={() => setVista({ v: "ficha", codigo: a.codigo, activo: { sistema: servicio, lat: a.lat, lon: a.lon } })} />)}
                   </ol>
                   {actual.total > actual.activos.length ? <p className="tec-ayuda">Se muestran los {actual.activos.length} más cercanos de {actual.total}.</p> : null}
                 </>

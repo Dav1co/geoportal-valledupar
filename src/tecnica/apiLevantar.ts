@@ -5,7 +5,7 @@ import { pedir } from "./apiTecnica";
 
 export type Servicio = "acueducto" | "alcantarillado";
 export type TipoLevantar = "tuberia" | "valvula" | "hidrante" | "pozo" | "caja" | "otro";
-export type InicioLevantar = { perfil: "admin" | "supervisor" | "operador" | "comercial"; area: "tecnica" | "comercial"; ficha_completa: boolean;
+export type InicioLevantar = { perfil: "admin" | "supervisor" | "operador" | "comercial"; area: "tecnica" | "comercial"; ficha_completa: boolean; reporta_dano?: boolean;
   radio_min_m: number; radio_max_m: number; duplicado_m: number; min_fotos: number; max_fotos: number;
   servicios: { codigo: Servicio; nombre: string }[]; tipos: { codigo: TipoLevantar; nombre: string }[] };
 export type Geometria = { type: string; coordinates: unknown };
@@ -24,7 +24,12 @@ export type LevantarCreado = { creado: true; repetido: boolean; id: string; codi
 export type EstadoLevantar = "reportado" | "asignado" | "levantado" | "descartado";
 export type PuntoLevantar = { codigo: string; servicio: Servicio; tipo: TipoLevantar; tipo_nombre: string; observacion: string | null; lat: number; lon: number; precision_m: number; precision_baja: boolean;
   registrado_en: string; area: "tecnica" | "comercial"; quien: string; estado: EstadoLevantar; estado_nombre: string; estado_desde: string; estado_motivo: string | null; estado_quien: string | null;
-  activo: string | null; fotos: number; sector: string | null };
+  activo: string | null; fotos: number; sector: string | null;
+  /** Cierre casi automático: un activo NUEVO a pocos metros (posiblemente ya se levantó); lo confirma el supervisor. */
+  propuesta?: { activo: string; tipo: string; distancia_m: number; cargado_en: string } | null };
+export type PuntoHoja = { n: number; codigo: string; tipo_nombre: string; servicio: Servicio; registrado_en: string; lat: number; lon: number; precision_m: number; precision_baja: boolean;
+  observacion: string | null; estado_nombre: string; sector: string | null; foto_url: string | null };
+export type HojaLevantar = { generado_en: string; estado: string; total: number; recortada: boolean; puntos: PuntoHoja[] };
 export type FiltroLevantar = "abiertos" | EstadoLevantar | "todos";
 export type ListaLevantar = { estado: FiltroLevantar; conteos: Partial<Record<EstadoLevantar, number>>; abiertos: number; items: PuntoLevantar[]; siguiente: string | null };
 export type FotoLevantar = { n: number; creado_en: string; url: string; expira_en: string };
@@ -42,6 +47,8 @@ export const apiLev = {
   evento: (codigo: string, tipo: "asignado" | "levantado" | "descartado" | "reabierto", o: { activo?: string | null; motivo?: string | null } = {}) =>
     pedir<{ codigo: string; estado: EstadoLevantar; estado_nombre: string; estado_desde: string; activo: string | null }>("levantar_evento",
       { ...F, cuerpo: { codigo, tipo, ...(o.activo ? { activo: o.activo } : {}), ...(o.motivo ? { motivo: o.motivo } : {}) } }),
+  /** La hoja de levantamiento (PDF): los puntos en el orden del recorrido, con la primera foto. La descarga queda en la auditoría. */
+  hoja: (estado: "abiertos" | "reportado" | "asignado") => pedir<HojaLevantar>("levantar_hoja", { ...F, cuerpo: { estado }, timeoutMs: 25000 }),
   fotos: (codigo: string) => pedir<{ codigo: string; fotos: FotoLevantar[] }>("levantar_fotos", { ...F, cuerpo: { codigo } }),
 };
 

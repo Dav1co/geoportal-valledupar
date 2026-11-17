@@ -40,6 +40,7 @@ function rehacer() {
   execFileSync(PSQL, ["-qX", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", `drop database if exists ${PLANTILLA}_chrome`, "-c", `create database ${PLANTILLA}_chrome template ${PLANTILLA}`], { env: PGENV, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   sqlq(`insert into public.geoportal_lista_blanca (email, nombre, rol, ver_campo, horario, dias) values ('${EMAILS.campo}', 'ZT Operario de Comercial', 'consulta', true, 'sin_restriccion', 'todos') on conflict do nothing`);
   if (!ANTES) sqlq(`select public.geoportal_redes_personal_formulario('${EMAILS.dist}', '${EMAILS.op}', 'activo_campo', true, 'Sale a campo a levantar activos')`);
+  if (!ANTES && sqlq(`select tecnica.f_formulario_asignado('${EMAILS.op}', 'danos_fallas')`) !== "t") sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values ('${EMAILS.op}', 'asignar_formulario', 'danos_fallas', '${EMAILS.adm}')`);
 }
 rehacer();
 // el lugar de la prueba: una válvula real con activos de acueducto y de alcantarillado a menos de 15 m
@@ -95,7 +96,11 @@ function rpcBase(fn, a) {
 function rpcOtras(fn, a) {
   switch (fn) {
     case "geoportal_tec_mis_formularios": { const p = PERFIL[a.p_solicitante]; return p ? { perfil: p, formularios: FORMS[a.p_solicitante].map((c) => ({ clave: c, nombre: NOMBRE[c], descripcion: "", con_campos: false })) } : { status: 403, cuerpo: { code: "42501", message: "Sin permiso" } }; }
-    case "geoportal_tec_avisos": return { areas: { planta: false, distribucion: true, personal: false }, admin: a.p_solicitante === EMAILS.adm, avisos: [], total: 0, rojos: 0, naranjas: 0, calculado_en: new Date().toISOString(), ms: 1 };
+    case "geoportal_tec_avisos": if (a.p_solicitante === EMAILS.dist) {      // Etapa 2: los avisos de distribución salen de la base (tecnica.f_avisos con el bloque del Corte 14)
+      const av = JSON.parse(sqlq("select tecnica.f_avisos(false, true)"));
+      return { areas: { planta: false, distribucion: true, personal: true }, admin: false, avisos: av, total: av.length, rojos: av.filter((x) => x.nivel === "rojo").length, naranjas: av.filter((x) => x.nivel === "naranja").length, calculado_en: new Date().toISOString(), ms: 1 };
+    }
+    return { areas: { planta: false, distribucion: true, personal: false }, admin: a.p_solicitante === EMAILS.adm, avisos: [], total: 0, rojos: 0, naranjas: 0, calculado_en: new Date().toISOString(), ms: 1 };
     case "geoportal_campo_obtener_formulario": return a.p_solicitante === EMAILS.campo
       ? { perfil: "reportante", puede: { reportar: true, crear_desde_escritorio: true, supervisar: false, administrar_catalogo: false }, limites: { max_fotos: 6, min_fotos_campo: 1, max_bytes_foto: 1572864, tipo_mime: "image/jpeg" },
           zona: { lat_min: 10.1, lat_max: 10.8, lon_min: -73.6, lon_max: -72.9 }, grupos: [] }
@@ -284,8 +289,14 @@ for (const ancho of ANCHOS) {
   await p.waitForSelector("[data-testid=enc-ficha]"); await esperarTexto(p, new RegExp(LUGAR.val));
   ok(A("C1 tocar un activo abre su ficha (la de Técnica, de solo lectura para el operador)"), await p.evaluate((c) => document.body.innerText.includes(c) && !/Editar ficha/.test(document.body.innerText) && /Volver a los activos cercanos/.test(document.body.innerText), LUGAR.val));
   await captura(p, `despues_ficha_${ancho}.png`, false);
+  ok(A("C3 la ficha trae «Reportar daño en este activo» (el operador tiene el formulario de daños)"), await p.evaluate(() => !!document.querySelector("[data-testid=enc-dano]")));
   await clicTexto(p, "button", "Volver a los activos cercanos");
   ok(A("C2 «Volver» regresa a la lista de cercanos"), await esperarLista(p, N_ACU));
+  await clic(p, `.enc-fila[data-activo="${LUGAR.val}"]`); await p.waitForSelector("[data-testid=enc-dano]"); await clic(p, "[data-testid=enc-dano]");
+  await p.waitForFunction((c) => /Reportar daño o falla/.test(document.body.innerText) && document.body.innerText.includes(c) && !!document.querySelector(".dan-opcion, .dan-rot"), { timeout: 30000 }, LUGAR.val).catch(() => {});
+  ok(A("C4 … y abre el formulario de daño con ese activo ya escogido"), await p.evaluate((c) => /Reportar daño o falla/.test(document.querySelector(".tec-volver-tit")?.textContent ?? "") && document.body.innerText.includes(c), LUGAR.val), (await texto(p)).slice(0, 300));
+  await captura(p, `despues_reportar_dano_${ancho}.png`, false);
+  await clic(p, ".tec-volver"); await esperarTexto(p, /Encontrar o reportar activo/); await clic(p, '[data-tarjeta="activo_campo"]'); await p.waitForSelector("[data-testid=enc-mapa]"); await esperarLista(p, N_ACU);
 
   // ===== D. Señal débil =====
   await p.setGeolocation({ latitude: LUGAR.lat, longitude: LUGAR.lon, accuracy: 45 });
@@ -401,6 +412,66 @@ for (const ancho of ANCHOS) {
   ok(A("H10 «Reabrir» lo devuelve a «reportado» y el historial se conserva (nada se borra)"), await p.waitForFunction((c) => document.querySelector(`[data-levantar="${c}"]`)?.dataset.estado === "reportado", { timeout: 20000 }, lev2).then(() => true).catch(() => false)
     && sqlq(`select count(*) from redes.levantar_eventos e join redes.levantar_puntos q on q.id = e.punto_id where q.codigo = '${lev2}'`) === "2");
   ok(A("H11 la bandeja: sin desborde horizontal y botones de 44 px o más"), (await sinDesborde(p)) && (await minimo(p, "[data-testid=lev-bandeja] button")) >= 44);
+  // ----- Etapa 2: el PDF con la hoja membretada -----
+  await clic(p, '[data-filtro-lev="abiertos"]'); await p.waitForSelector("[data-testid=lev-pdf]", { timeout: 20000 });
+  await clic(p, "[data-testid=lev-pdf]"); await p.waitForSelector('[data-testid=hoja][data-lista="si"]', { timeout: 40000 });
+  const hoja = () => p.evaluate(() => { const h = document.querySelector("[data-testid=hoja]"); const filas = [...h.querySelectorAll(".hoja-tabla tbody tr")];
+    return { tamano: h.dataset.tamano, filas: filas.length, ns: filas.map((f) => f.querySelector(".hoja-n strong").textContent).join(), marcas: [...h.querySelectorAll(".hoja-num")].map((x) => x.textContent).join(),
+      cab: [...h.querySelectorAll(".hoja-tabla th")].map((x) => x.textContent).join("|"), fotos: [...h.querySelectorAll(".hoja-foto img")].filter((i) => i.complete && i.naturalWidth > 0).length,
+      obs: h.querySelector(".hoja-tabla").innerText, pagina: h.querySelector("style").textContent, logo: !!h.querySelector("img.hoja-logo") && !!h.querySelector(".hoja-franja"), txt: h.querySelector(".hoja-papel").innerText }; });
+  let h = await hoja();
+  ok(A("J1 «Descargar en PDF»: la hoja con el mapa del sector y la tabla (N.º, tipo y servicio, fecha, coordenadas, precisión, foto y observación), los puntos numerados igual en los dos"), h.filas === 2 && h.ns === "1,2" && h.marcas === "1,2"
+    && h.cab === "N.º|Tipo y servicio|Fecha|Coordenadas|Precisión|Foto|Observación" && h.fotos === 2 && /Otros activos por levantamiento/.test(h.txt) && /en el orden del recorrido/.test(h.txt) && !/ZT Operario|zt\.oper/.test(h.txt), JSON.stringify(h).slice(0, 500));
+  ok(A("J2 hoja membretada: logo arriba y franja abajo; carta con márgenes 2,5 / 3 / 4 cm y «Página N de M»"), h.logo && /@top-right[^}]*url\(/.test(h.pagina) && /@bottom-center[^}]*url\(/.test(h.pagina) && h.tamano === "carta" && /size: 8\.5in 11in; margin: 2\.5cm 3cm 4cm 3cm/.test(h.pagina) && /Página " counter\(page\) " de " counter\(pages\)/.test(h.pagina));
+  await captura(p, `despues_hoja_${ancho}.png`);
+  await p.emulateMediaType("print");
+  const pdf = await p.pdf({ preferCSSPageSize: true, printBackground: true });
+  writeFileSync(join(CAP, `hoja_levantamiento_carta_${ancho}.pdf`), pdf);
+  const caja = (b) => (Buffer.from(b).toString("latin1").match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)/) || []).slice(1, 3).map((x) => Math.round(Number(x)));
+  ok(A("J3 el PDF sale en carta (612 × 792 puntos)"), caja(pdf).join("x") === "612x792" && pdf.length > 20000, caja(pdf).join("x") + " " + pdf.length);
+  await p.emulateMediaType("screen");
+  await clic(p, '[data-tamano-b="oficio"]');
+  await p.emulateMediaType("print");
+  const pdf2 = await p.pdf({ preferCSSPageSize: true, printBackground: true });
+  writeFileSync(join(CAP, `hoja_levantamiento_oficio_${ancho}.pdf`), pdf2);
+  ok(A("J4 … y en oficio, 8,5 × 13 in (612 × 936 puntos), con la misma hoja membretada"), caja(pdf2).join("x") === "612x936", caja(pdf2).join("x"));
+  await p.emulateMediaType("screen");
+  ok(A("J5 la descarga de la hoja queda en la auditoría"), Number(sqlq("select count(*) from public.geoportal_auditoria where accion = 'redes_levantar_hoja'")) >= 1);
+  await clicTexto(p, ".hoja-barra button", "Cerrar"); await p.waitForFunction(() => !document.querySelector("[data-testid=hoja]"));
+  // ----- Etapa 2: cierre casi automático -----
+  const nuevo = sqlq(`do $$ declare v_cons bigint; v_cod text; v_id bigint; begin
+      update redes.consecutivos set ultimo = ultimo + 1 where prefijo = 'HID' returning ultimo into v_cons; v_cod := 'HID-' || lpad(v_cons::text, 6, '0');
+      insert into redes.activos (codigo, prefijo, origen_alta, creado_por) values (v_cod, 'HID', 'carga', '${EMAILS.adm}') returning id into v_id;
+      insert into redes.activo_versiones (activo_id, version, geom, nombre, estado_codigo, atributos, huella, autor)
+      select v_id, 1, ST_Translate(q.geom, 0.00002, 0), 'ZT hidrante nuevo', 'en_operacion', '{}'::jsonb, md5(v_cod), '${EMAILS.adm}' from redes.levantar_puntos q where q.codigo = '${lev3}';
+      insert into redes.activo_origen (activo_id, version, origen, nota, autor) values (v_id, 1, 'emdupar', 'ZT activo de prueba', '${EMAILS.adm}');
+      perform redes.f_mat_refrescar_uno(v_id); perform set_config('zt.nuevo', v_cod, false); end $$; select current_setting('zt.nuevo')`).split("\n").pop().trim();
+  await clic(p, '[data-filtro-lev="todos"]'); await p.waitForSelector(`[data-levantar="${lev1}"]`); await clic(p, '[data-filtro-lev="abiertos"]');
+  await p.waitForSelector(`[data-levantar="${lev3}"] [data-testid=lev-propuesta]`, { timeout: 20000 }).catch(() => {});
+  ok(A("K1 con un activo NUEVO de la capa a 2 m, el punto dice «Posiblemente levantado: HID-…» (y el otro punto, sin activo nuevo, no)"), await p.evaluate((c, n, o) => { const t = (document.querySelector(`[data-levantar="${c}"] [data-testid=lev-propuesta]`)?.innerText ?? "").replace(/\s+/g, " ");
+    return t.includes(`Posiblemente levantado: ${n}`) && /a 2,\d m, cargado el/.test(t) && !document.querySelector(`[data-levantar="${o}"] [data-testid=lev-propuesta]`); }, lev3, nuevo, lev2), nuevo);
+  await captura(p, `despues_posiblemente_levantado_${ancho}.png`);
+  await clic(p, `[data-levantar="${lev3}"] [data-testid=lev-confirmar-propuesta]`);
+  await p.waitForFunction((c) => !document.querySelector(`[data-testid=lev-bandeja] [data-levantar="${c}"]`), { timeout: 20000 }, lev3).catch(() => {});
+  ok(A("K2 el supervisor confirma: queda «levantado» con ese activo"), sqlq(`select estado || '|' || (select codigo from redes.activos a where a.id = p.activo_id) from redes.v_levantar_punto p where codigo = '${lev3}'`) === `levantado|${nuevo}`);
+  // ----- Etapa 2: el aviso y la capa del geovisor -----
+  await p.evaluate(() => [...document.querySelectorAll("button")].find((b) => /Volver al inicio/.test(b.textContent))?.click());
+  await esperarTexto(p, /Avisos/);
+  await clicTexto(p, "button.tec-tarjeta-modo", "Avisos"); await p.waitForSelector('[data-aviso="activos_por_levantar"]', { timeout: 30000 });
+  ok(A("L1 Avisos: «1 activo reportado por levantar», informativo, con su lista"), await p.evaluate((c) => { const a = document.querySelector('article[data-aviso="activos_por_levantar"]'); return a.dataset.nivel === "info" && /1 activo reportado por levantar/.test(a.innerText) && a.innerText.includes(c) && /Por verificar/.test(a.innerText); }, lev2),
+    await p.evaluate(() => document.querySelector('article[data-aviso="activos_por_levantar"]')?.innerText));
+  await captura(p, `despues_aviso_${ancho}.png`);
+  await clic(p, 'article[data-aviso="activos_por_levantar"] .av-abrir');
+  ok(A("L2 el aviso abre Por verificar ya en «Otros activos por levantamiento»"), await p.waitForSelector(`[data-testid=lev-bandeja] [data-levantar="${lev2}"]`, { timeout: 30000 }).then(() => true).catch(() => false)
+    && await p.evaluate(() => document.querySelector('[data-grupo="levantar"]').getAttribute("aria-pressed") === "true"));
+  await clicTexto(p, "button", "Geovisor técnico"); await p.waitForFunction(() => !!document.querySelector(".geo-mapa")?.__mapa, { timeout: 30000 });
+  await clicTexto(p, ".geo-barra button", "Capas"); await p.waitForSelector(".geo-panel");
+  ok(A("M1 geovisor: la capa «Por levantar (activos reportados)» está en la lista del supervisor"), await p.evaluate(() => /Por levantar \(activos reportados\)/.test(document.querySelector(".geo-panel [data-capa=por_levantar]")?.innerText ?? "")));
+  await p.evaluate(() => { const i = document.querySelector(".geo-panel [data-capa=por_levantar] input"); i.scrollIntoView({ block: "center" }); if (!i.checked) i.click(); });
+  ok(A("M2 … y al encenderla trae el punto que sigue por levantar (el naranja de estado)"), await p.waitForFunction(() => { const m = document.querySelector(".geo-mapa").__mapa; const s = m.getSource("g-por_levantar"); return s && s._data && s._data.features && s._data.features.length === 1 && m.getPaintProperty("g-por_levantar", "circle-color") === "#c25e00"; }, { timeout: 30000 }).then(() => true).catch(() => false));
+  await clicTexto(p, ".geo-panel button", "✕"); await captura(p, `despues_geovisor_por_levantar_${ancho}.png`, false);
+  await clic(p, ".geo-volver"); await esperarTexto(p, /Dashboard distribución/);
+  await clicTexto(p, "button.tec-tarjeta-modo", "Dashboard distribución"); await esperarTexto(p, /Por verificar/);
   await clicTexto(p, "[role=tab]", "Personal"); await esperarTexto(p, /Encontrar o reportar activo/);
   ok(A("H12 Personal de distribución: el formulario «Encontrar o reportar activo» es uno más de los asignables"), /Encontrar o reportar activo/.test(await texto(p)));
   await captura(p, `despues_personal_${ancho}.png`);
@@ -434,7 +505,7 @@ if (!ANTES) {
   r = await edgeF("dist", "levantar_lista", { qs: { estado: "todos" } });
   ok("I8 levantar_lista (GET): al supervisor, sin caché y sin datos de suscriptores; al operador y a Comercial, 403; estado desconocido, 400", r.status === 200 && r.cuerpo.items.length === 3 && r.cache === "no-store" && !/contrato|telefono|direccion|suscriptor/i.test(JSON.stringify(r.cuerpo))
     && (await edgeF("op", "levantar_lista")).status === 403 && (await edgeF("campo", "levantar_lista")).status === 403 && (await edgeF("dist", "levantar_lista", { qs: { estado: "borrado" } })).status === 400);
-  const cod = r.cuerpo.items[0].codigo;
+  const cod = r.cuerpo.items.find((x) => x.estado === "reportado").codigo;
   ok("I9 levantar_evento rechaza por forma (código ajeno, tipo desconocido, dato de más): 400; al operador, 403; reabrir un punto abierto, 409",
     (await edgeF("dist", "levantar_evento", { cuerpo: { codigo: "DAN-000001", tipo: "asignado" } })).status === 400 && (await edgeF("dist", "levantar_evento", { cuerpo: { codigo: cod, tipo: "borrado" } })).status === 400
     && (await edgeF("dist", "levantar_evento", { cuerpo: { codigo: cod, tipo: "asignado", autor: "x" } })).status === 400 && (await edgeF("op", "levantar_evento", { cuerpo: { codigo: cod, tipo: "asignado" } })).status === 403
@@ -442,6 +513,11 @@ if (!ANTES) {
   r = await edgeF("dist", "levantar_fotos", { cuerpo: { codigo: cod } });
   ok("I10 levantar_fotos (POST): URL firmadas de lectura, sin la ruta de Storage; a Comercial, 403; por GET, 405", r.status === 200 && r.cuerpo.fotos.length >= 1 && r.cuerpo.fotos.every((f) => /token=/.test(f.url) && !("ruta" in f)) && r.cache === "no-store"
     && (await edgeF("campo", "levantar_fotos", { cuerpo: { codigo: cod } })).status === 403 && (await edgeF("dist", "levantar_fotos")).status === 405);
+  r = await edgeF("dist", "levantar_hoja", { cuerpo: { estado: "abiertos" } });
+  ok("I12 levantar_hoja (POST): los puntos numerados con la foto firmada (sin la ruta de Storage ni quién reportó); al operador y a Comercial, 403; de «levantados», 400; por GET, 405", r.status === 200 && r.cuerpo.puntos.length >= 1 && r.cache === "no-store"
+    && r.cuerpo.puntos.every((x, i) => x.n === i + 1 && /token=/.test(x.foto_url) && !("foto" in x) && !("quien" in x)) && (await edgeF("op", "levantar_hoja", { cuerpo: {} })).status === 403
+    && (await edgeF("campo", "levantar_hoja", { cuerpo: {} })).status === 403 && (await edgeF("dist", "levantar_hoja", { cuerpo: { estado: "levantado" } })).status === 400 && (await edgeF("dist", "levantar_hoja")).status === 405, JSON.stringify(r.cuerpo).slice(0, 300));
+  ok("I13 la capa «por_levantar» va por geovisor_capa: al supervisor, GeoJSON; al operador, 403", await edgeF("dist", "geovisor_capa", { qs: { capa: "por_levantar" } }).then((x) => x.status === 200 && Array.isArray(x.cuerpo.features)) && (await edgeF("op", "geovisor_capa", { qs: { capa: "por_levantar" } })).status === 403);
   ok("I11 el perfil de redes trae «activo_campo»: sí al operador con el formulario y al supervisor; no al operador sin él", (await edgeF("op", "mi_perfil")).cuerpo.activo_campo === true && (await edgeF("dist", "mi_perfil")).cuerpo.activo_campo === true && (await edgeF("op2", "mi_perfil")).cuerpo.activo_campo === false);
   ok("Z1 sin errores de JavaScript ni de consola", errores.length === 0, errores.join(" | "));
   ok("Z2 ninguna RPC sin simular", desconocidas.length === 0, [...new Set(desconocidas)].join(", "));

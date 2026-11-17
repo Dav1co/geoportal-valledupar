@@ -20,6 +20,7 @@ if [ -z "$($PSQL -d postgres -AtXc "select 1 from pg_database where datname = 'e
   (cd ../redes_corte9b_f3/carga_flujo/generado && $PSQL -q -X -d emdupar_b_14base -v ON_ERROR_STOP=1 -v solicitante=carga.local@emdupar.gov.co -f carga_flujo_modelo.sql >/dev/null)
   $PSQL -q -X -d emdupar_b_14base -v ON_ERROR_STOP=1 -f ../redes_corte9b_f3/encender_flujo_modelo_editor.sql >/dev/null
   $PSQL -q -X -d emdupar_b_14base -v ON_ERROR_STOP=1 -f pruebas_locales/doble_campo_personal_base_local.sql >/dev/null
+  $PSQL -q -X -d emdupar_b_14base -v ON_ERROR_STOP=1 -f pruebas_locales/doble_avisos_funciones_base_local.sql >/dev/null
 fi
 $PSQL -q -X -d postgres -c "drop database if exists $BASE" -c "create database $BASE template emdupar_b_14base"
 if [ "$1" = "con_14" ]; then $PSQL -q -X -d "$BASE" -v ON_ERROR_STOP=1 -f migracion_redes_corte14_editor.sql >/dev/null; fi
