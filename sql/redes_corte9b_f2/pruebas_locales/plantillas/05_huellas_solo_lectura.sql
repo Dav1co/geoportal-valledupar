@@ -18,9 +18,9 @@ union all select '2 tecnica.f_avisos(boolean,boolean,timestamp with time zone)',
        case md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) when '{{MD5_AVISOS}}' then '9b 1b (sin cambiar)' when '{{MD5_AVISOS_F2}}' then 'FASE 2 (reemplazada)' else 'DISTINTA' end
 union all select '4 tablas del 9b 1b (corte_fotos) y del 9a (pm_nodos)', null,
        case when to_regclass('redes.corte_fotos') is not null and to_regclass('redes.pm_nodos') is not null then 'ESTÁN' else 'FALTA' end
-union all select '5 tablas de la Fase 2 (tipos_sensible, usuarios_sensibles, usuario_sensible_eventos, presion_trabajo, sensor_lecturas)', null,
+union all select '5 tablas de la Fase 2 (tipos_sensible, usuarios_sensibles, usuario_sensible_eventos, presion_trabajo, presion_horas_no_confiables, sensor_lecturas)', null,
        case (to_regclass('redes.tipos_sensible') is not null)::int + (to_regclass('redes.usuarios_sensibles') is not null)::int + (to_regclass('redes.usuario_sensible_eventos') is not null)::int
-            + (to_regclass('redes.presion_trabajo') is not null)::int + (to_regclass('redes.sensor_lecturas') is not null)::int
-         when 0 then 'NO EXISTEN (sin aplicar)' when 5 then 'EXISTEN (Fase 2)' else 'DISTINTA' end
+            + (to_regclass('redes.presion_trabajo') is not null)::int + (to_regclass('redes.presion_horas_no_confiables') is not null)::int + (to_regclass('redes.sensor_lecturas') is not null)::int
+         when 0 then 'NO EXISTEN (sin aplicar)' when 6 then 'EXISTEN (Fase 2)' else 'DISTINTA' end
 union all select '6 INFO capa «cortes» en la lista del geovisor', null, (select case when activa then 'visible' else 'oculta' end from redes.geovisor_capas where codigo = 'cortes')
 order by 1;

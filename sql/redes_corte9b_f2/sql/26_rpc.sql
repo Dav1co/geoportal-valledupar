@@ -4,6 +4,7 @@
 --   · geoportal_redes_sensibles / geoportal_redes_sensible_fijar: bandeja de usuarios sensibles; el supervisor confirma, descarta o agrega uno a mano.
 --   · geoportal_redes_afectacion: contratos sin agua y usuarios sensibles de un daño o una intervención (cierre real si lo hay; si no, simulación).
 --   · geoportal_redes_sensores: los sensores (activos SEN) con su estado («por conectar» sin lecturas).
+--   · geoportal_redes_afectaciones_danos: TODOS los daños abiertos o en atención, sin límite de fecha, para el modo «Afectaciones» (supervisor y administrador).
 -- Sin nombres ni teléfonos: contrato, tipo y conteos.
 -- =====================================================================
 create function public.geoportal_redes_alertas_presion(p_solicitante text, p_escenario text default 'existente')
@@ -110,4 +111,25 @@ begin
                                                      from redes.sensor_lecturas l where l.activo_id = m.activo_id order by l.medido_en desc limit 1)) order by m.codigo)
       from redes.activo_vigente_mat m where m.prefijo in ('SEN', 'SCA') and not m.retirado and not m.oculto), '[]'::jsonb),
     'nota', 'Los sensores sin lecturas están «por conectar»: todavía no envían datos.');
+end $$;
+
+-- todos los daños abiertos («reportado») o en atención, SIN límite de fecha (David, 17-nov): para el modo «Afectaciones» del geovisor. Supervisor y administrador.
+-- La misma forma que la capa «danos» de geoportal_redes_geovisor_capa (las mismas propiedades), más «total». Acueducto y alcantarillado.
+create function public.geoportal_redes_afectaciones_danos(p_solicitante text)
+returns jsonb
+language plpgsql stable security definer set search_path = public, redes, tecnica, extensions, pg_temp as $$
+declare v_email text := redes.f_supervisor(p_solicitante, 'ven todos los daños abiertos'); v_max integer := floor(redes.f_param('geovisor_max_elementos'))::integer;
+        v_f jsonb; v_n integer;
+begin
+  with ab as materialized (      -- redes.v_dano se lee una sola vez
+    select d.codigo, d.clase, d.tipo_nombre, d.sistema, d.estado, d.activo_codigo, d.t_detectado, d.riesgo, d.origen, d.lat, d.lon
+      from redes.v_dano d where d.estado in ('reportado', 'en_atencion'))
+  select coalesce((select jsonb_agg(x.f order by x.o desc, x.codigo) from (
+           select jsonb_build_object('type', 'Feature', 'geometry', jsonb_build_object('type', 'Point', 'coordinates', jsonb_build_array(ab.lon, ab.lat)),
+                    'properties', jsonb_build_object('codigo', ab.codigo, 'clase', ab.clase, 'tipo', ab.tipo_nombre, 'sistema', ab.sistema, 'estado', ab.estado,
+                                                     'activo', ab.activo_codigo, 'cuando', ab.t_detectado, 'riesgo', ab.riesgo, 'origen', ab.origen)) as f, ab.t_detectado as o, ab.codigo
+             from ab order by ab.t_detectado desc, ab.codigo limit v_max) x), '[]'::jsonb),
+         (select count(*) from ab)
+    into v_f, v_n;
+  return jsonb_build_object('type', 'FeatureCollection', 'capa', 'afectaciones_danos', 'total', v_n, 'recortada', v_n > v_max, 'features', v_f);
 end $$;

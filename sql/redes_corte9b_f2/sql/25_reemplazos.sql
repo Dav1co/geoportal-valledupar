@@ -1,7 +1,8 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 25 — REEMPLAZO (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
 -- tecnica.f_avisos, con su texto vivo (el publicado con el 9b 1a + 1b, md5 898bafa5adddfcc08d65adf138d0114a) más UN bloque: D11, el aviso informativo
--- «N nodos fuera de rango según el modelo» (David, 17-nov: ni rojo ni naranja). Lo demás queda igual. AVISADO al Code B en la entrada de bitácora.
+-- «N nodos fuera de rango según el modelo» (David, 17-nov: ni rojo ni naranja; APAGADO por omisión, parámetro «presion_modelo_aviso»; solo horas confiables).
+-- Lo demás queda igual. AVISADO al Code B en la entrada de bitácora.
 -- =====================================================================
 
 -- tecnica.f_avisos(boolean,boolean,timestamp with time zone)
@@ -277,14 +278,15 @@ begin
     end loop;
   end if;
 
-  -- D11 (Corte 9b, Fase 2). Presión de MODELO fuera de rango (Res. 0330 de 2017): un solo aviso informativo. Los dos umbrales se leen una vez
-  if p_distribucion then
+  -- D11 (Corte 9b, Fase 2). Presión de MODELO fuera de rango (Res. 0330 de 2017): un solo aviso informativo. APAGADO por omisión: solo sale si el
+  -- parámetro «presion_modelo_aviso» vale 1 (lo enciende Técnica). Solo con las horas confiables del modelo (redes.f_presion_nodos). Los umbrales se leen una vez
+  if p_distribucion and coalesce(tecnica.f_aparam('presion_modelo_aviso'), 0) >= 1 then
     v_x := redes.f_param('presion_baja_naranja_mca'); v_y := redes.f_param('presion_alta_naranja_mca');
-    select count(*) into v_n from redes.pm_nodos x where x.carga_id = redes.f_ref_vigente('pm_nodos') and (x.pres_exist_min < v_x or x.pres_exist_max > v_y);
+    select count(*) into v_n from redes.f_presion_nodos('existente') x where x.p_min < v_x or x.p_max > v_y;
     if v_n > 0 then
       v_av := v_av || jsonb_build_object('clave', 'presion_modelo', 'area', 'distribucion', 'nivel', 'info', 'orden', 175,
                 'titulo', format('%s %s fuera de rango según el modelo', tecnica.f_texto_num(v_n), case when v_n = 1 then 'nodo' else 'nodos' end),      -- con punto de miles
-                'detalle', format('Presión de modelo, no medida (Plan Maestro 2014): mínima bajo %s o máxima sobre %s m.c.a.', v_x, v_y),
+                'detalle', format('Presión de modelo, no medida (Plan Maestro 2014): mínima bajo %s o máxima sobre %s m.c.a., sin las horas en que el modelo no es confiable.', v_x, v_y),
                 'n', v_n, 'items', '[]'::jsonb, 'bandeja', jsonb_build_object('tablero', 'distribucion', 'pestana', null), 'desde', null);
     end if;
   end if;

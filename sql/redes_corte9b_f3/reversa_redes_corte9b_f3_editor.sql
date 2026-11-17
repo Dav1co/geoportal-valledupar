@@ -7,7 +7,7 @@ do $$
 begin
   if to_regclass('redes.flujo_modelo') is null then raise exception 'No hay nada que revertir: la Fase 3 del Corte 9b no está aplicada'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'fbcbd7b3da35dfdc0e4104ed4a6e8f2f' then
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'a327aa51f43bb5cc2112a6db089718ed' then
     raise exception 'Las funciones cambiaron después de la migración de la Fase 3: la reversa se niega a pisarlas; avise';
   end if;
   if exists (select 1 from redes.flujo_modelo) or exists (select 1 from redes.ref_cargas where conjunto = 'flujo_modelo') then

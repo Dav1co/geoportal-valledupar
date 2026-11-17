@@ -1,6 +1,6 @@
 #!/bin/sh
 # Base local de CODE A para el Corte 9b, Fase 3 (localhost:55432, base redes_local): producción + 9b (1a + 1b) + Fase 2, que se publican antes.
-#   sh rehacer_base.sh          → hasta la Fase 2 (huella 7f9c0157…)
+#   sh rehacer_base.sh          → hasta la Fase 2 (huella 24e62e15…)
 #   sh rehacer_base.sh con_f3   → además, la migración de la Fase 3
 #   sh rehacer_base.sh cargada  → además, la carga del flujo del modelo (carga_flujo/generado/carga_flujo_modelo.sql)
 set -e
