@@ -82,7 +82,7 @@ do $prueba$
 declare
   a text := 'prueba.redes9f.adm@emdupar.gov.co'; sd text := 'prueba.redes9f.dist@emdupar.gov.co'; op text := 'prueba.redes9f.op@emdupar.gov.co'; na text := 'prueba.redes9f.nada@emdupar.gov.co';
   v_carga bigint; v_c bigint; j jsonb; v_p jsonb; v_dan text; v_sen bigint; c1 text; c2 text; c3 text; v_real text; v_n integer;
-  v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_ms3 numeric; v_ms4 numeric; v_ms5 numeric; v_info text := ''; v_total integer; v_bien integer; v_fallas text;
+  v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_ms3 numeric; v_ms4 numeric; v_ms5 numeric; v_ms6 numeric; v_info text := ''; v_total integer; v_bien integer; v_fallas text;
 begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (a, 'ZT9B Admin', 'admin', 'sin_restriccion', 'todos');
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, ver_dashboard_redes, horario, dias) values (sd, 'ZT9B Supervisor de distribución', 'consulta', true, true, 'sin_restriccion', 'todos');
@@ -136,9 +136,9 @@ begin
   perform pg_temp.reg('01.03 la capa «Cortes programados vigentes» ya no sale en la lista del geovisor, pero sigue en la tabla con su nota',
      not exists (select 1 from jsonb_array_elements(public.geoportal_redes_geovisor(sd) -> 'capas') x where x ->> 'codigo' = 'cortes')
      and (select not activa and nota like 'Oculta%' from redes.geovisor_capas where codigo = 'cortes'));
-  perform pg_temp.reg('01.04 tecnica.f_avisos no cambió: sigue con el bloque del 1b y sin presiones',
+  perform pg_temp.reg('01.04 tecnica.f_avisos conserva el bloque del 1b (válvulas cerradas) y suma el de presiones (D11)',
      position('D10 (Corte 9b, Fase 1b)' in pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) > 0
-     and position('presion' in lower(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure))) = 0);
+     and position('D11 (Corte 9b, Fase 2)' in pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) > 0);
 
   -- ===================== 02. Alertas de presión (modelo) =====================
   insert into redes.ref_cargas (conjunto, archivo, md5, filas, origen, autor) values ('pm_nodos', 'zt9b_pm_nodos.csv', md5('zt9b' || clock_timestamp()::text), 6, 'ZT9B modelo de prueba', a) returning id into v_c;
@@ -165,7 +165,11 @@ begin
   update redes.parametros set valor = 10 where clave = 'presion_baja_roja_mca';
   perform pg_temp.err('02.05 las alertas de presión son del supervisor: el operador no (42501)', format('select public.geoportal_redes_alertas_presion(%L)', op), '42501');
   perform pg_temp.err('02.06 un escenario que no existe', format('select public.geoportal_redes_alertas_presion(%L, %L)', sd, 'otra'), null, 'escenario');
-  perform pg_temp.reg('02.07 la lista para Avisos está lista (5 nodos fuera de rango) pero NO conectada', (select sum(n) from redes.f_presion_para_avisos()) = 5);
+  perform pg_temp.reg('02.07 Avisos (distribución): UN aviso informativo «5 nodos fuera de rango según el modelo» (ni rojo ni naranja); al supervisor de planta no le sale',
+     (select count(*) = 1 and bool_and(av ->> 'nivel' = 'info' and av ->> 'titulo' = '5 nodos fuera de rango según el modelo' and av ->> 'detalle' like 'Presión de modelo, no medida%15%50%')
+        from jsonb_array_elements(tecnica.f_avisos(false, true)) av where av ->> 'clave' = 'presion_modelo')
+     and not exists (select 1 from jsonb_array_elements(tecnica.f_avisos(true, false)) av where av ->> 'clave' = 'presion_modelo')
+     and (select sum(n) from redes.f_presion_para_avisos()) = 5);
 
   -- ===================== 03. Usuarios sensibles =====================
   perform pg_temp.reg('03.01 la regla del nombre: hospital, clínica (con tilde), institución educativa y bomberos se reconocen; una persona no',
@@ -253,10 +257,11 @@ begin
   v_t0 := clock_timestamp(); perform public.geoportal_redes_sensibles(sd, null, null, 500); v_ms2 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
   v_t0 := clock_timestamp(); perform public.geoportal_redes_afectacion(op, v_dan); v_ms3 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
   v_t0 := clock_timestamp(); perform public.geoportal_redes_sensores(sd); v_ms4 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
-  v_info := format('TIEMPOS: alertas de presión con %s nodos %s ms · bandeja de sensibles %s ms · afectación de un daño (simulación sobre la red de esta base) %s ms · sensores %s ms · propuesta de sensibles sobre la cartera de esta base (%s filas; solo por psql o editor) %s ms',
-                   j ->> 'nodos', v_ms1, v_ms2, v_ms3, v_ms4, (select count(*) from public.cartera_suscripcion), v_ms5);
-  perform pg_temp.reg('06.01 TIEMPOS: las lecturas (alertas de presión, bandeja de sensibles, sensores) en menos de 1 s y la afectación en menos de 5 s',
-     greatest(v_ms1, v_ms2, v_ms4) < 1000 and v_ms3 < 5000, v_info);
+  v_t0 := clock_timestamp(); perform tecnica.f_avisos(true, true); v_ms6 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_info := format('TIEMPOS: avisos completos (con el de presiones, 7.006 nodos) %s ms · alertas de presión con %s nodos %s ms · bandeja de sensibles %s ms · afectación de un daño (simulación sobre la red de esta base) %s ms · sensores %s ms · propuesta de sensibles sobre la cartera de esta base (%s filas; solo por psql o editor) %s ms',
+                   v_ms6, j ->> 'nodos', v_ms1, v_ms2, v_ms3, v_ms4, (select count(*) from public.cartera_suscripcion), v_ms5);
+  perform pg_temp.reg('06.01 TIEMPOS: las lecturas (avisos completos, alertas de presión, bandeja de sensibles, sensores) en menos de 1 s y la afectación en menos de 5 s',
+     greatest(v_ms1, v_ms2, v_ms4, v_ms6) < 1000 and v_ms3 < 5000, v_info);
   perform pg_temp.reg('06.02 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE', not exists (select 1 from redes.f_funciones_sin_where()));
 
   select count(*), count(*) filter (where ok), coalesce(string_agg('  FALLA ' || nombre || ' → ' || coalesce(detalle, ''), E'\n' order by _r.n) filter (where not ok), '') into v_total, v_bien, v_fallas from _r;

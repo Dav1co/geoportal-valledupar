@@ -3,7 +3,8 @@
 -- PROPUESTA. No se ha ejecutado en la base real (solo en el PostGIS local de Code A). Generado por pruebas_locales/generar.py.
 -- Fuente: encargo_code_corte9b_simulacion_alertas.md (Fase 2), §30.7 y §17 de la bitácora, respuestas de David del 17-nov.
 -- · Presupone el paquete del 9b (1a + 1b) publicado: huella del conjunto de funciones de redes 895517fb68f74d6d6c20079c83bdf7c4.
--- · SOLO AGREGA: no reemplaza ninguna función (ni de redes ni tecnica.f_avisos). Solo base de datos: las rutas de la Edge y las pantallas son del Code B.
+-- · No reemplaza ninguna función de redes. Reemplaza UNA de tecnica: tecnica.f_avisos (del 9b 1b, md5 898bafa5adddfcc08d65adf138d0114a), para sumar el aviso informativo
+--   de presiones (David, 17-nov). Solo base de datos: las rutas de la Edge y las pantallas son del Code B.
 -- · Sin datos de personas: de un usuario sensible se guarda el contrato, el tipo y la PALABRA que coincidió (nunca el nombre).
 -- =====================================================================
 do $$
@@ -12,6 +13,9 @@ begin
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
        where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '895517fb68f74d6d6c20079c83bdf7c4' then
     raise exception 'Las funciones de redes no son las del Corte 9b (1a + 1b) publicado (huella 895517fb68f74d6d6c20079c83bdf7c4): deténgase y avise';
+  end if;
+  if md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) <> '898bafa5adddfcc08d65adf138d0114a' then
+    raise exception 'tecnica.f_avisos no es la publicada con el Corte 9b (1b) (md5 898bafa5adddfcc08d65adf138d0114a): deténgase y avise';
   end if;
   if to_regclass('redes.corte_fotos') is null or to_regclass('redes.pm_nodos') is null then raise exception 'Faltan tablas del 9b (1b) o del 9a: deténgase y avise'; end if;
 end $$;

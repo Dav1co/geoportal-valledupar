@@ -9,10 +9,16 @@ begin
        where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '{{MD5_F2}}' then
     raise exception 'Las funciones cambiaron después de la migración de la Fase 2: la reversa se niega a pisarlas; avise';
   end if;
+  if md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) <> '{{MD5_AVISOS_F2}}' then
+    raise exception 'tecnica.f_avisos cambió después de la migración de la Fase 2: la reversa se niega a pisarla; avise';
+  end if;
   if exists (select 1 from redes.usuarios_sensibles) or exists (select 1 from redes.sensor_lecturas) then
     raise exception 'Ya hay usuarios sensibles o lecturas guardadas: la reversa no borra datos; avise';
   end if;
 end $$;
+-- tecnica.f_avisos vuelve a su texto del 9b (1b), sin el aviso de presiones
+{{TEXTO_AVISOS_ANTES}}
+revoke all on function tecnica.f_avisos(boolean, boolean, timestamptz) from public, anon, authenticated, service_role;
 {{DROPS}}
 drop view redes.v_usuario_sensible;
 drop table redes.usuario_sensible_eventos, redes.usuarios_sensibles, redes.tipos_sensible, redes.presion_trabajo, redes.sensor_lecturas;

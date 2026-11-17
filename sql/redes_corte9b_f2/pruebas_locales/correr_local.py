@@ -55,8 +55,9 @@ def archivo(n):
     return os.path.join(RAIZ, n)
 
 
+SALIDA_AV = "select md5(tecnica.f_avisos(true, true, '2026-11-17 15:00:00-05')::text)"
 rehacer()
-av0, viejas0 = q(AV), q(VIEJAS)
+av0, viejas0, salida0 = q(AV), q(VIEJAS), q(SALIDA_AV)
 p = psql('-q', '-f', archivo('ensayo_en_transaccion_redes_corte9b_f2_editor.sql'))
 m = re.search(r'RESULTADO: (\d+) de (\d+) pruebas correctas — SIN FALLAS', p.stderr)
 ok(f'01 el ensayo termina en el ERROR esperado: {m.group(1) if m else "?"} de {m.group(2) if m else "?"} … SIN FALLAS', m and m.group(1) == m.group(2) and 'esperado' in p.stderr, p.stderr[-1500:])
@@ -68,7 +69,8 @@ ok('03 las huellas antes: «9b 1a + 1b (listo para la Fase 2)» y las 12 nuevas 
    and sum('NO EXISTE (sin aplicar)' in f for f in filas) == 12 and not any('DISTINTA' in f or 'FALTA' in f for f in filas), '\n'.join(filas))
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('migracion_redes_corte9b_f2_editor.sql'))
 ok('04 la migración se aplica', p.returncode == 0, p.stderr)
-ok('05 la Fase 2 SOLO AGREGA: tecnica.f_avisos y las funciones del 9b (1a + 1b) quedan con el mismo texto', q(AV) == av0 and q(VIEJAS) == viejas0)
+ok('05 las funciones del 9b (1a + 1b) quedan con el mismo texto; tecnica.f_avisos cambia (aviso de presiones) y, sin presiones cargadas, devuelve exactamente lo mismo que antes',
+   q(VIEJAS) == viejas0 and q(AV) != av0 and q(SALIDA_AV) == salida0)
 filas = psql('-AtF', '|', '-f', archivo('huellas_solo_lectura_redes_corte9b_f2_editor.sql')).stdout.strip().splitlines()
 ok('06 las huellas después: «FASE 2 (aplicada)», 12 nuevas y las tablas', any('FASE 2 (aplicada)' in f for f in filas) and sum('NUEVA (aplicada)' in f for f in filas) == 12
    and any('EXISTEN (Fase 2)' in f for f in filas), '\n'.join(filas))
@@ -98,6 +100,10 @@ ms, out, e = edge(f"select public.geoportal_redes_alertas_presion('{SD}')")
 j = json.loads(out) if not e else {}
 ok(f'12 alertas de presión como la Edge, 7.000 nodos amarrados a la red real ({ms} ms, {len(out) // 1024} kB; tope local {T1:.0f} ms): {j.get("niveles")}; por material {j.get("por_material", {}).get("n")}',
    not e and ms < T1 and j['nodos'] == 7000 and len(out) < 131072, e)
+ms, out, e = edge(f"select public.geoportal_tec_avisos('{ADM}')")
+pres = [a for a in (json.loads(out).get('avisos', []) if not e and out.startswith('{') else (json.loads(out) if not e else [])) if isinstance(a, dict) and a.get('clave') == 'presion_modelo']
+ok(f'12b los Avisos del administrador como la Edge, con 7.000 nodos de presión ({ms} ms; tope local {T1:.0f} ms): un aviso informativo «{pres[0]["titulo"] if pres else "?"}»',
+   not e and ms < T1 and len(pres) == 1 and pres[0]['nivel'] == 'info', e or out[:300])
 ok('13 las alertas de presión son del supervisor', edge(f"select public.geoportal_redes_alertas_presion('{OP}')")[2] != '')
 q("insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, activo_id, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, autor) "
   "select gen_random_uuid(), 'DAN-999997', 'dano', 'fuga', 'acueducto', (select tn.activo_id from redes.tramo_nodos tn join redes.activo_vigente_mat m on m.activo_id = tn.activo_id and m.version = tn.version "
@@ -122,7 +128,7 @@ ok('18 con usuarios sensibles guardados, la reversa se niega (no borra datos)', 
 
 rehacer('con_f2')
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('reversa_redes_corte9b_f2_editor.sql'))
-ok('19 la reversa (sin datos) se aplica: vuelve la huella del 9b, la capa de cortes vuelve a la lista y tecnica.f_avisos no cambia',
+ok('19 la reversa (sin datos) se aplica: vuelve la huella del 9b, la capa de cortes vuelve a la lista y tecnica.f_avisos vuelve a la del 1b',
    p.returncode == 0 and q(CONJ) == MD5_9B and q("select activa from redes.geovisor_capas where codigo = 'cortes'") == 't' and q(AV) == av0, p.stderr)
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('reversa_redes_corte9b_f2_editor.sql'))
 ok('20 una segunda reversa se niega', p.returncode != 0 and 'No hay nada que revertir' in p.stderr, p.stderr)
