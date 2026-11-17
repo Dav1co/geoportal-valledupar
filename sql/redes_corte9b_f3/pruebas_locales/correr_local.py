@@ -17,7 +17,7 @@ BASE = 'redes_local'
 ENV = dict(os.environ, PGHOST='localhost', PGPORT='55432', PGUSER='postgres', PGOPTIONS='-c client_min_messages=warning')
 CONJ = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p "
         "where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%')")
-MD5_F2 = '7f9c0157c47e371e1d3d87ef6bda847b'
+MD5_F2 = '24e62e151ff418ea6acf631572d72683'
 AV = "select md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure))"
 VIEJAS = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.oid::regprocedure::text)) from pg_proc p where p.proname in ('f_sim_grafo', 'f_sim_escenario', "
           "'f_simular_cierre', 'f_cortes_foto', 'f_cierres_vigentes', 'geoportal_redes_simulacion_cierre', 'geoportal_redes_valvula_maniobra', 'geoportal_redes_cortes_vigentes', "
@@ -128,9 +128,17 @@ ms, out, e = edge(f"select public.geoportal_redes_flujo_tramo('{SD}', '{cod}')")
 ok(f'19 la tarjeta de un tramo que cambia de sentido ({cod}) como la Edge ({ms} ms)', not e and ms < T1 and json.loads(out)['cambia_de_sentido'] is True, e or out)
 ok('20 el operador no ve el flujo; la API no ve las tablas', edge(f"select public.geoportal_redes_flujo_modelo('{OP}')")[2] != '' and 'permission denied' in edge('select count(*) from redes.flujo_modelo')[2])
 ok('21 ningún activo cambió de versión por la carga', q("select count(*) from redes.activo_versiones v where v.creado_en >= (select min(creado_en) from redes.ref_cargas where conjunto = 'flujo_modelo')") == '0')
+p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('encender_flujo_modelo_editor.sql'))
+p2 = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('encender_flujo_modelo_editor.sql'))
+ok('21b encender la capa (va de último, con el flujo cargado): queda «activa», sigue «preparada» y solo de supervisores; repetirlo no cambia nada',
+   p.returncode == 0 and p2.returncode == 0 and 'activa · preparada · solo supervisores: sí' in p2.stdout
+   and q("select estado || fuente || solo_completo::text || activa::text from redes.geovisor_capas where codigo = 'flujo_modelo'") == 'activapreparadatruetrue', p.stderr + p2.stderr)
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('reversa_redes_corte9b_f3_editor.sql'))
 ok('22 con el flujo cargado, la reversa se niega (no borra datos)', p.returncode != 0 and 'no borra datos' in p.stderr, p.stderr)
 rehacer('con_f3')
+p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('encender_flujo_modelo_editor.sql'))
+ok('22b sin el flujo cargado, encender la capa se niega (no se enciende vacía)', p.returncode != 0 and 'no está cargado' in p.stderr
+   and q("select estado from redes.geovisor_capas where codigo = 'flujo_modelo'") == 'espera_dato', p.stderr)
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('reversa_redes_corte9b_f3_editor.sql'))
 ok('23 la reversa (sin datos) se aplica: vuelve la huella de la Fase 2 y la capa queda sin uso (no borrada)',
    p.returncode == 0 and q(CONJ) == MD5_F2 and q("select activa from redes.geovisor_capas where codigo = 'flujo_modelo'") == 'f', p.stderr)

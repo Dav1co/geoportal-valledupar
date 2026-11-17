@@ -5,7 +5,8 @@ begin;
 -- Fuente: encargo_code_corte9b_simulacion_alertas.md (Fase 2), §30.7 y §17 de la bitácora, respuestas de David del 17-nov.
 -- · Presupone el paquete del 9b (1a + 1b) publicado: huella del conjunto de funciones de redes 895517fb68f74d6d6c20079c83bdf7c4.
 -- · No reemplaza ninguna función de redes. Reemplaza UNA de tecnica: tecnica.f_avisos (del 9b 1b, md5 898bafa5adddfcc08d65adf138d0114a), para sumar el aviso informativo
---   de presiones (David, 17-nov). Solo base de datos: las rutas de la Edge y las pantallas son del Code B.
+--   de presiones (David, 17-nov): APAGADO por omisión (parámetro de Avisos «presion_modelo_aviso») y calculado solo con las horas confiables del modelo.
+--   Solo base de datos: las rutas de la Edge y las pantallas son del Code B.
 -- · Sin datos de personas: de un usuario sensible se guarda el contrato, el tipo y la PALABRA que coincidió (nunca el nombre).
 -- =====================================================================
 do $$
@@ -82,6 +83,22 @@ select m.codigo, x.clase, x.p, x.fuente from redes.materiales m
                (null, 88, 'PVC sin clase en la ficha: se toma la menor (RDE 32,5 = 125 psi; por verificar con Técnica)')) x(clase, p, fuente) on m.codigo = 'PVC';
 comment on table redes.presion_trabajo is 'Corte 9b (Fase 2): presión de trabajo por material y clase del tubo, para la alerta por material. Valores por verificar con la ficha del fabricante.';
 
+-- ---------- 2b. Horas del día en que el modelo NO es confiable (David, 17-nov). En la red existente (modeloV1) el modelo colapsa en las horas de consumo
+--                5, 7, 10, 12 y 14 (Fase 0 del 9b): las alertas y el aviso de presiones se calculan sin esas horas. La capa de presión del geovisor NO cambia ----------
+create table redes.presion_horas_no_confiables (
+  escenario text not null check (escenario in ('existente', 'futura')),
+  hora      integer not null check (hora between 0 and 24),      -- la hora del modelo (0 a 24): el valor horas[hora + 1] de redes.pm_presion_hora
+  motivo    text not null check (length(btrim(motivo)) between 10 and 300),
+  activa    boolean not null default true,      -- para volver a contar una hora: activa = false (no se borra)
+  creado_en timestamptz not null default clock_timestamp(),
+  primary key (escenario, hora)
+);
+insert into redes.presion_horas_no_confiables (escenario, hora, motivo)
+select 'existente', h, 'El modelo de la red existente (modeloV1, Plan Maestro 2014) colapsa a esta hora: presiones no confiables (Fase 0 del Corte 9b)' from unnest(array[5, 7, 10, 12, 14]) h;
+create trigger t_no_borrar before delete on redes.presion_horas_no_confiables for each row execute function tecnica.f_solo_agregar();
+create trigger t_no_vaciar before truncate on redes.presion_horas_no_confiables for each statement execute function tecnica.f_solo_agregar();
+comment on table redes.presion_horas_no_confiables is 'Corte 9b (Fase 2): horas del día en que la presión del modelo no es confiable; las alertas y el aviso de presiones no las cuentan. No se borra: activa = false.';
+
 -- ---------- 3. Lecturas de sensores: queda VACÍA (los sensores son activos SEN; «por conectar» mientras no haya lecturas). Sin ruta de escritura en la fase 1 ----------
 create table redes.sensor_lecturas (
   id          bigint generated always as identity primary key,
@@ -99,7 +116,7 @@ comment on table redes.sensor_lecturas is 'Corte 9b (Fase 2): lecturas de sensor
 do $$
 declare t text;
 begin
-  foreach t in array array['tipos_sensible', 'usuarios_sensibles', 'usuario_sensible_eventos', 'presion_trabajo', 'sensor_lecturas'] loop
+  foreach t in array array['tipos_sensible', 'usuarios_sensibles', 'usuario_sensible_eventos', 'presion_trabajo', 'presion_horas_no_confiables', 'sensor_lecturas'] loop
     execute format('alter table redes.%I enable row level security', t);
     execute format('revoke all on table redes.%I from public, anon, authenticated, service_role', t);
   end loop;
@@ -116,6 +133,11 @@ insert into redes.parametros (clave, valor, unidad, minimo, maximo, descripcion)
   ('presion_lista_max', 50, 'nodos', 5, 500,
    'Alertas de presión (Corte 9b): cuántos nodos se listan como máximo por cada nivel (los peores primero); el total siempre se dice')
 on conflict (clave) do update set estado = 'vigente', descripcion = excluded.descripcion;
+-- el aviso informativo de presiones sale APAGADO (David, 17-nov): lo enciende Técnica cuando lo revise, en los parámetros de Avisos (0 apagado, 1 encendido)
+insert into tecnica.aviso_parametros (clave, area, valor, minimo, maximo, unidad, orden, nombre, descripcion) values
+  ('presion_modelo_aviso', 'distribucion', 0, 0, 1, '(0 no, 1 sí)', 175, 'Aviso de presiones del modelo',
+   '0: apagado. 1: encendido. Encendido, sale un aviso informativo con los nodos fuera de rango según el modelo (presión de modelo, no medida; sin las horas en que el modelo no es confiable).')
+on conflict (clave) do update set valor = 0, descripcion = excluded.descripcion;
 
 -- ---------- 5. La capa «Cortes programados vigentes» se OCULTA de la lista de capas (David, 17-nov): ahora vive en el modo «Afectaciones». No se borra ----------
 update redes.geovisor_capas set activa = false, nota = 'Oculta el 17-nov-2026 (Corte 9b): los cortes vigentes se ven en el modo «Afectaciones» del geovisor'
@@ -124,7 +146,8 @@ update redes.geovisor_capas set activa = false, nota = 'Oculta el 17-nov-2026 (C
 -- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 20 — FUNCIONES INTERNAS. PROPUESTA. Solo agrega (no reemplaza nada).
 -- · Alertas de presión (§30.7, Res. 0330 de 2017, arts. 61 y 62): con los 4 parámetros del 9a (15 y 10 m.c.a. de mínima; 50 y 60 de máxima) sobre la presión
 --   de MODELO por nodo (redes.pm_nodos, carga vigente; red existente o futura). Y por material: nodos cuya presión máxima pasa la presión de trabajo de un tramo
---   que llega a ellos. Es presión de modelo, no medida: así se rotula.
+--   que llega a ellos. Es presión de modelo, no medida: así se rotula. La mínima y la máxima del día se toman SOLO de las horas confiables del modelo
+--   (redes.f_presion_nodos: sin las horas de redes.presion_horas_no_confiables), lo mismo en las alertas y en el aviso, para que den el mismo número.
 -- · Usuarios sensibles: propuesta por una palabra del nombre (cartera_suscripcion, último período) — se corre por psql o editor, NUNCA en una petición.
 -- · Afectación de un daño o una intervención: contratos sin agua y usuarios sensibles, del cierre real (la foto) si tiene válvulas cerradas, o de la simulación.
 -- · Sensores: estado derivado de las lecturas («por conectar» mientras no haya).
@@ -138,20 +161,35 @@ language sql stable set search_path = redes, pg_temp as $$
               when p_min < redes.f_param('presion_baja_naranja_mca') then 'baja_naranja'
               when p_max > redes.f_param('presion_alta_naranja_mca') then 'alta_naranja' end $$;
 
+-- ---------- presión mínima y máxima del día por nodo, SOLO con las horas confiables del modelo (David, 17-nov) ----------
+-- Si el escenario tiene horas no confiables y el nodo tiene sus presiones por hora (redes.pm_presion_hora, carga vigente): mínima y máxima de las demás horas.
+-- Si no (escenario sin horas excluidas, o nodo sin presiones por hora): la mínima y la máxima del día de redes.pm_nodos, como antes.
+create function redes.f_presion_nodos(p_escenario text) returns table (llave text, p_min numeric, p_max numeric)
+language sql stable security definer set search_path = redes, pg_temp as $$
+  with ex as (select array_agg(h.hora) as hs from redes.presion_horas_no_confiables h where h.escenario = p_escenario and h.activa)
+  select x.llave,
+         case when ph.llave is not null then c.p_min when p_escenario = 'futura' then x.pres_futura_min else x.pres_exist_min end,
+         case when ph.llave is not null then c.p_max when p_escenario = 'futura' then x.pres_futura_max else x.pres_exist_max end
+    from redes.pm_nodos x
+    left join redes.pm_presion_hora ph on (select hs from ex) is not null and ph.carga_id = redes.f_ref_vigente('pm_presion_' || p_escenario) and ph.llave = x.llave
+    left join lateral (select min(u.v) as p_min, max(u.v) as p_max from unnest(ph.horas) with ordinality u(v, o) where (u.o - 1)::integer <> all ((select hs from ex)::integer[])) c on ph.llave is not null
+   where x.carga_id = redes.f_ref_vigente('pm_nodos') $$;
+comment on function redes.f_presion_nodos(text) is 'Corte 9b (Fase 2): presión de modelo mínima y máxima por nodo, sin las horas no confiables (redes.presion_horas_no_confiables). La usan las alertas y el aviso de presiones.';
+
 -- ---------- las alertas de presión de un escenario (existente | futura): conteos por nivel, los peores nodos y la alerta por material ----------
 create function redes.f_alertas_presion(p_escenario text) returns jsonb
 language plpgsql stable security definer set search_path = redes, public, extensions, pg_temp as $$
-declare v_c bigint := redes.f_ref_vigente('pm_nodos'); v_lim integer := coalesce(redes.f_param('presion_lista_max'), 50)::integer; v_fut boolean := p_escenario = 'futura'; j jsonb;
+declare v_c bigint := redes.f_ref_vigente('pm_nodos'); v_hs integer[]; v_lim integer := coalesce(redes.f_param('presion_lista_max'), 50)::integer; v_fut boolean := p_escenario = 'futura'; j jsonb;
   -- los 4 umbrales se leen UNA vez (la misma regla de redes.f_presion_nivel; por nodo costaba 4 lecturas de parámetros)
   v_bn numeric := redes.f_param('presion_baja_naranja_mca'); v_br numeric := redes.f_param('presion_baja_roja_mca');
   v_an numeric := redes.f_param('presion_alta_naranja_mca'); v_ar numeric := redes.f_param('presion_alta_roja_mca');
 begin
   if p_escenario not in ('existente', 'futura') then perform tecnica.f_error('El escenario es «existente» o «futura»'); end if;
   if v_c is null then return jsonb_build_object('cargado', false, 'escenario', p_escenario); end if;
-  with n as (
-    select x.llave, coalesce(x.nombre, x.llave) as nombre, x.zona_modelo, x.geom,
-           case when v_fut then x.pres_futura_min else x.pres_exist_min end as p_min, case when v_fut then x.pres_futura_max else x.pres_exist_max end as p_max
-      from redes.pm_nodos x where x.carga_id = v_c),
+  select array_agg(h.hora order by h.hora) into v_hs from redes.presion_horas_no_confiables h where h.escenario = p_escenario and h.activa;
+  with n as (      -- la mínima y la máxima, solo de las horas confiables
+    select x.llave, coalesce(x.nombre, x.llave) as nombre, x.zona_modelo, x.geom, p.p_min, p.p_max
+      from redes.pm_nodos x join redes.f_presion_nodos(p_escenario) p on p.llave = x.llave where x.carga_id = v_c),
   c as materialized (select n.*, case when n.p_min < v_br then 'baja_roja' when n.p_max > v_ar then 'alta_roja' when n.p_min < v_bn then 'baja_naranja' when n.p_max > v_an then 'alta_naranja' end as nivel
           from n where n.p_min is not null or n.p_max is not null),
   -- por material: el tramo de menor presión de trabajo que llega al nodo (el nodo de la red se amarra por la llave del modelo)
@@ -166,6 +204,8 @@ begin
   select jsonb_build_object(
     'cargado', true, 'escenario', p_escenario, 'fuente', (select origen from redes.ref_cargas where id = v_c),
     'aviso', 'Presión de MODELO, no medida.',
+    'horas_excluidas', coalesce(to_jsonb(v_hs), '[]'::jsonb),
+    'nota_horas', case when v_hs is not null then format('Mínima y máxima del día sin las horas en que el modelo no es confiable (%s).', array_to_string(v_hs, ', ')) end,
     'umbrales', jsonb_build_object('baja_naranja', v_bn, 'baja_roja', v_br, 'alta_naranja', v_an, 'alta_roja', v_ar),
     'nodos', (select count(*) from c),
     'niveles', (select coalesce(jsonb_object_agg(g.nivel, g.n), '{}') from (select c.nivel, count(*) as n from c where c.nivel is not null group by 1) g),
@@ -183,11 +223,15 @@ begin
 end $$;
 comment on function redes.f_alertas_presion(text) is 'Corte 9b (Fase 2): alertas de presión de modelo por nodo (Res. 0330 de 2017; 4 parámetros editables) y por material. Lectura.';
 
--- ---------- lista para los Avisos del 12 (NO está conectada: sumarla pide un bloque en tecnica.f_avisos, que no se toca sin avisar) ----------
+-- ---------- los nodos fuera de rango por nivel (red existente, horas confiables): la suma es el número del aviso informativo de tecnica.f_avisos (D11) ----------
 create function redes.f_presion_para_avisos() returns table (nivel text, n bigint)
 language sql stable security definer set search_path = redes, pg_temp as $$
-  select redes.f_presion_nivel(x.pres_exist_min, x.pres_exist_max), count(*)
-    from redes.pm_nodos x where x.carga_id = redes.f_ref_vigente('pm_nodos') and redes.f_presion_nivel(x.pres_exist_min, x.pres_exist_max) is not null group by 1 $$;
+  with u as materialized (select redes.f_param('presion_baja_naranja_mca') as bn, redes.f_param('presion_baja_roja_mca') as br,      -- los 4 umbrales, una vez
+                                 redes.f_param('presion_alta_naranja_mca') as an, redes.f_param('presion_alta_roja_mca') as ar)
+  select y.nivel, count(*)
+    from (select case when x.p_min < u.br then 'baja_roja' when x.p_max > u.ar then 'alta_roja' when x.p_min < u.bn then 'baja_naranja' when x.p_max > u.an then 'alta_naranja' end as nivel
+            from redes.f_presion_nodos('existente') x cross join u) y
+   where y.nivel is not null group by 1 $$;
 
 -- ---------- el tipo de usuario sensible que sugiere un nombre (y la palabra que coincidió); sin filas si no sugiere ninguno ----------
 create function redes.f_sensible_tipo(p_nombre text) returns table (tipo text, palabra text)
@@ -233,7 +277,8 @@ language sql stable security definer set search_path = redes, pg_temp as $$
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 25 — REEMPLAZO (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
 -- tecnica.f_avisos, con su texto vivo (el publicado con el 9b 1a + 1b, md5 898bafa5adddfcc08d65adf138d0114a) más UN bloque: D11, el aviso informativo
--- «N nodos fuera de rango según el modelo» (David, 17-nov: ni rojo ni naranja). Lo demás queda igual. AVISADO al Code B en la entrada de bitácora.
+-- «N nodos fuera de rango según el modelo» (David, 17-nov: ni rojo ni naranja; APAGADO por omisión, parámetro «presion_modelo_aviso»; solo horas confiables).
+-- Lo demás queda igual. AVISADO al Code B en la entrada de bitácora.
 -- =====================================================================
 
 -- tecnica.f_avisos(boolean,boolean,timestamp with time zone)
@@ -509,14 +554,15 @@ begin
     end loop;
   end if;
 
-  -- D11 (Corte 9b, Fase 2). Presión de MODELO fuera de rango (Res. 0330 de 2017): un solo aviso informativo. Los dos umbrales se leen una vez
-  if p_distribucion then
+  -- D11 (Corte 9b, Fase 2). Presión de MODELO fuera de rango (Res. 0330 de 2017): un solo aviso informativo. APAGADO por omisión: solo sale si el
+  -- parámetro «presion_modelo_aviso» vale 1 (lo enciende Técnica). Solo con las horas confiables del modelo (redes.f_presion_nodos). Los umbrales se leen una vez
+  if p_distribucion and coalesce(tecnica.f_aparam('presion_modelo_aviso'), 0) >= 1 then
     v_x := redes.f_param('presion_baja_naranja_mca'); v_y := redes.f_param('presion_alta_naranja_mca');
-    select count(*) into v_n from redes.pm_nodos x where x.carga_id = redes.f_ref_vigente('pm_nodos') and (x.pres_exist_min < v_x or x.pres_exist_max > v_y);
+    select count(*) into v_n from redes.f_presion_nodos('existente') x where x.p_min < v_x or x.p_max > v_y;
     if v_n > 0 then
       v_av := v_av || jsonb_build_object('clave', 'presion_modelo', 'area', 'distribucion', 'nivel', 'info', 'orden', 175,
                 'titulo', format('%s %s fuera de rango según el modelo', tecnica.f_texto_num(v_n), case when v_n = 1 then 'nodo' else 'nodos' end),      -- con punto de miles
-                'detalle', format('Presión de modelo, no medida (Plan Maestro 2014): mínima bajo %s o máxima sobre %s m.c.a.', v_x, v_y),
+                'detalle', format('Presión de modelo, no medida (Plan Maestro 2014): mínima bajo %s o máxima sobre %s m.c.a., sin las horas en que el modelo no es confiable.', v_x, v_y),
                 'n', v_n, 'items', '[]'::jsonb, 'bandeja', jsonb_build_object('tablero', 'distribucion', 'pestana', null), 'desde', null);
     end if;
   end if;
@@ -556,6 +602,7 @@ end $function$;
 --   · geoportal_redes_sensibles / geoportal_redes_sensible_fijar: bandeja de usuarios sensibles; el supervisor confirma, descarta o agrega uno a mano.
 --   · geoportal_redes_afectacion: contratos sin agua y usuarios sensibles de un daño o una intervención (cierre real si lo hay; si no, simulación).
 --   · geoportal_redes_sensores: los sensores (activos SEN) con su estado («por conectar» sin lecturas).
+--   · geoportal_redes_afectaciones_danos: TODOS los daños abiertos o en atención, sin límite de fecha, para el modo «Afectaciones» (supervisor y administrador).
 -- Sin nombres ni teléfonos: contrato, tipo y conteos.
 -- =====================================================================
 create function public.geoportal_redes_alertas_presion(p_solicitante text, p_escenario text default 'existente')
@@ -663,11 +710,32 @@ begin
       from redes.activo_vigente_mat m where m.prefijo in ('SEN', 'SCA') and not m.retirado and not m.oculto), '[]'::jsonb),
     'nota', 'Los sensores sin lecturas están «por conectar»: todavía no envían datos.');
 end $$;
+
+-- todos los daños abiertos («reportado») o en atención, SIN límite de fecha (David, 17-nov): para el modo «Afectaciones» del geovisor. Supervisor y administrador.
+-- La misma forma que la capa «danos» de geoportal_redes_geovisor_capa (las mismas propiedades), más «total». Acueducto y alcantarillado.
+create function public.geoportal_redes_afectaciones_danos(p_solicitante text)
+returns jsonb
+language plpgsql stable security definer set search_path = public, redes, tecnica, extensions, pg_temp as $$
+declare v_email text := redes.f_supervisor(p_solicitante, 'ven todos los daños abiertos'); v_max integer := floor(redes.f_param('geovisor_max_elementos'))::integer;
+        v_f jsonb; v_n integer;
+begin
+  with ab as materialized (      -- redes.v_dano se lee una sola vez
+    select d.codigo, d.clase, d.tipo_nombre, d.sistema, d.estado, d.activo_codigo, d.t_detectado, d.riesgo, d.origen, d.lat, d.lon
+      from redes.v_dano d where d.estado in ('reportado', 'en_atencion'))
+  select coalesce((select jsonb_agg(x.f order by x.o desc, x.codigo) from (
+           select jsonb_build_object('type', 'Feature', 'geometry', jsonb_build_object('type', 'Point', 'coordinates', jsonb_build_array(ab.lon, ab.lat)),
+                    'properties', jsonb_build_object('codigo', ab.codigo, 'clase', ab.clase, 'tipo', ab.tipo_nombre, 'sistema', ab.sistema, 'estado', ab.estado,
+                                                     'activo', ab.activo_codigo, 'cuando', ab.t_detectado, 'riesgo', ab.riesgo, 'origen', ab.origen)) as f, ab.t_detectado as o, ab.codigo
+             from ab order by ab.t_detectado desc, ab.codigo limit v_max) x), '[]'::jsonb),
+         (select count(*) from ab)
+    into v_f, v_n;
+  return jsonb_build_object('type', 'FeatureCollection', 'capa', 'afectaciones_danos', 'total', v_n, 'recortada', v_n > v_max, 'features', v_f);
+end $$;
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 40 — PERMISOS: revoke all a public, anon, authenticated y service_role ANTES de dar permisos.
--- Las 7 funciones internas: nadie de la API. Las 5 RPC: solo service_role (la Edge geoportal-redes). Las tablas y la vista: nadie de la API (10_esquema.sql).
+-- Las 8 funciones internas: nadie de la API. Las 6 RPC: solo service_role (la Edge geoportal-redes). Las tablas y la vista: nadie de la API (10_esquema.sql).
 -- =====================================================================
-revoke all on function redes.f_presion_nivel(numeric, numeric), redes.f_alertas_presion(text), redes.f_presion_para_avisos(), redes.f_sensible_tipo(text), redes.f_sensibles_proponer(text),
+revoke all on function redes.f_presion_nivel(numeric, numeric), redes.f_presion_nodos(text), redes.f_alertas_presion(text), redes.f_presion_para_avisos(), redes.f_sensible_tipo(text), redes.f_sensibles_proponer(text),
                        redes.f_sensibles_en(text[]), redes.f_sensor_estado(bigint)
   from public, anon, authenticated, service_role;
 revoke all on function tecnica.f_avisos(boolean, boolean, timestamptz) from public, anon, authenticated, service_role;
@@ -676,7 +744,7 @@ declare f record;
 begin
   for f in select p.oid::regprocedure as firma from pg_proc p
             where p.pronamespace = 'public'::regnamespace and p.proname in ('geoportal_redes_alertas_presion', 'geoportal_redes_sensibles', 'geoportal_redes_sensible_fijar',
-                     'geoportal_redes_afectacion', 'geoportal_redes_sensores') loop
+                     'geoportal_redes_afectacion', 'geoportal_redes_sensores', 'geoportal_redes_afectaciones_danos') loop
     execute format('revoke all on function %s from public, anon, authenticated, service_role', f.firma);
     execute format('grant execute on function %s to service_role', f.firma);
   end loop;
@@ -685,20 +753,22 @@ end $$;
 -- marca de la migración
 insert into public.geoportal_auditoria (email, accion, referencia, detalle, ip)
 values ('migracion@redes_corte9b_f2', 'migracion_redes_corte9b_fase2', null, jsonb_build_object(
-        'tablas', jsonb_build_array('redes.tipos_sensible', 'redes.usuarios_sensibles', 'redes.usuario_sensible_eventos', 'redes.presion_trabajo', 'redes.sensor_lecturas'),
+        'tablas', jsonb_build_array('redes.tipos_sensible', 'redes.usuarios_sensibles', 'redes.usuario_sensible_eventos', 'redes.presion_trabajo', 'redes.presion_horas_no_confiables', 'redes.sensor_lecturas'),
         'vistas', jsonb_build_array('redes.v_usuario_sensible'),
-        'nuevas', jsonb_build_array('redes.f_presion_nivel', 'redes.f_alertas_presion', 'redes.f_presion_para_avisos', 'redes.f_sensible_tipo', 'redes.f_sensibles_proponer', 'redes.f_sensibles_en',
+        'nuevas', jsonb_build_array('redes.f_presion_nivel', 'redes.f_presion_nodos', 'redes.f_alertas_presion', 'redes.f_presion_para_avisos', 'redes.f_sensible_tipo', 'redes.f_sensibles_proponer', 'redes.f_sensibles_en',
                                     'redes.f_sensor_estado', 'geoportal_redes_alertas_presion', 'geoportal_redes_sensibles', 'geoportal_redes_sensible_fijar',
-                                    'geoportal_redes_afectacion', 'geoportal_redes_sensores'),
+                                    'geoportal_redes_afectacion', 'geoportal_redes_sensores', 'geoportal_redes_afectaciones_danos'),
+        'aviso_parametros', jsonb_build_array('presion_modelo_aviso (0: el aviso de presiones sale apagado)'),
         'parametros', jsonb_build_array('sensor_sin_senal_min', 'presion_lista_max'),
-        'reemplazadas', jsonb_build_array('tecnica.f_avisos (aviso informativo de presiones, D11)'),
+        'reemplazadas', jsonb_build_array('tecnica.f_avisos (aviso informativo de presiones, D11: apagado por omisión y solo con las horas confiables)'),
         'capa_oculta', 'cortes',
-        'motivo', 'alertas de presión de modelo (Res. 0330 de 2017), usuarios sensibles, afectación del daño o la intervención, lecturas de sensores (vacía) y la capa de cortes oculta (vive en el modo Afectaciones)'), null);
+        'motivo', 'alertas de presión de modelo (Res. 0330 de 2017), con las horas confiables, usuarios sensibles, afectación del daño o la intervención, daños abiertos sin límite de fecha para el modo Afectaciones, lecturas de sensores (vacía) y la capa de cortes oculta (vive en el modo Afectaciones)'), null);
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 70 — PRUEBAS «N de N» (PROPUESTA). Se corre DESPUÉS de 10, 20, 26 y 40, en la misma transacción.
 -- No supone códigos ni conteos de la base: arma sus personas (prueba.redes9f.*), la red de prueba ZT9B (la misma del ensayo del 9b, en un rincón de la caja),
 -- sus contratos (15 cifras, 99999…), su carga de presiones de modelo (que tapa la del Plan dentro de esta transacción), sus usuarios sensibles y su sensor.
 -- NO escribe en tablas de Comercial (cartera, catastro): la regla del nombre se prueba con textos, y la propuesta real solo se corre (y se deshace).
+-- El aviso de presiones se prueba apagado (como se publica) y encendido; las horas no confiables, con presiones por hora de prueba.
 -- Mide con el volumen real y FALLA si una lectura pasa de 1 s o la afectación de 5 s. Termina con un ERROR a propósito que deshace todo.
 --   Resultado esperado:  ERROR: PRUEBAS DE REDES · CORTE 9b, Fase 2 … RESULTADO: N de N pruebas correctas — SIN FALLAS
 -- =====================================================================
@@ -777,7 +847,7 @@ create function pg_temp.iso(p interval) returns text language sql as $$ select t
 do $prueba$
 declare
   a text := 'prueba.redes9f.adm@emdupar.gov.co'; sd text := 'prueba.redes9f.dist@emdupar.gov.co'; op text := 'prueba.redes9f.op@emdupar.gov.co'; na text := 'prueba.redes9f.nada@emdupar.gov.co';
-  v_carga bigint; v_c bigint; j jsonb; v_p jsonb; v_dan text; v_sen bigint; c1 text; c2 text; c3 text; v_real text; v_n integer;
+  v_carga bigint; v_c bigint; j jsonb; v_p jsonb; v_dan text; v_sen bigint; c1 text; c2 text; c3 text; v_real text; v_n integer; v_ch bigint; v_ms7 numeric; v_ms8 numeric;
   v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_ms3 numeric; v_ms4 numeric; v_ms5 numeric; v_ms6 numeric; v_info text := ''; v_total integer; v_bien integer; v_fallas text;
 begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (a, 'ZT9B Admin', 'admin', 'sin_restriccion', 'todos');
@@ -821,7 +891,7 @@ begin
 
 
   -- ===================== 01. Estructura =====================
-  perform pg_temp.reg('01.01 las 5 tablas existen sin permisos de la API; los hechos (usuarios sensibles, sus eventos y las lecturas) son de solo agregar',
+  perform pg_temp.reg('01.01 las 6 tablas existen sin permisos de la API; los hechos (usuarios sensibles, sus eventos y las lecturas) son de solo agregar',
      not has_table_privilege('service_role', 'redes.usuarios_sensibles', 'select') and not has_table_privilege('anon', 'redes.sensor_lecturas', 'select')
      and not has_table_privilege('service_role', 'redes.v_usuario_sensible', 'select')
      and (select count(*) from pg_trigger t where t.tgrelid in ('redes.usuarios_sensibles'::regclass, 'redes.usuario_sensible_eventos'::regclass, 'redes.sensor_lecturas'::regclass)
@@ -835,6 +905,11 @@ begin
   perform pg_temp.reg('01.04 tecnica.f_avisos conserva el bloque del 1b (válvulas cerradas) y suma el de presiones (D11)',
      position('D10 (Corte 9b, Fase 1b)' in pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) > 0
      and position('D11 (Corte 9b, Fase 2)' in pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) > 0);
+  perform pg_temp.reg('01.05 el aviso de presiones se publica APAGADO (parámetro «presion_modelo_aviso» en 0, de 0 a 1) y las horas no confiables de la red existente son 5, 7, 10, 12 y 14',
+     (select valor = 0 and minimo = 0 and maximo = 1 and area = 'distribucion' from tecnica.aviso_parametros where clave = 'presion_modelo_aviso')
+     and (select array_agg(hora order by hora) from redes.presion_horas_no_confiables where escenario = 'existente' and activa) = array[5, 7, 10, 12, 14]
+     and not exists (select 1 from redes.presion_horas_no_confiables where escenario = 'futura')
+     and not has_table_privilege('service_role', 'redes.presion_horas_no_confiables', 'select') and not has_function_privilege('service_role', 'redes.f_presion_nodos(text)', 'execute'));
 
   -- ===================== 02. Alertas de presión (modelo) =====================
   insert into redes.ref_cargas (conjunto, archivo, md5, filas, origen, autor) values ('pm_nodos', 'zt9b_pm_nodos.csv', md5('zt9b' || clock_timestamp()::text), 6, 'ZT9B modelo de prueba', a) returning id into v_c;
@@ -861,11 +936,39 @@ begin
   update redes.parametros set valor = 10 where clave = 'presion_baja_roja_mca';
   perform pg_temp.err('02.05 las alertas de presión son del supervisor: el operador no (42501)', format('select public.geoportal_redes_alertas_presion(%L)', op), '42501');
   perform pg_temp.err('02.06 un escenario que no existe', format('select public.geoportal_redes_alertas_presion(%L, %L)', sd, 'otra'), null, 'escenario');
-  perform pg_temp.reg('02.07 Avisos (distribución): UN aviso informativo «5 nodos fuera de rango según el modelo» (ni rojo ni naranja); al supervisor de planta no le sale',
+  perform pg_temp.reg('02.07 Avisos: como se publica (parámetro en 0), el aviso de presiones NO sale, aunque haya 5 nodos fuera de rango',
+     not exists (select 1 from jsonb_array_elements(tecnica.f_avisos(true, true)) av where av ->> 'clave' = 'presion_modelo') and (select sum(n) from redes.f_presion_para_avisos()) = 5);
+  update tecnica.aviso_parametros set valor = 1 where clave = 'presion_modelo_aviso';
+  perform pg_temp.reg('02.08 con el parámetro en 1: UN aviso informativo «5 nodos fuera de rango según el modelo» (ni rojo ni naranja); al supervisor de planta no le sale',
      (select count(*) = 1 and bool_and(av ->> 'nivel' = 'info' and av ->> 'titulo' = '5 nodos fuera de rango según el modelo' and av ->> 'detalle' like 'Presión de modelo, no medida%15%50%')
         from jsonb_array_elements(tecnica.f_avisos(false, true)) av where av ->> 'clave' = 'presion_modelo')
      and not exists (select 1 from jsonb_array_elements(tecnica.f_avisos(true, false)) av where av ->> 'clave' = 'presion_modelo')
      and (select sum(n) from redes.f_presion_para_avisos()) = 5);
+  -- horas confiables: presiones por hora de prueba (25 valores, horas 0 a 24). A: 30 todo el día salvo 8 a las 7 (hora no confiable) → queda en rango.
+  -- B: 40 todo el día salvo 12 a las 9 (hora confiable) → sigue en naranja. C: 20 todo el día salvo 55 a las 12 (no confiable) → queda en rango. Los demás no tienen horas: valen su mínima y máxima del día.
+  insert into redes.ref_cargas (conjunto, archivo, md5, filas, origen, autor) values ('pm_presion_existente', 'zt9b_pm_horas.csv', md5('zt9b-h' || clock_timestamp()::text), 3, 'ZT9B horas de prueba', a) returning id into v_ch;
+  insert into redes.pm_presion_hora (carga_id, llave, escenario, p_min, hora_min, p_max, hora_max, p_media, p_mediana, horas) values
+    (v_ch, 'ZT9B-A', 'existente', 8, 7, 30, 0, 29, 30, (select array_agg(case h when 7 then 8 else 30 end order by h) from generate_series(0, 24) h)),
+    (v_ch, 'ZT9B-B', 'existente', 12, 9, 40, 0, 39, 40, (select array_agg(case h when 9 then 12 else 40 end order by h) from generate_series(0, 24) h)),
+    (v_ch, 'ZT9B-C', 'existente', 20, 0, 55, 12, 21, 20, (select array_agg(case h when 12 then 55 else 20 end order by h) from generate_series(0, 24) h));
+  j := public.geoportal_redes_alertas_presion(sd);
+  perform pg_temp.reg('02.09 solo horas confiables: A (8 m.c.a. solo a las 7) y C (55 solo a las 12) quedan en rango; B (12 a las 9) sigue en naranja; D y E, sin presiones por hora, siguen en rojo; lo dice la respuesta',
+     j -> 'niveles' = '{"baja_naranja": 1, "alta_roja": 2}'::jsonb and j -> 'horas_excluidas' = '[5, 7, 10, 12, 14]'::jsonb and j ->> 'nota_horas' like '%5, 7, 10, 12, 14%'
+     and (select x.p_min = 30 and x.p_max = 30 from redes.f_presion_nodos('existente') x where x.llave = 'ZT9B-A')
+     and (select x.p_min = 12 and x.p_max = 40 from redes.f_presion_nodos('existente') x where x.llave = 'ZT9B-B'), j::text);
+  perform pg_temp.reg('02.10 el aviso y las alertas dan el mismo número: «3 nodos fuera de rango según el modelo», y el detalle dice que es sin las horas no confiables',
+     (select count(*) = 1 and bool_and(av ->> 'titulo' = '3 nodos fuera de rango según el modelo' and av ->> 'detalle' like '%sin las horas%' and (av ->> 'n')::integer = 3)
+        from jsonb_array_elements(tecnica.f_avisos(false, true)) av where av ->> 'clave' = 'presion_modelo')
+     and (select sum(n) from redes.f_presion_para_avisos()) = 3);
+  perform pg_temp.reg('02.11 la red futura no tiene horas excluidas: sale igual que antes (solo D en rojo) y sin nota de horas',
+     public.geoportal_redes_alertas_presion(sd, 'futura') -> 'niveles' = '{"alta_roja": 1}'::jsonb and public.geoportal_redes_alertas_presion(sd, 'futura') -> 'horas_excluidas' = '[]'::jsonb
+     and public.geoportal_redes_alertas_presion(sd, 'futura') ->> 'nota_horas' is null);
+  update redes.presion_horas_no_confiables set activa = false where escenario = 'existente' and hora = 7;
+  perform pg_temp.reg('02.12 una hora se vuelve a contar desactivándola (no se borra): sin la 7, A vuelve a rojo',
+     public.geoportal_redes_alertas_presion(sd) -> 'niveles' = '{"baja_roja": 1, "baja_naranja": 1, "alta_roja": 2}'::jsonb);
+  update redes.presion_horas_no_confiables set activa = true where escenario = 'existente' and hora = 7;
+  perform pg_temp.err('02.13 una hora no confiable no se borra', $q$delete from redes.presion_horas_no_confiables where escenario = 'existente' and hora = 7$q$);
+  update tecnica.aviso_parametros set valor = 0 where clave = 'presion_modelo_aviso';
 
   -- ===================== 03. Usuarios sensibles =====================
   perform pg_temp.reg('03.01 la regla del nombre: hospital, clínica (con tilde), institución educativa y bomberos se reconocen; una persona no',
@@ -932,6 +1035,30 @@ begin
   perform public.geoportal_redes_valvula_maniobra(op, pg_temp.cod('V1'), 'abrir');
   perform public.geoportal_redes_valvula_maniobra(op, pg_temp.cod('V2'), 'abrir');
 
+  -- ===================== 04b. Daños abiertos sin límite de fecha (modo «Afectaciones») =====================
+  -- tres daños viejos de prueba: uno de acueducto de hace 400 días y uno de alcantarillado de hace 500 (fuera del rango de la capa por fecha), abiertos; y uno de hace 450 días ya atendido
+  insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, no_ident_que_es, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, autor)
+  values (gen_random_uuid(), 'DAN-999981', 'dano', 'fuga', 'acueducto', 'ZT9B tubo de prueba', pg_temp.lat(50), pg_temp.lon(50), 'mapa', clock_timestamp() - interval '400 days', 'alto', 'desconocida', op),
+         (gen_random_uuid(), 'DAN-999982', 'dano', 'rebose', 'alcantarillado', 'ZT9B pozo de prueba', pg_temp.lat(60), pg_temp.lon(60), 'mapa', clock_timestamp() - interval '500 days', 'medio', 'desconocida', op),
+         (gen_random_uuid(), 'DAN-999983', 'dano', 'fuga', 'acueducto', 'ZT9B tubo de prueba', pg_temp.lat(70), pg_temp.lon(70), 'mapa', clock_timestamp() - interval '450 days', 'medio', 'desconocida', op);
+  insert into redes.dano_eventos (dano_id, tipo, motivo, autor) select id, 'atendido', 'ZT9B daño de prueba ya atendido', sd from redes.danos where codigo = 'DAN-999983';
+  insert into redes.dano_eventos (dano_id, tipo, motivo, autor) select id, 'en_atencion', 'ZT9B daño de prueba en atención', sd from redes.danos where codigo = 'DAN-999982';
+  j := public.geoportal_redes_afectaciones_danos(sd);
+  perform pg_temp.reg('04b.01 daños abiertos sin límite de fecha: salen el de acueducto de hace 400 días, el de alcantarillado de hace 500 (en atención) y el de hoy (con su activo); el atendido no; con total y la misma forma de la capa de daños',
+     j ->> 'type' = 'FeatureCollection' and j ->> 'capa' = 'afectaciones_danos' and not (j ->> 'recortada')::boolean and (j ->> 'total')::integer = jsonb_array_length(j -> 'features')
+     and (select count(*) from jsonb_array_elements(j -> 'features') f where f -> 'properties' ->> 'codigo' = 'DAN-999981' and f -> 'properties' ->> 'estado' = 'reportado'
+            and f -> 'properties' ->> 'riesgo' = 'alto' and f -> 'geometry' ->> 'type' = 'Point' and jsonb_array_length(f -> 'geometry' -> 'coordinates') = 2) = 1
+     and (select count(*) from jsonb_array_elements(j -> 'features') f where f -> 'properties' ->> 'codigo' = v_dan and f -> 'properties' ->> 'activo' = pg_temp.cod('T4')
+            and f -> 'properties' ?& array['codigo', 'clase', 'tipo', 'sistema', 'estado', 'activo', 'cuando', 'riesgo', 'origen']) = 1
+     and (select count(*) from jsonb_array_elements(j -> 'features') f where f -> 'properties' ->> 'codigo' = 'DAN-999982' and f -> 'properties' ->> 'sistema' = 'alcantarillado'
+            and f -> 'properties' ->> 'estado' = 'en_atencion') = 1
+     and not exists (select 1 from jsonb_array_elements(j -> 'features') f where f -> 'properties' ->> 'codigo' = 'DAN-999983')
+     and j::text !~* 'suscriptor|tel[eé]fono|direcci[oó]n|descripcion', left(j::text, 600));
+  perform pg_temp.reg('04b.02 … y la capa por fecha de siempre no lo trae (por eso la lectura nueva)',
+     not exists (select 1 from jsonb_array_elements(public.geoportal_redes_geovisor_capa(sd, 'danos') -> 'features') f where f -> 'properties' ->> 'codigo' = 'DAN-999981'));
+  perform pg_temp.err('04b.03 los daños abiertos son del supervisor y del administrador: el operador no (42501)', format('select public.geoportal_redes_afectaciones_danos(%L)', op), '42501');
+  perform pg_temp.reg('04b.04 el administrador también los ve', (public.geoportal_redes_afectaciones_danos(a) ->> 'total')::integer >= 3);
+
   -- ===================== 05. Sensores (vacíos) =====================
   v_sen := pg_temp.activo('SENSOR', 'SEN', pg_temp.pt(300, 0));
   j := public.geoportal_redes_sensores(sd);
@@ -954,10 +1081,23 @@ begin
   v_t0 := clock_timestamp(); perform public.geoportal_redes_afectacion(op, v_dan); v_ms3 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
   v_t0 := clock_timestamp(); perform public.geoportal_redes_sensores(sd); v_ms4 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
   v_t0 := clock_timestamp(); perform tecnica.f_avisos(true, true); v_ms6 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
-  v_info := format('TIEMPOS: avisos completos (con el de presiones, 7.006 nodos) %s ms · alertas de presión con %s nodos %s ms · bandeja de sensibles %s ms · afectación de un daño (simulación sobre la red de esta base) %s ms · sensores %s ms · propuesta de sensibles sobre la cartera de esta base (%s filas; solo por psql o editor) %s ms',
-                   v_ms6, j ->> 'nodos', v_ms1, v_ms2, v_ms3, v_ms4, (select count(*) from public.cartera_suscripcion), v_ms5);
-  perform pg_temp.reg('06.01 TIEMPOS: las lecturas (avisos completos, alertas de presión, bandeja de sensibles, sensores) en menos de 1 s y la afectación en menos de 5 s',
-     greatest(v_ms1, v_ms2, v_ms4, v_ms6) < 1000 and v_ms3 < 5000, v_info);
+  -- con el aviso ENCENDIDO y presiones por hora para los 7.000 nodos (25 valores cada uno): lo que costaría cuando Técnica lo active
+  insert into redes.pm_presion_hora (carga_id, llave, escenario, p_min, hora_min, p_max, hora_max, p_media, p_mediana, horas)
+  select v_ch, 'ZT9B-vol-' || i, 'existente', (i % 40), 5, 20 + (i % 70), 0, 20, 20, (select array_agg(case when h in (5, 7) then (i % 40) else 20 + ((i + h) % 50) end order by h) from generate_series(0, 24) h)
+    from generate_series(1, 7000) i;
+  analyze redes.pm_presion_hora;
+  update tecnica.aviso_parametros set valor = 1 where clave = 'presion_modelo_aviso';
+  v_t0 := clock_timestamp(); perform tecnica.f_avisos(true, true); v_ms7 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_t0 := clock_timestamp(); j := public.geoportal_redes_alertas_presion(sd); v_ms1 := greatest(v_ms1, round(extract(epoch from clock_timestamp() - v_t0) * 1000));
+  update tecnica.aviso_parametros set valor = 0 where clave = 'presion_modelo_aviso';
+  -- daños abiertos con volumen: 2.000 daños abiertos de prueba
+  insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, no_ident_que_es, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, autor)
+  select gen_random_uuid(), 'DAN-' || (997000 + i), 'dano', 'fuga', 'acueducto', 'ZT9B tubo de prueba', pg_temp.lat(i), pg_temp.lon(i), 'mapa', clock_timestamp() - make_interval(days => i % 900), 'medio', 'desconocida', op from generate_series(1, 2000) i;
+  v_t0 := clock_timestamp(); v_p := public.geoportal_redes_afectaciones_danos(sd); v_ms8 := round(extract(epoch from clock_timestamp() - v_t0) * 1000);
+  v_info := format('TIEMPOS: avisos completos con el de presiones apagado (como se publica) %s ms y encendido (7.006 nodos con sus 25 horas) %s ms · daños abiertos sin fecha (%s daños) %s ms · alertas de presión con %s nodos y horas confiables %s ms · bandeja de sensibles %s ms · afectación de un daño (simulación sobre la red de esta base) %s ms · sensores %s ms · propuesta de sensibles sobre la cartera de esta base (%s filas; solo por psql o editor) %s ms',
+                   v_ms6, v_ms7, v_p ->> 'total', v_ms8, j ->> 'nodos', v_ms1, v_ms2, v_ms3, v_ms4, (select count(*) from public.cartera_suscripcion), v_ms5);
+  perform pg_temp.reg('06.01 TIEMPOS: las lecturas (avisos completos apagado y encendido, alertas de presión, daños abiertos, bandeja de sensibles, sensores) en menos de 1 s y la afectación en menos de 5 s',
+     greatest(v_ms1, v_ms2, v_ms4, v_ms6, v_ms7, v_ms8) < 1000 and v_ms3 < 5000 and (v_p ->> 'total')::integer >= 2000, v_info);
   perform pg_temp.reg('06.02 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE', not exists (select 1 from redes.f_funciones_sin_where()));
 
   select count(*), count(*) filter (where ok), coalesce(string_agg('  FALLA ' || nombre || ' → ' || coalesce(detalle, ''), E'\n' order by _r.n) filter (where not ok), '') into v_total, v_bien, v_fallas from _r;

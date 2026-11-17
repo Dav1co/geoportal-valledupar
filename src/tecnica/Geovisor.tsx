@@ -367,14 +367,13 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
     const poner = () => { fotoPuesta.current = fotoCortes; (m.getSource("cortes") as maplibregl.VectorTileSource | undefined)?.setTiles([teselaCortes(fotoCortes)]); };
     if (m.getLayer("sel")) poner(); else m.once("styledata", poner);
   }, [fotoCortes, listo]);
-  // Daños abiertos para «Afectaciones»: de la capa de daños que ya existe (por fecha de detección). El supervisor, los de los últimos meses que admite el
-  // geovisor; el geovisor de solo lectura, los de hoy (la base no le entrega otros días). Solo los reportados o en atención.
+  // Daños abiertos para «Afectaciones». Supervisores y administrador: TODOS los abiertos o en atención, sin límite de fecha (ruta afectaciones_danos, del
+  // ajuste final del 9b). El geovisor de solo lectura: los de hoy, de la capa de daños por fecha (la base no le entrega otros días).
   const hayCapaDanos = cfg.capas.some((c) => c.codigo === "danos");
   useEffect(() => {
     if (colores !== "afectaciones" || !hayCapaDanos) return;
     let vivo = true;
-    const d = new Date(`${cfg.hoy}T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() - cfg.rango_meses); d.setUTCDate(d.getUTCDate() + 1);
-    apiGeovisor.capa("danos", cfg.completo ? d.toISOString().slice(0, 10) : cfg.hoy, cfg.hoy)
+    (cfg.completo ? apiGeovisor.danosAbiertos() : apiGeovisor.capa("danos", cfg.hoy, cfg.hoy))
       .then((r) => { if (vivo) setDanosAb(r.features.filter((f) => f.geometry.type === "Point" && ["reportado", "en_atencion"].includes(String(f.properties?.estado)))
         .map((f) => ({ ...(f.properties as Omit<DanoAbierto, "lat" | "lon">), lon: (f.geometry as GeoJSON.Point).coordinates[0], lat: (f.geometry as GeoJSON.Point).coordinates[1] }))); })
       .catch(() => { if (vivo) setDanosAb([]); });
@@ -493,7 +492,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
               : `${c.nombre}: se muestran los ${cfg.max_elementos} más recientes. Acorte el rango de fechas.`}</p>)}
           </div>) : null}
         {flujoOn ? <LeyendaFlujo info={flujo} derecha={colores !== "tipo"} /> : null}
-        {colores === "afectaciones" ? <LeyendaCortes cortes={cortes} danos={danosAb} hoy={!cfg.completo} meses={cfg.rango_meses} onRecalcular={cfg.completo && cortes?.hay ? () => { setTarjeta(null); setCorteSel({ tipo: "recalcular" }); } : undefined} /> : colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} edadRef={cfg.edad_ref === true} /> : null}
+        {colores === "afectaciones" ? <LeyendaCortes cortes={cortes} danos={danosAb} hoy={!cfg.completo} onRecalcular={cfg.completo && cortes?.hay ? () => { setTarjeta(null); setCorteSel({ tipo: "recalcular" }); } : undefined} /> : colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} edadRef={cfg.edad_ref === true} /> : null}
         {on.has("pqr_116") ? <Leyenda116 derecha={colores !== "tipo" || [...CAPAS_PRESION].some((c) => on.has(c))}
           sinUbicar={(() => { const d = datos.pqr_116; return d && d !== "cargando" && !("error" in d) ? (d as { sin_ubicar?: number }).sin_ubicar ?? 0 : 0; })()} /> : null}
         {[...CAPAS_PRESION].some((c) => on.has(c)) ? <LeyendaPresion modelo={on.has("presion_modelo")} medida={on.has("campana_2014")} arriba={colores !== "tipo"} /> : null}
@@ -601,7 +600,7 @@ function Leyenda({ colores, materiales, edadRef }: { colores: Exclude<Colores, "
 }
 
 // Corte 9b. Leyenda del modo «Afectaciones», en palabras sencillas (los textos vienen del servidor), y cuántas válvulas, contratos y daños hay ahora
-function LeyendaCortes({ cortes, danos, hoy, meses, onRecalcular }: { cortes: CortesVigentes | null; danos: DanoAbierto[] | null; hoy: boolean; meses: number; onRecalcular?: () => void }) {
+function LeyendaCortes({ cortes, danos, hoy, onRecalcular }: { cortes: CortesVigentes | null; danos: DanoAbierto[] | null; hoy: boolean; onRecalcular?: () => void }) {
   const texto = (k: string, t: string) => cortes?.leyenda?.find((x) => x.clave === k)?.texto ?? t;
   return (
     <div className="geo-leyenda geo-leyenda-cortes" aria-label="Afectaciones" data-testid="leyenda-cortes">
@@ -616,7 +615,7 @@ function LeyendaCortes({ cortes, danos, hoy, meses, onRecalcular }: { cortes: Co
         ? <p className="geo-leyenda-nota">{cortes.resumen.valvulas_cerradas === 1 ? "1 válvula cerrada" : `${cortes.resumen.valvulas_cerradas} válvulas cerradas`} · {nContratos(cortes.resumen.contratos)} sin agua</p>
         : <p className="geo-leyenda-nota">{cortes ? "No hay válvulas cerradas en este momento." : "Cargando…"}</p>}
       {danos ? <p className="geo-leyenda-nota" data-testid="leyenda-danos">{danos.length === 0 ? "Sin daños abiertos" : danos.length === 1 ? "1 daño abierto" : `${danos.length} daños abiertos`}
-        {hoy ? " reportados hoy" : ` de los últimos ${meses} ${meses === 1 ? "mes" : "meses"}`} (acueducto y alcantarillado)</p> : null}
+        {hoy ? " reportados hoy" : danos.length ? ", sin límite de fecha" : ""} (acueducto y alcantarillado)</p> : null}
       {onRecalcular ? <button type="button" className="geo-leyenda-accion" onClick={onRecalcular}>Volver a calcular</button> : null}
     </div>
   );

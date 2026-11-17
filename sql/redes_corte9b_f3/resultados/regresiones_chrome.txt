@@ -1,5 +1,8 @@
-Regresiones de Chrome del Corte 9b, Fase 4 (Code A, 17-nov-2026). Frontend main 4663d41 unido en tecnica-corte9b; Edges main f02197b.
-Base: producción + 9b (1a + 1b) + Fase 2 (con el aviso D11) + Fase 3 + carga del flujo. Las del Code B, además, con el Plan Maestro, los sectores y la valoración cargados (copia en el clúster 55434).
+Regresiones de Chrome del Corte 9b, ajuste final (Code A, 17-nov-2026, tarde). Frontend main 4663d41 unido en tecnica-corte9b; Edges main f02197b.
+Base: producción + 9b (1a + 1b) + Fase 2 (aviso de presiones apagado, horas confiables, afectaciones_danos) + Fase 3 + carga del flujo: huella a327aa51f43bb5cc2112a6db089718ed.
+Las del Code B, además, con el Plan Maestro, los sectores y la valoración cargados (copia en mi clúster 55434), en copias temporales de sus guiones con MIS puertos.
+Puertos: inicio, avisos, estilo, geovisor, dashboards y dashboard distribución, los de siempre de Code A (54971, 54972, 54975, 54976, 54981, 54982, 54989, 54990, 54995, 54996);
+cierre 54973/54974 · línea 116 54977/54978 · inventario 54979/54980 · Plan Maestro 54983/54984. Ninguno en el rango del Code B (55987–55994).
 inicio_c11: RESULTADO: 76 de 76 — SIN FALLAS
 avisos_c12: RESULTADO: 72 de 72 — SIN FALLAS
 estilo_c13: RESULTADO: 68 de 68 — SIN FALLAS
@@ -10,4 +13,4 @@ cierre_c9b: RESULTADO: 73 de 73 — SIN FALLAS
 linea116_c5d: RESULTADO: 34 de 34 — SIN FALLAS
 inventario_c10: RESULTADO: 52 de 52 — SIN FALLAS
 plan_maestro_c9a_bis: RESULTADO: 86 de 86 — SIN FALLAS
-Notas: cierre_c9b dio 72 de 73 en la primera corrida (un mensaje de consola «L», intermitente) y 73 de 73 en la segunda; linea116_c5d se cayó en la primera (la sesión del supervisor salió como operador al empezar el ancho 1280) y dio 34 de 34 en la segunda. avisos_c12: la prueba esperaba 9 plazos de distribución; con los 2 de válvula cerrada del 1b son 11 (prueba actualizada).
+Nota: cierre_c9b dio 72 de 73 en el primer intento (Z1: un mensaje de consola «L» en 1280 px, perfil «op2» del guion) y 73 de 73 al repetir. Es intermitente y NO es por puertos compartidos (esta vez iban separados).

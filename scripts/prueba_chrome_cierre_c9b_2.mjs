@@ -332,7 +332,7 @@ for (const ancho of ANCHOS) {
   // ===== J. «Afectaciones»: los daños abiertos de acueducto y alcantarillado, con o sin cierre =====
   await p.evaluate(() => document.querySelector(".geo-tarjeta .geo-cerrar")?.click()); await p.waitForSelector("[data-testid=leyenda-danos]");
   t = await leyenda(p, "leyenda-cortes");
-  ok(`${tag} J1 la leyenda agrega «Daño reportado» y dice cuántos hay: «3 daños abiertos de los últimos N meses (acueducto y alcantarillado)»`, /Sin agua[\s\S]*Tubería cerrada[\s\S]*Válvula cerrada[\s\S]*Daño reportado/.test(t) && /3 daños abiertos de los últimos \d+ mes(es)? \(acueducto y alcantarillado\)/.test(t), t);
+  ok(`${tag} J1 la leyenda agrega «Daño reportado» y dice cuántos hay: «3 daños abiertos, sin límite de fecha (acueducto y alcantarillado)»` , /Sin agua[\s\S]*Tubería cerrada[\s\S]*Válvula cerrada[\s\S]*Daño reportado/.test(t) && /3 daños abiertos, sin límite de fecha \(acueducto y alcantarillado\)/.test(t), t);
   r = await p.evaluate(() => { const m = document.querySelector(".geo-mapa").__mapa, ids = m.getStyle().layers.map((l) => l.id);
     return { puntos: m.getSource("x-danos").serialize().data.features.map((f) => f.properties.codigo).sort().join(","), fl: JSON.stringify(m.getFilter("x-dano-activo-l")), fp: JSON.stringify(m.getFilter("x-dano-activo-p")),
       vis: ["x-dano-activo-l", "x-dano-activo-p", "x-dano-punto"].map((c) => m.getLayoutProperty(c, "visibility")).join(","), encima: ids.indexOf("x-dano-punto") > ids.indexOf("x-corte-valvula") && ids.indexOf("x-dano-activo-l") > ids.indexOf("x-corte-cerrado") }; });
@@ -459,6 +459,9 @@ if (!ANTES) {
   ok("F7 flujo_tramo (GET): caudal y velocidad del tramo en las dos horas; sin código, 400", r.status === 200 && r.cuerpo.en_modelo === true && r.cuerpo.horas.length === 2 && (await edgeF("dist", "flujo_tramo")).status === 400);
   r = await edgeF("dist", "sensores");
   ok("F8 sensores (GET): la lista (vacía hoy) con su nota", r.status === 200 && Array.isArray(r.cuerpo.sensores) && /por conectar/.test(r.cuerpo.nota));
+  r = await edgeF("dist", "afectaciones_danos");
+  ok("F9 afectaciones_danos (GET): todos los daños abiertos, sin caché y sin datos de personas; al operador, 403; por POST, 405", r.status === 200 && r.cuerpo.capa === "afectaciones_danos" && r.cuerpo.total === r.cuerpo.features.length && r.cache === "no-store"
+     && !/nombre|telefono|direccion|descripcion|tercero/i.test(JSON.stringify(r.cuerpo)) && (await edgeF("op", "afectaciones_danos")).status === 403 && (await edgeF("dist", "afectaciones_danos", { cuerpo: {} })).status === 405, JSON.stringify(r.cuerpo).slice(0, 300));
   ok("Z1 sin errores de JavaScript ni de consola", errores.length === 0, errores.join(" | "));
   ok("Z2 ninguna RPC de planta sin simular", desconocidas.length === 0, desconocidas.join(", "));
 }

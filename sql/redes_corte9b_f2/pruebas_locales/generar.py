@@ -13,23 +13,26 @@ ENV = dict(os.environ, PGHOST='localhost', PGPORT='55432', PGUSER='postgres', PG
 CONJ = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p "
         "where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%')")
 MD5_BASE = os.environ.get('MD5_BASE', '895517fb68f74d6d6c20079c83bdf7c4')      # el paquete del 9b (1a + 1b), que se publica antes
-NUEVAS = ['redes.f_presion_nivel(numeric,numeric)', 'redes.f_alertas_presion(text)', 'redes.f_presion_para_avisos()', 'redes.f_sensible_tipo(text)', 'redes.f_sensibles_proponer(text)',
+NUEVAS = ['redes.f_presion_nivel(numeric,numeric)', 'redes.f_presion_nodos(text)', 'redes.f_alertas_presion(text)', 'redes.f_presion_para_avisos()', 'redes.f_sensible_tipo(text)', 'redes.f_sensibles_proponer(text)',
           'redes.f_sensibles_en(text[])', 'redes.f_sensor_estado(bigint)',
           'public.geoportal_redes_alertas_presion(text,text)', 'public.geoportal_redes_sensibles(text,text,text,integer)',
-          'public.geoportal_redes_sensible_fijar(text,text,text,text,text)', 'public.geoportal_redes_afectacion(text,text)', 'public.geoportal_redes_sensores(text)']
+          'public.geoportal_redes_sensible_fijar(text,text,text,text,text)', 'public.geoportal_redes_afectacion(text,text)', 'public.geoportal_redes_sensores(text)',
+          'public.geoportal_redes_afectaciones_danos(text)']
 MIG = ['10_esquema.sql', '20_funciones.sql', '25_reemplazos.sql', '26_rpc.sql', '40_permisos.sql']
 AVISOS = 'tecnica.f_avisos(boolean,boolean,timestamp with time zone)'
 # ---- Avisos del 12 (David, 17-nov): UN aviso informativo «N nodos fuera de rango según el modelo» (ni rojo ni naranja). Sobre el texto publicado con la 1b.
+# Decisión de David (17-nov, tarde): APAGADO por omisión (parámetro de Avisos «presion_modelo_aviso», 0 o 1) y solo con las horas confiables (redes.f_presion_nodos).
 T_AVISOS = [(
     """  -- ===================== PERSONAL (los dos supervisores y el administrador) =====================""",
-    """  -- D11 (Corte 9b, Fase 2). Presión de MODELO fuera de rango (Res. 0330 de 2017): un solo aviso informativo. Los dos umbrales se leen una vez
-  if p_distribucion then
+    """  -- D11 (Corte 9b, Fase 2). Presión de MODELO fuera de rango (Res. 0330 de 2017): un solo aviso informativo. APAGADO por omisión: solo sale si el
+  -- parámetro «presion_modelo_aviso» vale 1 (lo enciende Técnica). Solo con las horas confiables del modelo (redes.f_presion_nodos). Los umbrales se leen una vez
+  if p_distribucion and coalesce(tecnica.f_aparam('presion_modelo_aviso'), 0) >= 1 then
     v_x := redes.f_param('presion_baja_naranja_mca'); v_y := redes.f_param('presion_alta_naranja_mca');
-    select count(*) into v_n from redes.pm_nodos x where x.carga_id = redes.f_ref_vigente('pm_nodos') and (x.pres_exist_min < v_x or x.pres_exist_max > v_y);
+    select count(*) into v_n from redes.f_presion_nodos('existente') x where x.p_min < v_x or x.p_max > v_y;
     if v_n > 0 then
       v_av := v_av || jsonb_build_object('clave', 'presion_modelo', 'area', 'distribucion', 'nivel', 'info', 'orden', 175,
                 'titulo', format('%s %s fuera de rango según el modelo', tecnica.f_texto_num(v_n), case when v_n = 1 then 'nodo' else 'nodos' end),      -- con punto de miles
-                'detalle', format('Presión de modelo, no medida (Plan Maestro 2014): mínima bajo %s o máxima sobre %s m.c.a.', v_x, v_y),
+                'detalle', format('Presión de modelo, no medida (Plan Maestro 2014): mínima bajo %s o máxima sobre %s m.c.a., sin las horas en que el modelo no es confiable.', v_x, v_y),
                 'n', v_n, 'items', '[]'::jsonb, 'bandeja', jsonb_build_object('tablero', 'distribucion', 'pestana', null), 'desde', null);
     end if;
   end if;
@@ -68,7 +71,8 @@ for viejo, nuevo in T_AVISOS:
 escribir(os.path.join(RAIZ, 'sql', '25_reemplazos.sql'), f"""-- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 25 — REEMPLAZO (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
 -- tecnica.f_avisos, con su texto vivo (el publicado con el 9b 1a + 1b, md5 {md5_av}) más UN bloque: D11, el aviso informativo
--- «N nodos fuera de rango según el modelo» (David, 17-nov: ni rojo ni naranja). Lo demás queda igual. AVISADO al Code B en la entrada de bitácora.
+-- «N nodos fuera de rango según el modelo» (David, 17-nov: ni rojo ni naranja; APAGADO por omisión, parámetro «presion_modelo_aviso»; solo horas confiables).
+-- Lo demás queda igual. AVISADO al Code B en la entrada de bitácora.
 -- =====================================================================
 
 -- {AVISOS}

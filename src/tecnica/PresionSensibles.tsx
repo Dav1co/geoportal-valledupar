@@ -24,6 +24,7 @@ export function AlertasPresion() {
       <section className="tec-tarjeta ps" aria-labelledby="ps-tit" data-testid="alertas-presion">
         <h2 id="ps-tit">Alertas de presión</h2>
         <p className="tec-aviso tec-aviso-info ps-modelo" role="note" data-testid="ps-modelo"><strong>Modelo, no medido.</strong> Son presiones calculadas por el modelo hidráulico{d ? ` (${d.fuente})` : ""}: no vienen de sensores ni de mediciones de hoy.</p>
+        {d?.nota_horas ? <p className="tec-ayuda" data-testid="ps-horas">{d.nota_horas}</p> : null}
         <div className="dan-fila" role="group" aria-label="Red del modelo">
           {(["existente", "futura"] as const).map((e) => <button key={e} type="button" className="dan-opcion" aria-pressed={esc === e} onClick={() => setEsc(e)}>{e === "existente" ? "Red existente" : "Red futura"}</button>)}
         </div>

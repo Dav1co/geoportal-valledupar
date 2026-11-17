@@ -12,7 +12,7 @@ conj as (
   select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) as m from pg_proc p
    where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%'))
 select '0 funciones de redes (conjunto)' as objeto, (select m from conj) as md5,
-       case (select m from conj) when '7f9c0157c47e371e1d3d87ef6bda847b' then 'FASE 2 (lista para la Fase 3)' when 'fbcbd7b3da35dfdc0e4104ed4a6e8f2f' then 'FASE 3 (aplicada)' else 'DISTINTA' end as estado
+       case (select m from conj) when '24e62e151ff418ea6acf631572d72683' then 'FASE 2 (lista para la Fase 3)' when 'a327aa51f43bb5cc2112a6db089718ed' then 'FASE 3 (aplicada)' else 'DISTINTA' end as estado
 union all select * from rnue
 union all select '4 tablas de referencia del 9a (ref_cargas) y de la Fase 2 (usuarios_sensibles)', null,
        case when to_regclass('redes.ref_cargas') is not null and to_regclass('redes.usuarios_sensibles') is not null then 'ESTÁN' else 'FALTA' end

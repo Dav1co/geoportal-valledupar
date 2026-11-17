@@ -1,7 +1,7 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b · FASE 3 (capa «Flujo del agua (modelo)») · 10 — GUARDIA Y ESQUEMA
 -- PROPUESTA. No se ha ejecutado en la base real (solo en el PostGIS local de Code A). Generado por pruebas_locales/generar.py.
--- · Presupone la Fase 2 del 9b publicada: huella del conjunto de funciones de redes 7f9c0157c47e371e1d3d87ef6bda847b.
+-- · Presupone la Fase 2 del 9b publicada: huella del conjunto de funciones de redes 24e62e151ff418ea6acf631572d72683.
 -- · SOLO AGREGA: no reemplaza ninguna función. Solo base de datos: las rutas de la Edge y la pantalla del geovisor son del Code B.
 -- · El flujo es de MODELO, no medido (modeloV1 del Plan Maestro 2014, corrido en EPANET): va en tablas APARTE, de referencia y de solo inserción, por carga
 --   (redes.ref_cargas, conjunto «flujo_modelo»): vale la última no anulada. La tabla queda vacía: se llena con el paquete de carga por psql (carga_flujo/).
@@ -10,8 +10,8 @@ do $$
 begin
   if to_regclass('redes.flujo_modelo') is not null then raise exception 'La Fase 3 del Corte 9b ya está aplicada: deténgase y avise'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '7f9c0157c47e371e1d3d87ef6bda847b' then
-    raise exception 'Las funciones de redes no son las de la Fase 2 del Corte 9b (huella 7f9c0157c47e371e1d3d87ef6bda847b): deténgase y avise';
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '24e62e151ff418ea6acf631572d72683' then
+    raise exception 'Las funciones de redes no son las de la Fase 2 del Corte 9b (huella 24e62e151ff418ea6acf631572d72683): deténgase y avise';
   end if;
   if to_regclass('redes.ref_cargas') is null or to_regclass('redes.usuarios_sensibles') is null then raise exception 'Faltan tablas del 9a o de la Fase 2: deténgase y avise'; end if;
 end $$;
