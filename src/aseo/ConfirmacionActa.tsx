@@ -49,7 +49,7 @@ export function ConfirmacionActa({ r, auditor, onOtra, onSalir }: { r: Resultado
   }
 
   return (
-    <div className="tec-pagina campo-pagina">
+    <div className="aseo-modulo tec-pagina campo-pagina">
       <section className="tec-tarjeta aseo-acta" aria-label="Acta de supervisión">
         <div className="aseo-acta-membrete"><img src={`data:image/jpeg;base64,${LOGO.b64}`} alt="EMDUPAR S.A. E.S.P." width={150} /></div>
         <h1>Auditoría registrada</h1>

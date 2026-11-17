@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import "../tecnica/tecnica.css";
 import "../campo/campo.css";
-import "./aseo.css";
+import "./aseo.css";      // trae los tokens de Aseo (tokens.css)
 import { apiAseo, avisoDeError, ErrorAseo } from "./apiAseo";
 import { PantallaActividad } from "./PantallaActividad";
 import { supabase } from "../lib/supabase";
@@ -28,7 +28,7 @@ export function AreaAseo({ correo }: { correo: string }) {
   if (error) {
     const a = avisoDeError(error); const sinAcceso = error.tipo === "permiso" || error.tipo === "denegado";
     return (
-      <div className="tec-pagina"><section className="tec-tarjeta" role="alert">
+      <div className="aseo-modulo tec-pagina"><section className="tec-tarjeta" role="alert">
         <h1>{sinAcceso ? "Sin acceso a Aseo" : "No se pudo abrir Aseo"}</h1>
         <p>{sinAcceso ? "Su cuenta no tiene acceso a la interventoría de aseo. Solicítelo a un administrador." : a.texto}</p>
         {!sinAcceso && error.tipo !== "sesion" ? <button type="button" className="tec-boton" onClick={() => setIntento((i) => i + 1)}>Reintentar</button> : null}
@@ -36,14 +36,14 @@ export function AreaAseo({ correo }: { correo: string }) {
       </section></div>
     );
   }
-  if (!def) return <div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando…</p></section></div>;
+  if (!def) return <div className="aseo-modulo tec-pagina"><section className="tec-tarjeta"><p>Cargando…</p></section></div>;
   const auditor = { nombre: def.nombre ?? correo.split("@")[0], correo: def.correo ?? correo };
 
   if (vista.tipo === "admin" && def.puede.administrar) {
-    return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando la administración…</p></section></div>}><AdminAseo onVolver={() => setVista({ tipo: "inicio" })} /></Suspense>;
+    return <Suspense fallback={<div className="aseo-modulo tec-pagina"><section className="tec-tarjeta"><p>Cargando la administración…</p></section></div>}><AdminAseo onVolver={() => setVista({ tipo: "inicio" })} /></Suspense>;
   }
   if (vista.tipo === "supervision" && def.puede.supervisar) {
-    return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando Supervisión y dashboard…</p></section></div>}><Supervision def={def} correo={auditor.correo} onVolver={() => setVista({ tipo: "inicio" })} /></Suspense>;
+    return <Suspense fallback={<div className="aseo-modulo tec-pagina"><section className="tec-tarjeta"><p>Cargando Supervisión y dashboard…</p></section></div>}><Supervision def={def} correo={auditor.correo} onVolver={() => setVista({ tipo: "inicio" })} /></Suspense>;
   }
   if (vista.tipo === "actividad") {
     const act = def.actividades.find((a) => a.codigo === vista.codigo && a.activa);
@@ -51,8 +51,8 @@ export function AreaAseo({ correo }: { correo: string }) {
   }
 
   return (
-    <div className="tec-pagina campo-pagina">
-      <section className="tec-tarjeta">
+    <div className="aseo-modulo aseo-inicio tec-pagina campo-pagina">
+      <section className="tec-tarjeta aseo-hoja">
         <h1>Interventoría de Aseo</h1>
         <p className="campo-sub">{ROTULO[def.perfil]} · Auditoría de la prestación del servicio</p>
         <div className="campo-formatos">

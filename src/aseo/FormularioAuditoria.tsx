@@ -5,6 +5,7 @@ import { abrirCamara, capturarFoto, cerrarCamara, ErrorCamara } from "../campo/c
 import { useUbicacion, UMBRAL_PRECISION_MALA_M } from "../campo/ubicacion";
 import { aplanarDatos, contadorFotos, criteriosActivos, cuerpoFirmas, erroresDeEnvio, erroresDeFirmas, fotosNecesarias, textoFechaHora, type Valores } from "./logica";
 import { FirmasActa, FIRMAS_VACIAS, type FirmasLocal } from "./FirmasActa";
+import { IconoCamara } from "../tecnica/IconoCamara";
 import { ConfirmarCancelar } from "../components/ConfirmarCancelar";
 import type { Actividad, Confirmacion, Criterio, FormularioAseo, Modalidad, Preparacion, RutaPlan, SeRealizo } from "./tipos";
 
@@ -123,8 +124,8 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
   const hayDatos = seRealizo !== "" || causal !== "" || observaciones.trim() !== "" || Object.keys(valores).length > 0 || fotos.length > 0 || prep.current !== null;
   const pedirCancelar = () => { if (hayDatos) setCancelando(true); else onVolver(); };
   return (
-    <div className="tec-pagina campo-pagina">
-      <section className="tec-tarjeta">
+    <div className="aseo-modulo tec-pagina campo-pagina">
+      <section className="tec-tarjeta aseo-hoja">
         <div className="campo-cab"><button type="button" className="tec-boton-sec" onClick={pedirCancelar} disabled={dis}>‹ Rutas</button><h1>{actividad.nombre} · {modalidad.nombre}</h1>
           <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={dis}>Cancelar</button></div>
         {cancelando ? (
@@ -172,7 +173,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
                 <div className="campo-foto" key={n.etiqueta}>
                   <span className="campo-foto-n">{n.nombre} · {contadorFotos(mias.length, n.min, n.max)}</span>
                   <div className="aseo-miniaturas">{mias.map((f) => (<span className="aseo-mini" key={f.id}><img src={f.url} alt={`${n.nombre}`} /><button type="button" className="tec-boton-sec aseo-quitar" onClick={() => quitarFoto(f.id)} aria-label="Quitar esta foto">Quitar</button></span>))}</div>
-                  {mias.length < n.max ? <button type="button" className="tec-boton campo-boton-foto" onClick={() => setCamara({ etiqueta: n.etiqueta, nombre: n.nombre })}>Tomar foto</button> : null}
+                  {mias.length < n.max ? <button type="button" className="tec-boton campo-boton-foto" onClick={() => setCamara({ etiqueta: n.etiqueta, nombre: n.nombre })}><IconoCamara />Tomar foto</button> : null}
                 </div>
               );
             })}</div>
@@ -242,7 +243,7 @@ function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar }: { rotulo: st
     } catch (e) { setError(e instanceof ErrorCamara ? e.message : "No se pudo tomar la foto."); } finally { setProcesando(false); }
   }
   return (
-    <div className="campo-camara" role="dialog" aria-modal="true" aria-label={`Cámara · ${rotulo}`}>
+    <div className="aseo-modulo campo-camara" role="dialog" aria-modal="true" aria-label={`Cámara · ${rotulo}`}>
       <div className="campo-camara-cab">{rotulo}<small className="aseo-camara-nota"> · Evite fotografiar el rostro de las personas.</small></div>
       {error ? <div className="campo-camara-error"><p role="alert">{error}</p></div> : <video ref={videoRef} className="campo-video" autoPlay playsInline muted onLoadedMetadata={() => setLista(true)} />}
       <div className="campo-camara-acc">

@@ -37,8 +37,8 @@ export function PantallaActividad({ def, actividad, auditor, onSalir }: { def: F
   }
 
   return (
-    <div className="tec-pagina campo-pagina">
-      <section className="tec-tarjeta">
+    <div className="aseo-modulo tec-pagina campo-pagina">
+      <section className="tec-tarjeta aseo-hoja">
         <div className="campo-cab"><button type="button" className="tec-boton-sec" onClick={modalidad ? () => { setModalidad(null); setPlan(null); } : onSalir}>‹ {modalidad ? "Modalidad" : "Aseo"}</button><h1>{actividad.nombre}{modalidad ? ` · ${modalidad.nombre}` : ""}</h1></div>
         {!modalidad ? (
           <>

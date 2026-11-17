@@ -58,7 +58,7 @@ export function FirmaPad({ titulo, onAceptar, onCancelar }: { titulo: string; on
   }
 
   return (
-    <div className="aseo-firma-capa" role="dialog" aria-modal="true" aria-label={titulo}>
+    <div className="aseo-modulo aseo-firma-capa" role="dialog" aria-modal="true" aria-label={titulo}>
       <div className="aseo-firma-cab"><strong>{titulo}</strong>{vertical ? <span className="aseo-firma-giro"> Para firmar con más espacio, gire el teléfono.</span> : null}</div>
       <canvas ref={cvRef} className="aseo-firma-lienzo" aria-label="Espacio para firmar con el dedo" onPointerDown={abajo} onPointerMove={mueve} onPointerUp={arriba} onPointerCancel={arriba} />
       {error ? <p className="aseo-firma-error" role="alert">{error}</p> : null}

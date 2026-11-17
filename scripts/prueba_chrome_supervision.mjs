@@ -11,11 +11,14 @@ import { tmpdir } from "node:os";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-const aqui = dirname(fileURLToPath(import.meta.url)), raiz = join(aqui, "..");
+// «aseo-estilo» (17-nov): al final recorre TODAS las pantallas de Aseo a 390 y 1280 px como administrador, toma una captura de cada una (estilo_*.png) y comprueba el modelo visual
+// (color de Aseo, fuente única, tarjetas, botones de 44 px, rejilla de 4 columnas y 1). ANTES=1 RAIZ_UI=<árbol de main>: solo las capturas de «antes». PUERTO_MOCK cambia el puerto.
+const aqui = dirname(fileURLToPath(import.meta.url)), raiz = process.env.RAIZ_UI ? join(process.env.RAIZ_UI) : join(aqui, "..");
 const PP = process.env.PUPPETEER_DIR; if (!PP) { console.error("Defina PUPPETEER_DIR (carpeta que contiene node_modules/puppeteer-core)."); process.exit(2); }
 const puppeteer = createRequire(join(PP, "package.json"))("puppeteer-core");
 const CHROME = process.env.CHROME_BIN || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const PUERTO_MOCK = 54998;
+const PUERTO_MOCK = Number(process.env.PUERTO_MOCK || 54998);
+const ANTES = process.env.ANTES === "1";
 const CAPTURAS = process.env.CAPTURAS_DIR || null;
 const captura = async (p, n) => { if (CAPTURAS) await p.screenshot({ path: join(CAPTURAS, n), fullPage: true }); };
 
@@ -28,7 +31,7 @@ if (b.status !== 0) { console.error(b.stdout, b.stderr); process.exit(2); }
 const LOGO_B64 = readFileSync(join(raiz, "src/aseo/membrete.ts"), "utf8").match(/export const LOGO = \{[^}]*?b64: "([^"]+)"/)[1];
 const JPG = Buffer.from(LOGO_B64, "base64");
 const UUID = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const CATALOGO = (perfil) => ({ perfil, correo: "aud@emdupar.gov.co", nombre: "Auditor Prueba", puede: { capturar: true, supervisar: perfil !== "auditor", administrar: false }, ahora: "2026-11-13T10:30:00",
+const CATALOGO = (perfil) => ({ perfil, correo: "aud@emdupar.gov.co", nombre: "Auditor Prueba", puede: { capturar: true, supervisar: perfil !== "auditor", administrar: perfil === "admin" }, ahora: "2026-11-13T10:30:00",
   limites: { max_bytes_foto: 1572864, busqueda_min_caracteres: 5, mapa_zoom_inicial: 15, distancia_marca_m: 50, precision_aviso_m: 30 }, zona: { lat_min: 10.35, lat_max: 10.56, lon_min: -73.36, lon_max: -73.18 },
   actividades: [{ codigo: "barrido", nombre: "Barrido", orden: 10, activa: true, fotos_max: 5, usa_consecutivo: true,
     modalidades: [{ codigo: "manual", nombre: "Manual", orden: 10, activa: true, servicios: [{ codigo: "12", nombre: "Barrido Manual", activo: true }] }],
@@ -75,6 +78,11 @@ const mock = http.createServer(async (q, r) => {
   E.llamadas.push({ accion, cuerpo, q: Object.fromEntries(url.searchParams) });
   switch (accion) {
     case "formulario": return json(CATALOGO(E.perfil));
+    case "mapa": return json({ etag: "m1", type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [[-73.2450, 10.4700], [-73.2436, 10.4707], [-73.2420, 10.4712]] }, properties: { ruta_id: 1, codigo: RUTA.codigo, clase: "linea", version: 1, completa: true } }] });
+    case "cercanas": return json([{ ruta_id: 1, codigo: RUTA.codigo, distancia_m: 12, dentro: false }]);
+    case "cargas": return json({ cargas: [{ id: UUID(5), tipo: "plan", version: 1, provisional: true, nombre: "plan_operativo_2020.xlsx", filas: 541, origen: null, autor: "adm@emdupar.gov.co", creado_en: "2026-11-10T14:00:00+00:00", aplicada: true },
+      { id: UUID(6), tipo: "capa", version: null, provisional: false, nombre: "rutas_barrido.geojson", filas: 320, origen: "geojson", autor: "adm@emdupar.gov.co", creado_en: "2026-11-11T09:30:00+00:00", aplicada: true }], resumen: { rutas: 541, puntos: 12, con_trazado: 320, barrios_sin_coincidencia: 2 } });
+    case "barrios_sin_coincidencia": return json({ sugerencias_disponibles: true, barrios: [{ nombre: "Villa del Rosario", rutas: 3, ejemplo_ruta: "2010011207003", sugerencias: ["Villa Rosario"] }, { nombre: "Primero de Mayo", rutas: 1, ejemplo_ruta: "2010011207008", sugerencias: [] }] });
     case "plan": return json({ etag: "e1", ahora: "2026-11-13T10:30:00", rutas: [RUTA] });
     case "preparar_subida": return json({ auditoria_id: UUID(77), max_bytes_foto: 1572864, tipo_mime: "image/jpeg", ahora: "2026-11-13T10:30:00", fotos: Array.from({ length: cuerpo.cantidad }, (_, i) => ({ orden: i + 1, ruta: `auditorias/2026-11/${UUID(77)}/${i + 1}.jpg`, url_subida: `http://127.0.0.1:${PUERTO_MOCK}/storage/v1/object/upload/sign/aseo-fotos/x`, token: "TOKEN" })) });
     case "crear": { E.cuerpos.push(cuerpo); const r0 = E.colaCrear.shift(); if (r0) return json(r0.body, r0.status); }
@@ -114,7 +122,7 @@ async function sesion(perfil, vp) {
   E.perfil = perfil; E.llamadas.length = 0;
   const ctx = await navegador.createBrowserContext(); await ctx.overridePermissions(URL_APP.slice(0, -1), ["geolocation", "camera"]);
   const p = await ctx.newPage(); await p.setViewport(vp); await p.setGeolocation({ latitude: 10.4707, longitude: -73.2436, accuracy: 10 });
-  p.on("pageerror", (e) => errores.push(`${perfil}: ${String(e).slice(0, 200)}`)); p.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|net::ERR/.test(m.text()) && !(E.cors === false && esperadoCors.test(m.text()))) errores.push(`${perfil}: ${m.text().slice(0, 200)}`); });
+  p.on("pageerror", (e) => errores.push(`${perfil}: ${String(e).slice(0, 200)}`)); p.on("console", (m) => { if (m.type() === "error" && !E.mapaAbierto && !/Failed to load resource|net::ERR/.test(m.text()) && !(E.cors === false && esperadoCors.test(m.text()))) errores.push(`${perfil}: ${m.text().slice(0, 200)}`); });
   const c = await navegador.target().createCDPSession(); await c.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: DESCARGAS, browserContextId: ctx.id });
   await p.evaluateOnNewDocument((u) => { const ahora = Math.floor(Date.now() / 1000); localStorage.setItem("sb-127-auth-token", JSON.stringify({ access_token: "token-falso", refresh_token: "r", token_type: "bearer", expires_in: 3600, expires_at: ahora + 3600, user: u })); }, USER);
   await p.goto(URL_APP); return p;
@@ -337,6 +345,77 @@ for (const [nombre, vp] of [["380 px", { width: 380, height: 820, isMobile: true
   const b3 = E.cuerpos[2], d = b3 ? Date.parse(b1.inicio_dispositivo) - Date.parse(b3.inicio_dispositivo) : NaN;
   ok(`auditor ${nombre}: tras corregir el reloj, el inicio se recalcula UNA vez (hora corregida − tiempo desde que se abrió) y registra`, E.cuerpos.length === 3 && Math.abs(d - 600000) < 2000 && /BAR-000077/.test(await T(p)), { d, b3: b3?.inicio_dispositivo });
   ok(`auditor ${nombre}: sin desborde horizontal`, await sinDesborde(p));
+  await p.close();
+}
+// =====================================================================  6) ESTILO («aseo-estilo»): todas las pantallas a 390 y 1280 px, como administrador
+const ASEO_RGB = "rgb(138, 74, 31)";
+const estilo = (p) => p.evaluate(() => {
+  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== "hidden"; };
+  const raizM = [...document.querySelectorAll(".aseo-modulo")]; const todos = raizM.flatMap((r) => [r, ...r.querySelectorAll("*")]).filter((e) => !e.closest(".maplibregl-map, svg") && vis(e));
+  const fuentes = [...new Set(todos.map((e) => getComputedStyle(e).fontFamily.split(",")[0].replace(/"/g, "").trim()))];
+  const degradados = todos.filter((e) => /gradient/.test(getComputedStyle(e).backgroundImage)).length;
+  const bajos = todos.filter((e) => e.matches("button, select, input:not([type=radio]):not([type=checkbox]):not([type=file]), textarea") && e.getBoundingClientRect().height < 43.5).map((e) => `${e.tagName}.${e.className}:${Math.round(e.getBoundingClientRect().height)}`);
+  const emojis = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(raizM.map((r) => r.innerText).join(" "));
+  return { hayRaiz: raizM.length > 0, fuentes, degradados, bajos, emojis, desborde: document.documentElement.scrollWidth > window.innerWidth + 1 };
+});
+const css = (p, sel, prop) => p.evaluate((s, pr) => { const e = document.querySelector(s); return e ? getComputedStyle(e)[pr] : null; }, sel, prop);
+for (const ancho of [390, 1280]) {
+  const tag = `estilo ${ancho} px`; const vp = ancho === 390 ? { width: 390, height: 844, isMobile: true, hasTouch: true } : { width: 1280, height: 850 };
+  const p = await sesion("admin", vp); const vistos = [];
+  const foto = async (n, completa = true) => { await esp(250);
+    if (CAPTURAS) {      // la página de Aseo desplaza su propio contenido: para verla entera se alarga la ventana un momento
+      const alto = completa ? await p.evaluate(() => { const c = document.querySelector(".tec-pagina, .tdash"); return c ? Math.ceil(c.getBoundingClientRect().top + c.scrollHeight) : 0; }) : 0;
+      if (alto > vp.height) { await p.setViewport({ ...vp, height: Math.min(alto, 6000) }); await esp(250); }
+      await p.screenshot({ path: join(CAPTURAS, `estilo_${n}_${ancho}.png`), fullPage: completa });
+      if (alto > vp.height) { await p.setViewport(vp); await esp(150); }
+    } if (!ANTES) vistos.push([n, await estilo(p)]); };
+  await esperar(p, () => /Barrido|Aseo/.test(document.body.innerText), 15000); if (await hay(p, ".area-tarjeta", "Aseo")) await clic(p, ".area-tarjeta", "Aseo");
+  await esperar(p, () => /Administración de rutas/.test(document.body.innerText)); await foto("01_inicio");
+  if (!ANTES) {
+    const cols = (await css(p, ".campo-formatos", "gridTemplateColumns")).split(" ").length;
+    ok(`${tag}: inicio en rejilla de ${ancho === 390 ? "una columna" : "4 columnas"}`, cols === (ancho === 390 ? 1 : 4), cols);
+    ok(`${tag}: las tarjetas del inicio son blancas, con borde izquierdo de 5 px del color de Aseo y radio de 12 a 14 px`, await p.evaluate((c) => [...document.querySelectorAll("button.campo-formato-activo")].every((b) => { const e = getComputedStyle(b);
+      return e.borderLeftColor === c && e.borderLeftWidth === "5px" && e.backgroundColor === "rgb(255, 255, 255)" && parseFloat(e.borderTopLeftRadius) >= 12 && parseFloat(e.borderTopLeftRadius) <= 14 && b.getBoundingClientRect().height >= 68; }), ASEO_RGB));
+  }
+  await clic(p, ".campo-formato-activo", "Barrido"); await esperar(p, () => /Elija la modalidad/.test(document.body.innerText)); await foto("02_modalidad");
+  if (!ANTES) ok(`${tag}: el encabezado de la sección es una barra del color de Aseo con el texto blanco`, await css(p, ".campo-cab", "backgroundColor") === ASEO_RGB && await css(p, ".campo-cab h1", "color") === "rgb(255, 255, 255)");
+  await clic(p, ".campo-formato-activo", "Manual"); await p.waitForSelector("#aseo-q"); await foto("03_rutas");
+  E.mapaAbierto = true;      // el mapa pide su fondo a internet y la prueba no tiene red: sus errores de consola no cuentan
+  await clic(p, "button", "Elegir en el mapa"); await esperar(p, () => !!document.querySelector(".aseo-mapa-caja, .aseo-aviso"), 15000); await esp(1500); await foto("04_rutas_mapa");
+  if (!ANTES) ok(`${tag}: el mapa de rutas queda neutro (su caja no lleva el color de Aseo; sí sus controles)`, await p.evaluate((c) => { const m = document.querySelector(".aseo-mapa-caja"); if (!m) return true; const b = m.querySelector(".aseo-mapa-ctl button");
+    return getComputedStyle(m).borderTopColor !== c && getComputedStyle(m).backgroundColor !== c && (!b || getComputedStyle(b).color === c || b.disabled); }, ASEO_RGB));
+  await clic(p, "button", "Ocultar el mapa"); await esp(300); E.mapaAbierto = false; await p.type("#aseo-q", "2010011207003"); await p.waitForSelector(".aseo-ruta"); await foto("04b_rutas_busqueda"); await clic(p, ".aseo-ruta"); await p.waitForSelector("input[name=se_realizo]"); await foto("05_formulario_vacio");
+  await clic(p, "label.aseo-opcion", "Sí"); await esperar(p, () => [...document.querySelectorAll("button")].some((b) => /Tomar foto/.test(b.textContent)));
+  if (!ANTES) ok(`${tag}: «Tomar foto» lleva el ícono de cámara y el botón principal es del color de Aseo`, await p.evaluate((c) => { const b = [...document.querySelectorAll("button")].find((x) => /Tomar foto/.test(x.textContent));
+    return !!b.querySelector("svg[data-icono=camara]") && b.textContent.trim() === "Tomar foto" && getComputedStyle(b).backgroundColor === c && getComputedStyle(b).color === "rgb(255, 255, 255)"; }, ASEO_RGB));
+  await clic(p, "button", "Tomar foto"); await p.waitForSelector(".campo-camara"); await esperar(p, () => !document.querySelector(".campo-capturar")?.disabled, 10000); await foto("06_camara", false);
+  await clic(p, ".campo-camara-acc button", "Cancelar"); await esperar(p, () => !document.querySelector(".campo-camara"));
+  await clic(p, "button", "Agregar firma"); await p.waitForSelector(".aseo-firma-capa"); await esp(300); await dibujar(p); await foto("07_firma", false);
+  if (!ANTES) ok(`${tag}: la firma conserva su lienzo blanco; «OK» es del color de Aseo`, await css(p, ".aseo-firma-lienzo", "backgroundColor") === "rgb(255, 255, 255)" && await css(p, ".aseo-firma-acc .tec-boton", "backgroundColor") === ASEO_RGB);
+  await clic(p, ".aseo-firma-acc button", "Cancelar"); await esperar(p, () => !document.querySelector(".aseo-firma-capa"));
+  await clic(p, "label.aseo-opcion", "Sí"); await llenarFormulario(p); await foto("08_formulario_lleno");
+  if (!ANTES) ok(`${tag}: cada sección del formulario es una tarjeta (blanca, borde izquierdo del color de Aseo, radio 12 px)`, await p.evaluate((c) => { const f = [...document.querySelectorAll(".aseo-hoja > fieldset.campo-fieldset, .aseo-hoja > .campo-auto")];
+    return f.length >= 4 && f.every((x) => { const e = getComputedStyle(x); return e.borderLeftColor === c && e.borderLeftWidth === "5px" && e.backgroundColor === "rgb(255, 255, 255)" && e.borderTopLeftRadius === "12px"; }); }, ASEO_RGB));
+  await botonEnviar(p); await esperar(p, () => /BAR-000077/.test(document.body.innerText), 20000); await foto("09_acta_registrada");
+  await clic(p, ".aseo-acciones button", "Salir"); await esperar(p, () => /Administración de rutas/.test(document.body.innerText));
+  await clic(p, ".campo-formato-activo", "Administración de rutas"); await p.waitForSelector(".aseo-pestanas");
+  for (const [i, n] of ["Plan operativo", "Capa de rutas", "Barrios", "Historial"].entries()) { await clic(p, ".aseo-pestana", n); await esp(500); await foto(`1${i}_admin_${n.toLowerCase().replace(/ /g, "_")}`); }
+  if (!ANTES) ok(`${tag}: la pestaña elegida de la administración va en el color de Aseo`, await css(p, ".aseo-pestana-on", "color") === ASEO_RGB);
+  await clic(p, ".campo-cab button", "Aseo"); await esperar(p, () => /Supervisión y dashboard/.test(document.body.innerText));
+  await clic(p, "button.campo-formato-activo", "Supervisión y dashboard"); await p.waitForSelector(".tdash"); await esperar(p, () => !!document.querySelector(".tr-aviso, .tr-vacio"), 8000); await foto("20_supervision_resumen");
+  if (!ANTES) ok(`${tag}: el encabezado de Supervisión y dashboard es del color de Aseo y sus botones principales también`, await css(p, ".tdash-cab", "backgroundColor") === ASEO_RGB);
+  await clic(p, ".tdash-tab", "Auditorías"); await p.waitForSelector("table.td-tabla tbody tr[data-auditoria]"); await foto("21_supervision_auditorias");
+  await p.evaluate(() => document.querySelector("table.td-tabla tbody tr[data-auditoria] button").click()); await p.waitForSelector(".as-detalle"); await esp(600); await foto("22_supervision_detalle");
+  await clic(p, "button", "Cerrar detalle"); await clic(p, ".tdash-tab", "No conformidades"); await esp(700); await foto("23_supervision_no_conformidades");
+  await clic(p, ".tdash-tab", "Indicadores"); await esperar(p, () => !!document.querySelector(".as-barra, .td-cajita"), 8000); await esp(300); await foto("24_supervision_indicadores");
+  await clic(p, ".tdash-tab", "Personal"); await esperar(p, () => !!document.querySelector(".as-persona"), 8000); await foto("25_supervision_personal");
+  if (!ANTES) {
+    ok(`${tag}: todas las pantallas llevan los tokens de Aseo (raíz «aseo-modulo»)`, vistos.every(([, e]) => e.hayRaiz), vistos.filter(([, e]) => !e.hayRaiz).map(([n]) => n));
+    ok(`${tag}: una sola fuente (Arial; Courier solo en los códigos)`, vistos.every(([, e]) => e.fuentes.every((f) => /^(Arial|Courier New)$/.test(f))), [...new Set(vistos.flatMap(([, e]) => e.fuentes))]);
+    ok(`${tag}: sin degradados ni emojis`, vistos.every(([, e]) => e.degradados === 0 && !e.emojis), vistos.filter(([, e]) => e.degradados || e.emojis).map(([n]) => n));
+    ok(`${tag}: botones y campos de 44 px o más`, vistos.every(([, e]) => e.bajos.length === 0), vistos.filter(([, e]) => e.bajos.length).map(([n, e]) => `${n}: ${e.bajos.join(" ")}`));
+    ok(`${tag}: ninguna pantalla se desborda a lo ancho`, vistos.every(([, e]) => !e.desborde), vistos.filter(([, e]) => e.desborde).map(([n]) => n));
+  }
   await p.close();
 }
 ok("ninguna pantalla produjo errores de JavaScript ni de consola", errores.length === 0, errores);

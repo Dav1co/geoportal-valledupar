@@ -1,21 +1,31 @@
-/* Supervisión y dashboard de Aseo: solo lo propio; el resto viene de tecnica/dashboard.css */
+/* Supervisión y dashboard de Aseo: solo lo propio; el armado viene de tecnica/dashboard.css. Desde «aseo-estilo» (17-nov-2026) toma el color de Aseo y
+   todos sus colores salen de los tokens de ../tokens.css (la raíz lleva «aseo-modulo»). */
+@import "../tokens.css";
+.tdash.aseo-modulo { --tdash-color: var(--aseo); --t-modo: var(--aseo); font-family: var(--t-fuente); }
+.aseo-modulo .tdash-sesion, .aseo-modulo .tdash-tab { color: var(--aseo-suave); }
+.aseo-modulo .tdash-tab[aria-current="page"] { color: #fff; }
+.aseo-modulo .td-h3, .aseo-modulo .td-nombre, .aseo-modulo .td-dialogo h3 { color: var(--t-titulo); }
+.aseo-modulo .td-enlace { color: var(--t-modo); }
+.aseo-modulo .td-cajita { background: var(--t-modo-suave); color: var(--t-texto); }
+.aseo-modulo .td-tabla-caja, .aseo-modulo .td-historial { border-color: var(--t-borde); border-radius: var(--t-radio-tarjeta); }
+.aseo-modulo .td-historial { border-left: var(--t-borde-modo) solid var(--t-modo); }
 .as-dl { display: grid; grid-template-columns: 1fr; gap: 0; margin: 0; padding: 4px 12px; }
-.as-dl > div { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid #dde5ea; }
-.as-dl dt { font-weight: 700; color: #52626f; font-size: 13px; } .as-dl dd { margin: 0; overflow-wrap: anywhere; }
+.as-dl > div { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--t-borde); }
+.as-dl dt { font-weight: 700; color: var(--t-texto-2); font-size: var(--t-txt-chico); } .as-dl dd { margin: 0; overflow-wrap: anywhere; }
 .as-sello { font-size: 12px; word-break: break-all; }
 .as-fotos { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
-.as-foto { margin: 0; width: 180px; } .as-foto img { width: 180px; height: 135px; object-fit: cover; border-radius: 8px; border: 1px solid #c3ced6; background: #0b1620; display: block; }
-.as-foto figcaption { font-size: 12.5px; color: #52626f; margin-top: 4px; } .as-foto-vacia { width: 180px; height: 135px; display: grid; place-items: center; background: #eef2f5; border-radius: 8px; font-size: 13px; color: #52626f; }
+.as-foto { margin: 0; width: 180px; } .as-foto img { width: 180px; height: 135px; object-fit: cover; border-radius: var(--t-radio); border: 1px solid var(--t-borde); background: var(--t-texto); display: block; }
+.as-foto figcaption { font-size: var(--t-txt-chico); color: var(--t-texto-2); margin-top: 4px; } .as-foto-vacia { width: 180px; height: 135px; display: grid; place-items: center; background: var(--t-suave); border-radius: var(--t-radio); font-size: var(--t-txt-chico); color: var(--t-texto-2); }
 .as-motivos { margin: 6px 0; padding-left: 20px; line-height: 1.7; }
 .as-barra { display: grid; grid-template-columns: minmax(130px, 200px) 1fr minmax(100px, 150px); align-items: center; gap: 10px; padding: 4px 0; font-size: 14px; }
-.as-barra-caja { background: #e4eaee; border-radius: 6px; height: 16px; overflow: hidden; } .as-barra-rel { display: block; height: 100%; border-radius: 6px; }
-.as-ok { background: #1f8a54; } .as-aviso { background: #c98a1b; } .as-mal { background: #b42318; }
+.as-barra-caja { background: var(--t-suave); border-radius: 6px; height: 16px; overflow: hidden; } .as-barra-rel { display: block; height: 100%; border-radius: 6px; }
+.as-ok { background: var(--t-ok); } .as-aviso { background: var(--t-naranja); } .as-mal { background: var(--t-rojo); }
 .as-barra-v { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
-.as-grupo { background: #fff; border: 1px solid #dde5ea; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.as-grupo { background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
 .as-personas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.as-persona { background: #fff; border: 1px solid #dde5ea; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.as-persona { background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
 .as-persona-cab { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; } .as-fila { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-.td-marca-aviso { background: #fff3d6; color: #7a4a00; }
+.td-marca-aviso { background: var(--t-naranja-suave); color: var(--t-texto); }
 @media (max-width: 640px) { .as-dl > div { grid-template-columns: 1fr; gap: 2px; } .as-barra { grid-template-columns: 1fr; gap: 2px; } .as-barra-v { text-align: left; } }
 
 /* Inicio, fin y duración en la lista de auditorías (pasada 14/11): sin cortar la fecha y la hora */

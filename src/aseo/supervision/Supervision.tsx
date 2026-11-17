@@ -22,7 +22,7 @@ export function Supervision({ def, correo, onVolver }: { def: FormularioAseo; co
   const datos = useCallback((r: ResumenT) => setCat({ turnos: r.turnos, auditores: r.auditores }), []);
   const rotulo = def.perfil === "admin" ? "Administrador" : "Supervisor de aseo";
   return (
-    <div className="tdash">
+    <div className="tdash aseo-modulo">
       <div className="tdash-cab"><div className="tdash-ancho">
         <div className="tdash-fila"><h1>Supervisión y dashboard</h1><button type="button" className="td-boton-claro" onClick={onVolver}>← Volver a Aseo</button></div>
         <div className="tdash-sesion">{correo} · {rotulo}</div>
