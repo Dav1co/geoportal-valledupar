@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./quimicos.css";
 import { textoError, type Catalogo as CatalogoDash } from "./apiDashboard";
 import { apiQuimicos, subirFicha, type Catalogo, type Comparacion, type Historial, type ParametroQuimico, type Quimico } from "./apiQuimicos";
+import { apiAvisos, type MinimoQuimico } from "./apiAvisos";
 
 // Dashboard PTAP · pestaña «Químicos» (Técnica fase 1, Corte 7a; §29). Solo planta: supervisor de planta y administrador.
 // · Bodega (una sola; todo en kg): cada químico con su saldo, su dosis óptima, si es de potabilización y su ficha técnica en PDF (URL firmada de 60 s).
@@ -21,15 +22,16 @@ const fecha = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-CO
 const kg = (v: number | null) => (v === null ? "—" : `${nf.format(v)} kg`);
 
 export function QuimicosPTAP(_: { catalogo: CatalogoDash }) {
-  const [vista, setVista] = useState<"bodega" | "comparacion" | "parametros">("bodega");
+  const [vista, setVista] = useState<"bodega" | "comparacion" | "parametros" | "minimos">("bodega");
   return (
     <div className="qm">
       <div className="qm-seg" role="tablist" aria-label="Químicos">
         <button type="button" role="tab" aria-selected={vista === "bodega"} onClick={() => setVista("bodega")}>Bodega</button>
         <button type="button" role="tab" aria-selected={vista === "comparacion"} onClick={() => setVista("comparacion")}>Esperado contra usado</button>
         <button type="button" role="tab" aria-selected={vista === "parametros"} onClick={() => setVista("parametros")}>Parámetros</button>
+        <button type="button" role="tab" aria-selected={vista === "minimos"} onClick={() => setVista("minimos")}>Saldo mínimo</button>
       </div>
-      {vista === "bodega" ? <Bodega /> : vista === "comparacion" ? <ComparacionVista /> : <ParametrosVista />}
+      {vista === "bodega" ? <Bodega /> : vista === "comparacion" ? <ComparacionVista /> : vista === "parametros" ? <ParametrosVista /> : <MinimosVista />}
     </div>
   );
 }
@@ -243,6 +245,51 @@ function FormParametro({ p, onListo, onCerrar }: { p: ParametroQuimico; onListo:
       <Motivo id={`qm-p-m-${p.clave}`} valor={motivo} onCambiar={setMotivo} />
       <Pie enviando={enviando} error={error} listo={listo} rotulo="Guardar el cambio" onCerrar={onCerrar}
         onGuardar={() => void enviar(async () => { const r = await apiQuimicos.fijarParametro(p.clave, n, motivo); onListo(`${NOMBRE_PARAM[p.clave]?.nombre ?? p.clave}: de ${nf.format(r.antes)} a ${nf.format(r.valor)}.`); })} />
+    </section>
+  );
+}
+
+// Corte 12: el saldo mínimo de cada químico (kg). Arranca vacío: sin mínimo no hay aviso. Por debajo del mínimo sale el aviso «saldo bajo» en Avisos.
+function MinimosVista() {
+  const [qs, setQs] = useState<MinimoQuimico[] | null>(null); const [error, setError] = useState<string | null>(null);
+  const [vez, setVez] = useState(0); const [aviso, setAviso] = useState<string | null>(null); const [abierto, setAbierto] = useState<string | null>(null);
+  useEffect(() => { let vivo = true; setError(null);
+    apiAvisos.minimos().then((d) => { if (vivo) setQs(d.quimicos); }).catch((e) => { if (vivo) setError(textoError(e).texto); });
+    return () => { vivo = false; }; }, [vez]);
+  if (error) return <div className="td-aviso td-aviso-error" role="alert">{error} <button type="button" className="td-enlace" onClick={() => setVez((x) => x + 1)}>Reintentar</button></div>;
+  if (!qs) return <p className="td-sub" role="status">Cargando los saldos mínimos…</p>;
+  return (
+    <>
+      <p className="td-sub">Cuando el saldo de un químico baja de su mínimo, sale un aviso. Sin mínimo fijado no hay aviso. Cada cambio pide su motivo.</p>
+      {aviso ? <div className="td-aviso td-aviso-ok" role="status">{aviso}</div> : null}
+      <div className="qm-lista">
+        {qs.map((q) => (
+          <article key={q.codigo} className={`qm-tarjeta${q.bajo ? " qm-cmp-marca" : ""}`} data-minimo={q.codigo}>
+            <div className="qm-cab"><h3>{q.nombre}</h3>{q.bajo ? <span className="qm-chip qm-chip-marca">Por debajo del mínimo</span> : null}</div>
+            <p className="qm-param-valor"><span className="td-sub">Saldo</span> <strong>{kg(q.saldo_kg)}</strong> · <span className="td-sub">Mínimo</span> <strong>{q.minimo_kg === null ? "sin fijar" : kg(q.minimo_kg)}</strong></p>
+            {q.ultimo ? <p className="td-sub">Último cambio: «{q.ultimo.motivo}» · {q.ultimo.autor} · {fecha(q.ultimo.creado_en)}</p> : null}
+            {abierto === q.codigo
+              ? <FormMinimo q={q} onCerrar={() => setAbierto(null)} onListo={(t) => { setAbierto(null); setAviso(t); setVez((v) => v + 1); }} />
+              : <div className="qm-botones"><button type="button" className="td-boton-sec" onClick={() => { setAviso(null); setAbierto(q.codigo); }}>{q.minimo_kg === null ? "Fijar el mínimo…" : "Cambiar el mínimo…"}</button></div>}
+          </article>))}
+      </div>
+    </>
+  );
+}
+function FormMinimo({ q, onListo, onCerrar }: { q: MinimoQuimico; onListo: (t: string) => void; onCerrar: () => void }) {
+  const [v, setV] = useState(q.minimo_kg === null ? "" : String(q.minimo_kg).replace(".", ",")); const [motivo, setMotivo] = useState("");
+  const { enviando, error, enviar } = useEnvio();
+  const vacio = v.trim() === ""; const n = Number(v.replace(",", "."));
+  const valido = vacio ? q.minimo_kg !== null : Number.isFinite(n) && n > 0 && n <= 10_000_000 && n !== q.minimo_kg;
+  const listo = valido && motivo.trim().length >= 10;
+  return (
+    <section className="qm-form" aria-label={`Saldo mínimo de ${q.nombre}`} data-form="minimo">
+      <label className="td-campo" htmlFor={`qm-min-${q.codigo}`}>Saldo mínimo (kg){q.minimo_kg !== null ? " — vacío para quitarlo" : ""}
+        <input id={`qm-min-${q.codigo}`} type="text" inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} aria-invalid={!vacio && !valido} /></label>
+      <Motivo id={`qm-min-m-${q.codigo}`} valor={motivo} onCambiar={setMotivo} />
+      <Pie enviando={enviando} error={error} listo={listo} rotulo={vacio ? "Quitar el mínimo" : "Guardar el mínimo"} onCerrar={onCerrar}
+        onGuardar={() => void enviar(async () => { const r = await apiAvisos.fijarMinimo(q.codigo, vacio ? null : n, motivo);
+          onListo(r.minimo_kg === null ? `${q.nombre}: sin saldo mínimo.` : `${q.nombre}: saldo mínimo ${kg(r.minimo_kg)}.`); })} />
     </section>
   );
 }

@@ -105,7 +105,7 @@ const srv = http.createServer((req, res) => {
       if (fn === "geoportal_estado_acceso") return json(200, "ok");
       if (fn === "geoportal_log") return json(200, null);
       rpcs.push({ fn, a });
-      if (fn.startsWith("geoportal_redes_") || /^geoportal_tec_punto|^geoportal_tec_quimic/.test(fn)) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
+      if (fn.startsWith("geoportal_redes_") || /^geoportal_tec_punto|^geoportal_tec_quimic|^geoportal_tec_aviso/.test(fn)) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
       const r = rpcPlanta(fn, a);
       return r && typeof r.status === "number" && r.cuerpo ? json(r.status, r.cuerpo) : json(200, r);
     }
@@ -213,7 +213,7 @@ const mov = (tipo) => sqlq(`select coalesce(string_agg(q.codigo || '|' || m.cant
 for (const ancho of [390, 1280]) {
   const tag = `[${ancho}]`;
   rehacer(); rpcs.length = 0;
-  sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario) values ('${EMAILS.op2}', 'asignar_formulario', 'uso_quimicos'), ('${EMAILS.op2}', 'asignar_formulario', 'entrada_quimicos')`);
+  sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values ('${EMAILS.op2}', 'asignar_formulario', 'uso_quimicos', '${EMAILS.adm}'), ('${EMAILS.op2}', 'asignar_formulario', 'entrada_quimicos', '${EMAILS.adm}')`);
   const HOY = sqlq("select (clock_timestamp() at time zone 'America/Bogota')::date");
 
   // ===== A. El inicio: las dos tarjetas ya no son «Próximamente» =====

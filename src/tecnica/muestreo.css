@@ -12,7 +12,7 @@
 .mue-simb-rev { background: #fff; border: 4px solid #6d28d9; }
 .mue-cercano { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #eef4fb; border: 1px solid #b9cde6; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
 .mue-estado { display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: #3d4440; overflow-wrap: anywhere; }
-.mue-guardar { border: 2px solid #6d28d9; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: #faf8ff; }
+.mue-guardar { border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--t-tarjeta); }
 .mue-guardar h3 { margin: 0; font-size: 16px; }
 .mue-precision { margin: 0; font-size: 16px; }
 .mue-ok { color: #0f766e; }
@@ -20,7 +20,7 @@
 .mue-enlace { background: none; border: none; color: #0a4f9c; text-decoration: underline; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; padding: 10px 4px; min-height: 44px; }
 /* Dashboard PTAP · pestaña «Puntos» */
 .pto-lista { display: flex; flex-direction: column; gap: 14px; }
-.pto-tarjeta { border: 1px solid #c9cdc5; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #fff; min-width: 0; }
+.pto-tarjeta { border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #fff; min-width: 0; }
 .pto-tarjeta h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
 .pto-meta { margin: 0; font-size: 14px; color: #3d4440; overflow-wrap: anywhere; }
 .pto-lejos { display: inline-block; background: #fde8e7; color: #8a1c13; border-radius: 6px; padding: 2px 8px; font-size: 13px; font-weight: 700; margin-left: 6px; }

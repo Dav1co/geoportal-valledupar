@@ -111,7 +111,7 @@ const srv = http.createServer((req, res) => {
         const p = PERFIL[a.p_solicitante];
         return p ? json(200, { perfil: p, formularios: [{ clave: "danos_fallas", nombre: "Daño o falla", descripcion: "", con_campos: false }, { clave: "mantenimiento", nombre: "Registrar intervención", descripcion: "", con_campos: false }] }) : json(403, { code: "42501", message: "Sin permiso" });
       }
-      if (fn.startsWith("geoportal_redes_")) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
+      if (fn.startsWith("geoportal_redes_") || /^geoportal_tec_aviso/.test(fn)) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
       // Administración (Corte 4a): las funciones de permisos reales de la base local
       if (fn === "geoportal_pausa_estado") return json(200, { activa: false, afectados: 0 });
       if (fn === "geoportal_aislamiento_verificado") return json(200, true);
@@ -222,7 +222,7 @@ const puntoDeTramo = (p) => p.evaluate(() => {
 });
 const tocar = async (p, x, y, movil) => { if (movil) await p.touchscreen.tap(x, y); else await p.mouse.click(x, y); };
 async function foto(p, momento) {
-  await clicTexto(p, "button", `📷 ${momento}`); await p.waitForSelector(".campo-capturar:not([disabled])", { timeout: 15000 });
+  await clicTexto(p, "button", `Foto: ${momento}`); await p.waitForSelector(".campo-capturar:not([disabled])", { timeout: 15000 });
   const n = await p.evaluate(() => document.querySelectorAll(".dan-foto").length);
   await p.click(".campo-capturar"); await p.waitForFunction((n) => document.querySelectorAll(".dan-foto").length === n + 1, { timeout: 15000 }, n);
 }

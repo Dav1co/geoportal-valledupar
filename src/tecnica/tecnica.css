@@ -1,19 +1,19 @@
 /* Área Técnica (Torre B): pantalla del operador, celular primero (390 px). Colores de la maqueta; objetivos táctiles de al menos 44 px; campos de 16 px (el celular no hace zoom). */
-.tec-pagina { flex: 1; overflow: auto; background: #f3f6f8; padding: 0 0 24px; color: #22313f; -webkit-text-size-adjust: 100%; }
+.tec-pagina { flex: 1; overflow: auto; background: var(--t-fondo); padding: 0 0 24px; color: var(--t-texto); -webkit-text-size-adjust: 100%; }
 .tec-pagina > * { max-width: 520px; margin-left: auto; margin-right: auto; }
 .tec-sesion { background: #fff; border-bottom: 1px solid #dde5ea; padding: 10px 16px; font-size: 13px; color: #52626f; max-width: none !important; overflow-wrap: anywhere; }
 .tec-rotulo { font-size: 13px; font-weight: 600; color: #52626f; margin-bottom: 8px; }
 .tec-formularios { padding: 16px 16px 0; }
 .tec-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .tec-chip-form { min-height: 44px; padding: 0 14px; border-radius: 22px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; background: #fff; color: #0a2540; border: 1px solid #7b8b99; display: inline-flex; align-items: center; gap: 8px; }
-.tec-chip-form[aria-pressed="true"] { background: #0a2540; color: #fff; border-color: #0a2540; }
+.tec-chip-form[aria-pressed="true"] { background: var(--t-modo); color: #fff; border-color: var(--t-modo); }
 .tec-chip-form:disabled { background: #eef2f5; color: #52626f; border-color: #c3ced6; cursor: not-allowed; }
 .tec-pronto { font-size: 11.5px; font-weight: 600; background: #fdf1e0; color: #8a4a06; padding: 2px 7px; border-radius: 10px; }
 .tec-supervision { padding: 12px 16px 0; display: flex; flex-wrap: wrap; gap: 10px; }
 
-.tec-tarjeta { margin: 16px; background: #fff; border: 1px solid #dde5ea; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
-.tec-tarjeta h1 { margin: 0; font-size: 22px; color: #0a2540; }
-.tec-tarjeta h2 { margin: 0; font-size: 18px; color: #0a2540; }
+.tec-tarjeta { margin: 16px; background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.tec-tarjeta h1 { margin: 0; font-size: var(--t-titulo-1); color: var(--t-titulo); }
+.tec-tarjeta h2 { margin: 0; font-size: var(--t-titulo-2); color: var(--t-titulo); }
 .tec-sub { margin: 4px 0 0; font-size: 14px; color: #52626f; }
 .tec-tarjeta > p { margin: 0; }
 
@@ -33,22 +33,22 @@
 .tec-error-caja { margin: 0; background: #fdeceb; color: #b42318; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
 
 .tec-bloque { border-top: 1px solid #dde5ea; padding-top: 16px; display: flex; flex-direction: column; gap: 14px; }
-.tec-bloque-tit { font-size: 16px; font-weight: 700; color: #0f766e; }
+.tec-bloque-tit { font-size: 16px; font-weight: 700; color: var(--t-modo); }
 .tec-bloque-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tec-plantas { display: flex; gap: 10px; }
 .tec-planta { flex: 1; min-height: 52px; border-radius: 10px; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; background: #fff; color: #0a2540; border: 2px solid #c3ced6; }
-.tec-planta[aria-pressed="true"] { background: #0f766e; color: #fff; border-color: #0f766e; }
+.tec-planta[aria-pressed="true"] { background: var(--t-modo); color: #fff; border-color: var(--t-modo); }
 .tec-planta:disabled { opacity: 0.7; cursor: not-allowed; }
-.tec-comun { background: #e3f3f1; border: 1px solid #0f766e; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.tec-comun { background: var(--t-suave); border: 1px solid var(--t-borde); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
 .tec-comun .tec-bloque-tit { color: #0a2540; }
 .tec-comun .tec-ayuda { color: #22313f; }
-.tec-chip { background: #0f766e; color: #fff; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 10px; }
+.tec-chip { background: var(--t-modo); color: #fff; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 10px; }
 .tec-comun-plegado { background: #eef2f5; border-color: #c3ced6; }
 .tec-comun-plegado .tec-ayuda { color: #52626f; }
 
-.tec-boton { min-height: 52px; border: none; border-radius: 10px; background: #0f766e; color: #fff; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; padding: 0 16px; }
+.tec-boton { min-height: 48px; border: none; border-radius: var(--t-radio); background: var(--t-modo); color: #fff; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; padding: 0 16px; }
 .tec-boton:disabled { opacity: 0.65; cursor: not-allowed; }
-.tec-boton-sec { min-height: 48px; border-radius: 10px; background: #fff; color: #0f766e; border: 2px solid #0f766e; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.tec-boton-sec { min-height: var(--t-toque); border-radius: var(--t-radio); background: #fff; color: var(--t-modo); border: 1px solid var(--t-modo); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .tec-boton-sec:disabled { color: #52626f; border-color: #c3ced6; background: #eef2f5; cursor: not-allowed; }
 .tec-boton-corto { min-height: 44px; flex-shrink: 0; }
 .tec-enlace { background: none; border: none; color: #0a2540; text-decoration: underline; font: inherit; cursor: pointer; padding: 10px 4px; min-height: 44px; }
@@ -60,7 +60,7 @@
 .tec-aviso-info { background: #eaf2fb; color: #12395f; border: 1px solid #a9c8e8; }
 
 .tec-confirma { display: flex; flex-direction: column; gap: 12px; }
-.tec-lista-conf { list-style: none; margin: 0; padding: 0; border-top: 2px solid #0a2540; }
+.tec-lista-conf { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--t-modo); }
 .tec-lista-conf li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #dde5ea; font-size: 15px; }
 .tec-lista-conf strong { white-space: nowrap; text-align: right; }
 .tec-num { font-variant-numeric: tabular-nums; }
@@ -68,7 +68,7 @@
 .tec-resumen-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .tec-tabla { display: flex; flex-direction: column; font-size: 14px; }
 .tec-fila { display: grid; grid-template-columns: minmax(0, 1.7fr) 1fr 1fr 1fr; gap: 6px; padding: 10px 0; border-bottom: 1px solid #dde5ea; align-items: start; }
-.tec-fila-cab { font-weight: 700; border-bottom: 2px solid #0a2540; padding: 8px 0; }
+.tec-fila-cab { font-weight: 700; border-bottom: 2px solid var(--t-modo); padding: 8px 0; }
 .tec-der { text-align: right; }
 .tec-unidad-chica { display: block; font-size: 12px; color: #52626f; }
 
@@ -84,7 +84,7 @@
 .tec-estado-ok { background: #e5f5ec; color: #14532d; border: 1px solid #86c9a0; }
 .tec-estado-error { background: #fdeceb; color: #8f1d14; border: 1px solid #f0a8a2; }
 .tec-estado-pendiente { background: #fdf1e0; color: #6b3a05; border: 1px solid #e8c48f; }
-.tec-conf-lugar { font-size: 15px; font-weight: 700; color: #0f766e; margin: 6px 0 2px; }
+.tec-conf-lugar { font-size: 15px; font-weight: 700; color: var(--t-modo); margin: 6px 0 2px; }
 .tec-lugar-resumen { display: block; font-size: 13px; color: #22313f; }
 
 @media (max-width: 380px) { .tec-tarjeta { margin: 12px 8px; padding: 14px 12px; } .tec-fila { grid-template-columns: minmax(0, 1.5fr) 1fr 1fr 1fr; gap: 4px; font-size: 13.5px; } }
@@ -96,7 +96,7 @@
 .tec-dosis { border: 1px solid #c3ced6; border-radius: 10px; background: #fff; }
 .tec-dosis > summary { min-height: 48px; padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; cursor: pointer; font-size: 16px; font-weight: 700; color: #0a2540; list-style: none; }
 .tec-dosis > summary::-webkit-details-marker { display: none; }
-.tec-dosis > summary::before { content: "▸"; font-size: 14px; color: #0f766e; margin-right: 4px; }
+.tec-dosis > summary::before { content: "▸"; font-size: 14px; color: var(--t-modo); margin-right: 4px; }
 .tec-dosis[open] > summary::before { content: "▾"; }
 .tec-dosis > summary:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; border-radius: 10px; }
 .tec-dosis-cuerpo { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 14px; }
@@ -105,7 +105,7 @@
 /* §34: el selector PTAP | distribución pasó al encabezado común (dashboard.css, .tdash-selector). */
 
 /* ---------- Corte 11: inicio de Técnica por modos (Planta, Redes y Supervisión). Celular primero; tarjetas de al menos 68 px; un color por modo. ---------- */
-.tec-inicio { background: #f2f5f8; }
+.tec-inicio { background: var(--t-fondo); }
 .tec-inicio > * { max-width: 1120px; }
 .tec-inicio-cab { background: #fff; border-bottom: 1px solid #dde5ea; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; max-width: none !important; }
 .tec-inicio-tit h1 { margin: 0; font-size: 22px; color: #0a2540; }
@@ -113,20 +113,20 @@
 .tec-modos { display: flex; background: #e6ecf1; border-radius: 12px; padding: 4px; gap: 4px; }
 .tec-modo { flex: 1; min-height: 44px; border: none; border-radius: 9px; background: transparent; font: inherit; font-size: 15px; font-weight: 700; color: #33424f; cursor: pointer; padding: 0 10px; }
 .tec-modo[aria-selected="true"] { color: #fff; }
-.tec-modo-planta[aria-selected="true"] { background: #0a2540; }
-.tec-modo-redes[aria-selected="true"] { background: #0f3d2b; }
-.tec-modo-supervision[aria-selected="true"] { background: #1e5aa8; }
+.tec-modo-planta[aria-selected="true"] { background: var(--t-plantas); }
+.tec-modo-redes[aria-selected="true"] { background: var(--t-distribucion); }
+.tec-modo[data-modo="supervision"][aria-selected="true"] { background: var(--t-supervision); }
 .tec-modo:focus-visible, .tec-tarjeta-modo:focus-visible, .tec-volver:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
-.tec-tarjetas { padding: 16px; --tec-modo: #0a2540; }
-.tec-tarjetas-redes { --tec-modo: #0f3d2b; }
-.tec-tarjetas-supervision { --tec-modo: #1e5aa8; }
-.tec-modo-unico { margin: 0 0 12px; font-size: 14px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--tec-modo); }
+.tec-tarjetas { padding: 16px; --t-modo: var(--t-plantas); }
+.tec-tarjetas-redes { --t-modo: var(--t-distribucion); }
+.tec-tarjetas-supervision { --t-modo: var(--t-supervision); }
+.tec-modo-unico { margin: 0 0 12px; font-size: 16px; font-weight: 700; color: var(--t-modo); }
 .tec-rejilla { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .tec-tarjeta-modo { min-height: 68px; width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; padding: 12px 14px; border-radius: 14px; background: #fff;
-  border: 1px solid #cfd9e0; border-left: 5px solid var(--tec-modo); font: inherit; color: #22313f; cursor: pointer; box-sizing: border-box; }
-button.tec-tarjeta-modo:hover { border-color: var(--tec-modo); }
+  border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); font: inherit; color: #22313f; cursor: pointer; box-sizing: border-box; }
+button.tec-tarjeta-modo:hover { border-color: var(--t-modo); }
 button.tec-tarjeta-modo:active { background: #eef3f6; }
-.tec-tarjeta-ini { flex: 0 0 44px; width: 44px; height: 44px; border-radius: 12px; background: var(--tec-modo); color: #fff; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.tec-tarjeta-ini { flex: 0 0 44px; width: 44px; height: 44px; border-radius: 12px; background: var(--t-modo); color: #fff; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .tec-tarjeta-ini::before { content: attr(data-ini); }
 .tec-tarjeta-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .tec-tarjeta-nom { font-size: 17px; font-weight: 700; color: #0a2540; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

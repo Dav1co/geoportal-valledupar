@@ -53,6 +53,8 @@ body {
 .barra-usuario { display: flex; align-items: center; gap: 14px; font-size: 12px; color: #dbe7f4; }
 .barra-usuario .btn-link { color: #dbe7f4; }
 .barra-usuario .btn-link:hover { color: #ffffff; }
+/* Corte 13 (David, 16:40): el correo del encabezado deja la letra de máquina de escribir; misma familia Arial/Helvetica, peso normal, pequeño y gris claro sobre el azul. En todo el geoportal. */
+.barra-usuario .barra-correo { font-family: var(--sans); font-weight: 400; font-size: 12px; letter-spacing: 0; color: #c9d8ea; }
 
 .cuerpo { display: flex; flex: 1; min-height: 0; }
 

@@ -27,7 +27,7 @@ export function AvisoTurbiedad({ version = 0 }: { version?: number }) {
     <div className="tav-lista" data-testid="avisos-turbiedad" role="status" aria-live="polite">
       {datos.avisos.map((a) => (
         <div key={a.planta} className="tav" data-planta={a.planta}>
-          <div className="tav-texto"><span aria-hidden="true">⚠ </span>
+          <div className="tav-texto">
             <strong>Turbiedad de ingreso alta ({fmtValor(a.valor, a.decimales)} {a.unidad} en planta {a.planta_nombre}).</strong> Evalúe dosis o coagulante con prueba de jarras
           </div>
           <div className="tav-menor">Muestra del {fmtFecha(a.fecha_muestra)} a las {a.hora_muestra.slice(0, 5)} · umbral de la planta: {fmtValor(a.umbral, a.decimales)} {a.unidad}</div>

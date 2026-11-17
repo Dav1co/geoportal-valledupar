@@ -21,7 +21,7 @@
 .cg-asistente { gap: 14px; }
 .cg-pasos { display: flex; gap: 6px; }
 .cg-pasos span { flex: 1; height: 6px; border-radius: 3px; background: #dadDd6; background: #dadfd6; }
-.cg-pasos .cg-paso-si { background: #1f5fa8; }
+.cg-pasos .cg-paso-si { background: var(--t-modo, #0f3d2b); }
 .cg-asistente select { min-height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 16px; background: #fff; width: 100%; min-width: 0; max-width: 100%; }
 .cg-asistente .tec-campo input[type="text"] { height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; }
 .cg-dos { display: grid; grid-template-columns: 1fr; gap: 12px; }
@@ -30,7 +30,7 @@
 .cg-nav { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; }      /* 5d: con .tec-acciones (columna) la base de 140 px se iba al alto */
 .cg-nav > button { flex: 1 1 140px; }
 .cg-progreso .cg-barra { height: 10px; background: #e6eaee; border-radius: 5px; overflow: hidden; }
-.cg-progreso .cg-barra span { display: block; height: 100%; background: #1f5fa8; transition: width .2s; }
+.cg-progreso .cg-barra span { display: block; height: 100%; background: var(--t-modo, #0f3d2b); transition: width .2s; }
 .cg-cifras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 @media (min-width: 720px) { .cg-cifras { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .cg-cifra { background: #f4f6f8; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }

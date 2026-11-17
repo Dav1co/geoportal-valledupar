@@ -1,8 +1,8 @@
 /* Dashboard técnico (supervisor y administrador): pantalla ancha primero, usable a 390 px (tabla con desplazamiento horizontal contenido, filtros plegables). Colores de la maqueta. */
 /* §34: los dos dashboards (PTAP y distribución) comparten este armado. La raíz llena el alto que queda debajo de la barra (flex: 1 dentro de .app) y desplaza su propio
    contenido; min-height: 0 para que Safari no la estire más que la pantalla. Lo único que cambia entre los dos es el color del encabezado (--tdash-color). */
-.tdash { --tdash-color: #0a2540; position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; background: #f3f6f8; color: #22313f; -webkit-text-size-adjust: 100%; }
-.tdash-verde { --tdash-color: #0f3d2b; }      /* Dashboard distribución: verde oscuro */
+.tdash { --tdash-color: var(--t-plantas); --t-modo: var(--tdash-color); position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; background: var(--t-fondo); color: var(--t-texto); -webkit-text-size-adjust: 100%; }
+.tdash-verde { --tdash-color: var(--t-distribucion); --t-modo: var(--tdash-color); }      /* Dashboard distribución: verde oscuro */
 .tdash-cab { background: var(--tdash-color); color: #fff; }
 .tdash-ancho { max-width: 1200px; margin: 0 auto; padding: 12px 24px 0; box-sizing: border-box; }
 .tdash-fila { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
@@ -10,28 +10,28 @@
 .tdash-sesion { font-size: 14px; color: #b7c9d6; margin-top: 4px; overflow-wrap: anywhere; }
 .tdash-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .tdash-tab { min-height: 44px; padding: 0 14px; background: none; border: none; border-bottom: 3px solid transparent; color: #b7c9d6; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
-.tdash-tab[aria-current="page"] { color: #fff; border-bottom-color: #2dd4bf; }
+.tdash-tab[aria-current="page"] { color: #fff; border-bottom-color: #fff; }
 .tdash-tab:focus-visible, .td-boton:focus-visible, .td-boton-sec:focus-visible, .td-boton-claro:focus-visible, .td-enlace:focus-visible, .td-campo select:focus-visible, .td-campo input:focus-visible, .td-campo textarea:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
 .tdash-tab-pronto, .tdash-tab:disabled { color: #8fa4b4; cursor: not-allowed; }
 .td-pronto { font-size: 11.5px; font-weight: 600; background: #fdf1e0; color: #8a4a06; padding: 2px 7px; border-radius: 10px; }
 .tdash-selector { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.tdash-sel { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.55); background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.tdash-sel { min-height: 44px; padding: 0 14px; border-radius: var(--t-radio); border: 1px solid rgba(255,255,255,.55); background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .tdash-sel[aria-pressed="true"] { background: #fff; color: var(--tdash-color); border-color: #fff; }
 .tdash-sel:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
 .td-boton-claro { min-height: 44px; padding: 0 14px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.55); color: #fff; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .tdash-cuerpo { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; }
 
 .td-seccion { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.td-seccion h2 { margin: 0; font-size: 24px; color: #0a2540; }
+.td-seccion h2 { margin: 0; font-size: var(--t-titulo-1); color: var(--t-titulo); }
 .td-h3 { margin: 0; font-size: 18px; color: #0a2540; }
 .td-cab { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; }
 .td-sub { margin: 4px 0 0; font-size: 14px; color: #52626f; max-width: 700px; line-height: 1.45; }
 .td-privacidad { margin: 0; font-size: 13px; color: #52626f; background: #eef2f5; border-radius: 8px; padding: 8px 12px; }
 .td-descargas { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .td-botones { display: flex; flex-wrap: wrap; gap: 8px; }
-.td-boton { min-height: 44px; padding: 0 16px; border-radius: 8px; border: none; background: #0f766e; color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.td-boton { min-height: 44px; padding: 0 16px; border-radius: var(--t-radio); border: none; background: var(--t-modo); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
 .td-boton:disabled { opacity: .6; cursor: not-allowed; }
-.td-boton-sec { min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #0f766e; background: #fff; color: #0f766e; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.td-boton-sec { min-height: 44px; padding: 0 16px; border-radius: var(--t-radio); border: 1px solid var(--t-modo); background: #fff; color: var(--t-modo); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
 .td-boton-sec:disabled { color: #52626f; border-color: #c3ced6; background: #eef2f5; cursor: not-allowed; }
 .td-corto { padding: 0 12px; font-size: 14px; }
 .td-enlace { background: none; border: none; color: #0a4f9c; text-decoration: underline; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; padding: 10px 4px; min-height: 44px; text-align: left; }
@@ -55,7 +55,7 @@
 .td-tabla-caja { background: #fff; border: 1px solid #dde5ea; border-radius: 12px; overflow-x: auto; max-width: 100%; }
 .td-tabla { width: 100%; min-width: 980px; border-collapse: collapse; font-size: 14px; }
 .td-tabla-personal { min-width: 1100px; }
-.td-tabla th { text-align: left; padding: 12px 12px; background: #eef2f5; border-bottom: 2px solid #0a2540; font-size: 13px; font-weight: 700; color: #0a2540; vertical-align: bottom; }
+.td-tabla th { text-align: left; padding: 12px 12px; background: var(--t-suave); border-bottom: 2px solid var(--t-modo); font-size: 13px; font-weight: 700; color: #0a2540; vertical-align: bottom; }
 .td-tabla td { padding: 10px 12px; border-bottom: 1px solid #dde5ea; vertical-align: top; }
 .td-der { text-align: right !important; } .td-centro { text-align: center !important; }
 .td-num { white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -113,7 +113,7 @@
 .tr-menor { font-size: 13px; color: #52626f; }
 .tr-valor { font-weight: 700; font-variant-numeric: tabular-nums; }
 .tr-grupo { display: flex; flex-direction: column; gap: 8px; }
-.tr-grupo-tit { margin: 8px 0 0; font-size: 17px; color: #0f766e; }
+.tr-grupo-tit { margin: 8px 0 0; font-size: 17px; color: var(--t-modo); }
 .tr-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px; }
 .tr-sin-datos { background: #fff; border: 1px solid #dde5ea; border-radius: 10px; padding: 8px 14px; font-size: 14px; }
 .tr-sin-datos summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
@@ -121,7 +121,7 @@
 .tg-fig { margin: 0; background: #fff; border: 1px solid #dde5ea; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .tg-cab { display: flex; flex-direction: column; gap: 4px; }
 .tg-titulo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 15px; }
-.tg-lugar { color: #0f766e; font-weight: 600; font-size: 14px; }
+.tg-lugar { color: var(--t-modo); font-weight: 600; font-size: 14px; }
 .tg-datos { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; color: #52626f; }
 .tg-fuera { padding: 1px 8px; border-radius: 10px; background: #eef2f5; border: 1px solid #c3ced6; font-weight: 700; color: #22313f; }
 .tg-fuera-si { background: #fdeceb; border-color: #f0a8a2; color: #8f1d14; }
@@ -129,7 +129,7 @@
 .tg-nota { margin: 0; font-size: 12.5px; color: #8a4a06; background: #fdf1e0; border-radius: 6px; padding: 4px 8px; }
 .tg-caja { width: 100%; min-width: 0; }
 .tg-svg { display: block; max-width: 100%; }
-.tg-banda { fill: #0f766e; fill-opacity: .13; }
+.tg-banda { fill: var(--t-modo); fill-opacity: .13; }
 .tg-rejilla { stroke: #dde5ea; stroke-width: 1; }
 .tg-rejilla-x { stroke: #eef2f5; stroke-width: 1; }
 .tg-eje { font-size: 11px; fill: #52626f; font-variant-numeric: tabular-nums; }
@@ -157,7 +157,7 @@
 
 /* ---------- Aviso de turbiedad alta (supervisor) ---------- */
 .tav-lista { display: flex; flex-direction: column; gap: 8px; }
-.tav { border-radius: 10px; padding: 12px 14px; background: #fff4e0; border: 1px solid #e2a23b; border-left: 6px solid #b86e00; color: #5a3200; font-size: 15px; line-height: 1.4; }
+.tav { border-radius: 10px; padding: 12px 14px; background: var(--t-naranja-suave); border: 1px solid #e2a23b; border-left: var(--t-borde-modo) solid var(--t-naranja); color: #5a3200; font-size: 15px; line-height: 1.4; }
 .tav-menor { margin-top: 4px; font-size: 13px; color: #6b4a1a; }
 .tav-config { background: #fff; border: 1px solid #c3ced6; border-radius: 10px; padding: 0 14px; }
 .tav-config > summary { min-height: 44px; display: flex; align-items: center; gap: 8px; font-weight: 700; color: #0a2540; cursor: pointer; }
@@ -168,18 +168,18 @@
 .tav-planta legend { font-weight: 700; color: #0a2540; padding: 0 6px; }
 .tav-vigente { margin: 0; font-size: 14.5px; color: #22313f; }
 .tav-fila { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
-.tav-hist > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: #0f766e; }
+.tav-hist > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--t-modo); }
 .tav-hist ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: #3a4a57; display: flex; flex-direction: column; gap: 4px; }
 @media (max-width: 700px) { .tav-planta .td-boton, .tav-planta .td-boton-sec { width: 100%; } }
 
 /* §34: el contenido del Dashboard distribución con los mismos botones, opciones y tarjetas que el PTAP (sus componentes usan las clases de los formularios
    de Técnica: aquí se igualan, solo dentro del cuerpo del dashboard). */
 .tdash .dash-redes { padding-bottom: 24px; }
-.tdash .dash-redes .tec-tarjeta { margin: 0; background: #fff; border: 1px solid #dde5ea; border-radius: 12px; }
+.tdash .dash-redes .tec-tarjeta { margin: 0; background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); }
 .tdash .dash-redes .dan-pad-x, .tdash .dash-redes .dan-pad-x.dash-pestanas { margin: 0; }
 .tdash .dash-redes .dan-pad { padding: 0; }
-.tdash .dash-redes .tec-boton { min-height: 44px; padding: 0 16px; border-radius: 8px; border: none; background: #0f766e; color: #fff; font: inherit; font-size: 15px; font-weight: 700; }
-.tdash .dash-redes .tec-boton-sec { min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #0f766e; background: #fff; color: #0f766e; font: inherit; font-size: 15px; font-weight: 700; }
+.tdash .dash-redes .tec-boton { min-height: 44px; padding: 0 16px; border-radius: var(--t-radio); border: none; background: var(--t-modo); color: #fff; font: inherit; font-size: 15px; font-weight: 700; }
+.tdash .dash-redes .tec-boton-sec { min-height: 44px; padding: 0 16px; border-radius: var(--t-radio); border: 1px solid var(--t-modo); background: #fff; color: var(--t-modo); font: inherit; font-size: 15px; font-weight: 700; }
 .tdash .dash-redes .dan-opcion { min-height: 44px; border-radius: 8px; font-size: 15px; }
-.tdash .dash-redes .dan-opcion[aria-pressed="true"], .tdash .dash-redes [role="tab"][aria-selected="true"] { background: #0f766e; border-color: #0f766e; color: #fff; }
+.tdash .dash-redes .dan-opcion[aria-pressed="true"], .tdash .dash-redes [role="tab"][aria-selected="true"] { background: var(--t-modo); border-color: var(--t-modo); color: #fff; }
 .pto-tarjeta { border-color: #dde5ea; border-radius: 12px; }

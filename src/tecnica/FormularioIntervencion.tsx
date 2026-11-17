@@ -516,7 +516,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
         <h2 id="itv-t7">7. Fotos y soportes</h2>
         <p className="tec-ayuda">{sinFotos ? "Sin fotos: queda marcada «sin evidencia fotográfica»." : `Al menos una foto. Máximo ${reglas.max_fotos}. Solo cámara; la foto no se guarda en el celular.`}</p>
         {!sinFotos ? <div className="dan-fila">{CLASES.map((m) => (
-          <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}>📷 {m.n}</button>))}</div> : null}
+          <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}>Foto: {m.n}</button>))}</div> : null}
         {camara ? (
           <CamaraActa rotulo={`Foto: ${CLASES.find((m) => m.c === camara)!.n.toLowerCase()}`} maxBytes={reglas.max_bytes_foto}
             sello={() => [new Date().toLocaleString("es-CO"), ubic.fix ? `${ubic.fix.lat.toFixed(5)}, ${ubic.fix.lon.toFixed(5)}` : "sin GPS"]}
@@ -536,7 +536,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
               if (f.type !== "application/pdf") { setErrorEnvio("El documento debe ser PDF."); return; }
               if (f.size > reglas.max_bytes_documento) { setErrorEnvio(`El documento pesa más de ${Math.round(reglas.max_bytes_documento / 1048576)} MB.`); return; }
               setErrorEnvio(null); setDocs((d) => [...d, { archivo: f }]); prep.current = null; }} />
-          {docs.length ? <ul className="itv-docs">{docs.map((d, i) => <li key={i}>📄 {d.archivo.name} ({Math.round(d.archivo.size / 1024)} KB) <button type="button" className="tec-enlace" onClick={() => { setDocs((x) => x.filter((_, j) => j !== i)); prep.current = null; }}>Quitar</button></li>)}</ul> : null}
+          {docs.length ? <ul className="itv-docs">{docs.map((d, i) => <li key={i}>{d.archivo.name} ({Math.round(d.archivo.size / 1024)} KB) <button type="button" className="tec-enlace" onClick={() => { setDocs((x) => x.filter((_, j) => j !== i)); prep.current = null; }}>Quitar</button></li>)}</ul> : null}
         </div>
       </section>
 

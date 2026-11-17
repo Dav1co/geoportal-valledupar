@@ -1,10 +1,10 @@
 /* Ficha del activo (Técnica · distribución, Corte 1b). Colores de la maqueta Ficha.dc.html; celular primero (390 px); objetivos táctiles de 44 px o más. */
 .red-ficha { flex: 1; overflow: auto; background: #f4f5f2; color: #1b1f1d; padding-bottom: 28px; -webkit-text-size-adjust: 100%; }
-.red-cabeza { background: #1f5fa8; color: #fff; padding: 12px max(16px, calc((100% - 720px) / 2)) 20px; display: flex; flex-direction: column; gap: 8px; }
+.red-cabeza { background: var(--t-modo, #0f3d2b); color: #fff; padding: 12px max(16px, calc((100% - 720px) / 2)) 20px; display: flex; flex-direction: column; gap: 8px; }
 .red-cuerpo { max-width: 752px; width: 100%; margin-left: auto; margin-right: auto; box-sizing: border-box; }
 .red-volver { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; background: none; border: none; color: #fff; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; padding: 0; align-self: flex-start; }
 .red-volver:focus-visible, .red-fila:focus-visible, .red-plegable summary:focus-visible, .red-registro summary:focus-visible { outline: 3px solid #f2c94c; outline-offset: 2px; }
-.red-ceja { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #d6e4f5; }
+.red-ceja { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, .82); }
 .red-codigo { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 0.01em; overflow-wrap: anywhere; }
 .red-titulo { font-size: 26px; }
 .red-tipo { font-size: 16px; overflow-wrap: anywhere; }
@@ -16,7 +16,7 @@
 .red-estado-retirado { color: #8c2f1b; }
 .red-cuerpo { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 .red-aviso { margin: 0; }
-.red-seccion { background: #fff; border: 1px solid #daddd6; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.red-seccion { background: #fff; border: 1px solid var(--t-borde, #d5dde6); border-left: var(--t-borde-modo, 5px) solid var(--t-modo, #0f3d2b); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .red-seccion h2 { margin: 0; font-size: 16px; font-weight: 700; color: #1b1f1d; }
 .red-sub { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: #3f4541; }
 .red-tit-fila { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -37,18 +37,18 @@
 .red-fila-cod { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
 .red-fila-sub { font-size: 13px; color: #5b625d; overflow-wrap: anywhere; }
 .red-fila-estado { font-size: 13px; font-weight: 600; flex-shrink: 0; max-width: 40%; text-align: right; }
-.red-dist { color: #1f5fa8; }
+.red-dist { color: var(--t-modo, #0f3d2b); }
 .red-icono { width: 10px; height: 10px; flex-shrink: 0; border-radius: 50%; border: 2px solid #1f5fa8; }
 .red-icono-linea { width: 14px; height: 0; border-radius: 0; border: none; border-top: 3px solid #1f5fa8; }
 .red-icono-nodo { border-color: #9aa19b; }
 .red-opcion { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #daddd6; font-size: 13px; color: #5b625d; }
-.red-opcion-sel { background: #1f5fa8; border-color: #1f5fa8; color: #fff; font-weight: 600; }
+.red-opcion-sel { background: var(--t-modo, #0f3d2b); border-color: var(--t-modo, #0f3d2b); color: #fff; font-weight: 600; }
 .red-plegable summary, .red-registro summary { cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; list-style: none; }
 .red-plegable summary::-webkit-details-marker, .red-registro summary::-webkit-details-marker { display: none; }
 .red-plegable summary::after, .red-registro summary::after { content: "▾"; color: #5b625d; }
 .red-plegable[open] summary::after, .red-registro[open] summary::after { content: "▴"; }
 .red-registro { border-top: 1px solid #eceee9; padding-top: 4px; display: flex; flex-direction: column; gap: 10px; }
-.red-registro summary { font-size: 14px; font-weight: 600; color: #1f5fa8; }
+.red-registro summary { font-size: 14px; font-weight: 600; color: var(--t-modo, #0f3d2b); }
 .red-linea { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .red-evento { display: flex; gap: 12px; padding-bottom: 12px; }
 .red-evento-punto { width: 12px; height: 12px; border-radius: 50%; background: #1f5fa8; flex-shrink: 0; margin-top: 3px; }
@@ -65,7 +65,7 @@
 }
 .red-evento-intervencion .red-evento-punto { background: #1f5fa8; }
 .red-evento-intervencion .red-evento-tit { color: #1f5fa8; }
-.red-accion { align-self: flex-start; margin-top: 10px; background: #1f5fa8; }
+.red-accion { align-self: flex-start; margin-top: 10px; background: var(--t-modo, #0f3d2b); }
 /* Corte 3b: la ficha como «perfil» */
 .red-alias { display: block; font-size: 18px; font-weight: 700; color: #ffffff; overflow-wrap: anywhere; }
 .red-chip-placa { background: #fff6dd; color: #6b4a00; }
@@ -91,7 +91,7 @@
 .red-foto-vista { max-width: 100%; max-height: 240px; border-radius: 8px; }
 .red-evento-ficha .red-evento-punto { background: #6b4a00; }
 .red-evento-ficha .red-evento-tit { color: #6b4a00; }
-.red-cabeza .red-accion { background: #ffffff; color: #1f5fa8; border: 1px solid #ffffff; }
+.red-cabeza .red-accion { background: #ffffff; color: var(--t-modo, #0f3d2b); border: 1px solid #ffffff; }
 
 /* Corte 9a: datos de referencia del Plan Maestro en la ficha, ficha preliminar del nodo y bandeja «Por verificar» */
 .red-referencia { border-style: dashed; }

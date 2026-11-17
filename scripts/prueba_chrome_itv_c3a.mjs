@@ -214,7 +214,7 @@ const puntoDeTramo = (p) => p.evaluate(() => {
 });
 const tocar = async (p, x, y, movil) => { if (movil) await p.touchscreen.tap(x, y); else await p.mouse.click(x, y); };
 async function foto(p, momento) {
-  await clicTexto(p, "button", `📷 ${momento}`); await p.waitForSelector(".campo-capturar:not([disabled])", { timeout: 15000 });
+  await clicTexto(p, "button", `Foto: ${momento}`); await p.waitForSelector(".campo-capturar:not([disabled])", { timeout: 15000 });
   const n = await p.evaluate(() => document.querySelectorAll(".dan-foto").length);
   await p.click(".campo-capturar"); await p.waitForFunction((n) => document.querySelectorAll(".dan-foto").length === n + 1, { timeout: 15000 }, n);
 }
@@ -329,7 +329,7 @@ for (const ancho of [390, 1280]) {
   await poner(p, "#itv-ini", local(-300)); await poner(p, "#itv-fin", local(-30));
   await poner(p, "#itv-desc", "Extensión de red nueva de prueba (Chrome)");
   await foto(p, "Después");
-  const h = await p.$("#itv-doc"); await h.uploadFile(PDF); await esperarTexto(p, /📄 orden_de_trabajo\.pdf/);
+  const h = await p.$("#itv-doc"); await h.uploadFile(PDF); await esperarTexto(p, /orden_de_trabajo\.pdf \(/);
   ok(`${tag} adjuntar un PDF lo lista con su nombre y tamaño`, true);
   const s1 = subidas.length;
   await clicTexto(p, "button", "Guardar intervención"); await esperarTexto(p, /Intervención guardada: ITV-\d{6}/, 30000);
