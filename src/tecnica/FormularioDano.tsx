@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { IconoCamara } from "./IconoCamara";
 import "./ficha.css";
 import "./dano.css";
 import { apiDano, apiRedes, subirFotoDano, type DanoGuardado, type Ficha, type FormularioDano as Def, type PreparacionDano } from "./apiRedes";
@@ -372,7 +373,7 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
         <h2 id="dan-t7">{tipoSel?.pide_rotura ? "7" : "6"}. Fotos</h2>
         <p className="tec-ayuda">{sinFotos ? "Sin fotos: queda marcado «sin evidencia fotográfica»." : `Al menos una del daño. Máximo ${def.reglas.max_fotos}. Solo cámara; la foto no se guarda en el celular.`}</p>
         {!sinFotos ? <div className="dan-fila">{MOMENTOS.map((m) => (
-          <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= def.reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}>Foto: {m.n}</button>))}</div> : null}
+          <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= def.reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}><IconoCamara />Foto: {m.n}</button>))}</div> : null}
         {camara ? (
           <CamaraActa rotulo={`Foto: ${MOMENTOS.find((m) => m.c === camara)!.n.toLowerCase()}`} maxBytes={def.reglas.max_bytes_foto}
             sello={() => [new Date().toLocaleString("es-CO"), ubic.fix ? `${ubic.fix.lat.toFixed(5)}, ${ubic.fix.lon.toFixed(5)}` : "sin GPS"]}

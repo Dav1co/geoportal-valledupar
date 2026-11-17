@@ -219,6 +219,12 @@ const limpio = async (tag, nombre, p) => {
   const f = await fuentesMal(p), e = await emojis(p), d = await degradados(p);
   ok(`${tag} ${nombre}: todo el texto en Arial/Helvetica, sin emojis y sin degradados`, f.length === 0 && e.length === 0 && d === 0, JSON.stringify({ f, e, d }));
 };
+/** Botones de foto: cada uno lleva delante el ícono de cámara de línea (SVG de 18 px, del color del texto del botón; sin emoji). */
+const iconos = (p, sel) => p.evaluate((sel) => [...document.querySelectorAll(sel)].filter((b) => b.offsetParent).map((b) => {
+  const s = b.querySelector("svg[data-icono=camara]"); if (!s) return { txt: b.textContent.trim(), ok: false };
+  const cb = getComputedStyle(b).color, cs = getComputedStyle(s).stroke ?? s.getAttribute("stroke"), r = s.getBoundingClientRect();
+  return { txt: b.textContent.trim(), ok: b.firstElementChild === s && Math.round(r.width) === 18 && Math.round(r.height) === 18 && (cs === cb || s.getAttribute("stroke") === "currentColor") && s.getAttribute("aria-hidden") === "true" };
+}), sel);
 const capturar = (p, nombre, ancho, todo = true) => p.screenshot({ path: join(CAP, `${nombre}_${ancho}.png`), fullPage: todo });
 const modoA = async (p, m) => { await p.evaluate((m) => document.querySelector(`[role=tab][data-modo=${m}]`)?.click(), m); await p.waitForSelector(`[data-modo-actual=${m}]`); };
 
@@ -298,11 +304,15 @@ for (const ancho of [390, 1280]) {
   if (!SOLO) ok(`${tag} F1 el operador de redes, con un solo modo, lo ve nombrado «Distribución»`, unico === "Distribución", unico);
   await pulsar(p, "button[data-tarjeta=danos_fallas]"); await p.waitForSelector(".dan-cabeza", { timeout: 30000 });
   await capturar(p, "form_dano", ancho);
+  await p.evaluate(() => [...document.querySelectorAll("button")].find((b) => /^Foto: /.test(b.textContent.trim()))?.scrollIntoView({ block: "center" })); await capturar(p, "form_dano_fotos", ancho, false);
   if (!SOLO) {
     const cab = await estilo(p, ".dan-cabeza", ["backgroundColor"]), sec = await estilo(p, ".dan .tec-tarjeta", ["borderLeftColor", "borderLeftWidth", "backgroundColor"]);
     const fotos = await p.evaluate(() => [...document.querySelectorAll("button")].map((b) => b.textContent.trim()).filter((t) => /^Foto: /.test(t)));
     ok(`${tag} F2 «Reportar daño o falla»: encabezado verde de distribución (antes, rojo ladrillo) y cada sección como tarjeta blanca con su borde verde`, cab?.backgroundColor === RGB.distribucion && sec?.borderLeftColor === RGB.distribucion && sec?.borderLeftWidth === "5px" && sec?.backgroundColor === "rgb(255, 255, 255)", JSON.stringify({ cab, sec }));
     ok(`${tag} F3 los botones de fotos dicen «Foto: …» (sin el emoji de la cámara)`, fotos.length === 3 && fotos[0] === "Foto: El daño", fotos.join(","));
+    const ic = await iconos(p, ".dan button.tec-boton-sec");
+    const icF = ic.filter((x) => /^Foto: /.test(x.txt));
+    ok(`${tag} F3b cada botón de foto del daño lleva delante el ícono de cámara de línea (SVG de 18 px, del color del texto)`, icF.length === 3 && icF.every((x) => x.ok), JSON.stringify(icF));
     ok(`${tag} F4 botones de 44 px o más`, (await minimo(p, ".dan button.tec-boton, .dan button.tec-boton-sec, .dan button.dan-opcion")) >= 44);
     ok(`${tag} F5 sin desborde`, await sinDesborde(p));
     await limpio(tag, "F6 formulario de daño", p);
@@ -310,6 +320,9 @@ for (const ancho of [390, 1280]) {
   await clicTexto(p, "button", "← Volver"); await p.waitForSelector(".tec-tarjetas");
   await pulsar(p, "button[data-tarjeta=mantenimiento]"); await p.waitForSelector(".itv-cabeza", { timeout: 30000 });
   await capturar(p, "form_intervencion", ancho);
+  await p.evaluate(() => [...document.querySelectorAll("button")].find((b) => /^Foto: /.test(b.textContent.trim()))?.scrollIntoView({ block: "center" })); await capturar(p, "form_intervencion_fotos", ancho, false);
+  if (!SOLO) { const icI = (await iconos(p, ".itv button.tec-boton-sec, .dan button.tec-boton-sec")).filter((x) => /^Foto: /.test(x.txt));
+    ok(`${tag} F7b los botones de foto de la intervención («Foto: Antes», «Durante», «Después») con el ícono de cámara`, icI.length === 3 && icI.every((x) => x.ok), JSON.stringify(icI)); }
   if (!SOLO) { const cab = await estilo(p, ".itv-cabeza", ["backgroundColor"]); ok(`${tag} F7 «Registrar intervención» también en verde (antes, azul)`, cab?.backgroundColor === RGB.distribucion, JSON.stringify(cab)); await limpio(tag, "F8 formulario de intervención", p); }
   await p.close();
 
@@ -323,6 +336,9 @@ for (const ancho of [390, 1280]) {
     const b = await estilo(p, ".fq .tec-boton", ["backgroundColor", "minHeight"]), op = await estilo(p, ".fq-opcion[aria-pressed=true], .tec-planta[aria-pressed=true]", ["backgroundColor"]), sec = await estilo(p, ".fq .tec-tarjeta, .tec-pagina .tec-tarjeta", ["borderLeftColor"]);
     ok(`${tag} G2 «Entrada de químicos»: botón principal, opción elegida y bordes en azul oscuro de Plantas (antes, turquesa)`, b?.backgroundColor === RGB.plantas && parseFloat(b.minHeight) >= 44 && (!op || op.backgroundColor === RGB.plantas) && sec?.borderLeftColor === RGB.plantas, JSON.stringify({ b, op, sec }));
     await limpio(tag, "G3 formulario de químicos", p);
+    const icR = await iconos(p, "label.fq-foto-boton");
+    ok(`${tag} G4 «Tomar o elegir la foto de la remisión» con el ícono de cámara delante`, icR.length === 1 && icR[0].ok, JSON.stringify(icR));
+    await p.evaluate(() => document.querySelector("label.fq-foto-boton")?.scrollIntoView({ block: "center" })); await capturar(p, "form_remision_boton", ancho, false);
   }
   await p.close();
 }

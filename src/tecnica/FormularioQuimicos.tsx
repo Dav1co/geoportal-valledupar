@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { BotonFoto } from "./BotonFoto";
 import "./quimicos.css";
 import { ErrorTec } from "./apiTecnica";
 import { apiQuimicos, reducirFoto, subirRemision, type FormularioQuimicos as Def } from "./apiQuimicos";
@@ -185,9 +186,8 @@ export function FormularioQuimicos({ formulario, onSalir }: { formulario: "entra
                       <button type="button" className="tec-boton-sec tec-boton-corto" onClick={quitarFoto} disabled={enviando}>Quitar la foto</button></div>
                   </div>
                 ) : (
-                  <label className="tec-boton-sec fq-foto-boton" htmlFor="fq-foto">Tomar o elegir la foto de la remisión
-                    {/* 7c-bis (David): sin «capture», el celular ofrece cámara, galería y archivos. Solo imágenes: la base guarda la remisión como JPEG. */}
-                    <input id="fq-foto" type="file" accept="image/*" aria-labelledby="fq-l-foto" onChange={(e) => { void elegirFoto(e.target.files?.[0]); e.target.value = ""; }} /></label>
+                  /* 7c-bis (David): sin «capture», el celular ofrece cámara, galería y archivos. Solo imágenes: la base guarda la remisión como JPEG. */
+                  <BotonFoto id="fq-foto" className="tec-boton-sec fq-foto-boton" texto="Tomar o elegir la foto de la remisión" etiquetadoPor="fq-l-foto" onArchivo={(f) => void elegirFoto(f)} />
                 )}
                 {errorFoto ? <span className="tec-error">{errorFoto}</span> : null}
               </div>

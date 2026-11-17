@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { IconoCamara } from "./IconoCamara";
 import "./ficha.css";
 import "./dano.css";
 import "./intervencion.css";
@@ -516,7 +517,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
         <h2 id="itv-t7">7. Fotos y soportes</h2>
         <p className="tec-ayuda">{sinFotos ? "Sin fotos: queda marcada «sin evidencia fotográfica»." : `Al menos una foto. Máximo ${reglas.max_fotos}. Solo cámara; la foto no se guarda en el celular.`}</p>
         {!sinFotos ? <div className="dan-fila">{CLASES.map((m) => (
-          <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}>Foto: {m.n}</button>))}</div> : null}
+          <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}><IconoCamara />Foto: {m.n}</button>))}</div> : null}
         {camara ? (
           <CamaraActa rotulo={`Foto: ${CLASES.find((m) => m.c === camara)!.n.toLowerCase()}`} maxBytes={reglas.max_bytes_foto}
             sello={() => [new Date().toLocaleString("es-CO"), ubic.fix ? `${ubic.fix.lat.toFixed(5)}, ${ubic.fix.lon.toFixed(5)}` : "sin GPS"]}
