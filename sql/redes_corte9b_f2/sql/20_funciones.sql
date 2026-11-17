@@ -2,7 +2,8 @@
 -- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 20 — FUNCIONES INTERNAS. PROPUESTA. Solo agrega (no reemplaza nada).
 -- · Alertas de presión (§30.7, Res. 0330 de 2017, arts. 61 y 62): con los 4 parámetros del 9a (15 y 10 m.c.a. de mínima; 50 y 60 de máxima) sobre la presión
 --   de MODELO por nodo (redes.pm_nodos, carga vigente; red existente o futura). Y por material: nodos cuya presión máxima pasa la presión de trabajo de un tramo
---   que llega a ellos. Es presión de modelo, no medida: así se rotula.
+--   que llega a ellos. Es presión de modelo, no medida: así se rotula. La mínima y la máxima del día se toman SOLO de las horas confiables del modelo
+--   (redes.f_presion_nodos: sin las horas de redes.presion_horas_no_confiables), lo mismo en las alertas y en el aviso, para que den el mismo número.
 -- · Usuarios sensibles: propuesta por una palabra del nombre (cartera_suscripcion, último período) — se corre por psql o editor, NUNCA en una petición.
 -- · Afectación de un daño o una intervención: contratos sin agua y usuarios sensibles, del cierre real (la foto) si tiene válvulas cerradas, o de la simulación.
 -- · Sensores: estado derivado de las lecturas («por conectar» mientras no haya).
@@ -16,20 +17,35 @@ language sql stable set search_path = redes, pg_temp as $$
               when p_min < redes.f_param('presion_baja_naranja_mca') then 'baja_naranja'
               when p_max > redes.f_param('presion_alta_naranja_mca') then 'alta_naranja' end $$;
 
+-- ---------- presión mínima y máxima del día por nodo, SOLO con las horas confiables del modelo (David, 17-nov) ----------
+-- Si el escenario tiene horas no confiables y el nodo tiene sus presiones por hora (redes.pm_presion_hora, carga vigente): mínima y máxima de las demás horas.
+-- Si no (escenario sin horas excluidas, o nodo sin presiones por hora): la mínima y la máxima del día de redes.pm_nodos, como antes.
+create function redes.f_presion_nodos(p_escenario text) returns table (llave text, p_min numeric, p_max numeric)
+language sql stable security definer set search_path = redes, pg_temp as $$
+  with ex as (select array_agg(h.hora) as hs from redes.presion_horas_no_confiables h where h.escenario = p_escenario and h.activa)
+  select x.llave,
+         case when ph.llave is not null then c.p_min when p_escenario = 'futura' then x.pres_futura_min else x.pres_exist_min end,
+         case when ph.llave is not null then c.p_max when p_escenario = 'futura' then x.pres_futura_max else x.pres_exist_max end
+    from redes.pm_nodos x
+    left join redes.pm_presion_hora ph on (select hs from ex) is not null and ph.carga_id = redes.f_ref_vigente('pm_presion_' || p_escenario) and ph.llave = x.llave
+    left join lateral (select min(u.v) as p_min, max(u.v) as p_max from unnest(ph.horas) with ordinality u(v, o) where (u.o - 1)::integer <> all ((select hs from ex)::integer[])) c on ph.llave is not null
+   where x.carga_id = redes.f_ref_vigente('pm_nodos') $$;
+comment on function redes.f_presion_nodos(text) is 'Corte 9b (Fase 2): presión de modelo mínima y máxima por nodo, sin las horas no confiables (redes.presion_horas_no_confiables). La usan las alertas y el aviso de presiones.';
+
 -- ---------- las alertas de presión de un escenario (existente | futura): conteos por nivel, los peores nodos y la alerta por material ----------
 create function redes.f_alertas_presion(p_escenario text) returns jsonb
 language plpgsql stable security definer set search_path = redes, public, extensions, pg_temp as $$
-declare v_c bigint := redes.f_ref_vigente('pm_nodos'); v_lim integer := coalesce(redes.f_param('presion_lista_max'), 50)::integer; v_fut boolean := p_escenario = 'futura'; j jsonb;
+declare v_c bigint := redes.f_ref_vigente('pm_nodos'); v_hs integer[]; v_lim integer := coalesce(redes.f_param('presion_lista_max'), 50)::integer; v_fut boolean := p_escenario = 'futura'; j jsonb;
   -- los 4 umbrales se leen UNA vez (la misma regla de redes.f_presion_nivel; por nodo costaba 4 lecturas de parámetros)
   v_bn numeric := redes.f_param('presion_baja_naranja_mca'); v_br numeric := redes.f_param('presion_baja_roja_mca');
   v_an numeric := redes.f_param('presion_alta_naranja_mca'); v_ar numeric := redes.f_param('presion_alta_roja_mca');
 begin
   if p_escenario not in ('existente', 'futura') then perform tecnica.f_error('El escenario es «existente» o «futura»'); end if;
   if v_c is null then return jsonb_build_object('cargado', false, 'escenario', p_escenario); end if;
-  with n as (
-    select x.llave, coalesce(x.nombre, x.llave) as nombre, x.zona_modelo, x.geom,
-           case when v_fut then x.pres_futura_min else x.pres_exist_min end as p_min, case when v_fut then x.pres_futura_max else x.pres_exist_max end as p_max
-      from redes.pm_nodos x where x.carga_id = v_c),
+  select array_agg(h.hora order by h.hora) into v_hs from redes.presion_horas_no_confiables h where h.escenario = p_escenario and h.activa;
+  with n as (      -- la mínima y la máxima, solo de las horas confiables
+    select x.llave, coalesce(x.nombre, x.llave) as nombre, x.zona_modelo, x.geom, p.p_min, p.p_max
+      from redes.pm_nodos x join redes.f_presion_nodos(p_escenario) p on p.llave = x.llave where x.carga_id = v_c),
   c as materialized (select n.*, case when n.p_min < v_br then 'baja_roja' when n.p_max > v_ar then 'alta_roja' when n.p_min < v_bn then 'baja_naranja' when n.p_max > v_an then 'alta_naranja' end as nivel
           from n where n.p_min is not null or n.p_max is not null),
   -- por material: el tramo de menor presión de trabajo que llega al nodo (el nodo de la red se amarra por la llave del modelo)
@@ -44,6 +60,8 @@ begin
   select jsonb_build_object(
     'cargado', true, 'escenario', p_escenario, 'fuente', (select origen from redes.ref_cargas where id = v_c),
     'aviso', 'Presión de MODELO, no medida.',
+    'horas_excluidas', coalesce(to_jsonb(v_hs), '[]'::jsonb),
+    'nota_horas', case when v_hs is not null then format('Mínima y máxima del día sin las horas en que el modelo no es confiable (%s).', array_to_string(v_hs, ', ')) end,
     'umbrales', jsonb_build_object('baja_naranja', v_bn, 'baja_roja', v_br, 'alta_naranja', v_an, 'alta_roja', v_ar),
     'nodos', (select count(*) from c),
     'niveles', (select coalesce(jsonb_object_agg(g.nivel, g.n), '{}') from (select c.nivel, count(*) as n from c where c.nivel is not null group by 1) g),
@@ -61,11 +79,15 @@ begin
 end $$;
 comment on function redes.f_alertas_presion(text) is 'Corte 9b (Fase 2): alertas de presión de modelo por nodo (Res. 0330 de 2017; 4 parámetros editables) y por material. Lectura.';
 
--- ---------- lista para los Avisos del 12 (NO está conectada: sumarla pide un bloque en tecnica.f_avisos, que no se toca sin avisar) ----------
+-- ---------- los nodos fuera de rango por nivel (red existente, horas confiables): la suma es el número del aviso informativo de tecnica.f_avisos (D11) ----------
 create function redes.f_presion_para_avisos() returns table (nivel text, n bigint)
 language sql stable security definer set search_path = redes, pg_temp as $$
-  select redes.f_presion_nivel(x.pres_exist_min, x.pres_exist_max), count(*)
-    from redes.pm_nodos x where x.carga_id = redes.f_ref_vigente('pm_nodos') and redes.f_presion_nivel(x.pres_exist_min, x.pres_exist_max) is not null group by 1 $$;
+  with u as materialized (select redes.f_param('presion_baja_naranja_mca') as bn, redes.f_param('presion_baja_roja_mca') as br,      -- los 4 umbrales, una vez
+                                 redes.f_param('presion_alta_naranja_mca') as an, redes.f_param('presion_alta_roja_mca') as ar)
+  select y.nivel, count(*)
+    from (select case when x.p_min < u.br then 'baja_roja' when x.p_max > u.ar then 'alta_roja' when x.p_min < u.bn then 'baja_naranja' when x.p_max > u.an then 'alta_naranja' end as nivel
+            from redes.f_presion_nodos('existente') x cross join u) y
+   where y.nivel is not null group by 1 $$;
 
 -- ---------- el tipo de usuario sensible que sugiere un nombre (y la palabra que coincidió); sin filas si no sugiere ninguno ----------
 create function redes.f_sensible_tipo(p_nombre text) returns table (tipo text, palabra text)

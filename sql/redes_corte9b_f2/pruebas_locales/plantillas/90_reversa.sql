@@ -1,5 +1,5 @@
 -- =====================================================================
--- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 90 — REVERSA (PROPUESTA). Quita las {{N_NUEVAS}} funciones, la vista y las 5 tablas (sin hechos) y vuelve a mostrar la capa de cortes.
+-- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 90 — REVERSA (PROPUESTA). Quita las {{N_NUEVAS}} funciones, la vista y las 6 tablas (sin hechos) y vuelve a mostrar la capa de cortes.
 -- SE NIEGA si alguna función cambió después de la migración o si ya hay usuarios sensibles o lecturas guardadas (la reversa no borra datos: avise).
 -- =====================================================================
 do $$
@@ -9,14 +9,22 @@ begin
        where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '{{MD5_F2}}' then
     raise exception 'Las funciones cambiaron después de la migración de la Fase 2: la reversa se niega a pisarlas; avise';
   end if;
+  if md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) <> '{{MD5_AVISOS_F2}}' then
+    raise exception 'tecnica.f_avisos cambió después de la migración de la Fase 2: la reversa se niega a pisarla; avise';
+  end if;
   if exists (select 1 from redes.usuarios_sensibles) or exists (select 1 from redes.sensor_lecturas) then
     raise exception 'Ya hay usuarios sensibles o lecturas guardadas: la reversa no borra datos; avise';
   end if;
 end $$;
+-- tecnica.f_avisos vuelve a su texto del 9b (1b), sin el aviso de presiones
+{{TEXTO_AVISOS_ANTES}}
+revoke all on function tecnica.f_avisos(boolean, boolean, timestamptz) from public, anon, authenticated, service_role;
 {{DROPS}}
 drop view redes.v_usuario_sensible;
-drop table redes.usuario_sensible_eventos, redes.usuarios_sensibles, redes.tipos_sensible, redes.presion_trabajo, redes.sensor_lecturas;
+drop table redes.usuario_sensible_eventos, redes.usuarios_sensibles, redes.tipos_sensible, redes.presion_trabajo, redes.presion_horas_no_confiables, redes.sensor_lecturas;
 update redes.parametros set descripcion = 'Sin uso (reversa del Corte 9b, Fase 2)' where clave in ('sensor_sin_senal_min', 'presion_lista_max');
+-- el parámetro de Avisos no se borra (regla de la tabla): queda apagado y marcado sin uso
+update tecnica.aviso_parametros set valor = 0, descripcion = 'Sin uso (reversa del Corte 9b, Fase 2)' where clave = 'presion_modelo_aviso';
 update redes.geovisor_capas set activa = true, nota = null where codigo = 'cortes';
 insert into public.geoportal_auditoria (email, accion, referencia, detalle, ip)
 values ('reversa@redes_corte9b_f2', 'reversa_redes_corte9b_fase2', null, jsonb_build_object('motivo', 'reversa del Corte 9b (Fase 2)'), null);

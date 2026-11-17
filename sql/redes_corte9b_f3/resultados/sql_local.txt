@@ -1,5 +1,5 @@
 OK    01 el ensayo termina en el ERROR esperado: 17 de 17 … SIN FALLAS
-   TIEMPOS con flujo en 10592 tramos (todos los de acueducto de esta base): tesela más cargada 14/4857/7712 12 ms (91 kB) · tesela 13/2428/3856 (solo diámetros principales) 9 ms (46 kB) · información de la capa 4 ms · tarjeta de un tramo 22 ms
+   TIEMPOS con flujo en 10592 tramos (todos los de acueducto de esta base): tesela más cargada 14/4857/7712 15 ms (91 kB) · tesela 13/2428/3856 (solo diámetros principales) 10 ms (46 kB) · información de la capa 4 ms · tarjeta de un tramo 15 ms
 OK    02 … y no deja nada (sigue la huella de la Fase 2, no hay tablas del flujo ni la capa)
 OK    03 las huellas antes: «FASE 2 (lista para la Fase 3)» y las 4 nuevas no existen
 OK    04 la migración se aplica
@@ -9,21 +9,23 @@ OK    07 la verificación: las 6 filas OK
 OK    08 una segunda migración se niega
 OK    09 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
 OK    10 antes de cargar: la capa dice «no cargado» (con su rótulo) y la tesela sale vacía
-OK    11 el ENSAYO de la carga (el CSV real de la Fase 0): 10 de 10 … SIN FALLAS (396 ms)
+OK    11 el ENSAYO de la carga (el CSV real de la Fase 0): 10 de 10 … SIN FALLAS (305 ms)
 OK    12 … y no deja nada cargado
 OK    13 la carga se niega a quien no es administrador
-OK    14 la carga real: 10 de 10 comprobaciones, SIN FALLAS (324 ms en total)
-   TIEMPOS: tesela más cargada 14/4857/7712 hora mayor 18 ms (85 kB) · hora menor 10 ms (85 kB) · información de la capa 5 ms · tarjeta de RED-006537 2 ms
+OK    14 la carga real: 10 de 10 comprobaciones, SIN FALLAS (282 ms en total)
+   TIEMPOS: tesela más cargada 14/4857/7712 hora mayor 21 ms (85 kB) · hora menor 10 ms (85 kB) · información de la capa 5 ms · tarjeta de RED-006537 1 ms
 OK    15 la verificación de la carga: las 4 filas OK
    INFO tramos de acueducto visibles con flecha · sin dato del modelo|8669 · 1909
 OK    16 una segunda carga del mismo archivo se niega (no duplica)
-OK    17 la tesela del flujo como la Edge (service_role, 30 s / 8 s), 4 teselas: la más lenta 67 ms (tope local 167 ms = 1 s / 6): [('mayor', 14, 59, 84, ''), ('menor', 14, 67, 84, ''), ('mayor', 16, 53, 9, ''), ('mayor', 13, 54, 39, '')]
-OK    18 la información de la capa como la Edge (36 ms): {'con_tramo': 8669, 'sin_tramo': 911, 'tramos_red': 10578, 'tubos_modelo': 9580, 'sin_flujo_mayor': 677, 'sin_flujo_menor': 682}; horas ['Hora de mayor consumo (17:00)', 'Hora de menor consumo (23:00)']
-OK    19 la tarjeta de un tramo que cambia de sentido (RED-003456) como la Edge (32 ms)
+OK    17 la tesela del flujo como la Edge (service_role, 30 s / 8 s), 4 teselas: la más lenta 60 ms (tope local 167 ms = 1 s / 6): [('mayor', 14, 60, 84, ''), ('menor', 14, 57, 84, ''), ('mayor', 16, 49, 9, ''), ('mayor', 13, 54, 39, '')]
+OK    18 la información de la capa como la Edge (32 ms): {'con_tramo': 8669, 'sin_tramo': 911, 'tramos_red': 10578, 'tubos_modelo': 9580, 'sin_flujo_mayor': 677, 'sin_flujo_menor': 682}; horas ['Hora de mayor consumo (17:00)', 'Hora de menor consumo (23:00)']
+OK    19 la tarjeta de un tramo que cambia de sentido (RED-003456) como la Edge (28 ms)
 OK    20 el operador no ve el flujo; la API no ve las tablas
 OK    21 ningún activo cambió de versión por la carga
+OK    21b encender la capa (va de último, con el flujo cargado): queda «activa», sigue «preparada» y solo de supervisores; repetirlo no cambia nada
 OK    22 con el flujo cargado, la reversa se niega (no borra datos)
+OK    22b sin el flujo cargado, encender la capa se niega (no se enciende vacía)
 OK    23 la reversa (sin datos) se aplica: vuelve la huella de la Fase 2 y la capa queda sin uso (no borrada)
 OK    24 una segunda reversa se niega
 
-RESULTADO: 24 de 24 — SIN FALLAS
+RESULTADO: 26 de 26 — SIN FALLAS

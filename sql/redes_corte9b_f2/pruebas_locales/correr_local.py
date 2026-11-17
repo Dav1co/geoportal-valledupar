@@ -55,8 +55,9 @@ def archivo(n):
     return os.path.join(RAIZ, n)
 
 
+SALIDA_AV = "select md5(tecnica.f_avisos(true, true, '2026-11-17 15:00:00-05')::text)"
 rehacer()
-av0, viejas0 = q(AV), q(VIEJAS)
+av0, viejas0, salida0 = q(AV), q(VIEJAS), q(SALIDA_AV)
 p = psql('-q', '-f', archivo('ensayo_en_transaccion_redes_corte9b_f2_editor.sql'))
 m = re.search(r'RESULTADO: (\d+) de (\d+) pruebas correctas — SIN FALLAS', p.stderr)
 ok(f'01 el ensayo termina en el ERROR esperado: {m.group(1) if m else "?"} de {m.group(2) if m else "?"} … SIN FALLAS', m and m.group(1) == m.group(2) and 'esperado' in p.stderr, p.stderr[-1500:])
@@ -64,13 +65,14 @@ print('   ' + (re.search(r'TIEMPOS[^\n]*', p.stderr) or [''])[0])
 ok('02 … y no deja nada (sigue la huella del 9b, no hay tablas de la Fase 2 y la capa de cortes sigue visible)',
    q(CONJ) == MD5_9B and q("select to_regclass('redes.usuarios_sensibles')") == '' and q("select activa from redes.geovisor_capas where codigo = 'cortes'") == 't')
 filas = psql('-AtF', '|', '-f', archivo('huellas_solo_lectura_redes_corte9b_f2_editor.sql')).stdout.strip().splitlines()
-ok('03 las huellas antes: «9b 1a + 1b (listo para la Fase 2)» y las 12 nuevas no existen', any('listo para la Fase 2' in f for f in filas)
-   and sum('NO EXISTE (sin aplicar)' in f for f in filas) == 12 and not any('DISTINTA' in f or 'FALTA' in f for f in filas), '\n'.join(filas))
+ok('03 las huellas antes: «9b 1a + 1b (listo para la Fase 2)» y las 14 nuevas no existen', any('listo para la Fase 2' in f for f in filas)
+   and sum('NO EXISTE (sin aplicar)' in f for f in filas) == 14 and not any('DISTINTA' in f or 'FALTA' in f for f in filas), '\n'.join(filas))
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('migracion_redes_corte9b_f2_editor.sql'))
 ok('04 la migración se aplica', p.returncode == 0, p.stderr)
-ok('05 la Fase 2 SOLO AGREGA: tecnica.f_avisos y las funciones del 9b (1a + 1b) quedan con el mismo texto', q(AV) == av0 and q(VIEJAS) == viejas0)
+ok('05 las funciones del 9b (1a + 1b) quedan con el mismo texto; tecnica.f_avisos cambia (aviso de presiones) y, sin presiones cargadas, devuelve exactamente lo mismo que antes',
+   q(VIEJAS) == viejas0 and q(AV) != av0 and q(SALIDA_AV) == salida0)
 filas = psql('-AtF', '|', '-f', archivo('huellas_solo_lectura_redes_corte9b_f2_editor.sql')).stdout.strip().splitlines()
-ok('06 las huellas después: «FASE 2 (aplicada)», 12 nuevas y las tablas', any('FASE 2 (aplicada)' in f for f in filas) and sum('NUEVA (aplicada)' in f for f in filas) == 12
+ok('06 las huellas después: «FASE 2 (aplicada)», 14 nuevas y las tablas', any('FASE 2 (aplicada)' in f for f in filas) and sum('NUEVA (aplicada)' in f for f in filas) == 14
    and any('EXISTEN (Fase 2)' in f for f in filas), '\n'.join(filas))
 filas = psql('-AtF', '|', '-f', archivo('verificacion_redes_corte9b_f2_editor.sql')).stdout.strip().splitlines()
 ok(f'07 la verificación: las {sum(1 for f in filas if not f.startswith("INFO"))} filas OK', filas and all(f.endswith('|OK') for f in filas if not f.startswith('INFO')), '\n'.join(filas))
@@ -98,6 +100,35 @@ ms, out, e = edge(f"select public.geoportal_redes_alertas_presion('{SD}')")
 j = json.loads(out) if not e else {}
 ok(f'12 alertas de presión como la Edge, 7.000 nodos amarrados a la red real ({ms} ms, {len(out) // 1024} kB; tope local {T1:.0f} ms): {j.get("niveles")}; por material {j.get("por_material", {}).get("n")}',
    not e and ms < T1 and j['nodos'] == 7000 and len(out) < 131072, e)
+
+
+def avisos_presion():
+    ms, out, e = edge(f"select public.geoportal_tec_avisos('{ADM}')")
+    return ms, e, out, [a for a in (json.loads(out).get('avisos', []) if not e and out.startswith('{') else (json.loads(out) if not e else [])) if isinstance(a, dict) and a.get('clave') == 'presion_modelo']
+
+
+ms, e, out, pres = avisos_presion()
+ok(f'12b los Avisos del administrador como la Edge, tal como se publica (parámetro «presion_modelo_aviso» en 0; {ms} ms; tope local {T1:.0f} ms): el aviso de presiones NO sale',
+   not e and ms < T1 and pres == [] and q("select valor from tecnica.aviso_parametros where clave = 'presion_modelo_aviso'") == '0', e or out[:300])
+# presiones por hora para los mismos 7.000 nodos: la mínima del día cae en las horas 5 y 7 (no confiables); en las demás horas, 20 + (id % 50)
+q(f"""with c as (insert into redes.ref_cargas (conjunto, archivo, md5, filas, origen, autor) values ('pm_presion_existente', 'zt9f_arnes_horas.csv', md5('zt9f-arnes-h'), 7000, 'ZT9F arnés', '{ADM}') returning id)
+      insert into redes.pm_presion_hora (carga_id, llave, escenario, p_min, hora_min, p_max, hora_max, p_media, p_mediana, horas)
+      select c.id, x.llave, 'existente', x.pres_exist_min, 5, x.pres_exist_max, 0, 20, 20,
+             (select array_agg(case when h in (5, 7) then x.pres_exist_min else 20 + (h % 5) end order by h) from generate_series(0, 24) h)
+        from c, redes.pm_nodos x where x.carga_id = redes.f_ref_vigente('pm_nodos')""")
+q("analyze redes.pm_presion_hora")
+todas = j['niveles']
+ms, out, e = edge(f"select public.geoportal_redes_alertas_presion('{SD}')")
+j = json.loads(out) if not e else {}
+ok(f'12c alertas de presión con las 25 horas de los 7.000 nodos, sin las horas no confiables ({ms} ms; tope local {T1:.0f} ms): {j.get("niveles")} (con todas las horas eran {todas}); horas excluidas {j.get("horas_excluidas")}',
+   not e and ms < T1 and j['horas_excluidas'] == [5, 7, 10, 12, 14] and j['niveles'] == {} and todas != {}, e)
+q("update tecnica.aviso_parametros set valor = 1 where clave = 'presion_modelo_aviso'")
+q(f"""insert into redes.pm_nodos (carga_id, llave, nombre, geom, pres_exist_min, pres_exist_max, pres_futura_min, pres_futura_max)
+      select redes.f_ref_vigente('pm_nodos'), 'ZT9F-fuera-' || i, 'ZT9F fuera ' || i, ST_SetSRID(ST_MakePoint(-73.25, 10.46), 4326), 3, 30, 20, 40 from generate_series(1, 12) i""")
+ms, e, out, pres = avisos_presion()
+ok(f'12d con el parámetro en 1 (lo enciende Técnica): los Avisos como la Edge ({ms} ms; tope local {T1:.0f} ms) traen un aviso informativo «{pres[0]["titulo"] if pres else "?"}»',
+   not e and ms < T1 and len(pres) == 1 and pres[0]['nivel'] == 'info' and pres[0]['n'] == 12, e or out[:300])
+q("update tecnica.aviso_parametros set valor = 0 where clave = 'presion_modelo_aviso'")
 ok('13 las alertas de presión son del supervisor', edge(f"select public.geoportal_redes_alertas_presion('{OP}')")[2] != '')
 q("insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, activo_id, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, autor) "
   "select gen_random_uuid(), 'DAN-999997', 'dano', 'fuga', 'acueducto', (select tn.activo_id from redes.tramo_nodos tn join redes.activo_vigente_mat m on m.activo_id = tn.activo_id and m.version = tn.version "
@@ -114,18 +145,26 @@ ms, out, e = edge(f"select public.geoportal_redes_afectacion('{OP}', 'DAN-999997
 j = json.loads(out) if not e else {}
 ok(f'15 con sus {len(vals)} válvulas cerradas (el 1b sigue funcionando con la Fase 2): la afectación es la real ({ms} ms; tope local {T1:.0f} ms): {j.get("contratos")} contratos, {j.get("zonas")} zona',
    not any(errs) and not e and ms < T1 and j['fuente'] == 'cierre_real' and j['valvulas_cerradas'] == len(vals), errs or e)
+ms, out, e = edge(f"select public.geoportal_redes_afectaciones_danos('{SD}')")
+j = json.loads(out) if not e else {}
+ok(f'15b los daños abiertos sin límite de fecha como la Edge ({ms} ms; tope local {T1:.0f} ms): {j.get("total")} (trae el DAN-999997)',
+   not e and ms < T1 and any(f['properties']['codigo'] == 'DAN-999997' for f in j['features']) and j['total'] == len(j['features']), e)
+ok('15c … y son del supervisor y del administrador: el operador no', 'Solo el supervisor' in edge(f"select public.geoportal_redes_afectaciones_danos('{OP}')")[2])
 ms, out, e = edge(f"select public.geoportal_redes_sensores('{SD}')")
 ok(f'16 los sensores como la Edge ({ms} ms)', not e and ms < T1 and 'sensores' in json.loads(out), e)
-ok('17 la API no ve las tablas ni la vista de la Fase 2', all('permission denied' in edge(f'select count(*) from redes.{t}')[2] for t in ('usuarios_sensibles', 'v_usuario_sensible', 'sensor_lecturas', 'presion_trabajo')))
+ok('17 la API no ve las tablas ni la vista de la Fase 2', all('permission denied' in edge(f'select count(*) from redes.{t}')[2] for t in ('usuarios_sensibles', 'v_usuario_sensible', 'sensor_lecturas', 'presion_trabajo', 'presion_horas_no_confiables')))
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('reversa_redes_corte9b_f2_editor.sql'))
 ok('18 con usuarios sensibles guardados, la reversa se niega (no borra datos)', int(n) == 0 or (p.returncode != 0 and 'no borra datos' in p.stderr), p.stderr)
 
 rehacer('con_f2')
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('reversa_redes_corte9b_f2_editor.sql'))
-ok('19 la reversa (sin datos) se aplica: vuelve la huella del 9b, la capa de cortes vuelve a la lista y tecnica.f_avisos no cambia',
-   p.returncode == 0 and q(CONJ) == MD5_9B and q("select activa from redes.geovisor_capas where codigo = 'cortes'") == 't' and q(AV) == av0, p.stderr)
+ok('19 la reversa (sin datos) se aplica: vuelve la huella del 9b, la capa de cortes vuelve a la lista, tecnica.f_avisos vuelve a la del 1b y el parámetro del aviso queda apagado y «sin uso» (no se borra)',
+   p.returncode == 0 and q("select valor = 0 and descripcion like 'Sin uso%' from tecnica.aviso_parametros where clave = 'presion_modelo_aviso'") == 't' and q("select to_regclass('redes.presion_horas_no_confiables')") == '' and q(CONJ) == MD5_9B and q("select activa from redes.geovisor_capas where codigo = 'cortes'") == 't' and q(AV) == av0, p.stderr)
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('reversa_redes_corte9b_f2_editor.sql'))
 ok('20 una segunda reversa se niega', p.returncode != 0 and 'No hay nada que revertir' in p.stderr, p.stderr)
+p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('migracion_redes_corte9b_f2_editor.sql'))
+ok('21 después de la reversa, la migración se vuelve a aplicar y deja el parámetro apagado con su descripción',
+   p.returncode == 0 and q("select valor = 0 and descripcion like '0: apagado%' from tecnica.aviso_parametros where clave = 'presion_modelo_aviso'") == 't', p.stderr)
 rehacer()
 malas = [r for r in res if not r[1]]
 print(f'\nRESULTADO: {len(res) - len(malas)} de {len(res)} — ' + ('SIN FALLAS' if not malas else f'{len(malas)} FALLA(S)'))

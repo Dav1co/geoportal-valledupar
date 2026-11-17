@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Arma el paquete SQL del Corte 9b, Fase 3 (capa «Flujo del agua (modelo)») con las huellas reales de la base local de Code A
-(redes_local, 55432). Solo agrega: no hay reemplazos. Parte de la Fase 2 aplicada (huella 7f9c0157…).
+(redes_local, 55432). Solo agrega: no hay reemplazos. Parte de la Fase 2 aplicada (huella 24e62e15…).
 Uso: python3 -I generar.py     Sobre otra huella: MD5_BASE=<huella> python3 -I generar.py"""
 import os
 import subprocess
@@ -12,7 +12,7 @@ BASE = 'redes_local'
 ENV = dict(os.environ, PGHOST='localhost', PGPORT='55432', PGUSER='postgres', PGOPTIONS='-c client_min_messages=warning')
 CONJ = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p "
         "where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%')")
-MD5_BASE = os.environ.get('MD5_BASE', '7f9c0157c47e371e1d3d87ef6bda847b')      # la Fase 2 del 9b, que se publica antes
+MD5_BASE = os.environ.get('MD5_BASE', '24e62e151ff418ea6acf631572d72683')      # la Fase 2 del 9b, que se publica antes
 NUEVAS = ['redes.f_flujo_clase(numeric)', 'public.geoportal_redes_geovisor_mvt_flujo(text,text,integer,integer,integer)',
           'public.geoportal_redes_flujo_modelo(text)', 'public.geoportal_redes_flujo_tramo(text,text)']
 MIG = ['10_esquema.sql', '20_funciones.sql', '40_permisos.sql']
