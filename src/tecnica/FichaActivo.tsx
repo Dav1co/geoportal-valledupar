@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { apiPerfil, apiRedes, type ActivoCorto, type Epicrisis, type EventoEpicrisis, type Ficha, type FotoFirmada, type Galeria, type Perfil } from "./apiRedes";
+import { apiPerfil, apiRedes, type ActivoCorto, type Epicrisis, type EventoEpicrisis, type Ficha, type FotoFirmada, type Galeria, type Perfil, type Regulatorio } from "./apiRedes";
 import { FichaEditar, FotoPerfilCambiar } from "./FichaEditar";
 
 // Corte 3b: la ficha como «perfil» del activo (§22 y §23): minimapa estático arriba, alias propio y placa, foto principal, galería (supervisor y
@@ -34,6 +34,41 @@ const fecha = (iso: string) => new Date(iso).toLocaleString("es-CO", { timeZone:
 const fechaDia = (iso: string) => { const [a, m, d] = iso.slice(0, 10).split("-"); return `${d}/${m}/${a}`; };
 const tonoEstado = (a: { retirado: boolean; cuenta_vigente?: boolean; punteado?: boolean }) =>
   a.retirado ? "red-estado-retirado" : a.punteado || a.cuenta_vigente === false ? "red-estado-aviso" : "red-estado-ok";
+
+// Corte 10. «Inventario regulatorio»: la fila de la Valoración Técnica 2019 a la que está amarrado el activo. Solo llega a supervisor y administrador (lo decide
+// el servidor). Los valores son de TODA la fila (activos agregados): no se reparten por tramo. Es una propuesta de 2019: se dice en el encabezado.
+const pesos = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+const UNIDAD_REG: Record<string, string> = { m: "m", un: "unidades", "L/s": "L/s", "m³": "m³" };
+function InventarioRegulatorio({ r }: { r: Regulatorio }) {
+  return (
+    <section className="red-seccion red-referencia" aria-labelledby="red-t-reg" data-testid="ficha-regulatorio">
+      <h2 id="red-t-reg">Inventario regulatorio</h2>
+      <p className="red-nota">{r.fuente}. Dato de referencia: no hace parte de la ficha oficial del activo y no la cambia.</p>
+      <div className="red-rejilla">
+        <Dato rotulo="Remunerado vía tarifa" v={r.remunerado ? "Sí" : "No"} />
+        {r.filas?.length ? <Dato rotulo={r.filas.length === 1 ? "Fila de la valoración" : "Filas de la valoración"} v={r.filas.map((f) => `${f.n}`).join(" y ")} /> : null}
+      </div>
+      {r.texto ? <p className="red-texto">{r.texto}</p> : null}
+      {!r.filas && r.nota ? <p className="red-nota">{r.nota}</p> : null}
+      {(r.filas ?? []).map((f) => (
+        <div key={`${f.hoja}-${f.n}`} className="red-ref-grupo">
+          <h3 className="red-sub">Fila {f.n} · {f.nombre}{f.clase === "tuberia" || f.clase === "valvula" ? (f.diametro_pulg ? ` de ${nf.format(f.diametro_pulg)} pulgadas` : "") : ""}</h3>
+          <div className="red-rejilla">
+            <Dato rotulo="Hoja" v={f.hoja} />
+            <Dato rotulo="En la fila" v={`${f.cantidad === undefined ? "Sin cantidad" : `${nf.format(f.cantidad)} ${UNIDAD_REG[f.unidad ?? ""] ?? ""}`.trim()} · ${nf.format(f.activos)} ${f.activos === 1 ? "activo amarrado" : "activos amarrados"}`} />
+            <Dato rotulo="Entrada en operación (regulatoria)" v={f.fecha_operacion ? fechaDia(f.fecha_operacion) : null} />
+            <Dato rotulo="Vida útil" v={f.vida_util === undefined ? null : `${nf.format(f.vida_util)} años`} />
+            <Dato rotulo="Vida útil remanente a hoy" v={f.vida_remanente_hoy === undefined ? null : `${nf.format(f.vida_remanente_hoy)} años${f.fin_vida_util ? ` (hasta ${fechaDia(f.fin_vida_util)})` : ""}`} />
+            <Dato rotulo="Valor de la fila" v={f.valor_total === undefined ? null : pesos.format(f.valor_total)} />
+            <Dato rotulo="Valor remanente de la fila (al iniciar la tarifa)" v={f.valor_remanente === undefined ? null : pesos.format(f.valor_remanente)} />
+            <Dato rotulo="Depreciación anual de la fila" v={f.depreciacion_anual === undefined ? null : pesos.format(f.depreciacion_anual)} />
+          </div>
+          {f.nota ? <p className="red-nota">{f.nota}.</p> : null}
+        </div>))}
+      {r.filas?.length ? <p className="red-nota">El valor y la depreciación son de toda la fila (activos agregados): no se reparten por activo. La fecha es la de entrada en operación regulatoria, no la de instalación.</p> : null}
+    </section>
+  );
+}
 
 function Dato({ rotulo, v }: { rotulo: string; v: string | null }) {
   return (
@@ -241,6 +276,8 @@ export function FichaActivo({ codigo, onVolver, onAbrir, rotuloVolver, onRegistr
             {ficha.referencia![0].origen ? <p className="red-nota">Origen: {ficha.referencia![0].origen}.</p> : null}
           </section>
         ) : null}
+
+        {ficha.regulatorio ? <InventarioRegulatorio r={ficha.regulatorio} /> : null}
 
         {modelo.length > 0 ? (
           <details className="red-seccion red-plegable">
