@@ -1,0 +1,13 @@
+Regresiones de Chrome del Corte 9b, Fase 4 (Code A, 17-nov-2026). Frontend main 4663d41 unido en tecnica-corte9b; Edges main f02197b.
+Base: producción + 9b (1a + 1b) + Fase 2 (con el aviso D11) + Fase 3 + carga del flujo. Las del Code B, además, con el Plan Maestro, los sectores y la valoración cargados (copia en el clúster 55434).
+inicio_c11: RESULTADO: 76 de 76 — SIN FALLAS
+avisos_c12: RESULTADO: 72 de 72 — SIN FALLAS
+estilo_c13: RESULTADO: 68 de 68 — SIN FALLAS
+geovisor_c6c: RESULTADO: 54 de 54 — SIN FALLAS
+dashboards: RESULTADO: 25 de 25 — SIN FALLAS
+dashboard_c4a: RESULTADO: 43 de 43 — SIN FALLAS
+cierre_c9b: RESULTADO: 73 de 73 — SIN FALLAS
+linea116_c5d: RESULTADO: 34 de 34 — SIN FALLAS
+inventario_c10: RESULTADO: 52 de 52 — SIN FALLAS
+plan_maestro_c9a_bis: RESULTADO: 86 de 86 — SIN FALLAS
+Notas: cierre_c9b dio 72 de 73 en la primera corrida (un mensaje de consola «L», intermitente) y 73 de 73 en la segunda; linea116_c5d se cayó en la primera (la sesión del supervisor salió como operador al empezar el ancho 1280) y dio 34 de 34 en la segunda. avisos_c12: la prueba esperaba 9 plazos de distribución; con los 2 de válvula cerrada del 1b son 11 (prueba actualizada).

@@ -5,6 +5,7 @@
 revoke all on function redes.f_presion_nivel(numeric, numeric), redes.f_alertas_presion(text), redes.f_presion_para_avisos(), redes.f_sensible_tipo(text), redes.f_sensibles_proponer(text),
                        redes.f_sensibles_en(text[]), redes.f_sensor_estado(bigint)
   from public, anon, authenticated, service_role;
+revoke all on function tecnica.f_avisos(boolean, boolean, timestamptz) from public, anon, authenticated, service_role;
 do $$
 declare f record;
 begin
@@ -25,5 +26,6 @@ values ('migracion@redes_corte9b_f2', 'migracion_redes_corte9b_fase2', null, jso
                                     'redes.f_sensor_estado', 'geoportal_redes_alertas_presion', 'geoportal_redes_sensibles', 'geoportal_redes_sensible_fijar',
                                     'geoportal_redes_afectacion', 'geoportal_redes_sensores'),
         'parametros', jsonb_build_array('sensor_sin_senal_min', 'presion_lista_max'),
+        'reemplazadas', jsonb_build_array('tecnica.f_avisos (aviso informativo de presiones, D11)'),
         'capa_oculta', 'cortes',
         'motivo', 'alertas de presión de modelo (Res. 0330 de 2017), usuarios sensibles, afectación del daño o la intervención, lecturas de sensores (vacía) y la capa de cortes oculta (vive en el modo Afectaciones)'), null);

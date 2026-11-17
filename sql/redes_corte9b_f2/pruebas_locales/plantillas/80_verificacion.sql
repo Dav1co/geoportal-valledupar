@@ -1,6 +1,6 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b · FASE 2 · 80 — VERIFICACIÓN DE SOLO LECTURA (una sola consulta; apta para el editor SQL web). Todas las filas deben decir OK.
--- Nota: después de la Fase 2, la fila 03 de la verificación del 9b (1a + 1b) deja de valer (el conjunto de funciones cambió).
+-- Nota: la verificación del 9b (1a + 1b) que mira el md5 de tecnica.f_avisos deja de valer después de la Fase 2. Además, después de la Fase 2, la fila 03 de la verificación del 9b (1a + 1b) deja de valer (el conjunto de funciones cambió).
 -- =====================================================================
 select k, v from (
   select 1 as o, '01 las 5 RPC nuevas: security definer, search_path fijo, solo service_role' as k,
@@ -28,10 +28,10 @@ select k, v from (
   union all select 6, '06 usuarios sensibles sin datos de personas: ninguna columna de nombre, teléfono, dirección ni cédula',
          case when not exists (select 1 from information_schema.columns where table_schema = 'redes' and table_name in ('usuarios_sensibles', 'usuario_sensible_eventos')
                                 and column_name ~ 'suscriptor|nombre|telefono|celular|direccion|cedula|propietario') then 'OK' else 'MAL' end
-  union all select 7, '07 la capa «Cortes programados vigentes» está oculta de la lista (no borrada) y tecnica.f_avisos no cambió (sigue la del 9b 1b)',
+  union all select 7, '07 la capa «Cortes programados vigentes» está oculta de la lista (no borrada) y tecnica.f_avisos es la de la Fase 2 (con el aviso informativo de presiones)',
          case when (select not activa from redes.geovisor_capas where codigo = 'cortes')
-               and position('D10 (Corte 9b, Fase 1b)' in pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) > 0
-               and position('f_presion_para_avisos' in pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) = 0 then 'OK' else 'MAL' end
+               and md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamp with time zone)'::regprocedure)) = '{{MD5_AVISOS_F2}}'
+               and not has_function_privilege('service_role', 'tecnica.f_avisos(boolean,boolean,timestamp with time zone)', 'execute') then 'OK' else 'MAL' end
   union all select 8, 'INFO usuarios sensibles: por confirmar · confirmados · descartados',
          (select count(*) filter (where estado = 'por_confirmar') || ' · ' || count(*) filter (where estado = 'confirmado') || ' · ' || count(*) filter (where estado = 'descartado') from redes.v_usuario_sensible)
   union all select 9, 'INFO alertas de presión de modelo (red existente): nodos · por nivel',
