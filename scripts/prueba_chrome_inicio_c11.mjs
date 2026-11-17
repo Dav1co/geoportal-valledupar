@@ -196,7 +196,7 @@ for (const ancho of [390, 1280]) {
   const tag = `[${ancho}]`;
   rehacer(); rpcs.length = 0;
   sqlq(`select public.geoportal_redes_personal_fijar('${EMAILS.dist}', '${EMAILS.op}', 'geovisor', 'si', 'Necesita ver la red en la calle')`);
-  sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario) values ('${EMAILS.op2}', 'asignar_formulario', 'uso_quimicos'), ('${EMAILS.op2}', 'asignar_formulario', 'entrada_quimicos')`);      // 7b
+  sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values ('${EMAILS.op2}', 'asignar_formulario', 'uso_quimicos', '${EMAILS.adm}'), ('${EMAILS.op2}', 'asignar_formulario', 'entrada_quimicos', '${EMAILS.adm}')`);      // 7b
 
   // ===== A. Operador de planta: solo Planta, sin selector =====
   let p = await abrir(ancho, "op2"); await esperarTexto(p, /Entrada de químicos/);

@@ -741,7 +741,7 @@ begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, horario, dias) values (op, 'ZT12 Operador', 'consulta', true, 'sin_restriccion', 'todos'),
          (dz, 'ZT12 Supervisor desactivado', 'consulta', true, 'sin_restriccion', 'todos');
   update public.geoportal_lista_blanca set ver_dashboard_tecnico = true where email = dz;
-  insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, autor) values (dz, 'desactivar_tecnica', a);
+  insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, motivo, autor) values (dz, 'desactivar_tecnica', 'ZT12 cuenta de prueba desactivada', a);
   insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values (op, 'asignar_formulario', 'uso_quimicos', a);
   insert into tecnica.plantas (codigo, nombre, activa) values ('zt12_planta', 'ZT12 Planta', true) returning id into v_pl;
   select codigo into v_tipo from redes.tipos_dano where activo and 'acueducto' = any (sistemas) order by orden limit 1;
@@ -832,8 +832,9 @@ begin
   v_n1 := pg_temp.n(tecnica.f_avisos(true, false, null), 'muestreo_fuera_rango');
   insert into tecnica.registros (lote_id, formulario, variable_id, punto_id, valor, fecha_muestra, hora_muestra, autor)
   select gen_random_uuid(), 'muestreo', v.id, v_pt, 0.05, v_hoy - 3, time '09:00', op from tecnica.variables v where v.codigo = 'cloro_residual_libre';
-  insert into tecnica.registros (lote_id, formulario, variable_id, punto_id, valor, fecha_muestra, hora_muestra, autor)
-  select gen_random_uuid(), 'muestreo', v.id, v_pt2, 1.0, v_hoy - 40, time '09:00', op from tecnica.variables v where v.codigo = 'cloro_residual_libre';
+  -- (la regla de la tabla admite la fecha de la muestra hasta 31 días antes del registro: esta muestra «vieja» se registró ese día)
+  insert into tecnica.registros (lote_id, formulario, variable_id, punto_id, valor, fecha_muestra, hora_muestra, autor, registrado_en)
+  select gen_random_uuid(), 'muestreo', v.id, v_pt2, 1.0, v_hoy - 40, time '09:00', op, clock_timestamp() - interval '40 days' from tecnica.variables v where v.codigo = 'cloro_residual_libre';
   perform pg_temp.reg('04.02 una muestra de hace 3 días saca al punto del aviso; una de hace 40 días no',
      pg_temp.n(tecnica.f_avisos(true, false, null), 'muestreo_sin_muestra') = v_n0 + 1);
   v_n0 := v_n1;
@@ -971,7 +972,7 @@ begin
   perform pg_temp.reg('07.02 con un formulario y el área «distribución»: sale de los dos y entra a «sin cuadrilla»',
      pg_temp.n(v_j, 'personal_sin_formularios') = pg_temp.n(v_j0, 'personal_sin_formularios') and pg_temp.n(v_j, 'personal_sin_area') = pg_temp.n(v_j0, 'personal_sin_area')
      and pg_temp.n(v_j, 'personal_sin_cuadrilla') = pg_temp.n(v_j0, 'personal_sin_cuadrilla') + 1);
-  insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values (op2, 'quitar_formulario', 'danos_fallas', a);
+  insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, motivo, autor) values (op2, 'quitar_formulario', 'danos_fallas', 'ZT12 se le quita el formulario de prueba', a);
   perform pg_temp.reg('07.03 quitarle el único formulario lo devuelve a «sin formularios»', pg_temp.n(tecnica.f_avisos(true, true, null), 'personal_sin_formularios') = pg_temp.n(v_j0, 'personal_sin_formularios') + 1);
   perform pg_temp.reg('07.04 el supervisor de planta y el de distribución ven los avisos de Personal',
      pg_temp.av(public.geoportal_tec_avisos(sp) -> 'avisos', 'personal_sin_cuadrilla') is not null and pg_temp.av(public.geoportal_tec_avisos(sd) -> 'avisos', 'personal_sin_cuadrilla') is not null);
