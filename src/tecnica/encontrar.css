@@ -1,0 +1,60 @@
+/* «Encontrar o reportar activo» (Corte 14). Solo tokens de la guía visual (tokens.css); los colores de la red son los del geovisor. */
+.enc-pad { padding: var(--t-esp-4); }
+.enc-pad-x { margin: 0 var(--t-esp-4); }
+.enc .tec-tarjeta h2 { margin: 0; font-size: var(--t-titulo-2); color: var(--t-titulo); }
+.enc-mapa { gap: var(--t-esp-2); }
+.enc-mapa-caja { position: relative; }
+.enc-mapa-lienzo { height: 300px; border: 1px solid var(--t-borde); border-radius: var(--t-radio); overflow: hidden; }
+.enc-mapa-sin { min-height: 160px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: var(--t-esp-3); background: var(--t-suave); border: 1px dashed var(--t-borde-campo); border-radius: var(--t-radio); padding: var(--t-esp-4); font-size: var(--t-txt); }
+.enc-mapa-sin p { margin: 0; }
+.enc-zoom { position: absolute; top: var(--t-esp-2); right: var(--t-esp-2); display: flex; flex-direction: column; gap: var(--t-esp-1); z-index: 2; }
+.enc-zoom-b { min-width: var(--t-toque); min-height: var(--t-toque); padding: 0 var(--t-esp-2); border-radius: var(--t-radio); border: 1px solid var(--t-borde-campo); background: var(--t-tarjeta); color: var(--t-titulo); font: inherit; font-size: 22px; font-weight: 700; line-height: 1; cursor: pointer; }
+.enc-zoom-centrar { font-size: var(--t-txt-chico); }
+.enc-zoom-b:disabled { color: var(--t-borde-campo); cursor: default; }
+.enc-zoom-b:focus-visible, .enc-fila:focus-visible { outline: 3px solid var(--t-foco); outline-offset: 2px; }
+.enc-gps { margin: 0; font-size: var(--t-txt); color: var(--t-texto); }
+.enc-debil { background: var(--t-naranja-suave); color: var(--t-naranja); border: 1px solid var(--t-naranja); font-weight: 600; }
+.enc-persona { width: 18px; height: 18px; border-radius: 50%; background: var(--t-foco); border: 3px solid #fff; box-shadow: 0 0 0 1px var(--t-titulo); box-sizing: border-box; }
+.enc-marca { display: inline-flex; align-items: center; gap: var(--t-esp-1); pointer-events: none; }
+.enc-marca-n { width: 22px; height: 22px; border-radius: 50%; color: #fff; border: 2px solid #fff; font-size: var(--t-txt-chico); font-weight: 700; display: flex; align-items: center; justify-content: center; box-sizing: border-box; flex: 0 0 auto; }
+.enc-marca-cod { font-family: var(--t-fuente-codigo); font-size: 11px; font-weight: 700; color: var(--t-titulo); background: rgba(255, 255, 255, 0.88); border-radius: var(--t-esp-1); padding: 0 3px; white-space: nowrap; }
+.enc-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--t-esp-2); }
+.enc-fila { width: 100%; min-height: 56px; display: flex; align-items: center; gap: var(--t-esp-3); padding: var(--t-esp-2) var(--t-esp-3); border: 1px solid var(--t-borde); border-radius: var(--t-radio); background: var(--t-tarjeta); color: var(--t-texto); font: inherit; text-align: left; cursor: pointer; }
+.enc-n { width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: var(--t-txt); font-weight: 700; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.enc-n-acueducto { background: #1F5FA8; }
+.enc-n-alcantarillado { background: #8A5A2B; }
+.enc-ico { flex: 0 0 auto; width: 18px; height: 18px; box-sizing: border-box; }
+.enc-ico-punto { border-radius: 50%; border: 3px solid var(--t-texto-2); }
+.enc-ico-linea { height: 4px; background: var(--t-texto-2); border-radius: 2px; }
+.enc-ico-area { border: 2px solid var(--t-texto-2); background: var(--t-suave); }
+.enc-fila-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.enc-fila-tit { font-size: var(--t-txt); font-weight: 700; color: var(--t-titulo); overflow-wrap: anywhere; }
+.enc-fila-det { font-size: var(--t-txt-chico); color: var(--t-texto-2); }
+.enc-fila-dist { flex: 0 0 auto; font-size: var(--t-txt); font-weight: 700; color: var(--t-titulo); }
+.enc-vacio { margin: 0; font-size: var(--t-txt); color: var(--t-texto); background: var(--t-suave); border: 1px dashed var(--t-borde-campo); border-radius: var(--t-radio); padding: var(--t-esp-3); }
+.enc-ya { background: var(--t-naranja-suave); border: 1px solid var(--t-naranja); border-radius: var(--t-radio); padding: var(--t-esp-3); }
+.enc-ya h3 { margin: 0 0 var(--t-esp-1); font-size: var(--t-txt); color: var(--t-naranja); }
+.enc-ya ul { margin: 0; padding-left: 18px; font-size: var(--t-txt); color: var(--t-texto); }
+.enc-campo { display: flex; flex-direction: column; gap: var(--t-esp-2); }
+.enc-campo textarea { font: inherit; font-size: var(--t-txt-campo); padding: var(--t-esp-2) var(--t-esp-3); border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio); color: var(--t-texto); resize: vertical; }
+.enc-foto { margin: 0; display: flex; flex-direction: column; gap: var(--t-esp-1); }
+.enc-foto img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--t-radio); border: 1px solid var(--t-borde); }
+.enc-errores { margin: 0; padding-left: 28px; }
+.enc-dl { margin: 0; display: grid; grid-template-columns: 1fr; gap: var(--t-esp-2); }
+.enc-dl > div { display: flex; justify-content: space-between; gap: var(--t-esp-3); border-bottom: 1px solid var(--t-suave); padding-bottom: var(--t-esp-1); font-size: var(--t-txt); }
+.enc-dl dt { color: var(--t-texto-2); }
+.enc-dl dd { margin: 0; font-weight: 600; color: var(--t-texto); text-align: right; overflow-wrap: anywhere; }
+.enc-fondo { position: fixed; inset: 0; background: rgba(10, 37, 64, 0.55); display: flex; align-items: center; justify-content: center; padding: var(--t-esp-4); z-index: 50; max-width: none !important; }
+.enc-dialogo { background: var(--t-tarjeta); border-radius: var(--t-radio-tarjeta); border-left: var(--t-borde-modo) solid var(--t-naranja); padding: var(--t-esp-4); max-width: 440px; width: 100%; display: flex; flex-direction: column; gap: var(--t-esp-3); font-size: var(--t-txt); color: var(--t-texto); }
+.enc-dialogo h3 { margin: 0; font-size: var(--t-titulo-2); color: var(--t-titulo); }
+.enc-dialogo ul, .enc-dialogo p { margin: 0; }
+.enc-dialogo ul { padding-left: 18px; }
+/* Bandeja del supervisor (Dashboard distribución → Por verificar → Otros activos por levantamiento) */
+.lev-etq-baja { background: var(--t-naranja-suave); color: var(--t-naranja); }
+.lev-etq-ok { background: var(--t-ok-suave); color: var(--t-ok); }
+.lev-fotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--t-esp-2); margin-top: var(--t-esp-2); }
+.lev-fotos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--t-radio); border: 1px solid var(--t-borde); display: block; }
+.lev-form { display: flex; flex-direction: column; gap: var(--t-esp-2); margin-top: var(--t-esp-2); padding: var(--t-esp-3); background: var(--t-suave); border-radius: var(--t-radio); }
+.lev-form label { font-size: var(--t-txt); font-weight: 600; color: var(--t-texto); }
+.lev-form input { min-height: var(--t-toque); font: inherit; font-size: var(--t-txt-campo); padding: 0 var(--t-esp-3); border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio); }
+@media (min-width: 760px) { .enc-mapa-lienzo { height: 380px; } .enc-dl { grid-template-columns: 1fr 1fr; column-gap: var(--t-esp-5); } }

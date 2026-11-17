@@ -13,6 +13,8 @@ import { NoIdentificados, Recursos } from "./IntervencionesSupervisor";
 import { Catalogo, Descargas, Graficas, Nodos, Parametros, Personal } from "./DashboardGestion";
 import { CargueCapas } from "./cargue/CargueCapas";
 import { InventarioRegulatorio } from "./InventarioRegulatorio";
+import { PorLevantarLista } from "./PorLevantar";      // Corte 14
+import { apiLev } from "./apiLevantar";
 
 // Dashboard distribución (Técnica fase 1, Corte 4a; §7 y §16 de la bitácora). Para el supervisor de distribución (ver_dashboard_redes) y el administrador:
 // el servidor lo vuelve a verificar en cada ruta. Pestañas de este corte: no identificados (asociar o crear el activo), intervenciones (recursos por completar,
@@ -135,6 +137,9 @@ function PorVerificarLista({ onFicha }: { onFicha: (c: string) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [vez, setVez] = useState(0);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [levantar, setLevantar] = useState(false);                 // Corte 14: el filtro «Otros activos por levantamiento»
+  const [nLevantar, setNLevantar] = useState<number | null>(null);
+  useEffect(() => { let vivo = true; apiLev.lista("abiertos", null).then((r) => { if (vivo) setNLevantar(r.abiertos); }).catch(() => {}); return () => { vivo = false; }; }, []);
   useEffect(() => {
     let vivo = true;
     setD(null); setError(null);
@@ -144,12 +149,14 @@ function PorVerificarLista({ onFicha }: { onFicha: (c: string) => void }) {
   if (error) return <section className="tec-tarjeta" role="alert"><p>{error}</p></section>;
   return (
     <>
-      <p className="tec-ayuda dan-pad-x">Activos que hay que confirmar en campo. Al marcar «Verificado» escriba lo que se encontró; si el dato de la ficha está mal, corríjalo en «Editar ficha» (la marca no cambia la ficha).</p>
+      {levantar ? null : <p className="tec-ayuda dan-pad-x">Activos que hay que confirmar en campo. Al marcar «Verificado» escriba lo que se encontró; si el dato de la ficha está mal, corríjalo en «Editar ficha» (la marca no cambia la ficha).</p>}
       {d ? (
         <div className="dan-fila dan-pad-x" role="group" aria-label="Qué activos por verificar ver">
-          <button type="button" className="dan-opcion" aria-pressed={grupo === null} onClick={() => setGrupo(null)}>Todos: {d.grupos.reduce((s, g) => s + g.n, 0)}</button>
-          {d.grupos.map((g) => <button key={g.grupo} type="button" className="dan-opcion" aria-pressed={grupo === g.grupo} data-grupo={g.grupo} onClick={() => setGrupo(g.grupo)}>{GRUPO_PV[g.grupo] ?? g.grupo}: {g.n}</button>)}
+          <button type="button" className="dan-opcion" aria-pressed={!levantar && grupo === null} onClick={() => { setLevantar(false); setGrupo(null); }}>Todos: {d.grupos.reduce((s, g) => s + g.n, 0)}</button>
+          {d.grupos.map((g) => <button key={g.grupo} type="button" className="dan-opcion" aria-pressed={!levantar && grupo === g.grupo} data-grupo={g.grupo} onClick={() => { setLevantar(false); setGrupo(g.grupo); }}>{GRUPO_PV[g.grupo] ?? g.grupo}: {g.n}</button>)}
+          <button type="button" className="dan-opcion" aria-pressed={levantar} data-grupo="levantar" onClick={() => setLevantar(true)}>Otros activos por levantamiento{nLevantar !== null ? `: ${nLevantar}` : ""}</button>
         </div>) : null}
+      {levantar ? <PorLevantarLista onFicha={onFicha} onConteo={setNLevantar} /> : <>
       {aviso ? <p className="tec-aviso tec-aviso-info dan-pad-x" role="status">{aviso} <button type="button" className="tec-enlace" onClick={() => setAviso(null)}>Cerrar</button></p> : null}
       {!d ? <p className="tec-sub dan-pad" role="status">Cargando…</p>
         : !items.length ? <section className="tec-tarjeta"><p className="red-vacio">No hay activos por verificar{grupo ? " en ese grupo" : ""}.</p></section>
@@ -167,6 +174,7 @@ function PorVerificarLista({ onFicha }: { onFicha: (c: string) => void }) {
             {d.siguiente && items.length < d.total ? <div className="dan-pad-x"><button type="button" className="tec-boton-sec" onClick={() => apiDash.porVerificar(grupo, items[items.length - 1].activo_id)
               .then((r) => { setItems([...items, ...r.items]); setD({ ...d, siguiente: r.siguiente }); }).catch(() => {})}>Cargar más ({d.total - items.length})</button></div> : null}
           </>}
+      </>}
     </>
   );
 }

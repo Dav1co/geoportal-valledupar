@@ -1,7 +1,7 @@
 // Entradas del área «Formatos de campo» (Torre A). Cada pantalla es UNA entrada de esta lista; agregar una nueva pantalla = agregar una entrada aquí y un caso en AreaCampo.
 // Lógica pura (sin React): se prueba sola en scripts/prueba_integracion.mjs.
 
-export type EntradaId = "reporte_general" | "formatos" | "acta" | "analisis_contrato" | "acta_supervision" | "revision";
+export type EntradaId = "reporte_general" | "formatos" | "acta" | "analisis_contrato" | "acta_supervision" | "revision" | "activo_campo";
 
 export type EntradaCampo = {
   id: EntradaId;
@@ -35,6 +35,8 @@ export type CondicionesEntradas = {
   puedeSupervisar?: boolean;
   /** Permiso `analisis_contrato` (o administrador): abre «Análisis de contrato». Sin él la entrada no aparece. Puede venir solo (usuario comercial sin campo, decisión 12). */
   puedeAnalisis?: boolean;
+  /** Corte 14 de Técnica: muestra «Encontrar o reportar activo» (quien tiene Formularios de campo). Por omisión no (como antes). */
+  puedeActivoCampo?: boolean;
 };
 
 /** Entradas visibles, en orden (14/11/2026): «Reportar anomalía» · «Formatos de actividad» (solo si hay formatos activos) · «Reportar posible pérdida» (SOLO con el permiso de acta)
@@ -50,6 +52,11 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
   if (campo && c.hayFormatos) e.push({
     id: "formatos", titulo: "Formatos de actividad", seccion: 2, abreMas: true,
     descripcion: "Suspensión, corte, instalaciones y otras actividades, con sus campos, fotos y resultado.", habilitada: c.puedeReportar,
+  });
+  // Corte 14 de Técnica: «Encontrar o reportar activo» (la misma pantalla de Técnica). La ve quien tiene Formularios de campo; el servidor lo vuelve a decidir al abrirla.
+  if (campo && c.puedeActivoCampo === true) e.push({
+    id: "activo_campo", titulo: "Encontrar o reportar activo", seccion: 2,
+    descripcion: "Vea los activos de la red que tiene cerca o reporte uno que no está.", habilitada: true,
   });
   if (c.puedeActa) e.push({
     id: "acta", titulo: "Reportar posible pérdida", seccion: 3,

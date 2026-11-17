@@ -95,6 +95,11 @@ ok("entradas: solo acta no ve reporte general ni formatos aunque el catálogo te
 ok("entradas: campo + acta ve las dos entradas", igual(ids({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeCampo: true, puedeAnalisis: true }), ["reporte_general", "formatos", "acta", "analisis_contrato"]));
 ok("entradas: sin campo y sin acta no hay ninguna entrada", igual(ids({ puedeReportar: false, hayFormatos: false, puedeActa: false, puedeCampo: false }), []));
 ok("entradas: sin la opción puedeCampo se comporta como antes (compatibilidad)", igual(ids({ puedeReportar: true, hayFormatos: true, puedeActa: false }), ["reporte_general", "formatos"]));
+// Corte 14 de Técnica: «Encontrar o reportar activo»
+ok("entradas (Corte 14): con puedeActivoCampo aparece «Encontrar o reportar activo» después de los formatos, habilitada y con descripción", (() => { const l = E.entradasDeCampo({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeAnalisis: true, puedeActivoCampo: true });
+  const e = l.find((x) => x.id === "activo_campo"); return igual(l.map((x) => x.id), ["reporte_general", "formatos", "activo_campo", "acta", "analisis_contrato"]) && e.titulo === "Encontrar o reportar activo" && e.habilitada === true && e.seccion === 2 && e.descripcion.length > 10; })());
+ok("entradas (Corte 14): sin Formularios de campo (solo acta o solo análisis) NO aparece, aunque se pida", !ids({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false, puedeActivoCampo: true }).includes("activo_campo")
+  && !ids({ puedeReportar: false, hayFormatos: false, puedeActa: false, puedeCampo: false, puedeAnalisis: true, puedeActivoCampo: true }).includes("activo_campo"));
 ok("entradas: el supervisor de actas ve «Aperturas sin registrar» (pantalla mínima, habilitada)", (() => { const e = E.entradasDeCampo({ puedeReportar: false, hayFormatos: false, puedeActa: true, puedeCampo: false, puedeSupervisarActas: true }).find((x) => x.id === "acta_supervision"); return !!e && e.titulo === "Aperturas sin registrar" && !e.pendiente && e.habilitada === true; })());
 ok("entradas: sin permiso de supervisión no aparece el marcador del tablero", !ids({ puedeReportar: true, hayFormatos: true, puedeActa: true, puedeCampo: true }).includes("acta_supervision"));
 const ac2 = leer("src/campo/AreaCampo.tsx");

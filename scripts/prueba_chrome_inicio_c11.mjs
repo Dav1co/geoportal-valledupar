@@ -249,7 +249,7 @@ for (const ancho of [390, 1280]) {
   await modoA(p, "redes"); i = await inicio(p);
   ok(`${tag} C3 en Redes solo tiene «Ficha de activos» (buscar); no tiene formularios de redes`, claves(i) === "ficha_buscar" && i.pestanas[1].sel === "true" && i.pestanas[1].fondo === COLOR.redes, claves(i));
   await modoA(p, "supervision"); i = await inicio(p);
-  ok(`${tag} C4 en Supervisión: Avisos (Corte 12), Dashboard PTAP y Geovisor técnico; sin Dashboard distribución ni «Ficha de activos (editar)»`, claves(i) === "avisos,dashboard_ptap,geovisor" && i.pestanas[2].fondo === COLOR.supervision && i.tarjetas[0].colorIni === COLOR.supervision, claves(i));
+  ok(`${tag} C4 en Supervisión: Avisos (Corte 12), Dashboard PTAP, Geovisor técnico y «Encontrar o reportar activo» (Corte 14); sin Dashboard distribución ni «Ficha de activos (editar)»`, claves(i) === "avisos,dashboard_ptap,geovisor,activo_campo" && i.pestanas[2].fondo === COLOR.supervision && i.tarjetas[0].colorIni === COLOR.supervision, claves(i));
   await p.reload(); await p.waitForSelector("[data-tarjeta=dashboard_ptap]");
   ok(`${tag} C5 se recuerda el último modo elegido (Supervisión) al volver a entrar`, (await inicio(p)).modo === "supervision");
   ok(`${tag} C6 hasta aquí no se ha pedido el geovisor`, !pidio("geoportal_redes_geovisor", EMAILS.planta));
@@ -263,12 +263,12 @@ for (const ancho of [390, 1280]) {
   p = await abrir(ancho, "dist"); await p.waitForSelector("[data-tarjeta=dashboard_distribucion]");
   i = await inicio(p);
   ok(`${tag} D1 supervisor de distribución (sin formularios de Técnica): entra al mismo inicio, con Redes y Supervisión, y la primera vez abre en Supervisión (David, 14:39); no se le abre el dashboard solo`,
-     i.pestanas.map((x) => x.modo).join() === "redes,supervision" && i.modo === "supervision" && claves(i) === "avisos,dashboard_distribucion,geovisor,ficha_editar" && !(await p.$(".tdash-cab")), JSON.stringify(i.pestanas) + claves(i));
+     i.pestanas.map((x) => x.modo).join() === "redes,supervision" && i.modo === "supervision" && claves(i) === "avisos,dashboard_distribucion,geovisor,activo_campo,ficha_editar" && !(await p.$(".tdash-cab")), JSON.stringify(i.pestanas) + claves(i));
   await modoA(p, "redes");
   ok(`${tag} D1b en Redes solo tiene «Ficha de activos» (buscar)`, claves(await inicio(p)) === "ficha_buscar");
   ok(`${tag} D2 su sesión dice «Supervisor de distribución»`, /Supervisor de distribución/.test(await p.evaluate(() => document.querySelector(".tec-inicio-sesion").textContent)));
   await modoA(p, "supervision"); i = await inicio(p);
-  ok(`${tag} D3 en Supervisión: Avisos (Corte 12), Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»; sin Dashboard PTAP`, claves(i) === "avisos,dashboard_distribucion,geovisor,ficha_editar", claves(i));
+  ok(`${tag} D3 en Supervisión: Avisos (Corte 12), Dashboard distribución, Geovisor técnico, «Encontrar o reportar activo» (Corte 14) y «Ficha de activos (editar)»; sin Dashboard PTAP`, claves(i) === "avisos,dashboard_distribucion,geovisor,activo_campo,ficha_editar", claves(i));
   await tocar(p, "dashboard_distribucion"); await esperarTexto(p, /No identificados/);
   await clicTexto(p, "button", "← Volver"); await p.waitForSelector("[data-tarjeta=dashboard_distribucion]");
   ok(`${tag} D4 del Dashboard distribución se vuelve al inicio`, (await inicio(p)).modo === "supervision");
@@ -290,7 +290,7 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} E3 Redes: daño o falla, intervención y «Ficha de activos» (buscar)`, claves(i) === "danos_fallas,mantenimiento,ficha_buscar", claves(i));
   await p.screenshot({ path: join(CAP, `modo_redes_${ancho}.png`) });
   await modoA(p, "supervision"); i = await inicio(p);
-  ok(`${tag} E4 Supervisión: Avisos (Corte 12), Dashboard PTAP, Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»`, claves(i) === "avisos,dashboard_ptap,dashboard_distribucion,geovisor,ficha_editar" && (await sinDesborde(p)), claves(i));
+  ok(`${tag} E4 Supervisión: Avisos (Corte 12), Dashboard PTAP, Dashboard distribución, Geovisor técnico, «Encontrar o reportar activo» (Corte 14) y «Ficha de activos (editar)»`, claves(i) === "avisos,dashboard_ptap,dashboard_distribucion,geovisor,activo_campo,ficha_editar" && (await sinDesborde(p)), claves(i));
   await p.screenshot({ path: join(CAP, `modo_supervision_${ancho}.png`) });
   ok(`${tag} E5 el geovisor no se cargó al entrar ni al cambiar de modo`, !pidio("geoportal_redes_geovisor", EMAILS.adm) && !(await p.$(".geo-mapa")));
   await tocar(p, "geovisor"); await p.waitForFunction(() => !!document.querySelector(".geo-mapa")?.__mapa, { timeout: 30000 });

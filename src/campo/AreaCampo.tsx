@@ -16,6 +16,8 @@ import { supabase } from "../lib/supabase";
 const Revision = lazy(() => import("./dashboard/Revision"));
 // «Análisis de contrato»: también diferida (su mapa trae MapLibre, que solo se descarga al abrir la sección «Ubicación»).
 const AnalisisContrato = lazy(() => import("./analisis/AnalisisContrato"));
+// «Encontrar o reportar activo» (Corte 14 de Técnica): la misma pantalla de Técnica, también diferida (trae MapLibre).
+const EncontrarActivo = lazy(() => import("../tecnica/EncontrarActivo").then((m) => ({ default: m.EncontrarActivo })));
 /** Formato al que lleva el atajo de posible submedición, y lo que llega marcado («Cambio de medidor»). */
 const FORMATO_CAMBIO = "instalacion_medidor";
 const VALORES_CAMBIO = { inst_modalidad: "cambio" };
@@ -95,6 +97,14 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
     return <AperturasSinRegistrar onVolver={() => setAbierta(null)} />;
   }
 
+  if (abierta === "activo_campo" && campo) {
+    return (
+      <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando…</p></section></div>}>
+        <EncontrarActivo onVolver={() => setAbierta(null)} rotuloVolver="Volver" />
+      </Suspense>
+    );
+  }
+
   if (abierta === "analisis_contrato" && analisis) {
     return (
       <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando Análisis de contrato…</p></section></div>}>
@@ -109,7 +119,7 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
 
   const entradas = entradasDeCampo({
     puedeReportar: def?.puede.reportar ?? false, hayFormatos: def ? formatosDisponibles(def.grupos).length > 0 : false,
-    puedeActa: acta, puedeCampo: campo, puedeSupervisarActas: dashboardActa, puedeSupervisar: def?.puede.supervisar ?? false, puedeAnalisis: analisis,
+    puedeActa: acta, puedeCampo: campo, puedeSupervisarActas: dashboardActa, puedeSupervisar: def?.puede.supervisar ?? false, puedeAnalisis: analisis, puedeActivoCampo: campo,
   });
 
   return (

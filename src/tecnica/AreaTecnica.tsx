@@ -18,6 +18,7 @@ import { apiDash, type MiPerfilRedes } from "./apiRedes";
 import { pedirPestana } from "./CabeceraDashboard";
 import { AvisosContexto, PantallaAvisos, resolverBandeja, useAvisos } from "./Avisos";
 import type { Bandeja } from "./apiAvisos";
+import { EncontrarActivo } from "./EncontrarActivo";      // Corte 14
 import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
@@ -62,7 +63,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [desdeDano, setDesdeDano] = useState<DesdeDano | null>(null);      // «Registrar la reparación» desde el daño recién guardado
   const [activoItv, setActivoItv] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // desde la ficha
   const [activoDano, setActivoDano] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // Corte 6a: desde el geovisor
-  const [vista, setVista] = useState<"inicio" | "captura" | "dashboard" | "activos" | "redes" | "geovisor" | "avisos">("inicio");      // Corte 12: «avisos»      // Corte 11: se entra al inicio por modos
+  const [vista, setVista] = useState<"inicio" | "captura" | "dashboard" | "activos" | "redes" | "geovisor" | "avisos" | "encontrar">("inicio");      // Corte 14: «encontrar»      // Corte 12: «avisos»      // Corte 11: se entra al inicio por modos
   const [modo, setModo] = useState<Modo | null>(modoGuardado);
   // Corte 6b (§30.2): un enlace compartido del geovisor (#geovisor=<código>) se consume una vez: se quita de la barra de direcciones y abre el geovisor
   const [vistaId, setVistaId] = useState<string | null>(() => /(?:^|[#&])geovisor=([a-z0-9]{10})(?:&|$)/.exec(window.location.hash)?.[1] ?? null);
@@ -109,7 +110,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     const a = avisoDeError(errorMis);
     const sinAcceso = errorMis.tipo === "permiso" || errorMis.tipo === "denegado";
     // Corte 11: quien no tiene formularios de Técnica pero sí el Dashboard distribución o el geovisor entra al mismo inicio por modos (sigue más abajo)
-    if (!(sinAcceso && (redes?.dashboard_redes || redes?.geovisor))) {
+    if (!(sinAcceso && (redes?.dashboard_redes || redes?.geovisor || redes?.activo_campo))) {
       if (sinAcceso && !redesListo) return <div className="tec-pagina"><p className="tec-sub" role="status">Cargando Técnica…</p></div>;
     return (
       <div className="tec-pagina">
@@ -157,6 +158,11 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const fichaBuscar = redes?.ficha_buscar === true;      // 9a-bis (David, 16-nov): la Ficha de activos en modo buscar (solo lectura) también para el operador de redes; lo decide el servidor
   if ((puedeSupervisar || puedeRedes || fichaBuscar) && vista === "activos") return <div className="tec-envoltura tec-modo-distribucion"><ActivosRedes onVolver={() => setVista("inicio")} onRegistrarIntervencion={tieneItv || puedeSupervisar || puedeRedes ? (a) => abrirItv(null, a) : undefined} /></div>;
 
+  // Corte 14: «Encontrar o reportar activo» (lo decide el servidor: administrador, supervisores y el operador con el formulario asignado en Personal)
+  const encontrar = redes?.activo_campo === true;
+  if (encontrar && vista === "encontrar") return <EncontrarActivo onVolver={() => setVista("inicio")} />;
+  const tarjetaEncontrar = { clave: "activo_campo", nombre: "Encontrar o reportar activo", descripcion: "Los activos que tiene cerca, o reportar uno que no está en la red", estado: "lista" as const, abrir: () => { setVista("encontrar"); window.scrollTo?.(0, 0); } };
+
   // ----- las tarjetas de cada modo (solo lo que la persona ya tenía) -----
   const abrirForm = (clave: string) => { setElegido(clave); setVista("captura"); window.scrollTo?.(0, 0); };
   const tarjetaForm = (f: MisFormularios["formularios"][number]): Tarjeta => {
@@ -175,6 +181,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     planta: ordenados.filter((f) => !FORMULARIOS_REDES.has(f.clave)).map(tarjetaForm),
     redes: [
       ...ordenados.filter((f) => FORMULARIOS_REDES.has(f.clave)).map(tarjetaForm),
+      ...(encontrar && !supervisa ? [tarjetaEncontrar] : []),
       ...(veFicha ? [{ clave: "ficha_buscar", nombre: "Ficha de activos", descripcion: "Buscar un activo por código, placa o alias", estado: "lista" as const, abrir: () => setVista("activos") }] : []),
       ...(tieneGeovisor && !supervisa ? [{ clave: "geovisor", nombre: "Geovisor técnico (solo lectura)", descripcion: "La red y las actividades de hoy en el mapa", estado: "lista" as const, abrir: () => setVista("geovisor") }] : []),
     ],
@@ -185,6 +192,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
       ...(puedeSupervisar ? [{ clave: "dashboard_ptap", nombre: "Dashboard PTAP", descripcion: "Registros, gráficas, puntos y químicos de planta", estado: "lista" as const, abrir: () => setVista("dashboard") }] : []),
       ...(puedeRedes ? [{ clave: "dashboard_distribucion", nombre: "Dashboard distribución", descripcion: "Daños, intervenciones, personal y cargue de capas", estado: "lista" as const, abrir: () => setVista("redes") }] : []),
       ...(tieneGeovisor && supervisa ? [{ clave: "geovisor", nombre: "Geovisor técnico", descripcion: "La red, las actividades y los contratos en el mapa", estado: "lista" as const, abrir: () => setVista("geovisor") }] : []),
+      ...(encontrar && supervisa ? [tarjetaEncontrar] : []),
       ...(editaFicha ? [{ clave: "ficha_editar", nombre: "Ficha de activos (editar)", descripcion: "Corregir alias, placa y datos de un activo, con motivo", estado: "lista" as const, abrir: () => setVista("activos") }] : []),
     ],
   };

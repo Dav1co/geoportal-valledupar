@@ -1,0 +1,35 @@
+# Corte 14, Etapa 1 · base local de Code B (emdupar_b14, huella de partida a327aa51…)
+## huellas ANTES
+0 funciones de redes (conjunto)|CORTE 9b completo (listo para el 14)
+2 campo.f_formularios_personal()|ANTES DEL 14 (sin cambiar)
+2 public.geoportal_redes_mi_perfil(text)|ANTES DEL 14 (sin cambiar)
+3 public.geoportal_redes_levantar_cerca(text,numeric,numeric,numeric,text)|NO EXISTE (sin aplicar)
+## ensayo
+TIEMPOS con 36306 activos vigentes en esta base: cercanos en el lugar más cargado (10.503233, -73.285244; radio 30 m; 65 activos, 10 kB) 3 ms · cercanos de alcantarillado (15 m; 0 activos) 0 ms · bandeja del supervisor 1 ms · preparar y crear un punto 1 ms
+RESULTADO: 56 de 56 pruebas correctas — SIN FALLAS
+## después del ensayo sigue la huella de partida
+0 funciones de redes (conjunto)|a327aa51f43bb5cc2112a6db089718ed|CORTE 9b completo (listo para el 14)
+## migración + verificación
+01 las RPC nuevas y la reemplazada: security definer, search_path fijo, solo service_role|OK
+02 ninguna función interna de redes la ejecuta la API (incluidas las nuevas)|OK
+03 huellas md5 de las 2 reemplazadas, de las 13 nuevas y del conjunto de funciones de redes del 14|OK
+04 pg-safeupdate: ninguna función de redes, tecnica, public.geoportal_redes_* ni geoportal_tec_* con DELETE o UPDATE sin WHERE|OK
+05 las 4 tablas de los puntos por levantar: nadie de la API las lee ni las escribe; son de solo agregar (con su disparador)|OK
+06 ninguna tabla de los puntos por levantar tiene columnas de suscriptores (nombre, contrato, teléfono, dirección)|OK
+07 los parámetros del 14 y el consecutivo LEV|OK
+08 el formulario «Encontrar o reportar activo»: en el dominio de Técnica, en Personal de distribución y en la lista de Personal de Comercial|OK
+09 la lista de Personal de Comercial conserva los formularios que tenía (solo se sumó uno)|OK
+INFO puntos por levantar: reportados · asignados · levantados · descartados|0 · 0 · 0 · 0
+INFO personas de Técnica con el formulario «Encontrar o reportar activo» asignado|0
+## segunda migración (debe negarse)
+psql:migracion_redes_corte14_editor.sql:36: ERROR:  El Corte 14 ya está aplicado: deténgase y avise
+## reversa y huella
+0 funciones de redes (conjunto)|CORTE 9b completo (listo para el 14)
+2 campo.f_formularios_personal()|ANTES DEL 14 (sin cambiar)
+2 public.geoportal_redes_mi_perfil(text)|ANTES DEL 14 (sin cambiar)
+## md5 de los archivos
+8ec16bb705aff7de16997fc10770180c ensayo_en_transaccion_redes_corte14_editor.sql
+b7ec01274995736619b2962461028035 huellas_solo_lectura_redes_corte14_editor.sql
+5fb444b6747147ec6a0b1a56bc84c7ba migracion_redes_corte14_editor.sql
+7277d239423183cacbc705c7bb545661 reversa_redes_corte14_editor.sql
+9cabf256b173b5bdd55ee5a619e496c3 verificacion_redes_corte14_editor.sql
