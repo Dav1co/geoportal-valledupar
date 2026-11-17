@@ -259,6 +259,7 @@ for (const ancho of ANCHOS) {
   }
   // ===== A. El administrador: Dashboard distribución › Inventario regulatorio =====
   p = await alDashboard(ancho, "adm");
+  await esperarTexto(p, /Inventario regulatorio/);      // la pestaña del administrador aparece cuando llega el perfil: sin esta espera, a veces se buscaba antes
   await pestana(p, "Inventario regulatorio");
   await p.waitForSelector("[data-testid=reg-resumen]", { timeout: 30000 }).catch(async () => { throw new Error("no cargó la conciliación: " + (await texto(p)).slice(-600) + " · rpcs: " + rpcs.map((r) => r.fn).join(",") + " · " + errores.join(" | ") + edgeLog.slice(-400)); });
   t = await p.evaluate(() => document.querySelector("[data-testid=reg-resumen]").innerText);
