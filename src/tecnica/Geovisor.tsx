@@ -212,7 +212,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
           version: 8,
           sources: {
             base: FUENTE_BASE_CALLES,
-            red: { type: "vector", tiles: [`${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela&z={z}&x={x}&y={y}&v=${cfg.version}`], minzoom: cfg.zoom.min, maxzoom: 18 },
+            red: { type: "vector", tiles: [`${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela&z={z}&x={x}&y={y}&v=${cfg.version}&p=${cfg.completo ? "c" : "o"}`], minzoom: cfg.zoom.min, maxzoom: 18 },
             ...(conContratos ? { contratos: { type: "vector" as const, tiles: [`${FUNCTIONS_URL}/geoportal-redes?accion=geovisor_tesela_contratos&z={z}&x={x}&y={y}&v=${encodeURIComponent(cfg.hoy)}`],
                                               minzoom: cfg.zoom.contratos ?? 16, maxzoom: 18 } } : {}),
             ...fuentesGeo,
@@ -336,7 +336,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
             {avisos.map(({ c, d }) => <p key={c.codigo}>{d === "cargando" ? `Cargando ${c.nombre.toLowerCase()}…` : d && "error" in d ? `${c.nombre}: ${d.error}`
               : `${c.nombre}: se muestran los ${cfg.max_elementos} más recientes. Acorte el rango de fechas.`}</p>)}
           </div>) : null}
-        {colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} /> : null}
+        {colores !== "tipo" ? <Leyenda colores={colores} materiales={materiales} edadRef={cfg.edad_ref === true} /> : null}
         {on.has("pqr_116") ? <Leyenda116 derecha={colores !== "tipo" || [...CAPAS_PRESION].some((c) => on.has(c))}
           sinUbicar={(() => { const d = datos.pqr_116; return d && d !== "cargando" && !("error" in d) ? (d as { sin_ubicar?: number }).sin_ubicar ?? 0 : 0; })()} /> : null}
         {[...CAPAS_PRESION].some((c) => on.has(c)) ? <LeyendaPresion modelo={on.has("presion_modelo")} medida={on.has("campana_2014")} arriba={colores !== "tipo"} /> : null}
@@ -426,12 +426,13 @@ function SelectorPeriodo({ cfg, periodo, onCambiar }: { cfg: ConfigGeovisor; per
   );
 }
 
-function Leyenda({ colores, materiales }: { colores: Colores; materiales: { codigo: string; nombre: string; color: string }[] }) {
+function Leyenda({ colores, materiales, edadRef }: { colores: Colores; materiales: { codigo: string; nombre: string; color: string }[]; edadRef?: boolean }) {
   const items = colores === "material" ? [...materiales.map((x) => [x.color, x.nombre]), [SIN_DATO, "Sin dato"]] : [...EDADES.map((e) => [e[1], e[2]]), [SIN_FECHA, "Sin fecha de instalación"]];
   return (
     <div className="geo-leyenda" aria-label={colores === "material" ? "Colores por material" : "Colores por edad"}>
       <strong>{colores === "material" ? "Material" : "Edad"}</strong>
       <ul>{items.map(([c, n]) => <li key={n}><span style={{ background: c }} aria-hidden="true" />{n}</li>)}</ul>
+      {colores === "edad" && edadRef ? <p className="geo-leyenda-nota" data-testid="leyenda-edad-reg">Si el activo no tiene fecha de instalación, la edad sale de la fecha regulatoria, no de instalación.</p> : null}
     </div>
   );
 }
@@ -460,7 +461,7 @@ function TarjetaElemento({ t, cfg, onCerrar, onVerFicha, onReportarDano, onRegis
     if (p.clase) filas.push(["Clase", texto(p.clase)]);
     if (p.material) filas.push(["Material", cfg.materiales.find((x) => x.codigo === p.material)?.nombre ?? texto(p.material)]);
     if (typeof p.diametro === "number") filas.push(["Diámetro", `${nf.format(p.diametro)} mm`]);
-    filas.push(["Edad", typeof p.edad === "number" ? `${p.edad} años` : "Sin fecha de instalación"]);
+    filas.push(["Edad", typeof p.edad === "number" ? `${p.edad} años${p.edad_reg ? " (fecha regulatoria, no de instalación)" : ""}` : "Sin fecha de instalación"]);      // Corte 10
     filas.push(["Estado", cfg.estados?.[String(p.estado)] ?? texto(p.estado)]);
     if (p.nombre) filas.unshift(["Nombre", texto(p.nombre)]);      // Corte 9a: sectores e instalaciones
     if (p.prefijo === "SEC") filas.push(["Origen", "Plan Maestro 2014 · sectores con que se opera"]);      // 9a-bis (David, 16-nov): son los de hoy

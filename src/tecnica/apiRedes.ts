@@ -22,6 +22,7 @@ export type Ficha = {
   // Corte 9a (Plan Maestro 2014): el sector se calcula por geometría; «referencia» viene de tablas aparte, ya rotulada (9a-bis: solo supervisor y administrador).
   sector_hidraulico?: SectorPlan;      // 9a-bis: el sector oficial (David, 16-nov): el de la ubicación del activo
   referencia?: { titulo: string; origen?: string; advertencia?: string; filas: { r: string; v: string | number; u?: string }[] }[];
+  regulatorio?: Regulatorio;      // Corte 10: inventario regulatorio (solo supervisor y administrador; lo decide el servidor)
   por_verificar_motivo?: string;
   nodo?: { nombre_modelo?: string; nombre_visible: string; tramos: number };
   tramo?: { metodo: string; inicio?: { nombre: string; activo?: ActivoCorto }; fin?: { nombre: string; activo?: ActivoCorto } };
@@ -29,6 +30,13 @@ export type Ficha = {
   componentes: ActivoCorto[]; parte_de: ActivoCorto[]; admite_componentes: boolean;
   epicrisis: { hechos: number; registro: number };
 };
+// «aparte»: el activo tiene fila, pero está fuera de servicio o es obra de un tercero (SIVA): no remunerado (David, 16-nov).
+// Corte 10 (inventario regulatorio): la fila de la Valoración Técnica 2019 a la que está amarrado el activo. Los valores son DE LA FILA (activos agregados).
+export type FilaRegulatoria = { hoja: string; n: number; nombre: string; clase: string; caracteristica?: string; diametro_pulg?: number; cantidad?: number; unidad?: string; activos: number;
+  anio_operacion?: number; fecha_operacion?: string; vida_util?: number; vida_remanente_hoy?: number; fin_vida_util?: string;
+  valor_total?: number; valor_remanente?: number; depreciacion_anual?: number; aporte: number; nota?: string };
+export type Regulatorio = { fuente: string; archivo: string; cargada_en: string; remunerado: boolean; situacion: "con_fila" | "aparte" | "sin_fila" | "proyectado" | "fuera"; texto?: string; nota?: string;
+  filas?: FilaRegulatoria[] };
 export type Cursor = { cuando: string; clase: string; ref_id: number };
 export type EventoEpicrisis = { cuando: string; clase: string; ref_id: number; grupo: "hecho" | "registro"; resumen: string; estado?: string; autor?: string };
 export type Epicrisis = { codigo: string; items: EventoEpicrisis[]; siguiente: Cursor | null };
@@ -241,7 +249,17 @@ export type NodosPorClasificar = {
   tipos: { prefijo: string; nombre: string; sistema: string; pide_clase: boolean; clases: Opcion[] }[];
 };
 
+// Corte 10: la conciliación del inventario regulatorio con la red (solo el administrador)
+export type HojaValoracion = { hoja: "acueducto" | "alcantarillado" | "alcantarillado_2"; nombre: string; servicio: string; filas: number; bcr0: number; valor_total: number; depreciacion_anual: number; vigente: boolean };
+export type FilaConciliacion = { hoja: HojaValoracion["hoja"]; n: number; nombre: string; clase: string; caracteristica?: string; unidad?: string; cantidad?: number; anio_operacion?: number; vida_util?: number;
+  valor_total?: number; valor_remanente?: number; depreciacion_anual?: number; activos: number; codigos?: string; comparable: boolean; red?: number; aparte?: number; diferencia?: number; pct?: number;
+  calza?: boolean; nota?: string };
+export type SinFila = { prefijo: string; tipo: string; sistema: string; material?: string; diametro_mm?: number; motivo: "sin_fila" | "proyectado" | "fuera"; activos: number; longitud_m?: number };
+export type Conciliacion = { cargada: boolean; hoja_alcantarillado: HojaValoracion["hoja"]; tolerancia_pct: number; fuente?: string; generado_en?: string; generado_por?: string;
+  valoracion?: { archivo: string; md5: string; filas: number; cargada_en: string; origen: string }; amarre?: { archivo: string; md5: string; filas: number; cargado_en: string; nota?: string } | null;
+  hojas?: HojaValoracion[]; filas?: FilaConciliacion[]; sin_fila?: SinFila[] };
 export const apiGestion = {
+  valoracion: () => pedir<Conciliacion>("valoracion", F),
   personal: (buscar: string, filtro: string) => pedir<PersonalRedes>("personal", { ...F, qs: { buscar, filtro } }),
   personalFijar: (persona: string, tipo: EventoFicha["tipo"], valor: string | null, motivo: string) =>
     pedir<{ evento_id: number; antes: string | null; despues: string | null }>("personal_fijar", { ...F, cuerpo: { persona, tipo, valor, motivo } }),

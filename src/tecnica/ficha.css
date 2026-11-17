@@ -118,3 +118,11 @@
 .nodo-muestra { overflow-wrap: anywhere; }
 .dan-sector-prop { margin: 4px 0 0; font-size: 13px; color: #1e6b47; overflow-wrap: anywhere; }
 .dan-sector-prop-dif { color: #9a5b00; }
+
+/* Corte 10 · Inventario regulatorio (conciliación del Dashboard distribución). Sin colores nuevos (tokens del Corte 13): columnas de números a la derecha y la nota bajo el nombre. */
+.reg-num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.reg-tabla { min-width: 860px; }
+.reg-tabla td:nth-child(2) { min-width: 220px; }
+.reg-nota { display: block; margin-top: 2px; font-size: 13px; color: var(--t-texto-2); white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.reg-num .reg-nota { text-align: right; }
+.reg-num .tec-enlace + .tec-enlace { margin-left: 8px; }

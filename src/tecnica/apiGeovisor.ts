@@ -14,6 +14,7 @@ export type ConfigGeovisor = {
   perfil: "admin" | "supervisor" | "operador"; completo: boolean; perfiles: PerfilGeovisor[]; hoy: string; rango_meses: number; max_elementos: number;
   zoom: { min: number; red_completa: number; nodos: number; accesorios: number; contratos?: number }; version: number;
   formularios: { danos_fallas: boolean; mantenimiento: boolean }; ficha: boolean;
+  edad_ref?: boolean | null;      // Corte 10: hay amarre con la valoración (la edad de los activos sin fecha de instalación sale de la fecha regulatoria); solo supervisores
   contratos_corte?: string | null;      // Corte 7a: AAAAMMDD del último corte de la cartera diaria (solo supervisores)
   compartir?: boolean;      // Corte 6b. Corte 6c: ya no hay «contratos_capa»: la tesela de contratos se arma al vuelo, siempre al día
   capas: CapaGeovisor[]; tipos: Record<string, string>; estados?: Record<string, string>; materiales: { codigo: string; nombre: string }[];

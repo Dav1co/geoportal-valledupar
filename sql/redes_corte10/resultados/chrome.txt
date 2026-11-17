@@ -1,0 +1,53 @@
+OK    [390] A1 la valoración se presenta como PROPUESTA de 2019 («su adopción no está confirmada»), con su archivo y que es dato de referencia
+OK    [390] A2 las tres hojas con sus totales: BCR0 de acueducto 101.061 millones; alcantarillado 138.548 (referencia) y alcantarillado (2) 176.452 (vale)
+OK    [390] A3 la conciliación de acueducto: 26 de 33 filas de tubería calzan (2 % o menos); cada fila con valoración, red, diferencia y porcentaje
+OK    [390] A4 los puntuales no se comparan por cantidad: la planta Huaricha dice su activo (PTA-000001) y la bocatoma «Sin activo»
+OK    [390] A5 el filtro «Sin activos» deja las filas que no tienen activo en la red (bocatoma, aducción, desarenadores, terrenos…)
+OK    [390] A6 alcantarillado (2): 27 de 63 filas calzan (con el catastro); abajo, los activos sin fila del alcantarillado, con su motivo
+OK    [390] A7 la otra hoja de alcantarillado queda de referencia y también se concilia (4 de 34)
+OK    [390] A8 «Descargar Excel» arma el libro en el equipo (las tres hojas y los activos sin fila)
+OK    [390] A9 la pantalla no se desborda (las tablas se desplazan dentro de su caja) y los botones miden 44 px o más
+OK    [390] A10 la conciliación llegó en una sola petición (no recalcula nada) y ninguna petición escribió
+OK    [390] A11 la ficha de la planta (administrador): «Inventario regulatorio», remunerado vía tarifa «Sí», con sus dos filas (Huaricha y Gota Fría)
+OK    [390] A12 dice que es la valoración de 2019, propuesta; entrada en operación regulatoria, vida útil, remanente a hoy, y valor y depreciación «de la fila» (no se reparten)
+OK    [390] B1 el supervisor de distribución no tiene la pestaña «Inventario regulatorio» (es del administrador)
+OK    [390] B2 la leyenda por edad dice que, sin fecha de instalación, la edad sale de la «fecha regulatoria, no de instalación»
+OK    [390] B3 al tocar un tramo sin fecha de instalación (RED-000444): «Edad: N años (fecha regulatoria, no de instalación)»
+OK    [390] B4 el tramo se pinta con su edad (ya no en el gris de «sin fecha»): la tesela trae edad y edad_reg
+OK    [390] B5 el geovisor por edad no se desborda
+OK    [390] B6 la ficha del tramo (supervisor de distribución): remunerado «Sí», su fila de tubería por material y diámetro, con los metros de la fila y cuántos activos tiene amarrados
+OK    [390] B7 la ficha con la sección no se desborda
+OK    [390] B8 un tramo de obra SIVA (RED-000001): remunerado vía tarifa «No», dice por qué y sigue mostrando su fila
+OK    [390] C1 el operador: la leyenda por edad no menciona la fecha regulatoria
+OK    [390] C2 el operador toca el mismo tramo: «Sin fecha de instalación», sin edad regulatoria
+OK    [390] C3 la ficha del operador no trae «Inventario regulatorio» ni ningún término tarifario
+OK    [390] C4 … y la respuesta del servidor tampoco los trae
+OK    [390] C5 el inicio del operador no menciona el inventario regulatorio
+OK    [1280] A1 la valoración se presenta como PROPUESTA de 2019 («su adopción no está confirmada»), con su archivo y que es dato de referencia
+OK    [1280] A2 las tres hojas con sus totales: BCR0 de acueducto 101.061 millones; alcantarillado 138.548 (referencia) y alcantarillado (2) 176.452 (vale)
+OK    [1280] A3 la conciliación de acueducto: 26 de 33 filas de tubería calzan (2 % o menos); cada fila con valoración, red, diferencia y porcentaje
+OK    [1280] A4 los puntuales no se comparan por cantidad: la planta Huaricha dice su activo (PTA-000001) y la bocatoma «Sin activo»
+OK    [1280] A5 el filtro «Sin activos» deja las filas que no tienen activo en la red (bocatoma, aducción, desarenadores, terrenos…)
+OK    [1280] A6 alcantarillado (2): 27 de 63 filas calzan (con el catastro); abajo, los activos sin fila del alcantarillado, con su motivo
+OK    [1280] A7 la otra hoja de alcantarillado queda de referencia y también se concilia (4 de 34)
+OK    [1280] A8 «Descargar Excel» arma el libro en el equipo (las tres hojas y los activos sin fila)
+OK    [1280] A9 la pantalla no se desborda (las tablas se desplazan dentro de su caja) y los botones miden 44 px o más
+OK    [1280] A10 la conciliación llegó en una sola petición (no recalcula nada) y ninguna petición escribió
+OK    [1280] A11 la ficha de la planta (administrador): «Inventario regulatorio», remunerado vía tarifa «Sí», con sus dos filas (Huaricha y Gota Fría)
+OK    [1280] A12 dice que es la valoración de 2019, propuesta; entrada en operación regulatoria, vida útil, remanente a hoy, y valor y depreciación «de la fila» (no se reparten)
+OK    [1280] B1 el supervisor de distribución no tiene la pestaña «Inventario regulatorio» (es del administrador)
+OK    [1280] B2 la leyenda por edad dice que, sin fecha de instalación, la edad sale de la «fecha regulatoria, no de instalación»
+OK    [1280] B3 al tocar un tramo sin fecha de instalación (RED-000444): «Edad: N años (fecha regulatoria, no de instalación)»
+OK    [1280] B4 el tramo se pinta con su edad (ya no en el gris de «sin fecha»): la tesela trae edad y edad_reg
+OK    [1280] B5 el geovisor por edad no se desborda
+OK    [1280] B6 la ficha del tramo (supervisor de distribución): remunerado «Sí», su fila de tubería por material y diámetro, con los metros de la fila y cuántos activos tiene amarrados
+OK    [1280] B7 la ficha con la sección no se desborda
+OK    [1280] B8 un tramo de obra SIVA (RED-000001): remunerado vía tarifa «No», dice por qué y sigue mostrando su fila
+OK    [1280] C1 el operador: la leyenda por edad no menciona la fecha regulatoria
+OK    [1280] C2 el operador toca el mismo tramo: «Sin fecha de instalación», sin edad regulatoria
+OK    [1280] C3 la ficha del operador no trae «Inventario regulatorio» ni ningún término tarifario
+OK    [1280] C4 … y la respuesta del servidor tampoco los trae
+OK    [1280] C5 el inicio del operador no menciona el inventario regulatorio
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC de planta sin simular
+RESULTADO: 52 de 52 — SIN FALLAS

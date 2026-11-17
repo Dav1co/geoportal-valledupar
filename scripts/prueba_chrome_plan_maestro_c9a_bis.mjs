@@ -82,6 +82,8 @@ function rpcPlanta(fn, a) {
     case "geoportal_tec_catalogo_filtros": return { formularios: [], plantas: [], zonas: [], puntos: [], descarga_max_filas: 50000, descarga_pagina_max: 5000, motivo_min: 10, motivo_max: 500 };
     case "geoportal_tec_listar_registros": return { total: 0, devueltos: 0, registros: [] };
     case "geoportal_tec_listar_dosis": return { total: 0, devueltos: 0, dosis: [] };
+    // Corte 12 (Code A): el inicio pide los avisos; esta base no tiene el 12, así que se responde «sin avisos»
+    case "geoportal_tec_avisos": return { areas: { planta: false, distribucion: true, personal: false }, admin: a.p_solicitante === EMAILS.adm, avisos: [], total: 0, rojos: 0, naranjas: 0, calculado_en: new Date().toISOString(), ms: 1 };
     default: desconocidas.push(fn); return { status: 404, cuerpo: { code: "PGRST202", message: "no existe" } };
   }
 }

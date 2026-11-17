@@ -10,6 +10,7 @@ import { FichaActivo } from "./FichaActivo";
 import { NoIdentificados, Recursos } from "./IntervencionesSupervisor";
 import { Catalogo, Descargas, Graficas, Nodos, Parametros, Personal } from "./DashboardGestion";
 import { CargueCapas } from "./cargue/CargueCapas";
+import { InventarioRegulatorio } from "./InventarioRegulatorio";
 
 // Dashboard distribución (Técnica fase 1, Corte 4a; §7 y §16 de la bitácora). Para el supervisor de distribución (ver_dashboard_redes) y el administrador:
 // el servidor lo vuelve a verificar en cada ruta. Pestañas de este corte: no identificados (asociar o crear el activo), intervenciones (recursos por completar,
@@ -17,10 +18,11 @@ import { CargueCapas } from "./cargue/CargueCapas";
 // Corte 4b (DashboardGestion.tsx): Personal, Gráficas, Descargas, Catálogo, Parámetros y, solo para el administrador, Nodos por clasificar.
 // Corte 5c (cargue/CargueCapas.tsx): Cargue de capas (el supervisor lo lee; carga el administrador). Nada se borra: todo es un evento con motivo.
 
-type Pestana = "no_identificados" | "intervenciones" | "danos" | "por_verificar" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos";
+type Pestana = "no_identificados" | "intervenciones" | "danos" | "por_verificar" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos" | "regulatorio";
 const PESTANAS: { c: Pestana; n: string; admin?: boolean }[] = [{ c: "no_identificados", n: "No identificados" }, { c: "intervenciones", n: "Intervenciones" },
   { c: "danos", n: "Daños y fallas" }, { c: "por_verificar", n: "Por verificar" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
-  { c: "cargue", n: "Cargue de capas" }, { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar" }];      // 9a-bis: también el supervisor de distribución (David, 16-nov)
+  { c: "cargue", n: "Cargue de capas" }, { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar" },
+  { c: "regulatorio", n: "Inventario regulatorio", admin: true }];      // Corte 10: la conciliación con la Valoración Técnica 2019, solo el administrador      // 9a-bis: también el supervisor de distribución (David, 16-nov)
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const ESTADO: Record<string, string> = { reportado: "Reportado", en_atencion: "En atención", atendido: "Atendido", oculto: "Oculto", cerrada: "Cerrada", anulada: "Anulada", oculta: "Oculta",
   recibido: "Recibido", descartado: "Descartado" };
@@ -51,6 +53,7 @@ export function DashboardRedes({ correo, selector, onVolver, onGeovisor }: { cor
       {pestana === "catalogo" ? <Catalogo /> : null}
       {pestana === "parametros" ? <Parametros /> : null}
       {pestana === "nodos" ? <Nodos onFicha={setFicha} admin={admin} /> : null}
+      {pestana === "regulatorio" ? <InventarioRegulatorio onFicha={setFicha} /> : null}
       </div>
     </div>
   );

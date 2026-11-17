@@ -1,0 +1,23 @@
+OK    el marcador sigue en la línea 1, autorizar() tal cual y el correo nunca del cuerpo ni de la URL
+OK    _shared/auth.ts sin tocar en esta rama (lo comprueba git en el resumen; aquí, que siga exportando autorizar)
+OK    sin token: 401 y ninguna RPC
+OK    valoracion: llama a geoportal_redes_valoracion solo con el correo del token y devuelve la conciliación tal cual
+OK    valoracion: no se guarda en caché (Cache-Control: no-store)
+OK    valoracion: lo que venga en la URL no cambia quién pide ni llega a la RPC
+OK    valoracion: solo GET (POST → 405 y ninguna RPC)
+OK    valoracion: si la base dice 42501 (supervisor u operador), 403 «No tiene permiso»
+OK    valoracion: 28000 de la base → no es un 200
+OK    valoracion: si la base se pasa del tiempo, error sin filtrar el detalle interno
+OK    activo: la sección «regulatorio» llega tal cual la manda la base (la base decide a quién)
+OK    activo: si la base no manda la sección (operador), la Edge no agrega nada
+OK    geovisor_tesela: misma ruta y mismos argumentos de siempre (la edad regulatoria va dentro de la tesela)
+OK    geovisor_tesela: la respuesta lleva «Vary: Authorization» (el navegador no reutiliza la tesela de otra sesión) y sigue con su caché privado de 5 minutos
+OK    la ruta «valoracion» está una sola vez y no hay ninguna ruta que escriba la valoración (se carga por psql)
+---- 15 de 15 — SIN FALLAS
+== regresión prueba_redes_simulada: RESULTADO: 189 de 189 comprobaciones correctas
+== regresión prueba_cargue_simulada: RESULTADO: 52 de 53
+== regresión prueba_geovisor_simulada: RESULTADO: 38 de 38 — SIN FALLAS
+== regresión prueba_geovisor_6b_simulada: RESULTADO: 34 de 34 — SIN FALLAS
+== regresión prueba_plan_maestro_9a_simulada: RESULTADO: 44 de 44 — SIN FALLAS
+== regresión prueba_l116_5d_simulada: RESULTADO: 13 de 13 — SIN FALLAS
+(prueba_cargue_simulada da 52 de 53 también en main sin el Corte 10: su primera comprobación espera el marcador anterior de geoportal-tecnica, que el Corte 12 del Code A amplió con dashboard_redes.)
