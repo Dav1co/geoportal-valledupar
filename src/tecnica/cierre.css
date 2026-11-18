@@ -46,3 +46,14 @@
 .ps-tipo select, .ps-form select, .ps-form input { height: 44px; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio); padding: 0 var(--t-esp-3); font: inherit; font-size: var(--t-txt-campo); color: var(--t-texto); background: var(--t-tarjeta); width: 100%; min-width: 0; box-sizing: border-box; }
 .ps-form { display: grid; grid-template-columns: 1fr; gap: var(--t-esp-3); }
 @media (min-width: 760px) { .ps-niveles { grid-template-columns: repeat(4, minmax(0, 1fr)); } .ps-niveles > div { flex-direction: column; align-items: flex-start; } .ps-form { grid-template-columns: 1fr 1fr; } .ps-form-ancho { grid-column: 1 / -1; } }
+
+/* «Cierre por aguas arriba» (17-nov): dos opciones, la recomendada primero. Tokens de la guía (naranja de estado para los avisos de «no coincide» y «no se puede»). */
+.cie-opciones { display: flex; flex-wrap: wrap; gap: var(--t-esp-2); }
+.cie-opcion { flex: 1 1 150px; min-height: var(--t-toque); padding: var(--t-esp-2) var(--t-esp-3); border-radius: var(--t-radio); border: 1px solid var(--t-borde-campo); background: var(--t-tarjeta); color: var(--t-titulo); font: inherit; font-size: var(--t-txt); font-weight: 700; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--t-esp-2); }
+.cie-opcion[aria-selected="true"] { background: var(--t-modo); border-color: var(--t-modo); color: #fff; }
+.cie-opcion:focus-visible { outline: 3px solid var(--t-foco); outline-offset: 2px; }
+.cie-recomendada { font-size: var(--t-txt-chico); font-weight: 700; padding: 1px var(--t-esp-2); border-radius: var(--t-radio); background: var(--t-ok-suave); color: var(--t-ok); }
+.cie-aviso-naranja { background: var(--t-naranja-suave); color: var(--t-naranja); border: 1px solid var(--t-naranja); }
+.cie-comprobacion { display: flex; flex-direction: column; gap: var(--t-esp-2); padding: var(--t-esp-3); background: var(--t-suave); border-radius: var(--t-radio); }
+.cie-comprobacion p { margin: 0; }
+.cie-notas { margin: 0; padding-left: 18px; font-size: var(--t-txt-chico); color: var(--t-texto-2); display: flex; flex-direction: column; gap: var(--t-esp-1); }

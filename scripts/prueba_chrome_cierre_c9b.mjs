@@ -194,6 +194,12 @@ async function tocarEn(p, lon, lat, zoom = 17.5) {
 }
 
 
+// «Cierre por aguas arriba» (17-nov): si el servidor ya tiene la opción nueva, sale primero; estas pruebas son de la simulación de siempre («Aislamiento total»)
+const aTotal = async (p) => {
+  await p.waitForFunction(() => !!document.querySelector("[data-testid=cie-opciones], [data-testid=cie-resultado], [data-testid=panel-cierre] .tec-aviso-error"), { timeout: 60000 }).catch(() => {});
+  if (await p.evaluate(() => { const b = document.querySelector('[data-testid=cie-opciones] [data-opcion="total"]'); if (!b) return false; b.click(); return true; })) await p.waitForSelector("[data-testid=cie-resultado]", { timeout: 60000 }).catch(() => {});
+};
+
 // ---------- 5. Ayudantes (los del 9a-bis) ----------
 const tarjeta = (p, c) => p.evaluate((c) => [...document.querySelectorAll(".tec-tarjeta, .gest-item")].filter((s) => s.innerText.includes(c)).pop()?.innerText ?? "", c);
 const enTarjeta = async (p, c, sel, t) => { if (!(await enTarjeta0(p, c, sel, t))) throw new Error(`no hay «${t}» en la tarjeta de «${c}»: ${(await tarjeta(p, c)).slice(0, 500)}`); return true; };
@@ -296,9 +302,9 @@ for (const ancho of ANCHOS) {
   await p.waitForSelector("[data-testid=panel-cierre]", { timeout: 30000 }).catch(async () => { throw new Error("el formulario de daño no trae el panel de cierre: " + (await texto(p)).slice(0, 1200) + " · " + errores.join(" | ")); });
   await verPanel(p); s = await panel(p);
   ok(`${tag} B1 el formulario de daño trae «Cierre de válvulas» con el botón «¿Qué válvulas cierro?»`, /Cierre de válvulas/.test(s.txt) && s.botones.includes("¿Qué válvulas cierro?"), s.txt);
-  await enPanel(p, "¿Qué válvulas cierro?"); await esperarPanel(p, /Contratos sin agua/); s = await panel(p);
+  await enPanel(p, "¿Qué válvulas cierro?"); await aTotal(p); await esperarPanel(p, /Contratos sin agua/); s = await panel(p);
   const VALV = s.valvulas;
-  ok(`${tag} B2 la simulación dice qué válvulas cerrar (2, en orden) y cuántos tramos y contratos quedan sin agua (rango «De 160 a …»)`, VALV.length === 2 && VALV.every((v) => /^VAL-\d{6}$/.test(v)) && /Para aislar RED-010302/.test(s.txt)
+  ok(`${tag} B2 la simulación dice qué válvulas cerrar (2, en orden) y cuántos tramos y contratos quedan sin agua (rango «De 160 a …»)`, VALV.length === 2 && VALV.every((v) => /^VAL-\d{6}$/.test(v)) && /(Para aislar|Aislamiento total de) RED-010302/.test(s.txt)
      && /Cierre estas 2 válvulas/.test(s.txt) && /Tramos sin agua\s*18/.test(s.txt) && /De 160 a [\d.]+/.test(s.txt), s.txt);
   ok(`${tag} B3 sin el daño guardado no hay «Válvula cerrada» ni «Guardar esta simulación»: lo dice`, !s.botones.some((b) => /Válvula cerrada|Guardar esta simulación/.test(b)) && /guarde primero este registro/.test(s.txt));
   await enPanel(p, "Si una válvula no cierra"); await esperarPanel(p, /no cierra: /); s = await panel(p);
@@ -313,7 +319,7 @@ for (const ancho of ANCHOS) {
   await clicTexto(p, "button.dan-opcion", "Daño o falla"); await p.waitForSelector(".itv-dano");
   await p.evaluate((d) => [...document.querySelectorAll(".itv-dano")].find((b) => b.textContent.includes(d)).click(), DAN);
   await p.waitForSelector("[data-testid=panel-cierre]"); await verPanel(p);
-  await enPanel(p, "¿Qué válvulas cierro?"); await esperarPanel(p, /Contratos sin agua/); s = await panel(p);
+  await enPanel(p, "¿Qué válvulas cierro?"); await aTotal(p); await esperarPanel(p, /Contratos sin agua/); s = await panel(p);
   ok(`${tag} C1 con el daño elegido (${DAN}), cada válvula del resultado trae «Válvula cerrada», y está «Guardar esta simulación»`, s.botones.filter((b) => b === "Válvula cerrada").length === 2 && s.botones.includes("Guardar esta simulación"), s.botones.join(" | "));
   await enPanel(p, "Válvula cerrada", `[data-testid=panel-cierre] li[data-valvula="${VALV[0]}"]`); await p.waitForSelector("[data-testid=cie-pedir]");
   t = await p.evaluate(() => document.querySelector("[data-testid=cie-pedir]").innerText);

@@ -195,6 +195,12 @@ async function tocarEn(p, lon, lat, zoom = 17.5) {
 }
 
 
+// «Cierre por aguas arriba» (17-nov): si el servidor ya tiene la opción nueva, sale primero; estas pruebas son de la simulación de siempre («Aislamiento total»)
+const aTotal = async (p) => {
+  await p.waitForFunction(() => !!document.querySelector("[data-testid=cie-opciones], [data-testid=cie-resultado], [data-testid=panel-cierre] .tec-aviso-error"), { timeout: 60000 }).catch(() => {});
+  if (await p.evaluate(() => { const b = document.querySelector('[data-testid=cie-opciones] [data-opcion="total"]'); if (!b) return false; b.click(); return true; })) await p.waitForSelector("[data-testid=cie-resultado]", { timeout: 60000 }).catch(() => {});
+};
+
 // ---------- 5. Ayudantes (los del 9a-bis) ----------
 const tarjeta = (p, c) => p.evaluate((c) => [...document.querySelectorAll(".tec-tarjeta, .gest-item")].filter((s) => s.innerText.includes(c)).pop()?.innerText ?? "", c);
 const enTarjeta = async (p, c, sel, t) => { if (!(await enTarjeta0(p, c, sel, t))) throw new Error(`no hay «${t}» en la tarjeta de «${c}»: ${(await tarjeta(p, c)).slice(0, 500)}`); return true; };
@@ -289,7 +295,7 @@ for (const ancho of ANCHOS) {
   // ===== G. Simulación: el minimapa con las válvulas numeradas (formulario de daño, operador) =====
   p = await abrir(ancho, "op"); await alGeovisor(p); await apagarNodos(p); await tocar(p, TLON, TLAT, 18); tj = await esperarTarjeta(p, "activo", new RegExp(TRAMO));
   if (!tj || !(await clicTexto(p, ".geo-tarjeta button", "Reportar daño"))) throw new Error("la tarjeta del tramo no trae «Reportar daño»: " + JSON.stringify(tj));
-  await p.waitForSelector("[data-testid=panel-cierre]"); await enPanel(p, "¿Qué válvulas cierro?"); await esperarPanel(p, /Contratos sin agua/);
+  await p.waitForSelector("[data-testid=panel-cierre]"); await enPanel(p, "¿Qué válvulas cierro?"); await aTotal(p); await esperarPanel(p, /Contratos sin agua/);
   await p.waitForSelector("[data-testid=cie-mapa] .cie-mapa-num", { timeout: 30000 }); s = await panel(p);
   const VALV = s.valvulas;
   r = await p.evaluate(() => { const f = document.querySelector("[data-testid=cie-mapa]"); const m = f.querySelector(".cie-mapa-lienzo").__mapa; const c = f.querySelector("canvas").getBoundingClientRect();
@@ -305,7 +311,7 @@ for (const ancho of ANCHOS) {
   r = await p.evaluate(() => [...document.querySelectorAll("[data-cierre]")].map((b) => b.dataset.cierre).sort().join(","));
   ok(`${tag} H1 cada daño de acueducto trae «¿Qué válvulas cierro?»; el de alcantarillado no`, r === [DAN, DANS].sort().join(","), r);
   await p.evaluate((d) => { const b = document.querySelector(`[data-cierre="${d}"]`); b.scrollIntoView({ block: "center" }); b.click(); }, DAN);
-  await p.waitForSelector("[data-testid=panel-cierre]"); await enPanel(p, "¿Qué válvulas cierro?"); await esperarPanel(p, /Contratos sin agua/); s = await panel(p);
+  await p.waitForSelector("[data-testid=panel-cierre]"); await enPanel(p, "¿Qué válvulas cierro?"); await aTotal(p); await esperarPanel(p, /Contratos sin agua/); s = await panel(p);
   ok(`${tag} H2 el panel se abre dentro del daño con su código: simula y ofrece «Válvula cerrada» y «Guardar esta simulación»`, s.valvulas.join() === VALV.join() && s.botones.filter((b) => b === "Válvula cerrada").length === 2 && s.botones.includes("Guardar esta simulación") && s.alto >= 44, s.botones.join("|"));
   await enPanel(p, "Válvula cerrada", `[data-testid=panel-cierre] li[data-valvula="${VALV[0]}"]`); await p.waitForSelector("[data-testid=cie-pedir]");
   await enPanel(p, "Confirmar", "[data-testid=cie-pedir]"); await esperarPanel(p, new RegExp(`Válvula ${VALV[0]} cerrada \\(`)); await esperarPanel(p, /Válvulas cerradas por/);

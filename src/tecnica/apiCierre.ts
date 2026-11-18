@@ -20,10 +20,22 @@ export type ValvulaCerrada = { codigo: string; nombre: string; zona: number | nu
 export type CortesVigentes = { hay: boolean; foto?: { id: number; calculada_en: string; red_huella: string }; resumen?: { zonas: number; valvulas_cerradas: number; contratos: number };
   leyenda?: { clave: "afectado" | "cerrado" | "valvula"; texto: string }[]; zonas: ZonaCorte[]; valvulas: ValvulaCerrada[] };
 
+// «Cierre por aguas arriba» (9b; la base es del Code A): las válvulas por donde entra el agua al tramo, por un criterio (cota del terreno o flujo del modelo) y la
+// comprobación por el otro. Si no se puede, «cae_a_total» y trae el aislamiento total (la simulación de siempre). No guarda nada.
+export type CriterioSentido = "cota" | "modelo";
+export type LadoAguasArriba = { criterio: CriterioSentido; se_puede: boolean; motivo?: string; texto?: string; valvulas_total?: number; valvulas?: ValvulaSim[];
+  entra_por?: { codigo?: string; nombre?: string; tipo?: string; clase?: string | null; lat?: number; lon?: number } | null;
+  contratos_min?: number; contratos_max?: number; tramos_recorridos?: number; tramos_sin_sentido?: number; tramos_sin_agua_min?: number; tramos_sin_agua_max?: number; longitud_sin_agua_max_m?: number };
+export type AguasArriba = { ms: number; metodo: "aguas_arriba" | "aislamiento_total"; criterio: CriterioSentido; cae_a_total: boolean; activo?: Simulacion["activo"];
+  aguas_arriba: LadoAguasArriba; comprobacion: LadoAguasArriba & { coincide: boolean }; modelo_horas_coinciden?: boolean | null; aislamiento_total?: Simulacion | null;
+  contratos_min: number; contratos_max: number; notas: string[] };
+
 const F = { funcion: "geoportal-redes" };
 export const apiCierre = {
   /** «¿Qué válvulas cierro?»: desde un activo o desde una posición (el tramo más cercano). No guarda nada. */
   simular: (ref: { activo: string } | { lat: number; lon: number }) => pedir<Simulacion>("simulacion_cierre", { ...F, cuerpo: ref, timeoutMs: 25000 }),
+  /** «Cierre por aguas arriba»: desde un activo o desde una posición. No guarda nada. */
+  aguasArriba: (ref: { activo: string } | { lat: number; lon: number }) => pedir<AguasArriba>("simulacion_aguas_arriba", { ...F, cuerpo: ref, timeoutMs: 25000 }),
   guardar: (registro: string, activo?: string | null) => pedir<SimulacionGuardada>("simulacion_guardar", { ...F, cuerpo: { registro, ...(activo ? { activo } : {}) }, timeoutMs: 25000 }),
   maniobra: (valvula: string, tipo: "cerrar" | "abrir", o: { registro?: string | null; motivo?: string; hecho_en?: string | null; regreso?: string | null } = {}) =>
     pedir<ManiobraHecha>("valvula_maniobra", { ...F, timeoutMs: 25000,
