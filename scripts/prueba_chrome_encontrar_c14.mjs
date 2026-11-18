@@ -20,7 +20,7 @@ import http from "node:http";
 const aqui = dirname(fileURLToPath(import.meta.url)), raiz = process.env.RAIZ_UI ? resolve(process.env.RAIZ_UI) : join(aqui, "..");
 const [CHROME, PUP, DENO, FUNCIONES, PSQL, PLANTILLA] = process.argv.slice(2, 8);
 const CAP = resolve(process.argv[8] || join(tmpdir(), "capturas_c14"));
-if (!PLANTILLA) { console.error("Uso: node scripts/prueba_chrome_encontrar_c14.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> <psql> <base plantilla, p. ej. emdupar_b_14t> [capturas]"); process.exit(2); }
+if (!PLANTILLA) { console.error("Uso: node scripts/prueba_chrome_encontrar_c14.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> <psql> <base plantilla, p. ej. emdupar_b_14at> [capturas]"); process.exit(2); }
 mkdirSync(CAP, { recursive: true });
 const ANTES = process.env.ANTES === "1";
 const ANCHOS = (process.env.ANCHOS || "390,1280").split(",").map(Number);
@@ -40,6 +40,7 @@ function rehacer() {
   execFileSync(PSQL, ["-qX", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", `drop database if exists ${PLANTILLA}_chrome`, "-c", `create database ${PLANTILLA}_chrome template ${PLANTILLA}`], { env: PGENV, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   sqlq(`insert into public.geoportal_lista_blanca (email, nombre, rol, ver_campo, horario, dias) values ('${EMAILS.campo}', 'ZT Operario de Comercial', 'consulta', true, 'sin_restriccion', 'todos') on conflict do nothing`);
   if (!ANTES) sqlq(`select public.geoportal_redes_personal_formulario('${EMAILS.dist}', '${EMAILS.op}', 'activo_campo', true, 'Sale a campo a levantar activos')`);
+  if (!ANTES) sqlq(`select public.geoportal_redes_personal_fijar('${EMAILS.dist}', '${EMAILS.op}', 'area', 'distribucion', 'Sale a campo con la cuadrilla'), public.geoportal_redes_personal_fijar('${EMAILS.dist}', '${EMAILS.op}', 'cargo', 'Fontanero', 'Cargo de la persona')`);
   if (!ANTES && sqlq(`select tecnica.f_formulario_asignado('${EMAILS.op}', 'danos_fallas')`) !== "t") sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values ('${EMAILS.op}', 'asignar_formulario', 'danos_fallas', '${EMAILS.adm}')`);
 }
 rehacer();
@@ -227,6 +228,13 @@ async function tomarFoto(p) {
   await clic(p, ".campo-capturar");
   await p.waitForFunction(() => !document.querySelector(".campo-capturar"), { timeout: 30000 });
 }
+const acta = (p) => p.evaluate(() => { const a = document.querySelector("[data-testid=acta]"); if (!a) return null; const papel = a.querySelector(".hoja-papel");
+  return { codigo: a.querySelector("[data-testid=acta-codigo]")?.textContent, reporto: a.querySelector("[data-testid=acta-reporto]")?.innerText, txt: papel?.innerText.replace(/\s+/g, " ") ?? "",
+    fotos: [...a.querySelectorAll(".acta-fotos img")].filter((i) => i.complete && i.naturalWidth > 0).length, mapa: !!a.querySelector("[data-testid=acta-mapa] .hoja-mapa-img") && !!a.querySelector(".acta-punto"),
+    historial: [...a.querySelectorAll(".acta-historial tbody tr")].map((f) => f.dataset.evento + ":" + f.innerText.replace(/\s+/g, " ")), pagina: a.querySelector("style").textContent, logo: !!a.querySelector("img.hoja-logo") && !!a.querySelector(".hoja-franja") }; });
+const cajaPdf = (b) => (Buffer.from(b).toString("latin1").match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)/) || []).slice(1, 3).map((x) => Math.round(Number(x))).join("x");
+async function pdfActa(p, nombre) { await p.emulateMediaType("print"); const b = await p.pdf({ preferCSSPageSize: true, printBackground: true }); await p.emulateMediaType("screen"); writeFileSync(join(CAP, nombre), b); return b; }
+const cerrarActa = async (p) => { await clicTexto(p, ".hoja-barra button", "Cerrar"); await p.waitForFunction(() => !document.querySelector("[data-testid=acta]")); };
 const edgeF = (rol, accion, o = {}) => fetch(`http://127.0.0.1:${P_EDGE}/functions/v1/geoportal-redes?accion=${accion}${o.qs ? "&" + new URLSearchParams(o.qs) : ""}`, { method: o.metodo ?? (o.cuerpo ? "POST" : "GET"),
   headers: { Authorization: `Bearer tok-${rol}`, ...(o.cuerpo ? { "Content-Type": "application/json" } : {}) }, body: o.cuerpo ? JSON.stringify(o.cuerpo) : undefined })
   .then(async (r) => ({ status: r.status, cache: r.headers.get("cache-control"), cuerpo: await r.json().catch(() => null) }));
@@ -328,6 +336,19 @@ for (const ancho of ANCHOS) {
     && /Quedó marcado «precisión baja»/.test(await texto(p)), f1);
   ok(A("E5 las fotos subieron como JPEG a levantar/AAAA-MM/<id>/<n>.jpg"), subidas.slice(-2).every((s) => /^levantar\/\d{4}-\d{2}\/[0-9a-f-]{36}\/[12]\.jpg$/.test(s.ruta) && s.mime === "image/jpeg" && s.bytes > 1000), JSON.stringify(subidas.slice(-2)));
   await captura(p, `despues_reportado_${ancho}.png`);
+  // ----- Acta del reporte de activo: al enviar, quien reportó descarga la suya -----
+  ok(A("P1 la confirmación trae el código LEV-… y el botón «Descargar acta (PDF)»"), await p.evaluate((c) => { const s = document.querySelector("[data-testid=enc-listo]"); return s.innerText.includes(`Activo reportado: ${c}`) && s.querySelector("[data-testid=enc-acta]")?.textContent === "Descargar acta (PDF)"; }, lev1));
+  await clic(p, "[data-testid=enc-acta]"); await p.waitForSelector('[data-testid=acta][data-lista="si"]', { timeout: 40000 });
+  let ac = await acta(p);
+  ok(A("P2 el acta: código, quién lo reportó (nombre, área y cargo), fecha y hora, servicio, tipo, coordenadas, precisión con «Precisión baja», observación y estado"), ac.codigo === lev1 && /Técnica · Distribución · Fontanero/.test(ac.reporto)
+    && /Fecha y hora \d+ de \w+ de \d{4}/i.test(ac.txt) && /Servicio Acueducto/i.test(ac.txt) && /Tipo de activo Válvula/i.test(ac.txt) && ac.txt.includes(`${LUGAR.lat.toFixed(6)}, ${LUGAR.lon.toFixed(6)}`) && /± 45 m · Precisión baja/.test(ac.txt)
+    && /Observaci.n ZT válvula en el andén, frente a la tienda/i.test(ac.txt) && /Estado actual Reportado/i.test(ac.txt) && !/@emdupar/.test(ac.txt), JSON.stringify(ac).slice(0, 600));
+  ok(A("P3 … con sus 2 fotos (llevan el sello de hora y GPS estampado), el minimapa del punto y el historial («Reportado», quién y cuándo)"), ac.fotos === 2 && ac.mapa && ac.historial.length === 1 && /^reportado:Reportado \d+ de/.test(ac.historial[0]) && /sello de hora y GPS/.test(ac.txt), JSON.stringify(ac.historial));
+  ok(A("P4 hoja membretada, carta, con «Página N de M»"), ac.logo && /size: 8\.5in 11in; margin: 2\.5cm 3cm 4cm 3cm/.test(ac.pagina) && /Página " counter\(page\) " de " counter\(pages\)/.test(ac.pagina) && /@top-right[^}]*url\(/.test(ac.pagina) && /@bottom-center[^}]*url\(/.test(ac.pagina));
+  await captura(p, `despues_acta_reportante_${ancho}.png`);
+  { const b = await pdfActa(p, `acta_${ancho}_reportante.pdf`); ok(A("P5 el PDF del acta sale en carta (612 × 792 puntos)"), cajaPdf(b) === "612x792" && b.length > 20000, cajaPdf(b)); }
+  ok(A("P6 la consulta del acta queda en la auditoría (era la propia)"), sqlq(`select count(*) from public.geoportal_auditoria where accion = 'redes_levantar_acta' and referencia = '${lev1}' and (detalle ->> 'propia')::boolean`) === "1");
+  await cerrarActa(p);
 
   // ===== F. Duplicados =====
   await p.setGeolocation({ latitude: LUGAR.lat, longitude: LUGAR.lon, accuracy: 6 });
@@ -375,6 +396,11 @@ for (const ancho of ANCHOS) {
   await p.waitForSelector("[data-testid=enc-listo]", { timeout: 30000 });
   const lev3 = (await texto(p)).match(/Activo reportado: (LEV-\d{6})/)?.[1];
   ok(A("G4 Comercial reporta un activo (a 20 m ya no pregunta por duplicado): queda con el área Comercial"), lev3 && sqlq(`select area || '|' || tipo || '|' || autor from redes.levantar_puntos where codigo = '${lev3}'`) === `comercial|hidrante|${EMAILS.campo}`);
+  await clic(p, "[data-testid=enc-acta]"); await p.waitForSelector('[data-testid=acta][data-lista="si"]', { timeout: 40000 });
+  ac = await acta(p);
+  ok(A("P7 Comercial descarga el acta del punto que reportó: su nombre y «Comercial» como área"), ac.codigo === lev3 && /ZT Operario de Comercial · Comercial/.test(ac.reporto) && /Tipo de activo Hidrante/i.test(ac.txt) && ac.fotos === 1 && !/Precisión baja/.test(ac.txt), JSON.stringify(ac).slice(0, 400));
+  await captura(p, `despues_acta_comercial_${ancho}.png`);
+  await cerrarActa(p);
   await p.close();
 
   // ===== H. Supervisor de distribución: la bandeja y los estados =====
@@ -391,15 +417,15 @@ for (const ancho of ANCHOS) {
   ok(A("H3 la bandeja: tipo, servicio, estado, «Precisión baja», la observación, quién reportó (el funcionario), el área y la precisión"), await (async () => { const t = await tarj(lev1), t3 = await tarj(lev3);
     return t.includes(`${lev1} · Válvula de acueducto`) && /Reportado/.test(t) && /Precisión baja/.test(t) && /ZT válvula en el andén/.test(t) && /por .+ \(Técnica\) · precisión ± 45 m/.test(t) && /\(Comercial\)/.test(t3) && !/Precisión baja/.test(t3); })(), await tarj(lev1));
   await captura(p, `despues_por_levantar_${ancho}.png`);
-  await clic(p, `[data-levantar="${lev1}"] [data-accion-lev="fotos"]`);
-  ok(A("H4 «Ver las 2 fotos»: lectura firmada (queda en la auditoría)"), await p.waitForFunction((c) => document.querySelectorAll(`[data-levantar="${c}"] [data-testid=lev-fotos] img`).length === 2, { timeout: 20000 }, lev1).then(() => true).catch(() => false)
-    && sqlq(`select count(*) from public.geoportal_auditoria where accion = 'redes_levantar_fotos' and referencia = '${lev1}'`) === "1");
+  ok(A("H4 cada punto trae: Ver acta (PDF) · Asignar a levantamiento · Marcar levantado · Descartar («Ver la foto» ya no está)"), await p.evaluate((c) => [...document.querySelectorAll(`[data-levantar="${c}"] > .dash-acciones button`)].map((x) => x.textContent).join(" · ") === "Ver acta (PDF) · Asignar a levantamiento · Marcar levantado · Descartar"
+    && !/Ver la foto|Ver las \d fotos/.test(document.querySelector("[data-testid=lev-bandeja]").innerText), lev1), await p.evaluate((c) => [...document.querySelectorAll(`[data-levantar="${c}"] > .dash-acciones button`)].map((x) => x.textContent).join(" · "), lev1));
   await clic(p, `[data-levantar="${lev1}"] [data-accion-lev="asignado"]`); await poner(p, `#lev-mot-${lev1}`, "ZT cuadrilla de topografía"); await clic(p, `[data-levantar="${lev1}"] [data-testid=lev-confirmar]`);
   ok(A("H5 «Asignar a levantamiento»: pasa a «Asignado a levantamiento»"), await p.waitForFunction((c) => document.querySelector(`[data-levantar="${c}"]`)?.dataset.estado === "asignado", { timeout: 20000 }, lev1).then(() => true).catch(() => false) && /quedó «asignado a levantamiento»/.test(await texto(p)));
   await clic(p, `[data-levantar="${lev1}"] [data-accion-lev="levantado"]`);
   ok(A("H6 «Marcar levantado» pide el código del activo nuevo (sin él no deja confirmar)"), await p.evaluate((c) => document.querySelector(`[data-levantar="${c}"] [data-testid=lev-confirmar]`).disabled, lev1));
   await poner(p, `#lev-act-${lev1}`, LUGAR.val.toLowerCase()); await clic(p, `[data-levantar="${lev1}"] [data-testid=lev-confirmar]`);
   await p.waitForFunction((c) => !document.querySelector(`[data-testid=lev-bandeja] [data-levantar="${c}"]`), { timeout: 20000 }, lev1).catch(() => {});
+  await p.waitForFunction(() => /Por levantar: 2/.test(document.querySelector('[data-filtro-lev="abiertos"]')?.textContent ?? "") && !!document.querySelector("[data-testid=lev-bandeja] [data-levantar]"), { timeout: 20000 }).catch(() => {});
   ok(A("H7 … y con él queda «levantado», vinculado al activo, y sale de los abiertos"), sqlq(`select estado || '|' || (select codigo from redes.activos a where a.id = p.activo_id) from redes.v_levantar_punto p where codigo = '${lev1}'`) === `levantado|${LUGAR.val}`
     && await p.evaluate(() => /Por levantar: 2/.test(document.querySelector('[data-filtro-lev="abiertos"]').textContent)));
   await clic(p, `[data-levantar="${lev2}"] [data-accion-lev="descartado"]`); await poner(p, `#lev-mot-${lev2}`, "corto");
@@ -409,6 +435,15 @@ for (const ancho of ANCHOS) {
   await clic(p, '[data-filtro-lev="todos"]'); await p.waitForSelector(`[data-levantar="${lev2}"][data-estado="descartado"]`, { timeout: 20000 });
   ok(A("H9 en «Todos»: el levantado con su activo, el descartado con su motivo y quién lo hizo"), await (async () => { const t1 = await tarj(lev1), t2 = await tarj(lev2); return t1.includes(`activo ${LUGAR.val}`) && /Levantado el/.test(t1) && /Descartado el .* · ZT es el pozo POZ ya levantado/.test(t2) && /Reabrir/.test(t2) && !/Descartar/.test(t2); })(), await tarj(lev2));
   await captura(p, `despues_por_levantar_todos_${ancho}.png`);
+  await clic(p, `[data-levantar="${lev1}"] [data-accion-lev="acta"]`); await p.waitForSelector('[data-testid=acta][data-lista="si"]', { timeout: 40000 });
+  ac = await acta(p);
+  ok(A("P8 «Ver acta (PDF)» en la bandeja: el mismo documento, con el estado actual («Levantado» y su activo) y el historial completo (quién asignó y quién levantó, cuándo y con qué motivo)"), ac.codigo === lev1 && /Técnica · Distribución · Fontanero/.test(ac.reporto)
+    && new RegExp(`Estado actual Levantado · activo ${LUGAR.val}`, "i").test(ac.txt) && ac.historial.map((h) => h.split(":")[0]).join() === "reportado,asignado,levantado" && /ZT cuadrilla de topografía/.test(ac.historial[1]) && ac.historial[2].includes(`Activo ${LUGAR.val}`)
+    && ac.fotos === 2 && ac.mapa, JSON.stringify(ac.historial));
+  await captura(p, `despues_acta_supervisor_${ancho}.png`);
+  { const b = await pdfActa(p, `acta_${ancho}_supervisor.pdf`); ok(A("P9 … y su PDF en carta"), cajaPdf(b) === "612x792", cajaPdf(b)); }
+  ok(A("P10 el acta: sin desborde horizontal en la vista previa del celular y botones de 44 px o más"), (ancho >= 500 || await p.evaluate(() => document.querySelector(".hoja-barra").getBoundingClientRect().right <= window.innerWidth + 1)) && (await minimo(p, ".hoja-barra button")) >= 44);
+  await cerrarActa(p);
   await clic(p, `[data-levantar="${lev2}"] [data-accion-lev="reabierto"]`); await poner(p, `#lev-mot-${lev2}`, "ZT no era el mismo pozo"); await clic(p, `[data-levantar="${lev2}"] [data-testid=lev-confirmar]`);
   ok(A("H10 «Reabrir» lo devuelve a «reportado» y el historial se conserva (nada se borra)"), await p.waitForFunction((c) => document.querySelector(`[data-levantar="${c}"]`)?.dataset.estado === "reportado", { timeout: 20000 }, lev2).then(() => true).catch(() => false)
     && sqlq(`select count(*) from redes.levantar_eventos e join redes.levantar_puntos q on q.id = e.punto_id where q.codigo = '${lev2}'`) === "2");
@@ -559,6 +594,13 @@ if (!ANTES) {
     const t1 = await f("dist", { z, x, y, v: 1 }); const n1 = (await t1.arrayBuffer()).byteLength;
     ok("I16 geovisor_tesela_remuneracion: MVT con caché privada y por sesión; tesela fuera de rango, 400; al supervisor de planta y al operador, 403", t1.status === 200 && /mapbox-vector-tile/.test(t1.headers.get("content-type")) && /private/.test(t1.headers.get("cache-control")) && /Authorization/.test(t1.headers.get("vary") ?? "")
       && n1 > 500 && (await f("dist", { z: 40, x: 1, y: 1 })).status === 400 && (await f("planta", { z, x, y })).status === 403 && (await f("op", { z, x, y })).status === 403, `${t1.status} ${t1.headers.get("content-type")} ${t1.headers.get("cache-control")} vary=${t1.headers.get("vary")} bytes=${n1} fuera=${(await f("dist", { z: 40, x: 1, y: 1 })).status} planta=${(await f("planta", { z, x, y })).status} op=${(await f("op", { z, x, y })).status}`); }
+  { const codOp = sqlq(`select codigo from redes.levantar_puntos where autor = '${EMAILS.op}' order by codigo limit 1`), codCampo = sqlq(`select codigo from redes.levantar_puntos where autor = '${EMAILS.campo}' order by codigo limit 1`);
+    r = await edgeF("dist", "levantar_acta", { cuerpo: { codigo: codOp } });
+    ok("I17 levantar_acta (POST): al supervisor, cualquiera; fotos con lectura firmada (sin la ruta de Storage), sin correos, sin caché", r.status === 200 && r.cuerpo.codigo === codOp && r.cuerpo.fotos.every((f) => /token=/.test(f.url) && !("ruta" in f)) && !/@/.test(JSON.stringify({ ...r.cuerpo, fotos: [] })) && r.cache === "no-store", JSON.stringify(r.cuerpo).slice(0, 300));
+    ok("I18 levantar_acta: quien reportó ve la suya (200); la de otro, 403 (operador ↔ Comercial); quien no tiene el formulario, 403", (await edgeF("op", "levantar_acta", { cuerpo: { codigo: codOp } })).status === 200 && (await edgeF("campo", "levantar_acta", { cuerpo: { codigo: codCampo } })).status === 200
+      && (await edgeF("campo", "levantar_acta", { cuerpo: { codigo: codOp } })).status === 403 && (await edgeF("op", "levantar_acta", { cuerpo: { codigo: codCampo } })).status === 403 && (await edgeF("op2", "levantar_acta", { cuerpo: { codigo: codOp } })).status === 403);
+    ok("I19 levantar_acta rechaza por forma (código ajeno, dato de más): 400; uno que no existe, 404; por GET, 405", (await edgeF("dist", "levantar_acta", { cuerpo: { codigo: "DAN-000001" } })).status === 400 && (await edgeF("dist", "levantar_acta", { cuerpo: { codigo: codOp, autor: "x" } })).status === 400
+      && (await edgeF("dist", "levantar_acta", { cuerpo: { codigo: "LEV-999999" } })).status === 404 && (await edgeF("dist", "levantar_acta")).status === 405); }
   ok("I11 el perfil de redes trae «activo_campo»: sí al operador con el formulario y al supervisor; no al operador sin él", (await edgeF("op", "mi_perfil")).cuerpo.activo_campo === true && (await edgeF("dist", "mi_perfil")).cuerpo.activo_campo === true && (await edgeF("op2", "mi_perfil")).cuerpo.activo_campo === false);
   ok("Z1 sin errores de JavaScript ni de consola", errores.length === 0, errores.join(" | "));
   ok("Z2 ninguna RPC sin simular", desconocidas.length === 0, [...new Set(desconocidas)].join(", "));

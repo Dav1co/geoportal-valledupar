@@ -48,3 +48,18 @@
   .hoja-franja { position: static; width: 100%; margin-top: 0.6cm; break-inside: avoid; }
   .hoja-logo, .hoja-franja { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+/* «Acta del reporte de activo» (pase corto del Corte 14): la misma hoja membretada, en carta */
+.acta h2 { margin: 0.4cm 0 0.15cm; font-size: 11pt; color: #0a2540; break-after: avoid; }
+.acta-codigo { margin: 0 0 0.1cm; font-family: "Courier New", Courier, monospace; font-size: 15pt; font-weight: 700; color: #0a2540; }
+.acta-dl { margin: 0 0 0.35cm; display: grid; grid-template-columns: 1fr 1fr; column-gap: 0.6cm; row-gap: 0.14cm; }
+.acta-dl > div { border-bottom: 1px solid #d5dde6; padding-bottom: 0.08cm; break-inside: avoid; }
+.acta-dl .acta-ancho { grid-column: 1 / -1; }
+.acta-dl dt { font-size: 7.5pt; color: #52626f; text-transform: uppercase; letter-spacing: 0.02em; }
+.acta-dl dd { margin: 0; font-size: 9.5pt; overflow-wrap: anywhere; }
+.acta-mapa .hoja-mapa-lienzo, .acta-mapa .hoja-mapa-img { height: 4.4cm; }
+.acta-punto { width: 0.5cm; height: 0.5cm; }
+.acta-fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3cm; }
+.acta-fotos figure { margin: 0; break-inside: avoid; }
+.acta-fotos img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: #f2f5f8; border: 1px solid #7b8b99; box-sizing: border-box; }
+.acta-fotos figcaption { font-size: 8pt; color: #52626f; margin-top: 0.05cm; }
+.acta-historial th:nth-child(1) { width: 3.4cm; } .acta-historial th:nth-child(2) { width: 3.6cm; } .acta-historial th:nth-child(3) { width: 3.6cm; } .acta-historial th:nth-child(4) { width: auto; }

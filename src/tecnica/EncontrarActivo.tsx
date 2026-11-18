@@ -11,6 +11,7 @@ import { ErrorTec } from "./apiTecnica";
 import { MiniMapaEncontrar } from "./MiniMapaEncontrar";
 import { FichaActivo } from "./FichaActivo";
 import { IconoCamara } from "./IconoCamara";
+import { ActaLevantar } from "./ActaLevantar";
 import { CamaraActa } from "../campo/acta/CamaraActa";
 import { useUbicacion } from "../campo/ubicacion";
 import { supabase } from "../lib/supabase";
@@ -43,6 +44,7 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
   const [vista, setVista] = useState<Vista>({ v: "encontrar" });
   const [pregunta, setPregunta] = useState<(PuntoCerca | Duplicado)[] | null>(null);      // «Ya reportado el … ¿Es el mismo?»
   const [aviso, setAviso] = useState<string | null>(null);
+  const [acta, setActa] = useState<string | null>(null);      // el acta (PDF) del punto recién reportado
   const ultima = useRef<{ lat: number; lon: number; radio: number; servicio: Servicio; vez: number; t: number } | null>(null);
 
   useEffect(() => {
@@ -191,12 +193,14 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
           <p>Estado: <strong>Reportado</strong>. Le llega al supervisor de distribución para que lo manden a levantar.</p>
           {vista.precisionBaja ? <p className="tec-aviso enc-debil">Quedó marcado «precisión baja»: la señal del GPS era débil al reportar.</p> : null}
           <div className="dan-fila">
-            <button type="button" className="tec-boton" onClick={() => setVista({ v: "encontrar" })}>Volver a los activos cercanos</button>
+            <button type="button" className="tec-boton" data-testid="enc-acta" onClick={() => setActa(vista.codigo)}>Descargar acta (PDF)</button>
+            <button type="button" className="tec-boton-sec" onClick={() => setVista({ v: "encontrar" })}>Volver a los activos cercanos</button>
             <button type="button" className="tec-boton-sec" onClick={() => setVista({ v: "reportar", noEsDuplicado: false })}>Reportar otro activo</button>
           </div>
         </section>
       ) : null}
 
+      {acta ? <ActaLevantar codigo={acta} onCerrar={() => setActa(null)} /> : null}
       {pregunta ? (
         <div className="enc-fondo" role="presentation">
           <div className="enc-dialogo" role="dialog" aria-modal="true" aria-labelledby="enc-dlg-tit" data-testid="enc-duplicado">

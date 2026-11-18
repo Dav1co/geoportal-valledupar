@@ -32,6 +32,10 @@ export type PuntoHoja = { n: number; codigo: string; tipo_nombre: string; servic
 export type HojaLevantar = { generado_en: string; estado: string; total: number; recortada: boolean; puntos: PuntoHoja[] };
 export type FiltroLevantar = "abiertos" | EstadoLevantar | "todos";
 export type ListaLevantar = { estado: FiltroLevantar; conteos: Partial<Record<EstadoLevantar, number>>; abiertos: number; items: PuntoLevantar[]; siguiente: string | null };
+/** «Acta del reporte de activo»: una por punto. «reporto» y «quien» son funcionarios; ningún dato de suscriptores. */
+export type ActaLevantar = { codigo: string; generado_en: string; servicio: Servicio; tipo: TipoLevantar; tipo_nombre: string; observacion: string | null; lat: number; lon: number; precision_m: number; precision_baja: boolean;
+  registrado_en: string; sector: string | null; reporto: { nombre: string; area?: string; cargo?: string }; estado: EstadoLevantar; estado_nombre: string; estado_desde: string; activo: string | null;
+  historial: { que: string; tipo: string; cuando: string; quien: string; motivo?: string | null; activo?: string | null }[]; fotos: { n: number; creado_en: string; url: string }[] };
 export type FotoLevantar = { n: number; creado_en: string; url: string; expira_en: string };
 
 const F = { funcion: "geoportal-redes" };
@@ -49,6 +53,8 @@ export const apiLev = {
       { ...F, cuerpo: { codigo, tipo, ...(o.activo ? { activo: o.activo } : {}), ...(o.motivo ? { motivo: o.motivo } : {}) } }),
   /** La hoja de levantamiento (PDF): los puntos en el orden del recorrido, con la primera foto. La descarga queda en la auditoría. */
   hoja: (estado: "abiertos" | "reportado" | "asignado") => pedir<HojaLevantar>("levantar_hoja", { ...F, cuerpo: { estado }, timeoutMs: 25000 }),
+  /** El acta de un punto (para el PDF): la propia, o cualquiera para el supervisor de distribución y el administrador. La consulta queda en la auditoría. */
+  acta: (codigo: string) => pedir<ActaLevantar>("levantar_acta", { ...F, cuerpo: { codigo }, timeoutMs: 25000 }),
   fotos: (codigo: string) => pedir<{ codigo: string; fotos: FotoLevantar[] }>("levantar_fotos", { ...F, cuerpo: { codigo } }),
 };
 

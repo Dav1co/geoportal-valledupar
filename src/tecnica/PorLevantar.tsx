@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import "./encontrar.css";
-import { apiLev, type FiltroLevantar, type FotoLevantar, type ListaLevantar, type PuntoLevantar } from "./apiLevantar";
+import { apiLev, type FiltroLevantar, type ListaLevantar, type PuntoLevantar } from "./apiLevantar";
 import { ErrorTec } from "./apiTecnica";
 import { HojaLevantamiento } from "./HojaLevantamiento";
+import { ActaLevantar } from "./ActaLevantar";
 
 
 // Dashboard distribución → Por verificar → «Otros activos por levantamiento» (Corte 14). Los activos que alguien encontró en la calle y no están en la red.
 // Estados, de solo agregar: reportado → asignado a levantamiento → levantado (con el activo nuevo) | descartado con motivo. «Reabrir» lo devuelve a reportado.
-// «Quién» es el nombre del funcionario; ningún dato de suscriptores. Las fotos se piden con una lectura firmada de 60 s (queda en la auditoría).
+// «Quién» es el nombre del funcionario; ningún dato de suscriptores. Cada punto tiene su «Ver acta (PDF)» (con sus fotos; la consulta queda en la auditoría).
 const FILTROS: { c: FiltroLevantar; n: string }[] = [{ c: "abiertos", n: "Por levantar" }, { c: "levantado", n: "Levantados" }, { c: "descartado", n: "Descartados" }, { c: "todos", n: "Todos" }];
 const fechaHora = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Bogota" });
 const err = (e: unknown) => (e instanceof ErrorTec && e.tipo === "permiso" ? "Solo el supervisor de distribución o el administrador ven los activos por levantar." : e instanceof Error ? e.message : "No se pudo completar.");
@@ -55,8 +56,7 @@ export function PorLevantarLista({ onFicha, onConteo }: { onFicha: (c: string) =
 }
 
 function Punto({ p, onFicha, onCambio }: { p: PuntoLevantar; onFicha: (c: string) => void; onCambio: (aviso: string) => void }) {
-  const [fotos, setFotos] = useState<FotoLevantar[] | null>(null);
-  const [errorFotos, setErrorFotos] = useState<string | null>(null);
+  const [acta, setActa] = useState(false);      // «Ver acta (PDF)»: el mismo documento que descarga quien reportó
   const [accion, setAccion] = useState<Accion | null>(null);
   const [activo, setActivo] = useState("");
   const [motivo, setMotivo] = useState("");
@@ -87,12 +87,11 @@ function Punto({ p, onFicha, onCambio }: { p: PuntoLevantar; onFicha: (c: string
       ) : null}
       {error && !accion ? <p className="tec-aviso tec-aviso-error" role="alert">{error}</p> : null}
       <div className="dash-acciones">
-        <button type="button" className="tec-boton-sec" data-accion-lev="fotos" onClick={() => { setErrorFotos(null); apiLev.fotos(p.codigo).then((r) => setFotos(r.fotos)).catch((e) => setErrorFotos(err(e))); }}>Ver {p.fotos === 1 ? "la foto" : `las ${p.fotos} fotos`}</button>
+        <button type="button" className="tec-boton-sec" data-accion-lev="acta" onClick={() => setActa(true)}>Ver acta (PDF)</button>
         {p.activo ? <button type="button" className="tec-boton-sec" onClick={() => onFicha(p.activo!)}>Ver la ficha de {p.activo}</button> : null}
         {acciones.map((c) => <button key={c} type="button" className="tec-boton-sec" aria-pressed={accion === c} data-accion-lev={c} onClick={() => { setAccion(accion === c ? null : c); setError(null); setMotivo(""); setActivo(""); }}>{ACCION[c].boton}</button>)}
       </div>
-      {errorFotos ? <p className="tec-aviso tec-aviso-error" role="alert">{errorFotos}</p> : null}
-      {fotos ? <div className="lev-fotos" data-testid="lev-fotos">{fotos.map((f) => <a key={f.n} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt={`Foto ${f.n} de ${p.codigo}`} /></a>)}</div> : null}
+      {acta ? <ActaLevantar codigo={p.codigo} onCerrar={() => setActa(false)} /> : null}
       {a && accion ? (
         <div className="lev-form">
           {a.ayuda ? <p className="tec-ayuda">{a.ayuda}</p> : null}

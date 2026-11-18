@@ -1,0 +1,30 @@
+# Acta del Corte 14 · base local de Code B (huella de partida 1a9ef250…)
+## huellas ANTES
+0 funciones de redes (conjunto)|1a9ef250a74fb01962f463d98834cc4a|CORTE 14 (listo para el acta)
+1 public.geoportal_redes_levantar_acta(text,text,text)||NO EXISTE (sin aplicar)
+1 redes.f_levantar_funcionario(text,text)||NO EXISTE (sin aplicar)
+2 objetos que usa (puntos por levantar, Personal de distribución y cargo de Comercial)||ESTÁN
+## ensayo
+TIEMPOS: dos actas (una con historial de 5 eventos) 1 ms
+RESULTADO: 17 de 17 pruebas correctas — SIN FALLAS
+## después del ensayo
+0 funciones de redes (conjunto)|1a9ef250a74fb01962f463d98834cc4a|CORTE 14 (listo para el acta)
+## migración + verificación + huellas
+01 la RPC del acta: security definer, search_path fijo, solo service_role|OK
+02 ninguna función interna de redes la ejecuta la API (incluida la nueva)|OK
+03 huellas md5 de las 2 nuevas y del conjunto de funciones de redes con el acta|OK
+04 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE|OK
+0 funciones de redes (conjunto)|7c888d4f9ba3835cef951b49ada8ca59|ACTA (aplicada)
+1 public.geoportal_redes_levantar_acta(text,text,text)|0a7f82ff6fa307a9edb877f5ab0aa816|NUEVA (aplicada)
+1 redes.f_levantar_funcionario(text,text)|60ef521c697327104ad52fbbbbec78b6|NUEVA (aplicada)
+2 objetos que usa (puntos por levantar, Personal de distribución y cargo de Comercial)||ESTÁN
+## segunda migración (debe negarse)
+psql:migracion_redes_corte14_acta_editor.sql:20: ERROR:  El acta del Corte 14 ya está aplicada: deténgase y avise
+## reversa
+0 funciones de redes (conjunto)|1a9ef250a74fb01962f463d98834cc4a|CORTE 14 (listo para el acta)
+## md5
+e5f8bf644470c5afdccf223642184b38 ensayo_en_transaccion_redes_corte14_acta_editor.sql
+327a053e8b2b6b6a2fa611038c119fe1 huellas_solo_lectura_redes_corte14_acta_editor.sql
+774a9dc7298ed2ef51454906cb905e82 migracion_redes_corte14_acta_editor.sql
+3a0f9b3294d8d7558c93f6a727933f9b reversa_redes_corte14_acta_editor.sql
+a0a2bd2a0061e5e3b085d4a107665dc7 verificacion_redes_corte14_acta_editor.sql
