@@ -22,12 +22,13 @@ const P_BASE = 54989, P_EDGE = 54990;
 const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: "55432", PGUSER: "postgres", PGDATABASE: "redes_local", PGOPTIONS: "-c client_min_messages=warning" };
 const sqlq = (s) => execFileSync(PSQL, ["-AtX", "-v", "ON_ERROR_STOP=1", "-c", s], { env: PGENV, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trim();
 const lit = (v) => (v === null || v === undefined ? "null" : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : typeof v === "object" ? `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb` : `'${String(v).replace(/'/g, "''")}'`);
-const EMAILS = { adm: "zt.admin@emdupar.gov.co", dist: "zt.dist@emdupar.gov.co", planta: "zt.planta@emdupar.gov.co", op: "zt.oper@emdupar.gov.co", op2: "zt.oper.sinform@emdupar.gov.co" };
-const PERFIL = { [EMAILS.adm]: "admin", [EMAILS.planta]: "supervisor", [EMAILS.op]: "operador", [EMAILS.op2]: "operador" };      // dist: sin formularios de Técnica (403)
+const EMAILS = { adm: "zt.admin@emdupar.gov.co", dist: "zt.dist@emdupar.gov.co", planta: "zt.planta@emdupar.gov.co", op: "zt.oper@emdupar.gov.co", op2: "zt.oper.sinform@emdupar.gov.co",
+                 solo: "zt.oper.solo@emdupar.gov.co", solo2: "zt.oper.solo2@emdupar.gov.co" };      // solo y solo2: operadores que SOLO tienen «Encontrar o reportar activo»
+const PERFIL = { [EMAILS.adm]: "admin", [EMAILS.planta]: "supervisor", [EMAILS.op]: "operador", [EMAILS.op2]: "operador", [EMAILS.solo2]: "operador" };      // dist y solo: sin formularios de Técnica (403); solo2: el servidor responde 200 y lista activo_campo
 const PLANTA5 = ["entrada", "salida", "muestreo", "entrada_quimicos", "uso_quimicos"];
 const FORMS = { [EMAILS.adm]: ["mantenimiento", "uso_quimicos", "muestreo", "danos_fallas", "entrada", "entrada_quimicos", "salida"], [EMAILS.planta]: ["entrada", "salida", "muestreo"],
-                [EMAILS.op]: ["danos_fallas", "mantenimiento"], [EMAILS.op2]: PLANTA5 };
-const NOMBRE = { entrada: "Entrada", salida: "Salida", muestreo: "Muestreo", entrada_quimicos: "Entrada de químicos", uso_quimicos: "Uso de químicos", danos_fallas: "Reportar daño o falla", mantenimiento: "Registrar intervención" };
+                [EMAILS.op]: ["danos_fallas", "mantenimiento"], [EMAILS.op2]: PLANTA5, [EMAILS.solo2]: ["activo_campo"] };
+const NOMBRE = { entrada: "Entrada", salida: "Salida", muestreo: "Muestreo", entrada_quimicos: "Entrada de químicos", uso_quimicos: "Uso de químicos", danos_fallas: "Reportar daño o falla", mantenimiento: "Registrar intervención", activo_campo: "Encontrar o reportar activo" };
 const rehacer = () => execFileSync("sh", [BASE], { env: PGENV, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
 // ---------- 1. Paquete de la página ----------
@@ -198,6 +199,10 @@ for (const ancho of [390, 1280]) {
   sqlq(`select public.geoportal_redes_personal_fijar('${EMAILS.dist}', '${EMAILS.op}', 'geovisor', 'si', 'Necesita ver la red en la calle')`);
   sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values ('${EMAILS.op2}', 'asignar_formulario', 'uso_quimicos', '${EMAILS.adm}'), ('${EMAILS.op2}', 'asignar_formulario', 'entrada_quimicos', '${EMAILS.adm}')`);      // 7b
 
+  // dos operadores que solo tendrán «Encontrar o reportar activo» (se lo asigna el supervisor de distribución en Personal, como en producción)
+  sqlq(`insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, horario, dias) values ('${EMAILS.solo}', 'ZT Operador solo activos', 'consulta', true, 'sin_restriccion', 'todos'), ('${EMAILS.solo2}', 'ZT Operador solo activos 2', 'consulta', true, 'sin_restriccion', 'todos')`);
+  for (const q of [EMAILS.solo, EMAILS.solo2]) sqlq(`select public.geoportal_redes_personal_formulario('${EMAILS.dist}', '${q}', 'activo_campo', true, 'Sale a campo a levantar activos')`);
+
   // ===== A. Operador de planta: solo Planta, sin selector =====
   let p = await abrir(ancho, "op2"); await esperarTexto(p, /Entrada de químicos/);
   let i = await inicio(p);
@@ -223,6 +228,35 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} A10 el operador de planta nunca pidió el geovisor`, !pidio("geoportal_redes_geovisor", EMAILS.op2));
   await p.close();
 
+  // ===== A-bis. El mismo operador de planta con «Encontrar o reportar activo» asignado (en Personal de distribución): la tarjeta en Plantas y en Distribución =====
+  sqlq(`select public.geoportal_redes_personal_formulario('${EMAILS.dist}', '${EMAILS.op2}', 'activo_campo', true, 'Sale a campo a levantar activos')`);
+  p = await abrir(ancho, "op2"); await esperarTexto(p, /Entrada de químicos/);
+  i = await inicio(p);
+  ok(`${tag} AB1 operador de planta con «Encontrar o reportar activo»: en Plantas, sus 5 formularios y la tarjeta al final, con el color de Plantas`,
+     i.modo === "planta" && claves(i) === [...PLANTA5, "activo_campo"].join(",") && i.tarjetas[5].colorIni === COLOR.planta && i.tarjetas[5].alto >= 68 && (await sinDesborde(p)), claves(i));
+  ok(`${tag} AB2 … ahora tiene dos modos (Plantas y Distribución) y abre en Plantas`, i.pestanas.map((x) => x.modo).join() === "planta,redes", JSON.stringify(i.pestanas));
+  await p.screenshot({ path: join(CAP, `encontrar_operador_planta_plantas_${ancho}.png`) });
+  await modoA(p, "redes"); i = await inicio(p);
+  ok(`${tag} AB3 … y en Distribución, la misma tarjeta (sola), con el color de Distribución`, claves(i) === "activo_campo" && i.tarjetas[0].colorIni === COLOR.redes, claves(i));
+  await p.screenshot({ path: join(CAP, `encontrar_operador_planta_distribucion_${ancho}.png`) });
+  await modoA(p, "planta"); await tocar(p, "activo_campo"); await p.waitForFunction(() => !document.querySelector("[data-tarjeta]"));
+  ok(`${tag} AB4 desde Plantas la tarjeta abre «Encontrar o reportar activo»`, /Encontrar o reportar activo/.test(await texto(p)));
+  await p.evaluate(() => { try { localStorage.clear(); } catch { /* */ } });
+  await p.close();
+
+  // ===== A-ter. Operador que SOLO tiene «Encontrar o reportar activo» (sin ningún otro formulario) =====
+  for (const [rol, caso] of [["solo", "el servidor no le da formularios de Técnica (403)"], ["solo2", "el servidor lo lista entre sus formularios"]]) {
+    p = await abrir(ancho, rol); await p.waitForSelector("[data-tarjeta=activo_campo]", { timeout: 30000 });
+    i = await inicio(p);
+    ok(`${tag} AT1 (${rol}: ${caso}) entra a Técnica y ve UNA tarjeta, «Encontrar o reportar activo», en Distribución (un solo modo, sin selector); no dice «Sin acceso»`,
+       i.pestanas.length === 0 && i.unico === "Distribución" && claves(i) === "activo_campo" && i.tarjetas[0].colorIni === COLOR.redes && i.tarjetas[0].boton && !/Sin acceso|Próximamente/.test(await texto(p)) && (await sinDesborde(p)),
+       i.unico + " " + claves(i));
+    if (rol === "solo") await p.screenshot({ path: join(CAP, `encontrar_operador_solo_${ancho}.png`) });
+    await tocar(p, "activo_campo"); await p.waitForFunction(() => !document.querySelector("[data-tarjeta]"));
+    ok(`${tag} AT2 (${rol}) la tarjeta abre «Encontrar o reportar activo»`, /Encontrar o reportar activo/.test(await texto(p)));
+    await p.close();
+  }
+
   // ===== B. Operador de redes =====
   p = await abrir(ancho, "op"); await esperarTexto(p, /Reportar daño o falla/);
   i = await inicio(p);
@@ -246,10 +280,11 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} C1 supervisor de planta: selector con Planta, Redes y Supervisión (botones reales con aria-selected, de 44 px o más), abre en Planta`,
      i.pestanas.map((x) => x.modo).join() === "planta,redes,supervision" && i.pestanas.every((x) => x.esBoton && x.alto >= 44 && (x.sel === "true") === (x.modo === "planta")) && i.modo === "planta", JSON.stringify(i.pestanas));
   ok(`${tag} C2 el modo elegido lleva su color (Planta #0a2540)`, i.pestanas[0].fondo === COLOR.planta);
+  ok(`${tag} C2b en Plantas, después de sus formularios, «Encontrar o reportar activo»`, claves(i) === "entrada,salida,muestreo,activo_campo", claves(i));
   await modoA(p, "redes"); i = await inicio(p);
-  ok(`${tag} C3 en Redes solo tiene «Ficha de activos» (buscar); no tiene formularios de redes`, claves(i) === "ficha_buscar" && i.pestanas[1].sel === "true" && i.pestanas[1].fondo === COLOR.redes, claves(i));
+  ok(`${tag} C3 en Redes tiene «Encontrar o reportar activo» y «Ficha de activos» (buscar); no tiene formularios de redes`, claves(i) === "activo_campo,ficha_buscar" && i.pestanas[1].sel === "true" && i.pestanas[1].fondo === COLOR.redes, claves(i));
   await modoA(p, "supervision"); i = await inicio(p);
-  ok(`${tag} C4 en Supervisión: Avisos (Corte 12), Dashboard PTAP, Geovisor técnico y «Encontrar o reportar activo» (Corte 14); sin Dashboard distribución ni «Ficha de activos (editar)»`, claves(i) === "avisos,dashboard_ptap,geovisor,activo_campo" && i.pestanas[2].fondo === COLOR.supervision && i.tarjetas[0].colorIni === COLOR.supervision, claves(i));
+  ok(`${tag} C4 en Supervisión: Avisos (Corte 12), Dashboard PTAP y Geovisor técnico; «Encontrar o reportar activo» ya NO va aquí; sin Dashboard distribución ni «Ficha de activos (editar)»`, claves(i) === "avisos,dashboard_ptap,geovisor" && i.pestanas[2].fondo === COLOR.supervision && i.tarjetas[0].colorIni === COLOR.supervision, claves(i));
   await p.reload(); await p.waitForSelector("[data-tarjeta=dashboard_ptap]");
   ok(`${tag} C5 se recuerda el último modo elegido (Supervisión) al volver a entrar`, (await inicio(p)).modo === "supervision");
   ok(`${tag} C6 hasta aquí no se ha pedido el geovisor`, !pidio("geoportal_redes_geovisor", EMAILS.planta));
@@ -262,13 +297,15 @@ for (const ancho of [390, 1280]) {
   // ===== D. Supervisor de distribución sin formularios de Técnica (mis_formularios: 403) =====
   p = await abrir(ancho, "dist"); await p.waitForSelector("[data-tarjeta=dashboard_distribucion]");
   i = await inicio(p);
-  ok(`${tag} D1 supervisor de distribución (sin formularios de Técnica): entra al mismo inicio, con Redes y Supervisión, y la primera vez abre en Supervisión (David, 14:39); no se le abre el dashboard solo`,
-     i.pestanas.map((x) => x.modo).join() === "redes,supervision" && i.modo === "supervision" && claves(i) === "avisos,dashboard_distribucion,geovisor,activo_campo,ficha_editar" && !(await p.$(".tdash-cab")), JSON.stringify(i.pestanas) + claves(i));
+  ok(`${tag} D1 supervisor de distribución (sin formularios de Técnica): entra al mismo inicio, con Plantas (solo «Encontrar o reportar activo»), Redes y Supervisión, y la primera vez abre en Supervisión (David, 14:39); no se le abre el dashboard solo`,
+     i.pestanas.map((x) => x.modo).join() === "planta,redes,supervision" && i.modo === "supervision" && claves(i) === "avisos,dashboard_distribucion,geovisor,ficha_editar" && !(await p.$(".tdash-cab")), JSON.stringify(i.pestanas) + claves(i));
   await modoA(p, "redes");
-  ok(`${tag} D1b en Redes solo tiene «Ficha de activos» (buscar)`, claves(await inicio(p)) === "ficha_buscar");
+  ok(`${tag} D1b en Redes tiene «Encontrar o reportar activo» y «Ficha de activos» (buscar)`, claves(await inicio(p)) === "activo_campo,ficha_buscar");
+  await modoA(p, "planta");
+  ok(`${tag} D1c en Plantas solo tiene «Encontrar o reportar activo» (es supervisor; no tiene formularios de planta)`, claves(await inicio(p)) === "activo_campo");
   ok(`${tag} D2 su sesión dice «Supervisor de distribución»`, /Supervisor de distribución/.test(await p.evaluate(() => document.querySelector(".tec-inicio-sesion").textContent)));
   await modoA(p, "supervision"); i = await inicio(p);
-  ok(`${tag} D3 en Supervisión: Avisos (Corte 12), Dashboard distribución, Geovisor técnico, «Encontrar o reportar activo» (Corte 14) y «Ficha de activos (editar)»; sin Dashboard PTAP`, claves(i) === "avisos,dashboard_distribucion,geovisor,activo_campo,ficha_editar", claves(i));
+  ok(`${tag} D3 en Supervisión: Avisos (Corte 12), Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»; sin «Encontrar o reportar activo» ni Dashboard PTAP`, claves(i) === "avisos,dashboard_distribucion,geovisor,ficha_editar", claves(i));
   await tocar(p, "dashboard_distribucion"); await esperarTexto(p, /No identificados/);
   await clicTexto(p, "button", "← Volver"); await p.waitForSelector("[data-tarjeta=dashboard_distribucion]");
   ok(`${tag} D4 del Dashboard distribución se vuelve al inicio`, (await inicio(p)).modo === "supervision");
@@ -280,17 +317,17 @@ for (const ancho of [390, 1280]) {
   // ===== E. Administrador: los tres modos =====
   p = await abrir(ancho, "adm"); await esperarTexto(p, /Entrada de químicos/);
   i = await inicio(p);
-  ok(`${tag} E1 administrador: los tres modos; en Planta, los 5 formularios de planta en orden (aunque el servidor los mande revueltos)`, i.pestanas.length === 3 && claves(i) === PLANTA5.join(","), claves(i));
+  ok(`${tag} E1 administrador: los tres modos; en Planta, los 5 formularios de planta en orden (aunque el servidor los mande revueltos) y «Encontrar o reportar activo» al final`, i.pestanas.length === 3 && claves(i) === [...PLANTA5, "activo_campo"].join(","), claves(i));
   ok(`${tag} E2 ${ancho < 500 ? "en el celular el selector va debajo del título, a todo lo ancho, y las tarjetas en una columna" : "en escritorio el selector va a la derecha del título y las tarjetas en rejilla (varias columnas de 260 px o más, hasta 1.120 px)"}`,
      ancho < 500 ? i.selY.y > i.titulo.y + 20 && new Set(i.tarjetas.map((t) => t.x)).size === 1 && i.tarjetas[0].ancho > 300
                  : Math.abs(i.selY.y - i.titulo.y) < 40 && i.selY.x > i.titulo.x + 300 && new Set(i.tarjetas.map((t) => t.x)).size >= 3 && i.tarjetas.every((t) => t.ancho >= 260)
                    && Math.max(...i.tarjetas.map((t) => t.x + t.ancho)) - Math.min(...i.tarjetas.map((t) => t.x)) <= 1120, JSON.stringify([i.selY, i.titulo, i.tarjetas.map((t) => [t.x, Math.round(t.ancho)])]));
-  await p.screenshot({ path: join(CAP, `modo_planta_${ancho}.png`) });
+  await p.screenshot({ path: join(CAP, `modo_planta_${ancho}.png`) }); await p.screenshot({ path: join(CAP, `encontrar_administrador_plantas_${ancho}.png`) });
   await modoA(p, "redes"); i = await inicio(p);
-  ok(`${tag} E3 Redes: daño o falla, intervención y «Ficha de activos» (buscar)`, claves(i) === "danos_fallas,mantenimiento,ficha_buscar", claves(i));
-  await p.screenshot({ path: join(CAP, `modo_redes_${ancho}.png`) });
+  ok(`${tag} E3 Redes: daño o falla, intervención, «Encontrar o reportar activo» y «Ficha de activos» (buscar)`, claves(i) === "danos_fallas,mantenimiento,activo_campo,ficha_buscar", claves(i));
+  await p.screenshot({ path: join(CAP, `modo_redes_${ancho}.png`) }); await p.screenshot({ path: join(CAP, `encontrar_administrador_distribucion_${ancho}.png`) });
   await modoA(p, "supervision"); i = await inicio(p);
-  ok(`${tag} E4 Supervisión: Avisos (Corte 12), Dashboard PTAP, Dashboard distribución, Geovisor técnico, «Encontrar o reportar activo» (Corte 14) y «Ficha de activos (editar)»`, claves(i) === "avisos,dashboard_ptap,dashboard_distribucion,geovisor,activo_campo,ficha_editar" && (await sinDesborde(p)), claves(i));
+  ok(`${tag} E4 Supervisión: Avisos (Corte 12), Dashboard PTAP, Dashboard distribución, Geovisor técnico y «Ficha de activos (editar)»; «Encontrar o reportar activo» ya NO va aquí`, claves(i) === "avisos,dashboard_ptap,dashboard_distribucion,geovisor,ficha_editar" && (await sinDesborde(p)), claves(i));
   await p.screenshot({ path: join(CAP, `modo_supervision_${ancho}.png`) });
   ok(`${tag} E5 el geovisor no se cargó al entrar ni al cambiar de modo`, !pidio("geoportal_redes_geovisor", EMAILS.adm) && !(await p.$(".geo-mapa")));
   await tocar(p, "geovisor"); await p.waitForFunction(() => !!document.querySelector(".geo-mapa")?.__mapa, { timeout: 30000 });

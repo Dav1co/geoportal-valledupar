@@ -173,15 +173,22 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
              estado: !construido ? "pronto" : !activo ? "sin_campos" : "lista", abrir: () => abrirForm(f.clave) };
   };
   const orden = (c: string) => { const k = ORDEN_FORM.indexOf(c); return k < 0 ? ORDEN_FORM.length : k; };
-  const ordenados = [...formularios].sort((x, y) => orden(x.clave) - orden(y.clave));
+  // «activo_campo» tiene su propia tarjeta (tarjetaEncontrar): si el servidor lo lista entre los formularios, no se repite
+  const ordenados = formularios.filter((f) => f.clave !== "activo_campo").sort((x, y) => orden(x.clave) - orden(y.clave));
   const veFicha = puedeSupervisar || puedeRedes || fichaBuscar;        // la ficha de activos (el servidor lo vuelve a verificar)
   const editaFicha = perfil === "admin" || puedeRedes;                 // quién edita la ficha: administrador y supervisor de distribución (Corte 4a)
   const supervisa = puedeSupervisar || puedeRedes;
+  // «Encontrar o reportar activo» (David, 17-nov): en Distribución para todo el que lo tiene; en Plantas para quien tiene formularios de planta,
+  // los supervisores y el administrador. Ya no va en Supervisión.
+  const formulariosPlanta = ordenados.filter((f) => !FORMULARIOS_REDES.has(f.clave));
   const porModo: Record<Modo, Tarjeta[]> = {
-    planta: ordenados.filter((f) => !FORMULARIOS_REDES.has(f.clave)).map(tarjetaForm),
+    planta: [
+      ...formulariosPlanta.map(tarjetaForm),
+      ...(encontrar && (formulariosPlanta.length > 0 || supervisa) ? [tarjetaEncontrar] : []),
+    ],
     redes: [
       ...ordenados.filter((f) => FORMULARIOS_REDES.has(f.clave)).map(tarjetaForm),
-      ...(encontrar && !supervisa ? [tarjetaEncontrar] : []),
+      ...(encontrar ? [tarjetaEncontrar] : []),
       ...(veFicha ? [{ clave: "ficha_buscar", nombre: "Ficha de activos", descripcion: "Buscar un activo por código, placa o alias", estado: "lista" as const, abrir: () => setVista("activos") }] : []),
       ...(tieneGeovisor && !supervisa ? [{ clave: "geovisor", nombre: "Geovisor técnico (solo lectura)", descripcion: "La red y las actividades de hoy en el mapa", estado: "lista" as const, abrir: () => setVista("geovisor") }] : []),
     ],
@@ -192,7 +199,6 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
       ...(puedeSupervisar ? [{ clave: "dashboard_ptap", nombre: "Dashboard PTAP", descripcion: "Registros, gráficas, puntos y químicos de planta", estado: "lista" as const, abrir: () => setVista("dashboard") }] : []),
       ...(puedeRedes ? [{ clave: "dashboard_distribucion", nombre: "Dashboard distribución", descripcion: "Daños, intervenciones, personal y cargue de capas", estado: "lista" as const, abrir: () => setVista("redes") }] : []),
       ...(tieneGeovisor && supervisa ? [{ clave: "geovisor", nombre: "Geovisor técnico", descripcion: "La red, las actividades y los contratos en el mapa", estado: "lista" as const, abrir: () => setVista("geovisor") }] : []),
-      ...(encontrar && supervisa ? [tarjetaEncontrar] : []),
       ...(editaFicha ? [{ clave: "ficha_editar", nombre: "Ficha de activos (editar)", descripcion: "Corregir alias, placa y datos de un activo, con motivo", estado: "lista" as const, abrir: () => setVista("activos") }] : []),
     ],
   };
