@@ -459,7 +459,7 @@ try {
     pg = await abrir("p=admin&u=admc"); await esp(400);
     await clicTexto(pg, "button.btn-link", "Editar"); await esp(300);
     const etiqueta = "Análisis de contrato (consulta un contrato: incluye nombre y teléfono)";
-    ok(`${T} Admin: la casilla aparece dentro de «Formatos de campo» cuando el servidor trae ver_analisis_contrato`, await pg.evaluate((e) => [...document.querySelectorAll("section[aria-label='Formatos de campo'] label.adm-check")].some((l) => l.textContent.trim() === e), etiqueta));
+    ok(`${T} Admin: la casilla aparece dentro de «Comercial · Formatos de campo» cuando el servidor trae ver_analisis_contrato`, await pg.evaluate((e) => [...document.querySelectorAll("section[aria-label='Comercial · Formatos de campo'] label.adm-check")].some((l) => l.textContent.trim() === e), etiqueta));
     await pg.evaluate((e) => [...document.querySelectorAll("label.adm-check")].find((l) => l.textContent.trim() === e).querySelector("input").click(), etiqueta); await esp(150);
     if (ancho === 1280) await pg.screenshot({ path: join(CAP, "admin_1280_analisis.png") });
     let antes = peticiones.length;

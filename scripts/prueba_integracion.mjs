@@ -72,8 +72,8 @@ ok("AreaCampo.tsx monta FormatosCampo con la definición del servidor", /<Format
 
 // ---- 3. Administración: casillas del acta (comprobaciones sobre el código fuente; el proyecto no tiene ejecutor de pruebas de componentes) ----
 const ad = leer("src/components/Admin.tsx"), api = leer("src/lib/api.ts");
-ok("Admin: casilla «Acta de inspección técnica» (clave acta)", /\["acta", "Acta de inspección técnica"\]/.test(ad));
-ok("Admin: casilla «Supervisor de actas» (clave dashboard_acta)", /\["dashboard_acta", "Supervisor de actas"\]/.test(ad));
+ok("Admin: casilla «Registrar actas de revisión e irregularidades» (clave acta)", /\["acta", "Registrar actas de revisión e irregularidades"\]/.test(ad));
+ok("Admin: casilla «Supervisor de actas de revisión e irregularidades» (clave dashboard_acta)", /\["dashboard_acta", "Supervisor de actas de revisión e irregularidades"\]/.test(ad));
 ok("Admin: las casillas del acta solo se muestran si el servidor trae ver_acta (conActa)", /const conActa = useMemo\(\(\) => usuarios\.some\(\(u\) => typeof u\.ver_acta === "boolean"\)/.test(ad) && /\{conActa && \(\s*<BloquePermisos/.test(ad));
 ok("Admin: el aviso de horario del acta existe y reutiliza el mismo texto que Campo", /avisoHorarioActa\(borrador\)/.test(ad) && /const avisoHorarioCampo = \(b: Borrador\) => avisoHorario\(b, \["campo", "dashboard_campo"\]/.test(ad));
 ok("Admin: tras guardar se verifica que el servidor aplicó los permisos de acta", /conActa && !\(await verificarActa\(/.test(ad));

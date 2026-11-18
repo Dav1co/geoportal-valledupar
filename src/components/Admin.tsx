@@ -26,8 +26,8 @@ const MODOS_CAMPO: [keyof UsuarioAdmin, string][] = [
 ];
 // Acta de inspección técnica (integración Torre A). Se muestran SOLO si el servidor ya trae esas columnas (SQL del acta aplicado).
 const MODOS_ACTA: [keyof UsuarioAdmin, string][] = [
-  ["ver_acta", "Acta de inspección técnica"],
-  ["ver_dashboard_acta", "Supervisor de actas"],
+  ["ver_acta", "Registrar actas de revisión e irregularidades"],
+  ["ver_dashboard_acta", "Supervisor de actas de revisión e irregularidades"],
 ];
 // Interventoría de Aseo (Torre C). Se muestran SOLO si el servidor ya trae esas columnas (SQL de aseo aplicado).
 const MODOS_ASEO: [keyof UsuarioAdmin, string][] = [
@@ -106,8 +106,8 @@ const CAMPOS_CAMPO: [keyof Borrador, string][] = [
 // Análisis de contrato: va dentro del bloque de campo, SOLO si el servidor ya lista `ver_analisis_contrato`. El interruptor general del bloque no lo enciende (muestra datos personales).
 const CAMPO_ANALISIS: [keyof Borrador, string] = ["analisis_contrato", "Análisis de contrato (consulta un contrato: incluye nombre y teléfono)"];
 const CAMPOS_ACTA: [keyof Borrador, string][] = [
-  ["acta", "Acta de inspección técnica"],
-  ["dashboard_acta", "Supervisor de actas"],
+  ["acta", "Registrar actas de revisión e irregularidades"],
+  ["dashboard_acta", "Supervisor de actas de revisión e irregularidades"],
 ];
 const CAMPOS_ASEO: [keyof Borrador, string][] = [
   ["aseo", "Interventoría de aseo"],
@@ -772,7 +772,7 @@ export function Admin({ onVolver }: Props) {
               )}
               {conCampo && (
                 <BloquePermisos
-                  titulo="Formatos de campo"
+                  titulo="Comercial · Formatos de campo"
                   campo
                   campos={conAnalisis ? [...CAMPOS_CAMPO, CAMPO_ANALISIS] : CAMPOS_CAMPO}
                   alEncender={conAnalisis ? ["campo", "dashboard_campo"] : undefined}
@@ -792,21 +792,21 @@ export function Admin({ onVolver }: Props) {
               )}
               {conActa && (
                 <BloquePermisos
-                  titulo="Acta de inspección técnica"
+                  titulo="Comercial · Acta de revisión e irregularidades"
                   campo
                   campos={CAMPOS_ACTA}
                   borrador={borrador}
                   onCambio={(c) => setBorrador({ ...borrador, ...c })}
                 >
                   <p className="adm-aviso-tec">
-                    «Acta de inspección técnica» permite registrar actas (el registro digital acompaña al acta física firmada). «Supervisor de actas» permite revisarlas, cambiar su estado, ocultarlas y corregirlas. Solo con esto, la persona no ve el mapa ni datos comerciales.
+                    «Registrar actas de revisión e irregularidades» permite registrar actas (el registro digital acompaña al acta física firmada). «Supervisor de actas de revisión e irregularidades» permite revisarlas, cambiar su estado, ocultarlas y corregirlas. Solo con esto, la persona no ve el mapa ni datos comerciales.
                   </p>
                   {avisoHorarioActa(borrador) && <p className="adm-aviso-horario" role="alert">{avisoHorarioActa(borrador)}</p>}
                 </BloquePermisos>
               )}
               {conAseo && (
                 <BloquePermisos
-                  titulo="Interventoría de aseo"
+                  titulo="Aseo · Interventoría"
                   campo
                   campos={CAMPOS_ASEO}
                   borrador={borrador}
