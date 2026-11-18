@@ -1,0 +1,22 @@
+VALIDACIÓN DE «CIERRE POR AGUAS ARRIBA» con la red real (base local: producción con el Corte 14 + este paquete; cotas del Plan Maestro; flujo de modeloV1)
+Red: 9580 tubos del modelo · criterio vigente: cota
+
+A. EL CASO DE DAVID y otros 10 tramos (elegidos por md5 del código, sin escoger)
+tramo | diámetro mm | AISLAMIENTO TOTAL (válvulas · contratos) | AGUAS ARRIBA POR COTA | AGUAS ARRIBA POR MODELO | ¿coinciden?
+RED-000077 | 203 | 589 válv. · 95856 a 101698 | 1 válv. (VAL-000684) · 30 a 30 contratos | 2 válv. (VAL-000307, VAL-000672) · 30 a 329 contratos | no
+RED-008730 | 76 | 589 válv. · 95856 a 101698 | no se puede (sin válvulas aguas arriba) | 18 válv. (VAL-000210, VAL-000248, VAL-000557…) · 297 a 11366 contratos | no
+RED-006306 | 76 | 589 válv. · 95856 a 101698 | no se puede (sin sentido) | no se puede (sin sentido) | no
+RED-006113 | 76 | 1 válv. · 530 a 531 | 1 válv. (VAL-000341) · 7 a 7 contratos | no se puede (sin válvulas aguas arriba) | no
+RED-000937 | 102 | 2 válv. · 324 a 101698 | 1 válv. (VAL-000132) · 19 a 19 contratos | 1 válv. (VAL-000132) · 19 a 19 contratos | sí
+RED-008405 | 76 | 589 válv. · 95856 a 101698 | no se puede (sin sentido) | 1 válv. (VAL-000673) · 6 a 476 contratos | no
+RED-009360 | 102 | 8 válv. · 1785 a 101698 | no se puede (sin sentido) | 4 válv. (VAL-000334, VAL-000609, VAL-000306…) · 27 a 1378 contratos | no
+RED-009895 | 152 | 589 válv. · 95856 a 101698 | 4 válv. (VAL-000290, VAL-000635, VAL-000198…) · 40 a 40 contratos | 121 válv. (VAL-000290, VAL-000635, VAL-000750…) · 604 a 20788 contratos | no
+RED-006198 | 76 | 589 válv. · 95856 a 101698 | 2 válv. (VAL-000563, VAL-000726) · 14 a 14 contratos | 10 válv. (VAL-000733, VAL-000631, VAL-000667…) · 15 a 3997 contratos | no
+RED-000964 | 76 | 589 válv. · 95856 a 101698 | 1 válv. (VAL-000495) · 17 a 17 contratos | 2 válv. (VAL-000408, VAL-000495) · 17 a 3587 contratos | no
+RED-008097 | 203 | 589 válv. · 95856 a 101698 | 18 válv. (VAL-000271, VAL-000589, VAL-000242…) · 27 a 27 contratos | 3 válv. (VAL-000708, VAL-000242, VAL-000565) · 17 a 754 contratos | no
+
+B. MUESTRA de 300 tramos (por md5 del código)
+por cota: se puede en 154 de 300 (51 %); válvulas a cerrar: mediana 3, de 1 a 3 en 84, de 4 a 10 en 26, más de 10 en 44, máximo 58; no se puede en 146: {'sin_valvulas': 85, 'sin_sentido': 60, 'llega_a_la_fuente': 1}
+por modelo: se puede en 217 de 300 (72 %); válvulas a cerrar: mediana 6, de 1 a 3 en 92, de 4 a 10 en 32, más de 10 en 93, máximo 129; no se puede en 83: {'sin_sentido': 78, 'sin_valvulas': 5}
+los dos criterios se pueden en 131; dan las MISMAS válvulas en 19 (15 %)
+tiempo por simulación (incluye el aislamiento total cuando cae): mediana 312 ms, máximo 578 ms
