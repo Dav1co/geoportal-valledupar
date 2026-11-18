@@ -7,7 +7,7 @@ do $$
 begin
   if to_regprocedure('redes.f_simular_aguas_arriba(bigint)') is null then raise exception 'No hay nada que revertir: «Cierre por aguas arriba» no está aplicado'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'eebd34a64cd0cbc353f80ceef9256494' then
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'af34032d8e20434f53744eb642cddac2' then
     raise exception 'Las funciones cambiaron después de la migración: la reversa se niega a pisarlas; avise';
   end if;
 end $$;

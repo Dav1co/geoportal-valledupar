@@ -2,7 +2,7 @@
 -- TÉCNICA · FASE 1 · CORTE 9b · «CIERRE POR AGUAS ARRIBA» · 10 — GUARDIA Y PARÁMETROS
 -- PROPUESTA. No se ha ejecutado en la base real (solo en el PostGIS local de Code A). Generado por pruebas_locales/generar.py.
 -- Fuente: pedido de David del 17-nov (caso real RED-000077 / VAL-000684).
--- · Presupone el Corte 14 publicado: huella del conjunto de funciones de redes {{MD5_BASE}}.
+-- · Presupone el Corte 14 y su acta (redes_corte14_acta) publicados: huella del conjunto de funciones de redes {{MD5_BASE}}.
 -- · SOLO AGREGA: 4 funciones internas, 1 RPC y 2 parámetros. No reemplaza ninguna función: la simulación de hoy (redes.f_simular_cierre) queda igual,
 --   como «Aislamiento total». No toca tecnica.f_avisos, Personal, «Por verificar» ni el geovisor. Sin tablas nuevas. Solo base de datos: la ruta de la Edge
 --   y la pantalla son del Code B.
@@ -12,7 +12,7 @@ begin
   if to_regprocedure('redes.f_simular_aguas_arriba(bigint)') is not null then raise exception '«Cierre por aguas arriba» ya está aplicado: deténgase y avise'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
        where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '{{MD5_BASE}}' then
-    raise exception 'Las funciones de redes no son las del Corte 14 publicado (huella {{MD5_BASE}}): deténgase y avise';
+    raise exception 'Las funciones de redes no son las del Corte 14 con su acta publicados (huella {{MD5_BASE}}): deténgase y avise';
   end if;
   if to_regclass('redes.flujo_modelo') is null or to_regclass('redes.pm_nodos') is null or to_regprocedure('redes.f_simular_cierre(bigint)') is null then
     raise exception 'Faltan tablas o funciones del 9a o del 9b: deténgase y avise';

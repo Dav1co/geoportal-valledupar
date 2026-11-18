@@ -1,6 +1,6 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b · «CIERRE POR AGUAS ARRIBA» · 80 — VERIFICACIÓN DE SOLO LECTURA (una sola consulta; apta para el editor SQL web). Todas las filas deben decir OK.
--- Nota: después de este paquete, la fila de la huella del conjunto de la verificación del Corte 14 deja de valer (el conjunto de funciones cambió).
+-- Nota: después de este paquete, la fila de la huella del conjunto de la verificación del acta del Corte 14 deja de valer (el conjunto de funciones cambió).
 -- =====================================================================
 select k, v from (
   select 1 as o, '01 la RPC nueva: security definer, search_path fijo, solo service_role' as k,
