@@ -313,8 +313,8 @@ for (const ancho of [390, 1280]) {
   await clicTexto(p, "button", "Ver y cambiar los plazos"); await p.waitForSelector("[data-parametro=dano_alto_rojo_h]", { timeout: 20000 });
   const pd = await p.evaluate(() => [...document.querySelectorAll("[data-parametro]")].map((a) => a.dataset.parametro));
   // Corte 9b: con los dos de «válvula cerrada» (1b) son 11, y 12 con el interruptor del aviso de presiones de la Fase 2 (9 en una base anterior al 9b)
-  ok(`${tag} C4 ve los plazos de Distribución (riesgo alto 2 y 6 h…; 11 con los de válvula cerrada del 9b y 12 con el del aviso de presiones), ninguno de planta ni del bot`,
-     pd.length === 9 + (pd.includes("valvula_cerrada_naranja_h") ? 2 : 0) + (pd.includes("presion_modelo_aviso") ? 1 : 0) && pd.includes("dano_alto_naranja_h") && !pd.includes("horario_fin") && !pd.includes("salida_max_intentos"), pd.join(","));
+  ok(`${tag} C4 ve los plazos de Distribución (riesgo alto 2 y 6 h…; 11 con los de válvula cerrada del 9b, 12 con el del aviso de presiones y 13 con el de activos por levantar del 14), ninguno de planta ni del bot`,
+     pd.length === 9 + (pd.includes("valvula_cerrada_naranja_h") ? 2 : 0) + (pd.includes("presion_modelo_aviso") ? 1 : 0) + (pd.includes("levantar_naranja_dias") ? 1 : 0) && pd.includes("dano_alto_naranja_h") && !pd.includes("horario_fin") && !pd.includes("salida_max_intentos"), pd.join(","));
   await p.screenshot({ path: join(CAP, `plazos_distribucion_${ancho}.png`), fullPage: true });
   await clicTexto(p, "button", "← Volver"); await p.waitForSelector("[data-modo-actual]");
   await pulsar(p, "button[data-tarjeta=dashboard_distribucion]"); await p.waitForSelector("[data-franja=distribucion]", { timeout: 30000 }).catch(() => {});

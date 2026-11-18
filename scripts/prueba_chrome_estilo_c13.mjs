@@ -236,7 +236,7 @@ for (const ancho of [390, 1280]) {
   // ===== A. Inicio por modos: nombres y colores =====
   let p = await abrir(ancho, "adm"); await p.waitForSelector("[data-modo-actual]");
   const tabs = await p.evaluate(() => [...document.querySelectorAll('[role=tab][data-modo]')].map((t) => t.textContent.trim()).join(","));
-  if (!SOLO) ok(`${tag} A1 los modos se llaman «Distribución» y «Supervisión» (el administrador no tiene formularios de planta)`, tabs === "Distribución,Supervisión", tabs);
+  if (!SOLO) ok(`${tag} A1 los modos se llaman «Plantas», «Distribución» y «Supervisión» (el administrador no tiene formularios de planta: en Plantas solo tiene «Encontrar o reportar activo», desde el 17-nov)`, tabs === "Plantas,Distribución,Supervisión", tabs);
   await modoA(p, "redes"); await capturar(p, "inicio_distribucion", ancho, false);
   const tr = await estilo(p, "[role=tab][data-modo=redes]", ["backgroundColor"]), cr = await estilo(p, ".tec-tarjeta-modo", ["borderLeftColor", "borderLeftWidth"]), ir = await estilo(p, ".tec-tarjeta-ini", ["backgroundColor"]);
   const descs = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll("[data-tarjeta]")].map((t) => [t.dataset.tarjeta, t.querySelector(".tec-tarjeta-desc")?.textContent ?? ""])));
