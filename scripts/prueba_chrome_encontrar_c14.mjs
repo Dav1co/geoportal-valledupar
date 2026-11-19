@@ -406,7 +406,12 @@ for (const ancho of ANCHOS) {
   // ===== H. Supervisor de distribución: la bandeja y los estados =====
   p = await abrir(ancho, "dist");
   await esperarTexto(p, /Dashboard distribución/);
-  ok(A("H1 el supervisor ve «Encontrar o reportar activo» en Supervisión"), await p.evaluate(() => !!document.querySelector('.tec-tarjetas-supervision [data-tarjeta="activo_campo"]')), await textoInicio(p));
+  // desde el 17-nov (5380c27) la tarjeta ya no va en Supervisión: está en Distribución y en Plantas
+  const dondeEsta = await p.evaluate(async () => { const r = {};
+    for (const m of ["redes", "planta", "supervision"]) { document.querySelector(`[role=tab][data-modo="${m}"]`)?.click(); await new Promise((x) => setTimeout(x, 50));
+      r[m] = document.querySelector("[data-modo-actual]")?.dataset.modoActual === m && !!document.querySelector(`.tec-tarjetas-${m} [data-tarjeta="activo_campo"]`); }
+    return r; });
+  ok(A("H1 el supervisor ve «Encontrar o reportar activo» en Distribución y en Plantas, y ya no en Supervisión"), dondeEsta.redes === true && dondeEsta.planta === true && dondeEsta.supervision === false, JSON.stringify(dondeEsta) + " · " + await textoInicio(p));
   await clicTexto(p, "button.tec-tarjeta-modo", "Dashboard distribución"); await esperarTexto(p, /Por verificar/);
   await clicTexto(p, "[role=tab]", "Por verificar"); await p.waitForSelector('[data-grupo="levantar"]', { timeout: 30000 });
   await p.waitForFunction(() => /Otros activos por levantamiento: 3/.test(document.querySelector('[data-grupo="levantar"]').textContent), { timeout: 30000 }).catch(() => {});
