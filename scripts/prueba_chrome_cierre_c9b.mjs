@@ -255,6 +255,12 @@ const panel = (p) => p.evaluate(() => { const s = document.querySelector("[data-
   alto: Math.min(...[...s.querySelectorAll("button:not(.tec-enlace)")].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect().height)), valvulas: [...s.querySelectorAll("[data-testid=cie-resultado] li[data-valvula]")].map((x) => x.dataset.valvula) } : null; });
 const enPanel = (p, t, dentro = "[data-testid=panel-cierre]") => p.evaluate((t, d) => { const b = [...document.querySelectorAll(`${d} button`)].find((x) => x.textContent.trim().startsWith(t) && !x.disabled); if (!b) return false; b.scrollIntoView({ block: "center" }); b.click(); return true; }, t, dentro);
 const esperarPanel = (p, re, ms = 40000) => p.waitForFunction((s) => new RegExp(s).test(document.querySelector("[data-testid=panel-cierre]")?.innerText ?? ""), { timeout: ms }, re.source).then(() => true).catch(() => false);
+// La hora de regreso como la escribe la pantalla (horaClara): sola si cae hoy; con el día delante («18 de nov, 2:00 a. m.») si cruza la medianoche.
+// Antes la prueba esperaba siempre la hora sola y D6 fallaba al correrla después de las 9 p. m. (regreso = ahora + 3 h). FORZAR_REGRESO_MIN la corre a cualquier hora.
+const REGRESO_MIN = Number(process.env.FORZAR_REGRESO_MIN || 180);
+const diaBogota = (d) => d.toLocaleDateString("es-CO", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" });
+const horaRegreso = (min) => diaBogota(new Date(Date.now() + min * 60000)) === diaBogota(new Date())
+  ? /Regreso estimado del servicio\s*\d{1,2}:\d{2}/ : /Regreso estimado del servicio\s*\d{1,2} de [a-zñ]{3,5}\.?, \d{1,2}:\d{2}/;
 const campoLocal = (min) => { const d = new Date(Date.now() + min * 60000), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; };
 const verPanel = (p) => p.evaluate(() => document.querySelector("[data-testid=panel-cierre]")?.scrollIntoView({ block: "start" }));
 async function tarjetaDelTramo(p) {
@@ -324,7 +330,7 @@ for (const ancho of ANCHOS) {
   await enPanel(p, "Válvula cerrada", `[data-testid=panel-cierre] li[data-valvula="${VALV[0]}"]`); await p.waitForSelector("[data-testid=cie-pedir]");
   t = await p.evaluate(() => document.querySelector("[data-testid=cie-pedir]").innerText);
   ok(`${tag} C2 «Válvula cerrada» pide la hora (vacía si fue ahora) y la hora estimada de regreso (opcional)`, new RegExp(`Válvula ${VALV[0]} cerrada`).test(t) && /¿A qué hora\?/.test(t) && /Regreso estimado del servicio/.test(t), t);
-  await poner(p, "#cie-regreso", campoLocal(180));
+  await poner(p, "#cie-regreso", campoLocal(REGRESO_MIN));
   await enPanel(p, "Confirmar", "[data-testid=cie-pedir]"); await esperarPanel(p, new RegExp(`Válvula ${VALV[0]} cerrada \\(`)); await esperarPanel(p, /Válvulas cerradas por/); s = await panel(p);
   r = sqlq(`select m.tipo || '|' || (m.dano_id is not null) || '|' || (m.regreso_estimado is not null) || '|' || m.autor from redes.valvula_maniobras m join redes.activos a on a.id = m.valvula_id where a.codigo = '${VALV[0]}'`);
   ok(`${tag} C3 queda la maniobra «cerrar» con el daño, la hora de regreso y quien la hizo; el panel la muestra «Cerrada» y en «Válvulas cerradas por ${DAN}»`, r === `cerrar|true|true|${EMAILS.op}`
@@ -361,7 +367,7 @@ for (const ancho of ANCHOS) {
   await new Promise((x) => setTimeout(x, 800)); await p.screenshot({ path: join(CAP, `afectaciones_mapa_${ancho}.png`) });
   await clicTexto(p, "[data-testid=franja-cortes] button", "Zona 1"); tj = await esperarTarjeta(p, "corte_zona", /Contratos afectados/);
   ok(`${tag} D6 tarjeta de la zona en lenguaje claro: «Sin agua desde las …», «Por: … · ${DAN}», «Contratos afectados 160» y «Regreso estimado del servicio»`, !!tj && /Zona 1 sin agua/.test(tj.txt) && /Sin agua desde las \d{1,2}:\d{2}/.test(tj.txt)
-     && new RegExp(`Por\\s*[^\\n]* · ${DAN}`).test(tj.txt) && /Contratos afectados\s*160/.test(tj.txt) && /Regreso estimado del servicio\s*\d{1,2}:\d{2}/.test(tj.txt) && tj.dentro, tj?.txt);
+     && new RegExp(`Por\\s*[^\\n]* · ${DAN}`).test(tj.txt) && /Contratos afectados\s*160/.test(tj.txt) && horaRegreso(REGRESO_MIN).test(tj.txt) && tj.dentro, tj?.txt);
   await p.screenshot({ path: join(CAP, `afectaciones_zona_${ancho}.png`) });
   await p.evaluate(() => document.querySelector(".geo-tarjeta .geo-cerrar")?.click()); await p.waitForFunction(() => !document.querySelector(".geo-tarjeta"));
   const v0 = cv.valvulas.find((v) => v.codigo === VALV[0]);
