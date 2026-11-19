@@ -3,10 +3,13 @@ import "./tokens.css";
 import "./tecnica.css";
 import "./dano.css";
 import "./intervencion.css";
+import "./ficha.css";
+import "./cierre.css";
 import "./eventos.css";
 import { horaClara, nContratos } from "./apiCierre";
 import { apiEventos, nReportes, textoReportes, type CatalogoEventos, type Evento } from "./apiEventos";
 import { EventoDeclarar, errorEvento } from "./EventoDeclarar";
+import { EventoDetalle } from "./EventoDetalle";
 
 // Corte 15 · «Eventos de suspensión» (las pantallas; la lógica es del Code A). Cuando se va el agua en una zona llegan decenas de reportes del mismo problema:
 // el evento los agrupa, los controla y los cierra en bloque. Esta pantalla se abre desde el Dashboard distribución (pestaña «Suspensiones») y desde el geovisor
@@ -47,6 +50,7 @@ export function EventosSuspension({ onVolver, rotuloVolver = "Volver", inicial, 
   else if (!cat) cuerpo = <p className="tec-sub dan-pad" role="status">Cargando…</p>;
   else if (vista.v === "declarar") cuerpo = <EventoDeclarar cat={cat} onCancelar={aLista}
     onDeclarado={(e) => { cambio(); setVista({ v: "detalle", codigo: e.codigo, aviso: `Evento ${e.codigo} declarado. ${e.asociados_al_declarar === 1 ? "1 reporte que ya estaba en la zona quedó asociado" : `${nf.format(e.asociados_al_declarar)} reportes que ya estaban en la zona quedaron asociados`}.` }); }} />;
+  else if (vista.v === "detalle") cuerpo = <EventoDetalle key={vista.codigo} codigo={vista.codigo} cat={cat} avisoInicial={vista.aviso} alCambiar={cambio} />;
   else cuerpo = <Lista cat={cat} onDeclarar={() => setVista({ v: "declarar" })} onAbrir={(codigo) => setVista({ v: "detalle", codigo })} onPlantas={() => setVista({ v: "plantas" })} onTipos={() => setVista({ v: "tipos" })} />;
   void setVezCat;
 

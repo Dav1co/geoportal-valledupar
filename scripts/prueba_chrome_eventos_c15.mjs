@@ -246,6 +246,21 @@ const dato = (p, d, raiz = "[data-testid=evs-previa-datos]") => p.evaluate((d, r
 const mapaListo = (p) => p.waitForSelector("[data-testid=evs-mapa] .evs-mapa-lienzo[data-listo=si]", { timeout: 40000 });
 const zonaEnMapa = (p, fuente = "zona") => p.evaluate((f) => { const m = document.querySelector("[data-testid=evs-mapa] .evs-mapa-lienzo")?.__mapa; const d = m?.getSource(f)?.serialize?.().data; return d && d.type === "Feature" ? d.geometry.type : d?.features?.length ? "varias" : null; }, fuente);
 const pinturaMini = (p) => p.evaluate(() => { const m = document.querySelector("[data-testid=evs-mapa] .evs-mapa-lienzo").__mapa; return [m.getPaintProperty("zona-l", "line-color"), m.getPaintProperty("zona-l", "line-width"), m.getPaintProperty("zona-a", "fill-opacity"), m.getPaintProperty("zona-l", "line-dasharray") ?? null].join("|"); });
+const bot = (rad, lat, lon) => JSON.parse(sqlq(`select redes.f_reporte_externo_recibir_evento(${lit({ radicado: rad, canal: "telegram", tipo: "sin_agua", lat, lon })})`));
+const repCampo = (lat, lon) => { const id = sqlq(`insert into campo.reportes (id, tipo_id, lat, lon, origen, autor) select gen_random_uuid(), t.id, ${lat}, ${lon}, 'campo', '${EMAILS.campo}' from campo.tipos_reporte t where t.codigo = 'sin_agua' returning id`).split("\n")[0];
+  return sqlq(`select 'REP-' || lpad(seq::text, 6, '0') from campo.reportes where id = '${id}'`); };
+const eventoBase = (cod) => JSON.parse(sqlq(`select public.geoportal_redes_evento('${EMAILS.dist}', '${cod}')::jsonb - 'zona_geojson'`));
+async function alGeovisor(p) { await esperarTexto(p, /Geovisor técnico/); await clicTexto(p, "button.tec-tarjeta-modo", "Geovisor técnico"); await esperarTexto(p, /Geovisor técnico[\s\S]*Capas/);
+  await p.waitForFunction(() => !!document.querySelector(".geo-mapa")?.__mapa, { timeout: 30000 }); }
+const geo = (p, f, ...a) => p.evaluate(new Function("...a", `const m = document.querySelector(".geo-mapa").__mapa; return (${f})(m, ...a);`), ...a);
+const visible = (p, capa) => geo(p, "(m, c) => m.getLayer(c) ? (m.getLayoutProperty(c, 'visibility') ?? 'visible') : 'no existe'", capa);
+const modoGeo = async (p, n) => { await clicTexto(p, ".geo-seg button", n); await p.waitForFunction((n) => [...document.querySelectorAll(".geo-seg button")].find((b) => b.textContent.trim() === n)?.getAttribute("aria-pressed") === "true", {}, n); };
+const tarjetaGeo = (p) => p.evaluate(() => { const t = document.querySelector(".geo-tarjeta"); return t ? { capa: t.dataset.capa, txt: t.innerText, botones: [...t.querySelectorAll("button")].map((b) => b.textContent.trim()), dentro: t.getBoundingClientRect().right <= document.documentElement.clientWidth + 1 } : null; });
+const detalle = (p) => p.evaluate(() => { const d = document.querySelector("[data-testid=evs-detalle]"); if (!d) return null; return { estado: d.dataset.estado, franja: d.querySelector("[data-testid=evs-franja]").textContent, aviso: d.querySelector("[data-testid=evs-aviso]")?.textContent ?? null,
+  reportes: d.querySelector('[data-dato="reportes"]').textContent, regreso: d.querySelector('[data-dato="regreso"]').textContent, fin: d.querySelector('[data-dato="fin"]')?.textContent ?? null,
+  asociados: [...d.querySelectorAll("[data-asociado]")].map((x) => ({ clave: x.dataset.asociado, txt: x.innerText.replace(/\n/g, " ") })), titulo: d.querySelector("[data-testid=evs-asociados] h2").textContent,
+  acciones: [...(d.querySelector("[data-testid=evs-acciones]")?.querySelectorAll("button") ?? [])].map((b) => b.textContent.trim()), historial: [...d.querySelectorAll("[data-testid=evs-historial] li")].map((x) => x.innerText.replace(/\n/g, " ")), txt: d.innerText }; });
+const esperarDetalle = (p, re, ms = 40000) => p.waitForFunction((s) => new RegExp(s).test(document.querySelector("[data-testid=evs-detalle]")?.innerText ?? ""), { timeout: ms }, re.source).then(() => true).catch(() => false);
 const errorVisto = (p) => p.evaluate(() => [...document.querySelectorAll("[data-testid=eventos] .tec-aviso-error")].map((x) => x.innerText).join(" · "));
 const altoMin = (p, sel) => p.evaluate((s) => Math.min(...[...document.querySelectorAll(s)].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect().height)), sel);
 
@@ -291,6 +306,103 @@ for (const ancho of ANCHOS) {
   r = JSON.parse(sqlq(`select public.geoportal_redes_evento('${EMAILS.dist}', '${EV1}')::jsonb - 'zona_geojson'`));
   ok(A("A11 «Declarar evento» lo crea (EVS-…): por sectores, con la causa, el regreso estimado y el daño que ya estaba en la zona asociado"), /^EVS-\d{6}$/.test(EV1) && r.estado === "abierto" && r.alcance === "sectores" && r.sectores.join() === SUB && r.causa === "ZT daño en la tubería principal"
      && !!r.regreso_estimado && r.reportes.danos === 1 && r.asociados.some((a) => a.ref === DAN && a.modo === "al_declarar"), JSON.stringify(r).slice(0, 500));
+  await p.waitForSelector("[data-testid=evs-detalle]", { timeout: 30000 }); await esperarDetalle(p, /Historial/);
+  let d = await detalle(p);
+  ok(A("A12 tras declarar abre el detalle con el aviso «Evento EVS-… declarado. 1 reporte que ya estaba en la zona quedó asociado.»"), new RegExp(`^Evento ${EV1} declarado\\. 1 reporte que ya estaba en la zona quedó asociado\\.`).test(d.aviso ?? "") && d.estado === "abierto", JSON.stringify(d).slice(0, 400));
+  await p.close();
+
+  // ===== B. Geovisor, modo «Afectaciones»: la franja y la zona del evento =====
+  sqlq(`select public.geoportal_redes_personal_fijar('${EMAILS.dist}', '${EMAILS.op}', 'geovisor', 'si', 'Necesita ver la red en la calle')`);
+  r = eventoBase(EV1);
+  p = await abrir(ancho, "op"); await alGeovisor(p); await p.waitForSelector("[data-testid=franja-eventos]", { timeout: 30000 });
+  t = await p.evaluate(() => document.querySelector("[data-testid=franja-eventos]").innerText);
+  ok(A("B1 el operador ve la franja del evento con el texto del servidor: «Sin agua en Subsector 1.1 desde … por … Regreso estimado: …»"), t.includes(r.franja) && /^Sin agua en Subsector 1\.1 desde .+ por ZT daño en la tubería principal\. Regreso estimado: .+/.test(r.franja), t + " · " + r.franja);
+  ok(A("B2 … con «Ver la zona», y SIN el botón «Eventos de suspensión» (es de supervisores)"), /Ver la zona/.test(t) && !(await p.$("[data-testid=franja-eventos-ir]")));
+  ok(A("B3 fuera de «Afectaciones» la zona no se pinta"), (await visible(p, "x-evento-a")) === "none" && (await visible(p, "x-evento-l")) === "none");
+  await clicTexto(p, "[data-testid=franja-eventos] button", "Ver la zona"); await p.waitForSelector('.geo-tarjeta[data-capa="evento"]', { timeout: 30000 });
+  ok(A("B4 «Ver la zona» pasa a «Afectaciones», encuadra y pinta la zona: borde continuo #c25e00 de 2 px y relleno al 12 %, debajo de las tuberías del 9b"), (await p.evaluate(() => document.querySelector('.geo-seg button[data-colores="afectaciones"]').getAttribute("aria-pressed"))) === "true"
+     && (await visible(p, "x-evento-a")) === "visible" && (await geo(p, "(m) => [m.getPaintProperty('x-evento-l','line-color'), m.getPaintProperty('x-evento-l','line-width'), m.getPaintProperty('x-evento-a','fill-opacity'), m.getPaintProperty('x-evento-l','line-dasharray') ?? '', m.getSource('x-eventos').serialize().data.features.length].join('|')")) === "#c25e00|2|0.12||1"
+     && (await geo(p, "(m) => { const ids = m.getStyle().layers.map((l) => l.id); return ids.indexOf('x-evento-l') < ids.indexOf('x-corte-afectado'); }")) === true);
+  let tj = await tarjetaGeo(p);
+  ok(A("B5 la tarjeta de la zona: «Sin agua en Subsector 1.1», el evento, la causa, el regreso, los contratos y «1 reporte asociado (1 daño)»; al operador no le sale «Ver el evento»"), !!tj && /Sin agua en Subsector 1\.1/.test(tj.txt) && tj.txt.includes(EV1)
+     && /ZT daño en la tubería principal/.test(tj.txt) && /Contratos en la zona\s*1\.322/.test(tj.txt) && /1 reporte asociado \(1 daño\)/.test(tj.txt) && !tj.botones.includes("Ver el evento") && tj.dentro && !/@/.test(tj.txt), tj?.txt);
+  t = await p.evaluate(() => document.querySelector("[data-testid=leyenda-cortes]").innerText);
+  ok(A("B6 la leyenda gana «Zona sin agua (evento de suspensión)» y «1 evento de suspensión abierto»"), /Zona sin agua \(evento de suspensión\)/.test(t) && /1 evento de suspensión abierto/.test(t) && !(await p.$("[data-testid=leyenda-eventos-ir]")), t);
+  await pausa(1500); await p.screenshot({ path: join(CAP, `despues_geovisor_evento_${ancho}.png`) });
+  // la alternativa de color, solo para la captura de comparación (no queda en el código): borde azul oscuro #0a2540 y relleno al 8 %
+  await geo(p, "(m) => { m.setPaintProperty('x-evento-l','line-color','#0a2540'); m.setPaintProperty('x-evento-a','fill-color','#0a2540'); m.setPaintProperty('x-evento-a','fill-opacity',0.08); }");
+  await pausa(700); await p.screenshot({ path: join(CAP, `comparacion_geovisor_evento_azul_${ancho}.png`) });
+  await geo(p, "(m) => { m.setPaintProperty('x-evento-l','line-color','#c25e00'); m.setPaintProperty('x-evento-a','fill-color','#c25e00'); m.setPaintProperty('x-evento-a','fill-opacity',0.12); }");
+  await p.evaluate(() => document.querySelector(".geo-tarjeta .geo-cerrar").click());
+  await modoGeo(p, "Tipo");
+  ok(A("B7 al volver a «Tipo» la zona desaparece y la tarjeta se cierra"), (await visible(p, "x-evento-a")) === "none" && !(await p.$('.geo-tarjeta[data-capa="evento"]')));
+  await p.close();
+  // dos reportes del bot y uno del formato de campo DENTRO de la zona: se asocian solos
+  const b1 = bot(`ZT15-${ancho}-1`, TLAT, TLON), b2 = bot(`ZT15-${ancho}-2`, TLAT + 0.0002, TLON);
+  const REP = repCampo(TLAT + 0.0001, TLON);
+  ok(A("B8 (base) al bot le responde «Ya sabemos del corte en tu sector. Regreso estimado: …» con el código del evento"), b1.evento === EV1 && /^Ya sabemos del corte en tu sector\. Regreso estimado: /.test(b1.mensaje) && b2.evento === EV1, JSON.stringify(b1));
+  p = await abrir(ancho, "dist"); await alGeovisor(p); await p.waitForSelector("[data-testid=franja-eventos-ir]", { timeout: 30000 });
+  await clic(p, "[data-testid=franja-eventos-ir]"); await p.waitForSelector(`[data-testid=geo-eventos] [data-evento="${EV1}"]`, { timeout: 30000 });
+  t = await p.evaluate((c) => document.querySelector(`[data-testid=geo-eventos] [data-evento="${c}"]`).innerText, EV1);
+  ok(A("B9 el supervisor abre «Eventos de suspensión» desde la franja del geovisor: la lista con «4 reportes asociados (2 del bot · 1 daño · 1 de campo)»"), /4 reportes asociados \(2 del bot · 1 daño · 1 de campo\)/.test(t) && /Abierto/i.test(t), t);
+  await captura(p, `despues_eventos_lista_${ancho}.png`);
+  await clic(p, "[data-testid=geo-eventos] .tec-volver"); await p.waitForFunction(() => !document.querySelector("[data-testid=geo-eventos]"));
+  ok(A("B10 «Volver al mapa» cierra la pantalla y el geovisor sigue ahí"), !!(await p.$(".geo-mapa")));
+  await p.close();
+
+  // ===== C. Detalle: reportes asociados, desasociar, asociar a mano, regreso estimado y cierre en bloque =====
+  p = await abrir(ancho, "dist"); await aSuspensiones(p); await p.waitForSelector(`[data-evento="${EV1}"]`);
+  await clicTexto(p, `[data-evento="${EV1}"] button`, "Ver el evento"); await p.waitForSelector("[data-testid=evs-detalle]"); await esperarDetalle(p, /Historial/);
+  d = await detalle(p);
+  ok(A("C1 el detalle: la franja, los conteos y «4 reportes asociados» con cada uno (rótulo, origen y cómo se asoció); sin correos de ciudadanos ni contratos"), d.franja === r.franja && /^4 \(2 del bot · 1 daño · 1 de campo\)$/.test(d.reportes) && d.titulo === "4 reportes asociados" && d.asociados.length === 4
+     && d.asociados.some((a) => a.clave === `dano:${DAN}` && /ya estaba en la zona al declarar/.test(a.txt)) && d.asociados.some((a) => a.clave === `campo:${REP}` && /Formato de campo/.test(a.txt) && /se asoció solo al llegar/.test(a.txt))
+     && d.asociados.filter((a) => a.clave.startsWith("bot:")).length === 2, JSON.stringify(d.asociados));
+  ok(A("C2 con el evento abierto, el supervisor de distribución tiene «Cerrar el evento (volvió el agua)», «Ajustar el regreso estimado» y «Anular el evento»"), d.acciones.join("|") === "Cerrar el evento (volvió el agua)|Ajustar el regreso estimado|Anular el evento");
+  await mapaListo(p);
+  ok(A("C3 el minimapa del detalle pinta la zona; la pantalla no desborda y los botones miden 44 px o más"), (await zonaEnMapa(p)) === "MultiPolygon" && (await sinDesborde(p)) && (await altoMin(p, "[data-testid=evs-detalle] button.tec-boton, [data-testid=evs-detalle] button.tec-boton-sec")) >= 44);
+  await captura(p, `despues_evento_detalle_${ancho}.png`);
+  // desasociar un reporte del bot
+  const claveBot = d.asociados.find((a) => a.clave.startsWith("bot:")).clave;
+  await clicTexto(p, `[data-asociado="${claveBot}"] button`, "Desasociar"); await p.waitForSelector("#evs-m-quitar");
+  ok(A("C4 «Desasociar» pide el motivo y no deja confirmar con menos de 10 caracteres"), await p.evaluate(() => document.querySelector("[data-testid=evs-quitar-confirmar]").disabled));
+  await poner(p, "#evs-m-quitar", "ZT es una fuga interna del predio"); await clic(p, "[data-testid=evs-quitar-confirmar]"); await esperarDetalle(p, /3 reportes asociados/);
+  d = await detalle(p);
+  ok(A("C5 el reporte desasociado sale del evento (3) y queda en el historial con su motivo; en la base vuelve a «Recibido»"), d.asociados.length === 3 && !d.asociados.some((a) => a.clave === claveBot) && d.historial.some((h) => /Se desasoció un reporte: «ZT es una fuga interna del predio»/.test(h))
+     && /desasociado: vuelve a su flujo/.test(d.aviso ?? ""), JSON.stringify(d.historial));
+  // asociarlo a mano otra vez
+  await clic(p, "[data-testid=evs-asociar]"); await p.waitForSelector("[data-testid=evs-f-asociar]");
+  await clic(p, '[data-testid=evs-f-asociar] [data-origen="bot"]'); await poner(p, "#evs-ref", "no-existe-zt"); await poner(p, "#evs-m-asociar", "ZT sí es del mismo corte");
+  await clic(p, "[data-testid=evs-asociar-confirmar]"); await p.waitForSelector("[data-testid=evs-error-asociar]", { timeout: 30000 });
+  ok(A("C6 asociar a mano un reporte que no existe: el error del servidor se muestra y no cambia nada"), (await p.$eval("[data-testid=evs-error-asociar]", (e) => e.textContent.length)) > 5 && (await detalle(p)).asociados.length === 3, await p.$eval("[data-testid=evs-error-asociar]", (e) => e.textContent));
+  await poner(p, "#evs-ref", claveBot.slice(4)); await clic(p, "[data-testid=evs-asociar-confirmar]"); await esperarDetalle(p, /4 reportes asociados/);
+  d = await detalle(p);
+  ok(A("C7 «Asociar un reporte a mano» lo devuelve al evento («asociado a mano»), con su motivo en el historial"), d.asociados.length === 4 && d.asociados.some((a) => a.clave === claveBot && /asociado a mano/.test(a.txt)) && d.historial.some((h) => /Se asoció un reporte a mano: «ZT sí es del mismo corte»/.test(h)), JSON.stringify(d.asociados));
+  // regreso estimado
+  await clicTexto(p, "[data-testid=evs-acciones] button", "Ajustar el regreso estimado"); await p.waitForSelector("#evs-n-regreso");
+  const antesReg = d.regreso;
+  await poner(p, "#evs-n-regreso", campoLocal(600)); await poner(p, "#evs-m-regreso", "ZT la reparación tomó más tiempo"); await clicTexto(p, "[data-testid=evs-f-regreso] button", "Guardar la hora"); await esperarDetalle(p, /Regreso estimado ajustado/);
+  await p.waitForFunction((x) => document.querySelector('[data-testid=evs-detalle] [data-dato="regreso"]')?.textContent !== x, { timeout: 30000 }, antesReg).catch(() => {});      // el detalle se vuelve a leer después del aviso
+  d = await detalle(p);
+  ok(A("C8 «Ajustar el regreso estimado» cambia la hora (también en la franja) y queda en el historial"), d.regreso !== antesReg && d.franja !== r.franja && d.historial.some((h) => /Se ajustó el regreso estimado: «ZT la reparación tomó más tiempo»/.test(h))
+     && sqlq(`select count(*) from redes.evento_suspension_eventos x join redes.eventos_suspension e on e.id = x.evento_id where e.codigo = '${EV1}'`) === "1", d.regreso + " · " + antesReg);
+  // cierre en bloque
+  await clicTexto(p, "[data-testid=evs-acciones] button", "Cerrar el evento"); await p.waitForSelector("[data-testid=evs-f-cerrar]");
+  t = await p.$eval("[data-testid=evs-cierre-explica]", (e) => e.textContent);
+  ok(A("C9 «Cerrar el evento» explica: los 3 reportes del bot, la 116 y campo quedan atendidos con el mismo motivo y hora; el daño NO se cierra; nada se borra"), /los 3 reportes del bot, de la línea 116 y de campo quedan atendidos, con este mismo motivo y la misma hora/.test(t) && /El daño asociado NO se cierra: sigue hasta su reparación/.test(t) && /Nada se borra/.test(t)
+     && await p.evaluate(() => document.querySelector("[data-testid=evs-cerrar-confirmar]").disabled), t);
+  await captura(p, `despues_evento_cerrar_${ancho}.png`);
+  await poner(p, "#evs-m-cerrar", "ZT se reparó la tubería y volvió el servicio"); await clic(p, "[data-testid=evs-cerrar-confirmar]"); await esperarDetalle(p, /Evento cerrado\./); await p.waitForSelector('[data-testid=evs-detalle][data-estado="cerrado"]', { timeout: 30000 }).catch(() => {});
+  d = await detalle(p);
+  ok(A("C10 cierre en bloque: «Evento cerrado. 3 reportes quedaron atendidos (2 del bot · 1 de campo). 1 daño sigue abierto hasta su reparación.»; el evento queda «Cerrado», sin acciones"),
+    /^Evento cerrado\. 3 reportes quedaron atendidos \(2 del bot · 1 de campo\)\. 1 daño sigue abierto hasta su reparación\./.test(d.aviso ?? "") && d.estado === "cerrado" && d.acciones.length === 0 && /ZT se reparó la tubería y volvió el servicio/.test(d.fin ?? "")
+     && !(await p.$("[data-testid=evs-asociar]")), d.aviso + " · " + d.fin);
+  ok(A("C11 (base) los 2 reportes del bot y el de campo quedaron «atendido»; el daño sigue abierto"), sqlq(`select count(*) from redes.v_reporte_externo where radicado in ('ZT15-${ancho}-1', 'ZT15-${ancho}-2') and estado_bot = 'atendido'`) === "2"
+     && sqlq(`select estado from campo.v_reportes_estado e join campo.reportes r on r.id = e.id where 'REP-' || lpad(r.seq::text, 6, '0') = '${REP}'`) === "atendido" && sqlq(`select estado from redes.v_dano where codigo = '${DAN}'`) !== "atendido",
+    sqlq(`select string_agg(radicado || ':' || estado_bot, ',') from redes.v_reporte_externo where radicado like 'ZT15-${ancho}-%'`));
+  await captura(p, `despues_evento_cerrado_${ancho}.png`);
+  await clic(p, "[data-testid=eventos] .tec-volver"); await p.waitForSelector("[data-testid=evs-lista]"); await pausa(400);
+  ok(A("C12 de vuelta en la lista: ya no está entre los abiertos; en «Cerrados» aparece con quién y cuándo lo cerró"), /No hay eventos de suspensión abiertos/.test(await texto(p))
+     && await (async () => { await clic(p, '[data-filtro="cerrado"]'); await p.waitForSelector(`[data-evento="${EV1}"][data-estado="cerrado"]`, { timeout: 30000 }).catch(() => {}); return /Cerrado/.test(await p.evaluate((c) => document.querySelector(`[data-evento="${c}"]`)?.innerText ?? "", EV1)); })());
   await p.close();
 }
 ok("Z1 sin errores de JavaScript ni de consola", errores.length === 0, errores.join(" | "));

@@ -38,3 +38,8 @@
 .evs-estado-abierto { background: var(--t-naranja-suave, #fff4e5); color: var(--t-naranja, #c25e00); }
 .evs-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .evs-pagina { background: var(--t-fondo, #f2f5f8); min-height: 100%; }
+.evs-sensibles { margin: 8px 0; }
+.evs-sensibles summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--t-titulo, #0a2540); }
+.evs-sensibles ul { margin: 4px 0; padding-left: 20px; columns: 1; }
+@media (min-width: 700px) { .evs-sensibles ul { columns: 2; } }
+.evs .cie-pedir { margin-top: 12px; }
