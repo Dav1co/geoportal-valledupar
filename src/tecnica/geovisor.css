@@ -146,3 +146,11 @@
 .geo-leyenda-remun li > span:first-child { margin-top: 6px; }
 .geo-leyenda li .geo-remun-proyectado { height: 0; border-top: 2px dashed var(--t-texto-2); border-radius: 0; background: none; }
 .geo-leyenda li .geo-remun-txt { width: auto; height: auto; border-radius: 0; flex: 1 1 auto; font-size: var(--t-txt-chico); line-height: 1.3; }
+
+/* ---------- Corte 15: eventos de suspensión en «Afectaciones» (zona con el naranja de la guía, PROPUESTO: borde continuo de 2 px y relleno al 12 %) ---------- */
+.geo-franja-evento { background: var(--t-naranja-suave, #fff4e5); border-bottom-color: var(--t-naranja, #c25e00); }
+.geo-franja-evento strong { color: var(--t-texto, #22313f); font-weight: 600; }
+.geo-franja-textos { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; min-width: 0; }
+.geo-franja-textos p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.geo-franja-evento .geo-franja-ver { background: var(--t-naranja, #c25e00); }
+.geo-leyenda li .geo-corte-evento { height: 12px; box-sizing: border-box; border: 2px solid var(--t-naranja, #c25e00); background: color-mix(in srgb, var(--t-naranja, #c25e00) 12%, transparent); border-radius: 2px; }
