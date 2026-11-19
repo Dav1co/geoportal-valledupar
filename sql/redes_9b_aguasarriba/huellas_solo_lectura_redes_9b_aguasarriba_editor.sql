@@ -1,6 +1,6 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 9b · «CIERRE POR AGUAS ARRIBA» · 05 — HUELLAS DE SOLO LECTURA (una sola consulta; apta para el editor SQL web). No escribe nada.
--- ANTES: «funciones de redes» dice «CORTE 14 (listo para aguas arriba)» y las 5 nuevas «NO EXISTE».
+-- ANTES: «funciones de redes» dice «CORTE 14 CON ACTA (listo para aguas arriba)» y las 5 nuevas «NO EXISTE».
 -- DESPUÉS: «AGUAS ARRIBA (aplicada)» y 5 «NUEVA». Cualquier «DISTINTA» o «FALTA»: no aplique nada y avise.
 -- =====================================================================
 with nue(firma, nueva) as (values ('redes.f_sim_sentidos(text)', 'fa847b3399901c64fb62485ae45f6e15'), ('redes.f_sim_llenar_sentido()', '122e281e285a6d8cf2d3a74fc0e16854'), ('redes.f_sim_aguas_arriba_criterio(text,bigint,bigint[],bigint[],geometry,integer,boolean)', '192f146cd745139a00c6de125127674a'), ('redes.f_simular_aguas_arriba(bigint)', '39b97a6b73d89eb51fc52c6701a70874'), ('public.geoportal_redes_simulacion_aguas_arriba(text,text,numeric,numeric)', 'b06e57e8b74f1d3412e4c58f65f6d58f')),
@@ -12,7 +12,7 @@ conj as (
   select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) as m from pg_proc p
    where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%'))
 select '0 funciones de redes (conjunto)' as objeto, (select m from conj) as md5,
-       case (select m from conj) when '1a9ef250a74fb01962f463d98834cc4a' then 'CORTE 14 (listo para aguas arriba)' when 'eebd34a64cd0cbc353f80ceef9256494' then 'AGUAS ARRIBA (aplicada)' else 'DISTINTA' end as estado
+       case (select m from conj) when '7c888d4f9ba3835cef951b49ada8ca59' then 'CORTE 14 CON ACTA (listo para aguas arriba)' when 'af34032d8e20434f53744eb642cddac2' then 'AGUAS ARRIBA (aplicada)' else 'DISTINTA' end as estado
 union all select * from rnue
 union all select '2 redes.f_simular_cierre(bigint) (la simulación de siempre: no se toca)', md5(pg_get_functiondef('redes.f_simular_cierre(bigint)'::regprocedure)),
        case md5(pg_get_functiondef('redes.f_simular_cierre(bigint)'::regprocedure)) when '1ea9ec75226bd0592d0f85a9c1513feb' then 'LA PUBLICADA' else 'DISTINTA' end

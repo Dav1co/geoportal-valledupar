@@ -1,6 +1,6 @@
 #!/bin/sh
-# Base local de CODE A para «Cierre por aguas arriba» (localhost:55432, base redes_local): producción con el Corte 14 publicado (huella 1a9ef250…).
-# La plantilla «redes_au_base» = todo el 9b + la carga del flujo + la capa encendida + lo mínimo de «campo» que pide el 14 (su doble) + la migración del 14
+# Base local de CODE A para «Cierre por aguas arriba» (localhost:55432, base redes_local): producción con el Corte 14 y su acta publicados (huella 7c888d4f…).
+# La plantilla «redes_au_base» = todo el 9b + la carga del flujo + la capa encendida + lo mínimo de «campo» que pide el 14 (su doble) + la migración del 14 + la del acta del 14 (redes_corte14_acta)
 #   + las tablas de referencia del Plan Maestro (cotas), si su carga está en paquete_fase1/corte9a/carga_pm.
 #   sh rehacer_base.sh          → redes_local = copia limpia de la plantilla
 #   sh rehacer_base.sh con_au   → además, la migración de este paquete
@@ -14,6 +14,7 @@ if [ "$1" = "plantilla" ] || [ -z "$($PSQL -d postgres -AtXc "select 1 from pg_d
   $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f ../redes_corte9b_f3/encender_flujo_modelo_editor.sql >/dev/null
   $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f ../redes_corte14/pruebas_locales/doble_campo_personal_base_local.sql >/dev/null
   $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f ../redes_corte14/migracion_redes_corte14_editor.sql >/dev/null
+  $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f ../redes_corte14_acta/migracion_redes_corte14_acta_editor.sql >/dev/null
   # el Plan Maestro (cotas de los nodos), como en producción: su carga está fuera del repositorio (paquete_fase1/corte9a/carga_pm); si no está, la base queda sin cotas
   PM="${CARGA_PM:-$HOME/geoportal-consultas/tecnica/paquete_fase1/corte9a/carga_pm}/partes/10_referencia.sql"
   if [ -f "$PM" ]; then
@@ -25,4 +26,4 @@ if [ "$1" = "plantilla" ] || [ -z "$($PSQL -d postgres -AtXc "select 1 from pg_d
 fi
 $PSQL -q -X -d postgres -c "drop database if exists redes_local" -c "create database redes_local template redes_au_base"
 if [ "$1" = "con_au" ]; then $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f migracion_redes_9b_aguasarriba_editor.sql >/dev/null; fi
-echo "redes_local lista (Corte 14 $1)"
+echo "redes_local lista (Corte 14 con acta $1)"
