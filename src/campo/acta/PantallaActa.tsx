@@ -6,7 +6,8 @@ import { useUbicacion } from "../ubicacion";
 import { apiActa } from "./apiActa";
 import { almacenActa, useAlmacenActa } from "./almacenActa";
 import { CamaraActa } from "./CamaraActa";
-import { FormularioActa } from "./FormularioActa";
+import { FormularioActa, sinNombres } from "./FormularioActa";
+import { guardarDatosBorrador } from "../../tecnica/borradorCampo";
 import { IdentificarPredio } from "./IdentificarPredio";
 import { PanelCancelarActa } from "./PanelCancelarActa";
 import type { Destino, MotivoCancelacion } from "../../components/ConfirmarCancelar";
@@ -141,7 +142,11 @@ function Identificar({ cat, correo, contratoInicial = "", onCancelar, onAbierta,
       const a = await apiActa.abrir(fix.lat, fix.lon, Number.isFinite(fix.precision_m) ? Math.round(fix.precision_m * 10) / 10 : null);
       const base = L.borradorVacio(modo);
       const b = modo === "con_contrato" && precarga ? { ...L.conPrecarga(base, precarga), contrato: contrato.trim() } : base;
-      almacenActa.crear(a, { ...b, fechaFisica: L.hoyBogota() }, modo === "con_contrato" ? precarga : null);
+      const inicial = { ...b, fechaFisica: L.hoyBogota() };
+      almacenActa.crear(a, inicial, modo === "con_contrato" ? precarga : null);
+      // El contrato verificado y su precarga quedan en el borrador local apenas se abre el registro (David, 19-nov): si la página se recarga antes de escribir algo,
+      // «Retomar y completar» ofrece ese borrador y no hay que verificar el contrato otra vez. Sin contrato no hay nada que guardar todavía.
+      if (modo === "con_contrato" && precarga) void guardarDatosBorrador(`acta:${a.acta_id}`, correo, { borrador: sinNombres(inicial), precarga });
       onAbierta(a.acta_id);
     } catch (e) {
       setError(e instanceof ErrorCampo ? e : new ErrorCampo("servidor", "No se pudo abrir el registro.", 0));

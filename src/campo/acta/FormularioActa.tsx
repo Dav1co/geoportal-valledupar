@@ -28,7 +28,7 @@ type Fase = "editando" | "confirmando" | "enviando" | "error" | "guardado";
 type DestinoFoto = { tipo: string; papel: boolean } | null;
 /** Lo que va al borrador local: el acta sin los nombres de las personas, y la precarga del catastro (dirección, barrio, estrato y uso del predio). */
 type DatosBorrador = { borrador: Omit<BorradorActa, "atNombre" | "testigo"> | null; precarga: Precarga | null };
-const sinNombres = (b: BorradorActa): Omit<BorradorActa, "atNombre" | "testigo"> => { const { atNombre: _a, testigo: _t, ...resto } = b; void _a; void _t; return resto; };
+export const sinNombres = (b: BorradorActa): Omit<BorradorActa, "atNombre" | "testigo"> => { const { atNombre: _a, testigo: _t, ...resto } = b; void _a; void _t; return resto; };
 
 export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, motivos = null, destinos, onIrA }: {
   cat: Catalogo; actaId: string; correo: string; onVolver: () => void; onRegistrado: (c: ConfirmacionActa) => void;

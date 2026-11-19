@@ -168,7 +168,14 @@ for (const ancho of ANCHOS) {
   // ===== A. Llenar, recargar a la mitad y recuperar =====
   const C1 = await nueva(p); const ID1 = actas.at(-1).acta_id;
   await pausa(800);
-  ok(A("A1 un registro recién abierto y sin tocar no deja borrador"), ((await idb(p)) ?? [null]).length === 0, JSON.stringify(await idb(p)).slice(0, 300));
+  let b0 = await idb(p);
+  ok(A("A1 un registro recién abierto guarda de una vez el contrato verificado y su precarga (sin fotos ni nada más)"), b0?.length === 1 && b0[0].clave.startsWith(`acta:${ID1}:`) && b0[0].datos.borrador.contrato === "12345" && b0[0].datos.precarga?.direccion === "CL 10 12 34" && !/@/.test(JSON.stringify(b0)), JSON.stringify(b0).slice(0, 400));
+  await p.reload(); await p.waitForFunction(() => window.__listo === true); await esperarTexto(p, new RegExp(C1));
+  await clicTexto(p, "button", "Retomar y completar"); await p.waitForSelector("[data-testid=borrador-oferta]");
+  ok(A("A1b si se recarga antes de escribir nada, al retomar pregunta (sin mencionar fotos)"), /Tiene un borrador del [^()]+\. ¿Continuar o descartar\?$/.test((await oferta(p)).txt), (await oferta(p)).txt);
+  await clicTexto(p, "[data-testid=borrador-oferta] button", "Continuar"); await p.waitForSelector(".acta-form");
+  ok(A("A1c … y «Continuar» trae el contrato ya verificado con su dirección y su barrio: no hay que verificarlo otra vez"), (await valor(p, "#acta-contrato")) === "12345" && (await valor(p, slug("Dirección"))) === "CL 10 12 34" && (await valor(p, slug("Barrio"))) === "ZT BARRIO"
+     && /CL 10 12 34/.test(await p.evaluate(() => document.querySelector(".campo-auto")?.innerText ?? "")));
   await llenar(p); await poner(p, slug("Nombre de quien atendió"), NOMBRE);
   await foto(p, "+ Fachada"); await foto(p, "+ Hallazgo"); await foto(p, "Fotografiar el acta física firmada");
   await pausa(900);
