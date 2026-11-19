@@ -1,4 +1,5 @@
 import { pedir } from "./apiTecnica";
+import { comprimirArchivo } from "../lib/comprimirFoto";
 
 // Cliente de químicos de planta (Técnica fase 1, Corte 7a; §29) en la Edge geoportal-tecnica. Todo en kg; una sola bodega. Quién puede qué lo decide el SERVIDOR
 // (catálogo, saldo, inventario, ajuste y comparación: supervisor de planta y administrador). La ficha técnica en PDF llega como URL firmada de 60 s.
@@ -63,19 +64,9 @@ export async function subirFicha(archivo: File): Promise<string> {
 }
 
 /** Corte 7c: achica la foto del celular (lado mayor de 1.600 px, JPEG) para que pese poco y suba con mala señal. Devuelve un JPEG. */
-export async function reducirFoto(archivo: Blob, ladoMax = 1600, calidad = 0.82): Promise<Blob> {
-  let img: ImageBitmap;
-  try { img = await createImageBitmap(archivo); } catch { throw new Error("Ese archivo no es una foto que se pueda leer. Tome la foto de nuevo."); }
-  const escala = Math.min(1, ladoMax / Math.max(img.width, img.height));
-  const lienzo = document.createElement("canvas");
-  lienzo.width = Math.max(1, Math.round(img.width * escala)); lienzo.height = Math.max(1, Math.round(img.height * escala));
-  const ctx = lienzo.getContext("2d");
-  if (!ctx) throw new Error("No se pudo preparar la foto.");
-  ctx.drawImage(img, 0, 0, lienzo.width, lienzo.height);
-  img.close?.();
-  const blob = await new Promise<Blob | null>((ok) => lienzo.toBlob(ok, "image/jpeg", calidad));
-  if (!blob) throw new Error("No se pudo preparar la foto.");
-  return blob;
+export async function reducirFoto(archivo: Blob): Promise<Blob> {
+  // compresión común (src/lib/comprimirFoto.ts): 1.600 px, JPEG 0,8, meta 250–500 KB; respeta el giro del celular (EXIF). El tope real lo vuelve a mirar subirRemision.
+  return (await comprimirArchivo(archivo, 5 * 1048576)).blob;
 }
 
 /** Corte 7c: reserva la ruta de la foto de la remisión y la sube a su URL firmada (PUT directo a Storage). Devuelve la ruta para la entrada. */

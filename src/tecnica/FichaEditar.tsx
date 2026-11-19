@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { comprimirArchivo } from "../lib/comprimirFoto";
 import "./dano.css";
 import { IconoCamara } from "./IconoCamara";
 import { apiPerfil, subirArchivo, type CambiosFicha, type EdicionFicha, type Opcion } from "./apiRedes";
@@ -132,19 +133,8 @@ export function FichaEditar({ codigo, edicion, onCancelar, onGuardado }: { codig
 }
 
 /** Reduce una imagen a JPEG (lado mayor 1600 px) hasta que quepa en el tope. */
-async function aJpeg(archivo: File, maxBytes: number): Promise<Blob> {
-  const img = await createImageBitmap(archivo);
-  let lado = 1600, calidad = 0.85;
-  for (let i = 0; i < 6; i++) {
-    const k = Math.min(1, lado / Math.max(img.width, img.height));
-    const lienzo = document.createElement("canvas"); lienzo.width = Math.round(img.width * k); lienzo.height = Math.round(img.height * k);
-    lienzo.getContext("2d")!.drawImage(img, 0, 0, lienzo.width, lienzo.height);
-    const blob = await new Promise<Blob>((ok, mal) => lienzo.toBlob((b) => (b ? ok(b) : mal(new Error("No se pudo preparar la foto."))), "image/jpeg", calidad));
-    if (blob.size <= maxBytes) return blob;
-    lado = Math.round(lado * 0.8); calidad = Math.max(0.6, calidad - 0.05);
-  }
-  throw new Error("La foto es demasiado pesada.");
-}
+// compresión común (src/lib/comprimirFoto.ts): 1.600 px, JPEG 0,8, meta 250–500 KB; respeta el giro del celular (EXIF); un JPEG que ya cabe se sube tal cual
+const aJpeg = async (archivo: File, maxBytes: number): Promise<Blob> => (await comprimirArchivo(archivo, maxBytes)).blob;
 
 export function FotoPerfilCambiar({ codigo, maxBytes, onCancelar, onGuardado }: { codigo: string; maxBytes: number; onCancelar: () => void; onGuardado: (msg: string) => void }) {
   const [blob, setBlob] = useState<Blob | null>(null);

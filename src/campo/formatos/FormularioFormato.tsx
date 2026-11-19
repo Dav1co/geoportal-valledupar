@@ -3,7 +3,7 @@ import "./formatos.css";
 import { ConfirmarCancelar, type Destino as DestinoCancelar } from "../../components/ConfirmarCancelar";
 import { avisoDeError, apiCampo, ErrorCampo, type FormularioCampo, type Preparacion } from "../apiCampo";
 import { maxDescripcion } from "../limites";
-import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara } from "../camara";
+import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara, esFotoDeDetalle, LADO_FOTO_DETALLE_PX, LADO_MAYOR_PX } from "../camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "../ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
 import { apiFormatos } from "./apiFormatos";
@@ -380,6 +380,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
 
       {camaraEn !== null && (
         <PanelCamara rotulo={camaraEn.nombre} maxBytes={def.limites.max_bytes_foto} sello={lineasSello}
+          // las fotos del medidor (y de su lectura, serial o sellos) van a 2.048 px para que se lean; las demás, a 1.600
+          ladoMayor={camaraEn.tipo === "etiqueta" && esFotoDeDetalle(camaraEn.codigo, camaraEn.nombre) ? LADO_FOTO_DETALLE_PX : LADO_MAYOR_PX}
           onFoto={(f) => { guardarFoto(camaraEn, f.blob); setCamaraEn(null); }} onCerrar={() => setCamaraEn(null)} />
       )}
     </div>
@@ -451,8 +453,8 @@ function CampoPropio({ c, valor, error, obligatorio, deshabilitado, onCambio }: 
 }
 
 // ============ Cámara dentro del formulario (misma de ReporteGeneral; allí no se exporta y ese archivo no se toca) ============
-function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar }: {
-  rotulo: string; maxBytes: number; sello: () => string[]; onFoto: (f: { blob: Blob }) => void; onCerrar: () => void;
+function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar, ladoMayor }: {
+  rotulo: string; maxBytes: number; sello: () => string[]; onFoto: (f: { blob: Blob }) => void; onCerrar: () => void; ladoMayor: number;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const flujo = useRef<MediaStream | null>(null);
@@ -462,7 +464,7 @@ function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar }: {
 
   useEffect(() => {
     let vivo = true;
-    abrirCamara()
+    abrirCamara(ladoMayor)
       .then((f) => {
         if (!vivo) { cerrarCamara(f); return; }
         flujo.current = f;
@@ -478,7 +480,7 @@ function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar }: {
     if (!v || procesando) return;
     setProcesando(true);
     try {
-      const f = await capturarFoto(v, sello(), maxBytes);
+      const f = await capturarFoto(v, sello(), maxBytes, ladoMayor);
       if (!f) { setError(`La foto pesa más de ${megas(maxBytes)} aun reducida. Acérquese al objeto o mejore la luz e intente de nuevo.`); return; }
       onFoto(f);
     } catch (e) {

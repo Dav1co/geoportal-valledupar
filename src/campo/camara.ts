@@ -1,6 +1,9 @@
 // Cámara del formulario (getUserMedia) y procesamiento de la foto. REGLAS: nada de selector de archivos ni de galería; la foto vive SOLO en memoria (Blob): no se guarda en el
 // dispositivo, ni en localStorage/IndexedDB, ni en la galería. Al re-codificar con canvas se pierden los datos EXIF (deseable). El sello lo genera el celular y es falsificable:
 // no es prueba; la hora oficial es la del servidor.
+// COMPRESIÓN (19-nov-2026): el fotograma se dibuja con su sello y después se comprime con la regla común de src/lib/comprimirFoto.ts (1.600 px, o 2.048 px en el
+// acta de Comercial y en las fotos del medidor; JPEG 0,8; meta 250–500 KB). El sello va ANTES de comprimir: queda dentro de la foto que se guarda.
+import { codificar, LADO_FOTO_PX } from "../lib/comprimirFoto";
 
 export type TipoErrorCamara = "no_soportada" | "permiso" | "sin_camara" | "ocupada" | "otro";
 export class ErrorCamara extends Error {
@@ -12,14 +15,12 @@ export class ErrorCamara extends Error {
   }
 }
 
-// PROPUESTAS (parametrizables aquí): lado mayor, calidades de JPEG, en orden de intento, y un último intento a 1280 px.
-export const LADO_MAYOR_PX = 1600;
-export const CALIDADES = [0.72, 0.6, 0.5];
-export const LADO_MAYOR_ULTIMO_INTENTO_PX = 1280;
+export { LADO_FOTO_PX as LADO_MAYOR_PX, LADO_FOTO_DETALLE_PX, esFotoDeDetalle } from "../lib/comprimirFoto";
 
 export const camaraDisponible = () => typeof navigator !== "undefined" && !!navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function";
 
-export async function abrirCamara(): Promise<MediaStream> {
+/** `ladoMayor`: el lado largo con que se va a guardar la foto. Para 2.048 px se le pide a la cámara un video más grande (2.560 × 1.440), si lo tiene. */
+export async function abrirCamara(ladoMayor: number = LADO_FOTO_PX): Promise<MediaStream> {
   if (!camaraDisponible()) {
     throw new ErrorCamara("no_soportada", window.isSecureContext === false
       ? "Este navegador solo permite la cámara en páginas seguras (https). Abra el geoportal desde su dirección oficial."
@@ -27,7 +28,8 @@ export async function abrirCamara(): Promise<MediaStream> {
   }
   try {
     // Cámara trasera; el navegador usa la que haya si no existe. Sin audio.
-    return await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    const grande = ladoMayor > 1920;
+    return await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: grande ? 2560 : 1920 }, height: { ideal: grande ? 1440 : 1080 } }, audio: false });
   } catch (e) {
     const nombre = e instanceof DOMException ? e.name : "";
     if (nombre === "NotAllowedError" || nombre === "SecurityError" || nombre === "PermissionDeniedError") {
@@ -43,11 +45,7 @@ export function cerrarCamara(flujo: MediaStream | null) {
   flujo?.getTracks().forEach((t) => t.stop());
 }
 
-export type FotoProcesada = { blob: Blob; ancho: number; alto: number; calidad: number };
-
-function aBlob(canvas: HTMLCanvasElement, calidad: number): Promise<Blob | null> {
-  return new Promise((resolver) => canvas.toBlob((b) => resolver(b), "image/jpeg", calidad));
-}
+export type FotoProcesada = { blob: Blob; ancho: number; alto: number; calidad: number; lado: number };
 
 function dibujar(video: HTMLVideoElement, ladoMayor: number, lineasSello: string[]): HTMLCanvasElement {
   const w = video.videoWidth, h = video.videoHeight;
@@ -71,15 +69,10 @@ function dibujar(video: HTMLVideoElement, ladoMayor: number, lineasSello: string
   return canvas;
 }
 
-/** Captura el fotograma actual del video: lado mayor de 1600 px, JPEG a 0,72; si pesa más de `maxBytes`, 0,6 y 0,5; y como último intento 1280 px a 0,5. Devuelve null si nada cabe. */
-export async function capturarFoto(video: HTMLVideoElement, lineasSello: string[], maxBytes: number): Promise<FotoProcesada | null> {
+/** Captura el fotograma actual del video con su sello y lo comprime (src/lib/comprimirFoto.ts): lado largo `ladoMayor` (1.600 px por omisión; nunca se agranda),
+ *  JPEG 0,8 y, si pasa de 500 KB, 0,72 y 0,65. Devuelve null si ni reduciendo cabe en `maxBytes` (el tope del servidor). */
+export async function capturarFoto(video: HTMLVideoElement, lineasSello: string[], maxBytes: number, ladoMayor: number = LADO_FOTO_PX): Promise<FotoProcesada | null> {
   if (!video.videoWidth || !video.videoHeight) throw new ErrorCamara("otro", "La cámara todavía no está lista. Espere un segundo y vuelva a intentarlo.");
-  for (const lado of [LADO_MAYOR_PX, LADO_MAYOR_ULTIMO_INTENTO_PX]) {
-    const canvas = dibujar(video, lado, lineasSello);
-    for (const calidad of lado === LADO_MAYOR_PX ? CALIDADES : [CALIDADES[CALIDADES.length - 1]]) {
-      const blob = await aBlob(canvas, calidad);
-      if (blob && blob.size > 0 && blob.size <= maxBytes) return { blob, ancho: canvas.width, alto: canvas.height, calidad };
-    }
-  }
-  return null;
+  const canvas = dibujar(video, ladoMayor, lineasSello);      // el sello se dibuja AQUÍ, antes de comprimir
+  return codificar(canvas, maxBytes, (lado) => dibujar(video, lado, lineasSello));
 }

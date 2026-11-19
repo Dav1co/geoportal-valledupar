@@ -6,6 +6,7 @@ import { useUbicacion } from "../ubicacion";
 import { apiActa } from "./apiActa";
 import { almacenActa, useAlmacenActa, type Entrada, type FotoLocal } from "./almacenActa";
 import { CamaraActa } from "./CamaraActa";
+import { LADO_FOTO_DETALLE_PX } from "../../lib/comprimirFoto";
 import { IdentificarPredio } from "./IdentificarPredio";
 import { PanelCancelarActa } from "./PanelCancelarActa";
 import type { Destino, MotivoCancelacion } from "../../components/ConfirmarCancelar";
@@ -371,6 +372,7 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
         <CamaraActa
           rotulo={camaraEn.papel ? "Acta física firmada" : cat.tipos_foto.find((t) => t.codigo === camaraEn.tipo)?.nombre ?? "Foto"}
           maxBytes={camaraEn.papel ? cat.limites.max_bytes_foto_acta_fisica : cat.limites.max_bytes_foto}
+          ladoMayor={LADO_FOTO_DETALLE_PX}      // acta de Comercial: 2.048 px, para que se lean números y sellos
           sello={lineasSello}
           onFoto={(f) => { guardarFoto(camaraEn, f.blob); setCamaraEn(null); }}
           onCerrar={() => setCamaraEn(null)}

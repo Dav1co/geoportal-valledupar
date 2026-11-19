@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { abrirCamara, capturarFoto, cerrarCamara, ErrorCamara } from "../camara";
 import { megas } from "../formato";
 
-// Cámara del formulario del acta: SOLO cámara (sin galería), en memoria. Misma que la del Paso D (allí no se exporta y esa carpeta no se toca): 1600 px, JPEG 0,72, sello de hora y coordenada
-// estampado en la imagen (apoyo, no prueba: el servidor fija su propia hora y la coordenada de la apertura). El tope de peso lo manda el servidor (1,5 MB hallazgo, 2,5 MB papel).
-export function CamaraActa({ rotulo, maxBytes, sello, onFoto, onCerrar }: {
-  rotulo: string; maxBytes: number; sello: () => string[]; onFoto: (f: { blob: Blob }) => void; onCerrar: () => void;
+// Cámara de campo: SOLO cámara (sin galería), en memoria. La usan el acta de Comercial y, en Técnica, daño, intervención y Encontrar. Sello de hora y coordenada
+// estampado en la imagen ANTES de comprimir (apoyo, no prueba: el servidor fija su propia hora). Compresión común (src/lib/comprimirFoto.ts): 1.600 px, o los
+// `ladoMayor` que pida quien la abre (2.048 px en el acta de Comercial); JPEG 0,8; meta 250–500 KB. El tope de peso lo manda el servidor.
+export function CamaraActa({ rotulo, maxBytes, sello, onFoto, onCerrar, ladoMayor }: {
+  rotulo: string; maxBytes: number; sello: () => string[]; onFoto: (f: { blob: Blob }) => void; onCerrar: () => void; ladoMayor?: number;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const flujo = useRef<MediaStream | null>(null);
@@ -15,7 +16,7 @@ export function CamaraActa({ rotulo, maxBytes, sello, onFoto, onCerrar }: {
 
   useEffect(() => {
     let vivo = true;
-    abrirCamara()
+    abrirCamara(ladoMayor)
       .then((f) => {
         if (!vivo) { cerrarCamara(f); return; }
         flujo.current = f;
@@ -31,7 +32,7 @@ export function CamaraActa({ rotulo, maxBytes, sello, onFoto, onCerrar }: {
     if (!v || procesando) return;
     setProcesando(true);
     try {
-      const f = await capturarFoto(v, sello(), maxBytes);
+      const f = await capturarFoto(v, sello(), maxBytes, ladoMayor);
       if (!f) { setError(`La foto pesa más de ${megas(maxBytes)} aun reducida. Acérquese o mejore la luz e intente de nuevo.`); return; }
       onFoto(f);
     } catch (e) {

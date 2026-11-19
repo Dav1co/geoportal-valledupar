@@ -6,6 +6,7 @@ import { useUbicacion } from "../ubicacion";
 import { apiActa } from "./apiActa";
 import { almacenActa, useAlmacenActa } from "./almacenActa";
 import { CamaraActa } from "./CamaraActa";
+import { LADO_FOTO_DETALLE_PX } from "../../lib/comprimirFoto";
 import { FormularioActa, sinNombres } from "./FormularioActa";
 import { guardarDatosBorrador } from "../../tecnica/borradorCampo";
 import { IdentificarPredio } from "./IdentificarPredio";
@@ -261,7 +262,7 @@ function AdjuntarPapel({ cat, fila, onListo, onVolver }: { cat: Catalogo; fila: 
         <button type="button" className="tec-boton campo-enviar" onClick={() => void subir()} disabled={!foto || fase === "enviando"}>{fase === "enviando" ? "Subiendo…" : fase === "error" ? "Reintentar" : "Adjuntar al registro"}</button>
       </section>
       {camara && (
-        <CamaraActa rotulo="Acta física firmada" maxBytes={cat.limites.max_bytes_foto_acta_fisica}
+        <CamaraActa rotulo="Acta física firmada" maxBytes={cat.limites.max_bytes_foto_acta_fisica} ladoMayor={LADO_FOTO_DETALLE_PX}
           sello={() => [`${fechaHoraSello(new Date())} · hora del celular`, fix ? `${fix.lat.toFixed(5)}, ${fix.lon.toFixed(5)} · ${metros(fix.precision_m)}` : "ubicación no disponible"]}
           onFoto={(f) => { setFoto((p) => { if (p) URL.revokeObjectURL(p.url); return { blob: f.blob, url: URL.createObjectURL(f.blob) }; }); prep.current = null; setCamara(false); }}
           onCerrar={() => setCamara(false)} />
