@@ -68,6 +68,34 @@ export function PorLevantarLista({ onFicha, onConteo }: { onFicha: (c: string) =
   }, [filtro, vez]); // eslint-disable-line react-hooks/exhaustive-deps
   const repetidos = useMemo(() => posiblesRepetidos(items, umbral), [items, umbral]);
   const nRepetidos = useMemo(() => [...repetidos.values()].filter((x) => x.original).length, [repetidos]);
+  // DESCARTAR VARIOS (David, 19-nov): se marcan varios posibles repetidos, se escribe UN motivo y cada punto queda con su propio evento de descarte (se llama la
+  // ruta de siempre, levantar_evento, una vez por punto: no hace falta una ruta nueva). Solo se pueden marcar los repetidos, nunca un original.
+  const [varios, setVarios] = useState(false);
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const [motivoVarios, setMotivoVarios] = useState("Posible repetido: ya hay otro punto reportado en el mismo lugar");
+  const [progreso, setProgreso] = useState<string | null>(null);
+  const [errorVarios, setErrorVarios] = useState<string | null>(null);
+  const marcables = useMemo(() => items.filter((p) => repetidos.get(p.codigo)?.original).map((p) => p.codigo), [items, repetidos]);
+  // un punto y su original no se descartan juntos: quedaría sin ninguno de los dos. «Marcar todos» deja fuera los que son repetidos de otro repetido.
+  const seguros = useMemo(() => marcables.filter((c) => !repetidos.get(repetidos.get(c)!.original!.codigo)?.original), [marcables, repetidos]);
+  const choque = [...marcados].find((c) => { const o = repetidos.get(c)?.original?.codigo; return !!o && marcados.has(o); });
+  const salirVarios = () => { setVarios(false); setMarcados(new Set()); setErrorVarios(null); };
+  async function descartarVarios() {
+    const lista = [...marcados].filter((c) => repetidos.get(c)?.original).sort();
+    if (!lista.length || motivoVarios.trim().length < 10 || choque || progreso) return;
+    setErrorVarios(null);
+    const fallas: string[] = []; let hechos = 0;
+    for (let i = 0; i < lista.length; i++) {
+      const c = lista[i], o = repetidos.get(c)!.original!;
+      setProgreso(`Descartando ${i + 1} de ${lista.length}…`);
+      // cada punto con su propio evento: el motivo común y, al final, de cuál es repetido (para que su historial se entienda solo)
+      try { await apiLev.evento(c, "descartado", { motivo: `${motivoVarios.trim()} (posible repetido de ${o.codigo}, a ${metros(o.distancia_m)})`.slice(0, 500) }); hechos++; }
+      catch (e) { fallas.push(`${c}: ${err(e)}`); }
+    }
+    setProgreso(null);
+    setAviso(`${hechos === 1 ? "1 punto quedó «descartado»" : `${hechos} puntos quedaron «descartados»`}, cada uno con su evento en el historial.${fallas.length ? ` ${fallas.length === 1 ? "1 no se pudo" : `${fallas.length} no se pudieron`}: ${fallas.join("; ")}` : ""}`);
+    salirVarios(); setVez((v) => v + 1);
+  }
   if (error) return <section className="tec-tarjeta" role="alert"><p>{error}</p></section>;
   const n = (c: FiltroLevantar) => !d ? null : c === "abiertos" ? d.abiertos : c === "todos" ? Object.values(d.conteos).reduce((s, x) => s + (x ?? 0), 0) : d.conteos[c] ?? 0;
   return (
@@ -81,13 +109,36 @@ export function PorLevantarLista({ onFicha, onConteo }: { onFicha: (c: string) =
       {filtro === "abiertos" && d && nRepetidos > 0 ? (
         <div className="tec-aviso lev-repetidos dan-pad-x" role="status" data-testid="lev-repetidos">
           <p><strong>{nRepetidos === 1 ? "1 posible repetido" : `${nRepetidos} posibles repetidos`}:</strong> puntos del mismo servicio a menos de {Math.round(umbral)} m de otro que se reportó antes. Mírelos en el mapa y descarte el que sobre, con el motivo.</p>
-          <button type="button" className="tec-boton-sec" aria-pressed={soloRepetidos} data-testid="lev-solo-repetidos" onClick={() => setSoloRepetidos((x) => !x)}>{soloRepetidos ? "Ver todos" : "Ver solo los posibles repetidos y sus originales"}</button>
+          <div className="dash-acciones">
+            <button type="button" className="tec-boton-sec" aria-pressed={soloRepetidos} data-testid="lev-solo-repetidos" onClick={() => setSoloRepetidos((x) => !x)}>{soloRepetidos ? "Ver todos" : "Ver solo los posibles repetidos y sus originales"}</button>
+            {!varios ? <button type="button" className="tec-boton-sec" data-testid="lev-varios" onClick={() => { setVarios(true); setSoloRepetidos(true); setAviso(null); }}>Descartar varios de una vez</button> : null}
+          </div>
+          {varios ? (
+            <div className="lev-form lev-varios" role="group" aria-label="Descartar varios posibles repetidos" data-testid="lev-f-varios">
+              <p>Marque en la lista los repetidos que sobran (los originales no se pueden marcar). Con un solo motivo, cada punto queda «descartado» con su propio evento en el historial. Nada se borra: se pueden reabrir.</p>
+              <div className="dash-acciones">
+                <button type="button" className="tec-boton-sec" disabled={!!progreso} data-testid="lev-marcar-todos" onClick={() => setMarcados(new Set(seguros))}>Marcar todos ({seguros.length})</button>
+                <button type="button" className="tec-boton-sec" disabled={!!progreso || marcados.size === 0} onClick={() => setMarcados(new Set())}>Desmarcar todos</button>
+              </div>
+              {seguros.length < marcables.length ? <p className="tec-ayuda" data-testid="lev-cadena">{marcables.length - seguros.length === 1 ? "1 punto es repetido de otro repetido" : `${marcables.length - seguros.length} puntos son repetidos de otro repetido`}: «Marcar todos» no los incluye; mírelos en el mapa y márquelos a mano si de verdad sobran.</p> : null}
+              <label htmlFor="lev-mot-varios">Motivo para todos (10 caracteres o más)</label>
+              <input id="lev-mot-varios" type="text" maxLength={300} value={motivoVarios} disabled={!!progreso} onChange={(e) => setMotivoVarios(e.target.value)} />
+              <p className="tec-ayuda">A cada uno se le agrega de cuál es repetido y a qué distancia.</p>
+              {choque ? <p className="tec-aviso tec-aviso-error" role="alert" data-testid="lev-choque">{choque} es posible repetido de {repetidos.get(choque)!.original!.codigo}, que también está marcado: desmarque uno de los dos para que el activo no se quede sin reporte.</p> : null}
+              {errorVarios ? <p className="tec-aviso tec-aviso-error" role="alert">{errorVarios}</p> : null}
+              <div className="dash-acciones">
+                <button type="button" className="tec-boton" disabled={!!progreso || marcados.size === 0 || motivoVarios.trim().length < 10 || !!choque} data-testid="lev-varios-confirmar" onClick={() => void descartarVarios()}>{progreso ?? (marcados.size === 1 ? "Descartar el marcado" : `Descartar los ${marcados.size} marcados`)}</button>
+                <button type="button" className="tec-boton-sec" disabled={!!progreso} onClick={salirVarios}>Cancelar</button>
+              </div>
+            </div>) : null}
         </div>) : null}
       {aviso ? <p className="tec-aviso tec-aviso-info dan-pad-x" role="status">{aviso} <button type="button" className="tec-enlace" onClick={() => setAviso(null)}>Cerrar</button></p> : null}
       {!d ? <p className="tec-sub dan-pad" role="status">Cargando…</p>
         : !items.length ? <section className="tec-tarjeta"><p className="red-vacio">No hay activos {filtro === "abiertos" ? "por levantar" : "en ese estado"}.</p></section>
         : <>
-            {items.filter((p) => !soloRepetidos || filtro !== "abiertos" || repetidos.has(p.codigo)).map((p) => <Punto key={p.codigo} p={p} repetido={filtro === "abiertos" ? repetidos.get(p.codigo) : undefined} onFicha={onFicha} onCambio={(t) => { setAviso(t); setVez((v) => v + 1); }} />)}
+            {items.filter((p) => !soloRepetidos || filtro !== "abiertos" || repetidos.has(p.codigo)).map((p) => <Punto key={p.codigo} p={p} repetido={filtro === "abiertos" ? repetidos.get(p.codigo) : undefined}
+              marcar={varios && filtro === "abiertos" && !!repetidos.get(p.codigo)?.original ? { marcado: marcados.has(p.codigo), bloqueado: !!progreso, alCambiar: (si) => setMarcados((m) => { const n = new Set(m); if (si) n.add(p.codigo); else n.delete(p.codigo); return n; }) } : undefined}
+              onFicha={onFicha} onCambio={(t) => { setAviso(t); setVez((v) => v + 1); }} />)}
             {d.siguiente ? <div className="dan-pad-x"><button type="button" className="tec-boton-sec" onClick={() => apiLev.lista(filtro, d.siguiente)
               .then((r) => { setItems([...items, ...r.items]); setD({ ...d, siguiente: r.siguiente }); }).catch(() => {})}>Cargar más</button></div> : null}
           </>}
@@ -95,7 +146,9 @@ export function PorLevantarLista({ onFicha, onConteo }: { onFicha: (c: string) =
   );
 }
 
-function Punto({ p, repetido, onFicha, onCambio }: { p: PuntoLevantar; repetido?: Repetido; onFicha: (c: string) => void; onCambio: (aviso: string) => void }) {
+function Punto({ p, repetido, marcar, onFicha, onCambio }: { p: PuntoLevantar; repetido?: Repetido; onFicha: (c: string) => void; onCambio: (aviso: string) => void;
+  /** «Descartar varios de una vez»: la casilla de este punto (solo los posibles repetidos la traen). */
+  marcar?: { marcado: boolean; bloqueado: boolean; alCambiar: (si: boolean) => void } }) {
   const [verMapa, setVerMapa] = useState(false);      // el punto y sus posibles repetidos, juntos en el minimapa
   const [acta, setActa] = useState(false);      // «Ver acta (PDF)»: el mismo documento que descarga quien reportó
   const [accion, setAccion] = useState<Accion | null>(null);
@@ -118,6 +171,7 @@ function Punto({ p, repetido, onFicha, onCambio }: { p: PuntoLevantar; repetido?
   return (
     <section className="tec-tarjeta itv-bandeja" aria-label={p.codigo} data-levantar={p.codigo} data-estado={p.estado}>
       <h2>{p.codigo} · {p.tipo_nombre} de {p.servicio} <span className={`itv-etiqueta${p.estado === "levantado" ? " lev-etq-ok" : ""}`}>{p.estado_nombre}</span>{p.precision_baja ? <> <span className="itv-etiqueta lev-etq-baja">Precisión baja</span></> : null}</h2>
+      {marcar ? <label className="dan-check lev-marcar"><input type="checkbox" checked={marcar.marcado} disabled={marcar.bloqueado} data-testid="lev-marcar" onChange={(e) => marcar.alCambiar(e.target.checked)} />Descartar este (es el repetido)</label> : null}
       {repetido ? (
         <div className={`tec-aviso lev-repetido${repetido.original ? "" : " lev-repetido-original"}`} role="note" data-testid="lev-repetido" data-original={repetido.original?.codigo ?? ""}>
           {repetido.original

@@ -254,14 +254,17 @@ for (const ancho of ANCHOS) {
   // y 52 puntos más, separados, para que la lista tenga más de una página
   const P1 = crearLev(EMAILS.op, "alcantarillado", "pozo", 60, 0, "ZT pozo de la esquina"), P2 = crearLev(EMAILS.op, "alcantarillado", "pozo", 60, 4), P3 = crearLev(EMAILS.op, "alcantarillado", "pozo", 66, 0);
   const P4 = crearLev(EMAILS.op, "alcantarillado", "pozo", 60, 80), P5 = crearLev(EMAILS.op, "acueducto", "valvula", 61, 2);
+  // para «descartar varios»: un par (Q) y una cadena (R1–R2 a 6 m, R2–R3 a 6 m, pero R3 a 12 m de R1: R3 es repetido de un repetido)
+  const Q1 = crearLev(EMAILS.op, "alcantarillado", "pozo", 60, 160), Q2 = crearLev(EMAILS.op, "alcantarillado", "pozo", 60, 164);
+  const R1 = crearLev(EMAILS.op, "alcantarillado", "pozo", 60, 240), R2 = crearLev(EMAILS.op, "alcantarillado", "pozo", 60, 246), R3 = crearLev(EMAILS.op, "alcantarillado", "pozo", 60, 252);
   for (let i = 0; i < 52; i++) crearLev(EMAILS.op, "alcantarillado", "caja", 200 + i * 30, 300);
 
   // ===== K. Posibles repetidos en «Otros activos por levantamiento» =====
   p = await abrir(ancho, "dist"); await aPorLevantar(p);
   await p.waitForSelector("[data-testid=lev-repetidos]", { timeout: 60000 });
-  await p.waitForFunction(() => document.querySelectorAll("[data-testid=lev-bandeja] [data-levantar]").length >= 57, { timeout: 60000 }).catch(() => {});
+  await p.waitForFunction(() => document.querySelectorAll("[data-testid=lev-bandeja] [data-levantar]").length >= 62, { timeout: 60000 }).catch(() => {});
   t = await p.$eval("[data-testid=lev-repetidos]", (e) => e.innerText);
-  ok(A("K1 con 57 puntos por levantar (más de una página), la bandeja avisa «2 posibles repetidos: … a menos de 10 m de otro que se reportó antes»"), /^2 posibles repetidos: puntos del mismo servicio a menos de 10 m de otro que se reportó antes\./.test(t) && (await visibles(p)).length === 57, t + " · " + (await visibles(p)).length);
+  ok(A("K1 con 62 puntos por levantar (más de una página), la bandeja avisa «5 posibles repetidos: … a menos de 10 m de otro que se reportó antes»"), /^5 posibles repetidos: puntos del mismo servicio a menos de 10 m de otro que se reportó antes\./.test(t) && (await visibles(p)).length === 62, t + " · " + (await visibles(p)).length);
   let a2 = await punto(p, P2), a3 = await punto(p, P3), a1 = await punto(p, P1);
   ok(A("K2 el segundo y el tercero dicen «Posible repetido de <el primero>» con la distancia; el primero, «Tiene 2 posibles repetidos… Este se reportó primero»"),
     new RegExp(`^Posible repetido de ${P1} \\(a [34],\\d m, reportado antes\\)\\. También cerca: ${P3} \\(`).test(a2.repetido ?? "") && a2.original === P1 && new RegExp(`^Posible repetido de ${P1} \\(a [56],\\d m`).test(a3.repetido ?? "")
@@ -276,15 +279,43 @@ for (const ancho of ANCHOS) {
   ok(A("K6 la bandeja no desborda y los botones nuevos miden 44 px o más"), (await sinDesborde(p)) && (await altoMin(p, "[data-testid=lev-repetido] button.tec-boton-sec, [data-testid=lev-repetidos] button.tec-boton-sec")) >= 44, `desborda: ${!(await sinDesborde(p))} · alto ${await altoMin(p, "[data-testid=lev-repetido] button.tec-boton-sec, [data-testid=lev-repetidos] button.tec-boton-sec")}`);
   await p.evaluate((c) => document.querySelector(`[data-levantar="${c}"]`).scrollIntoView({ block: "start" }), P2); await captura(p, `despues_repetidos_mapa_${ancho}.png`, false);
   await clic(p, "[data-testid=lev-solo-repetidos]"); await pausa(300);
-  ok(A("K7 «Ver solo los posibles repetidos y sus originales» deja las 3 tarjetas del grupo"), (await visibles(p)).sort().join(",") === [P1, P2, P3].sort().join(","), (await visibles(p)).join(","));
+  ok(A("K7 «Ver solo los posibles repetidos y sus originales» deja las 8 tarjetas de los tres grupos"), (await visibles(p)).sort().join(",") === [P1, P2, P3, Q1, Q2, R1, R2, R3].sort().join(","), (await visibles(p)).join(","));
   await captura(p, `despues_repetidos_lista_${ancho}.png`);
   await enPunto(p, P2, "[data-testid=lev-descartar-repetido]"); await p.waitForSelector(`#lev-mot-${P2}`);
   t = await p.$eval(`#lev-mot-${P2}`, (e) => e.value);
   ok(A("K8 «Descartar como repetido» abre el descarte con el motivo ya escrito («Repetido de LEV-… (a … m)»), que se puede cambiar"), new RegExp(`^Repetido de ${P1} \\(a [34],\\d m\\)$`).test(t) && !(await p.evaluate(() => document.querySelector("[data-testid=lev-confirmar]").disabled)), t);
   await clic(p, "[data-testid=lev-confirmar]");
-  await p.waitForFunction(() => /^1 posible repetido:/.test(document.querySelector("[data-testid=lev-repetidos]")?.innerText ?? ""), { timeout: 60000 }).catch(() => {});
-  ok(A("K9 queda «descartado» con ese motivo (nada se borra) y la bandeja pasa a «1 posible repetido»"), sqlq(`select estado || '|' || estado_motivo from redes.v_levantar_punto where codigo = '${P2}'`).startsWith(`descartado|Repetido de ${P1}`)
-     && sqlq(`select count(*) from redes.levantar_puntos where codigo = '${P2}'`) === "1" && /^1 posible repetido:/.test(await p.$eval("[data-testid=lev-repetidos]", (e) => e.innerText).catch(() => "")), sqlq(`select estado || '|' || coalesce(estado_motivo, '') from redes.v_levantar_punto where codigo = '${P2}'`));
+  await p.waitForFunction(() => /^4 posibles repetidos:/.test(document.querySelector("[data-testid=lev-repetidos]")?.innerText ?? ""), { timeout: 60000 }).catch(() => {});
+  ok(A("K9 queda «descartado» con ese motivo (nada se borra) y la bandeja pasa a «4 posibles repetidos»"), sqlq(`select estado || '|' || estado_motivo from redes.v_levantar_punto where codigo = '${P2}'`).startsWith(`descartado|Repetido de ${P1}`)
+     && sqlq(`select count(*) from redes.levantar_puntos where codigo = '${P2}'`) === "1" && /^4 posibles repetidos:/.test(await p.$eval("[data-testid=lev-repetidos]", (e) => e.innerText).catch(() => "")), sqlq(`select estado || '|' || coalesce(estado_motivo, '') from redes.v_levantar_punto where codigo = '${P2}'`));
+
+  // ===== K-bis. Descartar varios repetidos de una vez =====
+  await p.waitForFunction(() => document.querySelectorAll("[data-testid=lev-bandeja] [data-levantar]").length >= 61, { timeout: 60000 }).catch(() => {});
+  await clic(p, "[data-testid=lev-varios]"); await p.waitForSelector("[data-testid=lev-f-varios]");
+  const casillas = () => p.evaluate(() => [...document.querySelectorAll("[data-testid=lev-bandeja] [data-levantar]")].filter((x) => x.querySelector("[data-testid=lev-marcar]")).map((x) => x.dataset.levantar + ":" + (x.querySelector("[data-testid=lev-marcar]").checked ? "si" : "no")).sort().join(","));
+  ok(A("N1 «Descartar varios de una vez»: salen casillas solo en los 4 repetidos (P3, Q2, R2 y R3); los originales no se pueden marcar"), (await casillas()) === [P3, Q2, R2, R3].map((c) => c + ":no").sort().join(",")
+     && (await p.evaluate(() => document.querySelector("[data-testid=lev-varios-confirmar]").disabled)), await casillas());
+  await clic(p, "[data-testid=lev-marcar-todos]"); await pausa(200);
+  ok(A("N2 «Marcar todos (3)» marca P3, Q2 y R2 y deja fuera a R3, que es repetido de otro repetido; lo explica"), (await casillas()) === [P3 + ":si", Q2 + ":si", R2 + ":si", R3 + ":no"].sort().join(",")
+     && /1 punto es repetido de otro repetido: «Marcar todos» no los incluye/.test(await p.$eval("[data-testid=lev-cadena]", (e) => e.textContent)) && (await p.$eval("[data-testid=lev-varios-confirmar]", (e) => e.textContent)) === "Descartar los 3 marcados", await casillas());
+  await enPunto(p, R3, "[data-testid=lev-marcar]"); await pausa(200);
+  ok(A("N3 si se marca a mano un punto y también su original, no deja seguir: «… desmarque uno de los dos para que el activo no se quede sin reporte»"), new RegExp(`${R3} es posible repetido de ${R2}, que también está marcado: desmarque uno de los dos`).test(await p.$eval("[data-testid=lev-choque]", (e) => e.textContent).catch(() => ""))
+     && (await p.evaluate(() => document.querySelector("[data-testid=lev-varios-confirmar]").disabled)));
+  await enPunto(p, R3, "[data-testid=lev-marcar]"); await pausa(200);
+  await p.evaluate(() => document.querySelector("[data-testid=lev-f-varios]").scrollIntoView({ block: "start" })); await captura(p, `despues_descartar_varios_${ancho}.png`, false);
+  ok(A("N4 el motivo viene propuesto y se puede cambiar; con menos de 10 caracteres no deja; el formulario no desborda y sus botones miden 44 px o más"), (await p.$eval("#lev-mot-varios", (e) => e.value)).length >= 10
+     && await (async () => { await poner(p, "#lev-mot-varios", "corto"); const d = await p.evaluate(() => document.querySelector("[data-testid=lev-varios-confirmar]").disabled); await poner(p, "#lev-mot-varios", "ZT el operario reportó dos veces el mismo pozo"); return d; })()
+     && (await sinDesborde(p)) && (await altoMin(p, "[data-testid=lev-f-varios] button")) >= 44);
+  const antesEv = Number(sqlq("select count(*) from redes.levantar_eventos"));
+  await clic(p, "[data-testid=lev-varios-confirmar]");
+  await p.waitForFunction(() => /3 puntos quedaron «descartados»/.test(document.querySelector("[data-testid=lev-bandeja]")?.innerText ?? ""), { timeout: 60000 }).catch(() => {});
+  t = await p.evaluate(() => document.querySelector("[data-testid=lev-bandeja] .tec-aviso-info")?.innerText ?? "");
+  r = sqlq(`select string_agg(codigo || '=' || estado || '=' || coalesce(estado_motivo, ''), ' ## ' order by codigo) from redes.v_levantar_punto where codigo in ('${P3}', '${Q2}', '${R2}', '${R3}')`);
+  ok(A("N5 confirma: «3 puntos quedaron «descartados», cada uno con su evento en el historial.»; en la base son 3 eventos nuevos, cada uno con el motivo y de cuál es repetido; R3 sigue reportado"),
+    /^3 puntos quedaron «descartados», cada uno con su evento en el historial\./.test(t) && Number(sqlq("select count(*) from redes.levantar_eventos")) === antesEv + 3
+     && new RegExp(`${P3}=descartado=ZT el operario reportó dos veces el mismo pozo \\(posible repetido de ${P1}, a .+ m\\) ## ${Q2}=descartado=ZT el operario reportó dos veces el mismo pozo \\(posible repetido de ${Q1}, a .+ m\\) ## ${R2}=descartado=.+\\(posible repetido de ${R1}, a .+ m\\) ## ${R3}=reportado=`).test(r), t + " · " + r);
+  await pausa(600);
+  ok(A("N6 después: ya no quedan posibles repetidos (R3 se quedó sin vecino) y el modo de marcar se cierra; nada se borró"), !(await p.$("[data-testid=lev-repetidos]")) && !(await p.$("[data-testid=lev-marcar]")) && sqlq(`select count(*) from redes.levantar_puntos where codigo in ('${P2}', '${P3}', '${Q2}', '${R2}')`) === "4");
   await p.close();
 
   // ===== L. Encontrar: con «Ya reportados aquí», para seguir hay que tocar «Es otro activo» =====

@@ -87,3 +87,8 @@
 .enc-mios .tec-boton-sec { align-self: flex-start; }
 /* los botones del aviso de repetidos van dentro de .tec-aviso (que achica lo que lleva dentro): se les devuelve el toque mínimo de 44 px de la guía */
 .lev-repetido .tec-boton-sec, .lev-repetidos .tec-boton-sec { min-height: 44px; padding: 0 var(--t-esp-4); font-size: var(--t-txt); }
+/* descartar varios repetidos de una vez */
+.lev-varios { background: var(--t-tarjeta); border: 1px solid var(--t-borde); }
+.lev-varios p { margin: 0; }
+.lev-varios .tec-boton { min-height: 44px; }
+.lev-marcar { font-weight: 600; color: var(--t-naranja); min-height: 44px; }
