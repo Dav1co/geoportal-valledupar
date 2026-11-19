@@ -1,0 +1,21 @@
+OK    01 el ensayo termina en el ERROR esperado: 30 de 30 … SIN FALLAS
+   TIEMPOS (con 20611 puntos en la tabla): mis 608 reportes, todos 7.6 ms · los de 30 días 5.3 ms · alguien con 1 reporte 0.2 ms
+OK    02 … y no deja nada (sigue la huella anterior, no están la función ni el índice, ni un punto ni una fila de auditoría)
+OK    03 las huellas antes: «CORTE 15 (lista para Mis reportes)», la nueva y el índice no existen y las 5 que no se tocan son las publicadas
+OK    04 la migración se aplica
+OK    05 SOLO AGREGA: ninguna función anterior de redes, tecnica ni public.geoportal_* cambió de texto
+OK    06 las huellas después: «MIS REPORTES (aplicado)», 1 nueva, el índice y las 5 publicadas igual
+OK    07 la verificación: las 6 filas OK
+OK    08 una segunda migración se niega
+OK    09 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
+OK    10 dos operadores reportan como la Edge: LEV-000001, LEV-000002 y LEV-000003
+OK    11 «Mis reportes» como la Edge (32 ms; tope local 167 ms): los 2 suyos, el último primero, «Reportado», y no el ajeno
+OK    12 el supervisor descarta uno (la RPC de siempre) y «Mis reportes» lo dice, sin el motivo
+OK    13 quien no puede reportar no lee (42501); un periodo que no existe se rechaza (22023); la API no ejecuta las internas
+OK    14 diez lecturas seguidas como la Edge: la más lenta 45 ms (tope local 167 ms); leer no deja auditoría
+OK    15 INFO el índice por autor existe y es válido (con 3 filas el planificador puede no usarlo)
+OK    16 la reversa se aplica: vuelve la huella anterior, las funciones anteriores siguen igual, el índice ya no está y los puntos reportados no se tocan
+OK    17 una segunda reversa se niega
+OK    18 después de la reversa, la migración se vuelve a aplicar
+
+RESULTADO: 18 de 18 — SIN FALLAS
