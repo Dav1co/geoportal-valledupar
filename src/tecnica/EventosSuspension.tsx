@@ -11,6 +11,7 @@ import { apiEventos, nReportes, textoReportes, type CatalogoEventos, type Evento
 import { EventoDeclarar, errorEvento } from "./EventoDeclarar";
 import { EventoDetalle } from "./EventoDetalle";
 import { EventoPlantas } from "./EventoPlantas";
+import { EventoTipos } from "./EventoTipos";
 
 // Corte 15 · «Eventos de suspensión» (las pantallas; la lógica es del Code A). Cuando se va el agua en una zona llegan decenas de reportes del mismo problema:
 // el evento los agrupa, los controla y los cierra en bloque. Esta pantalla se abre desde el Dashboard distribución (pestaña «Suspensiones») y desde el geovisor
@@ -53,6 +54,7 @@ export function EventosSuspension({ onVolver, rotuloVolver = "Volver", inicial, 
     onDeclarado={(e) => { cambio(); setVista({ v: "detalle", codigo: e.codigo, aviso: `Evento ${e.codigo} declarado. ${e.asociados_al_declarar === 1 ? "1 reporte que ya estaba en la zona quedó asociado" : `${nf.format(e.asociados_al_declarar)} reportes que ya estaban en la zona quedaron asociados`}.` }); }} />;
   else if (vista.v === "detalle") cuerpo = <EventoDetalle key={vista.codigo} codigo={vista.codigo} cat={cat} avisoInicial={vista.aviso} alCambiar={cambio} />;
   else if (vista.v === "plantas") cuerpo = <EventoPlantas cat={cat} alGuardar={() => { setVezCat((v) => v + 1); cambio(); }} />;
+  else if (vista.v === "tipos") cuerpo = <EventoTipos cat={cat} alGuardar={() => setVezCat((v) => v + 1)} />;
   else cuerpo = <Lista cat={cat} onDeclarar={() => setVista({ v: "declarar" })} onAbrir={(codigo) => setVista({ v: "detalle", codigo })} onPlantas={() => setVista({ v: "plantas" })} onTipos={() => setVista({ v: "tipos" })} />;
 
   return <div className={`tec-modo-distribucion evs-pagina${onVolver ? " tec-pagina" : ""}`} data-testid="eventos" data-vista={vista.v}>{barra}<div className="dan itv evs">{cuerpo}</div></div>;

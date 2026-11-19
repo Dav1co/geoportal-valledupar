@@ -82,7 +82,8 @@ writeFileSync(join(dir, "index.html"), `<!doctype html><html lang="es" style="he
 const rpcs = [], desconocidas = [], subidas = [];
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
 function rpcBase(fn, a) {
-  const args = Object.entries(a).map(([k, val]) => `${k} => ${lit(val)}`).join(", ");
+  // p_sectores es text[] (planta_sectores_fijar): PostgREST lo pasa como arreglo de texto, no como jsonb
+  const args = Object.entries(a).map(([k, val]) => `${k} => ${k === "p_sectores" && Array.isArray(val) ? `array[${val.map((x) => lit(String(x))).join(", ")}]::text[]` : lit(val)}`).join(", ");
   try {
     const t = execFileSync(PSQL, ["-AtqX", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose", "-c", "set role service_role", "-c", "set statement_timeout = '30s'", "-c", "set lock_timeout = '8s'", "-c", `select public.${fn}(${args})`], { env: PGENV, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 }).trim();
     return { status: 200, cuerpo: /_mvt($|_)/.test(fn) ? t : JSON.parse(t) };
@@ -261,6 +262,10 @@ const detalle = (p) => p.evaluate(() => { const d = document.querySelector("[dat
   asociados: [...d.querySelectorAll("[data-asociado]")].map((x) => ({ clave: x.dataset.asociado, txt: x.innerText.replace(/\n/g, " ") })), titulo: d.querySelector("[data-testid=evs-asociados] h2").textContent,
   acciones: [...(d.querySelector("[data-testid=evs-acciones]")?.querySelectorAll("button") ?? [])].map((b) => b.textContent.trim()), historial: [...d.querySelectorAll("[data-testid=evs-historial] li")].map((x) => x.innerText.replace(/\n/g, " ")), txt: d.innerText }; });
 const esperarDetalle = (p, re, ms = 40000) => p.waitForFunction((s) => new RegExp(s).test(document.querySelector("[data-testid=evs-detalle]")?.innerText ?? ""), { timeout: ms }, re.source).then(() => true).catch(() => false);
+const valor = (p, sel) => p.evaluate((s) => document.querySelector(s)?.value ?? null, sel);
+const edgeF = (rol, accion, o = {}) => fetch(`http://127.0.0.1:${P_EDGE}/functions/v1/geoportal-redes?accion=${accion}${o.qs ? "&" + new URLSearchParams(o.qs) : ""}`, { method: o.metodo ?? (o.cuerpo ? "POST" : "GET"),
+  headers: { Authorization: `Bearer tok-${rol}`, ...(o.cuerpo ? { "Content-Type": "application/json" } : {}) }, body: o.cuerpo ? JSON.stringify(o.cuerpo) : undefined })
+  .then(async (r) => ({ status: r.status, cache: r.headers.get("cache-control"), cuerpo: await r.json().catch(() => null) }));
 const errorVisto = (p) => p.evaluate(() => [...document.querySelectorAll("[data-testid=eventos] .tec-aviso-error")].map((x) => x.innerText).join(" · "));
 const altoMin = (p, sel) => p.evaluate((s) => Math.min(...[...document.querySelectorAll(s)].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect().height)), sel);
 
@@ -404,6 +409,115 @@ for (const ancho of ANCHOS) {
   ok(A("C12 de vuelta en la lista: ya no está entre los abiertos; en «Cerrados» aparece con quién y cuándo lo cerró"), /No hay eventos de suspensión abiertos/.test(await texto(p))
      && await (async () => { await clic(p, '[data-filtro="cerrado"]'); await p.waitForSelector(`[data-evento="${EV1}"][data-estado="cerrado"]`, { timeout: 30000 }).catch(() => {}); return /Cerrado/.test(await p.evaluate((c) => document.querySelector(`[data-evento="${c}"]`)?.innerText ?? "", EV1)); })());
   await p.close();
+
+  // ===== D. Declarar por círculo dibujado en el mapa; anular =====
+  p = await abrir(ancho, "dist"); await aSuspensiones(p); await clic(p, "[data-testid=evs-nuevo]"); await p.waitForSelector("[data-testid=evs-declarar]");
+  await opcion(p, "circulo"); await mapaListo(p);
+  ok(A("D1 «Por círculo en el mapa»: sin centro lo dice, y el radio arranca en 200 m"), /Todavía no hay centro/.test(await texto(p)) && (await valor(p, "#evs-radio")) === "200" && !(await p.$("[data-testid=evs-manija]")));
+  // se toca el centro del mapa (como un dedo o un clic)
+  let caja = await p.evaluate(() => { const r = document.querySelector("[data-testid=evs-mapa] .evs-mapa-lienzo"); r.scrollIntoView({ block: "center" }); const b = r.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+  if (ancho < 500) await p.touchscreen.tap(caja.x, caja.y); else await p.mouse.click(caja.x, caja.y);
+  await p.waitForSelector("[data-testid=evs-manija]", { timeout: 15000 });
+  ok(A("D2 al tocar el mapa queda el centro, el círculo dibujado (borde continuo #c25e00 y relleno al 12 %) y la manija del borde, de 44 px"), /Centro: 10\.\d{5}, -73\.\d{5}\./.test(await texto(p)) && (await zonaEnMapa(p, "circulo")) === "Polygon"
+     && (await p.evaluate(() => { const m = document.querySelector("[data-testid=evs-mapa] .evs-mapa-lienzo").__mapa; return [m.getPaintProperty("circulo-l", "line-color"), m.getPaintProperty("circulo-a", "fill-opacity")].join("|"); })) === "#c25e00|0.12"
+     && (await p.evaluate(() => { const b = document.querySelector("[data-testid=evs-manija]").getBoundingClientRect(); return Math.min(b.width, b.height); })) >= 44);
+  // se arrastra la manija hacia afuera: el radio crece
+  await pausa(400);
+  let man = await p.evaluate(() => { const b = document.querySelector("[data-testid=evs-manija]").getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+  if (ancho < 500) { await p.touchscreen.touchStart(man.x, man.y); await p.touchscreen.touchMove(man.x + 20, man.y); await p.touchscreen.touchMove(man.x + 45, man.y); await p.touchscreen.touchEnd(); }
+  else { await p.mouse.move(man.x, man.y); await p.mouse.down(); await p.mouse.move(man.x + 20, man.y, { steps: 4 }); await p.mouse.move(man.x + 45, man.y, { steps: 4 }); await p.mouse.up(); }
+  await pausa(500);
+  const radioArrastrado = Number(await valor(p, "#evs-radio"));
+  ok(A("D3 arrastrar la manija del borde hacia afuera agranda el radio, y el campo «Radio» lo muestra"), radioArrastrado > 205 && radioArrastrado <= 5000, String(radioArrastrado));
+  await poner(p, "#evs-radio", "10"); await pausa(150); await poner(p, "#evs-causa", "ZT fuga localizada en la esquina"); await clic(p, "[data-testid=evs-declarar-boton]"); await pausa(150);
+  ok(A("D4 un radio fuera de los límites no pasa: «El radio va de 20 a 5.000 m»"), /El radio va de 20 a 5\.000 m\./.test(await errorVisto(p)));
+  await poner(p, "#evs-radio", "300"); await pausa(300);
+  await clic(p, "[data-testid=evs-ver-previa]"); await p.waitForSelector("[data-testid=evs-previa-datos]", { timeout: 40000 });
+  t = await p.evaluate(() => document.querySelector("[data-testid=evs-previa-datos]").innerText);
+  ok(A("D5 con el radio escrito (300 m) la vista previa dice «un círculo de 300 m en …» y sus contratos"), /Sin agua en un círculo de 300 m/.test(t) && Number((await dato(p, "contratos")).replace(/\./g, "")) > 0 && (await sinDesborde(p)), t);
+  await captura(p, `despues_eventos_declarar_circulo_${ancho}.png`);
+  await clic(p, "[data-testid=evs-declarar-boton]"); await p.waitForSelector("[data-testid=evs-detalle]", { timeout: 40000 }); await esperarDetalle(p, /Historial/);
+  const EV2 = sqlq("select codigo from redes.eventos_suspension order by id desc limit 1");
+  r = eventoBase(EV2);
+  ok(A("D6 se declara por círculo: queda el centro y el radio de 300 m, sin regreso estimado («Todavía no hay hora estimada»)"), r.alcance === "circulo" && Math.round(r.circulo.radio_m) === 300 && r.regreso_estimado === null && /Todavía no hay hora estimada/.test((await detalle(p)).regreso)
+     && /radio 300 m/.test((await detalle(p)).txt), JSON.stringify(r.circulo));
+  await clicTexto(p, "[data-testid=evs-acciones] button", "Anular el evento"); await p.waitForSelector("[data-testid=evs-f-anular]");
+  ok(A("D7 «Anular» pide el motivo (10 o más)"), await p.evaluate(() => document.querySelector("[data-testid=evs-anular-confirmar]").disabled));
+  await poner(p, "#evs-m-anular", "ZT se declaró por error en otro punto"); await clic(p, "[data-testid=evs-anular-confirmar]"); await esperarDetalle(p, /Evento anulado\./);
+  await p.waitForSelector('[data-testid=evs-detalle][data-estado="anulado"]', { timeout: 30000 }).catch(() => {});
+  d = await detalle(p);
+  ok(A("D8 anulado: «Evento anulado. … a su flujo.», estado «Anulado», sin acciones y con el motivo en el historial; nada se borró"), /^Evento anulado\./.test(d.aviso ?? "") && d.estado === "anulado" && d.acciones.length === 0 && d.historial.some((h) => /Se anuló el evento: «ZT se declaró por error en otro punto»/.test(h))
+     && sqlq(`select count(*) from redes.eventos_suspension where codigo = '${EV2}'`) === "1", d.aviso);
+
+  // ===== E. Sectores de cada planta =====
+  await clic(p, "[data-testid=eventos] .tec-volver"); await p.waitForSelector("[data-testid=evs-lista]");
+  await clic(p, "[data-testid=evs-ir-plantas]"); await p.waitForSelector("[data-testid=evs-plantas]");
+  t = await p.evaluate(() => [...document.querySelectorAll("[data-planta]")].map((x) => x.querySelector("h2").innerText.replace(/\s+/g, " ")).join(" | "));
+  ok(A("E1 «Sectores de cada planta»: Huaricha y Gota Fría, las dos «Sin sectores asignados», con los 36 sectores y subsectores para marcar"), /Huaricha Sin sectores asignados \| Gota Fría Sin sectores asignados/i.test(t)
+     && (await p.evaluate(() => document.querySelectorAll('[data-planta="huaricha"] [data-sector]').length)) === 36 && !(await p.$("[data-testid=evs-planta-guardar]")), t);
+  await clic(p, `[data-planta="huaricha"] [data-sector="${SUB}"]`); await clic(p, `[data-planta="huaricha"] [data-sector="${SUB2}"]`); await p.waitForSelector('[data-planta="huaricha"] [data-testid=evs-planta-guardar]');
+  ok(A("E2 al marcar aparece «Guardar los sectores de Huaricha», apagado hasta escribir el motivo"), await p.evaluate(() => document.querySelector('[data-planta="huaricha"] [data-testid=evs-planta-guardar]').disabled));
+  await poner(p, "#evs-pm-huaricha", "ZT según el esquema de distribución"); await clic(p, '[data-planta="huaricha"] [data-testid=evs-planta-guardar]');
+  await p.waitForFunction(() => /2 asignados/.test(document.querySelector('[data-planta="huaricha"] h2')?.innerText ?? ""), { timeout: 30000 }).catch(() => {});
+  ok(A("E3 guarda: «Huaricha: 2 sectores o subsectores asignados.», la etiqueta pasa a «2 asignados» y queda en la base con su motivo"), /Huaricha: 2 sectores o subsectores asignados\./.test(await p.evaluate(() => document.querySelector('[data-planta="huaricha"]').innerText))
+     && /2 asignados/i.test(await p.evaluate(() => document.querySelector('[data-planta="huaricha"] h2').innerText)) && JSON.parse(sqlq(`select public.geoportal_redes_evento_catalogo('${EMAILS.dist}')->'plantas'`)).find((x) => x.codigo === "huaricha").sectores.length === 2
+     && (await sinDesborde(p)), await p.evaluate(() => document.querySelector('[data-planta="huaricha"]').innerText.slice(-300)));
+  await captura(p, `despues_eventos_plantas_${ancho}.png`);
+
+  // ===== F. Qué reportes se asocian =====
+  await clic(p, "[data-testid=eventos] .tec-volver"); await p.waitForSelector("[data-testid=evs-lista]");
+  await clic(p, "[data-testid=evs-ir-tipos]"); await p.waitForSelector("[data-testid=evs-tipos]");
+  ok(A("F1 «Qué reportes se asocian»: los 15 tipos por omisión, agrupados por bot (2), línea 116 (9), daños (3) y formato de campo (1), todos «Se asocia»"),
+    (await p.evaluate(() => ["bot", "l116", "dano", "campo"].map((o) => document.querySelectorAll(`[data-origen-tipos="${o}"] [data-tipo]`).length).join(","))) === "2,9,3,1" && (await p.evaluate(() => document.querySelectorAll('[data-tipo][data-asocia="no"]').length)) === 0
+     && /No tengo agua o tengo baja presión/.test(await p.evaluate(() => document.querySelector('[data-tipo="bot:sin_agua"]').innerText)));
+  await clicTexto(p, '[data-tipo="dano:electrica"] button', "Dejar de asociarlo"); await p.waitForSelector('[data-tipo="dano:electrica"] .evs-tipo-motivo');
+  await poner(p, '[data-tipo="dano:electrica"] .evs-tipo-motivo', "ZT las fallas eléctricas van aparte"); await clic(p, '[data-tipo="dano:electrica"] [data-testid=evs-tipo-confirmar]');
+  await p.waitForSelector('[data-tipo="dano:electrica"][data-asocia="no"]', { timeout: 30000 }).catch(() => {});
+  ok(A("F2 «Dejar de asociarlo», con motivo: «Falla eléctrica» queda «No se asocia» (en la base también) y ofrece «Volver a asociarlo»"), (await p.evaluate(() => document.querySelector('[data-tipo="dano:electrica"]').innerText)).includes("No se asocia")
+     && /Volver a asociarlo/.test(await p.evaluate(() => document.querySelector('[data-tipo="dano:electrica"]').innerText)) && sqlq("select asocia from redes.evento_tipos_asociables where origen = 'dano' and codigo = 'electrica'") === "f");
+  await clic(p, "[data-testid=evs-tipo-nuevo]"); await p.waitForSelector("[data-testid=evs-f-tipo]");
+  await clic(p, '[data-testid=evs-f-tipo] [data-origen="l116"]'); await poner(p, "#evs-tn-cod", "zt agua turbia en el sector"); await poner(p, "#evs-tn-nom", "ZT agua turbia en el sector"); await poner(p, "#evs-tn-mot", "ZT también llega con los cortes");
+  await clic(p, "[data-testid=evs-tipo-agregar]"); await p.waitForSelector('[data-tipo="l116:zt agua turbia en el sector"]', { timeout: 30000 }).catch(() => {});
+  ok(A("F3 «Agregar un tipo a la lista»: una causal nueva de la línea 116 queda en la lista, «Se asocia»"), (await p.evaluate(() => document.querySelector('[data-tipo="l116:zt agua turbia en el sector"]')?.dataset.asocia)) === "si" && (await p.evaluate(() => document.querySelectorAll('[data-origen-tipos="l116"] [data-tipo]').length)) === 10 && (await sinDesborde(p)),
+    await p.evaluate(() => document.querySelector("[data-testid=evs-error-tipo]")?.textContent ?? ""));
+  await captura(p, `despues_eventos_tipos_${ancho}.png`);
+  await p.close();
+
+  // ===== G. Evento total: el supervisor de planta, desde el geovisor =====
+  p = await abrir(ancho, "planta"); await alGeovisor(p); await modoGeo(p, "Afectaciones"); await p.waitForSelector("[data-testid=leyenda-eventos-ir]", { timeout: 30000 });
+  ok(A("G1 el supervisor de planta llega por el geovisor: en «Afectaciones», la leyenda trae «Eventos de suspensión» y dice «Sin eventos de suspensión abiertos»"), /Sin eventos de suspensión abiertos/.test(await p.evaluate(() => document.querySelector("[data-testid=leyenda-cortes]").innerText)));
+  await clic(p, "[data-testid=leyenda-eventos-ir]"); await p.waitForSelector("[data-testid=geo-eventos] [data-testid=evs-lista]", { timeout: 30000 });
+  ok(A("G2 puede declarar, pero no ve los dos catálogos (son del supervisor de distribución)"), !!(await p.$("[data-testid=evs-nuevo]")) && !(await p.$("[data-testid=evs-ir-plantas]")) && !(await p.$("[data-testid=evs-ir-tipos]")));
+  await clic(p, "[data-testid=evs-nuevo]"); await p.waitForSelector("[data-testid=evs-declarar]");
+  ok(A("G3 al supervisor de planta solo le sale «Total», ya elegido"), (await p.evaluate(() => [...document.querySelectorAll('[role=group][aria-label="Alcance del evento"] button')].map((b) => b.textContent + ":" + b.getAttribute("aria-pressed")).join("|"))) === "Total:true");
+  await opcion(p, "planta"); await p.waitForSelector("#evs-planta"); await p.select("#evs-planta", "gota_fria"); await p.waitForSelector("[data-testid=evs-planta-sin]");
+  ok(A("G4 «Lo que surte una planta» con Gota Fría (sin sectores asignados): lo dice y no deja ver a quién afecta"), /Gota Fría todavía no tiene sectores asignados: no se puede declarar por planta/.test(await p.$eval("[data-testid=evs-planta-sin]", (e) => e.textContent))
+     && /Huaricha \(2 sectores\)/.test(await p.evaluate(() => document.querySelector("#evs-planta").innerText)));
+  await p.select("#evs-planta", "huaricha"); await poner(p, "#evs-causa", "ZT falla de energía en la planta"); await pausa(200);
+  await clic(p, "[data-testid=evs-ver-previa]"); await p.waitForSelector("[data-testid=evs-previa-datos]", { timeout: 40000 });
+  r = JSON.parse(sqlq(`select public.geoportal_redes_evento_vista_previa('${EMAILS.planta}', ${lit({ alcance: "total", total: "planta", planta: "huaricha" })})::jsonb - 'zona_geojson'`));
+  ok(A("G5 con Huaricha (los 2 subsectores asignados en E): la vista previa con sus contratos y la zona en el minimapa"), (await dato(p, "contratos")) === nf.format(r.contratos) && r.contratos > 1322 && await (async () => { await mapaListo(p); return (await zonaEnMapa(p)) === "MultiPolygon"; })(), JSON.stringify(r));
+  await opcion(p, "ciudad"); await pausa(200); await clic(p, "[data-testid=evs-ver-previa]"); await p.waitForSelector("[data-testid=evs-previa-datos]", { timeout: 40000 });
+  t = await p.evaluate(() => document.querySelector("[data-testid=evs-previa-datos]").innerText);
+  ok(A("G6 «Toda la ciudad»: la vista previa cuenta todos los contratos y dice que no se dibuja una zona"), /Toda la ciudad: no se dibuja una zona en el mapa/.test(t) && Number((await dato(p, "contratos")).replace(/\./g, "")) > 50000, t);
+  await clic(p, "[data-testid=evs-declarar-boton]"); await p.waitForSelector("[data-testid=evs-detalle]", { timeout: 40000 }); await esperarDetalle(p, /Historial/);
+  const EV3 = sqlq("select codigo from redes.eventos_suspension order by id desc limit 1");
+  d = await detalle(p);
+  ok(A("G7 el evento total queda declarado; el supervisor de planta lo puede cerrar, ajustar o anular, pero no asociar reportes a mano"), eventoBase(EV3).alcance === "total" && eventoBase(EV3).total === "ciudad" && d.acciones.length === 3 && !(await p.$("[data-testid=evs-asociar]")));
+  await captura(p, `despues_evento_total_${ancho}.png`);
+  await clic(p, "[data-testid=geo-eventos] .tec-volver"); await p.waitForSelector("[data-testid=evs-lista]"); await clic(p, "[data-testid=geo-eventos] .tec-volver"); await p.waitForFunction(() => !document.querySelector("[data-testid=geo-eventos]"));
+  await p.waitForSelector("[data-testid=franja-eventos]", { timeout: 30000 });
+  t = await p.evaluate(() => document.querySelector("[data-testid=franja-eventos]").innerText);
+  ok(A("G8 de vuelta en el mapa, la franja ya muestra el evento total (sin zona que pintar: ofrece «Ver el evento»)"), /ZT falla de energía en la planta/.test(t) && /Ver el evento/.test(t) && !/Ver la zona/.test(t), t);
+  await p.close();
+  // el supervisor de distribución lo ve, pero no lo puede cerrar ni anular
+  p = await abrir(ancho, "dist"); await aSuspensiones(p); await p.waitForSelector(`[data-evento="${EV3}"]`); await clicTexto(p, `[data-evento="${EV3}"] button`, "Ver el evento"); await p.waitForSelector("[data-testid=evs-detalle]"); await esperarDetalle(p, /Historial/);
+  ok(A("G9 el supervisor de distribución ve el evento total, sin acciones: «… lo cierra o lo anula el supervisor de planta o el administrador»; sí puede asociar reportes"), (await detalle(p)).acciones.length === 0
+     && /Un evento total lo ajusta, lo cierra o lo anula el supervisor de planta o el administrador\./.test(await p.$eval("[data-testid=evs-sin-permiso]", (e) => e.textContent)) && !!(await p.$("[data-testid=evs-asociar]")));
+  await p.close();
+  // el operador no entra a la pantalla de eventos
+  r = await edgeF("op", "evento_catalogo");
+  ok(A("G10 (Edge) el operador no lee el catálogo ni la lista de eventos (403); las zonas vigentes sí (200)"), r.status === 403 && (await edgeF("op", "eventos", { qs: { estado: "abierto" } })).status === 403 && (await edgeF("op", "eventos_vigentes")).status === 200, String(r.status));
 }
 ok("Z1 sin errores de JavaScript ni de consola", errores.length === 0, errores.join(" | "));
 ok("Z2 ninguna RPC desconocida", desconocidas.length === 0, [...new Set(desconocidas)].join(", "));
