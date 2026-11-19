@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { lazyConRecarga } from "../lib/recarga";
+import { importarConRecarga, lazyConRecarga } from "../lib/recarga";
+import { fechaBorrador, useBorradorCampo, type ArchivoBorrador } from "./borradorCampo";
 import { IconoCamara } from "./IconoCamara";
 import "./ficha.css";
 import "./dano.css";
@@ -20,6 +21,10 @@ import type { Eleccion } from "./MiniMapaRed";
 // Sin términos tarifarios. La pérdida no se calcula aquí: sin la tabla de caudales de Técnica, el daño queda «sin tabla».
 
 const MiniMapaRed = lazyConRecarga(() => import("./MiniMapaRed").then((m) => ({ default: m.MiniMapaRed })));
+/** Lo que guarda el borrador local (borradorCampo.ts). El nombre o la placa del tercero NO va: es un dato personal y no se deja en el celular. */
+type DatosBorrador = { sistema: "acueducto" | "alcantarillado" | null; eleccion: Eleccion | null; noIdent: boolean; queEs: string; clase: "dano" | "falla"; tipo: string;
+  tIni: string; tDet: string; tRep: string; tRes: string; rotura: string; largo: string; presion: string; usuarios: string; sector: string; sectorAuto: boolean; riesgo: string; marcas: string[];
+  causaClase: string; causa: string; terceroTipo: string; descripcion: string; yaReparado: boolean; inicio: string };
 type Foto = { blob: Blob; momento: "dano" | "entorno" | "reparado"; url: string };
 const MOMENTOS = [{ c: "dano", n: "El daño" }, { c: "entorno", n: "Entorno" }, { c: "reparado", n: "Reparado" }] as const;
 const RIESGOS = [{ c: "bajo", n: "Bajo" }, { c: "medio", n: "Medio" }, { c: "alto", n: "Alto" }] as const;
@@ -79,6 +84,29 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
   const [ficha, setFicha] = useState<string | null>(null);
   const cercanosPedidos = useRef<string | null>(activoInicial?.sistema ?? null);      // con el activo del geovisor no se preselecciona el más cercano
 
+  // Borrador local (18-nov): lo escrito, lo elegido y las fotos quedan en este celular mientras se llena; se borra al guardar o al cancelar.
+  const datosBorrador: DatosBorrador = { sistema, eleccion, noIdent, queEs, clase, tipo, tIni, tDet, tRep, tRes, rotura, largo, presion, usuarios, sector, sectorAuto: sectorAuto.current, riesgo, marcas,
+    causaClase, causa, terceroTipo, descripcion, yaReparado, inicio: reloj.current.iso };
+  const archivosBorrador = useMemo<ArchivoBorrador[]>(() => fotos.map((f) => ({ blob: f.blob, etiqueta: f.momento })), [fotos]);
+  // «sin tocar»: no cuentan la hora de inicio ni el sector que se propone solo desde la ubicación
+  const borrador = useBorradorCampo<DatosBorrador>("dano", correo, datosBorrador, archivosBorrador, !!guardado, { ...datosBorrador, inicio: "", sector: sectorAuto.current ? "" : sector });
+  function continuarBorrador() {
+    const b = borrador.oferta; if (!b) return;
+    const d = b.datos, txt = (v: unknown) => (typeof v === "string" ? v : "");
+    if (d.sistema === "acueducto" || d.sistema === "alcantarillado") { setSistema(d.sistema); cercanosPedidos.current = d.sistema; }
+    setEleccion(d.eleccion ?? null); setNoIdent(!!d.noIdent); setQueEs(txt(d.queEs)); setClase(d.clase === "falla" ? "falla" : "dano"); setTipo(txt(d.tipo));
+    setTIni(txt(d.tIni)); setTDet(txt(d.tDet) || ahora); setTRep(txt(d.tRep)); setTRes(txt(d.tRes)); setRotura(txt(d.rotura)); setLargo(txt(d.largo)); setPresion(txt(d.presion));
+    setUsuarios(txt(d.usuarios)); sectorAuto.current = d.sectorAuto !== false; setSector(txt(d.sector)); setRiesgo(txt(d.riesgo)); setMarcas(Array.isArray(d.marcas) ? d.marcas.filter((x) => typeof x === "string") : []);
+    setCausaClase(txt(d.causaClase)); setCausa(txt(d.causa)); setTerceroTipo(txt(d.terceroTipo)); setDescripcion(txt(d.descripcion)); setYaReparado(!!d.yaReparado);
+    // la hora de inicio del formulario es la del borrador mientras el servidor todavía la acepte; si no, la de ahora
+    const t = Date.parse(txt(d.inicio)), maxMs = (def?.reglas.max_horas_inicio ?? 12) * 3_600_000;
+    if (Number.isFinite(t) && t <= Date.now() && Date.now() - t < maxMs - 600_000) reloj.current = abrirReloj(t, performance.now() - (Date.now() - t));
+    setFotos(b.archivos.filter((a) => MOMENTOS.some((m) => m.c === a.etiqueta)).map((a) => ({ blob: a.blob, momento: a.etiqueta as Foto["momento"], url: URL.createObjectURL(a.blob) })));
+    borrador.resolver(true);
+  }
+
+  // Precarga del minimapa al abrir: si tras una publicación ya no está, la página se recarga ahora (sin nada escrito) y no en la mitad del formulario.
+  useEffect(() => { void importarConRecarga(() => import("./MiniMapaRed")).catch(() => {}); }, []);
   useEffect(() => {
     apiDano.formulario().then(setDef).catch((e) => setErrorDef(e instanceof ErrorTec && e.tipo === "permiso" ? "No tiene asignado el formulario de daños y fallas." : e instanceof Error ? e.message : "No se pudo cargar."));
   }, []);
@@ -122,7 +150,16 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
 
   if (ficha) return <FichaActivo codigo={ficha} onAbrir={setFicha} onVolver={() => setFicha(null)} rotuloVolver="Volver al daño" />;
   if (errorDef) return <section className="tec-tarjeta" role="alert"><h2>Daño o falla</h2><p>{errorDef}</p></section>;
-  if (!def) return <p className="tec-sub dan-pad" role="status">Cargando el formulario…</p>;
+  if (!def || borrador.leyendo) return <p className="tec-sub dan-pad" role="status">Cargando el formulario…</p>;
+  if (borrador.oferta) return (
+    <section className="tec-tarjeta" role="group" aria-label="Borrador guardado" data-testid="borrador-oferta">
+      <h2>Daño o falla</h2>
+      <p>Tiene un borrador del {fechaBorrador(borrador.oferta.guardado)}{borrador.oferta.archivos.length ? ` (con ${borrador.oferta.archivos.length} ${borrador.oferta.archivos.length === 1 ? "foto" : "fotos"})` : ""}. ¿Continuar o descartar?</p>
+      <div className="tec-acciones">
+        <button type="button" className="tec-boton" onClick={continuarBorrador}>Continuar</button>
+        <button type="button" className="tec-boton-sec" onClick={() => borrador.resolver(false)}>Descartar</button>
+      </div>
+    </section>);
 
   const tipos = def.tipos.filter((t) => t.clase === clase && (!sistema || t.sistemas.includes(sistema)));
   const tipoSel = def.tipos.find((t) => t.codigo === tipo) ?? null;
@@ -196,7 +233,9 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
         fotos: fotos.map((f, i) => ({ n: i + 1, momento: f.momento, ruta: p.fotos[i].ruta })),
       };
       ubicGuardada.current = { lat: datos.lat, lon: datos.lon };
-      setGuardado(await apiDano.crear(p.dano_id, datos));
+      const hecho = await apiDano.crear(p.dano_id, datos);
+      borrador.terminar();      // guardado con éxito: el borrador de este celular ya no hace falta
+      setGuardado(hecho);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "No se pudo guardar.";
       if (msg === "vencida") { prep.current = null; setErrorEnvio("El permiso para subir las fotos venció. Pulse «Guardar» de nuevo: se pide uno nuevo."); }
@@ -381,7 +420,7 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
 
       <section className="tec-tarjeta" aria-labelledby="dan-t7">
         <h2 id="dan-t7">{tipoSel?.pide_rotura ? "7" : "6"}. Fotos</h2>
-        <p className="tec-ayuda">{sinFotos ? "Sin fotos: queda marcado «sin evidencia fotográfica»." : `Al menos una del daño. Máximo ${def.reglas.max_fotos}. Solo cámara; la foto no se guarda en el celular.`}</p>
+        <p className="tec-ayuda">{sinFotos ? "Sin fotos: queda marcado «sin evidencia fotográfica»." : `Al menos una del daño. Máximo ${def.reglas.max_fotos}. Solo cámara. Mientras llena el formulario, las fotos quedan en el borrador de este celular; se borran al guardar o al cancelar.`}</p>
         {!sinFotos ? <div className="dan-fila">{MOMENTOS.map((m) => (
           <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= def.reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}><IconoCamara />Foto: {m.n}</button>))}</div> : null}
         {camara ? (
@@ -405,7 +444,7 @@ export function FormularioDano({ correo, onSalir, onRegistrarReparacion, activoI
       {cancelar ? (
         <div className="dan-pad-x">
           <ConfirmarCancelar titulo="¿Cancelar este daño o falla?" mensaje="Se borra lo escrito y las fotos de este celular. En el servidor no queda nada." onSeguir={() => setCancelar(false)}
-            onConfirmar={() => { setCancelar(false); onSalir?.(); }} />
+            onConfirmar={() => { setCancelar(false); borrador.terminar(); onSalir?.(); }} />
         </div>
       ) : (
         <div className="tec-acciones dan-pad-x">
