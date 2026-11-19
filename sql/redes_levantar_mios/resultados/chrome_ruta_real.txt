@@ -1,0 +1,15 @@
+OK    390 · R1 con la ruta real, la tarjeta «Mis reportes» aparece sola y dice «Ver mis reportes (2 en los últimos 30 días)»
+OK    390 · R2 la lista de 30 días: sus 2 reportes, el último primero, con tipo, servicio, «Reportado» y la fecha; el ajeno y el viejo no
+OK    390 · R3 la lista no desborda y sus botones miden 44 px o más
+OK    390 · R4 «Últimos 90 días»: entran los 3 (también el de hace 40 días) y el descartado ya dice «Descartado», sin el motivo
+OK    390 · R5 «Todos»: los mismos 3, nunca el ajeno; la pantalla pidió 30, 90 y 0 y la ruta respondió 200 cada vez
+OK    390 · R6 «Ver acta (PDF)» de un reporte propio de la lista abre su acta (la ruta publicada)
+OK    1280 · R1 con la ruta real, la tarjeta «Mis reportes» aparece sola y dice «Ver mis reportes (2 en los últimos 30 días)»
+OK    1280 · R2 la lista de 30 días: sus 2 reportes, el último primero, con tipo, servicio, «Reportado» y la fecha; el ajeno y el viejo no
+OK    1280 · R3 la lista no desborda y sus botones miden 44 px o más
+OK    1280 · R4 «Últimos 90 días»: entran los 3 (también el de hace 40 días) y el descartado ya dice «Descartado», sin el motivo
+OK    1280 · R5 «Todos»: los mismos 3, nunca el ajeno; la pantalla pidió 30, 90 y 0 y la ruta respondió 200 cada vez
+OK    1280 · R6 «Ver acta (PDF)» de un reporte propio de la lista abre su acta (la ruta publicada)
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC desconocida
+RESULTADO: 14 de 14 — SIN FALLAS
