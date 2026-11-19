@@ -4,7 +4,8 @@
 --   · la ASOCIACIÓN AUTOMÁTICA: tres disparadores AFTER INSERT por sentencia (con la tabla de filas nuevas: una consulta por sentencia, no por fila):
 --       bot   → redes.reporte_externo_eventos (cuando entra el «recibido»);   116 → redes.l116_eventos (el «alta» al publicar);   daño → redes.danos;
 --       formato de campo (Comercial o Técnica) → campo.reportes.
---     Sin eventos abiertos no hacen nada. La pertenencia se decide por el punto del reporte (dentro de la zona; «toda la ciudad» no tiene geometría).
+--     Sin eventos abiertos no hacen nada. Los eventos abiertos se leen UNA vez por sentencia («ab»), no una vez por reporte (crecía con el historial de eventos).
+--     La pertenencia se decide por el punto del reporte (dentro de la zona; «toda la ciudad» no tiene geometría).
 --     Si un punto cae en dos eventos abiertos gana EL MÁS ESPECÍFICO (David, 19-nov): círculo > sectores > total; entre dos de la misma clase, el de menor
 --     área (un subsector antes que su sector) y, si empatan, el declarado más recientemente.
 --   · lo que le llega a cada reporte: bot → «en_atencion» al asociar, «atendido» al cerrar, «recibido» al desasociar o anular; daño → una nota en su historial
@@ -222,11 +223,12 @@ language plpgsql security definer set search_path = redes, public, extensions, p
 declare v_ids bigint[];
 begin
   if not exists (select 1 from nuevos x where x.tipo = 'recibido' and x.motivo is null) or not exists (select 1 from redes.f_eventos_abiertos()) then return null; end if;
-  with hechas as (
+  with ab as materialized (select e.id, e.desde, e.todo, e.geom, e.alcance from redes.f_eventos_abiertos() e),
+  hechas as (
     insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, tipo, modo, autor)
     select ev.id, 'bot', r.id, 'asociar', 'automatica', 'sistema@evento.suspension'
       from nuevos x join redes.reportes_externos r on r.id = x.reporte_id
-     cross join lateral (select e.id from redes.f_eventos_abiertos() e
+     cross join lateral (select e.id from ab e
                           where e.desde <= r.recibido_en and (e.todo or ST_Intersects(e.geom, r.geom)) order by case e.alcance when 'circulo' then 1 when 'sectores' then 2 else 3 end, ST_Area(e.geom) nulls last, e.id desc limit 1) ev
      where x.tipo = 'recibido' and x.motivo is null and r.geom is not null
        and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'bot' and t.codigo = lower(btrim(r.tipo_bot)) and t.asocia)
@@ -243,14 +245,14 @@ create function redes.f_evento_tg_l116() returns trigger
 language plpgsql security definer set search_path = redes, public, extensions, pg_temp as $$
 begin
   if not exists (select 1 from nuevos x where x.tipo = 'alta' and x.geom is not null) or not exists (select 1 from redes.f_eventos_abiertos()) then return null; end if;
+  with ab as materialized (select e.id, e.desde, e.todo, e.geom, e.alcance from redes.f_eventos_abiertos() e)
   insert into redes.evento_suspension_reportes (evento_id, origen, l116_reporte_id, tipo, modo, autor)
   select ev.id, 'l116', r.id, 'asociar', 'automatica', 'sistema@evento.suspension'
     from nuevos x join redes.l116_reportes r on r.id = x.reporte_id
-   cross join lateral (select e.id from redes.f_eventos_abiertos() e
+   cross join lateral (select e.id from ab e
                         where e.desde <= r.fecha_registro and (e.todo or ST_Intersects(e.geom, x.geom)) order by case e.alcance when 'circulo' then 1 when 'sectores' then 2 else 3 end, ST_Area(e.geom) nulls last, e.id desc limit 1) ev
    where x.tipo = 'alta' and x.estado = 'registrado' and x.geom is not null
-     and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'l116' and t.codigo = redes.f_evento_clave(r.causal) and t.asocia)
-     and redes.f_evento_ref_libre('l116', r.id::text);
+     and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'l116' and t.codigo = redes.f_evento_clave(r.causal) and t.asocia);      -- (un «alta» es de un reporte nuevo: no puede estar ya en un evento)
   return null;
 end $$;
 create trigger t_evento_asociar after insert on redes.l116_eventos referencing new table as nuevos for each statement execute function redes.f_evento_tg_l116();
@@ -261,11 +263,12 @@ language plpgsql security definer set search_path = redes, public, extensions, p
 declare v_ids bigint[];
 begin
   if not exists (select 1 from redes.f_eventos_abiertos()) then return null; end if;
-  with hechas as (
+  with ab as materialized (select e.id, e.desde, e.todo, e.geom, e.alcance from redes.f_eventos_abiertos() e),
+  hechas as (
     insert into redes.evento_suspension_reportes (evento_id, origen, dano_id, tipo, modo, autor)
     select ev.id, 'dano', d.id, 'asociar', 'automatica', 'sistema@evento.suspension'
       from nuevos d
-     cross join lateral (select e.id from redes.f_eventos_abiertos() e
+     cross join lateral (select e.id from ab e
                           where e.desde <= d.t_detectado and (e.todo or ST_Intersects(e.geom, d.geom)) order by case e.alcance when 'circulo' then 1 when 'sectores' then 2 else 3 end, ST_Area(e.geom) nulls last, e.id desc limit 1) ev
      where d.sistema = 'acueducto' and d.geom is not null
        and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'dano' and t.codigo = d.tipo_codigo and t.asocia)
@@ -282,11 +285,12 @@ language plpgsql security definer set search_path = redes, public, extensions, p
 declare v_ids bigint[];
 begin
   if not exists (select 1 from redes.f_eventos_abiertos()) then return null; end if;
-  with hechas as (
+  with ab as materialized (select e.id, e.desde, e.todo, e.geom, e.alcance from redes.f_eventos_abiertos() e),
+  hechas as (
     insert into redes.evento_suspension_reportes (evento_id, origen, campo_reporte_id, tipo, modo, autor)
     select ev.id, 'campo', c.id, 'asociar', 'automatica', 'sistema@evento.suspension'
       from nuevos c join campo.tipos_reporte tc on tc.id = c.tipo_id
-     cross join lateral (select e.id from redes.f_eventos_abiertos() e
+     cross join lateral (select e.id from ab e
                           where e.desde <= c.registrado_en and (e.todo or ST_Intersects(e.geom, c.geom)) order by case e.alcance when 'circulo' then 1 when 'sectores' then 2 else 3 end, ST_Area(e.geom) nulls last, e.id desc limit 1) ev
      where exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'campo' and t.codigo = tc.codigo and t.asocia)
     returning id)
@@ -333,31 +337,50 @@ language sql stable security definer set search_path = redes, public, pg_temp as
                 coalesce(redes.f_evento_hora(e.regreso_vigente), 'sin definir.'),      -- la hora ya termina en punto («p. m.»)
                 case when e.regreso_vigente is not null and e.regreso_vigente < p_ahora then ' Ya pasó: ajuste la hora o cierre el evento.' else '' end),
          c.n, e.desde
-    from redes.v_evento_suspension e cross join lateral (select count(*)::integer as n from redes.f_evento_reportes(e.id)) c
-   where e.estado = 'abierto' and e.creado_en <= p_ahora $$;
+    from (select a.*, coalesce((select x.regreso_estimado from redes.evento_suspension_eventos x where x.evento_id = a.id and x.tipo = 'regreso' order by x.id desc limit 1),
+                               a.regreso_estimado) as regreso_vigente
+            from redes.f_eventos_abiertos() a) e      -- solo los abiertos: no recorre el historial de eventos
+   cross join lateral (select count(*)::integer as n from redes.f_evento_reportes(e.id)) c
+   where e.creado_en <= p_ahora $$;
 
+-- Los avisos se consultan seguido. Los eventos abiertos y los tipos de «sin agua» se calculan UNA vez, y «está en un evento abierto» se resuelve por reporte
+-- con el índice de las asociaciones (origen, ref), escrito aquí mismo (una función por fila no se integra en el plan y se llamaba miles de veces).
 create function redes.f_sin_agua_para_avisos(p_ahora timestamptz, p_horas numeric) returns table (n integer, desde timestamptz, items jsonb)
 language sql stable security definer set search_path = redes, public, pg_temp as $$
-  with s as (
+  with abiertos as materialized (select coalesce(array_agg(e.id), '{}') as ids from redes.f_eventos_abiertos() e),
+  tipos as materialized (
+    select coalesce(array_agg(t.codigo) filter (where t.origen = 'bot'), '{}') as bot, coalesce(array_agg(t.codigo) filter (where t.origen = 'l116'), '{}') as l116,
+           coalesce(array_agg(t.codigo) filter (where t.origen = 'campo'), '{}') as campo
+      from redes.evento_tipos_asociables t where t.clase = 'sin_agua'),
+  s as (
     select r.recibido_en as cuando, 'Bot · ' || r.radicado as txt
       from redes.reportes_externos r
      where r.recibido_en > p_ahora - make_interval(secs => (p_horas * 3600)::double precision) and r.recibido_en <= p_ahora
-       and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'bot' and t.codigo = lower(btrim(r.tipo_bot)) and t.clase = 'sin_agua')
+       and lower(btrim(r.tipo_bot)) = any ((select bot from tipos)::text[])
        and (select x.tipo from redes.reporte_externo_eventos x where x.reporte_id = r.id order by x.id desc limit 1) = 'recibido'
-       and redes.f_evento_ref_libre('bot', r.id::text)
+       and not exists (select 1 from redes.evento_suspension_reportes y
+                        where y.origen = 'bot' and y.ref = r.id::text and y.tipo = 'asociar'
+                          and not exists (select 1 from redes.evento_suspension_reportes y2 where y2.origen = y.origen and y2.ref = y.ref and y2.id > y.id)
+                          and y.evento_id = any ((select ids from abiertos)::bigint[]))
     union all
     select v.fecha_registro, 'Línea 116 · ' || v.reporte || coalesce(' · sector ' || v.sector, '')
       from redes.l116_vigente v
      where not v.oculto and v.estado = 'registrado' and v.fecha_registro > p_ahora - make_interval(secs => (p_horas * 3600)::double precision) and v.fecha_registro <= p_ahora
-       and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'l116' and t.codigo = redes.f_evento_clave(v.causal) and t.clase = 'sin_agua')
-       and redes.f_evento_ref_libre('l116', v.reporte_id::text)
+       and redes.f_evento_clave(v.causal) = any ((select l116 from tipos)::text[])
+       and not exists (select 1 from redes.evento_suspension_reportes y
+                        where y.origen = 'l116' and y.ref = v.reporte_id::text and y.tipo = 'asociar'
+                          and not exists (select 1 from redes.evento_suspension_reportes y2 where y2.origen = y.origen and y2.ref = y.ref and y2.id > y.id)
+                          and y.evento_id = any ((select ids from abiertos)::bigint[]))
     union all
     select c.registrado_en, 'Formato de campo · ' || coalesce(c.consecutivo, 'REP-' || lpad(c.seq::text, 6, '0'))
       from campo.reportes c join campo.tipos_reporte tc on tc.id = c.tipo_id
      where c.registrado_en > p_ahora - make_interval(secs => (p_horas * 3600)::double precision) and c.registrado_en <= p_ahora
-       and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'campo' and t.codigo = tc.codigo and t.clase = 'sin_agua')
+       and tc.codigo = any ((select campo from tipos)::text[])
        and campo.f_estado_actual(c.id) = 'reportado' and redes.f_evento_campo_abierto(c.id)
-       and redes.f_evento_ref_libre('campo', c.id::text))
+       and not exists (select 1 from redes.evento_suspension_reportes y
+                        where y.origen = 'campo' and y.ref = c.id::text and y.tipo = 'asociar'
+                          and not exists (select 1 from redes.evento_suspension_reportes y2 where y2.origen = y.origen and y2.ref = y.ref and y2.id > y.id)
+                          and y.evento_id = any ((select ids from abiertos)::bigint[])))
   select count(*)::integer, min(s.cuando), coalesce((array_to_json((array_agg(s.txt order by s.cuando desc))[1:5]))::jsonb, '[]'::jsonb) from s $$;
 
 -- ---------- para el bot (n8n en el Dell): recibe el reporte como siempre y dice si quedó en un evento abierto, con el texto listo ----------

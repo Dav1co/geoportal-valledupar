@@ -63,37 +63,45 @@ CAMBIOS_PUBLICAR = [
 begin""", """v_iguales integer; v_mot text := btrim(p_motivo);
         v_cons integer;      -- Corte 15: reportes que cerró un evento de suspensión y que el archivo trae otra vez en «Registrado»
 begin"""),
+    ("""  -- (b) cambios de estado (también los de los que vuelven a mostrarse)
+""", """  -- Corte 15: lo que cerró un evento de suspensión y el archivo trae otra vez en «Registrado» («conservados»). Se calcula UNA vez, en una tabla temporal
+  -- (como las de redes.f_l116_candidatos), y las sentencias de abajo solo la cruzan
+  if to_regclass('pg_temp._l116_cons') is not null then drop table pg_temp._l116_cons; end if;
+  create temp table _l116_cons on commit drop as
+  select x.reporte_id, x.evento
+    from (select f.reporte_id, redes.f_evento_l116_cerrado(f.reporte_id) as evento
+            from redes.l116_revision_filas f
+           where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado = 'registrado' and f.estado_vigente = 'atendido' offset 0) x
+   where x.evento is not null;
+  get diagnostics v_cons = row_count;
+  if v_cons > 0 then create unique index on _l116_cons (reporte_id); analyze _l116_cons; end if;
+  -- (b) cambios de estado (también los de los que vuelven a mostrarse)
+"""),
     ("""    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado <> f.estado_vigente order by f.reporte_id;
   get diagnostics v_estado = row_count;
 """, """    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado <> f.estado_vigente
-     and not (f.estado = 'registrado' and f.estado_vigente = 'atendido' and redes.f_evento_l116_cerrado(f.reporte_id) is not null)      -- Corte 15: no se revive
+     and not exists (select 1 from _l116_cons k where k.reporte_id = f.reporte_id)      -- Corte 15: lo que cerró un evento no se revive
    order by f.reporte_id;
   get diagnostics v_estado = row_count;
-  -- (b2) Corte 15: lo que cerró un evento de suspensión conserva «Atendido» aunque el archivo lo traiga en «Registrado». La diferencia con la fuente queda
-  --      en el historial del reporte, una sola vez (sin carga_id: revertir la carga no tiene nada que devolver)
-  select count(*) into v_cons
-    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado = 'registrado' and f.estado_vigente = 'atendido'
-     and redes.f_evento_l116_cerrado(f.reporte_id) is not null;
+  -- (b2) Corte 15: lo conservado sigue «Atendido» aunque el archivo lo traiga en «Registrado». La diferencia con la fuente queda en el historial del reporte,
+  --      una sola vez (sin carga_id: revertir la carga no tiene nada que devolver). Se busca por el reporte, con su índice
   if v_cons > 0 then
     insert into redes.l116_eventos (reporte_id, tipo, estado, estado_antes, motivo, autor)
-    select f.reporte_id, 'estado', 'atendido', 'atendido',
-           left(format('La carga %s de la línea 116 lo trae en «Registrado»: conserva «Atendido» porque lo cerró el evento de suspensión %s', p_carga, redes.f_evento_l116_cerrado(f.reporte_id)), 1000), p_autor
-      from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado = 'registrado' and f.estado_vigente = 'atendido'
-       and redes.f_evento_l116_cerrado(f.reporte_id) is not null
-       -- (se busca por el reporte, con su índice; sin condición sobre carga_id, para que el planificador no recorra el índice de cargas)
-       and not exists (select 1 from redes.l116_eventos x where x.reporte_id = f.reporte_id and x.tipo = 'estado' and x.estado = 'atendido' and x.estado_antes = 'atendido'
-                                                             and x.motivo like 'La carga % de la línea 116 lo trae en «Registrado»%')
-     order by f.reporte_id;
+    select k.reporte_id, 'estado', 'atendido', 'atendido',
+           left(format('La carga %s de la línea 116 lo trae en «Registrado»: conserva «Atendido» porque lo cerró el evento de suspensión %s', p_carga, k.evento), 1000), p_autor
+      from _l116_cons k
+     where not exists (select 1 from redes.l116_eventos x where x.reporte_id = k.reporte_id and x.tipo = 'estado' and x.estado = 'atendido' and x.estado_antes = 'atendido'
+                                                           and x.motivo like 'La carga % de la línea 116 lo trae en «Registrado»%')
+     order by k.reporte_id;
   end if;
 """),
     ("""  update redes.l116_vigente v set estado = f.estado, estado_desde = case when v.estado <> f.estado then clock_timestamp() else v.estado_desde end,
          oculto = false, actualizado_en = clock_timestamp()
     from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.reporte_id = v.reporte_id;
-""", """  update redes.l116_vigente v set estado = case when k.conserva then v.estado else f.estado end,
-         estado_desde = case when not k.conserva and v.estado <> f.estado then clock_timestamp() else v.estado_desde end,
+""", """  update redes.l116_vigente v set estado = case when k.reporte_id is not null then v.estado else f.estado end,
+         estado_desde = case when k.reporte_id is null and v.estado <> f.estado then clock_timestamp() else v.estado_desde end,
          oculto = false, actualizado_en = clock_timestamp()
-    from redes.l116_revision_filas f
-   cross join lateral (select (f.estado = 'registrado' and f.estado_vigente = 'atendido' and redes.f_evento_l116_cerrado(f.reporte_id) is not null) as conserva) k
+    from redes.l116_revision_filas f left join _l116_cons k on k.reporte_id = f.reporte_id
    where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.reporte_id = v.reporte_id;
 """),
     ("""'servicios', v_res -> 'servicios', 'revision_id', v_rev), v_mot, p_autor);""",

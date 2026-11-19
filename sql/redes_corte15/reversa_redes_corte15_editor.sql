@@ -9,9 +9,9 @@ do $$
 begin
   if to_regclass('redes.eventos_suspension') is null then raise exception 'No hay nada que revertir: el Corte 15 no está aplicado'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '0546b3e20d46798a7156cfc0e7b58fb5'
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'ef7564883f523685cfe36478e0985e98'
      or md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamptz)'::regprocedure)) <> 'aaa81ee57ec79080b9e76213ecea006c'
-     or md5(pg_get_functiondef('redes.f_publicar_l116(bigint,text,text)'::regprocedure)) <> '1cd235b077d77479b73fab78e4aee983' then
+     or md5(pg_get_functiondef('redes.f_publicar_l116(bigint,text,text)'::regprocedure)) <> 'bd50695e59c376c2b8dbb3b006fddbd4' then
     raise exception 'Las funciones cambiaron después de la migración del Corte 15: la reversa se niega a pisarlas; avise';
   end if;
   if exists (select 1 from redes.eventos_suspension) then raise exception 'Ya hay eventos de suspensión declarados: la reversa no borra hechos; avise'; end if;

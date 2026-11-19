@@ -24,7 +24,7 @@ OK    D8 el administrador declara TODA LA CIUDAD (EVS-000004): sin geometría y 
 OK    E1 eventos (GET): los 4, los últimos primero; por omisión, solo los abiertos (1); un estado desconocido, 400; al operador, 403
 OK    E2 evento_cerrar (POST), «dar de alta»: 200, «cerrado», cierra en bloque los 2 reportes del bot y el del formato de campo (quedan «Atendido» con el motivo); sin motivo, 400; cerrarlo otra vez, 409
 OK    E3 al final no queda ningún evento abierto (eventos_vigentes vacío)
-OK    Z1 la respuesta más lenta de la Edge con la red real: 143 ms (cada una incluye abrir la conexión a la base)
+OK    Z1 la respuesta más lenta de la Edge con la red real: 158 ms (cada una incluye abrir la conexión a la base)
 OK    Z2 ninguna respuesta trae nombres, teléfonos, direcciones ni correos
 OK    Z3 ninguna RPC que no exista en la base
 RESULTADO: 29 de 29 — SIN FALLAS
