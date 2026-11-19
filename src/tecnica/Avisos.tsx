@@ -26,6 +26,7 @@ export function resolverBandeja(b: Bandeja, tieneDistribucion: boolean): { table
   return { tablero: b.tablero, pestana: b.pestana };
 }
 export function rotuloBandeja(b: Bandeja, tieneDistribucion: boolean): string {
+  if (b.evento) return `el evento ${b.evento}`;      // Corte 15: el aviso de un evento de suspensión abre ese evento, no un dashboard
   const r = resolverBandeja(b, tieneDistribucion);
   const tablero = r.tablero === "ptap" ? "Dashboard PTAP" : "Dashboard distribución";
   return r.pestana ? `${tablero} › ${PESTANA[r.tablero][r.pestana] ?? r.pestana}` : tablero;
@@ -128,7 +129,7 @@ export function FranjaAvisos({ onElegir, pestanas }: { onElegir: (clave: string)
   const abrir = (a: Aviso) => {
     const r = resolverBandeja(a.bandeja, ctx.tieneDistribucion);
     if (a.bandeja.filtro === "levantar") pedirLevantar();      // Corte 14
-    if (r.tablero === ctx.tablero && r.pestana && pestanas.includes(r.pestana)) onElegir(r.pestana); else ctx.onAbrir(a.bandeja);
+    if (!a.bandeja.evento && r.tablero === ctx.tablero && r.pestana && pestanas.includes(r.pestana)) onElegir(r.pestana); else ctx.onAbrir(a.bandeja);
   };
   return (
     <div className={`av-franja${rojos > 0 ? " av-franja-roja" : ""}`} role="region" aria-label="Avisos de este dashboard" data-franja={ctx.tablero}>

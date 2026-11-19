@@ -4,7 +4,7 @@ import { pedir } from "./apiTecnica";
 // Los avisos se calculan en cada consulta (no se guardan ni se marcan como vistos): desaparecen cuando se resuelve la causa.
 export type NivelAviso = "rojo" | "naranja" | "info";
 export type AreaAviso = "planta" | "distribucion" | "personal";
-export type Bandeja = { tablero: "ptap" | "distribucion" | "personal"; pestana: string | null; filtro?: string | null };      // filtro (Corte 14): «levantar» abre Por verificar en «Otros activos por levantamiento»
+export type Bandeja = { tablero: "ptap" | "distribucion" | "personal"; pestana: string | null; filtro?: string | null; evento?: string | null };      // evento (Corte 15): el aviso de un evento de suspensión abre ese evento      // filtro (Corte 14): «levantar» abre Por verificar en «Otros activos por levantamiento»
 export type Aviso = { clave: string; area: AreaAviso; nivel: NivelAviso; titulo: string; detalle: string | null; n: number; items: string[]; bandeja: Bandeja; desde: string | null; orden: number };
 export type Avisos = { areas: { planta: boolean; distribucion: boolean; personal: boolean }; admin: boolean; avisos: Aviso[]; total: number; rojos: number; naranjas: number; calculado_en: string; ms: number };
 export type ParametroAviso = { clave: string; area: "planta" | "distribucion" | "sistema"; nombre: string; descripcion: string; valor: number; minimo: number; maximo: number; unidad: string;
