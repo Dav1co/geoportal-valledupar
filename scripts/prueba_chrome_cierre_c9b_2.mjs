@@ -322,11 +322,17 @@ for (const ancho of ANCHOS) {
 
   // ===== I. Geovisor: el supervisor cierra una válvula sin daño ni intervención; el operador no tiene el botón =====
   const V2 = sqlq(`select codigo || '|' || ST_X(ST_PointOnSurface(geom)) || '|' || ST_Y(ST_PointOnSurface(geom)) from redes.activo_vigente_mat where codigo = '${VALV[1]}'`).split("|");
+  // 19-nov: junto a esa válvula hay otros puntos de la red (un codo a medio metro). La tesela no trae orden, y el geovisor tomaba el primero que viniera: según
+  // cómo estuviera armada la base salía la tarjeta del codo (sin «Marcar válvula cerrada») y la I2 fallaba. Aquí se fuerza el orden malo (los vecinos pasan al
+  // final de la tabla, que es lo que se dibuja encima) para que la prueba no dependa de la base: debe ganar el punto más cercano al dedo, que es la válvula.
+  const VEC = sqlq(`select coalesce(string_agg(b.codigo, ',' order by b.codigo), '') from redes.activo_vigente_mat a join redes.activo_vigente_mat b on b.activo_id <> a.activo_id and GeometryType(b.geom) = 'POINT' and ST_DWithin(a.geom::geography, b.geom::geography, 3) where a.codigo = '${VALV[1]}'`);
+  if (VEC) execFileSync(PSQL, ["-qX", "-v", "ON_ERROR_STOP=1", "-c", "set session_replication_role = replica", "-c", `update redes.activo_vigente_mat set codigo = codigo where codigo in ('${VEC.split(",").join("','")}')`, "-c", "vacuum analyze redes.activo_vigente_mat"], { env: PGENV, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  ok(`${tag} I0 la válvula de la prueba tiene otros puntos a menos de 3 m (${VEC}): el toque debe dar el más cercano, no el primero de la tesela`, VEC.length > 0, VEC);
   p = await abrir(ancho, "op"); await alGeovisor(p); await tocar(p, Number(V2[1]), Number(V2[2]), 19); tj = await esperarTarjeta(p, "activo", new RegExp(VALV[1]));
-  ok(`${tag} I1 el operador ve la tarjeta de la válvula sin «Marcar válvula cerrada»`, !!tj && !tj.botones.includes("Marcar válvula cerrada") && !(await p.$("[data-testid=cierre-sup]")), tj?.botones.join("|"));
+  ok(`${tag} I1 el operador ve la tarjeta de la válvula sin «Marcar válvula cerrada»`, !!tj && new RegExp(VALV[1]).test(tj.txt) && !tj.botones.includes("Marcar válvula cerrada") && !(await p.$("[data-testid=cierre-sup]")), tj?.txt.slice(0, 40) + " · " + tj?.botones.join("|"));
   await p.close();
   p = await abrir(ancho, "dist"); await alGeovisor(p); await tocar(p, Number(V2[1]), Number(V2[2]), 19); tj = await esperarTarjeta(p, "activo", new RegExp(VALV[1]));
-  ok(`${tag} I2 el supervisor de distribución tiene «Marcar válvula cerrada» en la tarjeta de la válvula`, !!tj && tj.botones.includes("Marcar válvula cerrada"), tj?.botones.join("|"));
+  ok(`${tag} I2 el supervisor de distribución tiene «Marcar válvula cerrada» en la tarjeta de la válvula`, !!tj && new RegExp(VALV[1]).test(tj.txt) && tj.botones.includes("Marcar válvula cerrada"), tj?.txt.slice(0, 40) + " · " + tj?.botones.join("|"));
   await clicTexto(p, ".geo-tarjeta button", "Marcar válvula cerrada"); await p.waitForSelector("#geo-cs-motivo");
   ok(`${tag} I3 pide el motivo (sin él no deja confirmar), la hora y el regreso estimado`, await p.evaluate(() => [...document.querySelectorAll("[data-testid=cierre-sup] button")].find((b) => /Confirmar el cierre/.test(b.textContent)).disabled && !!document.querySelector("#geo-cs-hecho") && !!document.querySelector("#geo-cs-regreso")));
   await poner(p, "#geo-cs-motivo", "Maniobra de operación de la noche"); await pausa(200); await p.screenshot({ path: join(CAP, `geovisor_cierre_supervisor_${ancho}.png`) });

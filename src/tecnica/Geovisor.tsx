@@ -322,15 +322,19 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
       m.on("click", (ev) => {
         if (!m) return;
         const caja: [maplibregl.PointLike, maplibregl.PointLike] = [[ev.point.x - 14, ev.point.y - 14], [ev.point.x + 14, ev.point.y + 14]];
+        // Entre varios PUNTOS de una misma capa que caben en el toque gana el más cercano al dedo. Antes ganaba el primero que trajera la tesela (un orden
+        // que no significa nada): al tocar una válvula con un codo a medio metro podía salir la tarjeta del codo, sin «Marcar válvula cerrada» (19-nov).
+        const lejos = (x: maplibregl.MapGeoJSONFeature) => { if (x.geometry.type !== "Point") return 0; const q = m!.project(x.geometry.coordinates as [number, number]); return Math.hypot(q.x - ev.point.x, q.y - ev.point.y); };
+        const elMasCercano = (l: maplibregl.MapGeoJSONFeature[]) => l.length < 2 ? l[0] : l.map((x, i) => ({ x, i, d: lejos(x) })).sort((a, b) => a.d - b.d || a.i - b.i)[0].x;
         if (coloresRef.current === "remuneracion") {      // Corte 14: en «Remuneración» se toca un activo y sale su tarjeta de remuneración
           const fr = m.queryRenderedFeatures(caja, { layers: CAPAS_REMUN.filter((id) => m!.getLayer(id)) });
-          const r = CAPAS_REMUN.map((id) => fr.find((x) => x.layer.id === id)).find(Boolean);
+          const r = CAPAS_REMUN.map((id) => elMasCercano(fr.filter((x) => x.layer.id === id))).find(Boolean);
           setTarjeta(null); setRemSel(r ? String(r.properties?.codigo) : null);
           return;
         }
         if (coloresRef.current === "afectaciones") {      // Corte 9b: en «Afectaciones» se toca una válvula cerrada o una zona sin agua
           const fc = m.queryRenderedFeatures(caja, { layers: CAPAS_CORTE.filter((id) => m!.getLayer(id)) });
-          const c = CAPAS_CORTE.map((id) => fc.find((x) => x.layer.id === id)).find(Boolean);
+          const c = CAPAS_CORTE.map((id) => elMasCercano(fc.filter((x) => x.layer.id === id))).find(Boolean);
           if (c) {
             setTarjeta(null);
             setCorteSel(c.layer.id === "x-corte-valvula" ? { tipo: "valvula", codigo: String(c.properties?.codigo) } : c.layer.id === "x-dano-punto" ? { tipo: "dano", codigo: String(c.properties?.codigo) }
@@ -348,8 +352,9 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
                        "f-flujo-l", ...capasTesela.map((c) => `t-${c.codigo}-l`), ...capasReferencia.map((c) => `r-${c.codigo}-l`), ...capasTesela.map((c) => `t-${c.codigo}-a`)]
           .filter((id) => m!.getLayer(id) && m!.getLayoutProperty(id, "visibility") !== "none");
         const feats = m.queryRenderedFeatures(caja, { layers: orden });
-        // en las áreas, el subsector antes que el sector que lo contiene
-        const f = orden.map((id) => feats.filter((x) => x.layer.id === id).sort((a, b) => Number(b.properties?.clase === "subsector") - Number(a.properties?.clase === "subsector"))[0]).find(Boolean);
+        // en las áreas, el subsector antes que el sector que lo contiene; en los puntos, el más cercano al dedo
+        const f = orden.map((id) => { const l = feats.filter((x) => x.layer.id === id); return l.some((x) => x.geometry.type === "Point") ? elMasCercano(l.filter((x) => x.geometry.type === "Point"))
+          : l.sort((a, b) => Number(b.properties?.clase === "subsector") - Number(a.properties?.clase === "subsector"))[0]; }).find(Boolean);
         if (!f) { setTarjeta(null); return; }
         const id = f.layer.id;
         const capa = id.startsWith("g-") ? id.slice(2) : id.startsWith("r-") ? `ref:${id.slice(2, -2)}` : id === "c-contratos" ? "contrato" : id === "f-flujo-l" ? "flujo" : "activo";
