@@ -3,11 +3,13 @@ import { ConfirmarCancelar, type Destino, type MotivoCancelacion } from "../../c
 import { avisoDeError, ErrorCampo } from "../apiCampo";
 import { apiActa } from "./apiActa";
 import { almacenActa } from "./almacenActa";
+import { borrarBorradorCampo } from "../../tecnica/borradorCampo";
 
 // Cancelar una apertura del acta de inspección (consecutivo ya entregado): motivo obligatorio del catálogo, evento «cancelado» en el servidor y, solo si salió bien, se descarta el borrador y las fotos del teléfono.
 // Sirve a la tarjeta de «Mis actas» y al formulario. Si se cortó la red NO se descarta nada: no se sabe si quedó cancelada.
-export function PanelCancelarActa({ actaId, consecutivo, contrato, motivos, destinos, onIrA, onHecho, onSeguir }: {
-  actaId: string; consecutivo: string; contrato: string; motivos: MotivoCancelacion[] | null; destinos?: Destino[];
+export function PanelCancelarActa({ actaId, consecutivo, contrato, motivos, destinos, onIrA, onHecho, onSeguir, correo }: {
+  /** De quién es el borrador local de este registro (para borrarlo del celular al cancelar). */
+  correo?: string; actaId: string; consecutivo: string; contrato: string; motivos: MotivoCancelacion[] | null; destinos?: Destino[];
   onIrA?: (destino: string, contrato: string) => void; onHecho: () => void; onSeguir: () => void;
 }) {
   const [ocupado, setOcupado] = useState(false);
@@ -19,6 +21,7 @@ export function PanelCancelarActa({ actaId, consecutivo, contrato, motivos, dest
     try {
       await apiActa.cancelar(actaId, motivo.codigo, motivo.texto);
       almacenActa.quitar(actaId);                 // libera el borrador y las fotos de la memoria
+      if (correo) void borrarBorradorCampo(`acta:${actaId}`, correo);      // … y el borrador guardado en este celular
       if (destino && onIrA) onIrA(destino, contrato); else onHecho();
     } catch (e) {
       const err = e instanceof ErrorCampo ? e : new ErrorCampo("servidor", "No se pudo cancelar.", 0);

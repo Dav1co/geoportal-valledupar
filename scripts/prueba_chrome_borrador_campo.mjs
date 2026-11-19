@@ -4,6 +4,7 @@
 // · el borrador se borra al guardar, al descartarlo y al cancelar; es de una sola persona; vence a las 24 horas; el nombre del tercero no se guarda.
 // · si el almacenamiento del celular falla (IndexedDB bloqueado), el formulario funciona igual, sin borrador.
 // · el minimapa se precarga al abrir el formulario (elegir el sistema ya no descarga módulos).
+// · «Encontrar o reportar activo» (19-nov): el reporte «No está en la lista» guarda su borrador (tipo, observación y fotos); avisa si se retoma lejos de donde se empezó.
 // Mismo arnés de la prueba del Corte 14: Edges REALES en Deno, RPC de redes a la base de Code B con el rol de la API y los topes de producción, Storage simulado.
 // Uso: node scripts/prueba_chrome_borrador_campo.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> <psql> <plantilla, p. ej. emdupar_b_aut> [capturas]
 import { createRequire } from "node:module";
@@ -59,7 +60,7 @@ const doble = { name: "doble-supabase", setup(b) {
   b.onLoad({ filter: /.*/, namespace: "doble" }, () => ({ loader: "js", contents: `
     const rol = new URLSearchParams(location.search).get("rol") || "op";
     export const FUNCTIONS_URL = "http://127.0.0.1:${P_EDGE}/functions/v1"; export const DOMINIO = "@emdupar.gov.co";
-    export const supabase = { auth: { getSession: async () => ({ data: { session: { access_token: "tok-" + rol } } }), refreshSession: async () => ({ error: null }), signOut: async () => ({}) } };` }));
+    export const supabase = { auth: { getSession: async () => ({ data: { session: { access_token: "tok-" + rol, user: { email: "zt." + rol + "@emdupar.gov.co" } } } }), refreshSession: async () => ({ error: null }), signOut: async () => ({}) } };` }));
 } };
 await build({
   plugins: [doble],
@@ -235,13 +236,16 @@ const envejecer = (p, horas) => p.evaluate((h) => new Promise((ok) => { const r 
   r.onsuccess = () => { const t = r.result.transaction("borradores", "readwrite"), a = t.objectStore("borradores"); const q = a.getAll();
     q.onsuccess = () => { for (const x of q.result) { x.guardado = Date.now() - h * 3600000; a.put(x); } }; t.oncomplete = () => { r.result.close(); ok(true); }; }; }), horas);
 /** Abre el formulario desde el inicio de Técnica y espera a que salga la oferta del borrador o el formulario. Devuelve cuál. */
-async function alFormulario(p, clave) {
+async function alFormularioSinEspera(p, clave) {
   await p.waitForSelector("[data-tarjeta]", { timeout: 30000 });
   const abierto = await p.evaluate(async (c, tabs) => {      // la tarjeta puede estar en otro modo (el administrador entra por Plantas)
     const buscar = () => document.querySelector(`button[data-tarjeta="${c}"]`); let b = buscar();
     if (!b) for (const m of document.querySelectorAll(tabs)) { m.click(); await new Promise((x) => setTimeout(x, 30)); b = buscar(); if (b) break; }
     if (!b) return false; b.click(); return true; }, clave, TABS_MODO);
   if (!abierto) throw new Error(`no está la tarjeta ${clave}`);
+}
+async function alFormulario(p, clave) {
+  await alFormularioSinEspera(p, clave);
   await p.waitForFunction(() => !!document.querySelector("[data-testid=borrador-oferta]") || !!document.querySelector("#dan-desc, #itv-desc"), { timeout: 30000 });
   return p.evaluate(() => (document.querySelector("[data-testid=borrador-oferta]") ? "oferta" : "formulario"));
 }
@@ -397,6 +401,71 @@ for (const ancho of ANCHOS) {
   ok(A("D2 … se llena, toma la foto y GUARDA el daño, sin errores de JavaScript"), /guardad[oa]: DAN-\d{6}/.test(await texto(p)) && erroresD.length === 0, erroresD.join(" | ") + " · " + (await texto(p)).slice(-300));
   await p.reload(); await p.waitForFunction(() => window.__listo === true);
   ok(A("D3 … y tras recargar no hay pregunta (no había borrador)"), (await alFormulario(p, "danos_fallas")) === "formulario");
+  await p.close();
+
+  // ===== E. «Encontrar o reportar activo»: el reporte «No está en la lista» =====
+  const alReporte = async (q) => {      // de la lista de cercanos al formulario del reporte (o a la pregunta del borrador)
+    await q.waitForSelector("[data-testid=enc-reportar]:not([disabled])", { timeout: 40000 }); await clic(q, "[data-testid=enc-reportar]");
+    await q.waitForFunction(() => !!document.querySelector("[data-testid=borrador-oferta], [data-testid=enc-form], [data-testid=enc-duplicado]"), { timeout: 30000 });
+    if (await q.$("[data-testid=enc-duplicado]")) { await clic(q, "[data-testid=enc-dup-no]"); await q.waitForFunction(() => !!document.querySelector("[data-testid=borrador-oferta], [data-testid=enc-form]")); }
+    return q.evaluate(() => (document.querySelector("[data-testid=borrador-oferta]") ? "oferta" : "formulario"));
+  };
+  const alEncontrar = async (q) => { await alFormularioSinEspera(q, "activo_campo"); await q.waitForSelector("[data-testid=encontrar]", { timeout: 30000 }); };
+  const fotoEnc = async (q) => { await clic(q, "[data-testid=enc-foto]"); await q.waitForFunction(() => { const x = document.querySelector(".campo-capturar"); return x && !x.disabled; }, { timeout: 30000 });
+    await clic(q, ".campo-capturar"); await q.waitForFunction(() => !document.querySelector(".campo-capturar"), { timeout: 30000 }); };
+  const fotosEnc = (q) => q.evaluate(async () => Promise.all([...document.querySelectorAll(".enc-foto img")].map(async (i) => { if (!i.complete) await new Promise((r) => { i.onload = i.onerror = r; }); return { ancho: i.naturalWidth, bytes: (await (await fetch(i.src)).blob()).size }; })));
+  const encIdb = async (q) => ((await idb(q)) ?? []).filter((x) => x.clave.startsWith("encontrar:"));
+  p = await abrir(ancho, "op"); await alEncontrar(p);
+  ok(A("E1 sin borrador, «No está en la lista» abre el formulario del reporte directo"), (await alReporte(p)) === "formulario");
+  await pausa(900);
+  ok(A("E2 el reporte abierto y sin tocar no deja borrador"), (await encIdb(p)).length === 0, JSON.stringify(await encIdb(p)));
+  await clic(p, '[data-tipo="hidrante"]'); await pausa(900);
+  await p.reload(); await p.waitForFunction(() => window.__listo === true); await alEncontrar(p);
+  ok(A("E3 con solo el tipo elegido, tras recargar pregunta (sin mencionar fotos)"), (await alReporte(p)) === "oferta" && /^Tiene un borrador del [^()]+\. ¿Continuar o descartar\?$/.test((await oferta(p)).txt), (await oferta(p))?.txt);
+  await clicTexto(p, "[data-testid=borrador-oferta] button", "Descartar"); await p.waitForSelector("[data-testid=enc-form]"); await pausa(600);
+  ok(A("E4 «Descartar» abre el reporte limpio y borra el borrador"), (await p.evaluate(() => document.querySelectorAll("[data-tipo][aria-pressed=true]").length)) === 0 && (await encIdb(p)).length === 0);
+  await clic(p, '[data-tipo="hidrante"]'); await poner(p, "[data-testid=enc-form] textarea", "ZT para cancelar"); await pausa(900);
+  await clicTexto(p, "[data-testid=enc-form] button", "Cancelar"); await p.waitForSelector("[data-testid=enc-reportar]"); await pausa(600);
+  ok(A("E5 «Cancelar» borra el borrador"), (await encIdb(p)).length === 0, JSON.stringify(await encIdb(p)));
+  await alReporte(p);
+  await clic(p, '[data-form-servicio="acueducto"]'); await clic(p, '[data-tipo="hidrante"]'); await poner(p, "[data-testid=enc-form] textarea", "ZT hidrante sin tapa en la esquina");
+  await fotoEnc(p); await fotoEnc(p); await pausa(900);
+  b = await encIdb(p); const eD = b.find((x) => /^encontrar:[a-z0-9]+$/.test(x.clave)), eF = b.find((x) => /:archivos$/.test(x.clave));
+  ok(A("E6 mientras se llena: tipo, observación, dónde se empezó y las 2 fotos, en IndexedDB y sin el correo"), !!eD && eD.datos.tipo === "hidrante" && eD.datos.observacion === "ZT hidrante sin tapa en la esquina" && Math.abs(eD.datos.lat - LUGAR.lat) < 0.0001
+     && eF?.archivos.length === 2 && !/@/.test(JSON.stringify(b)), JSON.stringify(b).slice(0, 400));
+  const bytesEnc = eF?.archivos.map((x) => x.n).join(",");
+  // se retoma lejos de donde se empezó (unos 330 m al norte)
+  await p.setGeolocation({ latitude: LUGAR.lat + 0.003, longitude: LUGAR.lon, accuracy: 6 });
+  await p.reload(); await p.waitForFunction(() => window.__listo === true); await alEncontrar(p);
+  ok(A("E7 tras RECARGAR lejos de donde se empezó: la pregunta (con 2 fotos) y el aviso «se empezó a … de aquí… continúe solo si está junto al activo»"), (await alReporte(p)) === "oferta" && /\(con 2 fotos\)\. ¿Continuar o descartar\?/.test((await oferta(p)).txt)
+     && /Ese borrador se empezó a 3[0-9]{2} m de aquí\. El reporte se guarda con su posición de ahora: continúe solo si está junto al activo\./.test(await p.evaluate(() => document.querySelector("[data-testid=borrador-lejos]")?.textContent ?? "")) && (await sinDesborde(p)),
+    await p.evaluate(() => document.querySelector("[data-testid=borrador-oferta]")?.innerText ?? ""));
+  await captura(p, `despues_encontrar_oferta_lejos_${ancho}.png`);
+  await p.setGeolocation({ latitude: LUGAR.lat, longitude: LUGAR.lon, accuracy: 6 });
+  await p.reload(); await p.waitForFunction(() => window.__listo === true); await alEncontrar(p);
+  ok(A("E8 de vuelta junto al activo: la pregunta sin el aviso de distancia; botones de 44 px o más"), (await alReporte(p)) === "oferta" && !(await p.$("[data-testid=borrador-lejos]")) && (await oferta(p)).alto >= 44);
+  await captura(p, `despues_encontrar_oferta_${ancho}.png`);
+  await clicTexto(p, "[data-testid=borrador-oferta] button", "Continuar"); await p.waitForSelector("[data-testid=enc-form]");
+  fs = await fotosEnc(p);
+  ok(A("E9 «Continuar» recupera el servicio, el tipo, la observación y las 2 fotos (los mismos bytes)"), (await p.evaluate(() => document.querySelector("[data-tipo][aria-pressed=true]")?.dataset.tipo)) === "hidrante"
+     && (await valor(p, "[data-testid=enc-form] textarea")) === "ZT hidrante sin tapa en la esquina" && fs.length === 2 && fs.every((x) => x.ancho > 100) && fs.map((x) => x.bytes).join(",") === bytesEnc, JSON.stringify(fs) + " · " + bytesEnc);
+  await captura(p, `despues_encontrar_recuperado_${ancho}.png`);
+  subidas.length = 0;
+  await clic(p, "[data-testid=enc-guardar]"); await p.waitForSelector("[data-testid=enc-listo]", { timeout: 40000 });
+  const LEV = (await texto(p)).match(/Activo reportado: (LEV-\d{6})/)?.[1];
+  await pausa(500);
+  ok(A("E10 el reporte recuperado se guarda de verdad (2 fotos subidas) y el borrador se borra"), !!LEV && subidas.length === 2 && sqlq(`select count(*) from redes.levantar_puntos where codigo = '${LEV}' and tipo = 'hidrante'`) === "1" && (await encIdb(p)).length === 0, `${LEV} · ${subidas.length}`);
+  await p.close();
+  // Comercial: la misma pantalla desde Formatos de campo
+  p = await abrir(ancho, "campo", "campo"); await esperarTexto(p, /Formatos de campo/);
+  await clicTexto(p, "button.campo-formato-activo", "Encontrar o reportar activo"); await p.waitForSelector("[data-testid=encontrar]", { timeout: 30000 });
+  await alReporte(p); await clic(p, '[data-tipo="valvula"]'); await poner(p, "[data-testid=enc-form] textarea", "ZT desde Comercial"); await pausa(900);
+  await p.reload(); await p.waitForFunction(() => window.__listo === true); await esperarTexto(p, /Formatos de campo/);
+  await clicTexto(p, "button.campo-formato-activo", "Encontrar o reportar activo"); await p.waitForSelector("[data-testid=encontrar]", { timeout: 30000 });
+  ok(A("E11 en Comercial (Formatos de campo) el reporte también guarda y ofrece su borrador, y es de esa persona (otra clave)"), (await alReporte(p)) === "oferta" && (await encIdb(p)).length === 1);
+  await clicTexto(p, "[data-testid=borrador-oferta] button", "Continuar"); await p.waitForSelector("[data-testid=enc-form]");
+  ok(A("E12 … y lo recupera"), (await valor(p, "[data-testid=enc-form] textarea")) === "ZT desde Comercial" && (await p.evaluate(() => document.querySelector("[data-tipo][aria-pressed=true]")?.dataset.tipo)) === "valvula");
+  await clicTexto(p, "[data-testid=enc-form] button", "Cancelar"); await pausa(500);
   await p.close();
 }
 ok("Z1 sin errores de JavaScript ni de consola", errores.length === 0, errores.join(" | "));

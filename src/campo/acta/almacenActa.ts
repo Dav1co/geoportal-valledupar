@@ -2,8 +2,9 @@ import { useSyncExternalStore } from "react";
 import type { Apertura, BorradorActa, PreparacionActa, Precarga } from "./tipos";
 
 // Almacén EN MEMORIA de los borradores del acta mientras dura la sesión de la página (el módulo vive lo que viva la pestaña). Así, volver a «Mis actas» o a otra entrada del área
-// NO borra lo escrito ni las fotos ya tomadas. NADA se escribe en el navegador (ni localStorage, ni sessionStorage, ni IndexedDB): las fotos nunca tocan el disco. Recargar la página
-// lo pierde todo (todavía no hay modo sin conexión: gancho abierto para guardar el borrador cifrado cuando se decida). Pertenece a UNA persona: si cambia el correo, se descarta.
+// NO borra lo escrito ni las fotos ya tomadas. Este almacén no escribe nada en el navegador y una recarga lo vacía. Desde el 19-nov-2026 (decisión de David) el formulario guarda
+// ADEMÁS un borrador local en IndexedDB (tecnica/borradorCampo.ts, enchufado en FormularioActa): lo escrito y las fotos del hallazgo, sin los nombres de las personas ni las fotos del
+// acta física. Pertenece a UNA persona: si cambia el correo, se descarta.
 
 export type FotoLocal = { id: string; tipo: string; blob: Blob; url: string; subida: boolean };
 export type Entrada = {

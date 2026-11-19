@@ -15,6 +15,7 @@ import { ActaLevantar } from "./ActaLevantar";
 import { CamaraActa } from "../campo/acta/CamaraActa";
 import { useUbicacion } from "../campo/ubicacion";
 import { supabase } from "../lib/supabase";
+import { borrarBorradorCampo, fechaBorrador, useBorradorCampo, type ArchivoBorrador } from "./borradorCampo";
 
 // «Encontrar o reportar activo» (Corte 14). Para todos los perfiles de campo y de supervisión, de Técnica y de Comercial (quién entra lo decide el SERVIDOR).
 // · Minimapa centrado en la persona (no se arrastra), encuadrado en el círculo de búsqueda: 15 m → nivel 20; 30 m → nivel 19; botones + y – (18 a 20) y «Centrar».
@@ -25,6 +26,9 @@ import { supabase } from "../lib/supabase";
 const fechaLarga = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" });
 const SENAL_DEBIL = "Señal débil: espere unos segundos o acérquese a cielo abierto.";
 type Foto = { blob: Blob; url: string };
+/** Lo que guarda el borrador local del reporte (borradorCampo.ts): lo elegido, la observación y dónde se empezó (para avisar si se retoma lejos). Las fotos van aparte. */
+type DatosBorrador = { servicio: Servicio; tipo: TipoLevantar | null; observacion: string; lat: number | null; lon: number | null };
+const BORRADOR = "encontrar";
 type Vista = { v: "encontrar" } | { v: "ficha"; codigo: string; activo?: { sistema: Servicio; lat: number; lon: number } } | { v: "reportar"; noEsDuplicado: boolean } | { v: "listo"; codigo: string; precisionBaja: boolean };
 
 type ActivoDano = { codigo: string; sistema: Servicio; lat: number; lon: number };
@@ -46,6 +50,9 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
   const [aviso, setAviso] = useState<string | null>(null);
   const [acta, setActa] = useState<string | null>(null);      // el acta (PDF) del punto recién reportado
   const ultima = useRef<{ lat: number; lon: number; radio: number; servicio: Servicio; vez: number; t: number } | null>(null);
+  // De quién es el borrador del reporte: el correo de la sesión (no se guarda; solo su huella en la clave). Sin sesión conocida no hay borrador.
+  const [persona, setPersona] = useState<string | null>(null);
+  useEffect(() => { let vivo = true; void supabase.auth.getSession().then((r) => { if (vivo) setPersona((r.data.session as { user?: { email?: string } } | null)?.user?.email ?? ""); }, () => { if (vivo) setPersona(""); }); return () => { vivo = false; }; }, []);
 
   useEffect(() => {
     let vivo = true; setErrorInicio(null);
@@ -181,8 +188,9 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
         </>
       ) : null}
 
-      {vista.v === "reportar" ? (
-        <Reportar key={`rep-${vez}`} inicio={inicio} servicioInicial={servicio} fix={fix} senalDebil={senalDebil} noEsDuplicado={vista.noEsDuplicado}
+      {vista.v === "reportar" && persona === null ? <p className="tec-sub enc-pad" role="status">Cargando…</p> : null}
+      {vista.v === "reportar" && persona !== null ? (
+        <Reportar key={`rep-${vez}`} persona={persona} inicio={inicio} servicioInicial={servicio} fix={fix} senalDebil={senalDebil} noEsDuplicado={vista.noEsDuplicado}
           onCancelar={() => setVista({ v: "encontrar" })} onDuplicado={(d) => setPregunta(d)}
           onGuardado={(codigo, baja) => { ultima.current = null; setVez((x) => x + 1); setVista({ v: "listo", codigo, precisionBaja: baja }); window.scrollTo?.(0, 0); }} />
       ) : null}
@@ -208,7 +216,7 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
             <ul>{pregunta.map((p) => <li key={p.codigo}><strong>{p.tipo_nombre}</strong> de {p.servicio}: ya reportado el {fechaLarga(p.registrado_en)}, a {metros(p.distancia_m)} de usted.</li>)}</ul>
             <p><strong>¿Es el mismo?</strong></p>
             <div className="dan-fila">
-              <button type="button" className="tec-boton" data-testid="enc-dup-si" onClick={() => { setPregunta(null); setVista({ v: "encontrar" }); setAviso("Ese activo ya está reportado: no hace falta reportarlo otra vez."); }}>Sí, es el mismo</button>
+              <button type="button" className="tec-boton" data-testid="enc-dup-si" onClick={() => { setPregunta(null); setVista({ v: "encontrar" }); if (persona) void borrarBorradorCampo(BORRADOR, persona); setAviso("Ese activo ya está reportado: no hace falta reportarlo otra vez."); }}>Sí, es el mismo</button>
               <button type="button" className="tec-boton-sec" data-testid="enc-dup-no" onClick={() => { setPregunta(null); setVista({ v: "reportar", noEsDuplicado: true }); }}>No, es otro</button>
             </div>
           </div>
@@ -269,8 +277,8 @@ function FichaSoloLectura({ codigo }: { codigo: string }) {
   );
 }
 
-function Reportar({ inicio, servicioInicial, fix, senalDebil, noEsDuplicado, onCancelar, onGuardado, onDuplicado }: {
-  inicio: InicioLevantar; servicioInicial: Servicio; fix: { lat: number; lon: number; precision_m: number } | null; senalDebil: boolean; noEsDuplicado: boolean;
+function Reportar({ persona, inicio, servicioInicial, fix, senalDebil, noEsDuplicado, onCancelar, onGuardado, onDuplicado }: {
+  persona: string; inicio: InicioLevantar; servicioInicial: Servicio; fix: { lat: number; lon: number; precision_m: number } | null; senalDebil: boolean; noEsDuplicado: boolean;
   onCancelar: () => void; onGuardado: (codigo: string, precisionBaja: boolean) => void; onDuplicado: (d: Duplicado[]) => void;
 }) {
   const [servicio, setServicio] = useState<Servicio>(servicioInicial);
@@ -285,6 +293,24 @@ function Reportar({ inicio, servicioInicial, fix, senalDebil, noEsDuplicado, onC
   const subidas = useRef<Set<number>>(new Set());
   const fixRef = useRef(fix); fixRef.current = fix;
   useEffect(() => () => { for (const f of fotos) URL.revokeObjectURL(f.url); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Borrador local (19-nov): lo elegido, la observación y las fotos quedan en este celular mientras se llena; se borra al guardar o al cancelar.
+  const [guardadoYa, setGuardadoYa] = useState(false);
+  const dondeEmpezo = useRef<{ lat: number; lon: number } | null>(null);
+  if (!dondeEmpezo.current && fix) dondeEmpezo.current = { lat: Number(fix.lat.toFixed(6)), lon: Number(fix.lon.toFixed(6)) };
+  const datosBorrador: DatosBorrador = { servicio, tipo, observacion, lat: dondeEmpezo.current?.lat ?? null, lon: dondeEmpezo.current?.lon ?? null };
+  const archivosBorrador = useMemo<ArchivoBorrador[]>(() => fotos.map((f) => ({ blob: f.blob, etiqueta: "foto" })), [fotos]);
+  // «sin tocar»: el servicio viene del filtro de la lista y la posición la pone el GPS; cuentan el tipo, la observación y las fotos
+  const borrador = useBorradorCampo<DatosBorrador>(BORRADOR, persona, datosBorrador, archivosBorrador, guardadoYa, { tipo, observacion }, { apagado: persona === "" });
+  function continuarBorrador() {
+    const b = borrador.oferta; if (!b) return;
+    const d = b.datos;
+    if (inicio.servicios.some((s) => s.codigo === d.servicio)) setServicio(d.servicio);
+    setTipo(inicio.tipos.some((t) => t.codigo === d.tipo) ? d.tipo : null);
+    setObservacion(typeof d.observacion === "string" ? d.observacion : "");
+    setFotos(b.archivos.slice(0, inicio.max_fotos).map((a) => ({ blob: a.blob, url: URL.createObjectURL(a.blob) })));
+    borrador.resolver(true);
+  }
 
   const obs = observacion.trim();
   const errores: string[] = [];
@@ -311,7 +337,7 @@ function Reportar({ inicio, servicioInicial, fix, senalDebil, noEsDuplicado, onC
       const g = fixRef.current ?? fix;
       const r = await apiLev.crear(p.punto_id, { servicio, tipo, observacion: obs || null, lat: Number(g.lat.toFixed(6)), lon: Number(g.lon.toFixed(6)),
         precision_m: Math.max(0.1, Number(g.precision_m.toFixed(1))), fotos: p.fotos.map((f) => ({ n: f.n, ruta: f.ruta })), no_es_duplicado: noEsDuplicado });
-      if (r.creado) onGuardado(r.codigo, r.precision_baja);
+      if (r.creado) { borrador.terminar(); setGuardadoYa(true); onGuardado(r.codigo, r.precision_baja); }
       else onDuplicado(r.duplicados);      // alguien lo reportó mientras se llenaba: se pregunta (las fotos siguen aquí)
     } catch (e) {
       const msg = e instanceof Error ? e.message : "No se pudo guardar.";
@@ -321,6 +347,21 @@ function Reportar({ inicio, servicioInicial, fix, senalDebil, noEsDuplicado, onC
     } finally { setEnviando(null); }
   }
 
+  if (borrador.leyendo) return <p className="tec-sub enc-pad" role="status">Cargando…</p>;
+  if (borrador.oferta) {
+    const o = borrador.oferta, nf = o.archivos.length;
+    const lejos = fix && typeof o.datos.lat === "number" && typeof o.datos.lon === "number" ? metrosEntre({ lat: o.datos.lat, lon: o.datos.lon }, fix) : 0;
+    return (
+      <section className="tec-tarjeta" role="group" aria-label="Borrador guardado" data-testid="borrador-oferta">
+        <h2>Reportar activo que no está en la lista</h2>
+        <p>Tiene un borrador del {fechaBorrador(o.guardado)}{nf ? ` (con ${nf} ${nf === 1 ? "foto" : "fotos"})` : ""}. ¿Continuar o descartar?</p>
+        {lejos > inicio.radio_max_m ? <p className="tec-aviso enc-debil" role="note" data-testid="borrador-lejos">Ese borrador se empezó a {metros(lejos)} de aquí. El reporte se guarda con su posición de ahora: continúe solo si está junto al activo.</p> : null}
+        <div className="tec-acciones">
+          <button type="button" className="tec-boton" onClick={continuarBorrador}>Continuar</button>
+          <button type="button" className="tec-boton-sec" onClick={() => borrador.resolver(false)}>Descartar</button>
+        </div>
+      </section>);
+  }
   return (
     <section className="tec-tarjeta" aria-labelledby="enc-t-form" data-testid="enc-form">
       <h2 id="enc-t-form">Reportar activo que no está en la lista</h2>
@@ -333,7 +374,7 @@ function Reportar({ inicio, servicioInicial, fix, senalDebil, noEsDuplicado, onC
           {inicio.tipos.map((t) => <button key={t.codigo} type="button" className="dan-opcion" aria-pressed={tipo === t.codigo} data-tipo={t.codigo} disabled={!!enviando} onClick={() => setTipo(t.codigo)}>{t.nombre}</button>)}
         </div></div>
       <div className="enc-campo"><span className="dan-rot">Fotos</span>
-        <p className="tec-ayuda">Una obligatoria y hasta dos más. Solo cámara, con sello de hora y GPS; la foto no se guarda en el celular.</p>
+        <p className="tec-ayuda">Una obligatoria y hasta dos más. Solo cámara, con sello de hora y GPS. Mientras llena el reporte, las fotos quedan en el borrador de este celular; se borran al guardar o al cancelar.</p>
         <div className="dan-fila">
           <button type="button" className="tec-boton-sec" disabled={fotos.length >= inicio.max_fotos || !!enviando} data-testid="enc-foto" onClick={() => setCamara(true)}><IconoCamara />{fotos.length === 0 ? "Tomar la foto" : "Tomar otra foto"}</button>
         </div>
@@ -356,7 +397,7 @@ function Reportar({ inicio, servicioInicial, fix, senalDebil, noEsDuplicado, onC
       {enviando ? <p className="tec-sub" role="status">{enviando}</p> : null}
       <div className="dan-fila">
         <button type="button" className="tec-boton" disabled={!!enviando} data-testid="enc-guardar" onClick={() => void guardar()}>{enviando ? "Guardando…" : "Guardar el reporte"}</button>
-        <button type="button" className="tec-boton-sec" disabled={!!enviando} onClick={onCancelar}>Cancelar</button>
+        <button type="button" className="tec-boton-sec" disabled={!!enviando} onClick={() => { borrador.terminar(); onCancelar(); }}>Cancelar</button>
       </div>
     </section>
   );

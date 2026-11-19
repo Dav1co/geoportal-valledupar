@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./acta.css";
 import { avisoDeError, ErrorCampo } from "../apiCampo";
 import { fechaHoraSello, megas, metros } from "../formato";
@@ -12,16 +12,23 @@ import type { Destino, MotivoCancelacion } from "../../components/ConfirmarCance
 import { SeccionConstancia } from "../constancia/SeccionConstancia";
 import { useConstancia } from "../constancia/useConstancia";
 import * as L from "./logica";
-import type { BorradorActa, ConfirmacionActa, FormularioActa as Catalogo } from "./tipos";
+import type { BorradorActa, ConfirmacionActa, FormularioActa as Catalogo, Precarga } from "./tipos";
+import { fechaBorrador, useBorradorCampo, type ArchivoBorrador } from "../../tecnica/borradorCampo";
 
 // Formulario del acta, por secciones y dibujado desde el catálogo que entrega la Edge (hallazgos, calidades, estados, diámetros, acciones y tipos de foto: nada escrito a mano aquí).
 // «Registrar» (no «firmar»): una transacción en el servidor. Las firmas son HECHOS DECLARADOS que constan en el acta física; aquí no hay firma en pantalla, PDF ni imágenes de firma.
 // Envío: preparar_subida (todas las fotos de una vez) → subida directa de cada foto → registrar con el MISMO acta_id (repetirlo no duplica ni gasta otro consecutivo).
 // Una vez preparada la subida, las fotos quedan fijas (cada ruta corresponde a un orden y un tipo). MALA SEÑAL: todavía no hay modo sin conexión; lo escrito y las fotos siguen en pantalla
-// (y en el almacén en memoria) para reintentar. GANCHO: aquí se enchufaría el borrador local cifrado cuando se decida el modo sin conexión.
+// (y en el almacén en memoria) para reintentar.
+// BORRADOR LOCAL (19-nov-2026, decisión de David): lo escrito, lo elegido y las fotos del hallazgo se guardan además en IndexedDB de este celular (tecnica/borradorCampo.ts), por persona
+// y por 24 horas, para que una recarga no los pierda. Al retomar el registro desde «Mis actas» se pregunta «¿Continuar o descartar?». Se borra al registrar, al descartar y al cancelar.
+// SIN datos personales del suscriptor: NO se guardan el nombre de quien atendió, el del testigo, las fotos del acta física firmada (traen nombres y firmas) ni la constancia por correo.
 
 type Fase = "editando" | "confirmando" | "enviando" | "error" | "guardado";
 type DestinoFoto = { tipo: string; papel: boolean } | null;
+/** Lo que va al borrador local: el acta sin los nombres de las personas, y la precarga del catastro (dirección, barrio, estrato y uso del predio). */
+type DatosBorrador = { borrador: Omit<BorradorActa, "atNombre" | "testigo"> | null; precarga: Precarga | null };
+const sinNombres = (b: BorradorActa): Omit<BorradorActa, "atNombre" | "testigo"> => { const { atNombre: _a, testigo: _t, ...resto } = b; void _a; void _t; return resto; };
 
 export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, motivos = null, destinos, onIrA }: {
   cat: Catalogo; actaId: string; correo: string; onVolver: () => void; onRegistrado: (c: ConfirmacionActa) => void;
@@ -42,6 +49,25 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
 
   useEffect(() => { const t = setInterval(() => setAhora(new Date()), 30000); return () => clearInterval(t); }, []);
   const hayFotos = (entrada?.fotos.length ?? 0) > 0;
+
+  // ---------- borrador local ----------
+  const tipoPapelB = cat.tipos_foto.find((t) => t.acta_fisica)?.codigo ?? "acta_fisica";
+  const datosBorrador: DatosBorrador = { borrador: entrada ? sinNombres(entrada.borrador) : null, precarga: entrada?.precarga ?? null };
+  const fotosEntrada = entrada?.fotos;
+  const archivosBorrador = useMemo<ArchivoBorrador[]>(() => (fotosEntrada ?? []).filter((f) => f.tipo !== tipoPapelB).map((f) => ({ blob: f.blob, etiqueta: f.tipo })), [fotosEntrada, tipoPapelB]);
+  // Se pregunta solo si el registro llega vacío (recién retomado desde «Mis actas» tras una recarga); si ya trae algo en pantalla, eso ES el borrador.
+  const llegaVacio = !!entrada && entrada.fotos.length === 0 && JSON.stringify(entrada.borrador) === JSON.stringify({ ...L.borradorVacio("con_contrato"), fechaFisica: entrada.borrador.fechaFisica });
+  const borrador = useBorradorCampo<DatosBorrador>(`acta:${actaId}`, correo, datosBorrador, archivosBorrador, fase === "guardado" || !entrada, undefined, { sinOferta: !llegaVacio, apagado: !entrada });
+  const [recuperado, setRecuperado] = useState(false);
+  function continuarBorrador() {
+    const o = borrador.oferta; if (!o?.datos.borrador) { borrador.resolver(false); return; }
+    const d = o.datos.borrador;
+    const fotos: FotoLocal[] = o.archivos.filter((a) => a.etiqueta !== tipoPapelB && cat.tipos_foto.some((t) => t.codigo === a.etiqueta))
+      .map((a) => ({ id: Math.random().toString(36).slice(2), tipo: a.etiqueta, blob: a.blob, url: URL.createObjectURL(a.blob), subida: false }));
+    almacenActa.parchar(actaId, (x) => ({ ...x, prep: null, precarga: o.datos.precarga ?? null, fotos,
+      borrador: { ...L.borradorVacio(d.modo === "sin_contrato" ? "sin_contrato" : "con_contrato"), ...d, atNombre: "", testigo: "" } }));
+    setRecuperado(true); borrador.resolver(true);
+  }
   useEffect(() => {
     if (!hayFotos || fase === "guardado") return;
     const f = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
@@ -112,6 +138,7 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
         }
       }
       if (!conf) conf = await apiActa.registrar(actaId, contenido, cons.bloque);
+      borrador.terminar();      // registrado: el borrador de este celular ya no hace falta
       setFase("guardado");
       onRegistrado(conf);
     } catch (e) {
@@ -125,6 +152,22 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
     } finally {
       enviando.current = false;
     }
+  }
+
+  if (borrador.leyendo) return <div className="tec-pagina"><section className="tec-tarjeta"><p role="status">Cargando…</p></section></div>;
+  if (borrador.oferta) {
+    const nf = borrador.oferta.archivos.length;
+    return (
+      <div className="tec-pagina campo-pagina">
+        <section className="tec-tarjeta" role="group" aria-label="Borrador guardado" data-testid="borrador-oferta">
+          <h1>Reportar posible pérdida</h1>
+          <p className="acta-consecutivo-chico">Consecutivo <strong>{entrada.consecutivo}</strong></p>
+          <p>Tiene un borrador del {fechaBorrador(borrador.oferta.guardado)}{nf ? ` (con ${nf} ${nf === 1 ? "foto" : "fotos"})` : ""}. ¿Continuar o descartar?</p>
+          <button type="button" className="tec-boton campo-enviar" onClick={continuarBorrador}>Continuar</button>
+          <button type="button" className="tec-boton-sec" onClick={() => borrador.resolver(false)}>Descartar</button>
+        </section>
+      </div>
+    );
   }
 
   // ======================= Resumen y confirmación =======================
@@ -149,8 +192,8 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
           {fase !== "enviando" && <button type="button" className="tec-boton-sec" onClick={() => { setErrorEnvio(null); setFase("editando"); }}>Volver a editar</button>}
           {fase !== "enviando" && <button type="button" className="btn-cancelar" onClick={() => setCancelando(true)}>Cancelar</button>}
           {cancelando && (
-            <PanelCancelarActa actaId={actaId} consecutivo={entrada.consecutivo} contrato={b.modo === "con_contrato" ? b.contrato : ""} motivos={motivos} destinos={destinos} onIrA={onIrA}
-              onHecho={onVolver} onSeguir={() => setCancelando(false)} />
+            <PanelCancelarActa correo={correo} actaId={actaId} consecutivo={entrada.consecutivo} contrato={b.modo === "con_contrato" ? b.contrato : ""} motivos={motivos} destinos={destinos} onIrA={onIrA}
+              onHecho={() => { borrador.terminar(); onVolver(); }} onSeguir={() => setCancelando(false)} />
           )}
         </section>
       </div>
@@ -167,13 +210,14 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
           <button type="button" className="btn-cancelar" onClick={() => setCancelando(true)} disabled={bloqueado}>Cancelar</button>
         </div>
         {cancelando && (
-          <PanelCancelarActa actaId={actaId} consecutivo={entrada.consecutivo} contrato={b.modo === "con_contrato" ? b.contrato : ""} motivos={motivos} destinos={destinos} onIrA={onIrA}
-            onHecho={onVolver} onSeguir={() => setCancelando(false)} />
+          <PanelCancelarActa correo={correo} actaId={actaId} consecutivo={entrada.consecutivo} contrato={b.modo === "con_contrato" ? b.contrato : ""} motivos={motivos} destinos={destinos} onIrA={onIrA}
+            onHecho={() => { borrador.terminar(); onVolver(); }} onSeguir={() => setCancelando(false)} />
         )}
         <p className="acta-consecutivo" aria-label="Consecutivo del registro">{entrada.consecutivo}</p>
+        {recuperado && <p className="campo-nota" role="status" data-testid="borrador-recuperado">Se recuperó el borrador. Por protección de datos no se guardan el nombre de quien atendió, el del testigo ni las fotos del acta física: vuelva a ponerlos.</p>}
         <p className="campo-nota" role="note"><strong>Escriba este consecutivo en el acta física.</strong> {L.TEXTO_PAPEL}</p>
         <p className="campo-sub">{cat.aviso_registro}</p>
-        <p className="campo-sub">Todavía no funciona sin conexión: si se pierde la señal, lo escrito y las fotos siguen en pantalla para reintentar. No cierre ni recargue la página antes de registrar.</p>
+        <p className="campo-sub">Todavía no funciona sin conexión: si se pierde la señal, lo escrito y las fotos siguen en pantalla para reintentar. Si la página se recarga, lo escrito y las fotos del hallazgo quedan en el borrador de este celular; los nombres y las fotos del acta física no.</p>
         {entrada.aviso_zona && <p className="campo-nota" role="note">La ubicación de la apertura quedó fuera de la zona de operación; se registra con esa marca.</p>}
         {vencido && <p className="campo-error" role="alert">Este registro caducó ({L.fechaCO(entrada.vence_en.slice(0, 10))}): ya no se puede registrar. Abra uno nuevo desde «Mis actas».</p>}
 
@@ -269,7 +313,7 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
         </Seccion>
 
         <Seccion titulo="5. Fotos de la visita">
-          <p className="campo-sub">Solo con la cámara. Las fotos quedan en la memoria del teléfono hasta registrar; no se guardan en el equipo.</p>
+          <p className="campo-sub">Solo con la cámara. Mientras llena el registro, las fotos del hallazgo quedan en el borrador de este celular; se borran al registrar o al cancelar.</p>
           <p className="acta-contador" aria-live="polite">
             Hallazgo: <strong>{cont.hallazgo}</strong> de {cont.maxHallazgo} (mínimo {cont.minHallazgo}){cont.tiposFaltantes.length > 0 ? ` · falta: ${cont.tiposFaltantes.join(", ")}` : ""} · tope {megas(cat.limites.max_bytes_foto)} por foto
           </p>

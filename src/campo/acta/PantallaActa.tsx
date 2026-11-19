@@ -104,7 +104,7 @@ export function PantallaActa({ correo, onVolver, contratoInicial = "", destinos,
                 )}
                 {f.puede_cancelar && cancelandoId !== f.acta_id && <button type="button" className="btn-cancelar" onClick={() => setCancelandoId(f.acta_id)}>Cancelar</button>}
                 {f.puede_cancelar && cancelandoId === f.acta_id && (
-                  <PanelCancelarActa actaId={f.acta_id} consecutivo={f.consecutivo} contrato={f.contrato ?? (entradas[f.acta_id]?.borrador.modo === "con_contrato" ? entradas[f.acta_id]?.borrador.contrato : "") ?? ""} motivos={motivos} destinos={destinos} onIrA={onIrA}
+                  <PanelCancelarActa correo={correo} actaId={f.acta_id} consecutivo={f.consecutivo} contrato={f.contrato ?? (entradas[f.acta_id]?.borrador.modo === "con_contrato" ? entradas[f.acta_id]?.borrador.contrato : "") ?? ""} motivos={motivos} destinos={destinos} onIrA={onIrA}
                     onHecho={() => { setCancelandoId(null); recargar(); }} onSeguir={() => setCancelandoId(null)} />
                 )}
                 {accion === "adjuntar_papel" && <button type="button" className="tec-boton" onClick={() => setVista({ v: "papel", fila: f })}>Adjuntar la foto del acta física</button>}

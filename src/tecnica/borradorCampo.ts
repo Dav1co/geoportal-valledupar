@@ -1,4 +1,5 @@
-// Borrador local de los formularios de campo de distribución («Reportar daño o falla» y «Registrar intervención»), 18-nov-2026.
+// Borrador local de los formularios de campo: «Reportar daño o falla» y «Registrar intervención» (18-nov-2026); el acta de Comercial («Reportar posible pérdida»)
+// y «Encontrar o reportar activo» (19-nov-2026).
 // Lo escrito, lo elegido y los archivos (fotos con su sello ya puesto, y los PDF adjuntos) se guardan EN ESTE CELULAR mientras se llena el formulario, para que una
 // recarga (la automática tras una publicación, o que el navegador cierre la pestaña) no los pierda. Al volver a abrir el formulario se ofrece continuar o descartar.
 // · Todo va en IndexedDB (los archivos no caben en sessionStorage ni en localStorage). Dos registros por formulario y persona: los datos y los archivos (los archivos
@@ -77,11 +78,15 @@ export const fechaBorrador = (ts: number) => new Date(ts).toLocaleString("es-CO"
  *  · Mientras `activo` (ya se eligió y no se ha guardado), cada cambio de `datos` o de `archivos` se guarda solo, con una espera corta.
  *    Un formulario sin tocar no deja borrador: `toque` es la parte de los datos que solo cambia la persona (sin lo que el formulario propone solo, como el sector
  *    de la ubicación); mientras sea igual a la de apertura y no haya archivos, no se guarda nada.
- *  · `terminar()` lo borra (al guardar con éxito o al cancelar). */
-export function useBorradorCampo<D>(formulario: string, correo: string, datos: D, archivos: ArchivoBorrador[], pausado: boolean, toque?: unknown) {
-  const [leyendo, setLeyendo] = useState(true);
+ *  · `terminar()` lo borra (al guardar con éxito o al cancelar).
+ *  · `opciones.sinOferta`: lo que hay en pantalla ya es el borrador (se volvió al formulario sin recargar): no se pregunta, se sigue guardando.
+ *  · `opciones.apagado`: no se sabe de quién es la sesión: no se lee ni se guarda nada. */
+export function useBorradorCampo<D>(formulario: string, correo: string, datos: D, archivos: ArchivoBorrador[], pausado: boolean, toque?: unknown, opciones?: { sinOferta?: boolean; apagado?: boolean }) {
+  const sinLeer = !!opciones?.sinOferta || !!opciones?.apagado;
+  const sinLeerInicial = useRef(sinLeer);       // se decide al abrir: lo que pase después en pantalla no cambia si se preguntó o no
+  const [leyendo, setLeyendo] = useState(!sinLeer);
   const [oferta, setOferta] = useState<BorradorCampo<D> | null>(null);
-  const [activo, setActivo] = useState(false);
+  const [activo, setActivo] = useState(!!opciones?.sinOferta && !opciones?.apagado);
   const terminado = useRef(false);
   const json = JSON.stringify(datos);
   const jsonToque = toque === undefined ? json : JSON.stringify(toque);
@@ -89,6 +94,7 @@ export function useBorradorCampo<D>(formulario: string, correo: string, datos: D
   const tocado = useRef(false);
 
   useEffect(() => {
+    if (sinLeerInicial.current) return;
     let vivo = true;
     void leerBorradorCampo<D>(formulario, correo).then((b) => { if (!vivo) return; if (b) setOferta(b); else setActivo(true); setLeyendo(false); });
     return () => { vivo = false; };
@@ -122,7 +128,8 @@ export function useBorradorCampo<D>(formulario: string, correo: string, datos: D
     else void borrarBorradorCampo(formulario, correo);
     setOferta(null); setActivo(true);
   }, [oferta, formulario, correo]);
-  const terminar = useCallback(() => { terminado.current = true; void borrarBorradorCampo(formulario, correo); }, [formulario, correo]);
+  const apagado = !!opciones?.apagado;
+  const terminar = useCallback(() => { terminado.current = true; if (!apagado) void borrarBorradorCampo(formulario, correo); }, [formulario, correo, apagado]);
 
   return { leyendo, oferta, resolver, terminar };
 }
