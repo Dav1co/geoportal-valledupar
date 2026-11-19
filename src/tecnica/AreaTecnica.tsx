@@ -19,6 +19,7 @@ import { pedirPestana } from "./CabeceraDashboard";
 import { AvisosContexto, PantallaAvisos, resolverBandeja, useAvisos } from "./Avisos";
 import type { Bandeja } from "./apiAvisos";
 import { EncontrarActivo } from "./EncontrarActivo";      // Corte 14
+import { EventosSuspension } from "./EventosSuspension";      // Corte 15: «Suspensiones» en el inicio y el aviso que abre su evento
 import { supabase } from "../lib/supabase";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
@@ -63,7 +64,8 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [desdeDano, setDesdeDano] = useState<DesdeDano | null>(null);      // «Registrar la reparación» desde el daño recién guardado
   const [activoItv, setActivoItv] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // desde la ficha
   const [activoDano, setActivoDano] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // Corte 6a: desde el geovisor
-  const [vista, setVista] = useState<"inicio" | "captura" | "dashboard" | "activos" | "redes" | "geovisor" | "avisos" | "encontrar">("inicio");      // Corte 14: «encontrar»      // Corte 12: «avisos»      // Corte 11: se entra al inicio por modos
+  const [vista, setVista] = useState<"inicio" | "captura" | "dashboard" | "activos" | "redes" | "geovisor" | "avisos" | "encontrar" | "suspensiones">("inicio");      // Corte 15: «suspensiones»      // Corte 14: «encontrar»      // Corte 12: «avisos»      // Corte 11: se entra al inicio por modos
+  const [eventoSusp, setEventoSusp] = useState<{ codigo: string | null; vez: number; desde: "inicio" | "avisos" | "dashboard" | "redes" }>({ codigo: null, vez: 0, desde: "inicio" });      // el evento que se abre directo (desde su aviso) y a dónde vuelve
   const [modo, setModo] = useState<Modo | null>(modoGuardado);
   // Corte 6b (§30.2): un enlace compartido del geovisor (#geovisor=<código>) se consume una vez: se quita de la barra de direcciones y abre el geovisor
   const [vistaId, setVistaId] = useState<string | null>(() => /(?:^|[#&])geovisor=([a-z0-9]{10})(?:&|$)/.exec(window.location.hash)?.[1] ?? null);
@@ -139,7 +141,10 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     ? <SelectorDashboards actual={vista === "redes" ? "distribucion" : "ptap"} onElegir={(d) => setVista(d === "ptap" ? "dashboard" : "redes")} /> : null;
 
   // Corte 12: un aviso abre su bandeja (el dashboard y la pestaña que corresponde)
+  // Corte 15: los eventos de suspensión los ven el administrador, el supervisor de planta y el de distribución (el servidor lo vuelve a decidir en cada ruta)
+  const abrirSuspensiones = (evento: string | null, desde: "inicio" | "avisos" | "dashboard" | "redes") => { setEventoSusp((e) => ({ codigo: evento, vez: e.vez + 1, desde })); setVista("suspensiones"); window.scrollTo?.(0, 0); };
   const abrirBandeja = (b: Bandeja) => {
+    if (b.evento) { abrirSuspensiones(b.evento, vista === "avisos" || vista === "dashboard" || vista === "redes" ? vista : "inicio"); return; }      // el aviso de un evento abre ese evento y «Volver» regresa a donde estaba
     const r = resolverBandeja(b, puedeRedes);
     const tablero = r.tablero === "distribucion" && !puedeRedes ? "ptap" : r.tablero;
     if (tablero === "ptap" && !puedeSupervisar) return;
@@ -147,6 +152,11 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     setVista(tablero === "ptap" ? "dashboard" : "redes"); window.scrollTo?.(0, 0);
   };
   const ctxAvisos = (tablero: "ptap" | "distribucion") => ({ estado: avisos, tablero, tieneDistribucion: puedeRedes, onVer: () => setVista("avisos"), onAbrir: abrirBandeja });
+  if ((puedeSupervisar || puedeRedes) && vista === "suspensiones") return (
+    <div className="tec-envoltura tec-modo-distribucion">
+      <EventosSuspension key={eventoSusp.vez} inicial={eventoSusp.codigo ? { evento: eventoSusp.codigo } : undefined} alCambiar={avisos.recargar}
+        rotuloVolver={eventoSusp.desde === "avisos" ? "Volver a los avisos" : "Volver"} onVolver={() => { setVista(eventoSusp.desde); window.scrollTo?.(0, 0); }} />
+    </div>);
   if ((puedeSupervisar || puedeRedes) && vista === "avisos") return <PantallaAvisos estado={avisos} tieneDistribucion={puedeRedes} onAbrir={abrirBandeja} onVolver={() => setVista("inicio")} />;
   if (puedeSupervisar && vista === "dashboard") return <AvisosContexto.Provider value={ctxAvisos("ptap")}><Dashboard correo={correo} rotuloPerfil={rotuloPerfil} selector={selector} onVolver={() => setVista("inicio")} /></AvisosContexto.Provider>;
   if (puedeRedes && vista === "redes") return <AvisosContexto.Provider value={ctxAvisos("distribucion")}><DashboardRedes correo={correo} selector={selector} onVolver={() => setVista("inicio")} onGeovisor={redes?.geovisor ? () => setVista("geovisor") : undefined} /></AvisosContexto.Provider>;
@@ -163,6 +173,8 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   if (encontrar && vista === "encontrar") return <EncontrarActivo onVolver={() => setVista("inicio")} onReportarDano={(a) => abrirDano(a)} />;
   const tarjetaEncontrar = { clave: "activo_campo", nombre: "Encontrar o reportar activo", descripcion: "Los activos que tiene cerca, o reportar uno que no está en la red", estado: "lista" as const, abrir: () => { setVista("encontrar"); window.scrollTo?.(0, 0); } };
 
+  // Corte 15: «Suspensiones». En Plantas para el supervisor de planta y el administrador; en Supervisión para el supervisor de distribución (David, 19-nov)
+  const tarjetaSuspensiones: Tarjeta = { clave: "suspensiones", nombre: "Suspensiones", descripcion: "Eventos de suspensión del servicio: declarar, ver a quién afecta y cerrar", estado: "lista", abrir: () => abrirSuspensiones(null, "inicio") };
   // ----- las tarjetas de cada modo (solo lo que la persona ya tenía) -----
   const abrirForm = (clave: string) => { setElegido(clave); setVista("captura"); window.scrollTo?.(0, 0); };
   const tarjetaForm = (f: MisFormularios["formularios"][number]): Tarjeta => {
@@ -185,6 +197,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     planta: [
       ...formulariosPlanta.map(tarjetaForm),
       ...(encontrar && (formulariosPlanta.length > 0 || supervisa) ? [tarjetaEncontrar] : []),
+      ...(puedeSupervisar ? [tarjetaSuspensiones] : []),
     ],
     redes: [
       ...ordenados.filter((f) => FORMULARIOS_REDES.has(f.clave)).map(tarjetaForm),
@@ -197,6 +210,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
           descripcion: avisos.datos ? (avisos.datos.total === 0 ? "Nada pendiente por ahora" : `${avisos.datos.rojos} urgentes · ${avisos.datos.naranjas} de atención`) : "Lo que falta por hacer o pasó su plazo",
           contador: avisos.datos ? { n: avisos.datos.total, nivel: avisos.datos.rojos > 0 ? "rojo" as const : avisos.datos.naranjas > 0 ? "naranja" as const : "info" as const } : undefined }] : []),
       ...(puedeSupervisar ? [{ clave: "dashboard_ptap", nombre: "Dashboard PTAP", descripcion: "Registros, gráficas, puntos y químicos de planta", estado: "lista" as const, abrir: () => setVista("dashboard") }] : []),
+      ...(puedeRedes ? [tarjetaSuspensiones] : []),
       ...(puedeRedes ? [{ clave: "dashboard_distribucion", nombre: "Dashboard distribución", descripcion: "Daños, intervenciones, personal y cargue de capas", estado: "lista" as const, abrir: () => setVista("redes") }] : []),
       ...(tieneGeovisor && supervisa ? [{ clave: "geovisor", nombre: "Geovisor técnico", descripcion: "La red, las actividades y los contratos en el mapa", estado: "lista" as const, abrir: () => setVista("geovisor") }] : []),
       ...(editaFicha ? [{ clave: "ficha_editar", nombre: "Ficha de activos (editar)", descripcion: "Corregir alias, placa y datos de un activo, con motivo", estado: "lista" as const, abrir: () => setVista("activos") }] : []),
