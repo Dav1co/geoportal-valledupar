@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { comprimirArchivo } from "../lib/comprimirFoto";
+import { comprimirArchivo, LADO_FOTO_DETALLE_PX } from "../lib/comprimirFoto";
 import "./dano.css";
 import { IconoCamara } from "./IconoCamara";
 import { apiPerfil, subirArchivo, type CambiosFicha, type EdicionFicha, type Opcion } from "./apiRedes";
@@ -133,8 +133,9 @@ export function FichaEditar({ codigo, edicion, onCancelar, onGuardado }: { codig
 }
 
 /** Reduce una imagen a JPEG (lado mayor 1600 px) hasta que quepa en el tope. */
-// compresión común (src/lib/comprimirFoto.ts): 1.600 px, JPEG 0,8, meta 250–500 KB; respeta el giro del celular (EXIF); un JPEG que ya cabe se sube tal cual
-const aJpeg = async (archivo: File, maxBytes: number): Promise<Blob> => (await comprimirArchivo(archivo, maxBytes)).blob;
+// compresión común (src/lib/comprimirFoto.ts): 2.048 px y JPEG 0,8 (David, 19-nov: los botones de archivo van a 2.048), meta 250–500 KB; respeta el giro del
+// celular (EXIF); un JPEG que ya cabe se sube tal cual
+const aJpeg = async (archivo: File, maxBytes: number): Promise<Blob> => (await comprimirArchivo(archivo, maxBytes, LADO_FOTO_DETALLE_PX)).blob;
 
 export function FotoPerfilCambiar({ codigo, maxBytes, onCancelar, onGuardado }: { codigo: string; maxBytes: number; onCancelar: () => void; onGuardado: (msg: string) => void }) {
   const [blob, setBlob] = useState<Blob | null>(null);

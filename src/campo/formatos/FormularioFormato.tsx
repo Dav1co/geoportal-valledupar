@@ -3,7 +3,7 @@ import "./formatos.css";
 import { ConfirmarCancelar, type Destino as DestinoCancelar } from "../../components/ConfirmarCancelar";
 import { avisoDeError, apiCampo, ErrorCampo, type FormularioCampo, type Preparacion } from "../apiCampo";
 import { maxDescripcion } from "../limites";
-import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara, esFotoDeDetalle, LADO_FOTO_DETALLE_PX, LADO_MAYOR_PX } from "../camara";
+import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara, ladoPara, LADO_MAYOR_PX } from "../camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "../ubicacion";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
 import { apiFormatos } from "./apiFormatos";
@@ -380,8 +380,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
 
       {camaraEn !== null && (
         <PanelCamara rotulo={camaraEn.nombre} maxBytes={def.limites.max_bytes_foto} sello={lineasSello}
-          // las fotos del medidor (y de su lectura, serial o sellos) van a 2.048 px para que se lean; las demás, a 1.600
-          ladoMayor={camaraEn.tipo === "etiqueta" && esFotoDeDetalle(camaraEn.codigo, camaraEn.nombre) ? LADO_FOTO_DETALLE_PX : LADO_MAYOR_PX}
+          // las fotos del medidor (y de su lectura, serial o sellos) y de placas van a 2.048 px para que se lean; las demás, a 1.600
+          ladoMayor={camaraEn.tipo === "etiqueta" ? ladoPara(camaraEn.codigo, camaraEn.nombre) : LADO_MAYOR_PX}
           onFoto={(f) => { guardarFoto(camaraEn, f.blob); setCamaraEn(null); }} onCerrar={() => setCamaraEn(null)} />
       )}
     </div>

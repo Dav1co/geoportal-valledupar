@@ -4,7 +4,9 @@
 //     capturarFoto, igual que en los formularios: sello primero, compresión después. «Antes» = lo que hacía el código anterior (1.600 px, JPEG 0,72).
 //   · botón de archivo (remisión de químicos, foto de la ficha): comprimirArchivo sobre el JPEG original. «Antes» = el archivo original.
 // Comprueba además: el sello está DENTRO de la foto comprimida, el lado largo (1.600 / 2.048), que nada se agranda y que un JPEG pequeño no se toca.
-// Y la cámara real del acta (CamaraActa con 2.048 px, cámara falsa de Chrome) y la regla de las fotos del medidor.
+// Y la cámara real del acta (CamaraActa con 2.048 px, cámara falsa de Chrome), una cámara que NO da 2.560 × 1.440 (se usa lo que dé, sin agrandar ni fallar)
+// y la regla de las fotos de detalle sobre las etiquetas REALES de los formatos de campo (campo.tipo_fotos).
+// Calidad (David, 19-nov): 0,72 a 1.600 px y 0,8 a 2.048 px; los botones de archivo (documentos) a 2.048 px.
 // Uso: node scripts/prueba_chrome_fotos_comprimidas.mjs <chrome> <puppeteer-core> <carpeta con fotos .jpg> [capturas]
 import { createRequire } from "node:module";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync } from "node:fs";
@@ -29,7 +31,7 @@ await build({
   stdin: { resolveDir: raiz, loader: "tsx", contents: `
     import React from "react"; import { createRoot } from "react-dom/client";
     import "./src/styles/app.css"; import "./src/tecnica/tokens.css"; import "./src/tecnica/tecnica.css"; import "./src/campo/campo.css";
-    import { capturarFoto, esFotoDeDetalle } from "./src/campo/camara.ts";
+    import { capturarFoto, esFotoDeDetalle, ladoPara } from "./src/campo/camara.ts";
     import { comprimirArchivo, LADO_FOTO_DETALLE_PX } from "./src/lib/comprimirFoto.ts";
     import { CamaraActa } from "./src/campo/acta/CamaraActa.tsx";
     const SELLO = ["19/11/2026, 10:42:13 a. m. · hora del celular", "10.47659, -73.28544 · ± 5 m"];
@@ -70,7 +72,7 @@ await build({
         r.despues_camara = f.blob.size; r.calidad = f.calidad; r.lado = Math.max(f.ancho, f.alto); r.sello = await selloDentro(f.blob);
         if (window.__guardar) window.__guardar[nombre + "_" + ladoMayor] = f.blob;
       } finally { cam.fin(); }
-      const a = await comprimirArchivo(original, 5 * 1048576, ladoMayor); r.despues_archivo = a.blob.size; r.lado_archivo = a.lado; r.calidad_archivo = a.calidad;
+      if (ladoMayor > 1600) { const a = await comprimirArchivo(original, 5 * 1048576, ladoMayor); r.despues_archivo = a.blob.size; r.lado_archivo = a.lado; r.calidad_archivo = a.calidad; }
       return r;
     };
     window.casos = async () => {
@@ -85,13 +87,21 @@ await build({
       out.pequeno = { igual: pr.blob === peq, sin_cambios: pr.sin_cambios, bytes: peq.size };
       // un PNG pequeño SÍ se pasa a JPEG (se sube como image/jpeg)
       const png = await new Promise((ok) => p.toBlob(ok, "image/png")); const pp = await comprimirArchivo(png, 1572864); out.png = { tipo: pp.blob.type, sin_cambios: pp.sin_cambios };
-      // las fotos del medidor (por código o nombre de la etiqueta de los formatos de campo)
-      out.detalle = ["medidor_nuevo", "medidor_retirado", "medidor_instalado", "caja_medidor", "lectura_inicial", "serial_nuevo", "sello_instalado"].every((c) => esFotoDeDetalle(c))
-        && ["fachada", "predio", "dano", "entorno", "antes"].every((c) => !esFotoDeDetalle(c)) && esFotoDeDetalle("x", "Foto del medidor y su lectura");
+      // las etiquetas REALES de foto de los formatos de campo (campo.tipo_fotos, paquete del Paso D): cuáles van a 2.048 px
+      const REALES = [["medidor_nuevo", "Medidor nuevo, con serial y lectura"], ["medidor_retirado", "Medidor retirado, con serial y lectura"], ["medidor_instalado", "Medidor instalado, con serial y lectura"],
+        ["medidor_lectura_inicial", "Medidor con lectura inicial"], ["medidor_lectura_serial", "Medidor con lectura y serial"], ["sello_instalado", "Sello instalado"], ["estado_sello_corte", "Estado del sello o del corte"],
+        ["antes", "Antes del corte"], ["punto_corte", "Punto de corte"], ["tapon_retiro", "Tapón o retiro"], ["acometida_terminada", "Acometida terminada"], ["punto_conexion", "Punto de conexión a la red"],
+        ["sitio_terminado", "Sitio terminado"], ["fachada_nomenclatura", "Fachada con nomenclatura"], ["predio_lote", "Predio o lote"], ["vecino_referencia", "Vecino o referencia"], ["recorrido", "Recorrido de la acometida"],
+        ["servicio_restablecido", "Servicio restablecido"], ["evidencia", "Evidencia de lo revisado"], ["valvula_cerrada", "Válvula cerrada"]];
+      out.a2048 = REALES.filter(([c, n]) => ladoPara(c, n) === 2048).map(([c]) => c);
+      out.placa = esFotoDeDetalle("placa_equipo") && esFotoDeDetalle("x", "Placa del vehículo") && ladoPara("x", "Placa de la bomba") === 2048;
       return out;
     };
     // la cámara REAL del acta (CamaraActa, cámara falsa de Chrome) con 2.048 px
     const q = new URLSearchParams(location.search);
+    // una cámara que NO tiene 2.560 × 1.440: entrega 1.280 × 720 aunque se le pida más (como un celular modesto). Se reemplaza getUserMedia antes de abrir el acta.
+    if (q.get("chica")) navigator.mediaDevices.getUserMedia = async (c) => { window.__pedido = JSON.stringify(c.video); const k = document.createElement("canvas"); k.width = 1280; k.height = 720;
+      const x = k.getContext("2d"); setInterval(() => { x.fillStyle = "#7a9"; x.fillRect(0, 0, 1280, 720); x.fillStyle = "#234"; x.fillRect(100 + (Date.now() / 10 % 300), 200, 200, 200); }, 50); return k.captureStream(10); };
     if (q.get("acta")) createRoot(document.getElementById("raiz")).render(<CamaraActa rotulo="Hallazgo" maxBytes={1572864} ladoMayor={Number(q.get("acta"))} sello={() => SELLO}
       onFoto={async (f) => { const b = await createImageBitmap(f.blob); window.__acta = { ancho: b.width, alto: b.height, bytes: f.blob.size }; }} onCerrar={() => {}} />);
     window.__listo = true;` },
@@ -121,18 +131,19 @@ for (const ancho of ANCHOS) {
   for (const f of fotos) for (const lado of [1600, 2048]) filas.push(await p.evaluate((f, l) => window.medir(f, l), f, lado));
   if (ancho === ANCHOS[0]) tabla.push(...filas);
   const c16 = filas.filter((r) => r.lado <= 1600 && r.original_lado), c20 = filas.filter((r, i) => i % 2 === 1);
-  ok(A(`C1 cámara a 1.600 px: lado largo 1.600 y peso dentro de la meta (≤ 500 KB) en las ${fotos.length} fotos`), filas.filter((r, i) => i % 2 === 0).every((r) => r.lado === 1600 && r.despues_camara <= 500 * 1024),
+  ok(A(`C1 cámara a 1.600 px: lado largo 1.600, JPEG 0,72 (como estaba) y peso ≤ 500 KB en las ${fotos.length} fotos`), filas.filter((r, i) => i % 2 === 0).every((r) => r.lado === 1600 && r.calidad === 0.72 && r.despues_camara <= 500 * 1024),
     filas.filter((r, i) => i % 2 === 0).map((r) => `${r.nombre}:${r.lado}px ${kb(r.despues_camara)} q${r.calidad}`).join(" · "));
-  ok(A("C2 cámara a 2.048 px (acta de Comercial y fotos del medidor): lado largo 2.048 y peso ≤ 500 KB (o, si no, calidad 0,65 dentro del tope)"), c20.every((r) => r.lado === 2048 && (r.despues_camara <= 500 * 1024 || r.calidad === 0.65)),
+  ok(A("C2 cámara a 2.048 px (acta de Comercial, medidor y placas): lado largo 2.048, JPEG 0,8 (o menos, hasta 0,65, para llegar a 500 KB)"), c20.every((r) => r.lado === 2048 && [0.8, 0.72, 0.65].includes(r.calidad) && (r.despues_camara <= 500 * 1024 || r.calidad === 0.65)) && c20.some((r) => r.calidad === 0.8),
     c20.map((r) => `${r.nombre}:${r.lado}px ${kb(r.despues_camara)} q${r.calidad}`).join(" · "));
   ok(A("C3 el sello está DENTRO de la foto comprimida (franja oscura abajo con texto claro), en todas"), filas.every((r) => r.sello.oscuros > 0.45 && r.sello.claros > 0.01), filas.map((r) => `${r.nombre}:${r.sello.oscuros.toFixed(2)}/${r.sello.claros.toFixed(3)}`).join(" "));
-  ok(A("C4 calidad 0,8 cuando la foto llega a la meta sin bajar"), filas.some((r) => r.calidad === 0.8) && filas.every((r) => [0.8, 0.72, 0.65].includes(r.calidad)), filas.map((r) => r.calidad).join(","));
-  ok(A("C5 botón de archivo: las fotos de cámara de 3.000 a 4.100 px quedan en 1.600 (o 2.048) px y por debajo del original"), filas.every((r) => r.lado_archivo === (filas.indexOf(r) % 2 ? 2048 : 1600) && r.despues_archivo < r.original),
-    filas.map((r) => `${r.nombre}:${kb(r.original)}→${kb(r.despues_archivo)}`).join(" · "));
+  ok(A("C4 nunca baja de 0,65 (el piso); a 1.600 px nunca pasa de 0,72"), filas.every((r) => r.calidad >= 0.65) && filas.filter((r, i) => i % 2 === 0).every((r) => r.calidad <= 0.72), filas.map((r) => r.calidad).join(","));
+  ok(A("C5 botón de archivo (documentos: remisión de químicos, foto de la ficha): las fotos de 3.000 a 4.100 px quedan en 2.048 px, por debajo del original y nunca por debajo de 0,65"), c20.every((r) => r.lado_archivo === 2048 && r.despues_archivo < r.original && r.calidad_archivo >= 0.65),
+    c20.map((r) => `${r.nombre}:${kb(r.original)}→${kb(r.despues_archivo)} q${r.calidad_archivo}`).join(" · "));
   const cs = await p.evaluate(() => window.casos());
   ok(A("C6 un video chico (1.280 × 720) no se agranda aunque se pidan 2.048 px"), cs.chico.ancho === 1280 && cs.chico.alto === 720, JSON.stringify(cs.chico));
   ok(A("C7 un JPEG pequeño de archivo se sube tal cual (el mismo archivo, «sin cambios»); un PNG pequeño sí se pasa a JPEG"), cs.pequeno.igual && cs.pequeno.sin_cambios && cs.png.tipo === "image/jpeg" && !cs.png.sin_cambios, JSON.stringify(cs));
-  ok(A("C8 fotos del medidor a 2.048 px: medidor_nuevo, medidor_retirado, medidor_instalado, caja_medidor, lectura_inicial, serial_nuevo, sello…; fachada, daño, entorno no"), cs.detalle);
+  ok(A("C8 de las 20 etiquetas reales de foto de los formatos de campo, van a 2.048 px las 7 del medidor y del sello; y «placa» también entra en la regla"),
+    cs.a2048.join(",") === "medidor_nuevo,medidor_retirado,medidor_instalado,medidor_lectura_inicial,medidor_lectura_serial,sello_instalado,estado_sello_corte" && cs.placa, cs.a2048.join(","));
   await p.close();
   // la cámara REAL del acta con 2.048 px (cámara falsa de Chrome, que entrega el tamaño pedido)
   p = await nav.newPage(); await p.setViewport(ancho < 600 ? { width: ancho, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : { width: ancho, height: 900 });
@@ -145,12 +156,23 @@ for (const ancho of ANCHOS) {
   ok(A("C9 la cámara del acta pide un video grande (2.560 × 1.440) y guarda la foto a 2.048 px de lado largo"), video.w === 2560 && video.h === 1440 && Math.max(acta.ancho, acta.alto) === 2048 && acta.bytes <= 1572864, JSON.stringify({ video, acta }));
   await p.screenshot({ path: join(CAP, `camara_acta_${ancho}.png`) });
   await p.close();
+  // un celular que NO da 2.560 × 1.440: la cámara abre igual, usa lo que hay (1.280 × 720) y guarda a ese tamaño, sin agrandar
+  p = await nav.newPage(); await p.setViewport(ancho < 600 ? { width: ancho, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : { width: ancho, height: 900 });
+  p.on("pageerror", (e) => errores.push(e.message));
+  await p.goto(`http://127.0.0.1:${PUERTO}/?acta=2048&chica=1`); await p.waitForFunction(() => window.__listo === true);
+  await p.waitForFunction(() => { const b = document.querySelector(".campo-capturar"); return b && !b.disabled; }, { timeout: 30000 });
+  await p.click(".campo-capturar"); await p.waitForFunction(() => !!window.__acta, { timeout: 30000 });
+  const chica = await p.evaluate(() => ({ acta: window.__acta, pedido: window.__pedido, error: document.querySelector(".campo-camara-error")?.innerText ?? null }));
+  ok(A("C10 si el celular no da 2.560 × 1.440 (solo 1.280 × 720): pide 2.560 × 1.440 como IDEAL (no exige), la cámara abre sin error y la foto queda de 1.280 × 720, sin agrandar"),
+    /"width":\{"ideal":2560\}/.test(chica.pedido) && !/"min"|"exact"/.test(chica.pedido) && chica.error === null && chica.acta.ancho === 1280 && chica.acta.alto === 720, JSON.stringify(chica));
+  await p.close();
 }
 ok("Z1 sin errores de JavaScript", errores.length === 0, errores.join(" | "));
 await nav.close(); srv.close();
 console.log("\nPESOS (fotos reales; «cámara» = la foto como video de la cámara; «archivo» = el JPEG original elegido con el botón)");
-console.log("foto | original | lado orig. | lado | cámara antes (1.600 px, 0,72) | cámara después | calidad | archivo después | ms");
-for (const r of tabla) console.log(`${r.nombre} | ${kb(r.original)} | ${r.original_lado} | ${r.lado} | ${kb(r.antes_camara)} | ${kb(r.despues_camara)} | ${r.calidad} | ${kb(r.despues_archivo)} | ${r.ms_camara}`);
+console.log("foto | original | lado orig. | cámara antes (1.600 px, 0,72) | cámara 1.600 px (0,72) | cámara 2.048 px | calidad | archivo 2.048 px | calidad");
+for (let i = 0; i < tabla.length; i += 2) { const a = tabla[i], b = tabla[i + 1];
+  console.log(`${a.nombre} | ${kb(a.original)} | ${a.original_lado} | ${kb(a.antes_camara)} | ${kb(a.despues_camara)} | ${kb(b.despues_camara)} | ${b.calidad} | ${kb(b.despues_archivo)} | ${b.calidad_archivo}`); }
 const bien = resultados.filter((r) => r.c).length;
 console.log(`RESULTADO: ${bien} de ${resultados.length} — ${bien === resultados.length ? "SIN FALLAS" : resultados.length - bien + " FALLA(S)"}`);
 process.exit(bien === resultados.length ? 0 : 1);

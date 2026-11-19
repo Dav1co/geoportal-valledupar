@@ -1,5 +1,5 @@
 import { pedir } from "./apiTecnica";
-import { comprimirArchivo } from "../lib/comprimirFoto";
+import { comprimirArchivo, LADO_FOTO_DETALLE_PX } from "../lib/comprimirFoto";
 
 // Cliente de químicos de planta (Técnica fase 1, Corte 7a; §29) en la Edge geoportal-tecnica. Todo en kg; una sola bodega. Quién puede qué lo decide el SERVIDOR
 // (catálogo, saldo, inventario, ajuste y comparación: supervisor de planta y administrador). La ficha técnica en PDF llega como URL firmada de 60 s.
@@ -65,8 +65,9 @@ export async function subirFicha(archivo: File): Promise<string> {
 
 /** Corte 7c: achica la foto del celular (lado mayor de 1.600 px, JPEG) para que pese poco y suba con mala señal. Devuelve un JPEG. */
 export async function reducirFoto(archivo: Blob): Promise<Blob> {
-  // compresión común (src/lib/comprimirFoto.ts): 1.600 px, JPEG 0,8, meta 250–500 KB; respeta el giro del celular (EXIF). El tope real lo vuelve a mirar subirRemision.
-  return (await comprimirArchivo(archivo, 5 * 1048576)).blob;
+  // compresión común (src/lib/comprimirFoto.ts): es un documento, va a 2.048 px y JPEG 0,8 (meta 250–500 KB); respeta el giro del celular (EXIF).
+  // El tope real lo vuelve a mirar subirRemision.
+  return (await comprimirArchivo(archivo, 5 * 1048576, LADO_FOTO_DETALLE_PX)).blob;
 }
 
 /** Corte 7c: reserva la ruta de la foto de la remisión y la sube a su URL firmada (PUT directo a Storage). Devuelve la ruta para la entrada. */

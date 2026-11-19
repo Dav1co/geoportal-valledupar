@@ -15,11 +15,12 @@ export class ErrorCamara extends Error {
   }
 }
 
-export { LADO_FOTO_PX as LADO_MAYOR_PX, LADO_FOTO_DETALLE_PX, esFotoDeDetalle } from "../lib/comprimirFoto";
+export { LADO_FOTO_PX as LADO_MAYOR_PX, LADO_FOTO_DETALLE_PX, esFotoDeDetalle, ladoPara } from "../lib/comprimirFoto";
 
 export const camaraDisponible = () => typeof navigator !== "undefined" && !!navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function";
 
-/** `ladoMayor`: el lado largo con que se va a guardar la foto. Para 2.048 px se le pide a la cámara un video más grande (2.560 × 1.440), si lo tiene. */
+/** `ladoMayor`: el lado largo con que se va a guardar la foto. Para 2.048 px se le pide a la cámara un video más grande (2.560 × 1.440) como IDEAL, no como
+ *  exigencia: si el celular no lo tiene, entrega el más grande que tenga y la foto se guarda a ese tamaño, sin agrandarla y sin fallar. */
 export async function abrirCamara(ladoMayor: number = LADO_FOTO_PX): Promise<MediaStream> {
   if (!camaraDisponible()) {
     throw new ErrorCamara("no_soportada", window.isSecureContext === false
@@ -70,9 +71,9 @@ function dibujar(video: HTMLVideoElement, ladoMayor: number, lineasSello: string
 }
 
 /** Captura el fotograma actual del video con su sello y lo comprime (src/lib/comprimirFoto.ts): lado largo `ladoMayor` (1.600 px por omisión; nunca se agranda),
- *  JPEG 0,8 y, si pasa de 500 KB, 0,72 y 0,65. Devuelve null si ni reduciendo cabe en `maxBytes` (el tope del servidor). */
+ *  JPEG 0,72 a 1.600 px y 0,8 a 2.048 px; si pasa de 500 KB, se baja hasta 0,65. Devuelve null si ni reduciendo cabe en `maxBytes` (el tope del servidor). */
 export async function capturarFoto(video: HTMLVideoElement, lineasSello: string[], maxBytes: number, ladoMayor: number = LADO_FOTO_PX): Promise<FotoProcesada | null> {
   if (!video.videoWidth || !video.videoHeight) throw new ErrorCamara("otro", "La cámara todavía no está lista. Espere un segundo y vuelva a intentarlo.");
   const canvas = dibujar(video, ladoMayor, lineasSello);      // el sello se dibuja AQUÍ, antes de comprimir
-  return codificar(canvas, maxBytes, (lado) => dibujar(video, lado, lineasSello));
+  return codificar(canvas, maxBytes, (lado) => dibujar(video, lado, lineasSello), ladoMayor);
 }

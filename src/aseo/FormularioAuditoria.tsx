@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiAseo, avisoDeError, ErrorAseo } from "./apiAseo";
 import { TEXTO_NO_APLICADO } from "../campo/apiCampo";
-import { abrirCamara, capturarFoto, cerrarCamara, ErrorCamara } from "../campo/camara";
+import { abrirCamara, capturarFoto, cerrarCamara, ErrorCamara, ladoPara } from "../campo/camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M } from "../campo/ubicacion";
 import { aplanarDatos, contadorFotos, criteriosActivos, cuerpoFirmas, erroresDeEnvio, erroresDeFirmas, fotosNecesarias, textoFechaHora, type Valores } from "./logica";
 import { FirmasActa, FIRMAS_VACIAS, type FirmasLocal } from "./FirmasActa";
@@ -114,7 +114,7 @@ export function FormularioAuditoria({ def, actividad, modalidad, ruta, ahora, on
     }
   }
 
-  if (camara) return <PanelCamara rotulo={camara.nombre} maxBytes={def.limites.max_bytes_foto} sello={sello} onCerrar={() => setCamara(null)}
+  if (camara) return <PanelCamara rotulo={camara.nombre} maxBytes={def.limites.max_bytes_foto} sello={sello} onCerrar={() => setCamara(null)} ladoMayor={ladoPara(camara.etiqueta, camara.nombre)}
     onFoto={(f) => { setFotos((l) => [...l, { id: crypto.randomUUID(), etiqueta: camara.etiqueta, blob: f.blob, url: URL.createObjectURL(f.blob) }]); setCamara(null); }} />;
 
   const precisionMala = ubic.fix && ubic.fix.precision_m > def.limites.precision_aviso_m;
@@ -224,12 +224,12 @@ function CampoCriterio({ c, valor, onCambio }: { c: Criterio; valor: string | st
   }
 }
 
-function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar }: { rotulo: string; maxBytes: number; sello: () => string[]; onFoto: (f: { blob: Blob }) => void; onCerrar: () => void }) {
+function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar, ladoMayor }: { rotulo: string; maxBytes: number; sello: () => string[]; onFoto: (f: { blob: Blob }) => void; onCerrar: () => void; ladoMayor: number }) {
   const videoRef = useRef<HTMLVideoElement>(null); const flujo = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null); const [lista, setLista] = useState(false); const [procesando, setProcesando] = useState(false);
   useEffect(() => {
     let vivo = true;
-    abrirCamara().then((f) => { if (!vivo) { cerrarCamara(f); return; } flujo.current = f; const v = videoRef.current; if (v) { v.srcObject = f; void v.play().catch(() => {}); } })
+    abrirCamara(ladoMayor).then((f) => { if (!vivo) { cerrarCamara(f); return; } flujo.current = f; const v = videoRef.current; if (v) { v.srcObject = f; void v.play().catch(() => {}); } })
       .catch((e) => { if (vivo) setError(e instanceof ErrorCamara ? e.message : "No se pudo abrir la cámara."); });
     return () => { vivo = false; cerrarCamara(flujo.current); flujo.current = null; };
   }, []);
@@ -237,7 +237,7 @@ function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar }: { rotulo: st
     const v = videoRef.current; if (!v || procesando) return;
     setProcesando(true);
     try {
-      const f = await capturarFoto(v, sello(), maxBytes);
+      const f = await capturarFoto(v, sello(), maxBytes, ladoMayor);
       if (!f) { setError(`La foto pesa más de ${megas(maxBytes)} aun reducida. Acérquese o mejore la luz e intente de nuevo.`); return; }
       onFoto(f);
     } catch (e) { setError(e instanceof ErrorCamara ? e.message : "No se pudo tomar la foto."); } finally { setProcesando(false); }
