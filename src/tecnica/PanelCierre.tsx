@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { lazyConRecarga } from "../lib/recarga";
 import "./cierre.css";
 import { apiCierre, horaClara, instanteDeCampo, nContratos, type AguasArriba, type LadoAguasArriba, type Simulacion, type ValvulaCerrada, type ValvulaSim } from "./apiCierre";
 import { ErrorTec } from "./apiTecnica";
@@ -12,7 +13,7 @@ import { ErrorTec } from "./apiTecnica";
 //   aguas arriba no se puede, lo dice y muestra el aislamiento total. Si el servidor todavía no tiene la ruta nueva, queda solo el aislamiento total, como antes.
 const CRITERIO: Record<string, string> = { cota: "la altura del terreno (el agua baja)", modelo: "el flujo del modelo hidráulico" };
 const rango = (min?: number, max?: number) => (min === undefined || max === undefined ? "—" : min !== max ? `De ${nf.format(min)} a ${nf.format(max)}` : nf.format(min));
-const MiniMapaCierre = lazy(() => import("./MiniMapaCierre").then((m) => ({ default: m.MiniMapaCierre })));
+const MiniMapaCierre = lazyConRecarga(() => import("./MiniMapaCierre").then((m) => ({ default: m.MiniMapaCierre })));
 const nf = new Intl.NumberFormat("es-CO");
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : "No se pudo completar. Intente de nuevo.");
 

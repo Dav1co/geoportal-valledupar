@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { lazyConRecarga } from "../lib/recarga";
 import { apiPerfil, apiRedes, type ActivoCorto, type Epicrisis, type EventoEpicrisis, type Ficha, type FotoFirmada, type Galeria, type Perfil, type Regulatorio } from "./apiRedes";
 import { FichaEditar, FotoPerfilCambiar } from "./FichaEditar";
 import { IconoCamara } from "./IconoCamara";
@@ -6,7 +7,7 @@ import { IconoCamara } from "./IconoCamara";
 // Corte 3b: la ficha como «perfil» del activo (§22 y §23): minimapa estático arriba, alias propio y placa, foto principal, galería (supervisor y
 // administrador; la lectura queda auditada) y la epicrisis como muro (daños, intervenciones y cambios de la ficha). Editar la ficha y su foto, por ahora
 // solo el administrador (el servidor lo decide y manda «editable»).
-const MiniMapaEstatico = lazy(() => import("./MiniMapaEstatico").then((m) => ({ default: m.MiniMapaEstatico })));
+const MiniMapaEstatico = lazyConRecarga(() => import("./MiniMapaEstatico").then((m) => ({ default: m.MiniMapaEstatico })));
 const ORIGEN_FOTO: Record<string, string> = { perfil: "Foto de perfil", dano: "Daño", intervencion: "Intervención" };
 const CLASE_FOTO: Record<string, string> = { dano: "el daño", entorno: "entorno", reparado: "reparado", antes: "antes", durante: "durante", despues: "después", perfil: "" };
 const pieFoto = (f: FotoFirmada) => [ORIGEN_FOTO[f.origen], f.codigo, CLASE_FOTO[f.clase ?? ""] || null].filter(Boolean).join(" · ");

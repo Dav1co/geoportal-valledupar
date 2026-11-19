@@ -1,5 +1,6 @@
 import { apiDash, type FiltrosRegistros } from "./apiDashboard";
 import { ANCHOS_XLSX, BOM, ENCABEZADOS, cabeceraCsv, filaCsv, filaXlsx, hojaLeame, nombreArchivo } from "./descargas";
+import { importarConRecarga } from "../lib/recarga";
 
 // Orquesta una descarga AUDITADA: iniciar (deja la auditoría y fija los filtros en el servidor) → páginas de 5.000 (y luego las de dosis de coagulante) → armar el archivo en el navegador → cerrar (segunda auditoría).
 // El archivo nunca se arma con más filas que el tope que el servidor declara (50.000). Excel se carga bajo demanda (import dinámico).
@@ -16,7 +17,7 @@ export async function ejecutarDescarga(a: {
   let hechas = 0; let cerrado = false;
   const cerrar = async (res: "completa" | "cancelada" | "error") => { if (cerrado) return; cerrado = true; try { await apiDash.descargaCerrar(ini.descarga_id, hechas, res); } catch { /* el cierre es de mejor esfuerzo */ } };
   try {
-    const xlsx = a.formato === "xlsx" ? await import("./xlsx") : null;
+    const xlsx = a.formato === "xlsx" ? await importarConRecarga(() => import("./xlsx")) : null;
     const libro = xlsx ? new xlsx.LibroXlsx({ hoja: "Registros", encabezados: ENCABEZADOS, anchos: ANCHOS_XLSX,
       leame: hojaLeame({ generadoPor: ini.generado_por, generadoEn: ini.generado_en, filas: ini.total, formato: "xlsx", incluirExcluidos: ini.incluir_excluidos, filtros: a.filtrosTexto }) }) : null;
     const partes: string[] = [BOM, cabeceraCsv()];

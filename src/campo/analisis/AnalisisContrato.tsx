@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { lazyConRecarga } from "../../lib/recarga";
 import "./analisis.css";
 import { apiCampo, ErrorCampo, TEXTO_NO_APLICADO } from "../apiCampo";
 import type { Destino } from "../../components/ConfirmarCancelar";
@@ -15,7 +16,7 @@ import {
 // `analisis_contrato`; cada consulta queda en su bitácora, sin límite diario); aquí solo se dibuja. Tarjeta fija con lo esencial y secciones plegables (<details>, sin librerías).
 // DATO PERSONAL (nombre y teléfonos): solo en pantalla. La respuesta vive en el estado de este componente y se descarta al salir: no se guarda en localStorage/sessionStorage,
 // no se escribe en la consola, no se reutiliza entre consultas y no sale en ninguna descarga.
-const MapaPunto = lazy(() => import("./MapaPunto"));
+const MapaPunto = lazyConRecarga(() => import("./MapaPunto"));
 
 export const FORMATO_CAMBIO_MEDIDOR = "instalacion_medidor";
 

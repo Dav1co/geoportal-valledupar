@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazyConRecarga } from "../../lib/recarga";
 import { apiRev, textoError, type FilaReporte, type FormularioRev } from "./apiRevision";
 import { camposDelTipo, columnasBase, columnasPropias, columnasTabla, hayPasoD, ordenar, type Contexto } from "./columnas";
 import { FILTROS_INICIALES, aFiltrosServidor, filtrosLegibles, filtrosSoloPantalla, pasaFiltroCliente, rangoInvalido, type FiltrosUI, type Periodo } from "./filtros";
@@ -8,7 +9,7 @@ import { Detalle } from "./Detalle";
 import { DescargaCancelada, ExcelDemasiadoGrande, ejecutarDescarga, guardarArchivo, type Progreso } from "./ejecutarDescarga";
 
 // El mapa (y MapLibre con él) se descarga SOLO cuando la persona abre la vista «Mapa».
-const MapaReportes = lazy(() => import("./MapaReportes"));
+const MapaReportes = lazyConRecarga(() => import("./MapaReportes"));
 const PAGINA = 5000;
 
 export function Reportes({ def }: { def: FormularioRev }) {

@@ -1,5 +1,6 @@
 import type { Celda } from "../../tecnica/xlsx";
 import { apiSup, type DescargaIniciada, type FilaDescarga, type Filtros, type TipoNc } from "./api";
+import { importarConRecarga } from "../../lib/recarga";
 
 // Descargas CSV y Excel de las auditorías POR ACTIVIDAD. Una fila por auditoría: columnas fijas y una columna por cada pregunta del catálogo de esa actividad. Sin fotos ni imágenes de firmas.
 // Auditadas en el servidor (iniciar → páginas de hasta 5.000 → cerrar). Lógica pura (se prueba en Node) + orquestador.
@@ -75,7 +76,7 @@ export async function ejecutarDescarga(a: { filtros: Filtros; formato: "csv" | "
   let hechas = 0, cerrado = false;
   const cerrar = async (res: "completa" | "cancelada" | "error") => { if (cerrado) return; cerrado = true; try { await apiSup.descargaCerrar(ini.descarga_id, hechas, res); } catch { /* el cierre es de mejor esfuerzo */ } };
   try {
-    const xlsx = a.formato === "xlsx" ? await import("../../tecnica/xlsx") : null;
+    const xlsx = a.formato === "xlsx" ? await importarConRecarga(() => import("../../tecnica/xlsx")) : null;
     const libro = xlsx ? new xlsx.LibroXlsx({ hoja: "Auditorías", encabezados: encabezados(ini.criterios), anchos: anchos(ini.criterios),
       leame: hojaLeame({ generadoPor: ini.generado_por, generadoEn: ini.generado_en, filas: ini.total, formato: "xlsx", actividad: ini.actividad.nombre, filtros: a.filtrosTexto }) }) : null;
     const partes: string[] = [BOM, cabeceraCsv(ini.criterios)]; let cursor: number | null = null;

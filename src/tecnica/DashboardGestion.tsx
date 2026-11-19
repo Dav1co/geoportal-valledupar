@@ -5,6 +5,7 @@ import {
 } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
 import { NodoPreliminar } from "./NodoPreliminar";
+import { importarConRecarga } from "../lib/recarga";
 
 // Dashboard distribución · gestión (Técnica fase 1, Corte 4b): Personal (área, cargo, cuadrilla y la casilla del geovisor del operador, N-13 y §27.3),
 // Catálogo (alias N-12 y cuadrillas), Parámetros, Gráficas (D-19), Descargas en Excel (auditadas) y Nodos por clasificar (solo el administrador).
@@ -469,7 +470,7 @@ export function Descargas() {
     try {
       const d: Descarga = await apiGestion.descarga(conjunto, desde, hasta, ocultos);
       const cols = conjunto === "intervenciones" ? COL_ITV : COL_DAN;
-      const { LibroXlsx, serialExcel } = await import("./xlsx");
+      const { LibroXlsx, serialExcel } = await importarConRecarga(() => import("./xlsx"));
       const libro = new LibroXlsx({ hoja: conjunto === "intervenciones" ? "Intervenciones" : "Daños y fallas", encabezados: cols.map((c) => c[1]), anchos: cols.map((c) => c[2]),
         leame: [["Qué es", conjunto === "intervenciones" ? "Intervenciones de distribución (Técnica)" : "Daños y fallas de distribución (Técnica)"],
           ["Rango", `${desde} a ${hasta} (${conjunto === "intervenciones" ? "por la fecha de fin" : "por la fecha de detección"}; hora de Bogotá)`],

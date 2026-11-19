@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiGestion, type Conciliacion, type FilaConciliacion, type HojaValoracion, type SinFila } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
 import type { Celda } from "./xlsx";
+import { importarConRecarga } from "../lib/recarga";
 
 // Dashboard distribución › Inventario regulatorio (Técnica fase 1, Corte 10). Solo el administrador (lo vuelve a decidir el servidor).
 // La conciliación de la Valoración Técnica de 2019 (Res. CRA 688 de 2014; una PROPUESTA cuya adopción no está confirmada) con la red del geoportal:
@@ -69,7 +70,7 @@ export function InventarioRegulatorio({ onFicha }: { onFicha: (codigo: string) =
         cuerpo.push(["Activos sin fila", s.sistema === "acueducto" ? "Acueducto" : "Alcantarillado", null, null, s.tipo, s.prefijo, [s.material, s.diametro_mm ? `${nf.format(s.diametro_mm)} mm` : null].filter(Boolean).join(" · ") || null,
           s.longitud_m !== undefined ? "m" : null, null, n(s.longitud_m), null, null, null, null, s.activos, null, null, null, null, null, null, MOTIVO[s.motivo]]);
       }
-      const { LibroXlsx } = await import("./xlsx");
+      const { LibroXlsx } = await importarConRecarga(() => import("./xlsx"));
       const libro = new LibroXlsx({ hoja: "Conciliación", encabezados: cols.map((c) => c[0]), anchos: cols.map((c) => c[1]),
         leame: [["Qué es", "Conciliación del inventario regulatorio con la red del geoportal (Técnica, distribución)."],
           ["Fuente", `${d.fuente ?? ""}. Es una propuesta de 2019: su adopción no está confirmada.`],

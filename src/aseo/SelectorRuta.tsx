@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazyConRecarga } from "../lib/recarga";
 import { apiAseo, avisoDeError, ErrorAseo } from "./apiAseo";
 import { buscarRutas, ordenarPorProgramacion, programacion, textoDistancia } from "./logica";
 import type { Cercana, GeoFeature, RutaPlan } from "./tipos";
 import { useUbicacion } from "../campo/ubicacion";
 
-const MapaRutas = lazy(() => import("./MapaRutas"));
+const MapaRutas = lazyConRecarga(() => import("./MapaRutas"));
 
 // Elegir la ruta: dos caminos, los dos hacia la misma lista. 1) BÚSQUEDA (principal): código, barrio o calle, desde 5 caracteres, sobre el plan que ya está en el celular (sin una consulta por tecla).
 // 2) UBICACIÓN: mapa centrado en el auditor con la capa de rutas; se toca la ruta (si pasan varias por ese punto, se ofrece la lista). Una ruta sin trazado se encuentra solo por búsqueda y se puede auditar igual.

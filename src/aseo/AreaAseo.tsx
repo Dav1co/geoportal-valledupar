@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { lazyConRecarga } from "../lib/recarga";
 import "../tecnica/tecnica.css";
 import "../campo/campo.css";
 import "./aseo.css";      // trae los tokens de Aseo (tokens.css)
@@ -9,8 +10,8 @@ import type { FormularioAseo } from "./tipos";
 
 // Interventoría de Aseo (Torre C): auditoría de la prestación del servicio de aseo. Qué puede hacer la persona lo decide el SERVIDOR (ruta formulario); aquí solo se dibuja. Pantalla completa, sin mapa ni datos comerciales:
 // el mapa de rutas es propio (MapLibre, carga diferida) y sus datos vienen de la Edge de Aseo. «Supervisión y dashboard» (supervisor y administrador) incluye el personal como pestaña; también es de carga diferida.
-const Supervision = lazy(() => import("./supervision/Supervision").then((m) => ({ default: m.Supervision })));
-const AdminAseo = lazy(() => import("./AdminAseo").then((m) => ({ default: m.AdminAseo })));
+const Supervision = lazyConRecarga(() => import("./supervision/Supervision").then((m) => ({ default: m.Supervision })));
+const AdminAseo = lazyConRecarga(() => import("./AdminAseo").then((m) => ({ default: m.AdminAseo })));
 // Cuadro con la inicial de cada tarjeta del inicio (guía visual, §5; como el inicio de Técnica): la letra va por CSS (data-ini) y no se lee en voz alta ni entra al texto del botón.
 const ini = (nombre: string) => <span className="aseo-tarjeta-ini" data-ini={nombre.trim().charAt(0).toUpperCase()} aria-hidden="true" />;
 const ROTULO: Record<FormularioAseo["perfil"], string> = { admin: "Administrador", supervisor: "Supervisor de aseo", auditor: "Auditor de aseo" };

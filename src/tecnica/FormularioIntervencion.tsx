@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazyConRecarga } from "../lib/recarga";
 import { IconoCamara } from "./IconoCamara";
 import "./ficha.css";
 import "./dano.css";
@@ -22,7 +23,7 @@ import type { Eleccion } from "./MiniMapaRed";
 // En la calle, siempre al menos una foto; sin fotos solo el supervisor o el administrador, con el motivo («sin evidencia fotográfica»). Las reglas las decide el servidor.
 // Sin términos tarifarios. Al cerrar una intervención que nace de un daño, el daño queda atendido con sus tiempos.
 
-const MiniMapaRed = lazy(() => import("./MiniMapaRed").then((m) => ({ default: m.MiniMapaRed })));
+const MiniMapaRed = lazyConRecarga(() => import("./MiniMapaRed").then((m) => ({ default: m.MiniMapaRed })));
 type Clase = "antes" | "durante" | "despues";
 type Foto = { blob: Blob; clase: Clase; url: string };
 type Doc = { archivo: File };

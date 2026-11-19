@@ -2,6 +2,7 @@ import { apiRev, type FiltrosServidor, type FormularioRev } from "./apiRevision"
 import { BOM, MAX_FILAS_EXCEL, cabeceraCsv, filaCsv, filaDeDescarga, hojaLeame, nombreArchivo, nombreHoja } from "./archivo";
 import { columnasBase, columnasDescarga, columnasPropias, camposDelTipo, type Columna, type Contexto } from "./columnas";
 import type { Celda } from "../../tecnica/xlsx";
+import { importarConRecarga } from "../../lib/recarga";
 
 // Orquesta una descarga AUDITADA y COMPLETA: iniciar (deja la auditoría, fija los filtros y el corte en el servidor) → páginas de 5.000 hasta que `hay_mas` sea falso → arma el archivo en el
 // navegador → cerrar (segunda auditoría con las filas entregadas). Sin tope de filas. El archivo nunca incluye rutas de Storage, URLs ni claves, y no se guarda en ningún almacenamiento del navegador.
@@ -28,8 +29,8 @@ export async function ejecutarDescarga(a: {
     const conTipo = !!a.filtros.tipo;
     const propiasDe = (tipo: string) => columnasPropias(camposDelTipo(a.def, tipo));
     const incluirAutor = ini.incluir_autor;
-    const xl = a.formato === "xlsx" ? await import("../../tecnica/xlsx") : null;
-    const libroMod = a.formato === "xlsx" ? await import("./xlsxRevision") : null;
+    const xl = a.formato === "xlsx" ? await importarConRecarga(() => import("../../tecnica/xlsx")) : null;
+    const libroMod = a.formato === "xlsx" ? await importarConRecarga(() => import("./xlsxRevision")) : null;
     const leame = (hojas: boolean) => hojaLeame({ generadoPor: ini.generado_por, generadoEn: ini.generado_en, filas: ini.total, formato: a.formato, filtros: a.filtrosTexto, incluyeAutor: incluirAutor, soloPantalla: a.soloPantalla, hojasPorTipo: hojas });
     const libro = libroMod ? new libroMod.LibroMulti(leame(!conTipo)) : null;
     const usados = new Set<string>(["léame"]);

@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazyConRecarga } from "./lib/recarga";
 import { useSession } from "./auth/useSession";
 import { Login } from "./auth/Login";
 import type {
@@ -26,12 +27,12 @@ import { VentanaEntrada } from "./areas/VentanaEntrada";
 import { AreaTecnica } from "./tecnica/AreaTecnica";
 import { AreaCampo } from "./campo/AreaCampo";
 // Interventoría de Aseo (Torre C): carga diferida; MapLibre solo entra cuando se abre el mapa de rutas.
-const AreaAseo = lazy(() => import("./aseo/AreaAseo").then((m) => ({ default: m.AreaAseo })));
+const AreaAseo = lazyConRecarga(() => import("./aseo/AreaAseo").then((m) => ({ default: m.AreaAseo })));
 import { SinModulos } from "./areas/SinModulos";
 import { PerfilNoDisponible } from "./areas/PerfilNoDisponible";
 // Carga diferida (Paso C): MapLibre pesa unos 217 KB comprimidos y solo lo necesitan el mapa comercial y el Dashboard comercial; quien solo usa Técnica o Formatos de campo no lo descarga.
-const MapView = lazy(() => import("./components/MapView").then((m) => ({ default: m.MapView })));
-const Dashboard = lazy(() => import("./dashboard/Dashboard").then((m) => ({ default: m.Dashboard })));
+const MapView = lazyConRecarga(() => import("./components/MapView").then((m) => ({ default: m.MapView })));
+const Dashboard = lazyConRecarga(() => import("./dashboard/Dashboard").then((m) => ({ default: m.Dashboard })));
 import { TrazadorRuta, type EstadoTrazo } from "./components/TrazadorRuta";
 import type { Capturado, PuntoRuta as PuntoTrazo } from "./lib/trazado";
 import { supabase } from "./lib/supabase";

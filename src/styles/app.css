@@ -178,6 +178,17 @@ body {
 
 .pantalla-carga { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); }
 
+/* ---------- Aviso de recarga (src/lib/recarga.tsx): un módulo de la página no cargó tras una publicación, o una pantalla falló ---------- */
+.aviso-recarga { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 8px 0; padding: 12px 16px; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--line); border-left: 5px solid var(--azul); border-radius: 12px; font-family: var(--sans); font-size: 15px; line-height: 1.4; }
+.aviso-recarga p { margin: 0; flex: 1 1 200px; }
+.aviso-recarga-boton { min-height: 44px; padding: 0 16px; border: 0; border-radius: var(--radio); background: var(--azul); color: var(--accent-ink); font: inherit; font-weight: 600; cursor: pointer; }
+.aviso-recarga-boton:disabled { background: var(--surface); color: var(--muted); cursor: default; }
+.aviso-recarga-boton:focus-visible { outline: 3px solid var(--azul-claro); outline-offset: 2px; }
+.aviso-recarga-pagina { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--surface); }
+.aviso-recarga-pagina .aviso-recarga { max-width: 520px; }
+.aviso-recarga-fijo { position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 10000; margin: 0 auto; max-width: 520px; }
+
 /* ---------- responsive ---------- */
 /* media query movil movida al final del archivo */
 

@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazyConRecarga } from "../lib/recarga";
 import { IconoCamara } from "./IconoCamara";
 import "./ficha.css";
 import "./dano.css";
@@ -18,7 +19,7 @@ import type { Eleccion } from "./MiniMapaRed";
 // Las reglas las vuelve a decidir el servidor. El nombre o la placa del tercero es un dato personal: va aparte y solo lo ve el supervisor.
 // Sin términos tarifarios. La pérdida no se calcula aquí: sin la tabla de caudales de Técnica, el daño queda «sin tabla».
 
-const MiniMapaRed = lazy(() => import("./MiniMapaRed").then((m) => ({ default: m.MiniMapaRed })));
+const MiniMapaRed = lazyConRecarga(() => import("./MiniMapaRed").then((m) => ({ default: m.MiniMapaRed })));
 type Foto = { blob: Blob; momento: "dano" | "entorno" | "reparado"; url: string };
 const MOMENTOS = [{ c: "dano", n: "El daño" }, { c: "entorno", n: "Entorno" }, { c: "reparado", n: "Reparado" }] as const;
 const RIESGOS = [{ c: "bajo", n: "Bajo" }, { c: "medio", n: "Medio" }, { c: "alto", n: "Alto" }] as const;

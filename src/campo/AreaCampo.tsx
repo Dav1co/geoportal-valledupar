@@ -1,4 +1,5 @@
-import { Fragment, lazy, Suspense, useEffect, useState } from "react";
+import { Fragment, Suspense, useEffect, useState } from "react";
+import { lazyConRecarga } from "../lib/recarga";
 import { fijarAreaCampo } from "./area";
 import "../tecnica/tecnica.css";
 import "./campo.css";
@@ -13,11 +14,11 @@ import type { Destino } from "../components/ConfirmarCancelar";
 import { supabase } from "../lib/supabase";
 
 // «Supervisión y dashboard» (antes «Revisión de reportes», Paso C): carga diferida. Quien no tiene el permiso de supervisión no descarga este código (ni MapLibre, que viene dentro del mapa).
-const Revision = lazy(() => import("./dashboard/Revision"));
+const Revision = lazyConRecarga(() => import("./dashboard/Revision"));
 // «Análisis de contrato»: también diferida (su mapa trae MapLibre, que solo se descarga al abrir la sección «Ubicación»).
-const AnalisisContrato = lazy(() => import("./analisis/AnalisisContrato"));
+const AnalisisContrato = lazyConRecarga(() => import("./analisis/AnalisisContrato"));
 // «Encontrar o reportar activo» (Corte 14 de Técnica): la misma pantalla de Técnica, también diferida (trae MapLibre).
-const EncontrarActivo = lazy(() => import("../tecnica/EncontrarActivo").then((m) => ({ default: m.EncontrarActivo })));
+const EncontrarActivo = lazyConRecarga(() => import("../tecnica/EncontrarActivo").then((m) => ({ default: m.EncontrarActivo })));
 /** Formato al que lleva el atajo de posible submedición, y lo que llega marcado («Cambio de medidor»). */
 const FORMATO_CAMBIO = "instalacion_medidor";
 const VALORES_CAMBIO = { inst_modalidad: "cambio" };
