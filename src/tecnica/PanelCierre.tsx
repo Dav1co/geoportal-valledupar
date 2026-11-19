@@ -1,12 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import "./cierre.css";
-import { apiCierre, horaClara, instanteDeCampo, nContratos, type AguasArriba, type LadoAguasArriba, type Simulacion, type ValvulaCerrada, type ValvulaSim } from "./apiCierre";
+import { apiCierre, horaClara, instanteDeCampo, nContratos, type AguasArriba, type LadoAguasArriba, type Simulacion, type ValvulaDelRegistro, type ValvulaSim } from "./apiCierre";
 import { ErrorTec } from "./apiTecnica";
 
 // Corte 9b (Fases 1a y 1b): «¿Qué válvulas cierro?» y el cierre real, dentro de Reportar daño o falla y de Registrar intervención.
 //   · Sin daño ni intervención guardados (el formulario a medio llenar): solo la simulación.
 //   · Con su código (DAN-… o ITV-…): además «Válvula cerrada» en cada válvula del resultado, «Válvula abierta» en las que cerró este registro y
 //     «Guardar esta simulación». Quién puede lo decide el servidor; lo que se muestra son conteos, sin datos de suscriptores.
+//   · Corrección del 18-nov: las válvulas cerradas por el registro se leen con «cierres_registro» (por registro; no pide el geovisor). Antes se leían de las
+//     afectaciones vigentes del geovisor, y el operador sin esa casilla cerraba la válvula pero no la veía cerrada ni podía abrirla desde aquí.
 // «Cierre por aguas arriba» (17-nov): es la opción RECOMENDADA y la primera que se muestra: las válvulas por donde entra el agua al tramo, con sus contratos, el
 //   resultado por el otro criterio (el modelo) y el aviso cuando no coinciden. «Aislamiento total» (la simulación de siempre) queda como segunda opción. Si por
 //   aguas arriba no se puede, lo dice y muestra el aislamiento total. Si el servidor todavía no tiene la ruta nueva, queda solo el aislamiento total, como antes.
@@ -21,7 +23,8 @@ export function PanelCierre({ activo, punto, registro }: { activo?: string | nul
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [cerradas, setCerradas] = useState<ValvulaCerrada[]>([]);
+  const [cerradas, setCerradas] = useState<ValvulaDelRegistro[]>([]);
+  const [puedeAbrir, setPuedeAbrir] = useState(true);                        // falso: la persona ve la válvula cerrada, pero abrirla pide otro formulario
   const [pedir, setPedir] = useState<{ valvula: string; tipo: "cerrar" | "abrir" } | null>(null);
   const [verMas, setVerMas] = useState(false);
   const [au, setAu] = useState<AguasArriba | null>(null);                    // el cierre por aguas arriba (null: sin calcular o el servidor no lo tiene)
@@ -29,8 +32,10 @@ export function PanelCierre({ activo, punto, registro }: { activo?: string | nul
   const ref = activo ? `a:${activo}` : punto ? `p:${punto.lat.toFixed(5)},${punto.lon.toFixed(5)}` : "";
 
   const leerCerradas = useCallback(() => {
-    if (!registro) { setCerradas([]); return; }
-    apiCierre.vigentes().then((r) => setCerradas(r.valvulas.filter((v) => v.registro === registro))).catch(() => { /* la lista de cerradas es ayuda: el resto sigue */ });
+    if (!registro) { setCerradas([]); setPuedeAbrir(true); return; }
+    apiCierre.delRegistro(registro).then((r) => { setCerradas(r.valvulas); setPuedeAbrir(r.puede_abrir !== false); })
+      // si el servidor todavía no tiene la lectura por registro, la de antes (solo le responde a quien tiene el geovisor); sin ninguna, el resto del panel sigue
+      .catch(() => apiCierre.vigentes().then((r) => { setCerradas(r.valvulas.filter((v) => v.registro === registro)); setPuedeAbrir(true); }).catch(() => { /* la lista de cerradas es ayuda */ }));
   }, [registro]);
   useEffect(() => { leerCerradas(); }, [leerCerradas]);
   useEffect(() => { setSim(null); setAu(null); setOpcion("aguas_arriba"); setError(null); setAviso(null); setPedir(null); }, [ref]);
@@ -95,7 +100,7 @@ export function PanelCierre({ activo, punto, registro }: { activo?: string | nul
               <span className="cie-punto" aria-hidden="true" />
               <span className="cie-valvula-txt"><strong>{v.codigo}{v.nombre && v.nombre !== v.codigo ? ` · ${v.nombre}` : ""}</strong>
                 <span>Cerrada desde {horaClara(v.desde)}{v.regreso_estimado ? ` · regreso estimado ${horaClara(v.regreso_estimado)}` : ""}</span></span>
-              <button type="button" className="tec-boton-sec" disabled={!!ocupado} onClick={() => setPedir({ valvula: v.codigo, tipo: "abrir" })}>Válvula abierta</button>
+              {puedeAbrir ? <button type="button" className="tec-boton-sec" disabled={!!ocupado} onClick={() => setPedir({ valvula: v.codigo, tipo: "abrir" })}>Válvula abierta</button> : null}
             </li>))}</ul>
         </div>) : null}
       {pedir ? <PedirHora valvula={pedir.valvula} tipo={pedir.tipo} ocupado={ocupado} onCancelar={() => setPedir(null)} onConfirmar={(h, r) => void maniobrar(pedir.valvula, pedir.tipo, h, r)} /> : null}
