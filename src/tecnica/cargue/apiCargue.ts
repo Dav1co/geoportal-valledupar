@@ -30,7 +30,9 @@ export type Resumen = {
 export type Muestra = { carga_id: number; capa: string; esperadas: number; recibidas: number; con_geometria: number; con_error: number;
   errores: { orden: number; llave: string | null; error: string }[]; caja: [number, number, number, number] | null; muestra: GeoJSON.FeatureCollection };
 export type Publicada = { carga_id: number; capa: string; version_capa: number; nuevos: number; cambiados: number; iguales?: number; retirados?: number; reactivados?: number;
-  desactivados?: number; segundos?: number; cambios_estado?: number };
+  desactivados?: number; segundos?: number; cambios_estado?: number;
+  /** Línea 116 (Corte 15): reportes que el archivo trae en «Registrado» pero siguen «Atendido» porque los cerró un evento de suspensión. */
+  conservados_por_evento?: number };
 
 const F = { funcion: "geoportal-redes" };
 export const apiCargue = {

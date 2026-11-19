@@ -286,13 +286,23 @@ for (const ancho of ANCHOS) {
   await p.waitForSelector("[data-testid=publicada]"); t = await texto(p);
   ok(`${tag} A5 publicar exige la nota y publica: «4 nuevos · 0 con cambio de estado»; en la base, 4 reportes sin nombre`,
      /4 nuevos · 0 con cambio de estado/.test(t) && sqlq(`select count(*) from redes.l116_reportes where reporte between ${R0} and ${R0 + 99}`) === "4", t.slice(0, 300));
+  ok(`${tag} A5b sin reportes conservados por un evento, la publicación no dice nada de eventos`, !(await p.$("[data-testid=conservados-evento]")));
   await clicTexto(p, "button", "Volver a las capas"); await esperarTexto(p, /Reportes de la línea 116/);
   await cargar116(p, CSV);
   await clicTexto(p, "button", "Subir y revisar"); await p.waitForSelector("[data-testid=resumen]");
   t = await p.evaluate(() => document.querySelector("[data-testid=resumen]").innerText);
   ok(`${tag} A6 la segunda carga (CSV, fecha DD/MM/AAAA) reconoce el reporte por su número: 1 nuevo y 1 que cambia de estado`, /Nuevos\s*1/.test(t) && /Cambian de estado\s*1/.test(t), t);
+  // Corte 15: la publicación devuelve «conservados_por_evento» (lo calcula el servidor; lo probó el Code A). Aquí se comprueba que la pantalla lo muestra:
+  // a la respuesta REAL de esta publicación se le agrega ese dato, como llegaría si un evento de suspensión hubiera cerrado 3 de esos reportes.
+  await p.evaluate(() => { const real = window.fetch; window.fetch = async (...a) => { const r = await real(...a);
+    if (!String(a[0]).includes("accion=cargue_publicar") || !r.ok) return r;
+    const j = await r.clone().json(); return new Response(JSON.stringify({ ...j, conservados_por_evento: 3 }), { status: r.status, headers: r.headers }); }; });
   await clicTexto(p, "button", "Siguiente"); await poner(p, "#cg116-nota", `Segunda carga de prueba (${ancho})`); await clicTexto(p, "button", "Publicar");
   await p.waitForSelector("[data-testid=publicada]");
+  ok(`${tag} A7b después de publicar: «3 reportes conservados por un evento de suspensión: el archivo los trae en «Registrado», pero siguen «Atendido» porque los cerró un evento.»`,
+     (await p.$eval("[data-testid=conservados-evento]", (e) => e.textContent).catch(() => "")) === "3 reportes conservados por un evento de suspensión: el archivo los trae en «Registrado», pero siguen «Atendido» porque los cerró un evento."
+     && await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+  await p.screenshot({ path: join(CAP, `despues_cargue_conservados_${ancho}.png`), fullPage: true });
   ok(`${tag} A7 el cambio de estado queda como evento con fecha (registrado → atendido) y nada se borra`,
      sqlq(`select string_agg(e.tipo || ':' || e.estado, ',' order by e.id) from redes.l116_eventos e join redes.l116_reportes r on r.id = e.reporte_id where r.reporte = ${R0 + 1}`) === "alta:registrado,estado:atendido"
      && sinNombre());

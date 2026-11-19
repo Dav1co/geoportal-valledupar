@@ -64,3 +64,31 @@
 .enc-accion-ficha { margin: var(--t-esp-3) var(--t-esp-4); }
 .enc-barra-dano { flex: 0 0 auto; padding: 0; overflow: visible; }
 @media (min-width: 760px) { .enc-mapa-lienzo { height: 380px; } .enc-dl { grid-template-columns: 1fr 1fr; column-gap: var(--t-esp-5); } }
+
+/* ---------- Posibles repetidos en «Otros activos por levantamiento» (19-nov): aviso naranja de la guía y minimapa con los puntos y su código ---------- */
+.lev-repetidos, .lev-repetido { background: var(--t-naranja-suave); border: 1px solid var(--t-naranja); border-radius: var(--t-radio); padding: var(--t-esp-3); color: var(--t-texto); display: flex; flex-direction: column; gap: var(--t-esp-2); }
+.lev-repetidos p, .lev-repetido p { margin: 0; font-size: var(--t-txt); }
+.lev-repetido strong, .lev-repetidos strong { color: var(--t-naranja); }
+.lev-repetido-original { background: var(--t-info-suave); border-color: var(--t-borde); }
+.lev-repetido-original strong { color: var(--t-titulo); }
+.lev-repetidos .tec-boton-sec { align-self: flex-start; }
+.lev-mapa { margin: 0; }
+.lev-mapa-lienzo { width: 100%; height: 280px; border: 1px solid var(--t-geo-borde); border-radius: var(--t-radio); overflow: hidden; background: var(--t-geo-claro); }
+@media (min-width: 900px) { .lev-mapa-lienzo { height: 340px; } }
+.lev-mapa figcaption { margin-top: var(--t-esp-1); font-size: var(--t-txt-chico); color: var(--t-texto-2); }
+.lev-marca { background: var(--t-tarjeta); color: var(--t-texto); border: 2px solid var(--t-naranja); border-radius: var(--t-radio); padding: 2px 6px; font-family: var(--t-fuente-codigo); font-size: var(--t-txt-chico); font-weight: 700; white-space: nowrap; }
+.lev-marca-principal { background: var(--t-naranja); color: var(--t-tarjeta); }
+.lev-marca-centro { width: 10px; height: 10px; border-radius: 50%; background: var(--t-naranja); border: 2px solid var(--t-tarjeta); box-sizing: border-box; }
+
+/* ---------- «Mis reportes» en Encontrar (19-nov) ---------- */
+.enc-mios { list-style: none; margin: var(--t-esp-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--t-esp-2); }
+.enc-mios > li { border: 1px solid var(--t-borde); border-radius: var(--t-radio); padding: var(--t-esp-3); display: flex; flex-direction: column; gap: var(--t-esp-1); }
+.enc-mios p { margin: 0; font-size: var(--t-txt); }
+.enc-mios .tec-boton-sec { align-self: flex-start; }
+/* los botones del aviso de repetidos van dentro de .tec-aviso (que achica lo que lleva dentro): se les devuelve el toque mínimo de 44 px de la guía */
+.lev-repetido .tec-boton-sec, .lev-repetidos .tec-boton-sec { min-height: 44px; padding: 0 var(--t-esp-4); font-size: var(--t-txt); }
+/* descartar varios repetidos de una vez */
+.lev-varios { background: var(--t-tarjeta); border: 1px solid var(--t-borde); }
+.lev-varios p { margin: 0; }
+.lev-varios .tec-boton { min-height: 44px; }
+.lev-marcar { font-weight: 600; color: var(--t-naranja); min-height: 44px; }

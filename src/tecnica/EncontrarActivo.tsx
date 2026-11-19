@@ -3,9 +3,10 @@ import "./tokens.css";
 import "./tecnica.css";
 import "./dano.css";
 import "./ficha.css";
+import "./intervencion.css";
 import "./encontrar.css";
 import { apiLev, metros, metrosEntre, zoomParaRadio, ZOOM_MAX, ZOOM_MIN, type ActivoCerca, type Cerca, type Duplicado, type FichaCorta, type InicioLevantar, type PreparacionLevantar,
-  type PuntoCerca, type Servicio, type TipoLevantar } from "./apiLevantar";
+  type MisReportes, type PuntoCerca, type Servicio, type TipoLevantar } from "./apiLevantar";
 import { subirFotoDano } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
 import { MiniMapaEncontrar } from "./MiniMapaEncontrar";
@@ -29,7 +30,7 @@ type Foto = { blob: Blob; url: string };
 /** Lo que guarda el borrador local del reporte (borradorCampo.ts): lo elegido, la observación y dónde se empezó (para avisar si se retoma lejos). Las fotos van aparte. */
 type DatosBorrador = { servicio: Servicio; tipo: TipoLevantar | null; observacion: string; lat: number | null; lon: number | null };
 const BORRADOR = "encontrar";
-type Vista = { v: "encontrar" } | { v: "ficha"; codigo: string; activo?: { sistema: Servicio; lat: number; lon: number } } | { v: "reportar"; noEsDuplicado: boolean } | { v: "listo"; codigo: string; precisionBaja: boolean };
+type Vista = { v: "encontrar" } | { v: "mios" } | { v: "ficha"; codigo: string; activo?: { sistema: Servicio; lat: number; lon: number } } | { v: "reportar"; noEsDuplicado: boolean } | { v: "listo"; codigo: string; precisionBaja: boolean };
 
 type ActivoDano = { codigo: string; sistema: Servicio; lat: number; lon: number };
 export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarDano }: { onVolver: () => void; rotuloVolver?: string;
@@ -48,7 +49,16 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
   const [vista, setVista] = useState<Vista>({ v: "encontrar" });
   const [pregunta, setPregunta] = useState<(PuntoCerca | Duplicado)[] | null>(null);      // «Ya reportado el … ¿Es el mismo?»
   const [aviso, setAviso] = useState<string | null>(null);
-  const [acta, setActa] = useState<string | null>(null);      // el acta (PDF) del punto recién reportado
+  const [acta, setActa] = useState<string | null>(null);      // el acta (PDF) del punto recién reportado o de uno de «Mis reportes»
+  // «Mis reportes» (19-nov): los puntos que reportó esta persona. Necesita la ruta `levantar_mios` (propuesta al Code A): mientras la Edge no la tenga, la
+  // tarjeta no aparece. Se prueba una vez al abrir; si responde, se muestra.
+  const [mios, setMios] = useState<MisReportes | null>(null);
+  const [diasMios, setDiasMios] = useState(30);
+  const [errorMios, setErrorMios] = useState<string | null>(null);
+  const [hayMios, setHayMios] = useState(false);
+  useEffect(() => { let vivo = true; setErrorMios(null);
+    apiLev.mios(diasMios).then((r) => { if (vivo) { setMios(r); setHayMios(true); } }).catch((e) => { if (vivo) { setMios(null); if (hayMios) setErrorMios(e instanceof Error ? e.message : "No se pudo cargar."); } });
+    return () => { vivo = false; }; }, [diasMios, vez]); // eslint-disable-line react-hooks/exhaustive-deps
   const ultima = useRef<{ lat: number; lon: number; radio: number; servicio: Servicio; vez: number; t: number } | null>(null);
   // De quién es el borrador del reporte: el correo de la sesión (no se guarda; solo su huella en la clave). Sin sesión conocida no hay borrador.
   const [persona, setPersona] = useState<string | null>(null);
@@ -94,7 +104,9 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
   const radio = actual?.radio_m ?? radioLocal;
   const zoomAuto = zoomParaRadio(radio);
   const zoom = zoomManual ?? zoomAuto;
-  const duplicables = useMemo(() => (actual?.puntos ?? []).filter((p) => p.posible_duplicado), [actual]);
+  // 19-nov (David): si la pantalla muestra «Ya reportados aquí», no se pasa de largo: se pregunta por TODOS los que hay cerca (no solo los que están a menos de
+  // la distancia de duplicado) y, para seguir, hay que tocar «Es otro activo». Primero los más cercanos.
+  const yaReportados = useMemo(() => [...(actual?.puntos ?? [])].sort((a, b) => a.distancia_m - b.distancia_m), [actual]);
 
   if (errorInicio) {
     const sinAcceso = errorInicio.tipo === "permiso" || errorInicio.tipo === "denegado";
@@ -124,7 +136,7 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
 
   const abrirReportar = () => {
     setAviso(null);
-    if (duplicables.length) setPregunta(duplicables); else setVista({ v: "reportar", noEsDuplicado: false });
+    if (yaReportados.length) setPregunta(yaReportados); else setVista({ v: "reportar", noEsDuplicado: false });
   };
 
   return (
@@ -180,12 +192,41 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
               </div>
             ) : null}
           </section>
+          {hayMios ? (
+            <section className="tec-tarjeta" aria-labelledby="enc-t-mios" data-testid="enc-mios-entrada">
+              <h2 id="enc-t-mios">Mis reportes</h2>
+              <p className="tec-ayuda">Los activos que usted reportó, con su estado y su acta.</p>
+              <button type="button" className="tec-boton-sec" data-testid="enc-mios" onClick={() => setVista({ v: "mios" })}>Ver mis reportes{mios && diasMios === 30 ? ` (${mios.total} en los últimos 30 días)` : ""}</button>
+            </section>) : null}
           <section className="tec-tarjeta" aria-labelledby="enc-t-rep">
             <h2 id="enc-t-rep">¿No está en la lista?</h2>
             <p className="tec-ayuda">Si encontró un activo que no aparece (una tubería, una válvula, un hidrante, un pozo, una caja), repórtelo con una foto para que lo levanten.</p>
-            <button type="button" className="tec-boton" disabled={!fix} data-testid="enc-reportar" onClick={abrirReportar}>No está en la lista: reportar activo</button>
+            <button type="button" className="tec-boton" disabled={!fix || (!actual && !errorCerca)} data-testid="enc-reportar" onClick={abrirReportar}>No está en la lista: reportar activo</button>
+            {fix && !actual && !errorCerca ? <p className="tec-ayuda">Un momento: se está mirando si ya hay algo reportado aquí.</p> : null}
           </section>
         </>
+      ) : null}
+
+      {vista.v === "mios" ? (
+        <section className="tec-tarjeta" aria-labelledby="enc-t-mios2" data-testid="enc-mios-lista">
+          <h2 id="enc-t-mios2">Mis reportes</h2>
+          <div className="dan-fila" role="group" aria-label="De cuándo">
+            {[{ d: 30, n: "Últimos 30 días" }, { d: 90, n: "Últimos 90 días" }, { d: 0, n: "Todos" }].map((x) => <button key={x.d} type="button" className="dan-opcion" aria-pressed={diasMios === x.d} data-dias={x.d} onClick={() => setDiasMios(x.d)}>{x.n}</button>)}
+          </div>
+          {errorMios ? <p className="tec-aviso tec-aviso-error" role="alert">{errorMios}</p> : null}
+          {!mios && !errorMios ? <p className="tec-sub" role="status">Cargando…</p> : null}
+          {mios && mios.items.length === 0 ? <p className="enc-vacio" data-testid="enc-mios-vacio">{diasMios ? `No ha reportado activos en los últimos ${diasMios} días.` : "Todavía no ha reportado activos."}</p> : null}
+          {mios?.items.length ? (
+            <ul className="enc-mios">
+              {mios.items.map((r) => (
+                <li key={r.codigo} data-mio={r.codigo} data-estado={r.estado}>
+                  <p><strong className="tec-codigo">{r.codigo}</strong> · {r.tipo_nombre} de {r.servicio} <span className={`itv-etiqueta${r.estado === "levantado" ? " lev-etq-ok" : ""}`}>{r.estado_nombre}</span></p>
+                  <p className="tec-ayuda">Reportado el {fechaLarga(r.registrado_en)}{r.activo ? ` · quedó como ${r.activo}` : ""}</p>
+                  <button type="button" className="tec-boton-sec" data-testid="enc-mio-acta" onClick={() => setActa(r.codigo)}>Ver acta (PDF)</button>
+                </li>))}
+            </ul>) : null}
+          {mios?.recortada ? <p className="tec-ayuda">Se muestran los {mios.items.length} más recientes de {mios.total}.</p> : null}
+        </section>
       ) : null}
 
       {vista.v === "reportar" && persona === null ? <p className="tec-sub enc-pad" role="status">Cargando…</p> : null}
@@ -212,12 +253,12 @@ export function EncontrarActivo({ onVolver, rotuloVolver = "Volver", onReportarD
       {pregunta ? (
         <div className="enc-fondo" role="presentation">
           <div className="enc-dialogo" role="dialog" aria-modal="true" aria-labelledby="enc-dlg-tit" data-testid="enc-duplicado">
-            <h3 id="enc-dlg-tit">Ya hay un activo reportado aquí</h3>
+            <h3 id="enc-dlg-tit">{pregunta.length === 1 ? "Ya hay un activo reportado aquí" : `Ya hay ${pregunta.length} activos reportados aquí`}</h3>
             <ul>{pregunta.map((p) => <li key={p.codigo}><strong>{p.tipo_nombre}</strong> de {p.servicio}: ya reportado el {fechaLarga(p.registrado_en)}, a {metros(p.distancia_m)} de usted.</li>)}</ul>
-            <p><strong>¿Es el mismo?</strong></p>
+            <p><strong>{pregunta.length === 1 ? "¿Es el mismo?" : "¿Es alguno de esos?"}</strong> Si lo es, no hace falta reportarlo otra vez.</p>
             <div className="dan-fila">
-              <button type="button" className="tec-boton" data-testid="enc-dup-si" onClick={() => { setPregunta(null); setVista({ v: "encontrar" }); if (persona) void borrarBorradorCampo(BORRADOR, persona); setAviso("Ese activo ya está reportado: no hace falta reportarlo otra vez."); }}>Sí, es el mismo</button>
-              <button type="button" className="tec-boton-sec" data-testid="enc-dup-no" onClick={() => { setPregunta(null); setVista({ v: "reportar", noEsDuplicado: true }); }}>No, es otro</button>
+              <button type="button" className="tec-boton" data-testid="enc-dup-si" onClick={() => { setPregunta(null); setVista({ v: "encontrar" }); if (persona) void borrarBorradorCampo(BORRADOR, persona); setAviso("Ese activo ya está reportado: no hace falta reportarlo otra vez."); }}>{pregunta.length === 1 ? "Sí, es el mismo" : "Sí, es uno de esos"}</button>
+              <button type="button" className="tec-boton-sec" data-testid="enc-dup-no" onClick={() => { setPregunta(null); setVista({ v: "reportar", noEsDuplicado: true }); }}>Es otro activo</button>
             </div>
           </div>
         </div>

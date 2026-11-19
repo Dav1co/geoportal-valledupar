@@ -36,6 +36,10 @@ export type ListaLevantar = { estado: FiltroLevantar; conteos: Partial<Record<Es
 export type ActaLevantar = { codigo: string; generado_en: string; servicio: Servicio; tipo: TipoLevantar; tipo_nombre: string; observacion: string | null; lat: number; lon: number; precision_m: number; precision_baja: boolean;
   registrado_en: string; sector: string | null; reporto: { nombre: string; area?: string; cargo?: string }; estado: EstadoLevantar; estado_nombre: string; estado_desde: string; activo: string | null;
   historial: { que: string; tipo: string; cuando: string; quien: string; motivo?: string | null; activo?: string | null }[]; fotos: { n: number; creado_en: string; url: string }[] };
+/** «Mis reportes»: los puntos que reportó quien consulta. RUTA PROPUESTA al Code A (19-nov): `levantar_mios` todavía no existe en la Edge; mientras no exista,
+ *  la pantalla no muestra «Mis reportes». Contrato: GET ?dias=30|90|0 (0 = todos) → solo los del solicitante, los últimos primero; sin datos de otras personas. */
+export type MiReporte = { codigo: string; registrado_en: string; servicio: Servicio; tipo: TipoLevantar; tipo_nombre: string; estado: EstadoLevantar; estado_nombre: string; estado_desde: string; activo: string | null };
+export type MisReportes = { dias: number; total: number; recortada: boolean; items: MiReporte[] };
 export type FotoLevantar = { n: number; creado_en: string; url: string; expira_en: string };
 
 const F = { funcion: "geoportal-redes" };
@@ -55,6 +59,8 @@ export const apiLev = {
   hoja: (estado: "abiertos" | "reportado" | "asignado") => pedir<HojaLevantar>("levantar_hoja", { ...F, cuerpo: { estado }, timeoutMs: 25000 }),
   /** El acta de un punto (para el PDF): la propia, o cualquiera para el supervisor de distribución y el administrador. La consulta queda en la auditoría. */
   acta: (codigo: string) => pedir<ActaLevantar>("levantar_acta", { ...F, cuerpo: { codigo }, timeoutMs: 25000 }),
+  /** Los puntos que reportó quien consulta (ruta propuesta: ver MisReportes). */
+  mios: (dias: number) => pedir<MisReportes>("levantar_mios", { ...F, qs: { dias: String(dias) } }),
   fotos: (codigo: string) => pedir<{ codigo: string; fotos: FotoLevantar[] }>("levantar_fotos", { ...F, cuerpo: { codigo } }),
 };
 
