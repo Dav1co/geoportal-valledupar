@@ -402,6 +402,15 @@ for (const ancho of ANCHOS) {
   await p.reload(); await p.waitForFunction(() => window.__listo === true);
   ok(A("D3 … y tras recargar no hay pregunta (no había borrador)"), (await alFormulario(p, "danos_fallas")) === "formulario");
   await p.close();
+  // IndexedDB que NO RESPONDE (ni éxito ni error; pasa en algunos celulares): el formulario no se queda en «Cargando el formulario…»
+  p = await nav.newPage(); pagina = p;
+  await p.evaluateOnNewDocument(() => { Object.defineProperty(window, "indexedDB", { configurable: true, get() { return { open() { return {}; }, deleteDatabase() { return {}; } }; } }); });
+  await p.setGeolocation({ latitude: LUGAR.lat, longitude: LUGAR.lon, accuracy: 6 }); await p.setViewport({ width: ancho, height: 844 }); p.setDefaultTimeout(60000);
+  await p.goto(`http://127.0.0.1:${P_BASE}/?rol=op`); await p.waitForFunction(() => window.__listo === true);
+  const t0 = Date.now(); const como = await alFormulario(p, "danos_fallas"); const tardo = Date.now() - t0;
+  await poner(p, "#dan-desc", "ZT sin respuesta del almacenamiento"); await pausa(3200);
+  ok(A("D4 si IndexedDB no responde, el formulario abre igual en menos de 5 s (tope de 2,5 s) y se puede escribir"), como === "formulario" && tardo < 5000 && (await valor(p, "#dan-desc")) === "ZT sin respuesta del almacenamiento", `${como} en ${tardo} ms`);
+  await p.close();
 
   // ===== E. «Encontrar o reportar activo»: el reporte «No está en la lista» =====
   const alReporte = async (q) => {      // de la lista de cercanos al formulario del reporte (o a la pregunta del borrador)

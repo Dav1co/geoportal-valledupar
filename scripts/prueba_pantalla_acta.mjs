@@ -25,7 +25,7 @@ await build({
       import { AreaCampo } from "./src/campo/AreaCampo.tsx"; import * as L from "./src/campo/acta/logica.ts";
       export { React, renderToStaticMarkup, FormularioActa, PantallaActa, IdentificarPredio, almacenActa, AreaCampo, L };` },
   bundle: true, platform: "node", format: "esm", outfile: salida, jsx: "automatic", logLevel: "error",
-  loader: { ".css": "empty" }, banner: { js: 'import { createRequire as __cr } from "node:module"; const require = __cr(import.meta.url);' },
+  loader: { ".css": "empty", ".png": "dataurl", ".svg": "dataurl" }, banner: { js: 'import { createRequire as __cr } from "node:module"; const require = __cr(import.meta.url);' },
   define: { "import.meta.env.VITE_SUPABASE_URL": '"http://sim.local"', "import.meta.env.VITE_SUPABASE_ANON_KEY": '"anon-falsa"', "import.meta.env.VITE_FUNCTIONS_URL": '"http://sim.local/functions/v1"' },
 });
 const M = await import(pathToFileURL(salida).href);
@@ -167,10 +167,11 @@ const form = (id) => dibujar(h(FormularioActa, { cat, actaId: id, correo: CORREO
 }
 // caducado
 {
-  const id = nueva({}, { vence: "2020-01-01T00:00:00Z" });
+  // Desde el 19-nov un registro que llega VACÍO al formulario primero busca su borrador local («Cargando…»; aquí no corren los efectos): estos dos traen algo escrito.
+  const id = nueva({ observaciones: "ya en pantalla" }, { vence: "2020-01-01T00:00:00Z" });
   const html = form(id);
   ok("registro caducado: lo dice y no deja registrar", sinEtiquetas(html).includes("caducó") && /<button[^>]*campo-enviar[^>]*disabled/.test(html));
-  const id2 = nueva({}, { zona: true });
+  const id2 = nueva({ observaciones: "ya en pantalla" }, { zona: true });
   ok("fuera de zona: avisa que se registra con esa marca", sinEtiquetas(form(id2)).includes("fuera de la zona de operación"));
   ok("acta que ya no está en pantalla: mensaje y salida a «Mis actas»", sinEtiquetas(dibujar(h(FormularioActa, { cat, actaId: "no-existe", correo: CORREO, onVolver: () => {}, onRegistrado: () => {} }))).includes("Volver a Mis actas"));
 }

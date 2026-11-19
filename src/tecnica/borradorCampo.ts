@@ -6,7 +6,8 @@
 //   solo se reescriben cuando cambian, no con cada tecla).
 // · Es de UNA persona: la clave lleva una huella del correo (el correo no se guarda). Vence a las 24 horas. No guarda tokens ni claves.
 // · Se borra al guardar con éxito, al descartarlo o al cancelar el formulario.
-// · Si el almacenamiento falla (modo privado, sin espacio, bloqueado), NADA de aquí lanza un error: el formulario sigue funcionando, sin borrador.
+// · Si el almacenamiento falla (modo privado, sin espacio, bloqueado) o no responde en 2,5 s, NADA de aquí lanza un error ni deja esperando: el formulario sigue
+//   funcionando, sin borrador.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ArchivoBorrador = { blob: Blob; etiqueta: string; nombre?: string };
@@ -25,14 +26,19 @@ function huella(correo: string): string {
 }
 const claveDe = (formulario: string, correo: string) => `${formulario}:${huella(correo)}`;
 
+/** Tope de espera para abrir la base. En algunos celulares IndexedDB no responde nunca (ni éxito ni error): sin tope, el formulario se quedaría en «Cargando…». */
+const ESPERA_ABRIR_MS = 2500;
 function abrir(): Promise<IDBDatabase> {
   return new Promise((ok, mal) => {
+    let resuelto = false;
+    const reloj = setTimeout(() => { if (!resuelto) { resuelto = true; mal(new Error("IndexedDB no respondió")); } }, ESPERA_ABRIR_MS);
+    const fin = (f: () => void) => { if (resuelto) return false; resuelto = true; clearTimeout(reloj); f(); return true; };
     try {
       const p = indexedDB.open(BASE, 1);
       p.onupgradeneeded = () => { if (!p.result.objectStoreNames.contains(ALMACEN)) p.result.createObjectStore(ALMACEN, { keyPath: "clave" }); };
-      p.onsuccess = () => ok(p.result);
-      p.onerror = () => mal(p.error); p.onblocked = () => mal(new Error("bloqueado"));
-    } catch (e) { mal(e); }
+      p.onsuccess = () => { if (!fin(() => ok(p.result))) p.result.close(); };      // llegó tarde: ya se siguió sin borrador
+      p.onerror = () => { fin(() => mal(p.error)); }; p.onblocked = () => { fin(() => mal(new Error("bloqueado"))); };
+    } catch (e) { fin(() => mal(e)); }
   });
 }
 /** Una transacción sobre el almacén; cierra la base al terminar. Rechaza si algo falla (quien llama lo atrapa). */
