@@ -1,0 +1,25 @@
+-- =====================================================================
+-- TÉCNICA · FASE 1 · «MIS REPORTES» (levantar_mios) · 05 — HUELLAS DE SOLO LECTURA (una sola consulta; apta para el editor SQL web). No escribe nada.
+-- ANTES: «funciones de redes» dice «CORTE 15 (lista para Mis reportes)», la nueva «NO EXISTE» y el índice «NO EXISTE».
+-- DESPUÉS: «MIS REPORTES (aplicado)», la nueva «NUEVA» y el índice «ESTÁ». Cualquier «DISTINTA» o «FALTA»: no aplique nada y avise.
+-- =====================================================================
+with nue(firma, nueva) as (values ('public.geoportal_redes_levantar_mios(text,integer)', 'b25bb783d505778f12bda1b05f23ace9')),
+rnue as (
+  select '3 ' || n.firma as objeto, md5(pg_get_functiondef(to_regprocedure(n.firma))) as md5,
+         case when to_regprocedure(n.firma) is null then 'NO EXISTE (sin aplicar)' when md5(pg_get_functiondef(to_regprocedure(n.firma))) = n.nueva then 'NUEVA (aplicada)' else 'DISTINTA' end as estado
+    from nue n),
+pub(firma, publicada) as (values ('redes.f_levantar_acceso(text)', '69298852e18084d8857cd225180b908a'), ('public.geoportal_redes_levantar_lista(text,text,text,integer)', 'd93c1a02106798ef5230d2b922f35aae'), ('public.geoportal_redes_levantar_acta(text,text,text)', '0a7f82ff6fa307a9edb877f5ab0aa816'), ('public.geoportal_redes_levantar_crear(text,uuid,jsonb,text)', '09d88de65df1238dc373a3500b6b1f3a'), ('public.geoportal_redes_levantar_evento(text,text,text,text,text,text)', '35105af251ffaa62aec4121b6c27d967')),
+conj as (
+  select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) as m from pg_proc p
+   where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%'))
+select '0 funciones de redes (conjunto)' as objeto, (select m from conj) as md5,
+       case (select m from conj) when 'ef7564883f523685cfe36478e0985e98' then 'CORTE 15 (lista para Mis reportes)' when '314112df87e4d649945fd3f611857025' then 'MIS REPORTES (aplicado)' else 'DISTINTA' end as estado
+union all select * from rnue
+union all select '2 ' || p.firma || ' (no se toca)', md5(pg_get_functiondef(to_regprocedure(p.firma))),
+       case when to_regprocedure(p.firma) is null then 'FALTA' when md5(pg_get_functiondef(to_regprocedure(p.firma))) = p.publicada then 'LA PUBLICADA' else 'DISTINTA' end from pub p
+union all select '4 índice redes.ix_levantar_puntos_autor', null, case when to_regclass('redes.ix_levantar_puntos_autor') is null then 'NO EXISTE (sin aplicar)' else 'ESTÁ (aplicado)' end
+union all select '5 tablas que lee (levantar_puntos, levantar_eventos, v_levantar_punto)', null,
+       case when to_regclass('redes.levantar_puntos') is not null and to_regclass('redes.levantar_eventos') is not null and to_regclass('redes.v_levantar_punto') is not null then 'ESTÁN' else 'FALTA' end
+union all select '6 INFO datos: puntos por levantar · personas que han reportado', null,
+       (select count(*) from redes.levantar_puntos) || ' · ' || (select count(distinct autor) from redes.levantar_puntos)
+order by 1;

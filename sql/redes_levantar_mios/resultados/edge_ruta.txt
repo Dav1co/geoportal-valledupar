@@ -1,0 +1,22 @@
+OK    A1 sin reportes: 200, {dias: 30, total: 0, recortada: false, items: []} y sin caché
+OK    A2 sin sesión: 401
+OK    A3 el operador sin el formulario: 403 (como en «Encontrar»)
+OK    A4 quien no es de Técnica ni tiene Formularios de campo: 403
+OK    A5 un periodo que no existe: 400 con su texto; por POST: 405
+OK    B1 el operador ve sus 3 reportes, los últimos primero, y ninguno ajeno
+OK    B2 cada uno trae las 9 claves del contrato del Code B, y nada más (ni correos ni nombres)
+OK    B3 recién reportado: «Reportado», con el nombre del tipo y sin activo
+OK    B4 el otro operador ve solo el suyo, Comercial solo el suyo (con 0 = todos) y el supervisor, que no ha reportado, ninguno
+OK    B5 pedir los de otra persona por la URL no sirve: salen los propios
+OK    B6 la bandeja del supervisor (levantar_lista) sigue cerrada para el operador: 403; al supervisor le trae los 5
+OK    C1 el supervisor asigna uno y descarta otro por levantar_evento
+OK    C2 «Mis reportes» lo refleja: «Asignado a levantamiento» y «Descartado», sin el motivo ni quién lo hizo; el tercero sigue «Reportado»
+OK    C3 el operador no puede cambiar el estado de su propio reporte (levantar_evento: 403)
+OK    D1 30 días: 593 (3 + 590); 90 días: 613 (entran los 20 de hace 40 días); todos: 623 (los 10 de hace 120 días)
+OK    D2 con más de 500: «recortada» y 500 en la respuesta, los más nuevos primero (el primero es el último reportado)
+   TIEMPOS por la Edge (con 20625 puntos en la tabla), diez veces cada una: mis 623 → mediana 114 ms, la más lenta 196 ms · alguien con 1 reporte → mediana 116 ms
+OK    D3 TIEMPOS: leer 623 reportes propios cuesta -2 ms más que leer 1 (medianas de diez; tope local 167 ms = 1 s / 6) y ninguna pasa de 1 s
+OK    D4 leer no deja auditoría
+OK    Z1 ninguna de las 30 respuestas de levantar_mios trae un correo ni el nombre de una persona
+OK    Z3 ninguna RPC que no exista en la base
+RESULTADO: 20 de 20 — SIN FALLAS
