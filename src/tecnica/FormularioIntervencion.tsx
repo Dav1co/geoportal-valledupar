@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { lazyConRecarga } from "../lib/recarga";
+import { importarConRecarga, lazyConRecarga } from "../lib/recarga";
+import { fechaBorrador, useBorradorCampo, type ArchivoBorrador } from "./borradorCampo";
 import { IconoCamara } from "./IconoCamara";
 import "./ficha.css";
 import "./dano.css";
@@ -29,6 +30,10 @@ type Foto = { blob: Blob; clase: Clase; url: string };
 type Doc = { archivo: File };
 type Material = { id: number; material: string; cantidad: string; unidad: string };
 type FuenteSel = { aportante: string; entidad: string; valor: string; porcentaje: string; soporte: string };
+/** Lo que guarda el borrador local (borradorCampo.ts): lo escrito y lo elegido. Las fotos y los PDF van aparte, como archivos. */
+type DatosBorrador = { nace: "programada" | "dano"; tipo: string; modo: "nuevo" | "mejora" | ""; dano: string; resuelve: boolean; sistema: "acueducto" | "alcantarillado" | null; eleccion: Eleccion | null;
+  noIdent: boolean; queEs: string; nuevoTipo: string; nuevoClase: string; nuevoMaterial: string; nuevoDiam: string; nuevoNombre: string; tambien: ActivoCorto[]; tIni: string; tFin: string; descripcion: string;
+  materiales: Material[]; ejecutor: "emdupar" | "contratista"; contratista: string; contratistaNombre: string; orden: string; companeros: string; fuentes: FuenteSel[]; inicio: string };
 export type DesdeDano = { codigo: string; sistema: "acueducto" | "alcantarillado"; activo: string | null; lat: number; lon: number };
 const CLASES: { c: Clase; n: string }[] = [{ c: "antes", n: "Antes" }, { c: "durante", n: "Durante" }, { c: "despues", n: "Después" }];
 
@@ -100,6 +105,32 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
   const [ficha, setFicha] = useState<string | null>(null);
   const cercanoPedido = useRef<string | null>(inicialActivo ? "ya" : null);
 
+  // Borrador local (18-nov): lo escrito, lo elegido, las fotos y los PDF quedan en este celular mientras se llena; se borra al guardar o al cancelar.
+  const datosBorrador: DatosBorrador = { nace, tipo, modo, dano, resuelve, sistema, eleccion, noIdent, queEs, nuevoTipo, nuevoClase, nuevoMaterial, nuevoDiam, nuevoNombre, tambien, tIni, tFin, descripcion,
+    materiales, ejecutor, contratista, contratistaNombre, orden, companeros, fuentes, inicio: reloj.current.iso };
+  const archivosBorrador = useMemo<ArchivoBorrador[]>(() => [...fotos.map((f) => ({ blob: f.blob, etiqueta: f.clase })), ...docs.map((d) => ({ blob: d.archivo as Blob, etiqueta: "documento", nombre: d.archivo.name }))], [fotos, docs]);
+  const borrador = useBorradorCampo<DatosBorrador>("intervencion", correo, datosBorrador, archivosBorrador, !!guardado, { ...datosBorrador, inicio: "" });
+  function continuarBorrador() {
+    const b = borrador.oferta; if (!b) return;
+    const d = b.datos, txt = (v: unknown) => (typeof v === "string" ? v : ""), lista = <T,>(v: unknown) => (Array.isArray(v) ? (v as T[]) : []);
+    setNace(d.nace === "dano" ? "dano" : "programada"); setTipo(txt(d.tipo)); setModo(d.modo === "nuevo" || d.modo === "mejora" ? d.modo : ""); setDano(txt(d.dano)); setResuelve(!!d.resuelve);
+    if (d.sistema === "acueducto" || d.sistema === "alcantarillado") { setSistema(d.sistema); cercanoPedido.current = d.sistema; }
+    setEleccion(d.eleccion ?? null); setNoIdent(!!d.noIdent); setQueEs(txt(d.queEs));
+    setNuevoTipo(txt(d.nuevoTipo)); setNuevoClase(txt(d.nuevoClase)); setNuevoMaterial(txt(d.nuevoMaterial)); setNuevoDiam(txt(d.nuevoDiam)); setNuevoNombre(txt(d.nuevoNombre));
+    setTambien(lista<ActivoCorto>(d.tambien)); setTIni(txt(d.tIni) || apertura); setTFin(txt(d.tFin)); setDescripcion(txt(d.descripcion));
+    const mats = lista<Material>(d.materiales); setMateriales(mats); sigMat.current = mats.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0) + 1;
+    setEjecutor(d.ejecutor === "contratista" ? "contratista" : "emdupar"); setContratista(txt(d.contratista)); setContratistaNombre(txt(d.contratistaNombre)); setOrden(txt(d.orden)); setCompaneros(txt(d.companeros));
+    setFuentes(lista<FuenteSel>(d.fuentes));
+    // la hora de inicio del formulario es la del borrador mientras el servidor todavía la acepte; si no, la de ahora
+    const t = Date.parse(txt(d.inicio)), maxMs = (def?.reglas.max_horas_inicio ?? 12) * 3_600_000;
+    if (Number.isFinite(t) && t <= Date.now() && Date.now() - t < maxMs - 600_000) reloj.current = abrirReloj(t, performance.now() - (Date.now() - t));
+    setFotos(b.archivos.filter((a) => CLASES.some((m) => m.c === a.etiqueta)).map((a) => ({ blob: a.blob, clase: a.etiqueta as Clase, url: URL.createObjectURL(a.blob) })));
+    setDocs(b.archivos.filter((a) => a.etiqueta === "documento").map((a) => ({ archivo: new File([a.blob], a.nombre || "documento.pdf", { type: "application/pdf" }) })));
+    borrador.resolver(true);
+  }
+
+  // Precarga del minimapa al abrir: si tras una publicación ya no está, la página se recarga ahora (sin nada escrito) y no en la mitad del formulario.
+  useEffect(() => { void importarConRecarga(() => import("./MiniMapaRed")).catch(() => {}); }, []);
   useEffect(() => {
     apiItv.formulario().then(setDef).catch((e) => setErrorDef(e instanceof ErrorTec && e.tipo === "permiso" ? "No tiene asignado el formulario de intervenciones." : e instanceof Error ? e.message : "No se pudo cargar."));
   }, []);
@@ -146,7 +177,16 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
 
   if (ficha) return <FichaActivo codigo={ficha} onAbrir={setFicha} onVolver={() => setFicha(null)} rotuloVolver="Volver a la intervención" />;
   if (errorDef) return <section className="tec-tarjeta" role="alert"><h2>Registrar intervención</h2><p>{errorDef}</p></section>;
-  if (!def) return <p className="tec-sub dan-pad" role="status">Cargando el formulario…</p>;
+  if (!def || borrador.leyendo) return <p className="tec-sub dan-pad" role="status">Cargando el formulario…</p>;
+  if (borrador.oferta) { const nf = borrador.oferta.archivos.length; return (
+    <section className="tec-tarjeta" role="group" aria-label="Borrador guardado" data-testid="borrador-oferta">
+      <h2>Registrar intervención</h2>
+      <p>Tiene un borrador del {fechaBorrador(borrador.oferta.guardado)}{nf ? ` (con ${nf} ${nf === 1 ? "archivo" : "archivos"})` : ""}. ¿Continuar o descartar?</p>
+      <div className="tec-acciones">
+        <button type="button" className="tec-boton" onClick={continuarBorrador}>Continuar</button>
+        <button type="button" className="tec-boton-sec" onClick={() => borrador.resolver(false)}>Descartar</button>
+      </div>
+    </section>); }
   const reglas = def.reglas;
   const tipos = def.tipos.filter((t) => nace === "programada" || t.admite_dano);
   const tiposNuevo = def.tipos_nuevo.filter((t) => t.sistema === sistema);
@@ -268,7 +308,9 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
           ...(apoderado ? { valor: numeroONulo(f.valor), porcentaje: decimalONulo(f.porcentaje), soporte: f.soporte.trim() || null } : {}) })),
         archivos: [...fs.map((f, i) => ({ n: p.fotos[i].n, clase: f.clase, ruta: p.fotos[i].ruta })), ...docs.map((_, i) => ({ n: p.documentos[i].n, clase: "documento", ruta: p.documentos[i].ruta }))],
       };
-      setGuardado(await apiItv.crear(p.intervencion_id, datos));
+      const hecho = await apiItv.crear(p.intervencion_id, datos);
+      borrador.terminar();      // guardada con éxito: el borrador de este celular ya no hace falta
+      setGuardado(hecho);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "No se pudo guardar.";
       if (msg === "vencida") { prep.current = null; setErrorEnvio("El permiso para subir los archivos venció. Pulse «Guardar» de nuevo: se pide uno nuevo."); }
@@ -525,7 +567,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
 
       <section className="tec-tarjeta" aria-labelledby="itv-t7">
         <h2 id="itv-t7">7. Fotos y soportes</h2>
-        <p className="tec-ayuda">{sinFotos ? "Sin fotos: queda marcada «sin evidencia fotográfica»." : `Al menos una foto. Máximo ${reglas.max_fotos}. Solo cámara; la foto no se guarda en el celular.`}</p>
+        <p className="tec-ayuda">{sinFotos ? "Sin fotos: queda marcada «sin evidencia fotográfica»." : `Al menos una foto. Máximo ${reglas.max_fotos}. Solo cámara. Mientras llena el formulario, las fotos quedan en el borrador de este celular; se borran al guardar o al cancelar.`}</p>
         {!sinFotos ? <div className="dan-fila">{CLASES.map((m) => (
           <button key={m.c} type="button" className="tec-boton-sec" disabled={fotos.length >= reglas.max_fotos || !!enviando} onClick={() => setCamara(m.c)}><IconoCamara />Foto: {m.n}</button>))}</div> : null}
         {camara ? (
@@ -562,7 +604,7 @@ export function FormularioIntervencion({ correo, desdeDano, activoInicial, onSal
       {cancelar ? (
         <div className="dan-pad-x">
           <ConfirmarCancelar titulo="¿Cancelar esta intervención?" mensaje="Se borra lo escrito, las fotos y los documentos de este celular. En el servidor no queda nada." onSeguir={() => setCancelar(false)}
-            onConfirmar={() => { setCancelar(false); onSalir?.(); }} />
+            onConfirmar={() => { setCancelar(false); borrador.terminar(); onSalir?.(); }} />
         </div>
       ) : (
         <div className="tec-acciones dan-pad-x">
