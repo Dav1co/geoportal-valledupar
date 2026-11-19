@@ -1,19 +1,19 @@
 OK    01 el ensayo termina en el ERROR esperado: 24 de 24 … SIN FALLAS
-   TIEMPOS (red de 10088 tramos y 742 válvulas): un tramo real (RED-006634; aislamiento_total; 589 válvulas; 95856 a 101698 contratos) 426 ms · el tramo de prueba 243 ms
-   CASO REAL: RED-000077 (246 ms): aguas_arriba; por cota 1 válvula(s) [VAL-000684], 30 a 30 contratos; comprobación por modelo: 2 válvula(s) [VAL-000307,VAL-000672]; aislamiento total: 589 válvulas
+   TIEMPOS (red de 10088 tramos y 742 válvulas): un tramo real (RED-006634; aislamiento_total; 589 válvulas; 95856 a 101698 contratos) 463 ms · el tramo de prueba 280 ms
+   CASO REAL: RED-000077 (266 ms): aguas_arriba; por cota 1 válvula(s) [VAL-000684], 30 a 30 contratos; comprobación por modelo: 2 válvula(s) [VAL-000307,VAL-000672]; aislamiento total: 589 válvulas
 OK    02 … y no deja nada (sigue la huella del 14, no están las funciones ni los parámetros, ni una fila de auditoría)
-OK    03 las huellas antes: «CORTE 14 (listo para aguas arriba)», las 5 nuevas no existen y la simulación de siempre es la publicada
+OK    03 las huellas antes: «CORTE 14 CON ACTA (listo para aguas arriba)», las 5 nuevas no existen y la simulación de siempre es la publicada
 OK    04 la migración se aplica
 OK    05 SOLO AGREGA: ninguna función anterior de redes, tecnica ni public.geoportal_* cambió de texto
 OK    06 las huellas después: «AGUAS ARRIBA (aplicada)» y 5 nuevas
 OK    07 la verificación: las 5 filas OK
 OK    08 una segunda migración se niega
 OK    09 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
-OK    10 EL CASO REAL como la Edge (317 ms; tope local 833 ms): RED-000077 por cota pide 1 válvula ['VAL-000684'], entra por Tee-4796; 30 a 30 contratos
+OK    10 EL CASO REAL como la Edge (344 ms; tope local 833 ms): RED-000077 por cota pide 1 válvula ['VAL-000684'], entra por Tee-4796; 30 a 30 contratos
 OK    11 … la comprobación por el modelo da otras válvulas ['VAL-000307', 'VAL-000672'] y lo dice: «Por el flujo del modelo da otras válvulas: confirme en campo por dónde entra el agua»
-OK    12 … frente al aislamiento total de siempre (254 ms): 589 válvulas y 95856 a 101698 contratos
-OK    13 otros 12 tramos de la red real como la Edge: el más lento 651 ms (tope local 833 ms); 6 caen al aislamiento total
-OK    14 por un punto del mapa como la Edge (393 ms): toma el tramo más cercano (RED-000077)
+OK    12 … frente al aislamiento total de siempre (267 ms): 589 válvulas y 95856 a 101698 contratos
+OK    13 otros 12 tramos de la red real como la Edge: el más lento 719 ms (tope local 833 ms); 6 caen al aislamiento total
+OK    14 por un punto del mapa como la Edge (335 ms): toma el tramo más cercano (RED-000077)
 OK    15 alguien sin Técnica no simula; la API no ejecuta las internas
 OK    16 simular no escribió nada: ni simulaciones guardadas ni auditoría del operador
 OK    17 la reversa se aplica: vuelve la huella del 14, las funciones anteriores siguen igual y los parámetros quedan «sin uso» (no se borran)

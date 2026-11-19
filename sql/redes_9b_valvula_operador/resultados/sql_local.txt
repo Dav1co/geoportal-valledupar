@@ -1,0 +1,26 @@
+OK    01 el ensayo termina en el ERROR esperado: 32 de 32 … SIN FALLAS
+   TIEMPOS (con 20009 maniobras en la tabla): las válvulas cerradas de un daño 2.8 ms · las de una intervención 2.6 ms
+OK    02 … y no deja nada (sigue la huella anterior, no está la función, ni una maniobra ni una fila de auditoría)
+OK    03 las huellas antes: «AGUAS ARRIBA (lista para la corrección)», la nueva no existe y las 5 que no se tocan son las publicadas
+OK    04 la migración se aplica
+OK    05 SOLO AGREGA: ninguna función anterior de redes, tecnica ni public.geoportal_* cambió de texto
+OK    06 las huellas después: «CORRECCIÓN (aplicada)», 1 nueva y las 5 publicadas igual
+OK    07 la verificación: las 5 filas OK
+OK    08 una segunda migración se niega
+OK    09 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
+OK    10 el perfil sintético: operador con «daños y fallas», SIN la casilla del geovisor y sin dashboards
+OK    11 simula como la Edge sobre el caso real (377 ms): RED-000077 pide VAL-000684
+OK    12 registra su daño como la Edge (60 ms): DAN-000001
+OK    13 cierra VAL-000684 desde su daño como la Edge (152 ms; la foto del corte sobre la red real): queda guardado
+OK    14 LA CAUSA: lo que leía el panel se le niega (42501, «Sin el geovisor técnico»)
+OK    15 LA CORRECCIÓN como la Edge (30 ms; tope local 167 ms): su daño tiene cerrada VAL-000684, con desde cuándo y quién; puede abrir
+OK    16 el operador de mantenimiento la ve cerrada pero «puede_abrir» es falso, y la maniobra se lo niega (42501)
+OK    17 alguien sin Técnica no lee (42501); la API no ejecuta las internas
+OK    18 diez lecturas seguidas como la Edge: la más lenta 34 ms (tope local 167 ms); leer no deja auditoría
+OK    19 el operador sin geovisor ABRE VAL-000684 como la Edge (153 ms) y su daño queda sin válvulas cerradas
+OK    20 el operador sigue SIN el geovisor: la configuración y la tesela de afectaciones se le niegan (42501)
+OK    21 la reversa se aplica: vuelve la huella anterior, las funciones anteriores siguen igual y las maniobras hechas no se tocan
+OK    22 una segunda reversa se niega
+OK    23 después de la reversa, la migración se vuelve a aplicar
+
+RESULTADO: 23 de 23 — SIN FALLAS

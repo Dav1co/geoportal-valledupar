@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Arnés local de «Cierre por aguas arriba» (Code A, localhost:55432, base redes_local = producción con el Corte 14 + las cotas del Plan Maestro):
+"""Arnés local de «Cierre por aguas arriba» (Code A, localhost:55432, base redes_local = producción con el Corte 14 y su acta + las cotas del Plan Maestro):
   · el ensayo (N de N … SIN FALLAS) y que no deja nada; huellas; migración; verificación; segunda migración; reversa (vuelve la huella del 14);
   · que SOLO AGREGA: ninguna función anterior cambia de texto (la simulación de siempre, tecnica.f_avisos);
   · como la ve producción (service_role, 30 s / 8 s): la RPC con el caso real (RED-000077 → VAL-000684) y otros tramos; tope local 5 s / 6.
@@ -17,7 +17,7 @@ BASE = 'redes_local'
 ENV = dict(os.environ, PGHOST='localhost', PGPORT='55432', PGUSER='postgres', PGOPTIONS='-c client_min_messages=warning')
 CONJ = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p "
         "where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%')")
-MD5_14 = '1a9ef250a74fb01962f463d98834cc4a'
+MD5_14 = '7c888d4f9ba3835cef951b49ada8ca59'
 NUEVAS = "('f_sim_sentidos', 'f_sim_llenar_sentido', 'f_sim_aguas_arriba_criterio', 'f_simular_aguas_arriba', 'geoportal_redes_simulacion_aguas_arriba')"
 VIEJAS = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.oid::regprocedure::text)) from pg_proc p "
           "where (p.pronamespace in ('redes'::regnamespace, 'tecnica'::regnamespace) or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_%')) "
@@ -65,7 +65,7 @@ ok('02 … y no deja nada (sigue la huella del 14, no están las funciones ni lo
    q(CONJ) == MD5_14 and q("select to_regprocedure('redes.f_simular_aguas_arriba(bigint)')") == '' and q("select count(*) from redes.parametros where clave like 'sim_aguas%'") == '0'
    and q('select count(*) from public.geoportal_auditoria') == aud0)
 filas = psql('-AtF', '|', '-f', archivo('huellas_solo_lectura_redes_9b_aguasarriba_editor.sql')).stdout.strip().splitlines()
-ok('03 las huellas antes: «CORTE 14 (listo para aguas arriba)», las 5 nuevas no existen y la simulación de siempre es la publicada', any('listo para aguas arriba' in f for f in filas)
+ok('03 las huellas antes: «CORTE 14 CON ACTA (listo para aguas arriba)», las 5 nuevas no existen y la simulación de siempre es la publicada', any('listo para aguas arriba' in f for f in filas)
    and sum('NO EXISTE (sin aplicar)' in f for f in filas) == 5 and any('LA PUBLICADA' in f for f in filas) and not any('DISTINTA' in f or 'FALTA' in f for f in filas), '\n'.join(filas))
 p = psql('-q', '-v', 'ON_ERROR_STOP=1', '-f', archivo('migracion_redes_9b_aguasarriba_editor.sql'))
 ok('04 la migración se aplica', p.returncode == 0, p.stderr)

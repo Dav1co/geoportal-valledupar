@@ -1,0 +1,88 @@
+OK    0 la base trae el caso (RED-000077 se cierra por VAL-000684) y el perfil del hallazgo: operador con «daños y fallas» y SIN el geovisor; la Edge corre en Node (doble de Deno.serve y Deno.env)
+OK    390 · ANTES (panel de main, sin la corrección): el operador sin geovisor cierra VAL-000684; el cierre SÍ queda en la base, pero el panel NO la muestra cerrada ni ofrece «Válvula abierta» (el hallazgo)
+OK    390 · A1 al abrir el panel con su daño recién guardado: todavía no hay «Válvulas cerradas por …» y no hay error
+OK    390 · A2 «¿Qué válvulas cierro?» le da VAL-000684 con el botón «Válvula cerrada»
+OK    390 · A3 LA CORRECCIÓN: al confirmar, VAL-000684 queda en la base y el panel la muestra en «Válvulas cerradas por DAN-000002», con «Cerrada desde …» y el botón «Válvula abierta»
+OK    390 · A4 … y en la lista de «¿Qué válvulas cierro?» esa válvula ya dice «Cerrada» (sin el botón de cerrar)
+OK    390 · A5 sin desborde horizontal y botones de 44 px o más
+OK    390 · A6 al volver a entrar a su daño (pantalla nueva), la válvula sigue ahí como cerrada, con «Válvula abierta»
+OK    390 · A7 el operador pulsa «Válvula abierta» y confirma: VAL-000684 queda abierta en la base, sale de la lista y el panel lo dice
+OK    390 · A8 en todo esto el operador nunca recibió las afectaciones del geovisor, y sigue sin el geovisor (su configuración responde 403)
+OK    390 · B1 el operador de mantenimiento ve la válvula cerrada por el daño, SIN el botón «Válvula abierta» (abrirla pide «daños y fallas»)
+OK    390 · B2 el supervisor de distribución, como siempre: la ve cerrada y con «Válvula abierta»
+OK    390 · C1 sin la función nueva en el servidor, el supervisor sigue viendo la válvula cerrada (el panel cae a la lectura de antes)
+OK    390 · C2 … y el operador queda como antes de la corrección: sin la lista y sin error en pantalla
+OK    390 · R1 el supervisor simula: «Cierre por aguas arriba» recomendada, y la válvula ya cerrada dice «Cerrada»
+OK    390 · R2 «Aislamiento total» y «Guardar esta simulación» siguen funcionando: queda guardada con el daño
+OK    390 · R3 el supervisor abre la válvula que cerró el operador: sale de la lista y vuelve el botón «Válvula cerrada»
+OK    390 · R4 … y la cierra de nuevo desde la lista: vuelve a «Válvulas cerradas por …»
+OK    1280 · ANTES (panel de main, sin la corrección): el operador sin geovisor cierra VAL-000684; el cierre SÍ queda en la base, pero el panel NO la muestra cerrada ni ofrece «Válvula abierta» (el hallazgo)
+OK    1280 · A1 al abrir el panel con su daño recién guardado: todavía no hay «Válvulas cerradas por …» y no hay error
+OK    1280 · A2 «¿Qué válvulas cierro?» le da VAL-000684 con el botón «Válvula cerrada»
+OK    1280 · A3 LA CORRECCIÓN: al confirmar, VAL-000684 queda en la base y el panel la muestra en «Válvulas cerradas por DAN-000002», con «Cerrada desde …» y el botón «Válvula abierta»
+OK    1280 · A4 … y en la lista de «¿Qué válvulas cierro?» esa válvula ya dice «Cerrada» (sin el botón de cerrar)
+OK    1280 · A5 sin desborde horizontal y botones de 44 px o más
+OK    1280 · A6 al volver a entrar a su daño (pantalla nueva), la válvula sigue ahí como cerrada, con «Válvula abierta»
+OK    1280 · A7 el operador pulsa «Válvula abierta» y confirma: VAL-000684 queda abierta en la base, sale de la lista y el panel lo dice
+OK    1280 · A8 en todo esto el operador nunca recibió las afectaciones del geovisor, y sigue sin el geovisor (su configuración responde 403)
+OK    1280 · B1 el operador de mantenimiento ve la válvula cerrada por el daño, SIN el botón «Válvula abierta» (abrirla pide «daños y fallas»)
+OK    1280 · B2 el supervisor de distribución, como siempre: la ve cerrada y con «Válvula abierta»
+OK    1280 · C1 sin la función nueva en el servidor, el supervisor sigue viendo la válvula cerrada (el panel cae a la lectura de antes)
+OK    1280 · C2 … y el operador queda como antes de la corrección: sin la lista y sin error en pantalla
+OK    1280 · R1 el supervisor simula: «Cierre por aguas arriba» recomendada, y la válvula ya cerrada dice «Cerrada»
+OK    1280 · R2 «Aislamiento total» y «Guardar esta simulación» siguen funcionando: queda guardada con el daño
+OK    1280 · R3 el supervisor abre la válvula que cerró el operador: sale de la lista y vuelve el botón «Válvula cerrada»
+OK    1280 · R4 … y la cierra de nuevo desde la lista: vuelve a «Válvulas cerradas por …»
+OK    F1 cierres_registro (GET) para el operador sin geovisor: 200, sin caché, registro, puede_abrir y las válvulas de DAN-000002 (con el nombre del funcionario que cerró); sin datos de suscriptores ni correos
+OK    F2 acepta el código en minúsculas
+OK    F3 rechaza por forma: sin registro o con un código que no es de daño ni de intervención (400), y por POST (405)
+OK    F4 un daño que no existe: 404
+OK    F5 quién: al supervisor y al de mantenimiento, 200 (este con puede_abrir falso); a quien no es de Técnica, 403; sin sesión, 401
+OK    F6 las rutas del 9b que el panel ya usaba siguen igual para el operador: simulacion_aguas_arriba 200 y cortes_vigentes 403
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC que no exista en la base
+----
+OK    0 la base trae el caso (RED-000077 se cierra por VAL-000684) y el perfil del hallazgo: operador con «daños y fallas» y SIN el geovisor; la Edge corre en Node (doble de Deno.serve y Deno.env)
+OK    390 · ANTES (panel de main, sin la corrección): el operador sin geovisor cierra VAL-000684; el cierre SÍ queda en la base, pero el panel NO la muestra cerrada ni ofrece «Válvula abierta» (el hallazgo)
+OK    390 · A1 al abrir el panel con su daño recién guardado: todavía no hay «Válvulas cerradas por …» y no hay error
+OK    390 · A2 «¿Qué válvulas cierro?» le da VAL-000684 con el botón «Válvula cerrada»
+OK    390 · A3 LA CORRECCIÓN: al confirmar, VAL-000684 queda en la base y el panel la muestra en «Válvulas cerradas por DAN-000002», con «Cerrada desde …» y el botón «Válvula abierta»
+OK    390 · A4 … y en la lista de «¿Qué válvulas cierro?» esa válvula ya dice «Cerrada» (sin el botón de cerrar)
+OK    390 · A5 sin desborde horizontal y botones de 44 px o más
+OK    390 · A6 al volver a entrar a su daño (pantalla nueva), la válvula sigue ahí como cerrada, con «Válvula abierta»
+OK    390 · A7 el operador pulsa «Válvula abierta» y confirma: VAL-000684 queda abierta en la base, sale de la lista y el panel lo dice
+OK    390 · A8 en todo esto el operador nunca recibió las afectaciones del geovisor, y sigue sin el geovisor (su configuración responde 403)
+OK    390 · B1 el operador de mantenimiento ve la válvula cerrada por el daño, SIN el botón «Válvula abierta» (abrirla pide «daños y fallas»)
+OK    390 · B2 el supervisor de distribución, como siempre: la ve cerrada y con «Válvula abierta»
+OK    390 · C1 sin la función nueva en el servidor, el supervisor sigue viendo la válvula cerrada (el panel cae a la lectura de antes)
+OK    390 · C2 … y el operador queda como antes de la corrección: sin la lista y sin error en pantalla
+OK    390 · R1 el supervisor simula: «Cierre por aguas arriba» recomendada, y la válvula ya cerrada dice «Cerrada»
+OK    390 · R2 «Aislamiento total» y «Guardar esta simulación» siguen funcionando: queda guardada con el daño
+OK    390 · R3 el supervisor abre la válvula que cerró el operador: sale de la lista y vuelve el botón «Válvula cerrada»
+OK    390 · R4 … y la cierra de nuevo desde la lista: vuelve a «Válvulas cerradas por …»
+OK    1280 · ANTES (panel de main, sin la corrección): el operador sin geovisor cierra VAL-000684; el cierre SÍ queda en la base, pero el panel NO la muestra cerrada ni ofrece «Válvula abierta» (el hallazgo)
+OK    1280 · A1 al abrir el panel con su daño recién guardado: todavía no hay «Válvulas cerradas por …» y no hay error
+OK    1280 · A2 «¿Qué válvulas cierro?» le da VAL-000684 con el botón «Válvula cerrada»
+OK    1280 · A3 LA CORRECCIÓN: al confirmar, VAL-000684 queda en la base y el panel la muestra en «Válvulas cerradas por DAN-000002», con «Cerrada desde …» y el botón «Válvula abierta»
+OK    1280 · A4 … y en la lista de «¿Qué válvulas cierro?» esa válvula ya dice «Cerrada» (sin el botón de cerrar)
+OK    1280 · A5 sin desborde horizontal y botones de 44 px o más
+OK    1280 · A6 al volver a entrar a su daño (pantalla nueva), la válvula sigue ahí como cerrada, con «Válvula abierta»
+OK    1280 · A7 el operador pulsa «Válvula abierta» y confirma: VAL-000684 queda abierta en la base, sale de la lista y el panel lo dice
+OK    1280 · A8 en todo esto el operador nunca recibió las afectaciones del geovisor, y sigue sin el geovisor (su configuración responde 403)
+OK    1280 · B1 el operador de mantenimiento ve la válvula cerrada por el daño, SIN el botón «Válvula abierta» (abrirla pide «daños y fallas»)
+OK    1280 · B2 el supervisor de distribución, como siempre: la ve cerrada y con «Válvula abierta»
+OK    1280 · C1 sin la función nueva en el servidor, el supervisor sigue viendo la válvula cerrada (el panel cae a la lectura de antes)
+OK    1280 · C2 … y el operador queda como antes de la corrección: sin la lista y sin error en pantalla
+OK    1280 · R1 el supervisor simula: «Cierre por aguas arriba» recomendada, y la válvula ya cerrada dice «Cerrada»
+OK    1280 · R2 «Aislamiento total» y «Guardar esta simulación» siguen funcionando: queda guardada con el daño
+OK    1280 · R3 el supervisor abre la válvula que cerró el operador: sale de la lista y vuelve el botón «Válvula cerrada»
+OK    1280 · R4 … y la cierra de nuevo desde la lista: vuelve a «Válvulas cerradas por …»
+OK    F1 cierres_registro (GET) para el operador sin geovisor: 200, sin caché, registro, puede_abrir y las válvulas de DAN-000002 (con el nombre del funcionario que cerró); sin datos de suscriptores ni correos
+OK    F2 acepta el código en minúsculas
+OK    F3 rechaza por forma: sin registro o con un código que no es de daño ni de intervención (400), y por POST (405)
+OK    F4 un daño que no existe: 404
+OK    F5 quién: al supervisor y al de mantenimiento, 200 (este con puede_abrir falso); a quien no es de Técnica, 403; sin sesión, 401
+OK    F6 las rutas del 9b que el panel ya usaba siguen igual para el operador: simulacion_aguas_arriba 200 y cortes_vigentes 403
+OK    Z1 sin errores de JavaScript ni de consola
+OK    Z2 ninguna RPC que no exista en la base
+RESULTADO: 43 de 43 — SIN FALLAS

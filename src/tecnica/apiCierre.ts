@@ -17,6 +17,10 @@ export type ManiobraHecha = { maniobra: number; valvula: string; estado: "cerrad
 export type ZonaCorte = { zona: number; lat: number; lon: number; caja: [number, number, number, number]; contratos: number; tramos: number; desde: string | null; regreso_estimado: string | null;
   por: { registro: string | null; que: string }[] };
 export type ValvulaCerrada = { codigo: string; nombre: string; zona: number | null; en_red: boolean; lat: number; lon: number; desde: string; quien: string; registro: string | null; regreso_estimado: string | null };
+// Corrección del 9b (18-nov): las válvulas que UN daño o UNA intervención tiene cerradas ahora. La lee el panel «Cierre de válvulas» y no pide el geovisor
+// (cortes_vigentes sí). «puede_abrir»: si esta persona tiene el formulario que la maniobra exige para abrirlas (lo vuelve a decidir el servidor).
+export type ValvulaDelRegistro = Pick<ValvulaCerrada, "codigo" | "nombre" | "desde" | "quien" | "registro" | "regreso_estimado">;
+export type CierresRegistro = { registro: string; puede_abrir: boolean; valvulas: ValvulaDelRegistro[] };
 export type CortesVigentes = { hay: boolean; foto?: { id: number; calculada_en: string; red_huella: string }; resumen?: { zonas: number; valvulas_cerradas: number; contratos: number };
   leyenda?: { clave: "afectado" | "cerrado" | "valvula"; texto: string }[]; zonas: ZonaCorte[]; valvulas: ValvulaCerrada[] };
 
@@ -42,6 +46,8 @@ export const apiCierre = {
       cuerpo: { valvula, tipo, ...(o.registro ? { registro: o.registro } : {}), ...(o.motivo ? { motivo: o.motivo } : {}), ...(o.hecho_en ? { hecho_en: o.hecho_en } : {}), ...(o.regreso ? { regreso: o.regreso } : {}) } }),
   regreso: (valvula: string, regreso: string, motivo?: string) => pedir<{ maniobra: number; regreso_estimado: string }>("corte_regreso", { ...F, cuerpo: { valvula, regreso, ...(motivo ? { motivo } : {}) } }),
   vigentes: () => pedir<CortesVigentes>("cortes_vigentes", F),
+  /** Las válvulas que ese daño o esa intervención tiene cerradas ahora (para quien lo atiende, tenga o no el geovisor). */
+  delRegistro: (registro: string) => pedir<CierresRegistro>("cierres_registro", { ...F, qs: { registro } }),
   /** El supervisor rehace la foto de las afectaciones (si la red cambió después del último cierre). */
   recalcular: (motivo: string) => pedir<{ foto: number; zonas: number; valvulas_cerradas: number; contratos: number }>("cortes_recalcular", { ...F, cuerpo: { motivo }, timeoutMs: 25000 }),
 };
