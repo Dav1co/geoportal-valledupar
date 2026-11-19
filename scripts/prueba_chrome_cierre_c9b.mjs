@@ -168,6 +168,8 @@ const esperarDibujo = (p, capa, ms = 60000) => p.waitForFunction((c) => { const 
 const marcada = (p, capa) => p.evaluate((c) => document.querySelector(`.geo-panel [data-capa=${c}] input`)?.checked ?? null, capa);
 async function abrir(ancho, rol, hash, gps) {
   const p = await nav.newPage();
+  // desde el 18-nov los formularios de daño e intervención guardan borrador en el celular: esta prueba los abre varias veces sin guardar, así que cada página arranca sin borradores
+  await p.evaluateOnNewDocument(() => { try { indexedDB.deleteDatabase("geoportal-tec-borradores"); } catch { /* sin almacenamiento */ } });
   if (gps) await p.setGeolocation({ latitude: gps[1], longitude: gps[0], accuracy: 6 }); await p.setViewport({ width: ancho, height: ancho < 500 ? 844 : 900, deviceScaleFactor: 1, isMobile: ancho < 500, hasTouch: ancho < 500 });
   p.setDefaultTimeout(120000);
   p.on("pageerror", (e) => errores.push(`${ancho} ${rol}: ${e.message}`));
