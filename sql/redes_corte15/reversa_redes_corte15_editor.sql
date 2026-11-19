@@ -1,7 +1,7 @@
 begin;
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 15 · «EVENTO DE SUSPENSIÓN» · 90 — REVERSA (PROPUESTA; no se ha ejecutado en la base real). Generada por pruebas_locales/generar.py.
--- Deja tecnica.f_avisos como estaba (texto exacto), quita los 3 disparadores, las 33 funciones, la vista y las 7 tablas, y DESACTIVA el tipo «sin_agua».
+-- Deja tecnica.f_avisos y redes.f_publicar_l116 como estaban (texto exacto), quita los 4 disparadores, las 36 funciones, la vista y las 7 tablas, y DESACTIVA el tipo «sin_agua».
 -- SE NIEGA si alguna función cambió después de la migración, si ya se declaró algún evento, o si alguien ajustó la lista de lo que se asocia o los
 -- sectores de una planta (la reversa no borra hechos: avise). Antes, devuelva la Edge a la anterior.
 -- =====================================================================
@@ -9,8 +9,9 @@ do $$
 begin
   if to_regclass('redes.eventos_suspension') is null then raise exception 'No hay nada que revertir: el Corte 15 no está aplicado'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'aa7f80d7e0a3df7715474318650a5ec0'
-     or md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamptz)'::regprocedure)) <> '3c6b6143a3f6d48c5624ec3fe94fd324' then
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '0546b3e20d46798a7156cfc0e7b58fb5'
+     or md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamptz)'::regprocedure)) <> 'aaa81ee57ec79080b9e76213ecea006c'
+     or md5(pg_get_functiondef('redes.f_publicar_l116(bigint,text,text)'::regprocedure)) <> '1cd235b077d77479b73fab78e4aee983' then
     raise exception 'Las funciones cambiaron después de la migración del Corte 15: la reversa se niega a pisarlas; avise';
   end if;
   if exists (select 1 from redes.eventos_suspension) then raise exception 'Ya hay eventos de suspensión declarados: la reversa no borra hechos; avise'; end if;
@@ -352,10 +353,60 @@ begin
   return coalesce((select jsonb_agg(a order by case a ->> 'nivel' when 'rojo' then 1 when 'naranja' then 2 else 3 end, (a ->> 'orden')::integer, a ->> 'clave')
                      from jsonb_array_elements(v_av) a), '[]'::jsonb);
 end $function$;
+-- 1b. redes.f_publicar_l116, con su texto de antes (el del Corte 5d)
+CREATE OR REPLACE FUNCTION redes.f_publicar_l116(p_carga bigint, p_autor text, p_motivo text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO 'redes', 'public', 'extensions', 'pg_temp'
+AS $function$
+declare c redes.v_cargas_estado%rowtype; v_res jsonb; v_rev bigint; v_version integer; v_nuevos integer; v_estado integer; v_mostrar integer; v_iguales integer; v_mot text := btrim(p_motivo);
+begin
+  perform pg_advisory_xact_lock(hashtext('redes.carga.linea_116'));
+  select * into c from redes.v_cargas_estado where id = p_carga;
+  if c.estado <> 'abierta' then perform tecnica.f_error(format('La carga %s está %s: no se puede publicar', p_carga, c.estado)); end if;
+  v_res := redes.f_resumen_l116(p_carga);      -- la última revisión si sigue valiendo; si la 116 cambió desde entonces, una nueva
+  if not (v_res ->> 'lista_para_publicar')::boolean then
+    perform tecnica.f_error('La carga no está lista para publicar: ' || array_to_string(array(select jsonb_array_elements_text(v_res -> 'bloqueos')), '; '));
+  end if;
+  v_rev := (v_res ->> 'revision_id')::bigint;
+  v_version := (select count(*) + 1 from redes.v_cargas_estado x where x.capa_codigo = 'linea_116' and x.estado = 'publicada');
+  -- (a) nuevos
+  insert into redes.l116_reportes (reporte, fecha_registro, servicio, causal, comuna, contrato, carga_id)
+  select f.reporte, f.fecha, f.servicio, f.causal, f.comuna, f.contrato, p_carga
+    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion = 'nuevo' order by f.reporte;
+  get diagnostics v_nuevos = row_count;
+  insert into redes.l116_eventos (reporte_id, tipo, estado, metodo, geom, sector, subsector, carga_id, motivo, autor)
+  select r.id, 'alta', f.estado, f.metodo, f.geom, f.sector, f.subsector, p_carga, v_mot, p_autor
+    from redes.l116_revision_filas f join redes.l116_reportes r on r.reporte = f.reporte
+   where f.revision_id = v_rev and f.accion = 'nuevo' order by r.id;
+  insert into redes.l116_vigente (reporte_id, reporte, fecha_registro, dia, servicio, causal, contrato, estado, estado_desde, metodo, geom, sector, subsector)
+  select r.id, f.reporte, f.fecha, (f.fecha at time zone 'America/Bogota')::date, f.servicio, f.causal, f.contrato, f.estado, f.fecha, f.metodo, f.geom, f.sector, f.subsector
+    from redes.l116_revision_filas f join redes.l116_reportes r on r.reporte = f.reporte
+   where f.revision_id = v_rev and f.accion = 'nuevo';
+  -- (b) cambios de estado (también los de los que vuelven a mostrarse)
+  insert into redes.l116_eventos (reporte_id, tipo, estado, estado_antes, carga_id, motivo, autor)
+  select f.reporte_id, 'estado', f.estado, f.estado_vigente, p_carga, v_mot, p_autor
+    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado <> f.estado_vigente order by f.reporte_id;
+  get diagnostics v_estado = row_count;
+  -- (c) los que vuelven a mostrarse (los había ocultado la reversa de una carga)
+  insert into redes.l116_eventos (reporte_id, tipo, carga_id, motivo, autor)
+  select f.reporte_id, 'mostrar', p_carga, v_mot, p_autor from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion = 'mostrar' order by f.reporte_id;
+  get diagnostics v_mostrar = row_count;
+  update redes.l116_vigente v set estado = f.estado, estado_desde = case when v.estado <> f.estado then clock_timestamp() else v.estado_desde end,
+         oculto = false, actualizado_en = clock_timestamp()
+    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.reporte_id = v.reporte_id;
+  v_iguales := (v_res -> 'frente_a_vigente' ->> 'igual')::integer;
+  insert into redes.carga_eventos (carga_id, tipo, version_capa, nuevos, cambiados, iguales, retirados, reactivados, detalle, motivo, autor)
+  values (p_carga, 'publicar', v_version, v_nuevos, v_estado, v_iguales, 0, v_mostrar,
+          jsonb_build_object('ubicacion', v_res -> 'ubicacion', 'con_sector', v_res -> 'con_sector', 'servicios', v_res -> 'servicios', 'revision_id', v_rev), v_mot, p_autor);
+  return jsonb_build_object('carga_id', p_carga, 'capa', 'linea_116', 'version_capa', v_version, 'nuevos', v_nuevos, 'cambiados', v_estado, 'cambios_estado', v_estado,
+                            'iguales', v_iguales, 'reactivados', v_mostrar, 'retirados', 0, 'ubicacion', v_res -> 'ubicacion', 'con_sector', v_res -> 'con_sector');
+end $function$;
 -- 2. los disparadores y lo nuevo (las tablas de hechos están vacías: lo comprobó la guardia)
 drop trigger t_evento_asociar on redes.reporte_externo_eventos;
 drop trigger t_evento_asociar on redes.l116_eventos;
 drop trigger t_evento_asociar on redes.danos;
+drop trigger t_evento_asociar on campo.reportes;
 drop function public.geoportal_redes_evento(text,text);
 drop function public.geoportal_redes_evento_anular(text,text,text);
 drop function public.geoportal_redes_evento_asociar(text,text,text,text,text);
@@ -371,17 +422,20 @@ drop function public.geoportal_redes_eventos_vigentes(text);
 drop function public.geoportal_redes_planta_sectores_fijar(text,text,text[],text);
 drop function redes.f_evento_abierto(text,text,text);
 drop function redes.f_evento_autorizar(text,text);
+drop function redes.f_evento_campo_abierto(uuid);
 drop function redes.f_evento_candidatos(geometry,boolean,timestamp with time zone,uuid);
 drop function redes.f_evento_clave(text);
 drop function redes.f_evento_contratos(geometry,boolean,boolean);
 drop function redes.f_evento_franja(text,timestamp with time zone,text,timestamp with time zone);
 drop function redes.f_evento_hora(timestamp with time zone);
 drop function redes.f_evento_json(bigint,boolean);
+drop function redes.f_evento_l116_cerrado(bigint);
 drop function redes.f_evento_marcar(bigint[],text,text,text);
 drop function redes.f_evento_ref_libre(text,text);
 drop function redes.f_evento_reporte_ref(text,text);
 drop function redes.f_evento_reportes(bigint);
 drop function redes.f_evento_tg_bot();
+drop function redes.f_evento_tg_campo();
 drop function redes.f_evento_tg_dano();
 drop function redes.f_evento_tg_l116();
 drop function redes.f_evento_zona(jsonb);

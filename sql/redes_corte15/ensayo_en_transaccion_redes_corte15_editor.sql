@@ -2,12 +2,13 @@ begin;
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 15 · «EVENTO DE SUSPENSIÓN» · 10 — GUARDIA, TABLAS, CATÁLOGOS Y PARÁMETROS
 -- PROPUESTA. No se ha ejecutado en la base real (solo en el PostGIS local de Code A). Generado por pruebas_locales/generar.py.
--- Fuente: encargo_code_corte15_eventos_suspension.md y las respuestas de David del 18-nov.
+-- Fuente: encargo_code_corte15_eventos_suspension.md y las respuestas de David del 18 y del 19-nov.
 -- · Presupone la corrección del 9b publicada: huella del conjunto de funciones de redes 63d917635b33e3696f28a3b0e579c002, y tecnica.f_avisos como la dejó el Corte 14.
 -- · Tablas nuevas (solo agregar): eventos_suspension, evento_suspension_eventos, evento_suspension_reportes; dos catálogos ajustables con su historial
 --   (qué reportes se asocian; qué sectores surte cada planta). Ninguna tabla existente cambia de forma: se agregan 3 disparadores AFTER INSERT (por
---   sentencia) en redes.reporte_externo_eventos, redes.l116_eventos y redes.danos.
--- · Reemplaza UNA función: tecnica.f_avisos (dos bloques más; 25_reemplazos.sql). Agrega el tipo «sin_agua» al catálogo de campo.
+--   sentencia) en redes.reporte_externo_eventos, redes.l116_eventos, redes.danos y campo.reportes (el formato de campo de Comercial: David, 19-nov).
+-- · Reemplaza DOS funciones (25_reemplazos.sql), cada una con su guardia md5: tecnica.f_avisos (dos bloques más) y redes.f_publicar_l116 (la publicación de la
+--   línea 116 no revive lo que cerró un evento: David, 19-nov). Agrega el tipo «sin_agua» al catálogo de campo.
 -- =====================================================================
 do $$
 begin
@@ -18,6 +19,14 @@ begin
   end if;
   if md5(pg_get_functiondef('tecnica.f_avisos(boolean,boolean,timestamptz)'::regprocedure)) <> 'b7ec2303f95153684963ded7bdb0a5c0' then
     raise exception 'tecnica.f_avisos no es la del Corte 14 (huella b7ec2303f95153684963ded7bdb0a5c0): deténgase y avise';
+  end if;
+  if md5(pg_get_functiondef('redes.f_publicar_l116(bigint,text,text)'::regprocedure)) <> '1d70c1fe36186cf498504898e5098b64' then
+    raise exception 'redes.f_publicar_l116 no es la publicada (Corte 5d, huella 1d70c1fe36186cf498504898e5098b64): deténgase y avise';
+  end if;
+  if to_regclass('campo.reportes') is null or to_regclass('campo.reporte_eventos') is null or to_regclass('campo.v_reportes_estado') is null
+     or not exists (select 1 from campo.estados_reporte where codigo = 'atendido' and activo and cambio_manual and not exige_motivo)
+     or not exists (select 1 from campo.estados_reporte where codigo = 'reportado' and inicial) then
+    raise exception 'Los reportes de campo (campo.reportes, sus hechos o los estados «reportado» y «atendido») no son los esperados: deténgase y avise';
   end if;
   if to_regclass('redes.reporte_externo_eventos') is null or to_regclass('redes.l116_eventos') is null or to_regclass('redes.l116_vigente') is null
      or to_regclass('redes.usuarios_sensibles') is null or to_regclass('redes.contrato_tramo') is null or to_regclass('tecnica.plantas') is null
@@ -78,29 +87,31 @@ comment on table redes.evento_suspension_eventos is 'Corte 15: hechos de un even
 create table redes.evento_suspension_reportes (
   id                 bigint generated always as identity primary key,
   evento_id          bigint not null references redes.eventos_suspension (id),
-  origen             text not null check (origen in ('bot', 'l116', 'dano')),
+  origen             text not null check (origen in ('bot', 'l116', 'dano', 'campo')),
   reporte_externo_id uuid references redes.reportes_externos (id),
   l116_reporte_id    bigint references redes.l116_reportes (id),
   dano_id            uuid references redes.danos (id),
-  ref                text generated always as (coalesce(reporte_externo_id::text, l116_reporte_id::text, dano_id::text)) stored,
+  campo_reporte_id   uuid references campo.reportes (id),      -- un reporte del formato de campo (Comercial o Técnica)
+  ref                text generated always as (coalesce(reporte_externo_id::text, l116_reporte_id::text, dano_id::text, campo_reporte_id::text)) stored,
   tipo               text not null check (tipo in ('asociar', 'desasociar')),
   modo               text not null check (modo in ('automatica', 'al_declarar', 'manual')),
   motivo             text check (motivo is null or length(btrim(motivo)) between 10 and 500),
   autor              text not null check (autor = lower(autor) and position('@' in autor) > 1),
   creado_en          timestamptz not null default clock_timestamp(),
-  check (num_nonnulls(reporte_externo_id, l116_reporte_id, dano_id) = 1),
-  check ((origen = 'bot') = (reporte_externo_id is not null) and (origen = 'l116') = (l116_reporte_id is not null) and (origen = 'dano') = (dano_id is not null)),
+  check (num_nonnulls(reporte_externo_id, l116_reporte_id, dano_id, campo_reporte_id) = 1),
+  check ((origen = 'bot') = (reporte_externo_id is not null) and (origen = 'l116') = (l116_reporte_id is not null) and (origen = 'dano') = (dano_id is not null)
+         and (origen = 'campo') = (campo_reporte_id is not null)),
   check (modo <> 'manual' or motivo is not null),      -- lo que hace una persona, con motivo
   check (tipo <> 'desasociar' or modo = 'manual')
 );
 create index ix_evsr_evento on redes.evento_suspension_reportes (evento_id, id);
 create index ix_evsr_ref on redes.evento_suspension_reportes (origen, ref, id desc);
-comment on table redes.evento_suspension_reportes is 'Corte 15: reportes (bot, línea 116, daños) asociados a un evento de suspensión. Solo agregar: asociar y desasociar son hechos; vale el último de cada reporte.';
+comment on table redes.evento_suspension_reportes is 'Corte 15: reportes (bot, línea 116, daños, formato de campo) asociados a un evento de suspensión. Solo agregar: asociar y desasociar son hechos; vale el último de cada reporte.';
 
 -- ---------- 3. Catálogos ajustables (estado + historial con motivo): qué se asocia y qué sectores surte cada planta ----------
 create table redes.evento_tipos_asociables (
-  origen  text not null check (origen in ('bot', 'l116', 'dano')),
-  codigo  text not null check (length(codigo) between 2 and 120 and codigo = lower(codigo)),      -- tipo del bot, causal de la 116 (en minúsculas, un espacio) o tipo de daño
+  origen  text not null check (origen in ('bot', 'l116', 'dano', 'campo')),
+  codigo  text not null check (length(codigo) between 2 and 120 and codigo = lower(codigo)),      -- tipo del bot, causal de la 116 (en minúsculas, un espacio), tipo de daño o tipo del formato de campo
   nombre  text not null check (length(btrim(nombre)) between 2 and 120),
   clase   text not null check (clase in ('sin_agua', 'dano_red', 'otro')),
   asocia  boolean not null default true,
@@ -111,7 +122,7 @@ create table redes.evento_tipo_eventos (
   motivo text not null check (length(btrim(motivo)) between 10 and 500), autor text not null check (autor = lower(autor) and position('@' in autor) > 1),
   creado_en timestamptz not null default clock_timestamp()
 );
-comment on table redes.evento_tipos_asociables is 'Corte 15: qué tipos del bot, causales de la línea 116 y tipos de daño se asocian solos a un evento de suspensión. «sin_agua» además se avisa cuando llega fuera de un evento.';
+comment on table redes.evento_tipos_asociables is 'Corte 15: qué tipos del bot, causales de la línea 116, tipos de daño y tipos del formato de campo se asocian solos a un evento de suspensión. «sin_agua» además se avisa cuando llega fuera de un evento.';
 create table redes.planta_sectores (
   planta_id bigint not null references tecnica.plantas (id),
   sector_id bigint not null references redes.activos (id),
@@ -153,9 +164,11 @@ insert into redes.evento_tipos_asociables (origen, codigo, nombre, clase) values
   ('l116', 'escape de agua (hidrante, tubería)', 'Escape de Agua (Hidrante, Tubería)', 'dano_red'),
   ('dano', 'fuga', 'Fuga o tubería rota', 'dano_red'),
   ('dano', 'bombeo', 'Falla de bombeo', 'otro'),
-  ('dano', 'electrica', 'Falla eléctrica', 'otro');
+  ('dano', 'electrica', 'Falla eléctrica', 'otro'),
+  ('campo', 'sin_agua', 'No tengo agua o tengo baja presión', 'sin_agua');
 
--- ---------- 5. El tipo nuevo del catálogo de campo: «sin_agua» (David, 18-nov), en el grupo «red_acueducto», como los dos que agregó el Corte 8 ----------
+-- ---------- 5. El tipo nuevo del catálogo de campo: «sin_agua» (David, 18-nov), en el grupo «red_acueducto», como los dos que agregó el Corte 8.
+--    Lo puede escoger también quien reporta desde Comercial; esos reportes se asocian al evento y se cierran en bloque (David, 19-nov) ----------
 insert into campo.tipos_reporte (grupo_id, codigo, nombre, orden)
 select g.id, 'sin_agua', 'No tengo agua o tengo baja presión', (select coalesce(max(t.orden), 0) from campo.tipos_reporte t where t.grupo_id = g.id) + 1
   from campo.grupos_reporte g
@@ -173,16 +186,21 @@ insert into redes.parametros (clave, valor, unidad, minimo, maximo, descripcion)
 on conflict (clave) do update set estado = 'vigente', descripcion = excluded.descripcion;
 insert into tecnica.aviso_parametros (clave, area, valor, minimo, maximo, unidad, orden, nombre, descripcion) values
   ('sin_agua_ventana_h', 'distribucion', 24, 1, 720, 'horas', 166, 'Reportes «sin agua» sin evento: ventana',
-   'Se avisan los reportes de falta de agua o baja presión (bot y línea 116) de estas últimas horas que no están en un evento de suspensión.')
+   'Se avisan los reportes de falta de agua o baja presión (bot, línea 116 y formato de campo) de estas últimas horas que no están en un evento de suspensión.')
 on conflict (clave) do update set nombre = excluded.nombre, descripcion = excluded.descripcion;
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 15 · «EVENTO DE SUSPENSIÓN» · 20 — VISTA Y FUNCIONES INTERNAS (ninguna la ejecuta la API)
 --   · quién puede qué; la zona de cada alcance; contratos y usuarios sensibles de la zona; los reportes que caen en una zona;
 --   · la ASOCIACIÓN AUTOMÁTICA: tres disparadores AFTER INSERT por sentencia (con la tabla de filas nuevas: una consulta por sentencia, no por fila):
---       bot   → redes.reporte_externo_eventos (cuando entra el «recibido»);   116 → redes.l116_eventos (el «alta» al publicar);   daño → redes.danos.
+--       bot   → redes.reporte_externo_eventos (cuando entra el «recibido»);   116 → redes.l116_eventos (el «alta» al publicar);   daño → redes.danos;
+--       formato de campo (Comercial o Técnica) → campo.reportes.
 --     Sin eventos abiertos no hacen nada. La pertenencia se decide por el punto del reporte (dentro de la zona; «toda la ciudad» no tiene geometría).
+--     Si un punto cae en dos eventos abiertos gana EL MÁS ESPECÍFICO (David, 19-nov): círculo > sectores > total; entre dos de la misma clase, el de menor
+--     área (un subsector antes que su sector) y, si empatan, el declarado más recientemente.
 --   · lo que le llega a cada reporte: bot → «en_atencion» al asociar, «atendido» al cerrar, «recibido» al desasociar o anular; daño → una nota en su historial
---     (el daño NO se cierra con el evento: sigue hasta su reparación); 116 → «atendido» al cerrar.
+--     (el daño NO se cierra con el evento: sigue hasta su reparación); 116 → «atendido» al cerrar; formato de campo → una nota al asociar, desasociar o
+--     anular, y «atendido» al cerrar (si seguía «reportado» o «en revisión»).
+--   · la publicación de la línea 116 NO revive lo que cerró un evento (redes.f_evento_l116_cerrado; el reemplazo está en 25_reemplazos.sql).
 --   · los dos bloques para Avisos y la respuesta para el bot.
 -- =====================================================================
 
@@ -214,6 +232,21 @@ language sql stable security definer set search_path = redes, pg_temp as $$
   select r.* from redes.evento_suspension_reportes r
    where r.evento_id = p_evento and r.tipo = 'asociar'
      and not exists (select 1 from redes.evento_suspension_reportes x where x.origen = r.origen and x.ref = r.ref and x.id > r.id) $$;
+
+-- el evento que CERRÓ un reporte de la línea 116 (su último hecho es «asociar» a un evento que terminó en «cerrar»), o nulo. La usa la publicación de la 116:
+-- lo que cerró un evento conserva «Atendido» aunque el archivo siga diciendo «Registrado»
+create function redes.f_evento_l116_cerrado(p_reporte_id bigint) returns text
+language sql stable security definer set search_path = redes, pg_temp as $$
+  select e.codigo
+    from (select y.tipo, y.evento_id from redes.evento_suspension_reportes y where y.origen = 'l116' and y.ref = p_reporte_id::text order by y.id desc limit 1) u
+    join redes.eventos_suspension e on e.id = u.evento_id
+   where u.tipo = 'asociar' and exists (select 1 from redes.evento_suspension_eventos z where z.evento_id = u.evento_id and z.tipo = 'cerrar') $$;
+
+-- un reporte del formato de campo sigue abierto: «reportado» o «en revisión», y no está oculto
+create function redes.f_evento_campo_abierto(p_id uuid) returns boolean
+language sql stable security definer set search_path = redes, pg_temp as $$
+  select campo.f_estado_actual(p_id) in ('reportado', 'en_revision')
+     and coalesce((select x.tipo_evento from campo.reporte_eventos x where x.reporte_id = p_id and x.tipo_evento in ('ocultar', 'reincluir') order by x.id desc limit 1), 'reincluir') <> 'ocultar' $$;
 
 -- la causal de la 116 como clave del catálogo: minúsculas y un solo espacio
 create function redes.f_evento_clave(p_texto text) returns text
@@ -319,30 +352,38 @@ end $$;
 
 -- ---------- los reportes ABIERTOS que caen en una zona desde una hora (al declarar y en la vista previa) ----------
 create function redes.f_evento_candidatos(p_geom geometry, p_todo boolean, p_desde timestamptz, p_sin_dano uuid default null)
-returns table (origen text, reporte_externo_id uuid, l116_reporte_id bigint, dano_id uuid)
+returns table (origen text, reporte_externo_id uuid, l116_reporte_id bigint, dano_id uuid, campo_reporte_id uuid)
 language sql stable security definer set search_path = redes, public, extensions, pg_temp as $$
-  select 'bot', r.id, null::bigint, null::uuid
+  select 'bot', r.id, null::bigint, null::uuid, null::uuid
     from redes.reportes_externos r
    where r.recibido_en >= p_desde and r.geom is not null and (p_todo or (r.geom && p_geom and ST_Intersects(p_geom, r.geom)))
      and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'bot' and t.codigo = lower(btrim(r.tipo_bot)) and t.asocia)
      and (select x.tipo from redes.reporte_externo_eventos x where x.reporte_id = r.id order by x.id desc limit 1) = 'recibido'
      and redes.f_evento_ref_libre('bot', r.id::text)
   union all
-  select 'l116', null::uuid, v.reporte_id, null::uuid
+  select 'l116', null::uuid, v.reporte_id, null::uuid, null::uuid
     from redes.l116_vigente v
    where not v.oculto and v.estado = 'registrado' and v.fecha_registro >= p_desde and v.geom is not null and (p_todo or (v.geom && p_geom and ST_Intersects(p_geom, v.geom)))
      and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'l116' and t.codigo = redes.f_evento_clave(v.causal) and t.asocia)
      and redes.f_evento_ref_libre('l116', v.reporte_id::text)
   union all
-  select 'dano', null::uuid, null::bigint, d.id
+  select 'dano', null::uuid, null::bigint, d.id, null::uuid
     from redes.danos d
    where d.registrado_en >= p_desde and d.t_detectado >= p_desde and d.sistema = 'acueducto' and d.geom is not null and (p_todo or (d.geom && p_geom and ST_Intersects(p_geom, d.geom)))
      and (p_sin_dano is null or d.id <> p_sin_dano)
      and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'dano' and t.codigo = d.tipo_codigo and t.asocia)
      and (select vd.estado from redes.v_dano vd where vd.id = d.id) <> 'atendido'
-     and redes.f_evento_ref_libre('dano', d.id::text) $$;
+     and redes.f_evento_ref_libre('dano', d.id::text)
+  union all
+  select 'campo', null::uuid, null::bigint, null::uuid, c.id
+    from campo.reportes c join campo.tipos_reporte tc on tc.id = c.tipo_id
+   where c.registrado_en >= p_desde and (p_todo or ST_Intersects(p_geom, c.geom))
+     and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'campo' and t.codigo = tc.codigo and t.asocia)
+     and redes.f_evento_campo_abierto(c.id)
+     and redes.f_evento_ref_libre('campo', c.id::text) $$;
 
--- ---------- lo que le llega a cada reporte de unas asociaciones: bot → un hecho de su historial; daño → una nota. «{evento}» = el código ----------
+-- ---------- lo que le llega a cada reporte de unas asociaciones: bot → un hecho de su historial; daño → una nota; formato de campo → una nota, o «atendido»
+-- cuando el evento se cierra (p_bot_tipo = 'atendido') y el reporte seguía abierto. «{evento}» = el código ----------
 create function redes.f_evento_marcar(p_ids bigint[], p_bot_tipo text, p_texto text, p_autor text) returns void
 language plpgsql volatile security definer set search_path = redes, pg_temp as $$
 begin
@@ -355,6 +396,12 @@ begin
   select r.dano_id, 'nota', left(replace(p_texto, '{evento}', e.codigo), 1000), p_autor
     from redes.evento_suspension_reportes r join redes.eventos_suspension e on e.id = r.evento_id
    where r.id = any (p_ids) and r.origen = 'dano' order by r.id;
+  insert into campo.reporte_eventos (reporte_id, tipo_evento, estado_nuevo, motivo, autor)
+  select r.campo_reporte_id, case when k.cierra then 'cambio_estado' else 'nota' end, case when k.cierra then 'atendido' end,
+         left(replace(p_texto, '{evento}', e.codigo), 1000), p_autor
+    from redes.evento_suspension_reportes r join redes.eventos_suspension e on e.id = r.evento_id
+   cross join lateral (select coalesce(p_bot_tipo = 'atendido', false) and redes.f_evento_campo_abierto(r.campo_reporte_id) as cierra) k
+   where r.id = any (p_ids) and r.origen = 'campo' order by r.id;
 end $$;
 
 -- ---------- LA ASOCIACIÓN AUTOMÁTICA ----------
@@ -370,7 +417,7 @@ begin
     select ev.id, 'bot', r.id, 'asociar', 'automatica', 'sistema@evento.suspension'
       from nuevos x join redes.reportes_externos r on r.id = x.reporte_id
      cross join lateral (select e.id from redes.f_eventos_abiertos() e
-                          where e.desde <= r.recibido_en and (e.todo or ST_Intersects(e.geom, r.geom)) order by e.id desc limit 1) ev
+                          where e.desde <= r.recibido_en and (e.todo or ST_Intersects(e.geom, r.geom)) order by case e.alcance when 'circulo' then 1 when 'sectores' then 2 else 3 end, ST_Area(e.geom) nulls last, e.id desc limit 1) ev
      where x.tipo = 'recibido' and x.motivo is null and r.geom is not null
        and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'bot' and t.codigo = lower(btrim(r.tipo_bot)) and t.asocia)
        and redes.f_evento_ref_libre('bot', r.id::text)
@@ -390,7 +437,7 @@ begin
   select ev.id, 'l116', r.id, 'asociar', 'automatica', 'sistema@evento.suspension'
     from nuevos x join redes.l116_reportes r on r.id = x.reporte_id
    cross join lateral (select e.id from redes.f_eventos_abiertos() e
-                        where e.desde <= r.fecha_registro and (e.todo or ST_Intersects(e.geom, x.geom)) order by e.id desc limit 1) ev
+                        where e.desde <= r.fecha_registro and (e.todo or ST_Intersects(e.geom, x.geom)) order by case e.alcance when 'circulo' then 1 when 'sectores' then 2 else 3 end, ST_Area(e.geom) nulls last, e.id desc limit 1) ev
    where x.tipo = 'alta' and x.estado = 'registrado' and x.geom is not null
      and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'l116' and t.codigo = redes.f_evento_clave(r.causal) and t.asocia)
      and redes.f_evento_ref_libre('l116', r.id::text);
@@ -409,7 +456,7 @@ begin
     select ev.id, 'dano', d.id, 'asociar', 'automatica', 'sistema@evento.suspension'
       from nuevos d
      cross join lateral (select e.id from redes.f_eventos_abiertos() e
-                          where e.desde <= d.t_detectado and (e.todo or ST_Intersects(e.geom, d.geom)) order by e.id desc limit 1) ev
+                          where e.desde <= d.t_detectado and (e.todo or ST_Intersects(e.geom, d.geom)) order by case e.alcance when 'circulo' then 1 when 'sectores' then 2 else 3 end, ST_Area(e.geom) nulls last, e.id desc limit 1) ev
      where d.sistema = 'acueducto' and d.geom is not null
        and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'dano' and t.codigo = d.tipo_codigo and t.asocia)
     returning id)
@@ -418,6 +465,26 @@ begin
   return null;
 end $$;
 create trigger t_evento_asociar after insert on redes.danos referencing new table as nuevos for each statement execute function redes.f_evento_tg_dano();
+
+-- formato de campo (Comercial o Técnica): el reporte se guarda como siempre y queda asociado, con una nota en su historial (David, 19-nov)
+create function redes.f_evento_tg_campo() returns trigger
+language plpgsql security definer set search_path = redes, public, extensions, pg_temp as $$
+declare v_ids bigint[];
+begin
+  if not exists (select 1 from redes.f_eventos_abiertos()) then return null; end if;
+  with hechas as (
+    insert into redes.evento_suspension_reportes (evento_id, origen, campo_reporte_id, tipo, modo, autor)
+    select ev.id, 'campo', c.id, 'asociar', 'automatica', 'sistema@evento.suspension'
+      from nuevos c join campo.tipos_reporte tc on tc.id = c.tipo_id
+     cross join lateral (select e.id from redes.f_eventos_abiertos() e
+                          where e.desde <= c.registrado_en and (e.todo or ST_Intersects(e.geom, c.geom)) order by case e.alcance when 'circulo' then 1 when 'sectores' then 2 else 3 end, ST_Area(e.geom) nulls last, e.id desc limit 1) ev
+     where exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'campo' and t.codigo = tc.codigo and t.asocia)
+    returning id)
+  select array_agg(id) into v_ids from hechas;
+  perform redes.f_evento_marcar(v_ids, null, 'Asociado al evento de suspensión {evento}', 'sistema@evento.suspension');
+  return null;
+end $$;
+create trigger t_evento_asociar after insert on campo.reportes referencing new table as nuevos for each statement execute function redes.f_evento_tg_campo();
 
 -- ---------- el evento como lo ven las pantallas (sin datos de suscriptores; «quién» es el nombre del funcionario) ----------
 create function redes.f_evento_franja(p_zona text, p_desde timestamptz, p_causa text, p_regreso timestamptz) returns text
@@ -437,7 +504,7 @@ language sql stable security definer set search_path = public, redes, tecnica, e
     'declarado_por', coalesce((select nullif(btrim(lb.nombre), '') from public.geoportal_lista_blanca lb where lb.email = e.autor), 'Funcionario de EMDUPAR'),
     'contratos', e.contratos, 'sensibles', e.sensibles,
     'reportes', (select jsonb_build_object('total', count(*), 'bot', count(*) filter (where r.origen = 'bot'), 'l116', count(*) filter (where r.origen = 'l116'),
-                                           'danos', count(*) filter (where r.origen = 'dano')) from redes.f_evento_reportes(e.id) r),
+                                           'danos', count(*) filter (where r.origen = 'dano'), 'campo', count(*) filter (where r.origen = 'campo')) from redes.f_evento_reportes(e.id) r),
     'franja', redes.f_evento_franja(e.zona_nombre, e.desde, e.causa, e.regreso_vigente),
     'fin', case when e.estado <> 'abierto' then jsonb_build_object('cuando', e.fin_en, 'motivo', e.fin_motivo,
               'por', coalesce((select nullif(btrim(lb.nombre), '') from public.geoportal_lista_blanca lb where lb.email = e.fin_autor), 'Funcionario de EMDUPAR')) end,
@@ -473,7 +540,14 @@ language sql stable security definer set search_path = redes, public, pg_temp as
       from redes.l116_vigente v
      where not v.oculto and v.estado = 'registrado' and v.fecha_registro > p_ahora - make_interval(secs => (p_horas * 3600)::double precision) and v.fecha_registro <= p_ahora
        and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'l116' and t.codigo = redes.f_evento_clave(v.causal) and t.clase = 'sin_agua')
-       and redes.f_evento_ref_libre('l116', v.reporte_id::text))
+       and redes.f_evento_ref_libre('l116', v.reporte_id::text)
+    union all
+    select c.registrado_en, 'Formato de campo · ' || coalesce(c.consecutivo, 'REP-' || lpad(c.seq::text, 6, '0'))
+      from campo.reportes c join campo.tipos_reporte tc on tc.id = c.tipo_id
+     where c.registrado_en > p_ahora - make_interval(secs => (p_horas * 3600)::double precision) and c.registrado_en <= p_ahora
+       and exists (select 1 from redes.evento_tipos_asociables t where t.origen = 'campo' and t.codigo = tc.codigo and t.clase = 'sin_agua')
+       and campo.f_estado_actual(c.id) = 'reportado' and redes.f_evento_campo_abierto(c.id)
+       and redes.f_evento_ref_libre('campo', c.id::text))
   select count(*)::integer, min(s.cuando), coalesce((array_to_json((array_agg(s.txt order by s.cuando desc))[1:5]))::jsonb, '[]'::jsonb) from s $$;
 
 -- ---------- para el bot (n8n en el Dell): recibe el reporte como siempre y dice si quedó en un evento abierto, con el texto listo ----------
@@ -532,7 +606,8 @@ begin
   c := redes.f_evento_contratos(z.geom, z.todo);
   return jsonb_build_object('alcance', z.alcance, 'zona', z.zona_nombre, 'contratos', c -> 'contratos', 'sensibles', c -> 'sensibles',
     'reportes', (select jsonb_build_object('total', count(*), 'bot', count(*) filter (where k.origen = 'bot'), 'l116', count(*) filter (where k.origen = 'l116'),
-                                           'danos', count(*) filter (where k.origen = 'dano')) from redes.f_evento_candidatos(z.geom, z.todo, v_desde) k),
+                                           'danos', count(*) filter (where k.origen = 'dano'), 'campo', count(*) filter (where k.origen = 'campo'))
+                   from redes.f_evento_candidatos(z.geom, z.todo, v_desde) k),
     'ya_abierto', (select e.codigo from redes.f_eventos_abiertos() e where (z.todo and e.todo) or (not z.todo and not e.todo and ST_Equals(e.geom, z.geom)) limit 1),
     'zona_geojson', case when z.geom is not null then ST_AsGeoJSON(ST_Multi(ST_SimplifyPreserveTopology(z.geom, 0.00002)), 6)::jsonb end);
 end $$;
@@ -580,8 +655,8 @@ begin
           v_desde, v_regreso, (c ->> 'contratos')::integer, (c ->> 'sensibles')::integer, v_email)
   returning id into v_id;
   with hechas as (
-    insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, tipo, modo, autor)
-    select v_id, k.origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, 'asociar', 'al_declarar', v_email
+    insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, campo_reporte_id, tipo, modo, autor)
+    select v_id, k.origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, k.campo_reporte_id, 'asociar', 'al_declarar', v_email
       from redes.f_evento_candidatos(z.geom, z.todo, v_desde, v_dano) k
     returning id)
   select array_agg(id) into v_ids from hechas;
@@ -618,11 +693,12 @@ begin
   return redes.f_evento_json(e.id);
 end $$;
 
--- «dar de alta»: cierra el evento y, con el mismo motivo y la misma hora, los reportes asociados del bot y de la 116. Los daños quedan con la nota (siguen abiertos)
+-- «dar de alta»: cierra el evento y, con el mismo motivo y la misma hora, los reportes asociados del bot, de la 116 y del formato de campo. Los daños quedan con
+-- la nota (siguen abiertos)
 create function public.geoportal_redes_evento_cerrar(p_solicitante text, p_codigo text, p_motivo text, p_hecho_en text default null)
 returns jsonb
 language plpgsql volatile security definer set search_path = public, redes, tecnica, extensions, pg_temp as $$
-declare e record; v_mot text := btrim(coalesce(p_motivo, '')); v_hecho timestamptz; v_ahora timestamptz := clock_timestamp(); v_ids bigint[]; v_l116 bigint[]; v_bot integer; v_dan integer; v_txt text;
+declare e record; v_mot text := btrim(coalesce(p_motivo, '')); v_hecho timestamptz; v_ahora timestamptz := clock_timestamp(); v_ids bigint[]; v_l116 bigint[]; v_bot integer; v_dan integer; v_cam integer; v_txt text;
 begin
   select * into e from redes.f_evento_abierto(p_solicitante, p_codigo);
   if length(v_mot) < 10 or length(v_mot) > 500 then perform tecnica.f_error('Escriba el motivo del cierre (de 10 a 500 letras)'); end if;
@@ -630,7 +706,9 @@ begin
   if v_hecho > v_ahora + interval '5 minutes' then perform tecnica.f_error('La hora del cierre no puede ser futura'); end if;
   if v_hecho < e.desde then perform tecnica.f_error('El evento no se puede cerrar antes de la hora en que empezó'); end if;
   perform pg_advisory_xact_lock(hashtext('redes.eventos_suspension'));
-  select array_agg(r.id), count(*) filter (where r.origen = 'bot'), count(*) filter (where r.origen = 'dano') into v_ids, v_bot, v_dan from redes.f_evento_reportes(e.id) r;
+  select array_agg(r.id), count(*) filter (where r.origen = 'bot'), count(*) filter (where r.origen = 'dano'),
+         count(*) filter (where r.origen = 'campo' and redes.f_evento_campo_abierto(r.campo_reporte_id))      -- los de campo que siguen abiertos: los que se cierran
+    into v_ids, v_bot, v_dan, v_cam from redes.f_evento_reportes(e.id) r;
   insert into redes.evento_suspension_eventos (evento_id, tipo, motivo, hecho_en, autor) values (e.id, 'cerrar', v_mot, v_hecho, e.email);
   v_txt := format('Evento de suspensión {evento} cerrado (%s): %s', redes.f_evento_hora(v_hecho), v_mot);
   perform redes.f_evento_marcar(v_ids, 'atendido', v_txt, e.email);
@@ -642,8 +720,8 @@ begin
     select x, 'estado', 'atendido', 'registrado', left(replace(v_txt, '{evento}', e.codigo), 1000), e.email from unnest(v_l116) x order by x;
     update redes.l116_vigente set estado = 'atendido', estado_desde = v_hecho, actualizado_en = clock_timestamp() where reporte_id = any (v_l116) and estado = 'registrado';
   end if;
-  perform tecnica.f_auditar(e.email, 'redes_evento_cerrar', e.codigo, jsonb_build_object('reportes', coalesce(cardinality(v_ids), 0), 'bot', v_bot, 'l116', coalesce(cardinality(v_l116), 0), 'danos', v_dan), null);
-  return redes.f_evento_json(e.id) || jsonb_build_object('cerrados', jsonb_build_object('bot', v_bot, 'l116', coalesce(cardinality(v_l116), 0)), 'danos_siguen_abiertos', v_dan);
+  perform tecnica.f_auditar(e.email, 'redes_evento_cerrar', e.codigo, jsonb_build_object('reportes', coalesce(cardinality(v_ids), 0), 'bot', v_bot, 'l116', coalesce(cardinality(v_l116), 0), 'campo', v_cam, 'danos', v_dan), null);
+  return redes.f_evento_json(e.id) || jsonb_build_object('cerrados', jsonb_build_object('bot', v_bot, 'l116', coalesce(cardinality(v_l116), 0), 'campo', v_cam), 'danos_siguen_abiertos', v_dan);
 end $$;
 
 -- anular (se declaró por error): los reportes asociados vuelven a su flujo normal
@@ -662,8 +740,8 @@ begin
   return redes.f_evento_json(e.id) || jsonb_build_object('reportes_liberados', coalesce(cardinality(v_ids), 0));
 end $$;
 
--- un reporte por su referencia: bot = su id (uuid) · l116 = el número del reporte · dano = DAN-000123
-create function redes.f_evento_reporte_ref(p_origen text, p_ref text, out reporte_externo_id uuid, out l116_reporte_id bigint, out dano_id uuid, out ref text) returns record
+-- un reporte por su referencia: bot = su id (uuid) · l116 = el número del reporte · dano = DAN-000123 · campo = su código (REP-000123 o su consecutivo)
+create function redes.f_evento_reporte_ref(p_origen text, p_ref text, out reporte_externo_id uuid, out l116_reporte_id bigint, out dano_id uuid, out campo_reporte_id uuid, out ref text) returns record
 language plpgsql stable security definer set search_path = redes, tecnica, pg_temp as $$
 declare v_ref text := btrim(coalesce(p_ref, ''));
 begin
@@ -673,9 +751,13 @@ begin
     select r.id into l116_reporte_id from redes.l116_reportes r where r.reporte = v_ref::bigint;
   elsif p_origen = 'dano' and upper(v_ref) ~ '^DAN-[0-9]{6}$' then
     select d.id into dano_id from redes.danos d where d.codigo = upper(v_ref);
-  else perform tecnica.f_error('Diga qué reporte es: del bot (su identificador), de la línea 116 (su número) o un daño (DAN-000123)');
+  elsif p_origen = 'campo' and upper(v_ref) ~ '^REP-[0-9]{1,15}$' then
+    select c.id into campo_reporte_id from campo.reportes c where c.seq = substr(v_ref, 5)::bigint and c.consecutivo is null;
+  elsif p_origen = 'campo' and length(v_ref) between 3 and 40 then
+    select c.id into campo_reporte_id from campo.reportes c where c.consecutivo = upper(v_ref);
+  else perform tecnica.f_error('Diga qué reporte es: del bot (su identificador), de la línea 116 (su número), un daño (DAN-000123) o un reporte de campo (REP-000123)');
   end if;
-  ref := coalesce(reporte_externo_id::text, l116_reporte_id::text, dano_id::text);
+  ref := coalesce(reporte_externo_id::text, l116_reporte_id::text, dano_id::text, campo_reporte_id::text);
   if ref is null then perform tecnica.f_error('Ese reporte no existe', 'P0002'); end if;
 end $$;
 
@@ -688,8 +770,8 @@ begin
   select * into k from redes.f_evento_reporte_ref(p_origen, p_ref);
   if length(v_mot) < 10 or length(v_mot) > 500 then perform tecnica.f_error('Escriba el motivo (de 10 a 500 letras)'); end if;
   if not exists (select 1 from redes.f_evento_reportes(e.id) r where r.origen = p_origen and r.ref = k.ref) then perform tecnica.f_error(format('Ese reporte no está asociado al evento %s', e.codigo)); end if;
-  insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, tipo, modo, motivo, autor)
-  values (e.id, p_origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, 'desasociar', 'manual', v_mot, e.email) returning id into v_id;
+  insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, campo_reporte_id, tipo, modo, motivo, autor)
+  values (e.id, p_origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, k.campo_reporte_id, 'desasociar', 'manual', v_mot, e.email) returning id into v_id;
   perform redes.f_evento_marcar(array[v_id], 'recibido', 'Desasociado del evento de suspensión {evento}: ' || v_mot, e.email);
   return redes.f_evento_json(e.id);
 end $$;
@@ -710,8 +792,11 @@ begin
   if p_origen = 'bot' and (select x.tipo from redes.reporte_externo_eventos x where x.reporte_id = k.reporte_externo_id order by x.id desc limit 1) <> 'recibido' then
     perform tecnica.f_error('Ese reporte del bot ya no está en «Recibido» (se convirtió en daño, se descartó o se atendió)');
   end if;
-  insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, tipo, modo, motivo, autor)
-  values (e.id, p_origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, 'asociar', 'manual', v_mot, e.email) returning id into v_id;
+  if p_origen = 'campo' and not redes.f_evento_campo_abierto(k.campo_reporte_id) then
+    perform tecnica.f_error('Ese reporte de campo ya no está abierto (se atendió, se descartó, es un duplicado o está oculto)');
+  end if;
+  insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, campo_reporte_id, tipo, modo, motivo, autor)
+  values (e.id, p_origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, k.campo_reporte_id, 'asociar', 'manual', v_mot, e.email) returning id into v_id;
   perform redes.f_evento_marcar(array[v_id], 'en_atencion', 'Asociado a mano al evento de suspensión {evento}: ' || v_mot, e.email);
   return redes.f_evento_json(e.id);
 end $$;
@@ -738,7 +823,7 @@ begin
       from (select e.id from redes.v_evento_suspension e where v_est = 'todos' or e.estado = v_est order by e.id desc limit v_lim) s), '[]'::jsonb));
 end $$;
 
--- el detalle: el evento, sus reportes asociados (sin nombres, direcciones ni textos del ciudadano), los sensibles confirmados (contrato y tipo) y el historial
+-- el detalle: el evento, sus reportes asociados (sin nombres, direcciones, textos del ciudadano ni número de contrato), los sensibles confirmados (contrato y tipo) y el historial
 create function public.geoportal_redes_evento(p_solicitante text, p_codigo text)
 returns jsonb
 language plpgsql stable security definer set search_path = public, redes, tecnica, extensions, pg_temp as $$
@@ -754,21 +839,27 @@ begin
       select jsonb_agg(s.j order by s.id desc) from (
         select r.id, jsonb_build_object('origen', r.origen, 'modo', r.modo, 'asociado_en', r.creado_en,
                  'ref', case r.origen when 'bot' then r.ref when 'l116' then (select l.reporte::text from redes.l116_reportes l where l.id = r.l116_reporte_id)
+                                      when 'campo' then (select coalesce(c.consecutivo, 'REP-' || lpad(c.seq::text, 6, '0')) from campo.reportes c where c.id = r.campo_reporte_id)
                                       else (select d.codigo from redes.danos d where d.id = r.dano_id) end,
                  'rotulo', case r.origen when 'bot' then (select 'Bot · ' || b.radicado from redes.reportes_externos b where b.id = r.reporte_externo_id)
                                          when 'l116' then (select 'Línea 116 · ' || l.reporte from redes.l116_reportes l where l.id = r.l116_reporte_id)
+                                         when 'campo' then (select 'Formato de campo · ' || coalesce(c.consecutivo, 'REP-' || lpad(c.seq::text, 6, '0')) from campo.reportes c where c.id = r.campo_reporte_id)
                                          else (select d.codigo from redes.danos d where d.id = r.dano_id) end,
                  'tipo', case r.origen when 'bot' then (select coalesce(t.nombre, b.tipo_bot) from redes.reportes_externos b left join redes.evento_tipos_asociables t on t.origen = 'bot' and t.codigo = lower(btrim(b.tipo_bot)) where b.id = r.reporte_externo_id)
                                        when 'l116' then (select l.causal from redes.l116_reportes l where l.id = r.l116_reporte_id)
+                                       when 'campo' then (select tc.nombre from campo.reportes c join campo.tipos_reporte tc on tc.id = c.tipo_id where c.id = r.campo_reporte_id)
                                        else (select td.nombre from redes.danos d join redes.tipos_dano td on td.codigo = d.tipo_codigo where d.id = r.dano_id) end,
                  'cuando', case r.origen when 'bot' then (select b.recibido_en from redes.reportes_externos b where b.id = r.reporte_externo_id)
                                          when 'l116' then (select l.fecha_registro from redes.l116_reportes l where l.id = r.l116_reporte_id)
+                                         when 'campo' then (select c.registrado_en from campo.reportes c where c.id = r.campo_reporte_id)
                                          else (select d.t_detectado from redes.danos d where d.id = r.dano_id) end,
                  'lat', case r.origen when 'bot' then (select b.lat from redes.reportes_externos b where b.id = r.reporte_externo_id)
                                       when 'l116' then (select round(ST_Y(v.geom)::numeric, 6) from redes.l116_vigente v where v.reporte_id = r.l116_reporte_id)
+                                      when 'campo' then (select c.lat from campo.reportes c where c.id = r.campo_reporte_id)
                                       else (select d.lat from redes.danos d where d.id = r.dano_id) end,
                  'lon', case r.origen when 'bot' then (select b.lon from redes.reportes_externos b where b.id = r.reporte_externo_id)
                                       when 'l116' then (select round(ST_X(v.geom)::numeric, 6) from redes.l116_vigente v where v.reporte_id = r.l116_reporte_id)
+                                      when 'campo' then (select c.lon from campo.reportes c where c.id = r.campo_reporte_id)
                                       else (select d.lon from redes.danos d where d.id = r.dano_id) end) as j
           from redes.f_evento_reportes(e.id) r order by r.id desc limit v_max) s), '[]'::jsonb),
     'sensibles_lista', redes.f_evento_contratos(e.geom, e.todo, true) -> 'sensibles_lista',
@@ -790,7 +881,7 @@ language plpgsql volatile security definer set search_path = public, redes, tecn
 declare v_email text := redes.f_evento_autorizar(p_solicitante, 'reportes'); v_cod text := redes.f_evento_clave(p_codigo); v_mot text := btrim(coalesce(p_motivo, ''));
         v_fila redes.evento_tipos_asociables%rowtype; v_nom text := nullif(btrim(coalesce(p_nombre, '')), ''); v_cla text := nullif(btrim(coalesce(p_clase, '')), '');
 begin
-  if coalesce(p_origen, '') not in ('bot', 'l116', 'dano') then perform tecnica.f_error('El origen es bot, l116 o dano'); end if;
+  if coalesce(p_origen, '') not in ('bot', 'l116', 'dano', 'campo') then perform tecnica.f_error('El origen es bot, l116, dano o campo'); end if;
   if length(v_cod) < 2 or length(v_cod) > 120 then perform tecnica.f_error('Escriba el tipo o la causal'); end if;
   if p_asocia is null then perform tecnica.f_error('Diga si se asocia o no'); end if;
   if length(v_mot) < 10 or length(v_mot) > 500 then perform tecnica.f_error('Escriba el motivo (de 10 a 500 letras)'); end if;
@@ -800,6 +891,7 @@ begin
   if v_fila.codigo is null then
     if v_nom is null or v_cla is null then perform tecnica.f_error('Ese tipo no está en la lista: para agregarlo escriba su nombre y su clase'); end if;
     if p_origen = 'dano' and not exists (select 1 from redes.tipos_dano td where td.codigo = v_cod) then perform tecnica.f_error('Ese tipo de daño no existe', 'P0002'); end if;
+    if p_origen = 'campo' and not exists (select 1 from campo.tipos_reporte tc where tc.codigo = v_cod) then perform tecnica.f_error('Ese tipo del formato de campo no existe', 'P0002'); end if;
     insert into redes.evento_tipos_asociables (origen, codigo, nombre, clase, asocia) values (p_origen, v_cod, left(v_nom, 120), v_cla, p_asocia);
   else
     update redes.evento_tipos_asociables set asocia = p_asocia, clase = coalesce(v_cla, clase), nombre = coalesce(left(v_nom, 120), nombre) where origen = p_origen and codigo = v_cod;
@@ -829,10 +921,14 @@ begin
   return jsonb_build_object('planta', v_pl.codigo, 'nombre', v_pl.nombre, 'sectores', to_jsonb(v_cods));
 end $$;
 -- =====================================================================
--- TÉCNICA · FASE 1 · CORTE 15 · «EVENTO DE SUSPENSIÓN» · 25 — REEMPLAZO (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
--- es el texto vivo de tecnica.f_avisos (el del Corte 14) con UN cambio exacto: dos bloques nuevos antes del de Personal.
+-- TÉCNICA · FASE 1 · CORTE 15 · «EVENTO DE SUSPENSIÓN» · 25 — REEMPLAZOS (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
+-- son los textos vivos con cambios exactos (cada uno con su guardia md5 en 10_esquema.sql y su texto de antes en la reversa).
+-- 1) tecnica.f_avisos (la del Corte 14): dos bloques nuevos antes del de Personal.
 --   · D15: un aviso por evento de suspensión abierto (rojo si ya pasó la hora estimada de regreso);
---   · D15b: un aviso con los reportes de falta de agua (bot y línea 116) que no están en ningún evento.
+--   · D15b: un aviso con los reportes de falta de agua (bot, línea 116 y formato de campo) que no están en ningún evento.
+-- 2) redes.f_publicar_l116 (la del Corte 5d): la publicación de la línea 116 NO revive lo que cerró un evento de suspensión (David, 19-nov). Si el archivo
+--    trae en «Registrado» un reporte que un evento dejó «Atendido», el reporte conserva «Atendido» y la diferencia con la fuente queda en su historial
+--    (una vez). Lo demás de la publicación no cambia; el resultado gana la clave «conservados_por_evento».
 -- =====================================================================
 
 -- tecnica.f_avisos(boolean,boolean,timestamptz)
@@ -1149,7 +1245,7 @@ begin
                 'bandeja', jsonb_build_object('tablero', 'distribucion', 'pestana', null, 'evento', r.codigo), 'desde', r.desde);
     end loop;
   end if;
-  -- D15b. Reportes de falta de agua o baja presión (bot y línea 116) de las últimas horas que NO están en ningún evento: un solo aviso
+  -- D15b. Reportes de falta de agua o baja presión (bot, línea 116 y formato de campo) de las últimas horas que NO están en ningún evento: un solo aviso
   if p_distribucion then
     select x.n, x.desde, x.items into v_n, v_desde, v_items from redes.f_sin_agua_para_avisos(v_ahora, coalesce(tecnica.f_aparam('sin_agua_ventana_h'), 24)) x;
     if v_n > 0 then
@@ -1189,6 +1285,79 @@ begin
   return coalesce((select jsonb_agg(a order by case a ->> 'nivel' when 'rojo' then 1 when 'naranja' then 2 else 3 end, (a ->> 'orden')::integer, a ->> 'clave')
                      from jsonb_array_elements(v_av) a), '[]'::jsonb);
 end $function$;
+
+-- redes.f_publicar_l116(bigint,text,text)
+CREATE OR REPLACE FUNCTION redes.f_publicar_l116(p_carga bigint, p_autor text, p_motivo text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO 'redes', 'public', 'extensions', 'pg_temp'
+AS $function$
+declare c redes.v_cargas_estado%rowtype; v_res jsonb; v_rev bigint; v_version integer; v_nuevos integer; v_estado integer; v_mostrar integer; v_iguales integer; v_mot text := btrim(p_motivo);
+        v_cons integer;      -- Corte 15: reportes que cerró un evento de suspensión y que el archivo trae otra vez en «Registrado»
+begin
+  perform pg_advisory_xact_lock(hashtext('redes.carga.linea_116'));
+  select * into c from redes.v_cargas_estado where id = p_carga;
+  if c.estado <> 'abierta' then perform tecnica.f_error(format('La carga %s está %s: no se puede publicar', p_carga, c.estado)); end if;
+  v_res := redes.f_resumen_l116(p_carga);      -- la última revisión si sigue valiendo; si la 116 cambió desde entonces, una nueva
+  if not (v_res ->> 'lista_para_publicar')::boolean then
+    perform tecnica.f_error('La carga no está lista para publicar: ' || array_to_string(array(select jsonb_array_elements_text(v_res -> 'bloqueos')), '; '));
+  end if;
+  v_rev := (v_res ->> 'revision_id')::bigint;
+  v_version := (select count(*) + 1 from redes.v_cargas_estado x where x.capa_codigo = 'linea_116' and x.estado = 'publicada');
+  -- (a) nuevos
+  insert into redes.l116_reportes (reporte, fecha_registro, servicio, causal, comuna, contrato, carga_id)
+  select f.reporte, f.fecha, f.servicio, f.causal, f.comuna, f.contrato, p_carga
+    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion = 'nuevo' order by f.reporte;
+  get diagnostics v_nuevos = row_count;
+  insert into redes.l116_eventos (reporte_id, tipo, estado, metodo, geom, sector, subsector, carga_id, motivo, autor)
+  select r.id, 'alta', f.estado, f.metodo, f.geom, f.sector, f.subsector, p_carga, v_mot, p_autor
+    from redes.l116_revision_filas f join redes.l116_reportes r on r.reporte = f.reporte
+   where f.revision_id = v_rev and f.accion = 'nuevo' order by r.id;
+  insert into redes.l116_vigente (reporte_id, reporte, fecha_registro, dia, servicio, causal, contrato, estado, estado_desde, metodo, geom, sector, subsector)
+  select r.id, f.reporte, f.fecha, (f.fecha at time zone 'America/Bogota')::date, f.servicio, f.causal, f.contrato, f.estado, f.fecha, f.metodo, f.geom, f.sector, f.subsector
+    from redes.l116_revision_filas f join redes.l116_reportes r on r.reporte = f.reporte
+   where f.revision_id = v_rev and f.accion = 'nuevo';
+  -- (b) cambios de estado (también los de los que vuelven a mostrarse)
+  insert into redes.l116_eventos (reporte_id, tipo, estado, estado_antes, carga_id, motivo, autor)
+  select f.reporte_id, 'estado', f.estado, f.estado_vigente, p_carga, v_mot, p_autor
+    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado <> f.estado_vigente
+     and not (f.estado = 'registrado' and f.estado_vigente = 'atendido' and redes.f_evento_l116_cerrado(f.reporte_id) is not null)      -- Corte 15: no se revive
+   order by f.reporte_id;
+  get diagnostics v_estado = row_count;
+  -- (b2) Corte 15: lo que cerró un evento de suspensión conserva «Atendido» aunque el archivo lo traiga en «Registrado». La diferencia con la fuente queda
+  --      en el historial del reporte, una sola vez (sin carga_id: revertir la carga no tiene nada que devolver)
+  select count(*) into v_cons
+    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado = 'registrado' and f.estado_vigente = 'atendido'
+     and redes.f_evento_l116_cerrado(f.reporte_id) is not null;
+  if v_cons > 0 then
+    insert into redes.l116_eventos (reporte_id, tipo, estado, estado_antes, motivo, autor)
+    select f.reporte_id, 'estado', 'atendido', 'atendido',
+           left(format('La carga %s de la línea 116 lo trae en «Registrado»: conserva «Atendido» porque lo cerró el evento de suspensión %s', p_carga, redes.f_evento_l116_cerrado(f.reporte_id)), 1000), p_autor
+      from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado = 'registrado' and f.estado_vigente = 'atendido'
+       and redes.f_evento_l116_cerrado(f.reporte_id) is not null
+       -- (se busca por el reporte, con su índice; sin condición sobre carga_id, para que el planificador no recorra el índice de cargas)
+       and not exists (select 1 from redes.l116_eventos x where x.reporte_id = f.reporte_id and x.tipo = 'estado' and x.estado = 'atendido' and x.estado_antes = 'atendido'
+                                                             and x.motivo like 'La carga % de la línea 116 lo trae en «Registrado»%')
+     order by f.reporte_id;
+  end if;
+  -- (c) los que vuelven a mostrarse (los había ocultado la reversa de una carga)
+  insert into redes.l116_eventos (reporte_id, tipo, carga_id, motivo, autor)
+  select f.reporte_id, 'mostrar', p_carga, v_mot, p_autor from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion = 'mostrar' order by f.reporte_id;
+  get diagnostics v_mostrar = row_count;
+  update redes.l116_vigente v set estado = case when k.conserva then v.estado else f.estado end,
+         estado_desde = case when not k.conserva and v.estado <> f.estado then clock_timestamp() else v.estado_desde end,
+         oculto = false, actualizado_en = clock_timestamp()
+    from redes.l116_revision_filas f
+   cross join lateral (select (f.estado = 'registrado' and f.estado_vigente = 'atendido' and redes.f_evento_l116_cerrado(f.reporte_id) is not null) as conserva) k
+   where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.reporte_id = v.reporte_id;
+  v_iguales := (v_res -> 'frente_a_vigente' ->> 'igual')::integer;
+  insert into redes.carga_eventos (carga_id, tipo, version_capa, nuevos, cambiados, iguales, retirados, reactivados, detalle, motivo, autor)
+  values (p_carga, 'publicar', v_version, v_nuevos, v_estado, v_iguales, 0, v_mostrar,
+          jsonb_build_object('ubicacion', v_res -> 'ubicacion', 'con_sector', v_res -> 'con_sector', 'servicios', v_res -> 'servicios', 'revision_id', v_rev, 'conservados_por_evento', v_cons), v_mot, p_autor);
+  return jsonb_build_object('carga_id', p_carga, 'capa', 'linea_116', 'version_capa', v_version, 'nuevos', v_nuevos, 'cambiados', v_estado, 'cambios_estado', v_estado,
+                            'iguales', v_iguales, 'reactivados', v_mostrar, 'retirados', 0, 'ubicacion', v_res -> 'ubicacion', 'con_sector', v_res -> 'con_sector',
+                            'conservados_por_evento', v_cons);
+end $function$;
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 15 · «EVENTO DE SUSPENSIÓN» · 40 — PERMISOS: revoke all antes de dar permisos.
 -- Las internas de redes (y la del bot): nadie de la API. Las 13 RPC: solo service_role. El permiso del Dell para la función del bot va en otro paquete.
@@ -1206,13 +1375,14 @@ end $$;
 insert into public.geoportal_auditoria (email, accion, referencia, detalle, ip)
 values ('migracion@redes_corte15', 'migracion_redes_corte15', null, jsonb_build_object(
         'tablas', jsonb_build_array('eventos_suspension', 'evento_suspension_eventos', 'evento_suspension_reportes', 'evento_tipos_asociables', 'evento_tipo_eventos', 'planta_sectores', 'planta_sector_eventos'),
-        'disparadores', jsonb_build_array('redes.reporte_externo_eventos', 'redes.l116_eventos', 'redes.danos'),
-        'reemplazada', 'tecnica.f_avisos', 'tipo_de_campo', 'sin_agua',
+        'disparadores', jsonb_build_array('redes.reporte_externo_eventos', 'redes.l116_eventos', 'redes.danos', 'campo.reportes'),
+        'reemplazadas', jsonb_build_array('tecnica.f_avisos', 'redes.f_publicar_l116'), 'tipo_de_campo', 'sin_agua',
         'motivo', 'Corte 15: evento de suspensión (por sectores, por círculo o total), asociación automática de reportes, cierre en bloque y un aviso por evento'), null);
 -- =====================================================================
 -- TÉCNICA · FASE 1 · CORTE 15 · «EVENTO DE SUSPENSIÓN» · 70 — PRUEBAS «N de N» (PROPUESTA). Se corre DESPUÉS de 10, 20, 26, 25 y 40, en la misma transacción.
 -- No supone códigos ni conteos de la base: arma sus personas (prueba.redes9b.*), tres sectores de prueba y su red ZT9B (en un rincón de la caja), sus contratos
--- (99999…), dos usuarios sensibles confirmados, reportes del bot, de la línea 116 y daños, y los eventos con las RPC del corte.
+-- (99999…), dos usuarios sensibles confirmados, reportes del bot, de la línea 116, daños y reportes del formato de campo, y los eventos con las RPC del corte.
+-- Publica cargas REALES de la línea 116 por el motor del Cargue (iniciar, lotes, resumen, publicar) sobre reportes que cerró un evento.
 -- Mide con volumen: la zona grande cubre la red real de la base (todos sus contratos), 300 eventos viejos y una carga de 5.000 reportes de la 116.
 -- FALLA si la asociación de un reporte, declarar, cerrar o los avisos pasan de 1 s. Termina con un ERROR a propósito que deshace todo.
 --   Resultado esperado:  ERROR: PRUEBAS DE REDES · CORTE 15, evento de suspensión … RESULTADO: N de N pruebas correctas — SIN FALLAS
@@ -1320,6 +1490,30 @@ begin
            'activo', pg_temp.cod(p_tramo), 'lat', pg_temp.lat(y), 'lon', pg_temp.lon(x), 't_detectado', pg_temp.iso(p_cuando), 'tipo_rotura', 'parcial', 'riesgo', 'medio',
            'causa_clase', 'desconocida', 'fotos', jsonb_build_array(jsonb_build_object('n', 1, 'momento', 'dano', 'ruta', v_p -> 'fotos' -> 0 ->> 'ruta')))) ->> 'codigo';
 end $$;
+-- un reporte del formato de campo en (x, y), como lo deja geoportal_campo_crear_reporte (la fila en campo.reportes; nulo en «area» = hecho desde Comercial)
+create function pg_temp.campo(x numeric, y numeric, p_tipo text default 'sin_agua', p_cuando interval default '0') returns uuid language sql as $$
+  insert into campo.reportes (id, tipo_id, lat, lon, origen, autor, registrado_en)
+  select gen_random_uuid(), t.id, pg_temp.lat(y), pg_temp.lon(x), 'campo', 'prueba.redes9b.comercial@emdupar.gov.co', clock_timestamp() + p_cuando from campo.tipos_reporte t where t.codigo = p_tipo
+  returning id $$;
+create function pg_temp.ecampo(p_id uuid) returns text language sql as $$ select v.estado from campo.v_reportes_estado v where v.id = p_id $$;
+create function pg_temp.codcampo(p_id uuid) returns text language sql as $$ select 'REP-' || lpad(c.seq::text, 6, '0') from campo.reportes c where c.id = p_id $$;
+-- una fila de un archivo de la línea 116 y la subida por el motor del Cargue (como la pantalla: iniciar y lotes de 200); devuelve la carga
+create function pg_temp.fila116(p_orden integer, p_rep bigint, p_estado text, p_causal text default 'Sin servicio de agua') returns jsonb language sql as $$
+  select jsonb_build_object('orden', p_orden, 'wkt', null, 'atributos', jsonb_build_object('REPORTE', p_rep, 'ESTADO', p_estado,
+           'FECHA_REGISTRO', to_char((clock_timestamp() at time zone 'America/Bogota') - interval '2 minutes', 'YYYY-MM-DD HH24:MI:SS'), 'CONTRATO', '0',
+           'DIRECCION', 'CL ZT9B 1 2 3', 'BARRIO', 'ZT9B BARRIO', 'COMUNA', 'COMUNA 5', 'DESC_CAUSAL', p_causal, 'SERVICIO', 'Acueducto')) $$;
+create function pg_temp.subir116(p_sd text, p_filas jsonb, p_sha text) returns bigint language plpgsql as $$
+declare v_c bigint; k integer := 0; n integer := jsonb_array_length(p_filas);
+begin
+  v_c := (public.geoportal_redes_cargue_iniciar(p_sd, 'linea_116', md5(p_sha) || md5(p_sha || 'b'), 'xlsx', 4326, 'reporte', n, 'ZT9B archivo de prueba') ->> 'carga_id')::bigint;
+  while k < n loop
+    perform public.geoportal_redes_carga_lote(p_sd, v_c, (select jsonb_agg(e order by o) from jsonb_array_elements(p_filas) with ordinality x(e, o) where o > k and o <= k + 200));
+    k := k + 200;
+  end loop;
+  return v_c;
+end $$;
+create function pg_temp.h116(p_rep bigint) returns text[] language sql as $$
+  select array_agg(e.tipo || ':' || coalesce(e.estado, '-') || ':' || coalesce(e.estado_antes, '-') order by e.id) from redes.l116_eventos e join redes.l116_reportes r on r.id = e.reporte_id where r.reporte = p_rep $$;
 -- a qué evento ABIERTO está asociado hoy un reporte (o nulo)
 create function pg_temp.en(p_origen text, p_ref text) returns text language sql as $$
   select e.codigo from redes.f_eventos_abiertos() e join lateral redes.f_evento_reportes(e.id) r on true where r.origen = p_origen and r.ref = p_ref $$;
@@ -1333,6 +1527,7 @@ declare
   v_carga bigint; j jsonb; j2 jsonb; v_e1 text; v_e2 text; v_e3 text; v_e4 text; v_d1 text; v_d2 text; v_d3 text; v_d4 text; v_md5 text; v_txt text; v_num integer; v_num2 integer; v_id bigint;
   v_c1 text; v_c2 text; v_c3 text; v_reales integer; v_gran text; v_t0 timestamptz; v_ms numeric; v_ms_bot numeric; v_ms_dano numeric; v_ms_116 numeric; v_ms_decl numeric; v_ms_cerrar numeric;
   v_ms_av numeric; v_ms_vp numeric; v_ms_det numeric; v_info text := ''; v_total integer; v_bien integer; v_fallas text; v_av jsonb; v_caja geometry;
+  ca1 uuid; ca2 uuid; ca3 uuid; ca4 uuid; ca5 uuid; v_e5 text; v_e6 text; v_cg bigint; v_x jsonb; v_r jsonb; v_ts timestamptz; v_ms_pub numeric; v_ms_campo numeric;
 begin
   -- ---------- personas de prueba ----------
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (a, 'ZT9B Admin', 'admin', 'sin_restriccion', 'todos');
@@ -1341,8 +1536,7 @@ begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, horario, dias) values (op, 'ZT9B Operador daños', 'consulta', true, 'sin_restriccion', 'todos');
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (na, 'ZT9B Sin Técnica', 'consulta', 'sin_restriccion', 'todos');
   insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values (op, 'asignar_formulario', 'danos_fallas', a);
-  v_md5 := md5(pg_get_functiondef('redes.f_reporte_externo_recibir(jsonb)'::regprocedure)) || md5(pg_get_functiondef('redes.f_publicar_l116(bigint,text,text)'::regprocedure))
-           || md5(pg_get_functiondef('public.geoportal_redes_crear_dano(text,uuid,jsonb,text)'::regprocedure));
+  v_md5 := md5(pg_get_functiondef('redes.f_reporte_externo_recibir(jsonb)'::regprocedure)) || md5(pg_get_functiondef('public.geoportal_redes_crear_dano(text,uuid,jsonb,text)'::regprocedure));
 
   -- ---------- tres sectores de prueba y su red: S1 (con el subsector S1A adentro) y S2, lejos de la red real ----------
   insert into redes.cargas (capa_codigo, sha256, formato, srid_origen, columna_llave, filas_esperadas, nota, autor)
@@ -1374,14 +1568,14 @@ begin
   perform pg_temp.reg('01.02 el tipo «sin_agua» quedó activo en el catálogo de campo (grupo red_acueducto) y en la lista de lo que se asocia; lo que había en el catálogo no cambió',
      (select t.activo and t.nombre = 'No tengo agua o tengo baja presión' and g.codigo = 'red_acueducto' from campo.tipos_reporte t join campo.grupos_reporte g on g.id = t.grupo_id where t.codigo = 'sin_agua')
      and (select count(*) from campo.tipos_reporte where codigo <> 'sin_agua') = 2
-     and (select clase = 'sin_agua' and asocia from redes.evento_tipos_asociables where origen = 'bot' and codigo = 'sin_agua'));
-  perform pg_temp.reg('01.03 la lista por omisión: 4 causales de la 116 son «sin agua» (sin servicio, poca presión, deficiencia, no llega) y 5 son daño en la red; del bot, 2; de daños, 3',
+     and (select count(*) = 2 and bool_and(clase = 'sin_agua' and asocia) from redes.evento_tipos_asociables where origen in ('bot', 'campo') and codigo = 'sin_agua'));
+  perform pg_temp.reg('01.03 la lista por omisión: 4 causales de la 116 son «sin agua» (sin servicio, poca presión, deficiencia, no llega) y 5 son daño en la red; del bot, 2; de daños, 3 (fuga, bombeo y eléctrica); del formato de campo, 1',
      (select count(*) filter (where origen = 'l116' and clase = 'sin_agua') = 4 and count(*) filter (where origen = 'l116' and clase = 'dano_red') = 5
-             and count(*) filter (where origen = 'bot') = 2 and count(*) filter (where origen = 'dano') = 3 and bool_and(asocia) from redes.evento_tipos_asociables));
-  perform pg_temp.reg('01.04 los 3 disparadores de la asociación están puestos y no se reemplazó recibir del bot, publicar la 116 ni crear daño',
-     (select count(*) from pg_trigger t where t.tgname = 't_evento_asociar' and t.tgrelid in ('redes.reporte_externo_eventos'::regclass, 'redes.l116_eventos'::regclass, 'redes.danos'::regclass)) = 3
-     and v_md5 = md5(pg_get_functiondef('redes.f_reporte_externo_recibir(jsonb)'::regprocedure)) || md5(pg_get_functiondef('redes.f_publicar_l116(bigint,text,text)'::regprocedure))
-                 || md5(pg_get_functiondef('public.geoportal_redes_crear_dano(text,uuid,jsonb,text)'::regprocedure)));
+             and count(*) filter (where origen = 'bot') = 2 and count(*) filter (where origen = 'dano' and codigo in ('fuga', 'bombeo', 'electrica')) = 3
+             and count(*) filter (where origen = 'dano') = 3 and count(*) filter (where origen = 'campo') = 1 and bool_and(asocia) from redes.evento_tipos_asociables));
+  perform pg_temp.reg('01.04 los 4 disparadores de la asociación están puestos (bot, línea 116, daños y formato de campo); campo.reportes conserva los suyos',
+     (select count(*) from pg_trigger t where t.tgname = 't_evento_asociar' and t.tgrelid in ('redes.reporte_externo_eventos'::regclass, 'redes.l116_eventos'::regclass, 'redes.danos'::regclass, 'campo.reportes'::regclass)) = 4
+     and (select count(*) from pg_trigger t where t.tgrelid = 'campo.reportes'::regclass and not t.tgisinternal and t.tgname in ('t_reporte_coherente', 't_solo_agregar', 't_solo_agregar_trunc')) = 3);
 
   -- ===================== 02. Sin eventos, todo sigue como antes; el «sin agua» suelto se avisa =====================
   j := pg_temp.bot('ZT15-0001', 100, 10, 'sin_agua', '-10 minutes');      -- en S1
@@ -1393,19 +1587,26 @@ begin
   v_d1 := pg_temp.dano(op, 'T1', 100, 0, 'fuga', '-6 minutes');      -- en S1
   perform pg_temp.bot('ZT15-0002', 110, 10, 'tapa_caja_acueducto', '-9 minutes');      -- en S1, tipo que no se asocia
   perform pg_temp.bot('ZT15-0003', 105, 10, 'sin_agua', '-3 hours');      -- en S1, pero de antes del evento
+  ca1 := pg_temp.campo(150, 30, 'sin_agua', '-7 minutes');      -- formato de campo, hecho desde Comercial, en S1
+  ca3 := pg_temp.campo(800, 200, 'sin_agua', '-7 minutes');      -- en S2
+  perform pg_temp.reg('02.01b sin eventos abiertos, un «sin agua» del formato de campo (Comercial) se guarda como siempre: «Reportado», sin hechos ni asociación',
+     pg_temp.ecampo(ca1) = 'reportado' and not exists (select 1 from campo.reporte_eventos) and not exists (select 1 from redes.evento_suspension_reportes));
   v_av := tecnica.f_avisos(false, true);
-  perform pg_temp.reg('02.02 AVISO: los «sin agua» que no están en ningún evento salen en UN aviso al supervisor de distribución (2 del bot y 2 de la 116), no uno por reporte',
-     (pg_temp.aviso(v_av, 'sin_agua_sin_evento') ->> 'n')::integer = 4 and pg_temp.aviso(v_av, 'sin_agua_sin_evento') ->> 'nivel' = 'naranja'
-     and pg_temp.aviso(v_av, 'sin_agua_sin_evento') ->> 'titulo' = '4 reportes de falta de agua sin evento' and jsonb_array_length(pg_temp.aviso(v_av, 'sin_agua_sin_evento') -> 'items') = 4
+  perform pg_temp.reg('02.02 AVISO: los «sin agua» que no están en ningún evento salen en UN aviso al supervisor de distribución (2 del bot, 2 de la 116 y 2 del formato de campo), no uno por reporte',
+     (pg_temp.aviso(v_av, 'sin_agua_sin_evento') ->> 'n')::integer = 6 and pg_temp.aviso(v_av, 'sin_agua_sin_evento') ->> 'nivel' = 'naranja'
+     and pg_temp.aviso(v_av, 'sin_agua_sin_evento') ->> 'titulo' = '6 reportes de falta de agua sin evento' and jsonb_array_length(pg_temp.aviso(v_av, 'sin_agua_sin_evento') -> 'items') = 5
+     and pg_temp.aviso(v_av, 'sin_agua_sin_evento') -> 'items' @> to_jsonb(array['Formato de campo · ' || pg_temp.codcampo(ca1)])
      and pg_temp.aviso(v_av, 'evento_suspension_%') is null, pg_temp.aviso(v_av, 'sin_agua_sin_evento')::text);
   perform pg_temp.reg('02.03 … al supervisor de planta no le sale', pg_temp.aviso(tecnica.f_avisos(true, false), 'sin_agua_sin_evento') is null);
 
   -- ===================== 03. Quién puede; el catálogo; la vista previa =====================
   j := public.geoportal_redes_evento_catalogo(sd);
-  perform pg_temp.reg('03.01 el catálogo para el supervisor de distribución: puede zona y reportes, no total; trae los sectores de prueba, las 2 plantas (sin sectores) y los 14 tipos',
+  perform pg_temp.reg('03.01 el catálogo para el supervisor de distribución: puede zona y reportes, no total; trae los sectores de prueba, las 2 plantas (sin sectores) y los 15 tipos; los sectores dicen si son sector o subsector',
      (j -> 'puede' ->> 'zona')::boolean and (j -> 'puede' ->> 'reportes')::boolean and not (j -> 'puede' ->> 'total')::boolean
      and (select count(*) from jsonb_array_elements(j -> 'sectores') x where x ->> 'codigo' in (pg_temp.cod('S1'), pg_temp.cod('S1A'), pg_temp.cod('S2'))) = 3
-     and jsonb_array_length(j -> 'plantas') = (select count(*) from tecnica.plantas where activa) and j -> 'plantas' -> 0 -> 'sectores' = '[]'::jsonb and jsonb_array_length(j -> 'tipos') = 14, left(j::text, 500));
+     and jsonb_array_length(j -> 'plantas') = (select count(*) from tecnica.plantas where activa) and j -> 'plantas' -> 0 -> 'sectores' = '[]'::jsonb and jsonb_array_length(j -> 'tipos') = 15
+     and (select x ->> 'clase' from jsonb_array_elements(j -> 'sectores') x where x ->> 'codigo' = pg_temp.cod('S1A')) = 'subsector'
+     and (select x ->> 'clase' from jsonb_array_elements(j -> 'sectores') x where x ->> 'codigo' = pg_temp.cod('S1')) = 'sector', left(j::text, 500));
   j := public.geoportal_redes_evento_catalogo(sp);
   perform pg_temp.reg('03.02 … para el supervisor de planta: puede total, no zona ni reportes', (j -> 'puede' ->> 'total')::boolean and not (j -> 'puede' ->> 'zona')::boolean and not (j -> 'puede' ->> 'reportes')::boolean, (j -> 'puede')::text);
   perform pg_temp.err('03.03 el operador no ve el catálogo ni la lista de eventos (42501)', format('select public.geoportal_redes_evento_catalogo(%L)', op), '42501');
@@ -1415,8 +1616,8 @@ begin
   perform pg_temp.err('03.07 el supervisor de distribución no declara un evento total (42501)', format('select public.geoportal_redes_evento_declarar(%L, %L)', sd, jsonb_build_object('alcance', 'total', 'total', 'ciudad', 'causa', 'ZT9B falla de planta')), '42501', 'supervisor de planta');
   perform pg_temp.err('03.08 el supervisor de planta no declara uno por sectores (42501)', format('select public.geoportal_redes_evento_declarar(%L, %L)', sp, jsonb_build_object('alcance', 'sectores', 'sectores', jsonb_build_array(pg_temp.cod('S1')), 'causa', 'ZT9B daño de prueba')), '42501', 'supervisor de distribución');
   j := public.geoportal_redes_evento_vista_previa(sd, jsonb_build_object('alcance', 'sectores', 'sectores', jsonb_build_array(pg_temp.cod('S1')), 'desde', pg_temp.iso('-30 minutes')));
-  perform pg_temp.reg('03.09 VISTA PREVIA de S1 desde hace 30 minutos: 5 contratos, 1 usuario sensible confirmado (el propuesto no cuenta) y 3 reportes que quedarían asociados (1 bot, 1 de la 116, 1 daño); trae la zona; no guarda',
-     (j ->> 'contratos')::integer = 5 and (j ->> 'sensibles')::integer = 1 and j -> 'reportes' = jsonb_build_object('total', 3, 'bot', 1, 'l116', 1, 'danos', 1)
+  perform pg_temp.reg('03.09 VISTA PREVIA de S1 desde hace 30 minutos: 5 contratos, 1 usuario sensible confirmado (el propuesto no cuenta) y 4 reportes que quedarían asociados (1 bot, 1 de la 116, 1 daño, 1 del formato de campo); trae la zona; no guarda',
+     (j ->> 'contratos')::integer = 5 and (j ->> 'sensibles')::integer = 1 and j -> 'reportes' = jsonb_build_object('total', 4, 'bot', 1, 'l116', 1, 'danos', 1, 'campo', 1)
      and j -> 'zona_geojson' ->> 'type' = 'MultiPolygon' and j ->> 'ya_abierto' is null and j ->> 'zona' = 'ZT9B Sector S1' and not exists (select 1 from redes.eventos_suspension), j::text);
 
   -- ===================== 04. Declarar por sectores: asocia lo que ya estaba =====================
@@ -1435,15 +1636,18 @@ begin
      and j ->> 'declarado_por' = 'ZT9B Supervisor de distribución' and j -> 'sectores' = jsonb_build_array(pg_temp.cod('S1')) and j -> 'zona_geojson' ->> 'type' = 'MultiPolygon', j::text);
   perform pg_temp.reg('04.08 … la franja: «Sin agua en <zona> desde las <hora> por <causa>. Regreso estimado: <hora>»',
      j ->> 'franja' ~ '^Sin agua en ZT9B Sector S1 desde las [0-9]{2}/[0-9]{2}, [0-9]{1,2}:[0-9]{2} [ap]\. m\. por Daño en la tubería matriz de la calle 44\. Regreso estimado: [0-9]{2}/[0-9]{2}, [0-9]{1,2}:[0-9]{2} [ap]\. m\.$', j ->> 'franja');
-  perform pg_temp.reg('04.09 … y asoció de una vez los 3 reportes que ya estaban en la zona desde el inicio (bot, 116 y daño)',
-     (j ->> 'asociados_al_declarar')::integer = 3 and j -> 'reportes' = jsonb_build_object('total', 3, 'bot', 1, 'l116', 1, 'danos', 1)
+  perform pg_temp.reg('04.09 … y asoció de una vez los 4 reportes que ya estaban en la zona desde el inicio (bot, 116, daño y formato de campo)',
+     (j ->> 'asociados_al_declarar')::integer = 4 and j -> 'reportes' = jsonb_build_object('total', 4, 'bot', 1, 'l116', 1, 'danos', 1, 'campo', 1) and pg_temp.en('campo', ca1::text) = v_e1 and pg_temp.en('campo', ca3::text) is null
      and pg_temp.en('bot', pg_temp.idbot('ZT15-0001')) = v_e1 and pg_temp.en('dano', pg_temp.iddano(v_d1)) = v_e1
-     and (select count(*) from redes.evento_suspension_reportes where modo = 'al_declarar') = 3, j::text);
+     and (select count(*) from redes.evento_suspension_reportes where modo = 'al_declarar') = 4, j::text);
   perform pg_temp.reg('04.10 el reporte del bot asociado pasa a «En atención» con el evento en su historial; el daño recibe una nota y SIGUE abierto',
      pg_temp.ebot('ZT15-0001') = 'en_atencion'
      and (select x.motivo like 'Asociado al evento de suspensión ' || v_e1 || '%' from redes.reporte_externo_eventos x join redes.reportes_externos r on r.id = x.reporte_id where r.radicado = 'ZT15-0001' order by x.id desc limit 1)
      and (select count(*) from redes.dano_eventos) = v_num + 1 and (select e.tipo = 'nota' and e.motivo like '%' || v_e1 || '%' from redes.dano_eventos e order by e.id desc limit 1)
      and (select estado from redes.v_dano where codigo = v_d1) <> 'atendido');
+  perform pg_temp.reg('04.10b el reporte del formato de campo asociado recibe una nota con el evento en su historial y sigue «Reportado» (se cierra con el evento)',
+     pg_temp.ecampo(ca1) = 'reportado' and (select count(*) = 1 and bool_and(x.tipo_evento = 'nota' and x.motivo like 'Asociado al evento de suspensión ' || v_e1 || '%' and x.autor = sd)
+                                             from campo.reporte_eventos x where x.reporte_id = ca1));
   perform pg_temp.reg('04.11 lo que NO se asoció: el de otro sector (S2), el tipo que no está en la lista (tapa; fuga en el medidor) y el que llegó antes del inicio',
      pg_temp.en('l116', (select id::text from redes.l116_reportes where reporte = 990000002)) is null and pg_temp.en('l116', (select id::text from redes.l116_reportes where reporte = 990000003)) is null
      and pg_temp.en('bot', pg_temp.idbot('ZT15-0002')) is null and pg_temp.en('bot', pg_temp.idbot('ZT15-0003')) is null and pg_temp.ebot('ZT15-0002') = 'recibido');
@@ -1494,19 +1698,28 @@ begin
   perform pg_temp.reg('05.08 … un daño fuera de la zona, o de un tipo que no está en la lista (válvula dañada), no se asocia ni recibe nota',
      pg_temp.en('dano', pg_temp.iddano(v_d3)) is null and pg_temp.en('dano', pg_temp.iddano(v_d4)) is null
      and not exists (select 1 from redes.dano_eventos e where e.dano_id::text in (pg_temp.iddano(v_d3), pg_temp.iddano(v_d4))));
+  -- formato de campo (Comercial): la fila nueva en campo.reportes
+  ca2 := pg_temp.campo(160, 30, 'sin_agua');
+  perform pg_temp.reg('05.08b FORMATO DE CAMPO: un «sin agua» hecho desde Comercial dentro de la zona se guarda como siempre («Reportado») y queda asociado solo, con la nota en su historial',
+     pg_temp.en('campo', ca2::text) = v_e1 and pg_temp.ecampo(ca2) = 'reportado'
+     and (select count(*) = 1 and bool_and(x.tipo_evento = 'nota' and x.motivo = 'Asociado al evento de suspensión ' || v_e1 and x.autor = 'sistema@evento.suspension') from campo.reporte_eventos x where x.reporte_id = ca2));
+  ca4 := pg_temp.campo(170, 30, 'fuga_acometida');
+  ca5 := pg_temp.campo(820, 200, 'sin_agua');
+  perform pg_temp.reg('05.08c … uno de otro tipo (fuga en acometida) dentro de la zona, o un «sin agua» fuera de ella, no se asocian ni reciben nota',
+     pg_temp.en('campo', ca4::text) is null and pg_temp.en('campo', ca5::text) is null and not exists (select 1 from campo.reporte_eventos x where x.reporte_id in (ca4, ca5)));
   j := public.geoportal_redes_evento(sd, v_e1);
-  perform pg_temp.reg('05.09 el evento lleva 8 reportes asociados: 3 del bot, 3 de la 116 y 2 daños', j -> 'reportes' = jsonb_build_object('total', 8, 'bot', 3, 'l116', 3, 'danos', 2), (j -> 'reportes')::text);
+  perform pg_temp.reg('05.09 el evento lleva 10 reportes asociados: 3 del bot, 3 de la 116, 2 daños y 2 del formato de campo', j -> 'reportes' = jsonb_build_object('total', 10, 'bot', 3, 'l116', 3, 'danos', 2, 'campo', 2), (j -> 'reportes')::text);
 
   -- ===================== 06. Avisos: uno por evento =====================
   v_av := tecnica.f_avisos(false, true);
-  perform pg_temp.reg('06.01 AVISOS: UN solo aviso por el evento (naranja), con los 8 reportes asociados en el texto, y no uno por reporte',
+  perform pg_temp.reg('06.01 AVISOS: UN solo aviso por el evento (naranja), con los 10 reportes asociados en el texto, y no uno por reporte',
      (select count(*) from jsonb_array_elements(v_av) x where x ->> 'clave' like 'evento_suspension_%') = 1
      and pg_temp.aviso(v_av, 'evento_suspension_%') ->> 'clave' = 'evento_suspension_' || lower(v_e1) and pg_temp.aviso(v_av, 'evento_suspension_%') ->> 'nivel' = 'naranja'
-     and (pg_temp.aviso(v_av, 'evento_suspension_%') ->> 'n')::integer = 8 and pg_temp.aviso(v_av, 'evento_suspension_%') ->> 'titulo' like 'Sin agua en ZT9B Sector S1 desde las %'
-     and pg_temp.aviso(v_av, 'evento_suspension_%') ->> 'detalle' like 'Daño en la tubería matriz de la calle 44. 8 reportes asociados. Regreso estimado: %'
+     and (pg_temp.aviso(v_av, 'evento_suspension_%') ->> 'n')::integer = 10 and pg_temp.aviso(v_av, 'evento_suspension_%') ->> 'titulo' like 'Sin agua en ZT9B Sector S1 desde las %'
+     and pg_temp.aviso(v_av, 'evento_suspension_%') ->> 'detalle' like 'Daño en la tubería matriz de la calle 44. 10 reportes asociados. Regreso estimado: %'
      and pg_temp.aviso(v_av, 'evento_suspension_%') -> 'bandeja' ->> 'evento' = v_e1, pg_temp.aviso(v_av, 'evento_suspension_%')::text);
-  perform pg_temp.reg('06.02 … el aviso de «sin agua sin evento» ya solo cuenta los que quedaron por fuera (5): los 2 de la 116 y el del bot en S2, y los 2 de antes del inicio (uno del bot y uno de la 116)',
-     (pg_temp.aviso(v_av, 'sin_agua_sin_evento') ->> 'n')::integer = 5, pg_temp.aviso(v_av, 'sin_agua_sin_evento')::text);
+  perform pg_temp.reg('06.02 … el aviso de «sin agua sin evento» ya solo cuenta los que quedaron por fuera (7): los 2 de la 116, el del bot y los 2 del formato de campo en S2, y los 2 de antes del inicio (uno del bot y uno de la 116)',
+     (pg_temp.aviso(v_av, 'sin_agua_sin_evento') ->> 'n')::integer = 7, pg_temp.aviso(v_av, 'sin_agua_sin_evento')::text);
   perform pg_temp.reg('06.03 … el aviso de reportes del bot «Recibidos» no cuenta los asociados (están «En atención»)',
      not exists (select 1 from redes.v_reporte_externo v where v.radicado in ('ZT15-0001', 'ZT15-0010', 'ZT15-0011') and v.ultimo_evento = 'recibido'));
   perform pg_temp.reg('06.04 … al supervisor de planta no le sale un evento por sectores', pg_temp.aviso(tecnica.f_avisos(true, false), 'evento_suspension_%') is null);
@@ -1524,8 +1737,8 @@ begin
   perform pg_temp.err('07.04 desasociar sin motivo', format('select public.geoportal_redes_evento_desasociar(%L, %L, %L, %L, %L)', sd, v_e1, 'bot', pg_temp.idbot('ZT15-0011'), 'corto'), '22023', 'motivo');
   perform pg_temp.err('07.05 el operador no desasocia (42501)', format('select public.geoportal_redes_evento_desasociar(%L, %L, %L, %L, %L)', op, v_e1, 'bot', pg_temp.idbot('ZT15-0011'), 'ZT9B es otro problema'), '42501');
   j := public.geoportal_redes_evento_desasociar(sd, v_e1, 'bot', pg_temp.idbot('ZT15-0011'), 'ZT9B es otra fuga, a tres cuadras');
-  perform pg_temp.reg('07.06 el supervisor DESASOCIA un reporte del bot con motivo: sale del evento (quedan 8 con el que acaba de entrar) y vuelve a «Recibido», con el motivo en su historial',
-     (j -> 'reportes' ->> 'total')::integer = 8 and pg_temp.en('bot', pg_temp.idbot('ZT15-0011')) is null and pg_temp.ebot('ZT15-0011') = 'recibido'
+  perform pg_temp.reg('07.06 el supervisor DESASOCIA un reporte del bot con motivo: sale del evento (quedan 10 con el que acaba de entrar) y vuelve a «Recibido», con el motivo en su historial',
+     (j -> 'reportes' ->> 'total')::integer = 10 and pg_temp.en('bot', pg_temp.idbot('ZT15-0011')) is null and pg_temp.ebot('ZT15-0011') = 'recibido'
      and (select x.motivo like 'Desasociado del evento de suspensión ' || v_e1 || ': ZT9B es otra fuga%' from redes.reporte_externo_eventos x where x.reporte_id::text = pg_temp.idbot('ZT15-0011') order by x.id desc limit 1), j::text);
   perform pg_temp.err('07.07 desasociar uno que no está en el evento', format('select public.geoportal_redes_evento_desasociar(%L, %L, %L, %L, %L)', sd, v_e1, 'bot', pg_temp.idbot('ZT15-0011'), 'ZT9B es otro problema'), '22023', 'no está asociado');
   j := public.geoportal_redes_evento_desasociar(sd, v_e1, 'dano', v_d2, 'ZT9B ese daño es de otra tubería');
@@ -1538,8 +1751,10 @@ begin
   perform pg_temp.err('07.10 asociar uno que ya está en el evento', format('select public.geoportal_redes_evento_asociar(%L, %L, %L, %L, %L)', sd, v_e1, 'l116', '990000003', 'ZT9B sí es del mismo corte'), '22023', 'ya está asociado');
   perform pg_temp.err('07.11 un reporte que no existe: P0002', format('select public.geoportal_redes_evento_asociar(%L, %L, %L, %L, %L)', sd, v_e1, 'dano', 'DAN-999999', 'ZT9B sí es del mismo corte'), 'P0002');
   j := public.geoportal_redes_evento(sd, v_e1);
-  perform pg_temp.reg('07.12 EL DETALLE: 8 asociados con origen, rótulo, tipo, cuándo y punto; el usuario sensible confirmado (contrato y tipo); y el historial (regreso, desasociaciones y la asociación a mano)',
-     jsonb_array_length(j -> 'asociados') = 8 and (select bool_and(x ? 'rotulo' and x ->> 'cuando' is not null and x ->> 'lat' is not null and x ->> 'tipo' is not null) from jsonb_array_elements(j -> 'asociados') x)
+  perform pg_temp.reg('07.12 EL DETALLE: 10 asociados con origen, rótulo, tipo, cuándo y punto; el usuario sensible confirmado (contrato y tipo); y el historial (regreso, desasociaciones y la asociación a mano)',
+     jsonb_array_length(j -> 'asociados') = 10
+     and (select count(*) = 2 and bool_and(x ->> 'ref' ~ '^REP-[0-9]{6}$' and x ->> 'rotulo' = 'Formato de campo · ' || (x ->> 'ref') and x ->> 'tipo' = 'No tengo agua o tengo baja presión') from jsonb_array_elements(j -> 'asociados') x where x ->> 'origen' = 'campo')
+     and (select bool_and(x ? 'rotulo' and x ->> 'cuando' is not null and x ->> 'lat' is not null and x ->> 'tipo' is not null) from jsonb_array_elements(j -> 'asociados') x)
      and j -> 'sensibles_lista' = jsonb_build_array(jsonb_build_object('contrato', v_c1, 'tipo', 'Hospital'))
      and (select count(*) filter (where x ->> 'que' = 'regreso') = 1 and count(*) filter (where x ->> 'que' = 'desasociar') = 2 and count(*) filter (where x ->> 'que' = 'asociar_a_mano') = 1 from jsonb_array_elements(j -> 'historial') x),
      left(j::text, 900));
@@ -1550,6 +1765,13 @@ begin
      jsonb_array_length(j -> 'eventos') = 1 and j -> 'eventos' -> 0 ->> 'codigo' = v_e1 and j -> 'eventos' -> 0 -> 'zona_geojson' ->> 'type' = 'MultiPolygon'
      and j -> 'eventos' -> 0 ->> 'franja' like 'Sin agua en %' and not (j -> 'eventos' -> 0 ? 'asociados') and not (j -> 'eventos' -> 0 ? 'sensibles_lista'));
   perform pg_temp.err('07.15 … pero no el detalle ni la lista (42501)', format('select public.geoportal_redes_evento(%L, %L)', op, v_e1), '42501');
+  j := public.geoportal_redes_evento_desasociar(sd, v_e1, 'campo', pg_temp.codcampo(ca2), 'ZT9B ese reporte es de otra cuadra');
+  perform pg_temp.reg('07.16 FORMATO DE CAMPO: el supervisor desasocia un reporte por su código (REP-…), con motivo: sale del evento, sigue «Reportado» y queda la nota en su historial',
+     pg_temp.en('campo', ca2::text) is null and pg_temp.ecampo(ca2) = 'reportado' and (j -> 'reportes' ->> 'campo')::integer = 1
+     and (select x.tipo_evento = 'nota' and x.motivo like 'Desasociado del evento de suspensión ' || v_e1 || ': ZT9B ese reporte%' from campo.reporte_eventos x where x.reporte_id = ca2 order by x.id desc limit 1));
+  j := public.geoportal_redes_evento_asociar(sd, v_e1, 'campo', pg_temp.codcampo(ca2), 'ZT9B sí era del mismo corte');
+  perform pg_temp.reg('07.17 … y lo vuelve a asociar a mano; un reporte de campo que no existe: P0002', pg_temp.en('campo', ca2::text) = v_e1 and (j -> 'reportes' ->> 'campo')::integer = 2);
+  perform pg_temp.err('07.18 … un reporte de campo que no existe: P0002', format('select public.geoportal_redes_evento_asociar(%L, %L, %L, %L, %L)', sd, v_e1, 'campo', 'REP-99999999', 'ZT9B sí es del mismo corte'), 'P0002');
 
   -- ===================== 08. Por círculo; dos eventos que se cruzan =====================
   perform pg_temp.err('08.01 un radio fuera de rango', format('select public.geoportal_redes_evento_declarar(%L, %L)', sd, jsonb_build_object('alcance', 'circulo', 'lat', pg_temp.lat(100), 'lon', pg_temp.lon(380), 'radio_m', 5, 'causa', 'ZT9B fuga localizada')), '22023', 'radio');
@@ -1569,17 +1791,27 @@ begin
      j ->> 'evento' = v_e2 and j ->> 'mensaje' = 'Ya sabemos del corte en tu sector. Todavía no hay hora estimada de regreso.' and j2 ->> 'evento' is null, j::text);
   j := public.geoportal_redes_evento_declarar(sd, jsonb_build_object('alcance', 'circulo', 'lat', pg_temp.lat(100), 'lon', pg_temp.lon(380), 'radio_m', 60, 'causa', 'ZT9B válvula cerrada en la esquina'));
   v_e3 := j ->> 'codigo';
+  -- y, DESPUÉS, un evento de toda la ciudad: es el más reciente de los tres, pero el menos específico
+  v_e5 := public.geoportal_redes_evento_declarar(a, jsonb_build_object('alcance', 'total', 'total', 'ciudad', 'causa', 'ZT9B falla general de prueba')) ->> 'codigo';
   j2 := pg_temp.bot('ZT15-0032', 370, 100, 'sin_agua');
-  perform pg_temp.reg('08.06 si un punto cae en dos eventos abiertos (el sector S1 y un círculo adentro), queda en UNO solo: el declarado más recientemente',
-     j2 ->> 'evento' = v_e3 and (select count(*) from redes.evento_suspension_reportes r where r.origen = 'bot' and r.ref = pg_temp.idbot('ZT15-0032')) = 1);
+  perform pg_temp.reg('08.06 si un punto cae en varios eventos abiertos (el sector S1, un círculo adentro y toda la ciudad, declarado de último), queda en UNO solo: EL MÁS ESPECÍFICO, el círculo (no el más reciente)',
+     j2 ->> 'evento' = v_e3 and (select count(*) from redes.evento_suspension_reportes r where r.origen = 'bot' and r.ref = pg_temp.idbot('ZT15-0032')) = 1, j2::text);
+  j := pg_temp.bot('ZT15-0033', 100, 200, 'sin_agua');
+  j2 := pg_temp.bot('ZT15-0034', 5000, 5000, 'sin_agua');
+  perform pg_temp.reg('08.06b … círculo > sectores > total: un punto del sector fuera del círculo queda en el evento del sector (no en el total, que es más reciente); uno fuera de todo, en el total',
+     j ->> 'evento' = v_e1 and j2 ->> 'evento' = v_e5, j::text || j2::text);
+  ca5 := pg_temp.campo(375, 100, 'sin_agua');
+  perform pg_temp.reg('08.06c … la misma regla para la línea 116, los daños y el formato de campo (un reporte de campo dentro del círculo queda en el círculo)', pg_temp.en('campo', ca5::text) = v_e3);
+  perform public.geoportal_redes_evento_anular(a, v_e5, 'ZT9B fin de la prueba de prioridad');
   v_av := tecnica.f_avisos(false, true);
   perform pg_temp.reg('08.07 con 3 eventos abiertos hay 3 avisos, uno por evento', (select count(*) from jsonb_array_elements(v_av) x where x ->> 'clave' like 'evento_suspension_%') = 3);
 
   -- ===================== 09. Anular: los reportes vuelven a su flujo =====================
   perform pg_temp.err('09.01 anular sin motivo', format('select public.geoportal_redes_evento_anular(%L, %L, %L)', sd, v_e3, ''), '22023', 'motivo');
   j := public.geoportal_redes_evento_anular(sd, v_e3, 'ZT9B se declaró por error, era el mismo corte');
-  perform pg_temp.reg('09.02 el supervisor ANULA un evento con motivo: queda «anulado» (nada se borra), su reporte del bot vuelve a «Recibido» y ya no tiene aviso',
-     j ->> 'estado' = 'anulado' and (j ->> 'reportes_liberados')::integer = 1 and j -> 'fin' ->> 'motivo' like 'ZT9B se declaró por error%' and pg_temp.ebot('ZT15-0032') = 'recibido'
+  perform pg_temp.reg('09.02 el supervisor ANULA un evento con motivo: queda «anulado» (nada se borra), su reporte del bot vuelve a «Recibido», el del formato de campo queda libre con la nota, y ya no tiene aviso',
+     j ->> 'estado' = 'anulado' and (j ->> 'reportes_liberados')::integer = 2 and pg_temp.en('campo', ca5::text) is null and pg_temp.ecampo(ca5) = 'reportado'
+     and (select x.tipo_evento = 'nota' and x.motivo like 'Evento de suspensión ' || v_e3 || ' anulado:%' from campo.reporte_eventos x where x.reporte_id = ca5 order by x.id desc limit 1) and j -> 'fin' ->> 'motivo' like 'ZT9B se declaró por error%' and pg_temp.ebot('ZT15-0032') = 'recibido'
      and pg_temp.en('bot', pg_temp.idbot('ZT15-0032')) is null and exists (select 1 from redes.eventos_suspension where codigo = v_e3)
      and (select count(*) from jsonb_array_elements(tecnica.f_avisos(false, true)) x where x ->> 'clave' like 'evento_suspension_%') = 2, j::text);
   perform pg_temp.err('09.03 un evento anulado no se cierra ni se vuelve a anular (55000)', format('select public.geoportal_redes_evento_cerrar(%L, %L, %L)', sd, v_e3, 'ZT9B ya volvió el servicio'), '55000', 'anulado');
@@ -1592,16 +1824,21 @@ begin
   perform pg_temp.err('10.03 el operador no cierra (42501)', format('select public.geoportal_redes_evento_cerrar(%L, %L, %L)', op, v_e1, 'ZT9B ya volvió el servicio'), '42501');
   select count(*) into v_num from redes.danos; select count(*) into v_num2 from redes.reportes_externos;
   j := public.geoportal_redes_evento_cerrar(sd, v_e1, 'Tubería reparada y servicio restablecido');
-  perform pg_temp.reg('10.04 el supervisor CIERRA el evento: queda «cerrado» con motivo, hora y quién; cierra en bloque 4 reportes del bot y 4 de la 116; el daño asociado sigue abierto',
+  perform pg_temp.reg('10.04 el supervisor CIERRA el evento: queda «cerrado» con motivo, hora y quién; cierra en bloque 5 reportes del bot, 4 de la 116 y 2 del formato de campo; el daño asociado sigue abierto',
      j ->> 'estado' = 'cerrado' and j -> 'fin' ->> 'motivo' = 'Tubería reparada y servicio restablecido' and j -> 'fin' ->> 'por' = 'ZT9B Supervisor de distribución'
-     and j -> 'cerrados' = jsonb_build_object('bot', 4, 'l116', 4) and (j ->> 'danos_siguen_abiertos')::integer = 1, j::text);
+     and j -> 'cerrados' = jsonb_build_object('bot', 5, 'l116', 4, 'campo', 2) and (j ->> 'danos_siguen_abiertos')::integer = 1, j::text);
   perform pg_temp.reg('10.05 … cada reporte del bot quedó «Atendido» con el MISMO motivo y la MISMA hora en su historial',
-     (select count(*) = 4 and count(distinct x.motivo) = 1 and bool_and(x.motivo like 'Evento de suspensión ' || v_e1 || ' cerrado (%): Tubería reparada y servicio restablecido' and x.autor = sd)
+     (select count(*) = 5 and count(distinct x.motivo) = 1 and bool_and(x.motivo like 'Evento de suspensión ' || v_e1 || ' cerrado (%): Tubería reparada y servicio restablecido' and x.autor = sd)
         from redes.reporte_externo_eventos x where x.tipo = 'atendido')
      and pg_temp.ebot('ZT15-0001') = 'atendido' and pg_temp.ebot('ZT15-0010') = 'atendido' and pg_temp.ebot('ZT15-0020') = 'atendido' and pg_temp.ebot('ZT15-0032') = 'atendido');
   perform pg_temp.reg('10.06 … cada reporte de la 116 quedó «Atendido», con su hecho en el historial (de «Registrado» a «Atendido», mismo motivo)',
      (select count(*) = 4 and count(distinct e.motivo) = 1 and bool_and(e.estado = 'atendido' and e.estado_antes = 'registrado' and e.motivo like '%' || v_e1 || '%Tubería reparada%') from redes.l116_eventos e where e.tipo = 'estado')
      and (select count(*) = 4 and bool_and(v.estado = 'atendido') from redes.l116_vigente v where v.reporte in (990000001, 990000003, 990000010, 990000011)));
+  perform pg_temp.reg('10.06b … cada reporte del formato de campo (Comercial) quedó «Atendido» con el mismo motivo y la misma hora en su historial; los que no estaban en el evento siguen «Reportado»',
+     pg_temp.ecampo(ca1) = 'atendido' and pg_temp.ecampo(ca2) = 'atendido' and pg_temp.ecampo(ca3) = 'reportado' and pg_temp.ecampo(ca4) = 'reportado' and pg_temp.ecampo(ca5) = 'reportado'
+     and (select count(*) = 2 and count(distinct x.motivo) = 1 and bool_and(x.estado_nuevo = 'atendido' and x.autor = sd
+                 and x.motivo = (select y.motivo from redes.reporte_externo_eventos y where y.tipo = 'atendido' limit 1))
+            from campo.reporte_eventos x where x.tipo_evento = 'cambio_estado'));
   perform pg_temp.reg('10.07 … el daño NO se cerró: sigue «Reportado», con la nota del cierre del evento en su historial',
      (select estado from redes.v_dano where codigo = v_d1) = 'reportado'
      and (select e.motivo like 'Evento de suspensión ' || v_e1 || ' cerrado%' from redes.dano_eventos e where e.dano_id::text = pg_temp.iddano(v_d1) order by e.id desc limit 1));
@@ -1613,11 +1850,46 @@ begin
   perform pg_temp.reg('10.10 después del cierre, un reporte nuevo en esa zona ya no se asocia: entra como siempre y se avisa como «sin agua sin evento»',
      j ->> 'evento' is null and pg_temp.ebot('ZT15-0040') = 'recibido');
   j := public.geoportal_redes_eventos(sd, 'todos');
-  perform pg_temp.reg('10.11 la lista del supervisor: 3 eventos (1 abierto, 1 cerrado, 1 anulado), los últimos primero; por estado, solo los de ese estado',
-     jsonb_array_length(j -> 'eventos') = 3 and j -> 'eventos' -> 0 ->> 'codigo' = v_e3 and jsonb_array_length(public.geoportal_redes_eventos(sd, 'abierto') -> 'eventos') = 1
+  perform pg_temp.reg('10.11 la lista del supervisor: 4 eventos (1 abierto, 1 cerrado, 2 anulados), los últimos primero; por estado, solo los de ese estado',
+     jsonb_array_length(j -> 'eventos') = 4 and j -> 'eventos' -> 0 ->> 'codigo' = v_e5 and jsonb_array_length(public.geoportal_redes_eventos(sd, 'anulado') -> 'eventos') = 2 and jsonb_array_length(public.geoportal_redes_eventos(sd, 'abierto') -> 'eventos') = 1
      and public.geoportal_redes_eventos(sd, 'cerrado') -> 'eventos' -> 0 ->> 'codigo' = v_e1);
-  perform pg_temp.reg('10.12 el evento cerrado conserva sus 9 reportes y su historial en el detalle', (public.geoportal_redes_evento(sd, v_e1) -> 'reportes' ->> 'total')::integer = 9
-     and jsonb_array_length(public.geoportal_redes_evento(sd, v_e1) -> 'historial') = 6);      -- 1 regreso, 2 desasociaciones, 2 asociaciones a mano y el cierre
+  perform pg_temp.reg('10.12 el evento cerrado conserva sus 12 reportes y su historial en el detalle', (public.geoportal_redes_evento(sd, v_e1) -> 'reportes' ->> 'total')::integer = 12
+     and jsonb_array_length(public.geoportal_redes_evento(sd, v_e1) -> 'historial') = 8, public.geoportal_redes_evento(sd, v_e1)::text);      -- 1 regreso, 3 desasociaciones, 3 asociaciones a mano y el cierre
+
+  -- ===================== 10b. La publicación de la línea 116 NO revive lo que cerró un evento (una publicación REAL, por el motor del Cargue) =====================
+  -- el archivo trae: 990000001 en «Registrado» (lo cerró el evento) · 990000010 «Atendido» (igual) · 990000015 «Atendido» (cambio normal: no estaba en el evento)
+  -- · 990000013 «Registrado» (estaba «Atendido» desde su alta, sin evento: la publicación SÍ lo devuelve, como siempre) · 990000030, nuevo
+  select estado_desde into v_ts from redes.l116_vigente where reporte = 990000001;
+  v_cg := pg_temp.subir116(sd, jsonb_build_array(pg_temp.fila116(1, 990000001, 'Registrado'), pg_temp.fila116(2, 990000010, 'Atendido', 'No llega agua a la residencia'),
+            pg_temp.fila116(3, 990000015, 'Atendido', 'Manjole tapado'), pg_temp.fila116(4, 990000013, 'Registrado'), pg_temp.fila116(5, 990000030, 'Registrado')), 'zt9b-116-uno');
+  v_r := public.geoportal_redes_carga_resumen(sd, v_cg);
+  v_x := public.geoportal_redes_carga_publicar(sd, v_cg, 'ZT9B carga de la 116 después del cierre del evento');
+  perform pg_temp.reg('10b.01 PUBLICACIÓN REAL de la 116 después del cierre: lista para publicar; 1 nuevo, 2 cambios de estado normales y 1 conservado por el evento',
+     (v_r ->> 'lista_para_publicar')::boolean and (v_x ->> 'nuevos')::integer = 1 and (v_x ->> 'cambios_estado')::integer = 2 and (v_x ->> 'conservados_por_evento')::integer = 1, (v_r - 'tabla')::text || v_x::text);
+  perform pg_temp.reg('10b.02 … el reporte que cerró el evento NO revive: sigue «Atendido» (desde la misma hora), aunque el archivo lo trae en «Registrado»',
+     (select v.estado = 'atendido' and v.estado_desde = v_ts and not v.oculto from redes.l116_vigente v where v.reporte = 990000001));
+  perform pg_temp.reg('10b.03 … y la diferencia con la fuente queda en su historial: «La carga N … lo trae en «Registrado»: conserva «Atendido» porque lo cerró el evento EVS-…»',
+     pg_temp.h116(990000001) = array['alta:registrado:-', 'estado:atendido:registrado', 'estado:atendido:atendido']
+     and (select e.motivo = format('La carga %s de la línea 116 lo trae en «Registrado»: conserva «Atendido» porque lo cerró el evento de suspensión %s', v_cg, v_e1) and e.carga_id is null and e.autor = sd
+            from redes.l116_eventos e join redes.l116_reportes r on r.id = e.reporte_id where r.reporte = 990000001 order by e.id desc limit 1), pg_temp.h116(990000001)::text);
+  perform pg_temp.reg('10b.04 … lo demás se publica como siempre: el que no estaba en un evento sí vuelve a «Registrado»; el otro pasa a «Atendido»; el nuevo entra',
+     (select estado from redes.l116_vigente where reporte = 990000013) = 'registrado' and pg_temp.h116(990000013) = array['alta:atendido:-', 'estado:registrado:atendido']
+     and (select estado from redes.l116_vigente where reporte = 990000015) = 'atendido' and (select estado from redes.l116_vigente where reporte = 990000030) = 'registrado'
+     and (select (detalle ->> 'conservados_por_evento')::integer from redes.carga_eventos where carga_id = v_cg and tipo = 'publicar') = 1);
+  v_cg := pg_temp.subir116(sd, jsonb_build_array(pg_temp.fila116(1, 990000001, 'Registrado'), pg_temp.fila116(2, 990000003, 'Registrado', 'Fuga en el medidor')), 'zt9b-116-dos');
+  v_x := public.geoportal_redes_carga_publicar(sd, v_cg, 'ZT9B otra carga de la 116 con los mismos reportes');
+  perform pg_temp.reg('10b.05 una carga siguiente que los vuelve a traer en «Registrado» tampoco los revive (2 conservados, 0 cambios); la diferencia se anota UNA vez por reporte',
+     (v_x ->> 'conservados_por_evento')::integer = 2 and (v_x ->> 'cambios_estado')::integer = 0
+     and pg_temp.h116(990000001) = array['alta:registrado:-', 'estado:atendido:registrado', 'estado:atendido:atendido']
+     and pg_temp.h116(990000003) = array['alta:registrado:-', 'estado:atendido:registrado', 'estado:atendido:atendido']
+     and (select count(*) = 2 and bool_and(v.estado = 'atendido') from redes.l116_vigente v where v.reporte in (990000001, 990000003)), v_x::text);
+  v_x := public.geoportal_redes_carga_revertir(sd, 'linea_116', 'ZT9B se revierte la última carga de prueba');
+  perform pg_temp.reg('10b.06 revertir esa carga no toca lo conservado (sigue «Atendido», sin hechos nuevos)',
+     (v_x ->> 'estados_devueltos')::integer = 0 and (select count(*) = 2 and bool_and(v.estado = 'atendido') from redes.l116_vigente v where v.reporte in (990000001, 990000003))
+     and array_length(pg_temp.h116(990000001), 1) = 3, v_x::text);
+  perform pg_temp.reg('10b.07 un reporte de la 116 que alguien DESASOCIÓ del evento antes del cierre no queda protegido (la publicación lo trata como siempre)',
+     redes.f_evento_l116_cerrado((select id from redes.l116_reportes where reporte = 990000001)) = v_e1
+     and redes.f_evento_l116_cerrado((select id from redes.l116_reportes where reporte = 990000013)) is null);
 
   -- ===================== 11. Total: por planta y toda la ciudad =====================
   perform pg_temp.err('11.01 una planta sin sectores asignados no se puede declarar: lo dice', format('select public.geoportal_redes_evento_declarar(%L, %L)', sp, jsonb_build_object('alcance', 'total', 'total', 'planta', 'planta', 'huaricha', 'causa', 'ZT9B falla de energía')), '22023', 'no tiene sectores asignados');
@@ -1667,6 +1939,16 @@ begin
      and pg_temp.bot('ZT15-0060', 90, 50, 'dano_red_acueducto') ->> 'evento' is null and pg_temp.en('l116', (select id::text from redes.l116_reportes where reporte = 990000020)) = v_e1);
   perform pg_temp.reg('12.05 un evento por SUBSECTOR: la zona es la del subsector (un reporte en el resto del sector no entra)',
      pg_temp.bot('ZT15-0061', 90, 50, 'sin_agua') ->> 'evento' = v_e1 and pg_temp.bot('ZT15-0062', 300, 50, 'sin_agua') ->> 'evento' is null);
+  -- después del subsector, el sector que lo contiene (más reciente y de la misma clase): gana el de MENOR ÁREA, el subsector
+  v_e6 := public.geoportal_redes_evento_declarar(sd, jsonb_build_object('alcance', 'sectores', 'sectores', jsonb_build_array(pg_temp.cod('S1')), 'causa', 'ZT9B corte del sector completo')) ->> 'codigo';
+  perform pg_temp.reg('12.05b dos eventos por sectores que se cruzan (el subsector S1A y, declarado después, su sector S1): un punto del subsector queda en el del SUBSECTOR (el más específico); uno del resto del sector, en el del sector',
+     pg_temp.bot('ZT15-0063', 95, 50, 'sin_agua') ->> 'evento' = v_e1 and pg_temp.bot('ZT15-0064', 300, 50, 'sin_agua') ->> 'evento' = v_e6);
+  perform pg_temp.err('12.06 un tipo del formato de campo que no existe no se agrega a la lista: P0002', format('select public.geoportal_redes_evento_tipo_fijar(%L, %L, %L, true, %L, %L, %L)', sd, 'campo', 'zt9b_no_existe', 'ZT9B se agrega el tipo de prueba', 'ZT9B tipo', 'otro'), 'P0002');
+  j := public.geoportal_redes_evento_tipo_fijar(sd, 'campo', 'fuga_acometida', true, 'ZT9B la fuga en acometida también se asocia', 'Fuga en acometida', 'dano_red');
+  ca4 := pg_temp.campo(90, 60, 'fuga_acometida');
+  perform pg_temp.reg('12.07 la lista del formato de campo también se ajusta: se agrega «fuga en acometida» y un reporte de ese tipo dentro de la zona queda asociado',
+     (j ->> 'asocia')::boolean and j ->> 'origen' = 'campo' and pg_temp.en('campo', ca4::text) = v_e1);
+  perform public.geoportal_redes_evento_cerrar(sd, v_e6, 'ZT9B terminó el corte del sector');
   perform public.geoportal_redes_evento_cerrar(sd, v_e1, 'ZT9B terminó el corte programado');
 
   -- ===================== 13. Solo agregar =====================
@@ -1676,8 +1958,8 @@ begin
   perform pg_temp.err('13.04 solo agregar: el cierre de un evento no se cambia', 'update redes.evento_suspension_eventos set motivo = ''otro motivo distinto'' where id = (select min(id) from redes.evento_suspension_eventos)');
   perform pg_temp.err('13.05 un evento termina una sola vez (la base lo impide aunque se salte la RPC)',
      format('insert into redes.evento_suspension_eventos (evento_id, tipo, motivo, hecho_en, autor) select id, ''anular'', ''ZT9B segundo final'', clock_timestamp(), %L from redes.eventos_suspension where codigo = %L', a, v_e1), '23505');
-  perform pg_temp.reg('13.06 al final no queda ningún evento abierto y nadie recibió nada que no fuera suyo: 6 eventos en la base (4 cerrados y 2 anulados)',
-     not exists (select 1 from redes.f_eventos_abiertos()) and (select count(*) filter (where estado = 'cerrado') = 4 and count(*) filter (where estado = 'anulado') = 2 and count(*) = 6 from redes.v_evento_suspension));
+  perform pg_temp.reg('13.06 al final no queda ningún evento abierto y nadie recibió nada que no fuera suyo: 8 eventos en la base (5 cerrados y 3 anulados)',
+     not exists (select 1 from redes.f_eventos_abiertos()) and (select count(*) filter (where estado = 'cerrado') = 5 and count(*) filter (where estado = 'anulado') = 3 and count(*) = 8 from redes.v_evento_suspension));
 
   -- ===================== 14. TIEMPOS con volumen: la zona cubre la red real de esta base, 300 eventos viejos y una carga de 5.000 reportes de la 116 =====================
   select ST_SetSRID(ST_Extent(m.geom)::geometry, 4326) into v_caja from redes.activo_vigente_mat m where m.prefijo = 'RED' and m.sistema = 'acueducto' and m.codigo not in (pg_temp.cod('T1'), pg_temp.cod('T2'), pg_temp.cod('T3'))
@@ -1730,8 +2012,20 @@ begin
   perform pg_temp.reg('14.02 TIEMPOS: asociar un reporte nuevo (bot) en menos de 1 s', v_ms_bot < 1000, v_info);
   perform pg_temp.reg('14.03 TIEMPOS: la carga de 5.000 reportes de la 116, la vista previa, declarar, los avisos, el detalle y el cierre en bloque, cada uno en menos de 1 s (local; producción es unas 6 veces más lenta)',
      greatest(v_ms_116, v_ms_vp, v_ms_decl, v_ms_av, v_ms_det, v_ms_cerrar) < 1000, v_info);
+  -- una publicación REAL de la 116 con los 2.500 reportes que cerró el evento otra vez en «Registrado»: ninguno revive
+  v_cg := pg_temp.subir116(sd, (select jsonb_agg(pg_temp.fila116(i, 980000000 + 2 * i, 'Registrado') order by i) from generate_series(1, 2500) i), 'zt9b-116-volumen');
+  v_r := public.geoportal_redes_carga_resumen(sd, v_cg);
+  v_t0 := clock_timestamp(); v_x := public.geoportal_redes_carga_publicar(sd, v_cg, 'ZT9B carga de volumen después del cierre'); v_ms_pub := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+  v_info := v_info || format(' · publicar una carga REAL de la 116 con 2.500 reportes cerrados por el evento %s ms', v_ms_pub);
+  perform pg_temp.reg('14.03b PUBLICACIÓN REAL con volumen: los 2.500 reportes que cerró el evento vuelven en «Registrado» y NINGUNO revive (2.500 conservados, 0 cambios), en menos de 1 s',
+     (v_x ->> 'conservados_por_evento')::integer = 2500 and (v_x ->> 'cambios_estado')::integer = 0 and v_ms_pub < 1000
+     and (select count(*) from redes.l116_vigente v where v.reporte > 980000000 and v.reporte <= 980005000 and v.estado = 'atendido') = 2500
+     and (select count(*) from redes.l116_eventos e where e.tipo = 'estado' and e.estado_antes = 'atendido' and e.estado = 'atendido' and e.motivo like 'La carga ' || v_cg || ' %') = 2500, v_x::text || ' ' || v_info);
   v_t0 := clock_timestamp(); v_d1 := pg_temp.dano(op, 'T1', 100, 0, 'fuga'); v_ms_dano := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
-  v_info := v_info || format(' · crear un daño sin eventos abiertos %s ms', v_ms_dano);
+  v_t0 := clock_timestamp(); ca1 := pg_temp.campo(100, 10, 'sin_agua'); v_ms_campo := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+  v_info := v_info || format(' · crear un daño sin eventos abiertos %s ms · guardar un reporte de campo sin eventos abiertos %s ms', v_ms_dano, v_ms_campo);
+  perform pg_temp.reg('14.04b sin eventos abiertos, guardar un reporte del formato de campo no se demora por el disparador (menos de 1 s) y no escribe nada del corte',
+     v_ms_campo < 1000 and not exists (select 1 from campo.reporte_eventos x where x.reporte_id = ca1) and pg_temp.ecampo(ca1) = 'reportado', v_info);
   perform pg_temp.reg('14.04 sin eventos abiertos, crear un daño no se demora por los disparadores (menos de 1 s) y no escribe nada del corte',
      v_ms_dano < 1000 and not exists (select 1 from redes.dano_eventos e where e.dano_id::text = pg_temp.iddano(v_d1)), v_info);
   perform pg_temp.reg('14.05 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE', not exists (select 1 from redes.f_funciones_sin_where()), (select string_agg(funcion, ', ') from redes.f_funciones_sin_where()));

@@ -15,6 +15,6 @@ end $$;
 insert into public.geoportal_auditoria (email, accion, referencia, detalle, ip)
 values ('migracion@redes_corte15', 'migracion_redes_corte15', null, jsonb_build_object(
         'tablas', jsonb_build_array('eventos_suspension', 'evento_suspension_eventos', 'evento_suspension_reportes', 'evento_tipos_asociables', 'evento_tipo_eventos', 'planta_sectores', 'planta_sector_eventos'),
-        'disparadores', jsonb_build_array('redes.reporte_externo_eventos', 'redes.l116_eventos', 'redes.danos'),
-        'reemplazada', 'tecnica.f_avisos', 'tipo_de_campo', 'sin_agua',
+        'disparadores', jsonb_build_array('redes.reporte_externo_eventos', 'redes.l116_eventos', 'redes.danos', 'campo.reportes'),
+        'reemplazadas', jsonb_build_array('tecnica.f_avisos', 'redes.f_publicar_l116'), 'tipo_de_campo', 'sin_agua',
         'motivo', 'Corte 15: evento de suspensión (por sectores, por círculo o total), asociación automática de reportes, cierre en bloque y un aviso por evento'), null);

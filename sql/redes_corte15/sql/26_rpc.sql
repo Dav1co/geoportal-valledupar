@@ -40,7 +40,8 @@ begin
   c := redes.f_evento_contratos(z.geom, z.todo);
   return jsonb_build_object('alcance', z.alcance, 'zona', z.zona_nombre, 'contratos', c -> 'contratos', 'sensibles', c -> 'sensibles',
     'reportes', (select jsonb_build_object('total', count(*), 'bot', count(*) filter (where k.origen = 'bot'), 'l116', count(*) filter (where k.origen = 'l116'),
-                                           'danos', count(*) filter (where k.origen = 'dano')) from redes.f_evento_candidatos(z.geom, z.todo, v_desde) k),
+                                           'danos', count(*) filter (where k.origen = 'dano'), 'campo', count(*) filter (where k.origen = 'campo'))
+                   from redes.f_evento_candidatos(z.geom, z.todo, v_desde) k),
     'ya_abierto', (select e.codigo from redes.f_eventos_abiertos() e where (z.todo and e.todo) or (not z.todo and not e.todo and ST_Equals(e.geom, z.geom)) limit 1),
     'zona_geojson', case when z.geom is not null then ST_AsGeoJSON(ST_Multi(ST_SimplifyPreserveTopology(z.geom, 0.00002)), 6)::jsonb end);
 end $$;
@@ -88,8 +89,8 @@ begin
           v_desde, v_regreso, (c ->> 'contratos')::integer, (c ->> 'sensibles')::integer, v_email)
   returning id into v_id;
   with hechas as (
-    insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, tipo, modo, autor)
-    select v_id, k.origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, 'asociar', 'al_declarar', v_email
+    insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, campo_reporte_id, tipo, modo, autor)
+    select v_id, k.origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, k.campo_reporte_id, 'asociar', 'al_declarar', v_email
       from redes.f_evento_candidatos(z.geom, z.todo, v_desde, v_dano) k
     returning id)
   select array_agg(id) into v_ids from hechas;
@@ -126,11 +127,12 @@ begin
   return redes.f_evento_json(e.id);
 end $$;
 
--- «dar de alta»: cierra el evento y, con el mismo motivo y la misma hora, los reportes asociados del bot y de la 116. Los daños quedan con la nota (siguen abiertos)
+-- «dar de alta»: cierra el evento y, con el mismo motivo y la misma hora, los reportes asociados del bot, de la 116 y del formato de campo. Los daños quedan con
+-- la nota (siguen abiertos)
 create function public.geoportal_redes_evento_cerrar(p_solicitante text, p_codigo text, p_motivo text, p_hecho_en text default null)
 returns jsonb
 language plpgsql volatile security definer set search_path = public, redes, tecnica, extensions, pg_temp as $$
-declare e record; v_mot text := btrim(coalesce(p_motivo, '')); v_hecho timestamptz; v_ahora timestamptz := clock_timestamp(); v_ids bigint[]; v_l116 bigint[]; v_bot integer; v_dan integer; v_txt text;
+declare e record; v_mot text := btrim(coalesce(p_motivo, '')); v_hecho timestamptz; v_ahora timestamptz := clock_timestamp(); v_ids bigint[]; v_l116 bigint[]; v_bot integer; v_dan integer; v_cam integer; v_txt text;
 begin
   select * into e from redes.f_evento_abierto(p_solicitante, p_codigo);
   if length(v_mot) < 10 or length(v_mot) > 500 then perform tecnica.f_error('Escriba el motivo del cierre (de 10 a 500 letras)'); end if;
@@ -138,7 +140,9 @@ begin
   if v_hecho > v_ahora + interval '5 minutes' then perform tecnica.f_error('La hora del cierre no puede ser futura'); end if;
   if v_hecho < e.desde then perform tecnica.f_error('El evento no se puede cerrar antes de la hora en que empezó'); end if;
   perform pg_advisory_xact_lock(hashtext('redes.eventos_suspension'));
-  select array_agg(r.id), count(*) filter (where r.origen = 'bot'), count(*) filter (where r.origen = 'dano') into v_ids, v_bot, v_dan from redes.f_evento_reportes(e.id) r;
+  select array_agg(r.id), count(*) filter (where r.origen = 'bot'), count(*) filter (where r.origen = 'dano'),
+         count(*) filter (where r.origen = 'campo' and redes.f_evento_campo_abierto(r.campo_reporte_id))      -- los de campo que siguen abiertos: los que se cierran
+    into v_ids, v_bot, v_dan, v_cam from redes.f_evento_reportes(e.id) r;
   insert into redes.evento_suspension_eventos (evento_id, tipo, motivo, hecho_en, autor) values (e.id, 'cerrar', v_mot, v_hecho, e.email);
   v_txt := format('Evento de suspensión {evento} cerrado (%s): %s', redes.f_evento_hora(v_hecho), v_mot);
   perform redes.f_evento_marcar(v_ids, 'atendido', v_txt, e.email);
@@ -150,8 +154,8 @@ begin
     select x, 'estado', 'atendido', 'registrado', left(replace(v_txt, '{evento}', e.codigo), 1000), e.email from unnest(v_l116) x order by x;
     update redes.l116_vigente set estado = 'atendido', estado_desde = v_hecho, actualizado_en = clock_timestamp() where reporte_id = any (v_l116) and estado = 'registrado';
   end if;
-  perform tecnica.f_auditar(e.email, 'redes_evento_cerrar', e.codigo, jsonb_build_object('reportes', coalesce(cardinality(v_ids), 0), 'bot', v_bot, 'l116', coalesce(cardinality(v_l116), 0), 'danos', v_dan), null);
-  return redes.f_evento_json(e.id) || jsonb_build_object('cerrados', jsonb_build_object('bot', v_bot, 'l116', coalesce(cardinality(v_l116), 0)), 'danos_siguen_abiertos', v_dan);
+  perform tecnica.f_auditar(e.email, 'redes_evento_cerrar', e.codigo, jsonb_build_object('reportes', coalesce(cardinality(v_ids), 0), 'bot', v_bot, 'l116', coalesce(cardinality(v_l116), 0), 'campo', v_cam, 'danos', v_dan), null);
+  return redes.f_evento_json(e.id) || jsonb_build_object('cerrados', jsonb_build_object('bot', v_bot, 'l116', coalesce(cardinality(v_l116), 0), 'campo', v_cam), 'danos_siguen_abiertos', v_dan);
 end $$;
 
 -- anular (se declaró por error): los reportes asociados vuelven a su flujo normal
@@ -170,8 +174,8 @@ begin
   return redes.f_evento_json(e.id) || jsonb_build_object('reportes_liberados', coalesce(cardinality(v_ids), 0));
 end $$;
 
--- un reporte por su referencia: bot = su id (uuid) · l116 = el número del reporte · dano = DAN-000123
-create function redes.f_evento_reporte_ref(p_origen text, p_ref text, out reporte_externo_id uuid, out l116_reporte_id bigint, out dano_id uuid, out ref text) returns record
+-- un reporte por su referencia: bot = su id (uuid) · l116 = el número del reporte · dano = DAN-000123 · campo = su código (REP-000123 o su consecutivo)
+create function redes.f_evento_reporte_ref(p_origen text, p_ref text, out reporte_externo_id uuid, out l116_reporte_id bigint, out dano_id uuid, out campo_reporte_id uuid, out ref text) returns record
 language plpgsql stable security definer set search_path = redes, tecnica, pg_temp as $$
 declare v_ref text := btrim(coalesce(p_ref, ''));
 begin
@@ -181,9 +185,13 @@ begin
     select r.id into l116_reporte_id from redes.l116_reportes r where r.reporte = v_ref::bigint;
   elsif p_origen = 'dano' and upper(v_ref) ~ '^DAN-[0-9]{6}$' then
     select d.id into dano_id from redes.danos d where d.codigo = upper(v_ref);
-  else perform tecnica.f_error('Diga qué reporte es: del bot (su identificador), de la línea 116 (su número) o un daño (DAN-000123)');
+  elsif p_origen = 'campo' and upper(v_ref) ~ '^REP-[0-9]{1,15}$' then
+    select c.id into campo_reporte_id from campo.reportes c where c.seq = substr(v_ref, 5)::bigint and c.consecutivo is null;
+  elsif p_origen = 'campo' and length(v_ref) between 3 and 40 then
+    select c.id into campo_reporte_id from campo.reportes c where c.consecutivo = upper(v_ref);
+  else perform tecnica.f_error('Diga qué reporte es: del bot (su identificador), de la línea 116 (su número), un daño (DAN-000123) o un reporte de campo (REP-000123)');
   end if;
-  ref := coalesce(reporte_externo_id::text, l116_reporte_id::text, dano_id::text);
+  ref := coalesce(reporte_externo_id::text, l116_reporte_id::text, dano_id::text, campo_reporte_id::text);
   if ref is null then perform tecnica.f_error('Ese reporte no existe', 'P0002'); end if;
 end $$;
 
@@ -196,8 +204,8 @@ begin
   select * into k from redes.f_evento_reporte_ref(p_origen, p_ref);
   if length(v_mot) < 10 or length(v_mot) > 500 then perform tecnica.f_error('Escriba el motivo (de 10 a 500 letras)'); end if;
   if not exists (select 1 from redes.f_evento_reportes(e.id) r where r.origen = p_origen and r.ref = k.ref) then perform tecnica.f_error(format('Ese reporte no está asociado al evento %s', e.codigo)); end if;
-  insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, tipo, modo, motivo, autor)
-  values (e.id, p_origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, 'desasociar', 'manual', v_mot, e.email) returning id into v_id;
+  insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, campo_reporte_id, tipo, modo, motivo, autor)
+  values (e.id, p_origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, k.campo_reporte_id, 'desasociar', 'manual', v_mot, e.email) returning id into v_id;
   perform redes.f_evento_marcar(array[v_id], 'recibido', 'Desasociado del evento de suspensión {evento}: ' || v_mot, e.email);
   return redes.f_evento_json(e.id);
 end $$;
@@ -218,8 +226,11 @@ begin
   if p_origen = 'bot' and (select x.tipo from redes.reporte_externo_eventos x where x.reporte_id = k.reporte_externo_id order by x.id desc limit 1) <> 'recibido' then
     perform tecnica.f_error('Ese reporte del bot ya no está en «Recibido» (se convirtió en daño, se descartó o se atendió)');
   end if;
-  insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, tipo, modo, motivo, autor)
-  values (e.id, p_origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, 'asociar', 'manual', v_mot, e.email) returning id into v_id;
+  if p_origen = 'campo' and not redes.f_evento_campo_abierto(k.campo_reporte_id) then
+    perform tecnica.f_error('Ese reporte de campo ya no está abierto (se atendió, se descartó, es un duplicado o está oculto)');
+  end if;
+  insert into redes.evento_suspension_reportes (evento_id, origen, reporte_externo_id, l116_reporte_id, dano_id, campo_reporte_id, tipo, modo, motivo, autor)
+  values (e.id, p_origen, k.reporte_externo_id, k.l116_reporte_id, k.dano_id, k.campo_reporte_id, 'asociar', 'manual', v_mot, e.email) returning id into v_id;
   perform redes.f_evento_marcar(array[v_id], 'en_atencion', 'Asociado a mano al evento de suspensión {evento}: ' || v_mot, e.email);
   return redes.f_evento_json(e.id);
 end $$;
@@ -246,7 +257,7 @@ begin
       from (select e.id from redes.v_evento_suspension e where v_est = 'todos' or e.estado = v_est order by e.id desc limit v_lim) s), '[]'::jsonb));
 end $$;
 
--- el detalle: el evento, sus reportes asociados (sin nombres, direcciones ni textos del ciudadano), los sensibles confirmados (contrato y tipo) y el historial
+-- el detalle: el evento, sus reportes asociados (sin nombres, direcciones, textos del ciudadano ni número de contrato), los sensibles confirmados (contrato y tipo) y el historial
 create function public.geoportal_redes_evento(p_solicitante text, p_codigo text)
 returns jsonb
 language plpgsql stable security definer set search_path = public, redes, tecnica, extensions, pg_temp as $$
@@ -262,21 +273,27 @@ begin
       select jsonb_agg(s.j order by s.id desc) from (
         select r.id, jsonb_build_object('origen', r.origen, 'modo', r.modo, 'asociado_en', r.creado_en,
                  'ref', case r.origen when 'bot' then r.ref when 'l116' then (select l.reporte::text from redes.l116_reportes l where l.id = r.l116_reporte_id)
+                                      when 'campo' then (select coalesce(c.consecutivo, 'REP-' || lpad(c.seq::text, 6, '0')) from campo.reportes c where c.id = r.campo_reporte_id)
                                       else (select d.codigo from redes.danos d where d.id = r.dano_id) end,
                  'rotulo', case r.origen when 'bot' then (select 'Bot · ' || b.radicado from redes.reportes_externos b where b.id = r.reporte_externo_id)
                                          when 'l116' then (select 'Línea 116 · ' || l.reporte from redes.l116_reportes l where l.id = r.l116_reporte_id)
+                                         when 'campo' then (select 'Formato de campo · ' || coalesce(c.consecutivo, 'REP-' || lpad(c.seq::text, 6, '0')) from campo.reportes c where c.id = r.campo_reporte_id)
                                          else (select d.codigo from redes.danos d where d.id = r.dano_id) end,
                  'tipo', case r.origen when 'bot' then (select coalesce(t.nombre, b.tipo_bot) from redes.reportes_externos b left join redes.evento_tipos_asociables t on t.origen = 'bot' and t.codigo = lower(btrim(b.tipo_bot)) where b.id = r.reporte_externo_id)
                                        when 'l116' then (select l.causal from redes.l116_reportes l where l.id = r.l116_reporte_id)
+                                       when 'campo' then (select tc.nombre from campo.reportes c join campo.tipos_reporte tc on tc.id = c.tipo_id where c.id = r.campo_reporte_id)
                                        else (select td.nombre from redes.danos d join redes.tipos_dano td on td.codigo = d.tipo_codigo where d.id = r.dano_id) end,
                  'cuando', case r.origen when 'bot' then (select b.recibido_en from redes.reportes_externos b where b.id = r.reporte_externo_id)
                                          when 'l116' then (select l.fecha_registro from redes.l116_reportes l where l.id = r.l116_reporte_id)
+                                         when 'campo' then (select c.registrado_en from campo.reportes c where c.id = r.campo_reporte_id)
                                          else (select d.t_detectado from redes.danos d where d.id = r.dano_id) end,
                  'lat', case r.origen when 'bot' then (select b.lat from redes.reportes_externos b where b.id = r.reporte_externo_id)
                                       when 'l116' then (select round(ST_Y(v.geom)::numeric, 6) from redes.l116_vigente v where v.reporte_id = r.l116_reporte_id)
+                                      when 'campo' then (select c.lat from campo.reportes c where c.id = r.campo_reporte_id)
                                       else (select d.lat from redes.danos d where d.id = r.dano_id) end,
                  'lon', case r.origen when 'bot' then (select b.lon from redes.reportes_externos b where b.id = r.reporte_externo_id)
                                       when 'l116' then (select round(ST_X(v.geom)::numeric, 6) from redes.l116_vigente v where v.reporte_id = r.l116_reporte_id)
+                                      when 'campo' then (select c.lon from campo.reportes c where c.id = r.campo_reporte_id)
                                       else (select d.lon from redes.danos d where d.id = r.dano_id) end) as j
           from redes.f_evento_reportes(e.id) r order by r.id desc limit v_max) s), '[]'::jsonb),
     'sensibles_lista', redes.f_evento_contratos(e.geom, e.todo, true) -> 'sensibles_lista',
@@ -298,7 +315,7 @@ language plpgsql volatile security definer set search_path = public, redes, tecn
 declare v_email text := redes.f_evento_autorizar(p_solicitante, 'reportes'); v_cod text := redes.f_evento_clave(p_codigo); v_mot text := btrim(coalesce(p_motivo, ''));
         v_fila redes.evento_tipos_asociables%rowtype; v_nom text := nullif(btrim(coalesce(p_nombre, '')), ''); v_cla text := nullif(btrim(coalesce(p_clase, '')), '');
 begin
-  if coalesce(p_origen, '') not in ('bot', 'l116', 'dano') then perform tecnica.f_error('El origen es bot, l116 o dano'); end if;
+  if coalesce(p_origen, '') not in ('bot', 'l116', 'dano', 'campo') then perform tecnica.f_error('El origen es bot, l116, dano o campo'); end if;
   if length(v_cod) < 2 or length(v_cod) > 120 then perform tecnica.f_error('Escriba el tipo o la causal'); end if;
   if p_asocia is null then perform tecnica.f_error('Diga si se asocia o no'); end if;
   if length(v_mot) < 10 or length(v_mot) > 500 then perform tecnica.f_error('Escriba el motivo (de 10 a 500 letras)'); end if;
@@ -308,6 +325,7 @@ begin
   if v_fila.codigo is null then
     if v_nom is null or v_cla is null then perform tecnica.f_error('Ese tipo no está en la lista: para agregarlo escriba su nombre y su clase'); end if;
     if p_origen = 'dano' and not exists (select 1 from redes.tipos_dano td where td.codigo = v_cod) then perform tecnica.f_error('Ese tipo de daño no existe', 'P0002'); end if;
+    if p_origen = 'campo' and not exists (select 1 from campo.tipos_reporte tc where tc.codigo = v_cod) then perform tecnica.f_error('Ese tipo del formato de campo no existe', 'P0002'); end if;
     insert into redes.evento_tipos_asociables (origen, codigo, nombre, clase, asocia) values (p_origen, v_cod, left(v_nom, 120), v_cla, p_asocia);
   else
     update redes.evento_tipos_asociables set asocia = p_asocia, clase = coalesce(v_cla, clase), nombre = coalesce(left(v_nom, 120), nombre) where origen = p_origen and codigo = v_cod;

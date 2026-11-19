@@ -1,8 +1,12 @@
 -- =====================================================================
--- TÉCNICA · FASE 1 · CORTE 15 · «EVENTO DE SUSPENSIÓN» · 25 — REEMPLAZO (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
--- es el texto vivo de tecnica.f_avisos (el del Corte 14) con UN cambio exacto: dos bloques nuevos antes del de Personal.
+-- TÉCNICA · FASE 1 · CORTE 15 · «EVENTO DE SUSPENSIÓN» · 25 — REEMPLAZOS (create or replace, misma firma). GENERADO por pruebas_locales/generar.py:
+-- son los textos vivos con cambios exactos (cada uno con su guardia md5 en 10_esquema.sql y su texto de antes en la reversa).
+-- 1) tecnica.f_avisos (la del Corte 14): dos bloques nuevos antes del de Personal.
 --   · D15: un aviso por evento de suspensión abierto (rojo si ya pasó la hora estimada de regreso);
---   · D15b: un aviso con los reportes de falta de agua (bot y línea 116) que no están en ningún evento.
+--   · D15b: un aviso con los reportes de falta de agua (bot, línea 116 y formato de campo) que no están en ningún evento.
+-- 2) redes.f_publicar_l116 (la del Corte 5d): la publicación de la línea 116 NO revive lo que cerró un evento de suspensión (David, 19-nov). Si el archivo
+--    trae en «Registrado» un reporte que un evento dejó «Atendido», el reporte conserva «Atendido» y la diferencia con la fuente queda en su historial
+--    (una vez). Lo demás de la publicación no cambia; el resultado gana la clave «conservados_por_evento».
 -- =====================================================================
 
 -- tecnica.f_avisos(boolean,boolean,timestamptz)
@@ -319,7 +323,7 @@ begin
                 'bandeja', jsonb_build_object('tablero', 'distribucion', 'pestana', null, 'evento', r.codigo), 'desde', r.desde);
     end loop;
   end if;
-  -- D15b. Reportes de falta de agua o baja presión (bot y línea 116) de las últimas horas que NO están en ningún evento: un solo aviso
+  -- D15b. Reportes de falta de agua o baja presión (bot, línea 116 y formato de campo) de las últimas horas que NO están en ningún evento: un solo aviso
   if p_distribucion then
     select x.n, x.desde, x.items into v_n, v_desde, v_items from redes.f_sin_agua_para_avisos(v_ahora, coalesce(tecnica.f_aparam('sin_agua_ventana_h'), 24)) x;
     if v_n > 0 then
@@ -358,4 +362,77 @@ begin
 
   return coalesce((select jsonb_agg(a order by case a ->> 'nivel' when 'rojo' then 1 when 'naranja' then 2 else 3 end, (a ->> 'orden')::integer, a ->> 'clave')
                      from jsonb_array_elements(v_av) a), '[]'::jsonb);
+end $function$;
+
+-- redes.f_publicar_l116(bigint,text,text)
+CREATE OR REPLACE FUNCTION redes.f_publicar_l116(p_carga bigint, p_autor text, p_motivo text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO 'redes', 'public', 'extensions', 'pg_temp'
+AS $function$
+declare c redes.v_cargas_estado%rowtype; v_res jsonb; v_rev bigint; v_version integer; v_nuevos integer; v_estado integer; v_mostrar integer; v_iguales integer; v_mot text := btrim(p_motivo);
+        v_cons integer;      -- Corte 15: reportes que cerró un evento de suspensión y que el archivo trae otra vez en «Registrado»
+begin
+  perform pg_advisory_xact_lock(hashtext('redes.carga.linea_116'));
+  select * into c from redes.v_cargas_estado where id = p_carga;
+  if c.estado <> 'abierta' then perform tecnica.f_error(format('La carga %s está %s: no se puede publicar', p_carga, c.estado)); end if;
+  v_res := redes.f_resumen_l116(p_carga);      -- la última revisión si sigue valiendo; si la 116 cambió desde entonces, una nueva
+  if not (v_res ->> 'lista_para_publicar')::boolean then
+    perform tecnica.f_error('La carga no está lista para publicar: ' || array_to_string(array(select jsonb_array_elements_text(v_res -> 'bloqueos')), '; '));
+  end if;
+  v_rev := (v_res ->> 'revision_id')::bigint;
+  v_version := (select count(*) + 1 from redes.v_cargas_estado x where x.capa_codigo = 'linea_116' and x.estado = 'publicada');
+  -- (a) nuevos
+  insert into redes.l116_reportes (reporte, fecha_registro, servicio, causal, comuna, contrato, carga_id)
+  select f.reporte, f.fecha, f.servicio, f.causal, f.comuna, f.contrato, p_carga
+    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion = 'nuevo' order by f.reporte;
+  get diagnostics v_nuevos = row_count;
+  insert into redes.l116_eventos (reporte_id, tipo, estado, metodo, geom, sector, subsector, carga_id, motivo, autor)
+  select r.id, 'alta', f.estado, f.metodo, f.geom, f.sector, f.subsector, p_carga, v_mot, p_autor
+    from redes.l116_revision_filas f join redes.l116_reportes r on r.reporte = f.reporte
+   where f.revision_id = v_rev and f.accion = 'nuevo' order by r.id;
+  insert into redes.l116_vigente (reporte_id, reporte, fecha_registro, dia, servicio, causal, contrato, estado, estado_desde, metodo, geom, sector, subsector)
+  select r.id, f.reporte, f.fecha, (f.fecha at time zone 'America/Bogota')::date, f.servicio, f.causal, f.contrato, f.estado, f.fecha, f.metodo, f.geom, f.sector, f.subsector
+    from redes.l116_revision_filas f join redes.l116_reportes r on r.reporte = f.reporte
+   where f.revision_id = v_rev and f.accion = 'nuevo';
+  -- (b) cambios de estado (también los de los que vuelven a mostrarse)
+  insert into redes.l116_eventos (reporte_id, tipo, estado, estado_antes, carga_id, motivo, autor)
+  select f.reporte_id, 'estado', f.estado, f.estado_vigente, p_carga, v_mot, p_autor
+    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado <> f.estado_vigente
+     and not (f.estado = 'registrado' and f.estado_vigente = 'atendido' and redes.f_evento_l116_cerrado(f.reporte_id) is not null)      -- Corte 15: no se revive
+   order by f.reporte_id;
+  get diagnostics v_estado = row_count;
+  -- (b2) Corte 15: lo que cerró un evento de suspensión conserva «Atendido» aunque el archivo lo traiga en «Registrado». La diferencia con la fuente queda
+  --      en el historial del reporte, una sola vez (sin carga_id: revertir la carga no tiene nada que devolver)
+  select count(*) into v_cons
+    from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado = 'registrado' and f.estado_vigente = 'atendido'
+     and redes.f_evento_l116_cerrado(f.reporte_id) is not null;
+  if v_cons > 0 then
+    insert into redes.l116_eventos (reporte_id, tipo, estado, estado_antes, motivo, autor)
+    select f.reporte_id, 'estado', 'atendido', 'atendido',
+           left(format('La carga %s de la línea 116 lo trae en «Registrado»: conserva «Atendido» porque lo cerró el evento de suspensión %s', p_carga, redes.f_evento_l116_cerrado(f.reporte_id)), 1000), p_autor
+      from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.estado = 'registrado' and f.estado_vigente = 'atendido'
+       and redes.f_evento_l116_cerrado(f.reporte_id) is not null
+       -- (se busca por el reporte, con su índice; sin condición sobre carga_id, para que el planificador no recorra el índice de cargas)
+       and not exists (select 1 from redes.l116_eventos x where x.reporte_id = f.reporte_id and x.tipo = 'estado' and x.estado = 'atendido' and x.estado_antes = 'atendido'
+                                                             and x.motivo like 'La carga % de la línea 116 lo trae en «Registrado»%')
+     order by f.reporte_id;
+  end if;
+  -- (c) los que vuelven a mostrarse (los había ocultado la reversa de una carga)
+  insert into redes.l116_eventos (reporte_id, tipo, carga_id, motivo, autor)
+  select f.reporte_id, 'mostrar', p_carga, v_mot, p_autor from redes.l116_revision_filas f where f.revision_id = v_rev and f.accion = 'mostrar' order by f.reporte_id;
+  get diagnostics v_mostrar = row_count;
+  update redes.l116_vigente v set estado = case when k.conserva then v.estado else f.estado end,
+         estado_desde = case when not k.conserva and v.estado <> f.estado then clock_timestamp() else v.estado_desde end,
+         oculto = false, actualizado_en = clock_timestamp()
+    from redes.l116_revision_filas f
+   cross join lateral (select (f.estado = 'registrado' and f.estado_vigente = 'atendido' and redes.f_evento_l116_cerrado(f.reporte_id) is not null) as conserva) k
+   where f.revision_id = v_rev and f.accion in ('estado', 'mostrar') and f.reporte_id = v.reporte_id;
+  v_iguales := (v_res -> 'frente_a_vigente' ->> 'igual')::integer;
+  insert into redes.carga_eventos (carga_id, tipo, version_capa, nuevos, cambiados, iguales, retirados, reactivados, detalle, motivo, autor)
+  values (p_carga, 'publicar', v_version, v_nuevos, v_estado, v_iguales, 0, v_mostrar,
+          jsonb_build_object('ubicacion', v_res -> 'ubicacion', 'con_sector', v_res -> 'con_sector', 'servicios', v_res -> 'servicios', 'revision_id', v_rev, 'conservados_por_evento', v_cons), v_mot, p_autor);
+  return jsonb_build_object('carga_id', p_carga, 'capa', 'linea_116', 'version_capa', v_version, 'nuevos', v_nuevos, 'cambiados', v_estado, 'cambios_estado', v_estado,
+                            'iguales', v_iguales, 'reactivados', v_mostrar, 'retirados', 0, 'ubicacion', v_res -> 'ubicacion', 'con_sector', v_res -> 'con_sector',
+                            'conservados_por_evento', v_cons);
 end $function$;

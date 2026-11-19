@@ -1,4 +1,4 @@
-OK    A1 evento_catalogo (GET), supervisor de distribución: 200 sin caché; puede zona y reportes, no total; trae los 2 sectores, las plantas y los 14 tipos
+OK    A1 evento_catalogo (GET), supervisor de distribución: 200 sin caché; puede zona y reportes, no total; trae los 2 sectores, las plantas y los 15 tipos
 OK    A2 … al supervisor de planta: puede total; al operador y a quien no es de Técnica, 403; sin sesión, 401; por POST, 405
 OK    A3 evento_vista_previa (POST) de un sector: 200 sin caché, 57510 contratos, sensibles, reportes y la zona; no guarda nada
 OK    A4 … rechazos por forma (400): sin alcance, alcance desconocido, sectores vacíos o mal escritos, un dato de más, círculo sin centro; por GET, 405
@@ -11,6 +11,8 @@ OK    B5 evento (GET; el código también en minúsculas): el detalle con 2 asoc
 OK    C1 evento_regreso (POST): 200 y vale la hora nueva; sin la hora, 400; el operador, 403
 OK    C2 evento_desasociar (POST) con motivo: 200 y queda 1 asociado; sin motivo o con el reporte mal dicho, 400; el operador, 403; uno que ya no está en el evento, 400
 OK    C3 evento_asociar (POST) con motivo: 200 y vuelven a ser 2; asociarlo otra vez, 400; un daño que no existe, 404
+OK    C4 FORMATO DE CAMPO: un «sin agua» hecho desde Comercial dentro de la zona queda asociado solo; el detalle lo trae con su código (REP-000001), sin contrato ni autor
+OK    C5 … evento_desasociar y evento_asociar con origen «campo» y su código: 200 (queda en 0 y vuelve a 1); un reporte de campo que no existe, 404; una referencia vacía, 400
 OK    D1 evento_tipo_fijar (POST): 200 y el tipo deja de asociarse; sin motivo o sin decir si se asocia, 400; el supervisor de planta, 403
 OK    D2 una planta sin sectores asignados no se puede declarar (400 con el motivo claro)
 OK    D3 planta_sectores_fijar (POST), supervisor de distribución: 200; el de planta, 403; sectores mal escritos, 400
@@ -20,9 +22,9 @@ OK    D6 evento_declarar POR CÍRCULO (EVS-000003; centro y radio de 300 m): 200
 OK    D7 evento_anular (POST) con motivo: 200, «anulado», libera su reporte; sin motivo, 400; anularlo otra vez, 409
 OK    D8 el administrador declara TODA LA CIUDAD (EVS-000004): sin geometría y con todos los contratos; lo anula
 OK    E1 eventos (GET): los 4, los últimos primero; por omisión, solo los abiertos (1); un estado desconocido, 400; al operador, 403
-OK    E2 evento_cerrar (POST), «dar de alta»: 200, «cerrado», cierra en bloque los 2 reportes del bot (quedan «Atendido» con el motivo); sin motivo, 400; cerrarlo otra vez, 409
+OK    E2 evento_cerrar (POST), «dar de alta»: 200, «cerrado», cierra en bloque los 2 reportes del bot y el del formato de campo (quedan «Atendido» con el motivo); sin motivo, 400; cerrarlo otra vez, 409
 OK    E3 al final no queda ningún evento abierto (eventos_vigentes vacío)
-OK    Z1 la respuesta más lenta de la Edge con la red real: 182 ms (cada una incluye abrir la conexión a la base)
+OK    Z1 la respuesta más lenta de la Edge con la red real: 143 ms (cada una incluye abrir la conexión a la base)
 OK    Z2 ninguna respuesta trae nombres, teléfonos, direcciones ni correos
 OK    Z3 ninguna RPC que no exista en la base
-RESULTADO: 27 de 27 — SIN FALLAS
+RESULTADO: 29 de 29 — SIN FALLAS

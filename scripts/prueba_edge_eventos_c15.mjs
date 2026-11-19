@@ -103,8 +103,8 @@ const iso = (min) => new Date(Date.now() + min * 60000).toISOString();
 try {
   // ===== A. Catálogo y vista previa =====
   let r = await E("dist", "evento_catalogo");
-  ok("A1 evento_catalogo (GET), supervisor de distribución: 200 sin caché; puede zona y reportes, no total; trae los 2 sectores, las plantas y los 14 tipos",
-    r.s === 200 && r.cache === "no-store" && r.c.puede.zona && r.c.puede.reportes && !r.c.puede.total && [S1, S2].every((s) => r.c.sectores.some((x) => x.codigo === s)) && r.c.plantas.length >= 1 && r.c.tipos.length === 14, r.txt.slice(0, 300));
+  ok("A1 evento_catalogo (GET), supervisor de distribución: 200 sin caché; puede zona y reportes, no total; trae los 2 sectores, las plantas y los 15 tipos",
+    r.s === 200 && r.cache === "no-store" && r.c.puede.zona && r.c.puede.reportes && !r.c.puede.total && [S1, S2].every((s) => r.c.sectores.some((x) => x.codigo === s)) && r.c.plantas.length >= 1 && r.c.tipos.length === 15, r.txt.slice(0, 300));
   ok("A2 … al supervisor de planta: puede total; al operador y a quien no es de Técnica, 403; sin sesión, 401; por POST, 405",
     (await E("planta", "evento_catalogo")).c?.puede?.total === true && (await E("op", "evento_catalogo")).s === 403 && (await E("nada", "evento_catalogo")).s === 403
     && (await E(null, "evento_catalogo")).s === 401 && (await E("dist", "evento_catalogo", { cuerpo: {} })).s === 405);
@@ -158,6 +158,22 @@ try {
     r.s === 200 && r.c.reportes.total === 2 && (await E("dist", "evento_asociar", { cuerpo: { evento: EV1, origen: "bot", ref: idB2, motivo: "ZT15 sí era del mismo corte" } })).s === 400
     && (await E("dist", "evento_asociar", { cuerpo: { evento: EV1, origen: "dano", ref: "DAN-999999", motivo: "ZT15 sí era del mismo corte" } })).s === 404, r.txt.slice(0, 200));
 
+  // ===== C bis. El formato de campo de Comercial (David, 19-nov): un «sin agua» hecho desde Comercial se asocia solo, se maneja por su código y se cierra en bloque =====
+  const pc = punto(S1, 0.45, 0.55);
+  const idCampo = sqlq(`insert into campo.reportes (id, tipo_id, lat, lon, origen, autor) select gen_random_uuid(), t.id, ${pc.lat}, ${pc.lon}, 'campo', 'zt15.comercial@emdupar.gov.co' from campo.tipos_reporte t where t.codigo = 'sin_agua' returning id`).split("\n")[0];
+  const codCampo = sqlq(`select 'REP-' || lpad(seq::text, 6, '0') from campo.reportes where id = '${idCampo}'`);
+  r = await E("dist", "evento", { qs: { codigo: EV1 } });
+  const filaCampo = (r.c.asociados || []).find((x) => x.origen === "campo");
+  ok(`C4 FORMATO DE CAMPO: un «sin agua» hecho desde Comercial dentro de la zona queda asociado solo; el detalle lo trae con su código (${codCampo}), sin contrato ni autor`,
+    r.s === 200 && r.c.reportes.campo === 1 && r.c.reportes.total === 3 && filaCampo && filaCampo.ref === codCampo && filaCampo.modo === "automatica" && filaCampo.rotulo === `Formato de campo · ${codCampo}`
+    && !("contrato" in filaCampo) && !("autor" in filaCampo), r.txt.slice(0, 400));
+  r = await E("dist", "evento_desasociar", { cuerpo: { evento: EV1, origen: "campo", ref: codCampo.toLowerCase(), motivo: "ZT15 ese reporte es de otra cuadra" } });
+  const r2 = await E("dist", "evento_asociar", { cuerpo: { evento: EV1, origen: "campo", ref: codCampo, motivo: "ZT15 sí era del mismo corte" } });
+  ok("C5 … evento_desasociar y evento_asociar con origen «campo» y su código: 200 (queda en 0 y vuelve a 1); un reporte de campo que no existe, 404; una referencia vacía, 400",
+    r.s === 200 && r.c.reportes.campo === 0 && r2.s === 200 && r2.c.reportes.campo === 1
+    && (await E("dist", "evento_asociar", { cuerpo: { evento: EV1, origen: "campo", ref: "REP-99999999", motivo: "ZT15 sí era del mismo corte" } })).s === 404
+    && (await E("dist", "evento_asociar", { cuerpo: { evento: EV1, origen: "campo", ref: "", motivo: "ZT15 sí era del mismo corte" } })).s === 400, r.txt.slice(0, 200) + r2.txt.slice(0, 200));
+
   // ===== D. Los dos catálogos; el total por planta; el círculo; anular =====
   r = await E("dist", "evento_tipo_fijar", { cuerpo: { origen: "bot", codigo: "dano_red_acueducto", asocia: false, motivo: "ZT15 ese tipo sigue su flujo normal" } });
   ok("D1 evento_tipo_fijar (POST): 200 y el tipo deja de asociarse; sin motivo o sin decir si se asocia, 400; el supervisor de planta, 403",
@@ -198,8 +214,8 @@ try {
   ok("E1 eventos (GET): los 4, los últimos primero; por omisión, solo los abiertos (1); un estado desconocido, 400; al operador, 403",
     r.s === 200 && r.c.eventos.length === 4 && r.c.eventos[0].codigo === EV4 && (await E("dist", "eventos")).c.eventos.length === 1 && (await E("dist", "eventos", { qs: { estado: "viejos" } })).s === 400 && (await E("op", "eventos")).s === 403, r.txt.slice(0, 200));
   r = await E("dist", "evento_cerrar", { cuerpo: { evento: EV1, motivo: "Tubería reparada y servicio restablecido" } });
-  ok("E2 evento_cerrar (POST), «dar de alta»: 200, «cerrado», cierra en bloque los 2 reportes del bot (quedan «Atendido» con el motivo); sin motivo, 400; cerrarlo otra vez, 409",
-    r.s === 200 && r.c.estado === "cerrado" && r.c.cerrados.bot === 2 && sqlq("select count(*) from redes.v_reporte_externo where radicado in ('ZT15-E001', 'ZT15-E002') and estado_bot = 'atendido'") === "2"
+  ok("E2 evento_cerrar (POST), «dar de alta»: 200, «cerrado», cierra en bloque los 2 reportes del bot y el del formato de campo (quedan «Atendido» con el motivo); sin motivo, 400; cerrarlo otra vez, 409",
+    r.s === 200 && r.c.estado === "cerrado" && r.c.cerrados.bot === 2 && r.c.cerrados.campo === 1 && sqlq(`select estado from campo.v_reportes_estado where id = '${idCampo}'`) === "atendido" && sqlq("select count(*) from redes.v_reporte_externo where radicado in ('ZT15-E001', 'ZT15-E002') and estado_bot = 'atendido'") === "2"
     && (await E("dist", "evento_cerrar", { cuerpo: { evento: EV1 } })).s === 400 && (await E("dist", "evento_cerrar", { cuerpo: { evento: EV1, motivo: "Tubería reparada y servicio restablecido" } })).s === 409, r.txt.slice(0, 300));
   ok("E3 al final no queda ningún evento abierto (eventos_vigentes vacío)", (await E("op", "eventos_vigentes")).c.eventos.length === 0);
   ok(`Z1 la respuesta más lenta de la Edge con la red real: ${peor} ms (cada una incluye abrir la conexión a la base)`, peor < 3000);
