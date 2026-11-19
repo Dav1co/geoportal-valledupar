@@ -1,0 +1,29 @@
+OK    01 el ensayo termina en el ERROR esperado: 108 de 108 … SIN FALLAS
+   TIEMPOS (zona con 104325 contratos; 307 eventos en la base): asociar un reporte del bot 0.9 ms · una carga de 5.000 reportes de la 116 (2.500 asociados) 345.6 ms, 0.069 ms por reporte · vista previa 136.3 ms · declarar 83.8 ms · avisos 145.2 ms · detalle (200 de 2501 asociados) 95.8 ms · cerrar en bloque 2501 reportes 49.7 ms · crear un daño sin eventos abiertos 3.1 ms
+OK    02 … y no deja nada (sigue la huella anterior y tecnica.f_avisos, no están las tablas ni el tipo sin_agua, ni un reporte, ni una fila de auditoría)
+OK    03 las huellas antes: «CORRECCIÓN DEL 9b (lista para el 15)», f_avisos «LA DEL CORTE 14», 33 nuevas que no existen, las 5 publicadas igual y las tablas «NO EXISTEN»
+OK    04 la migración se aplica
+OK    05 SOLO reemplaza tecnica.f_avisos: ninguna otra función anterior de redes, tecnica, campo ni public.geoportal_* cambió de texto
+OK    06 las huellas después: «CORTE 15 (aplicado)», f_avisos «CORTE 15 (reemplazada)», 33 nuevas y las tablas «EXISTEN»
+OK    07 la verificación: las 8 filas OK
+OK    08 una segunda migración se niega
+OK    09 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
+OK    10 la reversa (sin eventos) se aplica: vuelven la huella anterior y tecnica.f_avisos con su texto exacto; las demás funciones siguen igual; «sin_agua» queda desactivado (no se borra)
+OK    11 una segunda reversa se niega
+OK    12 después de la reversa, la migración se vuelve a aplicar: «sin_agua» activo otra vez y los parámetros con su descripción
+OK    13 el catálogo como la Edge (28 ms; tope local 167 ms): trae el sector sintético y los 14 tipos
+OK    14 la vista previa de toda la red como la Edge (81 ms): 104325 contratos y 240 usuarios sensibles confirmados
+OK    15 DECLARAR como la Edge (86 ms): EVS-000001, 104325 contratos, 240 sensibles
+OK    16 BOT: un «sin agua» nuevo se asocia solo (43 ms con la conexión; tope 1 s en producción → local 167 ms) y recibe «Ya sabemos del corte en tu sector. Regreso estimado: 19/11, 12:51 a. m.»
+OK    17 … la API no puede llamar la función del bot ni las internas (42501); su permiso para el Dell va en otro paquete
+OK    18 DAÑO: el operador reporta un daño dentro de la zona como la Edge (49 ms): se crea (DAN-000001) y queda asociado, con la nota; sigue «Reportado»
+OK    19 LÍNEA 116: una carga de 5.000 reportes nuevos en una sentencia (413 ms en total, 0.083 ms por reporte): asocia los 2500 «sin agua» y ninguna «fuga en el medidor»
+OK    20 AVISOS como la Edge (149 ms): UN aviso por el evento, con sus 2502 reportes asociados
+OK    21 los eventos vigentes como la Edge, para el operador (49 ms): la zona y la franja; sin datos de suscriptores
+OK    22 el detalle como la Edge (97 ms): lista 200 de 2502 asociados y los 240 sensibles (contrato y tipo, sin nombre)
+OK    23 quién: el operador no declara ni ve el detalle; el supervisor de planta no cierra un evento por sectores; alguien sin Técnica no ve nada (42501)
+OK    24 con eventos declarados, la reversa SE NIEGA (no borra hechos) y no cambia nada
+OK    25 CERRAR EN BLOQUE como la Edge (96 ms): {'bot': 1, 'l116': 2500}; el daño sigue abierto
+OK    26 después del cierre, un «sin agua» nuevo ya no se asocia (39 ms) y sale en el aviso de «sin agua sin evento»
+
+RESULTADO: 26 de 26 — SIN FALLAS
