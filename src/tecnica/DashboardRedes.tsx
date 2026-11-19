@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EventosSuspension } from "./EventosSuspension";      // Corte 15: eventos de suspensión
 import "./ficha.css";
 import "./dano.css";
 import "./intervencion.css";
@@ -23,9 +24,9 @@ import { apiLev } from "./apiLevantar";
 // Corte 4b (DashboardGestion.tsx): Personal, Gráficas, Descargas, Catálogo, Parámetros y, solo para el administrador, Nodos por clasificar.
 // Corte 5c (cargue/CargueCapas.tsx): Cargue de capas (el supervisor lo lee; carga el administrador). Nada se borra: todo es un evento con motivo.
 
-type Pestana = "no_identificados" | "intervenciones" | "danos" | "por_verificar" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos" | "regulatorio" | "presion" | "sensibles";
+type Pestana = "no_identificados" | "intervenciones" | "danos" | "por_verificar" | "bot" | "graficas" | "descargas" | "personal" | "cargue" | "catalogo" | "parametros" | "nodos" | "regulatorio" | "presion" | "sensibles" | "suspensiones";
 const PESTANAS: { c: Pestana; n: string; admin?: boolean }[] = [{ c: "no_identificados", n: "No identificados" }, { c: "intervenciones", n: "Intervenciones" },
-  { c: "danos", n: "Daños y fallas" }, { c: "presion", n: "Alertas de presión" }, { c: "sensibles", n: "Usuarios sensibles" }, { c: "por_verificar", n: "Por verificar" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
+  { c: "danos", n: "Daños y fallas" }, { c: "suspensiones", n: "Suspensiones" }, { c: "presion", n: "Alertas de presión" }, { c: "sensibles", n: "Usuarios sensibles" }, { c: "por_verificar", n: "Por verificar" }, { c: "bot", n: "Reportes del bot" }, { c: "graficas", n: "Gráficas" }, { c: "descargas", n: "Descargas" }, { c: "personal", n: "Personal" },
   { c: "cargue", n: "Cargue de capas" }, { c: "catalogo", n: "Catálogo" }, { c: "parametros", n: "Parámetros" }, { c: "nodos", n: "Nodos por clasificar" },
   { c: "regulatorio", n: "Inventario regulatorio", admin: true }];      // Corte 10: la conciliación con la Valoración Técnica 2019, solo el administrador      // 9a-bis: también el supervisor de distribución (David, 16-nov)
 const fecha = (iso: string) => new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -49,6 +50,7 @@ export function DashboardRedes({ correo, selector, onVolver, onGeovisor }: { cor
       {pestana === "no_identificados" ? <NoIdentificados onFicha={setFicha} /> : null}
       {pestana === "intervenciones" ? <Intervenciones onFicha={setFicha} /> : null}
       {pestana === "danos" ? <Danos onFicha={setFicha} /> : null}
+      {pestana === "suspensiones" ? <EventosSuspension /> : null}
       {pestana === "presion" ? <AlertasPresion /> : null}
       {pestana === "sensibles" ? <UsuariosSensibles /> : null}
       {pestana === "por_verificar" ? <PorVerificarLista onFicha={setFicha} /> : null}
