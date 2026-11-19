@@ -711,6 +711,9 @@ function Asistente116({ capa, datos, onCerrar }: { capa: CapaCargue; datos: Capa
     <section className="tec-tarjeta cg-asistente" data-testid="publicada">
       <h2>{capa.nombre}: carga {publicada.version_capa} publicada</h2>
       <p>{n(publicada.nuevos)} nuevos · {n(publicada.cambios_estado ?? publicada.cambiados)} con cambio de estado · {n(publicada.iguales)} iguales{publicada.reactivados ? ` · ${n(publicada.reactivados)} vuelven a mostrarse` : ""}</p>
+      {publicada.conservados_por_evento ? <p className="tec-aviso tec-aviso-info" role="status" data-testid="conservados-evento">{publicada.conservados_por_evento === 1
+        ? "1 reporte conservado por un evento de suspensión: el archivo lo trae en «Registrado», pero sigue «Atendido» porque lo cerró un evento."
+        : `${n(publicada.conservados_por_evento)} reportes conservados por un evento de suspensión: el archivo los trae en «Registrado», pero siguen «Atendido» porque los cerró un evento.`}</p> : null}
       <p className="tec-ayuda">El geovisor técnico ya los muestra en la capa «Línea 116», por fecha de registro. Si algo quedó mal, desde el historial se vuelve atrás la última carga.</p>
       <button type="button" className="tec-boton" onClick={() => onCerrar(`${capa.nombre}: carga ${publicada.version_capa} publicada.`)}>Volver a las capas</button>
     </section>
