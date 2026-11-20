@@ -1,0 +1,19 @@
+/* Página «Foto de la remisión» (remision.html): el encabezado de Técnica · Plantas (#0a2540, texto blanco), fondo y tarjeta de la guía visual; solo tokens. */
+html, body { margin: 0; background: var(--t-fondo); color: var(--t-texto); font-family: var(--t-fuente); -webkit-text-size-adjust: 100%; }
+.rem-ancho { max-width: 960px; margin: 0 auto; padding: 0 var(--t-esp-4); box-sizing: border-box; }
+.rem-cab { background: var(--t-modo); color: #fff; padding: var(--t-esp-4) 0; }
+.rem-cab h1 { margin: 0; font-size: var(--t-titulo-1); font-weight: 700; }
+.rem-cab p { margin: var(--t-esp-1) 0 0; font-size: var(--t-txt-chico); opacity: .9; }
+.rem-cuerpo { padding-top: var(--t-esp-4); padding-bottom: var(--t-esp-5); display: flex; flex-direction: column; gap: var(--t-esp-3); }
+.rem-foto { display: block; max-width: 100%; height: auto; background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-radius: var(--t-radio-tarjeta); }
+.rem-ayuda { margin: 0; font-size: var(--t-txt-chico); color: var(--t-texto-2); line-height: 1.45; }
+.rem-aviso { background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); padding: var(--t-esp-4);
+  display: flex; flex-direction: column; gap: var(--t-esp-3); align-items: flex-start; font-size: var(--t-txt); }
+.rem-aviso p { margin: 0; }
+.rem-botones { display: flex; flex-wrap: wrap; gap: var(--t-esp-2); }
+.rem-boton, .rem-boton-sec { min-height: var(--t-toque); display: inline-flex; align-items: center; padding: 0 var(--t-esp-4); border-radius: var(--t-radio); font: inherit; font-size: var(--t-txt);
+  font-weight: 700; text-decoration: none; cursor: pointer; box-sizing: border-box; }
+.rem-boton { background: var(--t-modo); color: #fff; border: none; }
+.rem-boton-sec { background: #fff; color: var(--t-modo); border: 1px solid var(--t-modo); }
+.rem-boton:focus-visible, .rem-boton-sec:focus-visible { outline: 3px solid var(--t-foco); outline-offset: 2px; }
+@media (max-width: 700px) { .rem-boton, .rem-boton-sec { width: 100%; justify-content: center; } }

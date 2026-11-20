@@ -1,41 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import "./reportes.css";
 import { ErrorTec } from "../apiTecnica";
-import type { DefReporte, FiltroReporte } from "./catalogo";
+import type { DefReporte, FiltroReporte, FuenteFiltro, Opcion } from "./catalogo";
 import { errorPeriodo, hoyBogota, primeroDelMes, type Pedido } from "./armar";
-import { fuenteDe, opcionesDistribucion, type Opcion } from "./apiReportes";
+import { fuenteDe } from "./apiReportes";
 import { ejecutarReporte, guardarArchivo, ReporteCancelado, type Progreso } from "./ejecutar";
 
 // La MISMA tarjeta para todos los reportes del Dashboard PTAP («Reportes») y las descargas del Dashboard distribución («Descargas»): nombre, una línea de
-// descripción y, al abrirla, el periodo (hasta un año), el filtro que aplique (planta, sector o tipo de activo), «Incluir los excluidos / ocultos» y los
-// botones «Descargar Excel» y «Descargar CSV». Una tarjeta abierta a la vez; el periodo y los filtros se conservan al pasar de una a otra.
+// descripción y, al abrirla, el periodo (hasta un año; los inventarios a hoy no lo llevan), los filtros del reporte, «Incluir…» donde aplica y los botones
+// «Descargar Excel» y «Descargar CSV». Una tarjeta abierta a la vez; el periodo y los filtros se conservan al pasar de una a otra.
 
 const nf = (n: number) => n.toLocaleString("es-CO");
-const ROTULO: Record<FiltroReporte, { rotulo: string; todos: string }> = {
-  planta: { rotulo: "Planta", todos: "Todas las plantas" }, sector: { rotulo: "Sector", todos: "Todos los sectores" }, tipo_activo: { rotulo: "Tipo de activo", todos: "Todos los tipos" },
-};
 type Msg = { tipo: "ok" | "info" | "error"; t: string };
+export type Listas = Partial<Record<FuenteFiltro, Opcion[]>>;
 
-export function PanelReportes({ titulo, ayuda, reportes, plantas, sinPermiso, prefijo }: {
-  titulo: string; ayuda: string; reportes: DefReporte[]; plantas?: Opcion[]; sinPermiso: string; prefijo: string;
+export function PanelReportes({ titulo, ayuda, reportes, listas, listasConError = [], sinPermiso, prefijo }: {
+  titulo: string; ayuda: string; reportes: DefReporte[]; listas: Listas; listasConError?: FuenteFiltro[]; sinPermiso: string; prefijo: string;
 }) {
   const [abierta, setAbierta] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [desde, setDesde] = useState(primeroDelMes);
   const [hasta, setHasta] = useState(hoyBogota);
-  const [filtro, setFiltro] = useState<Partial<Record<FiltroReporte, string>>>({});
+  const [filtros, setFiltros] = useState<Record<string, string>>({});
   const [ocultos, setOcultos] = useState(false);
-  const [opciones, setOpciones] = useState<{ sector: Opcion[]; tipo_activo: Opcion[] } | null>(null);
-  const [opcionesError, setOpcionesError] = useState(false);
-  const pideOpciones = reportes.some((r) => r.filtros.includes("sector") || r.filtros.includes("tipo_activo"));
-  useEffect(() => {
-    if (!pideOpciones) return;
-    let vivo = true;
-    opcionesDistribucion().then((o) => { if (vivo) setOpciones({ sector: Array.isArray(o.sectores) ? o.sectores : [], tipo_activo: Array.isArray(o.tipos_activo) ? o.tipos_activo : [] }); })
-      .catch(() => { if (vivo) setOpcionesError(true); });
-    return () => { vivo = false; };
-  }, [pideOpciones]);
-  const listas: Record<FiltroReporte, Opcion[]> = { planta: plantas ?? [], sector: opciones?.sector ?? [], tipo_activo: opciones?.tipo_activo ?? [] };
   return (
     <section className="td-seccion rep" aria-label={titulo}>
       <div className="td-cab"><div><h2>{titulo}</h2><p className="td-sub">{ayuda}</p></div></div>
@@ -44,17 +31,23 @@ export function PanelReportes({ titulo, ayuda, reportes, plantas, sinPermiso, pr
           <TarjetaReporte key={def.clave} def={def} abierta={abierta === def.clave} bloqueada={ocupado && abierta !== def.clave} prefijo={prefijo}
             onAbrir={() => setAbierta(abierta === def.clave ? null : def.clave)} onOcupado={setOcupado} sinPermiso={sinPermiso}
             desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} ocultos={ocultos} setOcultos={setOcultos}
-            filtro={filtro} setFiltro={(k, v) => setFiltro((f) => ({ ...f, [k]: v }))} listas={listas} opcionesError={opcionesError} />
+            filtros={filtros} setFiltro={(k, v) => setFiltros((f) => ({ ...f, [k]: v }))} listas={listas} listasConError={listasConError} />
         ))}
       </div>
     </section>
   );
 }
 
+/** Opciones de un filtro: las de la lista fija o las del dashboard. */
+const opcionesDe = (f: FiltroReporte, listas: Listas): Opcion[] => (f.fuente === "fija" ? f.opciones ?? [] : listas[f.fuente] ?? []);
+/** El valor de un filtro se guarda por clave Y fuente: «tipo» de Usuarios sensibles (lista fija) y «tipo» de Activos (prefijos) no se mezclan. */
+const claveEstado = (f: FiltroReporte) => `${f.clave}|${f.fuente}`;
+const SECTOR_VALIDO = /^\d{1,4}$/;
+
 function TarjetaReporte(p: {
   def: DefReporte; abierta: boolean; bloqueada: boolean; prefijo: string; onAbrir: () => void; onOcupado: (b: boolean) => void; sinPermiso: string;
   desde: string; hasta: string; setDesde: (v: string) => void; setHasta: (v: string) => void; ocultos: boolean; setOcultos: (v: boolean) => void;
-  filtro: Partial<Record<FiltroReporte, string>>; setFiltro: (k: FiltroReporte, v: string) => void; listas: Record<FiltroReporte, Opcion[]>; opcionesError: boolean;
+  filtros: Record<string, string>; setFiltro: (k: string, v: string) => void; listas: Listas; listasConError: FuenteFiltro[];
 }) {
   const { def } = p;
   const [progreso, setProgreso] = useState<Progreso | null>(null);
@@ -67,19 +60,23 @@ function TarjetaReporte(p: {
 
   async function descargar(formato: "xlsx" | "csv") {
     if (def.periodo) { const e = errorPeriodo(p.desde, p.hasta); if (e) { setMsg({ tipo: "error", t: e }); return; } }
-    const pedido: Pedido = { formato, incluir_ocultos: !!def.ocultos && p.ocultos };
+    const pedido: Pedido = { formato, incluir_excluidos: !!def.ocultos && p.ocultos, filtros: {} };
     if (def.periodo) { pedido.desde = p.desde; pedido.hasta = p.hasta; }
     const filtrosTexto: string[] = [];
-    for (const k of def.filtros) {
-      const v = p.filtro[k]; if (!v) continue;
-      pedido[k] = v;
-      filtrosTexto.push(`${ROTULO[k].rotulo}: ${p.listas[k].find((o) => o.codigo === v)?.nombre ?? v}`);
+    for (const f of def.filtros) {
+      const v = (p.filtros[claveEstado(f)] ?? "").trim(); if (!v) continue;
+      if (f.fuente === "numero") {
+        if (!SECTOR_VALIDO.test(v)) { setMsg({ tipo: "error", t: `${f.rotulo}: escriba solo el número (por ejemplo, 5), o déjelo vacío para todos.` }); return; }
+        pedido.filtros[f.clave] = v; filtrosTexto.push(`${f.rotulo}: ${v}`); continue;
+      }
+      const o = opcionesDe(f, p.listas).find((x) => x.codigo === v); if (!o) continue;      // un valor que ya no está en la lista no se manda
+      pedido.filtros[f.clave] = v; filtrosTexto.push(`${f.rotulo}: ${o.nombre}`);
     }
     const c = new AbortController(); ctl.current = c;
     setMsg(null); p.onOcupado(true);
     try {
       const r = await ejecutarReporte({ def, fuente: fuenteDe(def), pedido, filtrosTexto, onProgreso: setProgreso, senal: c.signal });
-      if (!r.blob) setMsg({ tipo: "info", t: "No hay registros con esos filtros. No se generó el archivo." });
+      if (!r.blob) setMsg({ tipo: "info", t: `${r.sinDatos || "No hay datos con esos filtros."} No se generó el archivo.` });
       else { guardarArchivo(r.nombre, r.blob); setMsg({ tipo: "ok", t: `Listo: ${nf(r.filas)} fila${r.filas === 1 ? "" : "s"} en ${formato === "xlsx" ? "Excel" : "CSV"}. La descarga quedó registrada.` }); }
     } catch (e) {
       setMsg(e instanceof ReporteCancelado ? { tipo: "info", t: "Descarga cancelada. No se generó el archivo." }
@@ -88,6 +85,7 @@ function TarjetaReporte(p: {
   }
 
   const trabajando = progreso !== null;
+  const sinLista = def.filtros.filter((f) => f.fuente !== "fija" && f.fuente !== "numero" && p.listasConError.includes(f.fuente)).map((f) => `«${f.rotulo}»`);
   return (
     <article ref={caja} className={`rep-tarjeta${p.abierta ? " rep-abierta" : ""}`} data-reporte={def.clave}>
       <button type="button" className="rep-cab" aria-expanded={p.abierta} aria-controls={`${id}-form`} disabled={p.bloqueada} onClick={p.onAbrir}>
@@ -103,19 +101,25 @@ function TarjetaReporte(p: {
               <div className="td-campo"><label htmlFor={`${id}-hasta`}>Hasta</label>
                 <input id={`${id}-hasta`} type="date" value={p.hasta} min={p.desde || undefined} disabled={trabajando} onChange={(e) => p.setHasta(e.target.value)} /></div>
             </> : null}
-            {def.filtros.map((k) => (
-              <div key={k} className="td-campo"><label htmlFor={`${id}-${k}`}>{ROTULO[k].rotulo}</label>
-                <select id={`${id}-${k}`} value={p.filtro[k] ?? ""} disabled={trabajando} onChange={(e) => p.setFiltro(k, e.target.value)}>
-                  <option value="">{ROTULO[k].todos}</option>
-                  {p.listas[k].map((o) => <option key={o.codigo} value={o.codigo}>{o.nombre}</option>)}
+            {def.filtros.map((f) => f.fuente === "numero" ? (
+              <div key={f.clave} className="td-campo rep-campo-numero"><label htmlFor={`${id}-${f.clave}`}>{f.rotulo}</label>
+                <input id={`${id}-${f.clave}`} type="text" inputMode="numeric" maxLength={4} placeholder={f.todos} value={p.filtros[claveEstado(f)] ?? ""} disabled={trabajando}
+                  onChange={(e) => p.setFiltro(claveEstado(f), e.target.value.replace(/\D+/g, ""))} /></div>
+            ) : (
+              <div key={f.clave} className="td-campo"><label htmlFor={`${id}-${f.clave}`}>{f.rotulo}</label>
+                <select id={`${id}-${f.clave}`} value={opcionesDe(f, p.listas).some((o) => o.codigo === p.filtros[claveEstado(f)]) ? p.filtros[claveEstado(f)] : ""} disabled={trabajando}
+                  onChange={(e) => p.setFiltro(claveEstado(f), e.target.value)}>
+                  <option value="">{f.todos}</option>
+                  {opcionesDe(f, p.listas).map((o) => <option key={o.codigo} value={o.codigo}>{o.nombre}</option>)}
                 </select></div>
             ))}
           </div>
           {def.ocultos ? <label className="td-check rep-check"><input type="checkbox" checked={p.ocultos} disabled={trabajando} onChange={(e) => p.setOcultos(e.target.checked)} /> {def.ocultos}</label> : null}
           <p className="rep-ayuda">
-            {def.periodo ? `Hasta un año por descarga, por ${def.periodoPor ?? "la fecha del registro"}. ` : "Es la foto de hoy: no lleva periodo. "}
+            {def.periodo ? `Hasta un año por descarga, por ${def.periodoPor ?? "la fecha del registro"}. ` : "Es el inventario de hoy: no lleva periodo. "}
+            {def.filtros.some((f) => f.fuente === "numero") ? "Sector: el número del sector hidráulico, o vacío para todos. " : ""}
             Sin teléfonos ni nombres de personas. Cada descarga queda registrada con quién la hizo.
-            {p.opcionesError && def.filtros.some((k) => k !== "planta") ? " No se pudo cargar la lista para filtrar: se descarga todo." : ""}
+            {sinLista.length ? ` No se pudo cargar la lista ${sinLista.join(" y ")}: se descarga sin ese filtro.` : ""}
           </p>
           {msg ? <p className={`td-aviso td-aviso-${msg.tipo === "error" ? "error" : msg.tipo === "ok" ? "ok" : "info"}`} role={msg.tipo === "error" ? "alert" : "status"}>{msg.t}</p> : null}
           {trabajando ? (

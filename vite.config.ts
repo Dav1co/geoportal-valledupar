@@ -8,6 +8,8 @@ export default defineConfig({
   server: { port: 5173 },
   build: {
     rollupOptions: {
+      // Dos páginas: la app (index.html) y la foto de una remisión (remision.html), que abre el enlace «Ver foto» de los reportes del Dashboard PTAP.
+      input: { main: "index.html", remision: "remision.html" },
       output: {
         // Separar las librerías grandes en archivos aparte (chunks).
         // Así el navegador las cachea por separado y la primera carga

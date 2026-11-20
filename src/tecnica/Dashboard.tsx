@@ -9,15 +9,7 @@ import { PuntosUbicacion } from "./PuntosUbicacion";
 import { QuimicosPTAP } from "./QuimicosPTAP";
 import { supabase } from "../lib/supabase";
 import { CabeceraDashboard } from "./CabeceraDashboard";
-import { PanelReportes } from "./reportes/PanelReportes";
-import { REPORTES_PTAP } from "./reportes/catalogo";
-
-// Pestaña «Reportes» (20-nov): una tarjeta por ítem (reportes/catalogo.ts), con la misma tarjeta de las descargas del Dashboard distribución.
-function Reportes({ catalogo }: { catalogo: Catalogo }) {
-  return <PanelReportes titulo="Reportes" prefijo="rep" reportes={REPORTES_PTAP} plantas={catalogo.plantas.filter((p) => p.activa).map((p) => ({ codigo: p.codigo, nombre: p.nombre }))}
-    ayuda="Un reporte por ítem, en Excel o CSV: una fila por envío o registro y cada variable en su columna, con su unidad. Toque una tarjeta para elegir el periodo y la planta."
-    sinPermiso="Solo el supervisor de planta o el administrador descargan reportes." />;
-}
+import { ReportesPTAP } from "./reportes/Pestanas";      // 20-nov: pestaña «Reportes», una tarjeta por ítem (reportes/catalogo.ts)
 
 // Dashboard PTAP (antes «Dashboard técnico»; supervisor y administrador). Las secciones salen de este registro: agregar «Estado del servicio» o «Eventos» cuando existan es registrar una sección
 // con su componente; el resto de la pantalla no cambia. Las que aún no existen se muestran deshabilitadas, sin datos de ejemplo.
@@ -29,7 +21,7 @@ const SECCIONES: Seccion[] = [
   { clave: "quimicos", titulo: "Químicos", Componente: QuimicosPTAP },      // Corte 7a (§29): bodega, ficha técnica, dosis óptima y esperado contra usado
   { clave: "personal", titulo: "Personal técnico", Componente: PersonalTecnico },
   { clave: "puntos", titulo: "Puntos", Componente: PuntosUbicacion },      // Corte 5b: ubicación de los puntos de muestreo
-  { clave: "reportes", titulo: "Reportes", Componente: Reportes },
+  { clave: "reportes", titulo: "Reportes", Componente: ReportesPTAP },
 ];
 
 // §34: el encabezado es el común (CabeceraDashboard), con el selector PTAP | distribución adentro.

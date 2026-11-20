@@ -12,8 +12,7 @@ import { ErrorTec } from "./apiTecnica";
 import { FichaActivo } from "./FichaActivo";
 import { NoIdentificados, Recursos } from "./IntervencionesSupervisor";
 import { Catalogo, Graficas, Nodos, Parametros, Personal } from "./DashboardGestion";
-import { PanelReportes } from "./reportes/PanelReportes";      // 20-nov: una tarjeta por formulario (reportes/catalogo.ts)
-import { REPORTES_DISTRIBUCION } from "./reportes/catalogo";
+import { DescargasDistribucion } from "./reportes/Pestanas";      // 20-nov: una tarjeta por formulario (reportes/catalogo.ts)
 import { CargueCapas } from "./cargue/CargueCapas";
 import { InventarioRegulatorio } from "./InventarioRegulatorio";
 import { PorLevantarLista } from "./PorLevantar";      // Corte 14
@@ -58,9 +57,7 @@ export function DashboardRedes({ correo, selector, onVolver, onGeovisor }: { cor
       {pestana === "por_verificar" ? <PorVerificarLista onFicha={setFicha} /> : null}
       {pestana === "bot" ? <ReportesBot /> : null}
       {pestana === "graficas" ? <Graficas onFicha={setFicha} /> : null}
-      {pestana === "descargas" ? <PanelReportes titulo="Descargas" prefijo="dsc" reportes={REPORTES_DISTRIBUCION}
-        ayuda="Una descarga por formulario, en Excel o CSV: una fila por registro y cada dato en su columna. Toque una tarjeta para elegir el periodo y los filtros."
-        sinPermiso="Solo el supervisor de distribución o el administrador descargan." /> : null}
+      {pestana === "descargas" ? <DescargasDistribucion /> : null}
       {pestana === "personal" ? <Personal /> : null}
       {pestana === "cargue" ? <CargueCapas /> : null}
       {pestana === "catalogo" ? <Catalogo /> : null}
