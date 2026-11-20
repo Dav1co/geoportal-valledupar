@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AvisoSinAgua } from "./AvisoSinAgua";
 import { apiCampo, avisoDeError, ErrorCampo, type Confirmacion, type FormularioCampo, type Preparacion } from "./apiCampo";
 import { maxDescripcion } from "./limites";
 import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara } from "./camara";
@@ -259,6 +260,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
         <div className="tec-campo">
           <label htmlFor="campo-contrato">Número de contrato (opcional)</label>
           <input id="campo-contrato" type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" maxLength={20} value={contrato} onChange={(e) => setContrato(e.target.value.replace(/\D/g, ""))} disabled={bloqueado} />
+          <AvisoSinAgua contrato={contrato} />
         </div>
 
         {/* 5. Riesgo inmediato */}

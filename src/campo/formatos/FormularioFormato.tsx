@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AvisoSinAgua } from "../AvisoSinAgua";
 import "./formatos.css";
 import { ConfirmarCancelar, type Destino as DestinoCancelar } from "../../components/ConfirmarCancelar";
 import { avisoDeError, apiCampo, ErrorCampo, type FormularioCampo, type Preparacion } from "../apiCampo";
@@ -269,6 +270,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
           <div className="tec-campo">
             <label htmlFor="fp-contrato">Número de contrato{tipo.requiere_contrato === "si" ? " (obligatorio)" : " (opcional)"}</label>
             <input id="fp-contrato" type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" maxLength={20} value={contrato} onChange={(e) => setContrato(e.target.value.replace(/\D/g, ""))} disabled={bloqueado} />
+            <AvisoSinAgua contrato={contrato} />
           </div>
         )}
 

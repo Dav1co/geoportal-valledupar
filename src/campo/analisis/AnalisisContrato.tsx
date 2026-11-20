@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { AvisoSinAgua } from "../AvisoSinAgua";
 import { lazyConRecarga } from "../../lib/recarga";
 import "./analisis.css";
 import { apiCampo, ErrorCampo, TEXTO_NO_APLICADO } from "../apiCampo";
@@ -126,6 +127,7 @@ function Ficha({ r, destinos, onIrA, puedeCambioMedidor, onCambioMedidor }: { r:
       {/* ===== Tarjeta fija ===== */}
       <section className="tec-tarjeta ac-tarjeta" aria-label="Resumen del contrato" data-testid="tarjeta">
         <h2 className="ac-titulo">Contrato {r.contrato}{c?.estado ? ` · ${capital(c.estado)}` : ""}</h2>
+        <AvisoSinAgua contrato={r.contrato} espera={0} />
         <Distancia predios={r.ubicacion?.predios ?? []} />
         {sinFicha ? <p className="ac-nota" role="note">El análisis mensual aún no se ha calculado: faltan consumo, medidor, pago y PQR.</p> : null}
         <div className="ac-personal">

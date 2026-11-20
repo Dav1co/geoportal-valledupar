@@ -1,0 +1,8 @@
+/* Aviso «sin agua» de Campo (AvisoSinAgua.tsx): el naranja del evento de suspensión de la guía visual (#c25e00, --t-naranja) con su fondo suave (#fff4e5).
+   Mismo armado que las notas de Campo: borde, radio 8 px, texto de 15 px. Solo informa. */
+.aviso-sin-agua { margin: 8px 0; padding: 10px 12px; border: 2px solid var(--t-naranja, #c25e00); border-left-width: 5px; border-radius: 8px; background: var(--t-naranja-suave, #fff4e5);
+  color: var(--t-texto, #22313f); font-size: 15px; line-height: 1.4; }
+.aviso-sin-agua p { margin: 0; }
+/* el texto va oscuro: el naranja sobre su fondo suave da 3,95:1 (no llega a AA); el naranja queda en el borde */
+.aviso-sin-agua-tit strong { color: var(--t-titulo, #0a2540); }
+.aviso-sin-agua-sug { margin-top: 4px !important; font-size: 14px; color: var(--t-texto-2, #52626f); }
