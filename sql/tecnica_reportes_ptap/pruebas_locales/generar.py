@@ -4,6 +4,13 @@ Parte del aviso por contrato publicado (huella de redes b474fbbe…); acepta tam
 Uso: python3 -I generar.py   (antes: python3 -I ../../redes_reportes_distribucion/pruebas_locales/generar.py, que deja huella_despues.txt)"""
 import os
 import subprocess
+import sys
+
+# Pasada de herramientas (20-nov): -h/--help imprime el uso y sale antes de tocar la base; no lleva opciones. Es local (55432): no consulta Supabase.
+for _a in sys.argv[1:]:
+    if _a in ('-h', '--help'):
+        print(__doc__); sys.exit(0)
+    print(f'Opción desconocida: {_a} (no lleva opciones; -h para el uso)', file=sys.stderr); sys.exit(2)
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.dirname(AQUI)

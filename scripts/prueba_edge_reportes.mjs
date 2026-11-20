@@ -11,6 +11,13 @@ import { join, resolve } from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import http from "node:http";
 
+// Pasada de herramientas (20-nov): -h/--help imprime el uso y sale ANTES de tocar ninguna base; una opción desconocida es error. Es local (no consulta Supabase).
+const USO = "Uso: node scripts/prueba_edge_reportes.mjs <deno> <supabase/functions> <psql> <plantilla con los dos paquetes, p. ej. redes_local>   (-h, --help: este uso; base local de Code A, PGPORT_A=55432)";
+for (const a of process.argv.slice(2)) {
+  if (a === "-h" || a === "--help") { console.log(USO); process.exit(0); }
+  if (a.startsWith("-")) { console.error(`Opción desconocida: ${a}\n${USO}`); process.exit(2); }
+}
+if (process.argv.length > 6) { console.error(`Sobran argumentos.\n${USO}`); process.exit(2); }
 const [DENO, FUNCIONES, PSQL, PLANTILLA] = process.argv.slice(2, 6);
 if (!PLANTILLA) { console.error("Uso: node scripts/prueba_edge_reportes.mjs <deno> <supabase/functions> <psql> <base plantilla con los dos paquetes>"); process.exit(2); }
 const P_BASE = 54993, P_EDGE = 54994;

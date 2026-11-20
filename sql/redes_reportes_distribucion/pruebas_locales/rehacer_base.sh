@@ -7,6 +7,13 @@
 #   sh rehacer_base.sh con_todo   → además, la de los reportes del PTAP
 #   sh rehacer_base.sh plantilla  → rehace también la plantilla
 set -e
+# Pasada de herramientas (20-nov): -h/--help imprime el uso y sale; un modo que no conoce es error. Es local (55432): no consulta Supabase.
+case "${1:-}" in
+  -h|--help) sed -n '2,8p' "$0" | sed -e 's/^# \{0,1\}//'; exit 0;;
+  ""|con_dist|con_todo|plantilla) ;;
+  *) echo "Modo u opción desconocida: $1 (use con_dist, con_todo, plantilla o nada; -h para el uso)" >&2; exit 2;;
+esac
+[ $# -le 1 ] || { echo "Sobran argumentos (-h para el uso)" >&2; exit 2; }
 cd "$(dirname "$0")/.."
 PSQL=${PSQL:-/opt/homebrew/opt/postgresql@17/bin/psql}
 export PGHOST=localhost PGPORT=55432 PGUSER=postgres PGOPTIONS='-c client_min_messages=warning'
