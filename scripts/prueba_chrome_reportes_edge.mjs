@@ -186,11 +186,13 @@ const esp = (ms) => new Promise((r) => setTimeout(r, ms));
 const nav = await puppeteer.launch({ executablePath: CHROME, headless: "new", args: ["--no-sandbox", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1"] });
 const ORIGEN = `http://127.0.0.1:${P_BASE}`;
 let ANCHO = 390, ALTO = 844, BAJADAS = "";
-const iniciados = [];      // respuestas reales de reporte_iniciar (200)
+const iniciados = [];
+const paginasMs = [];      // [acción, ms hasta tener la respuesta, Edge]: cuánto tarda cada petición sola      // respuestas reales de reporte_iniciar (200)
 async function abrir(qs, pagina = "") {
   const pg = await nav.newPage();
   await pg.setViewport({ width: ANCHO, height: ALTO, deviceScaleFactor: ANCHO < 500 ? 2 : 1, isMobile: ANCHO < 500, hasTouch: ANCHO < 500 });
   pg.on("pageerror", (e) => { total++; fallas++; console.log("ERROR de página:", String(e).slice(0, 300)); });
+  pg.on("response", (r) => { if (/accion=reporte_(iniciar|pagina)/.test(r.url())) { const t = r.timing(); if (t) paginasMs.push([r.url().match(/accion=(\w+)/)[1], Math.round(t.receiveHeadersEnd), r.url().includes("geoportal-redes") ? "redes" : "tecnica"]); } });
   pg.on("response", async (r) => { if (r.url().includes("accion=reporte_iniciar") && r.status() === 200) { try { iniciados.push(await r.json()); } catch { /* sin cuerpo */ } } });
   const cdp = await pg.createCDPSession(); await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: BAJADAS });
   await pg.goto(`${ORIGEN}/${pagina}${qs ? "?" + qs : ""}`); await pg.waitForFunction("window.__listo === true", { timeout: 20000 }); await esp(400);
@@ -406,6 +408,8 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
   await pg.close();
 }
 console.log("\nTiempos (navegador + Edges reales + base local; producción es unas 6 veces más lenta en la base):\n  " + tiempos.join("\n  "));
+const peor = (acc) => paginasMs.filter((x) => x[0] === acc).sort((a, b) => b[1] - a[1])[0];
+console.log(`Petición más lenta (Edge real + base local, una sola): reporte_iniciar ${peor("reporte_iniciar")?.[1]} ms (${peor("reporte_iniciar")?.[2]}), reporte_pagina ${peor("reporte_pagina")?.[1]} ms (${peor("reporte_pagina")?.[2]}); ${paginasMs.length} peticiones`);
 const raras = [...new Set(rpcs)].filter((f) => !hayRpc(f) && f !== "geoportal_tec_catalogo_filtros");
 if (raras.length) console.log("RPC que la base local no tiene (las pidieron otras pestañas al cargar):", raras.join(", "));
 console.log(`\n${total - fallas} de ${total}${fallas ? ` (${fallas} FALLAS)` : " SIN FALLAS"}`);
