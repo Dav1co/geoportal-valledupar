@@ -12,7 +12,8 @@ language sql stable security definer set search_path = redes, public, extensions
     from redes.f_eventos_abiertos() e
    where e.todo or exists (select 1 from t where t.geom && e.geom and ST_Intersects(t.geom, e.geom)) $$;
 
--- Quién consulta: los perfiles que buscan contratos en Comercial (geovisor comercial) y en Campo (formularios de campo y su supervisor), y el administrador.
+-- Quién consulta: los perfiles que buscan contratos en Comercial (geovisor comercial), en Campo (formularios de campo y su supervisor) y en el acta de
+-- Comercial (quien la captura y su supervisor: el aviso sale al verificar el contrato del acta; David, 19-nov), y el administrador. Técnica sola, no.
 -- Devuelve el correo normalizado o se niega (42501). Como las demás de redes: el acceso tiene que estar «ok» (lista blanca, horario).
 create function redes.f_evento_contrato_acceso(p_solicitante text) returns text
 language plpgsql stable security definer set search_path = public, redes, tecnica, pg_temp as $$
@@ -20,7 +21,7 @@ declare v_email text := lower(btrim(coalesce(p_solicitante, '')));
 begin
   if v_email = '' or position('@' in v_email) < 2 then raise exception 'Solicitante no identificado' using errcode = '28000'; end if;
   if public.geoportal_estado_acceso(v_email) <> 'ok' then raise exception 'Acceso no disponible' using errcode = '42501'; end if;
-  if not (public.geoportal_puede(v_email, 'comercial') or public.geoportal_puede(v_email, 'campo')) then
+  if not (public.geoportal_puede(v_email, 'comercial') or public.geoportal_puede(v_email, 'campo') or public.geoportal_puede(v_email, 'acta')) then
     raise exception 'Sin permiso para consultar si un contrato está en un evento de suspensión' using errcode = '42501';
   end if;
   return v_email;

@@ -7,7 +7,7 @@ do $$
 begin
   if to_regprocedure('public.geoportal_redes_evento_contrato(text,text)') is null then raise exception 'No hay nada que revertir: el aviso de evento por contrato no está aplicado'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '52147337ba4d42045bdd937a2b1f0bc1' then
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'b474fbbe3e0f7a3a7e6dbc04c53e02e7' then
     raise exception 'Las funciones cambiaron después de la migración: la reversa se niega a pisarlas; avise';
   end if;
 end $$;

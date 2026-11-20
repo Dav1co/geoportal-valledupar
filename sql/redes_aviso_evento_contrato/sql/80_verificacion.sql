@@ -12,9 +12,9 @@ select k, v from (
          case when not exists (select 1 from pg_proc p where p.pronamespace = 'redes'::regnamespace
                                 and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('service_role', p.oid, 'execute'))) then 'OK' else 'MAL' end
   union all select 3, '03 huellas md5 de la nueva y del conjunto de funciones de redes',
-         case when (select count(*) from (values ('redes.f_eventos_del_contrato(text)', '8095ab6a65b1d983873d34d9fdfe5b95'), ('redes.f_evento_contrato_acceso(text)', '14128308aa6b4a48c8d32ca0f692bbbc'), ('public.geoportal_redes_evento_contrato(text,text)', 'f82b45906c62feca8b431020284e8bbf')) c(f, m) where md5(pg_get_functiondef(to_regprocedure(c.f))) = c.m) = 3
+         case when (select count(*) from (values ('redes.f_eventos_del_contrato(text)', '8095ab6a65b1d983873d34d9fdfe5b95'), ('redes.f_evento_contrato_acceso(text)', '0dbfe115507497bb587be04f994d07bc'), ('public.geoportal_redes_evento_contrato(text,text)', 'f82b45906c62feca8b431020284e8bbf')) c(f, m) where md5(pg_get_functiondef(to_regprocedure(c.f))) = c.m) = 3
                and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-                     where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) = '52147337ba4d42045bdd937a2b1f0bc1' then 'OK' else 'MAL' end
+                     where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) = 'b474fbbe3e0f7a3a7e6dbc04c53e02e7' then 'OK' else 'MAL' end
   union all select 4, '04 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE',
          coalesce((select 'MAL: ' || string_agg(distinct funcion, ', ') from redes.f_funciones_sin_where()), 'OK')
   union all select 5, '05 no se tocó nada de lo publicado: los eventos abiertos, el conteo de contratos del Corte 15, la franja, las zonas vigentes y declarar',

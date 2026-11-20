@@ -38,7 +38,8 @@ language sql stable security definer set search_path = redes, public, extensions
     from redes.f_eventos_abiertos() e
    where e.todo or exists (select 1 from t where t.geom && e.geom and ST_Intersects(t.geom, e.geom)) $$;
 
--- Quién consulta: los perfiles que buscan contratos en Comercial (geovisor comercial) y en Campo (formularios de campo y su supervisor), y el administrador.
+-- Quién consulta: los perfiles que buscan contratos en Comercial (geovisor comercial), en Campo (formularios de campo y su supervisor) y en el acta de
+-- Comercial (quien la captura y su supervisor: el aviso sale al verificar el contrato del acta; David, 19-nov), y el administrador. Técnica sola, no.
 -- Devuelve el correo normalizado o se niega (42501). Como las demás de redes: el acceso tiene que estar «ok» (lista blanca, horario).
 create function redes.f_evento_contrato_acceso(p_solicitante text) returns text
 language plpgsql stable security definer set search_path = public, redes, tecnica, pg_temp as $$
@@ -46,7 +47,7 @@ declare v_email text := lower(btrim(coalesce(p_solicitante, '')));
 begin
   if v_email = '' or position('@' in v_email) < 2 then raise exception 'Solicitante no identificado' using errcode = '28000'; end if;
   if public.geoportal_estado_acceso(v_email) <> 'ok' then raise exception 'Acceso no disponible' using errcode = '42501'; end if;
-  if not (public.geoportal_puede(v_email, 'comercial') or public.geoportal_puede(v_email, 'campo')) then
+  if not (public.geoportal_puede(v_email, 'comercial') or public.geoportal_puede(v_email, 'campo') or public.geoportal_puede(v_email, 'acta')) then
     raise exception 'Sin permiso para consultar si un contrato está en un evento de suspensión' using errcode = '42501';
   end if;
   return v_email;
@@ -54,7 +55,7 @@ end $$;
 -- =====================================================================
 -- TÉCNICA · FASE 1 · AVISO DE EVENTO POR CONTRATO · 26 — RPC (la llama la Edge geoportal-redes, ruta evento_contrato).
 --   · geoportal_redes_evento_contrato: dado un contrato, si HOY está dentro de un evento de suspensión abierto, y cuál (el más específico).
--- Para qué: que Comercial y Campo, al buscar un contrato, vean «este contrato está sin agua por el evento EVS-…» antes de mandar a alguien o de
+-- Para qué: que Comercial, Campo y el acta, al buscar o verificar un contrato, vean «este contrato está sin agua por el evento EVS-…» antes de mandar a alguien o de
 --   recibir un reclamo. SOLO AVISA: no bloquea ni cambia nada.
 -- Qué devuelve: solo datos del evento (código, tipo, causa, zona, desde, regreso estimado, el texto de la franja). Ningún dato del suscriptor ni del
 --   catastro (ni nombre, ni dirección, ni tramo, ni coordenadas). «ubicado» dice si el contrato tiene amarre a la red (sin él, solo cuenta un evento de toda la ciudad).
@@ -93,7 +94,7 @@ grant execute on function public.geoportal_redes_evento_contrato(text, text) to 
 insert into public.geoportal_auditoria (email, accion, referencia, detalle, ip)
 values ('migracion@redes_aviso_evento_contrato', 'migracion_redes_aviso_evento_contrato', null, jsonb_build_object(
         'nuevas', jsonb_build_array('redes.f_eventos_del_contrato', 'redes.f_evento_contrato_acceso', 'public.geoportal_redes_evento_contrato'),
-        'motivo', 'primera regla de choque: al buscar un contrato, Comercial y Campo ven si está dentro de un evento de suspensión abierto (solo avisa)'), null);
+        'motivo', 'primera regla de choque: al buscar o verificar un contrato, Comercial, Campo y el acta ven si está dentro de un evento de suspensión abierto (solo avisa)'), null);
 -- =====================================================================
 -- TÉCNICA · FASE 1 · AVISO DE EVENTO POR CONTRATO · 70 — PRUEBAS «N de N» (PROPUESTA). Se corre DESPUÉS de 10, 20, 26 y 40, en la misma transacción.
 -- Todo es SIMULADO y se deshace: sus personas (prueba.evc.*), una red de prueba ZTEVC en un rincón de la caja (4 tramos y 2 sectores), 5 contratos de
@@ -149,7 +150,7 @@ do $prueba$
 declare
   adm text := 'prueba.evc.adm@emdupar.gov.co'; co text := 'prueba.evc.comercial@emdupar.gov.co'; ca text := 'prueba.evc.campo@emdupar.gov.co'; dc text := 'prueba.evc.supcampo@emdupar.gov.co';
   sd text := 'prueba.evc.sd@emdupar.gov.co'; sp text := 'prueba.evc.sp@emdupar.gov.co'; op text := 'prueba.evc.op@emdupar.gov.co'; ex text := 'prueba.evc.explorar@emdupar.gov.co';
-  ac text := 'prueba.evc.acta@emdupar.gov.co';
+  ac text := 'prueba.evc.acta@emdupar.gov.co'; sa text := 'prueba.evc.supacta@emdupar.gov.co';
   c1 text := '999999990001'; c2 text := '999999990002'; c3 text := '999999990003'; c4 text := '999999990004'; c5 text := '999999990005';
   j jsonb; j2 jsonb; v_dan text; e1 text; e2 text; e3 text; e4 text; v_reg timestamptz; v_reg2 timestamptz; v_aud bigint; v_n integer; v_txt text;
   v_t0 timestamptz; v_ms numeric; v_tiempos numeric[] := '{}'; v_max numeric; v_p95 numeric; v_med numeric; v_ct text; v_info text; v_total integer; v_bien integer; v_fallas text;
@@ -163,6 +164,7 @@ begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, horario, dias) values (op, 'ZTEVC Operador', 'consulta', true, 'sin_restriccion', 'todos');
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_explorar, horario, dias) values (ex, 'ZTEVC Explorar', 'consulta', true, 'sin_restriccion', 'todos');
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_acta, horario, dias) values (ac, 'ZTEVC Actas', 'consulta', true, 'sin_restriccion', 'todos');
+  insert into public.geoportal_lista_blanca (email, nombre, rol, ver_dashboard_acta, horario, dias) values (sa, 'ZTEVC Supervisor de actas', 'consulta', true, 'sin_restriccion', 'todos');
   insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values (op, 'asignar_formulario', 'danos_fallas', adm);
   -- la red de prueba: 4 tramos separados y 2 sectores (S1 cubre T1 y T2; S2 cubre T3); T4 queda por fuera de todo
   perform pg_temp.activo('T1', 'RED', ST_MakeLine(pg_temp.pt(0, 0), pg_temp.pt(100, 0)));
@@ -175,19 +177,19 @@ begin
   select x.c, z.activo_id, 4, 'cercania' from (values (c1, 'T1'), (c2, 'T2'), (c3, 'T3'), (c4, 'T4')) x(c, t) join _zt z on z.nombre = x.t;      -- c5: sin amarre
 
   -- ===================== 01. Quién consulta =====================
-  perform pg_temp.reg('01.01 consultan Comercial (geovisor comercial), Formularios de campo, el supervisor de campo y el administrador',
-    pg_temp.ev(co, c4) ->> 'contrato' = c4 and pg_temp.ev(ca, c4) ->> 'contrato' = c4 and pg_temp.ev(dc, c4) ->> 'contrato' = c4 and pg_temp.ev(adm, c4) ->> 'contrato' = c4);
+  perform pg_temp.reg('01.01 consultan Comercial (geovisor comercial), Formularios de campo, el supervisor de campo, quien captura actas, el supervisor de actas y el administrador',
+    pg_temp.ev(co, c4) ->> 'contrato' = c4 and pg_temp.ev(ca, c4) ->> 'contrato' = c4 and pg_temp.ev(dc, c4) ->> 'contrato' = c4 and pg_temp.ev(adm, c4) ->> 'contrato' = c4
+    and pg_temp.ev(ac, c4) ->> 'contrato' = c4 and pg_temp.ev(sa, c4) ->> 'contrato' = c4);
   perform pg_temp.err('01.02 el supervisor de distribución (solo Técnica) no: 42501', format('select public.geoportal_redes_evento_contrato(%L, %L)', sd, c1), '42501');
   perform pg_temp.err('01.03 el supervisor de planta no: 42501', format('select public.geoportal_redes_evento_contrato(%L, %L)', sp, c1), '42501');
   perform pg_temp.err('01.04 el operador de Técnica no: 42501', format('select public.geoportal_redes_evento_contrato(%L, %L)', op, c1), '42501');
   perform pg_temp.err('01.05 quien solo tiene Explorar no: 42501', format('select public.geoportal_redes_evento_contrato(%L, %L)', ex, c1), '42501');
-  perform pg_temp.err('01.06 quien solo captura actas no: 42501', format('select public.geoportal_redes_evento_contrato(%L, %L)', ac, c1), '42501');
-  perform pg_temp.err('01.07 alguien que no está en la lista blanca no: 42501', format('select public.geoportal_redes_evento_contrato(%L, %L)', 'prueba.evc.nadie@emdupar.gov.co', c1), '42501');
-  perform pg_temp.err('01.08 sin solicitante: 28000', format('select public.geoportal_redes_evento_contrato(null, %L)', c1), '28000');
-  perform pg_temp.err('01.09 un contrato con letras se rechaza (22023, con su texto)', format('select public.geoportal_redes_evento_contrato(%L, %L)', co, '12A45'), '22023', 'solo números');
-  perform pg_temp.err('01.10 … uno vacío o de 16 cifras también', format('select public.geoportal_redes_evento_contrato(%L, %L)', co, ''), '22023');
-  perform pg_temp.err('01.11 … y uno de 16 cifras', format('select public.geoportal_redes_evento_contrato(%L, %L)', co, '1234567890123456'), '22023');
-  perform pg_temp.reg('01.12 el contrato con espacios alrededor se lee igual', pg_temp.ev(co, '  ' || c4 || ' ') ->> 'contrato' = c4);
+  perform pg_temp.err('01.06 alguien que no está en la lista blanca no: 42501', format('select public.geoportal_redes_evento_contrato(%L, %L)', 'prueba.evc.nadie@emdupar.gov.co', c1), '42501');
+  perform pg_temp.err('01.07 sin solicitante: 28000', format('select public.geoportal_redes_evento_contrato(null, %L)', c1), '28000');
+  perform pg_temp.err('01.08 un contrato con letras se rechaza (22023, con su texto)', format('select public.geoportal_redes_evento_contrato(%L, %L)', co, '12A45'), '22023', 'solo números');
+  perform pg_temp.err('01.09 … uno vacío o de 16 cifras también', format('select public.geoportal_redes_evento_contrato(%L, %L)', co, ''), '22023');
+  perform pg_temp.err('01.10 … y uno de 16 cifras', format('select public.geoportal_redes_evento_contrato(%L, %L)', co, '1234567890123456'), '22023');
+  perform pg_temp.reg('01.11 el contrato con espacios alrededor se lee igual', pg_temp.ev(co, '  ' || c4 || ' ') ->> 'contrato' = c4);
 
   -- ===================== 02. Sin eventos en su zona =====================
   j := pg_temp.ev(co, c1);

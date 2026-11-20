@@ -38,7 +38,8 @@ language sql stable security definer set search_path = redes, public, extensions
     from redes.f_eventos_abiertos() e
    where e.todo or exists (select 1 from t where t.geom && e.geom and ST_Intersects(t.geom, e.geom)) $$;
 
--- Quién consulta: los perfiles que buscan contratos en Comercial (geovisor comercial) y en Campo (formularios de campo y su supervisor), y el administrador.
+-- Quién consulta: los perfiles que buscan contratos en Comercial (geovisor comercial), en Campo (formularios de campo y su supervisor) y en el acta de
+-- Comercial (quien la captura y su supervisor: el aviso sale al verificar el contrato del acta; David, 19-nov), y el administrador. Técnica sola, no.
 -- Devuelve el correo normalizado o se niega (42501). Como las demás de redes: el acceso tiene que estar «ok» (lista blanca, horario).
 create function redes.f_evento_contrato_acceso(p_solicitante text) returns text
 language plpgsql stable security definer set search_path = public, redes, tecnica, pg_temp as $$
@@ -46,7 +47,7 @@ declare v_email text := lower(btrim(coalesce(p_solicitante, '')));
 begin
   if v_email = '' or position('@' in v_email) < 2 then raise exception 'Solicitante no identificado' using errcode = '28000'; end if;
   if public.geoportal_estado_acceso(v_email) <> 'ok' then raise exception 'Acceso no disponible' using errcode = '42501'; end if;
-  if not (public.geoportal_puede(v_email, 'comercial') or public.geoportal_puede(v_email, 'campo')) then
+  if not (public.geoportal_puede(v_email, 'comercial') or public.geoportal_puede(v_email, 'campo') or public.geoportal_puede(v_email, 'acta')) then
     raise exception 'Sin permiso para consultar si un contrato está en un evento de suspensión' using errcode = '42501';
   end if;
   return v_email;
@@ -54,7 +55,7 @@ end $$;
 -- =====================================================================
 -- TÉCNICA · FASE 1 · AVISO DE EVENTO POR CONTRATO · 26 — RPC (la llama la Edge geoportal-redes, ruta evento_contrato).
 --   · geoportal_redes_evento_contrato: dado un contrato, si HOY está dentro de un evento de suspensión abierto, y cuál (el más específico).
--- Para qué: que Comercial y Campo, al buscar un contrato, vean «este contrato está sin agua por el evento EVS-…» antes de mandar a alguien o de
+-- Para qué: que Comercial, Campo y el acta, al buscar o verificar un contrato, vean «este contrato está sin agua por el evento EVS-…» antes de mandar a alguien o de
 --   recibir un reclamo. SOLO AVISA: no bloquea ni cambia nada.
 -- Qué devuelve: solo datos del evento (código, tipo, causa, zona, desde, regreso estimado, el texto de la franja). Ningún dato del suscriptor ni del
 --   catastro (ni nombre, ni dirección, ni tramo, ni coordenadas). «ubicado» dice si el contrato tiene amarre a la red (sin él, solo cuenta un evento de toda la ciudad).
@@ -93,5 +94,5 @@ grant execute on function public.geoportal_redes_evento_contrato(text, text) to 
 insert into public.geoportal_auditoria (email, accion, referencia, detalle, ip)
 values ('migracion@redes_aviso_evento_contrato', 'migracion_redes_aviso_evento_contrato', null, jsonb_build_object(
         'nuevas', jsonb_build_array('redes.f_eventos_del_contrato', 'redes.f_evento_contrato_acceso', 'public.geoportal_redes_evento_contrato'),
-        'motivo', 'primera regla de choque: al buscar un contrato, Comercial y Campo ven si está dentro de un evento de suspensión abierto (solo avisa)'), null);
+        'motivo', 'primera regla de choque: al buscar o verificar un contrato, Comercial, Campo y el acta ven si está dentro de un evento de suspensión abierto (solo avisa)'), null);
 commit;

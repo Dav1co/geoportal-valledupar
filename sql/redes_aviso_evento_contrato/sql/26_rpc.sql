@@ -1,7 +1,7 @@
 -- =====================================================================
 -- TÉCNICA · FASE 1 · AVISO DE EVENTO POR CONTRATO · 26 — RPC (la llama la Edge geoportal-redes, ruta evento_contrato).
 --   · geoportal_redes_evento_contrato: dado un contrato, si HOY está dentro de un evento de suspensión abierto, y cuál (el más específico).
--- Para qué: que Comercial y Campo, al buscar un contrato, vean «este contrato está sin agua por el evento EVS-…» antes de mandar a alguien o de
+-- Para qué: que Comercial, Campo y el acta, al buscar o verificar un contrato, vean «este contrato está sin agua por el evento EVS-…» antes de mandar a alguien o de
 --   recibir un reclamo. SOLO AVISA: no bloquea ni cambia nada.
 -- Qué devuelve: solo datos del evento (código, tipo, causa, zona, desde, regreso estimado, el texto de la franja). Ningún dato del suscriptor ni del
 --   catastro (ni nombre, ni dirección, ni tramo, ni coordenadas). «ubicado» dice si el contrato tiene amarre a la red (sin él, solo cuenta un evento de toda la ciudad).

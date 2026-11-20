@@ -3,7 +3,7 @@
 -- ANTES: «funciones de redes» dice «MIS REPORTES (lista para el aviso)» y las 3 nuevas «NO EXISTE».
 -- DESPUÉS: «AVISO POR CONTRATO (aplicado)» y las 3 «NUEVA». Cualquier «DISTINTA» o «FALTA»: no aplique nada y avise.
 -- =====================================================================
-with nue(firma, nueva) as (values ('redes.f_eventos_del_contrato(text)', '8095ab6a65b1d983873d34d9fdfe5b95'), ('redes.f_evento_contrato_acceso(text)', '14128308aa6b4a48c8d32ca0f692bbbc'), ('public.geoportal_redes_evento_contrato(text,text)', 'f82b45906c62feca8b431020284e8bbf')),
+with nue(firma, nueva) as (values ('redes.f_eventos_del_contrato(text)', '8095ab6a65b1d983873d34d9fdfe5b95'), ('redes.f_evento_contrato_acceso(text)', '0dbfe115507497bb587be04f994d07bc'), ('public.geoportal_redes_evento_contrato(text,text)', 'f82b45906c62feca8b431020284e8bbf')),
 rnue as (
   select '3 ' || n.firma as objeto, md5(pg_get_functiondef(to_regprocedure(n.firma))) as md5,
          case when to_regprocedure(n.firma) is null then 'NO EXISTE (sin aplicar)' when md5(pg_get_functiondef(to_regprocedure(n.firma))) = n.nueva then 'NUEVA (aplicada)' else 'DISTINTA' end as estado
@@ -13,7 +13,7 @@ conj as (
   select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) as m from pg_proc p
    where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%'))
 select '0 funciones de redes (conjunto)' as objeto, (select m from conj) as md5,
-       case (select m from conj) when '314112df87e4d649945fd3f611857025' then 'MIS REPORTES (lista para el aviso)' when '52147337ba4d42045bdd937a2b1f0bc1' then 'AVISO POR CONTRATO (aplicado)' else 'DISTINTA' end as estado
+       case (select m from conj) when '314112df87e4d649945fd3f611857025' then 'MIS REPORTES (lista para el aviso)' when 'b474fbbe3e0f7a3a7e6dbc04c53e02e7' then 'AVISO POR CONTRATO (aplicado)' else 'DISTINTA' end as estado
 union all select * from rnue
 union all select '2 ' || p.firma || ' (no se toca)', md5(pg_get_functiondef(to_regprocedure(p.firma))),
        case when to_regprocedure(p.firma) is null then 'FALTA' when md5(pg_get_functiondef(to_regprocedure(p.firma))) = p.publicada then 'LA PUBLICADA' else 'DISTINTA' end from pub p

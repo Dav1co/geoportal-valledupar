@@ -1,14 +1,14 @@
 OK    A1 Comercial (perfil D) consulta un contrato real: 200, sin caché y las 6 claves; sin evento
-OK    A2 permiten A, D, R y V (administrador, Comercial, Formularios de campo y su supervisor); Y, S, O y N reciben 403 — como dice la sonda propuesta
+OK    A2 permiten A, D, R, V, T y U (administrador, Comercial, Formularios de campo, su supervisor, actas y su supervisor); Y, S, O y N reciben 403 — como dice la sonda propuesta
 OK    A3 sin sesión: 401
 OK    A4 un contrato con letras: 400 con su texto; por POST: 405
 OK    A5 un contrato que no está amarrado a la red: 200, «ubicado: false» y sin evento
 OK    B1 el supervisor declara por la ruta un evento simulado (círculo de 300 m en el centro de la red real): EVS-000001
 OK    B2 los 15 contratos reales a menos de 150 m del centro están en el evento; los 15 a más de 1,5 km, no
-   Respuesta real: {"evento":{"tipo":"suspension","zona":"circulo","causa":"ZTEVC fuga simulada en el centro","desde":"2026-11-19T22:52:42.428127-05:00","texto":"Sin agua en un círculo de 300 m desde las 19/11, 10:52 p. m. por ZTEVC fuga simulada en el centro. Regreso estimado: 20/11, 2:52 a. m.","codigo":"EVS-000001","tipo_nombre":"Suspensión del servicio","zona_nombre":"un círculo de 300 m","regreso_estimado":"2026-11-20T02:52:42.336-05:00"},"ubicado":true,"contrato":"100030","en_evento":true,"consultado_en":"2026-11-19T22:52:45.771371-05:00","otros_eventos":0}
+   Respuesta real: {"evento":{"tipo":"suspension","zona":"circulo","causa":"ZTEVC fuga simulada en el centro","desde":"2026-11-19T23:19:55.998944-05:00","texto":"Sin agua en un círculo de 300 m desde las 19/11, 11:19 p. m. por ZTEVC fuga simulada en el centro. Regreso estimado: 20/11, 3:19 a. m.","codigo":"EVS-000001","tipo_nombre":"Suspensión del servicio","zona_nombre":"un círculo de 300 m","regreso_estimado":"2026-11-20T03:19:55.889-05:00"},"ubicado":true,"contrato":"100030","en_evento":true,"consultado_en":"2026-11-19T23:19:59.584789-05:00","otros_eventos":0}
 OK    B3 la respuesta: el evento con sus 9 claves, zona «circulo», tipo «suspension», regreso estimado y el texto de la franja
-   TIEMPOS por la Edge, diez veces cada una: evento_contrato → mediana 107 ms, la más lenta 110 ms · eventos_vigentes (otra lectura con un psql por RPC) → mediana 108 ms
-OK    C1 TIEMPOS: por la Edge la mediana es 107 ms y la más lenta 110 ms (el simulador abre un psql por RPC: ~100 ms fijos); ninguna pasa de 1 s y no cuesta más que leer los eventos vigentes
+   TIEMPOS por la Edge, diez veces cada una: evento_contrato → mediana 119 ms, la más lenta 134 ms · eventos_vigentes (otra lectura con un psql por RPC) → mediana 113 ms
+OK    C1 TIEMPOS: por la Edge la mediana es 119 ms y la más lenta 134 ms (el simulador abre un psql por RPC: ~100 ms fijos); ninguna pasa de 1 s y no cuesta más que leer los eventos vigentes
 OK    D1 cerrado el evento simulado, el contrato vuelve a «sin evento»
 OK    Z1 ninguna respuesta de evento_contrato trae correos ni nombres de personas
 OK    Z3 ninguna RPC que no exista en la base

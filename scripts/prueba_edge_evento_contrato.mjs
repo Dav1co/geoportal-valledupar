@@ -2,7 +2,7 @@
 // REAL corriendo en Deno, cuyas RPC van a la base local de CODE A (localhost:55432: producción al 19-nov + este paquete; se copia a <plantilla>_edgeevc)
 // con el rol de la API (service_role) y los topes de producción (30 s y 8 s). Auth y PostgREST son simulados (el segundo pasa cada RPC a la base real).
 // Sobre la RED REAL, con un evento SIMULADO (círculo en el centro de la red, declarado por la ruta evento_declarar como el supervisor) y contratos reales.
-// Perfiles sintéticos como los de las sondas: Comercial (D: ver_comercial + ver_registro_tecnico), Formularios de campo (R), su supervisor (V), administrador (A),
+// Perfiles sintéticos como los de las sondas: Comercial (D: ver_comercial + ver_registro_tecnico), Formularios de campo (R), su supervisor (V), actas (T), su supervisor (U), administrador (A),
 // supervisor de distribución (Y), supervisor de planta (S), operador (O) y alguien sin permiso. Puertos de Code A: 54991 (Auth y PostgREST) y 54992 (Edge).
 // Uso: node scripts/prueba_edge_evento_contrato.mjs <deno> <supabase/functions> <psql> <plantilla con el paquete, p. ej. redes_local>
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -20,13 +20,13 @@ const sqlq = (s) => execFileSync(PSQL, ["-AtqX", "-v", "ON_ERROR_STOP=1", "-c", 
 const lit = (v) => (v === null || v === undefined ? "null" : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : Array.isArray(v) && v.every((x) => typeof x === "string") ? `array[${v.map((x) => `'${x.replace(/'/g, "''")}'`).join(", ")}]::text[]`
   : typeof v === "object" ? `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb` : `'${String(v).replace(/'/g, "''")}'`);
 const EMAILS = { A: "ztevc.e.admin@emdupar.gov.co", D: "ztevc.e.comercial@emdupar.gov.co", R: "ztevc.e.campo@emdupar.gov.co", V: "ztevc.e.supcampo@emdupar.gov.co",
-  Y: "ztevc.e.sd@emdupar.gov.co", S: "ztevc.e.sp@emdupar.gov.co", O: "ztevc.e.op@emdupar.gov.co", N: "ztevc.e.nada@emdupar.gov.co" };
+  T: "ztevc.e.acta@emdupar.gov.co", U: "ztevc.e.supacta@emdupar.gov.co", Y: "ztevc.e.sd@emdupar.gov.co", S: "ztevc.e.sp@emdupar.gov.co", O: "ztevc.e.op@emdupar.gov.co", N: "ztevc.e.nada@emdupar.gov.co" };
 execFileSync(PSQL, ["-qX", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", `drop database if exists ${PLANTILLA}_edgeevc`, "-c", `create database ${PLANTILLA}_edgeevc template ${PLANTILLA}`], { env: PGENV, stdio: ["ignore", "pipe", "pipe"] });
 if (sqlq("select coalesce(to_regprocedure('public.geoportal_redes_evento_contrato(text,text)')::text, '')") === "") { console.error(`La plantilla ${PLANTILLA} no tiene el aviso por contrato (sh rehacer_base.sh con_evc)`); process.exit(2); }
 const lb = (e, nombre, cols) => sqlq(`insert into public.geoportal_lista_blanca (email, nombre, rol${cols.map((c) => ", " + c).join("")}, horario, dias) values ('${e}', '${nombre}', '${cols.length ? "consulta" : "admin"}'${cols.map(() => ", true").join("")}, 'sin_restriccion', 'todos')`);
 lb(EMAILS.A, "ZTEVC Admin", []); lb(EMAILS.D, "ZTEVC Comercial", ["ver_comercial", "ver_registro_tecnico"]); lb(EMAILS.R, "ZTEVC Campo", ["ver_campo"]); lb(EMAILS.V, "ZTEVC Supervisor de campo", ["ver_dashboard_campo"]);
 lb(EMAILS.Y, "ZTEVC Supervisor de distribución", ["ver_registro_tecnico", "ver_dashboard_redes"]); lb(EMAILS.S, "ZTEVC Supervisor de planta", ["ver_registro_tecnico", "ver_dashboard_tecnico"]);
-lb(EMAILS.O, "ZTEVC Operador", ["ver_registro_tecnico"]); lb(EMAILS.N, "ZTEVC Sin módulo", ["ver_explorar"]);
+lb(EMAILS.O, "ZTEVC Operador", ["ver_registro_tecnico"]); lb(EMAILS.T, "ZTEVC Actas", ["ver_acta"]); lb(EMAILS.U, "ZTEVC Supervisor de actas", ["ver_dashboard_acta"]); lb(EMAILS.N, "ZTEVC Sin módulo", ["ver_explorar"]);
 const CENTRO = JSON.parse(sqlq("select jsonb_build_object('lat', round(ST_Y(ST_Centroid(ST_Extent(geom)))::numeric, 6), 'lon', round(ST_X(ST_Centroid(ST_Extent(geom)))::numeric, 6)) from redes.activo_vigente_mat where prefijo = 'RED' and sistema = 'acueducto'"));
 const cerca = (m, lim, orden = "ct.contrato") => sqlq(`select string_agg(contrato, ',') from (select ct.contrato from redes.contrato_tramo ct join redes.activo_vigente_mat m on m.activo_id = ct.activo_id
   where ${m} order by ${orden} limit ${lim}) x`.replace(/\$P/g, `ST_SetSRID(ST_MakePoint(${CENTRO.lon}, ${CENTRO.lat}), 4326)::geography`)).split(",");
@@ -93,8 +93,8 @@ try {
   ok("A1 Comercial (perfil D) consulta un contrato real: 200, sin caché y las 6 claves; sin evento", r.s === 200 && r.cache === "no-store" && Object.keys(r.c).sort().join() === "consultado_en,contrato,en_evento,evento,otros_eventos,ubicado"
      && r.c.en_evento === false && r.c.evento === null && r.c.ubicado === true && r.c.contrato === FUERA[0], r.txt);
   const permiten = [], niegan = [];
-  for (const p of ["A", "D", "R", "V", "Y", "S", "O", "N"]) ((await E(p, "evento_contrato", { qs: { contrato: FUERA[0] } })).s === 200 ? permiten : niegan).push(p);
-  ok("A2 permiten A, D, R y V (administrador, Comercial, Formularios de campo y su supervisor); Y, S, O y N reciben 403 — como dice la sonda propuesta", permiten.join() === "A,D,R,V" && niegan.join() === "Y,S,O,N", `permiten ${permiten} · niegan ${niegan}`);
+  for (const p of ["A", "D", "R", "V", "T", "U", "Y", "S", "O", "N"]) ((await E(p, "evento_contrato", { qs: { contrato: FUERA[0] } })).s === 200 ? permiten : niegan).push(p);
+  ok("A2 permiten A, D, R, V, T y U (administrador, Comercial, Formularios de campo, su supervisor, actas y su supervisor); Y, S, O y N reciben 403 — como dice la sonda propuesta", permiten.join() === "A,D,R,V,T,U" && niegan.join() === "Y,S,O,N", `permiten ${permiten} · niegan ${niegan}`);
   ok("A3 sin sesión: 401", (await E(null, "evento_contrato", { qs: { contrato: FUERA[0] } })).s === 401);
   r = await E("D", "evento_contrato", { qs: { contrato: "12A45" } });
   ok("A4 un contrato con letras: 400 con su texto; por POST: 405", r.s === 400 && /número del contrato/.test(r.c?.error ?? "") && (await E("D", "evento_contrato", { metodo: "POST", cuerpo: {} })).s === 405, r.txt);

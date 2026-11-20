@@ -1,5 +1,5 @@
-OK    01 el ensayo termina en el ERROR esperado: 32 de 32 … SIN FALLAS
-   TIEMPOS (200 contratos reales, 4 eventos abiertos y 300 cerrados): mediana 0.3 ms · p95 0.4 ms · el más lento 1.3 ms (meta 150 ms)
+OK    01 el ensayo termina en el ERROR esperado: 31 de 31 … SIN FALLAS
+   TIEMPOS (200 contratos reales, 4 eventos abiertos y 300 cerrados): mediana 0.3 ms · p95 0.5 ms · el más lento 1.4 ms (meta 150 ms)
 OK    02 … y no deja nada (sigue la huella anterior, no están las funciones, ni un evento ni una fila de auditoría)
 OK    03 las huellas antes: «MIS REPORTES (lista para el aviso)», las 3 nuevas no existen y las 5 que no se tocan son las publicadas
 OK    04 la migración se aplica
@@ -8,12 +8,12 @@ OK    06 las huellas después: «AVISO POR CONTRATO (aplicado)», 3 nuevas y las
 OK    07 la verificación: las 6 filas OK
 OK    08 una segunda migración se niega
 OK    09 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE
-OK    10 antes del evento, un contrato real como la Edge (39 ms): sin evento
+OK    10 antes del evento, un contrato real como la Edge (42 ms): sin evento
 OK    11 se declara un evento SIMULADO (círculo de 300 m en el centro de la red real) con la RPC publicada: EVS-000001, 1177 contratos
 OK    12 como la Edge: los 20 contratos reales a menos de 150 m del centro están en EVS-000001 y los 20 a más de 1,5 km no
 OK    13 MISMA REGLA DEL CORTE 15 sobre la red real: el evento contó 1177 contratos al declararse y esta consulta pone dentro exactamente 1177
 OK    14 el operador de Técnica y alguien sin permiso no consultan (42501)
-OK    15 TIEMPOS como la Edge, en una sesión abierta (como las de PostgREST): 40 contratos reales, mediana 0.53 ms y, sin contar la primera, el más lento 0.74 ms (tope local 25 ms). La primera de la sesión 18.03 ms (prepara las funciones y PostGIS; tope local 150 ms). INFO: con una conexión NUEVA, 43 ms contando abrir psql. Leer no audita
+OK    15 TIEMPOS como la Edge, en una sesión abierta (como las de PostgREST): 40 contratos reales, mediana 0.55 ms y, sin contar la primera, el más lento 0.82 ms (tope local 25 ms). La primera de la sesión 18.31 ms (prepara las funciones y PostGIS; tope local 150 ms). INFO: con una conexión NUEVA, 44 ms contando abrir psql. Leer no audita
 OK    16 cerrado el evento simulado, el contrato vuelve a «sin evento»
 OK    17 la reversa se aplica: vuelve la huella anterior, las funciones anteriores siguen igual y el evento simulado no se toca
 OK    18 una segunda reversa se niega
