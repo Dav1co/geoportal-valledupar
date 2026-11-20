@@ -85,7 +85,8 @@ const COLS = {
   activos: [c("codigo", "Código", "texto"), c("tipo", "Tipo", "texto"), c("prefijo", "Prefijo", "texto"), c("sistema", "Sistema", "texto"), c("diametro_mm", "Diámetro", "decimal", "mm"), c("sector", "Sector", "entero"), c("lat", "Latitud", "decimal"), c("lon", "Longitud", "decimal")],
 };
 // Filtros que acepta cada reporte e «Incluir excluidos» (tablas §2 y §3 del contrato). «no aplica» en distribución: se rechaza aquí, para que la pantalla no lo mande.
-const ACEPTA = { entrada: ["planta"], salida: ["planta"], muestreo: ["punto", "zona"], uso_quimicos: ["planta", "quimico"], entrada_quimicos: ["quimico"], kardex_quimicos: ["quimico"],
+const ACEPTA = { entrada: ["planta"], salida: ["planta", "punto"],      // CAMBIO del Code A (20-nov): Salida también por punto
+  muestreo: ["punto", "zona"], uso_quimicos: ["planta", "quimico"], entrada_quimicos: ["quimico"], kardex_quimicos: ["quimico"],
   eventos_planta: ["planta"], fuera_referencia: ["planta", "formulario", "punto"], levantamientos: ["sector"], valvulas: ["sector"], eventos: ["sector"], l116: ["sector"], bot: ["sector"],
   sensibles: ["tipo"], activos: ["tipo", "sistema"] };
 const SIN_EXCLUIDOS = new Set(["valvulas"]);
@@ -320,6 +321,7 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
   const unaAbierta = await pg.evaluate(() => document.querySelectorAll(".rep-abierta").length === 1 && !!document.querySelector('[data-reporte="salida"].rep-abierta'));
   const conserva = await pg.evaluate(() => [document.querySelector("#rep-salida-desde")?.value, document.querySelector("#rep-salida-planta")?.value]);
   ok(`${T} P11 una tarjeta abierta a la vez; el periodo y la planta se conservan al pasar a otra`, unaAbierta && conserva[0] === "2026-11-01" && conserva[1] === "ZT1", JSON.stringify(conserva));
+  ok(`${T} P11b Salida: filtros «Planta» y «Punto» (CAMBIO del Code A)`, (await rotulos(pg, "salida")).includes("Punto") && (await rotulos(pg, "salida")).includes("Planta"));
   antes = readdirSync(BAJADAS);
   await enTarjeta(pg, "salida", "Descargar CSV"); await esperarAviso(pg, "salida");
   f = await archivoNuevo(antes, ".csv");

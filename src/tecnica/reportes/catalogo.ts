@@ -49,9 +49,9 @@ export const REPORTES_PTAP: DefReporte[] = [
   { clave: "entrada", titulo: "Entrada", descripcion: "Agua cruda: un envío por fila, cada variable en su columna.", funcion: T,
     periodo: true, periodoPor: "la fecha de la muestra", filtros: [PLANTA], ocultos: "Incluir los excluidos",
     trae: "Un envío del formulario Entrada por fila: muestra, planta, cada variable en su columna, coagulante y dosis, estado y quién registró.", noTrae: SIN_PERSONALES, archivo: "ptap_entrada" },
-  { clave: "salida", titulo: "Salida", descripcion: "Agua tratada: un envío por fila, cada variable en su columna.", funcion: T,
-    periodo: true, periodoPor: "la fecha de la muestra", filtros: [PLANTA], ocultos: "Incluir los excluidos",
-    trae: "Un envío del formulario Salida por fila: muestra, planta, cada variable en su columna, estado y quién registró.", noTrae: SIN_PERSONALES, archivo: "ptap_salida" },
+  { clave: "salida", titulo: "Salida", descripcion: "Agua tratada: un envío por fila, cada variable en su columna.", funcion: T,      // CAMBIO del Code A (20-nov): también por punto
+    periodo: true, periodoPor: "la fecha de la muestra", filtros: [PLANTA, PUNTO], ocultos: "Incluir los excluidos",
+    trae: "Un envío del formulario Salida por fila (de una planta o de un punto: tanque, distribución): muestra, lugar, cada variable en su columna, estado y quién registró.", noTrae: SIN_PERSONALES, archivo: "ptap_salida" },
   { clave: "muestreo", titulo: "Muestreo", descripcion: "Muestras en la red: una por fila, con el punto y la zona.", funcion: T,
     periodo: true, periodoPor: "la fecha de la muestra", filtros: [PUNTO, ZONA], ocultos: "Incluir los excluidos",
     trae: "Una muestra de un punto por fila: punto, zona, número de informe, cada variable en su columna, estado y quién registró.", noTrae: SIN_PERSONALES, archivo: "ptap_muestreo" },
