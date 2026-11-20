@@ -1,0 +1,32 @@
+/* Reportes del Dashboard PTAP y Descargas del Dashboard distribución (PanelReportes.tsx): la tarjeta de la guía visual (§5: fondo blanco, borde 1 px
+   --t-borde, borde izquierdo de 5 px del color del dashboard, radio 12 px, cuadro con la inicial, nombre en negrita y una línea de descripción) en la rejilla
+   de la guía (una columna en el celular; en PC las que quepan de 260 px, como el inicio de Técnica). La tarjeta abierta ocupa la fila entera. Solo tokens. */
+.rep-rejilla { display: grid; grid-template-columns: 1fr; gap: var(--t-esp-3); }
+.rep-tarjeta { min-width: 0; background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); }
+.rep-abierta { grid-column: 1 / -1; border-color: var(--t-modo); }
+.rep-cab { width: 100%; min-height: 68px; display: flex; align-items: center; gap: 14px; padding: var(--t-esp-3) 14px; background: none; border: none; border-radius: var(--t-radio-tarjeta);
+  font: inherit; color: var(--t-texto); text-align: left; cursor: pointer; box-sizing: border-box; }
+.rep-cab:hover:not(:disabled) .rep-nom { text-decoration: underline; }
+.rep-cab:focus-visible { outline: 3px solid var(--t-foco); outline-offset: 2px; }
+.rep-cab:disabled { cursor: not-allowed; opacity: .6; }
+.rep-ini { flex: 0 0 44px; width: 44px; height: 44px; border-radius: var(--t-radio-tarjeta); background: var(--t-modo); color: #fff; font-size: 20px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+.rep-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rep-nom { font-size: 16px; font-weight: 600; color: var(--t-titulo); }
+.rep-desc { font-size: var(--t-txt-chico); color: var(--t-texto-2); line-height: 1.35; }
+.rep-form { display: flex; flex-direction: column; gap: var(--t-esp-3); padding: 0 var(--t-esp-4) var(--t-esp-4); border-top: 1px solid var(--t-borde); padding-top: var(--t-esp-3); }
+.rep-campos { display: flex; flex-wrap: wrap; gap: var(--t-esp-3); }
+.rep-campos .td-campo select, .rep-campos .td-campo input[type="date"] { font-size: var(--t-txt-campo); }
+.rep-check { align-self: flex-start; }
+.rep-ayuda { margin: 0; font-size: var(--t-txt-chico); color: var(--t-texto-2); line-height: 1.45; }
+.rep-progreso { display: flex; flex-wrap: wrap; align-items: center; gap: var(--t-esp-3); font-size: var(--t-txt); color: var(--t-texto); }
+@media (min-width: 760px) {
+  .rep-rejilla { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .rep-cab { min-height: 84px; }
+  .rep-nom { font-size: 17px; }
+  .rep-desc { font-size: 14px; }
+}
+@media (max-width: 700px) {
+  .rep-campos .td-campo { flex: 1 1 100%; }
+  .rep-botones .td-boton, .rep-botones .td-boton-sec, .rep-progreso .td-boton-sec { width: 100%; }
+}

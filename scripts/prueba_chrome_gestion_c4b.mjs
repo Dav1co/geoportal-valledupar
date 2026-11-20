@@ -302,12 +302,12 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} Gráficas no desborda`, await sinDesborde(p));
   await p.screenshot({ path: join(CAP, `graficas_${ancho}.png`), fullPage: true });
   // Descargas: el archivo Excel real
-  await pestana(p, "Descargas"); await esperarTexto(p, /Descargar en Excel/);
+  await pestana(p, "Descargas"); await p.waitForSelector('[data-reporte="danos"] .rep-cab', { timeout: 8000 });      // 20-nov: la tarjeta común de reportes
   const cdp = await p.createCDPSession(); const carpeta = join(DESCARGAS, String(ancho)); mkdirSync(carpeta, { recursive: true });
   await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: carpeta });
-  await clicTexto(p, ".tec-tarjeta .dan-opcion", "Daños y fallas");
+  await p.evaluate(() => document.querySelector('[data-reporte="danos"] .rep-cab').click());
   const aud0 = Number(sqlq(`select count(*) from public.geoportal_auditoria where accion = 'redes_descarga'`));
-  await clicTexto(p, ".itv-guardar", "Descargar Excel"); await esperarTexto(p, /Listo: [\d.]+ filas?\. La descarga quedó registrada/, 30000);
+  await clicTexto(p, '[data-reporte="danos"] button', "Descargar Excel"); await esperarTexto(p, /Listo: [\d.]+ filas? en Excel\. La descarga quedó registrada/, 30000);
   let archivo = null; for (let i = 0; i < 40 && !archivo; i++) { archivo = readdirSync(carpeta).find((f) => f.endsWith(".xlsx")); if (!archivo) await new Promise((r) => setTimeout(r, 250)); }
   const hoja = archivo ? execFileSync("python3", ["-I", "-c", "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print(z.read('xl/worksheets/sheet1.xml').decode() + z.read('xl/worksheets/sheet2.xml').decode())", join(carpeta, archivo)], { encoding: "utf8" }) : "";
   ok(`${tag} el Excel de daños se descarga (${archivo}), trae el daño de prueba con el tipo de tercero y NO su placa`, !!archivo && hoja.includes(D.dano) && hoja.includes("vehiculo") && !hoja.includes(`ZQ${ancho}`)

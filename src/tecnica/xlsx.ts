@@ -4,6 +4,9 @@
 // de XML en memoria; si el navegador no lo tiene, se guarda sin comprimir (el archivo pesa más pero abre igual).
 
 export type Celda = string | number | null | { fecha: number } | { hora: number } | { fechaHora: number };
+export type CeldaConEnlace = Celda | { enlace: string; texto: string };
+// { enlace, texto }: un vínculo web (reportes del PTAP: la foto de la remisión). Va como hipervínculo de la hoja (relación externa), no como fórmula: así no
+// tiene el tope de 255 caracteres de HIPERVINCULO() y Excel no lo evalúa.
 
 const ENC = new TextEncoder();
 const XML_CABECERA = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
@@ -19,22 +22,24 @@ function crc32(datos: Uint8Array, previo = 0): number {
 const esc = (s: string) => s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 function nombreColumna(i: number): string { let s = ""; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; }
 
-// Estilos: 0 normal · 1 negrita · 2 fecha · 3 hora · 4 fecha y hora · 5 texto que ajusta línea
-const ESTILO_FECHA = 2, ESTILO_HORA = 3, ESTILO_FECHAHORA = 4;
+// Estilos: 0 normal · 1 negrita · 2 fecha · 3 hora · 4 fecha y hora · 5 texto que ajusta línea · 6 enlace (azul y subrayado)
+const ESTILO_FECHA = 2, ESTILO_HORA = 3, ESTILO_FECHAHORA = 4, ESTILO_ENLACE = 6;
 const STYLES = XML_CABECERA + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
   + '<numFmts count="3"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="hh:mm"/><numFmt numFmtId="166" formatCode="dd/mm/yyyy\\ hh:mm"/></numFmts>'
-  + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+  + '<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><u/><sz val="11"/><color rgb="FF0563C1"/><name val="Calibri"/></font></fonts>'
   + '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
   + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
   + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-  + '<cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+  + '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
   + '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
   + '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
   + '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
   + '<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
-  + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs>'
+  + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>'
+  + '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>'
   + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
 const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+const NS_R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
 const CONTENT_TYPES = XML_CABECERA + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
   + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
   + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
@@ -46,12 +51,13 @@ const WB_RELS = XML_CABECERA + '<Relationships xmlns="http://schemas.openxmlform
   + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>'
   + '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
 
-function celdaXml(ref: string, c: Celda, estilo = 0): string {
+function celdaXml(ref: string, c: CeldaConEnlace, estilo = 0): string {
   if (c === null || c === undefined || c === "") return "";
   if (typeof c === "number") return Number.isFinite(c) ? `<c r="${ref}"${estilo ? ` s="${estilo}"` : ""}><v>${c}</v></c>` : "";
   if (typeof c === "string") return `<c r="${ref}"${estilo ? ` s="${estilo}"` : ""} t="inlineStr"><is><t xml:space="preserve">${esc(c)}</t></is></c>`;
   if ("fecha" in c) return `<c r="${ref}" s="${ESTILO_FECHA}"><v>${c.fecha}</v></c>`;
   if ("hora" in c) return `<c r="${ref}" s="${ESTILO_HORA}"><v>${c.hora}</v></c>`;
+  if ("enlace" in c) return `<c r="${ref}" s="${ESTILO_ENLACE}" t="inlineStr"><is><t xml:space="preserve">${esc(c.texto)}</t></is></c>`;
   return `<c r="${ref}" s="${ESTILO_FECHAHORA}"><v>${c.fechaHora}</v></c>`;
 }
 
@@ -72,10 +78,11 @@ export class LibroXlsx {
   private escritor: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private lectura: Promise<Uint8Array[]> | null = null;
   private crudo: Uint8Array[] = [];                 // si no hay CompressionStream
+  private enlaces: [ref: string, url: string][] = [];   // hipervínculos de la hoja de datos (van al final de la hoja y en sus relaciones)
   private listo: Promise<void>;
   constructor(private o: { hoja: string; encabezados: string[]; anchos: number[]; leame: string[][] }) {
     const cols = o.anchos.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("");
-    const cabecera = XML_CABECERA + `<worksheet ${NS}><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`
+    const cabecera = XML_CABECERA + `<worksheet ${NS} ${NS_R}><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`
       + `<sheetFormatPr defaultRowHeight="15"/><cols>${cols}</cols><sheetData>`
       + `<row r="1">${o.encabezados.map((t, i) => celdaXml(`${nombreColumna(i)}1`, t, 1)).join("")}</row>`;
     if (typeof CompressionStream !== "undefined") {
@@ -91,12 +98,16 @@ export class LibroXlsx {
     if (this.escritor) await this.escritor.write(b); else this.crudo.push(b);
   }
   /** Agrega filas de datos (las columnas del mismo orden que los encabezados). */
-  async agregarFilas(filas: Celda[][]) {
+  async agregarFilas(filas: CeldaConEnlace[][]) {
     await this.listo;
     let xml = "";
     for (const f of filas) {
       this.n++; const r = this.n + 1;
-      xml += `<row r="${r}">` + f.map((c, i) => celdaXml(`${nombreColumna(i)}${r}`, c)).join("") + "</row>";
+      xml += `<row r="${r}">` + f.map((c, i) => {
+        const ref = `${nombreColumna(i)}${r}`;
+        if (c && typeof c === "object" && "enlace" in c && c.texto) this.enlaces.push([ref, c.enlace]);
+        return celdaXml(ref, c);
+      }).join("") + "</row>";
     }
     this.listo = this.escribir(xml); await this.listo;
   }
@@ -104,7 +115,8 @@ export class LibroXlsx {
   async finalizar(): Promise<Blob> {
     await this.listo;
     const ultima = `${nombreColumna(this.o.encabezados.length - 1)}${this.n + 1}`;
-    await this.escribir(`</sheetData><autoFilter ref="A1:${ultima}"/></worksheet>`);
+    const vinculos = this.enlaces.length ? `<hyperlinks>${this.enlaces.map(([ref], i) => `<hyperlink ref="${ref}" r:id="rIdE${i + 1}"/>`).join("")}</hyperlinks>` : "";
+    await this.escribir(`</sheetData><autoFilter ref="A1:${ultima}"/>${vinculos}</worksheet>`);
     let datos1: Uint8Array; let comprimido = false;
     if (this.escritor && this.lectura) {
       await this.escritor.close(); const partes = await this.lectura; comprimido = true;
@@ -115,7 +127,10 @@ export class LibroXlsx {
     const workbook = XML_CABECERA + `<workbook ${NS} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${esc(this.o.hoja)}" sheetId="1" r:id="rId1"/><sheet name="Léame" sheetId="2" r:id="rId2"/></sheets></workbook>`;
     const peq = (nombre: string, texto: string): Entrada => { const d = ENC.encode(texto); return { nombre, datos: d, crc: crc32(d), usize: d.length, comprimido: false }; };
     return zip([peq("[Content_Types].xml", CONTENT_TYPES), peq("_rels/.rels", RELS), peq("xl/workbook.xml", workbook), peq("xl/_rels/workbook.xml.rels", WB_RELS),
-      peq("xl/styles.xml", STYLES), { nombre: "xl/worksheets/sheet1.xml", datos: datos1, crc: this.crc, usize: this.usize, comprimido }, peq("xl/worksheets/sheet2.xml", leame)]);
+      peq("xl/styles.xml", STYLES), { nombre: "xl/worksheets/sheet1.xml", datos: datos1, crc: this.crc, usize: this.usize, comprimido }, peq("xl/worksheets/sheet2.xml", leame),
+      ...(this.enlaces.length ? [peq("xl/worksheets/_rels/sheet1.xml.rels", XML_CABECERA + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + this.enlaces.map(([, url], i) => `<Relationship Id="rIdE${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${esc(url).replace(/"/g, "&quot;")}" TargetMode="External"/>`).join("")
+        + "</Relationships>")] : [])]);
   }
 }
 

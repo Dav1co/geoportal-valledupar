@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  apiGestion, type AccionSugerida, type Area, type GrupoNoCrear, type VistaPreviaGrupo, type CatalogoRedes, type Descarga, type EventoFicha, type GraficasRedes, type NodoPorClasificar, type NodosPorClasificar,
+  apiGestion, type AccionSugerida, type Area, type GrupoNoCrear, type VistaPreviaGrupo, type CatalogoRedes, type EventoFicha, type GraficasRedes, type NodoPorClasificar, type NodosPorClasificar,
   type Parametro, type ParametrosRedes, type PersonaRedes, type PersonalRedes, type TipoCatalogo,
 } from "./apiRedes";
 import { ErrorTec } from "./apiTecnica";
 import { NodoPreliminar } from "./NodoPreliminar";
-import { importarConRecarga } from "../lib/recarga";
 
 // Dashboard distribución · gestión (Técnica fase 1, Corte 4b): Personal (área, cargo, cuadrilla y la casilla del geovisor del operador, N-13 y §27.3),
 // Catálogo (alias N-12 y cuadrillas), Parámetros, Gráficas (D-19), Descargas en Excel (auditadas) y Nodos por clasificar (solo el administrador).
@@ -431,86 +430,8 @@ export function Graficas({ onFicha }: { onFicha: (c: string) => void }) {
   );
 }
 
-// =====================================================================
-// DESCARGAS EN EXCEL (los datos salen solo por la ruta auditada; el archivo se arma en el navegador)
-// =====================================================================
-type Col = [clave: string, titulo: string, ancho: number, tipo?: "fechaHora" | "num"];
-const COL_ITV: Col[] = [["codigo", "Código", 12], ["nace_de", "Nace de", 11], ["dano", "Daño que atiende", 13], ["tipo", "Tipo", 22], ["inversion_modo", "Inversión", 10],
-  ["sistema", "Sistema", 14], ["activo", "Activo", 13], ["prefijo", "Prefijo", 8], ["tipo_activo", "Tipo de activo (nombre visible)", 24], ["no_identificado", "No identificado", 22],
-  ["t_inicio", "Inicio", 17, "fechaHora"], ["t_fin", "Fin", 17, "fechaHora"], ["duracion_min", "Duración (min)", 12, "num"], ["ejecutor", "Ejecutor", 12], ["contratista", "Contratista", 22],
-  ["contrato_orden", "Contrato u orden", 16], ["estado", "Estado", 11], ["resuelve_dano", "Resuelve el daño", 10], ["fotos", "Fotos", 7, "num"], ["documentos", "Documentos", 9, "num"],
-  ["recursos", "Recursos", 13], ["aportantes", "Aportantes", 26], ["valor_total", "Valor total", 14, "num"], ["lat", "Latitud", 11, "num"], ["lon", "Longitud", 11, "num"],
-  ["autor", "Registró", 28], ["registrado_en", "Registrado", 17, "fechaHora"]];
-const COL_DAN: Col[] = [["codigo", "Código", 12], ["clase", "Clase", 8], ["tipo", "Tipo", 22], ["sistema", "Sistema", 14], ["activo", "Activo", 13], ["prefijo", "Prefijo", 8],
-  ["tipo_activo", "Tipo de activo (nombre visible)", 24], ["no_identificado", "No identificado", 22], ["estado", "Estado", 12], ["t_inicio_dano", "Inicio del daño", 17, "fechaHora"],
-  ["t_detectado", "Detectado", 17, "fechaHora"], ["t_inicio_reparacion", "Inicio de la reparación", 17, "fechaHora"], ["t_restablecido", "Servicio restablecido", 17, "fechaHora"],
-  ["respuesta_min", "Respuesta (min)", 11, "num"], ["reparacion_min", "Reparación (min)", 11, "num"], ["total_min", "Total (min)", 11, "num"], ["tipo_rotura", "Rotura", 12],
-  ["largo_afectado_m", "Largo afectado (m)", 11, "num"], ["presion_mca", "Presión (mca)", 10, "num"], ["usuarios_sin_servicio", "Usuarios sin servicio", 11, "num"], ["sector", "Sector", 8, "num"],
-  ["riesgo", "Riesgo", 8], ["causa_clase", "Causa (clase)", 12], ["causa", "Causa", 18], ["tercero_tipo", "Tipo de tercero", 16], ["origen", "Origen", 11],
-  ["intervenciones", "Intervenciones", 10, "num"], ["fotos", "Fotos", 7, "num"], ["lat", "Latitud", 11, "num"], ["lon", "Longitud", 11, "num"], ["autor", "Registró", 28],
-  ["registrado_en", "Registrado", 17, "fechaHora"]];
-const BOGOTA = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
-function partesBogota(iso: string): [string, string] | null {
-  const d = new Date(iso); if (Number.isNaN(d.getTime())) return null;
-  const p = Object.fromEntries(BOGOTA.formatToParts(d).map((x) => [x.type, x.value]));
-  return [`${p.year}-${p.month}-${p.day}`, `${p.hour}:${p.minute}:${p.second}`];
-}
-const hoyBogota = () => partesBogota(new Date().toISOString())![0];
-
-export function Descargas() {
-  const [conjunto, setConjunto] = useState<"intervenciones" | "danos">("intervenciones");
-  const [desde, setDesde] = useState(() => hoyBogota().slice(0, 8) + "01");
-  const [hasta, setHasta] = useState(hoyBogota);
-  const [ocultos, setOcultos] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null);
-  const [trabajando, setTrabajando] = useState(false);
-  async function descargar() {
-    if (!desde || !hasta || hasta < desde) { setMsg({ ok: false, t: "Elija el rango: «hasta» no puede ser antes de «desde»." }); return; }
-    setTrabajando(true); setMsg(null);
-    try {
-      const d: Descarga = await apiGestion.descarga(conjunto, desde, hasta, ocultos);
-      const cols = conjunto === "intervenciones" ? COL_ITV : COL_DAN;
-      const { LibroXlsx, serialExcel } = await importarConRecarga(() => import("./xlsx"));
-      const libro = new LibroXlsx({ hoja: conjunto === "intervenciones" ? "Intervenciones" : "Daños y fallas", encabezados: cols.map((c) => c[1]), anchos: cols.map((c) => c[2]),
-        leame: [["Qué es", conjunto === "intervenciones" ? "Intervenciones de distribución (Técnica)" : "Daños y fallas de distribución (Técnica)"],
-          ["Rango", `${desde} a ${hasta} (${conjunto === "intervenciones" ? "por la fecha de fin" : "por la fecha de detección"}; hora de Bogotá)`],
-          ["Ocultos", ocultos ? "Incluidos (columna Estado)" : "No incluidos"], ["Filas", String(d.total)],
-          ["Generado", `${fecha(d.generado_en)} por ${d.generado_por}. La descarga queda registrada en la auditoría.`],
-          ["Tipo de activo", "Va el nombre visible y el prefijo: el prefijo no cambia aunque cambie el nombre visible."],
-          ["Lo que no va", "El nombre o la placa del tercero (dato personal), las descripciones y los compañeros (texto libre). Se ven en la pantalla."]] });
-      const filas = d.filas.map((f) => cols.map(([k, , , tipo]) => {
-        const v = f[k]; if (v === null || v === undefined) return null;
-        if (tipo === "fechaHora") { const p = partesBogota(String(v)); const s = p ? serialExcel(p[0], p[1]) : null; return s === null ? String(v) : { fechaHora: s }; }
-        if (tipo === "num") return typeof v === "number" ? v : Number(v);
-        if (typeof v === "boolean") return v ? "Sí" : "No";
-        return String(v);
-      }));
-      for (let i = 0; i < filas.length; i += 2000) await libro.agregarFilas(filas.slice(i, i + 2000));
-      const blob = await libro.finalizar();
-      const url = URL.createObjectURL(blob); const a = document.createElement("a");
-      a.href = url; a.download = `${conjunto === "intervenciones" ? "intervenciones" : "danos_fallas"}_${desde}_a_${hasta}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 30_000);
-      setMsg({ ok: true, t: `Listo: ${nf(d.total)} fila${d.total === 1 ? "" : "s"}. La descarga quedó registrada.` });
-    } catch (e) { setMsg({ ok: false, t: err(e, "Solo el supervisor de distribución o el administrador descargan.") }); } finally { setTrabajando(false); }
-  }
-  return (
-    <section className="tec-tarjeta" aria-label="Descargar en Excel">
-      <h2>Descargar en Excel</h2>
-      <div className="dan-fila" role="group" aria-label="Qué descargar">
-        <button type="button" className="dan-opcion" aria-pressed={conjunto === "intervenciones"} onClick={() => setConjunto("intervenciones")}>Intervenciones</button>
-        <button type="button" className="dan-opcion" aria-pressed={conjunto === "danos"} onClick={() => setConjunto("danos")}>Daños y fallas</button>
-      </div>
-      <div className="gest-fechas">
-        <div className="tec-campo"><label htmlFor="ds-desde">Desde</label><input id="ds-desde" type="date" value={desde} max={hasta} onChange={(e) => setDesde(e.target.value)} /></div>
-        <div className="tec-campo"><label htmlFor="ds-hasta">Hasta</label><input id="ds-hasta" type="date" value={hasta} min={desde} onChange={(e) => setHasta(e.target.value)} /></div>
-      </div>
-      <label className="dan-check gest-check"><input type="checkbox" checked={ocultos} onChange={(e) => setOcultos(e.target.checked)} /> Incluir los ocultos</label>
-      <p className="tec-ayuda">Hasta un año por descarga. No lleva el nombre ni la placa del tercero, ni las descripciones. Cada descarga queda registrada con quién la hizo.</p>
-      <Aviso msg={msg} />
-      <button type="button" className="tec-boton itv-guardar" disabled={trabajando} onClick={descargar}>{trabajando ? "Preparando…" : "Descargar Excel"}</button>
-    </section>
-  );
-}
+// DESCARGAS EN EXCEL (Corte 4b): desde el 20-nov van en la pestaña «Descargas» con la tarjeta común de reportes (reportes/PanelReportes.tsx); las columnas de
+// Intervenciones y Daños y fallas pasaron a reportes/columnasGestion.ts.
 
 // =====================================================================
 // NODOS POR CLASIFICAR (solo el administrador; N-3)
