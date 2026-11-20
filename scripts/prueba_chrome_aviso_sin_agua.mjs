@@ -1,6 +1,7 @@
 // Aviso «sin agua» en Campo (19-nov-2026) · prueba en CHROME REAL con los componentes reales (AreaCampo: Análisis de contrato, Formatos de actividad, Reportar
-// anomalía y el acta «Reportar posible pérdida») contra un servidor SIMULADO en 127.0.0.1 (nada llega a Supabase). La ruta del Code A todavía no existe: se simula
-// `geoportal-redes?accion=evento_contrato` con la forma acordada {en_evento, codigo, tipo, desde, regreso_estimado, alcance}.
+// anomalía y el acta «Reportar posible pérdida») contra un servidor SIMULADO en 127.0.0.1 (nada llega a Supabase). La ruta es la del Code A (rama
+// redes-aviso-evento-contrato), simulada con su forma REAL: {contrato, consultado_en, ubicado, en_evento, evento: {codigo, tipo, tipo_nombre, causa, zona,
+// zona_nombre, desde, regreso_estimado, texto} | null, otros_eventos}; 403 para un perfil sin permiso.
 // A 390×844 y 1280×900: el aviso sale si el predio está en un evento activo (con y sin hora de regreso), no sale si no lo está, ni si la consulta falla o tarda
 // más de 2 s; no bloquea guardar ni avanzar; mientras se escribe el contrato se consulta una sola vez.
 //   node scripts/prueba_chrome_aviso_sin_agua.mjs <ruta_chrome> <ruta_puppeteer-core> [carpeta_capturas]
@@ -100,16 +101,21 @@ const USUARIOS = { admc: usuario(true), adms: usuario(false) };
 
 
 // ---------- La ruta del Code A, SIMULADA (forma acordada) y el acta ----------
-const EVENTO = (regreso) => ({ en_evento: true, codigo: "EVS-000007", tipo: "suspension", desde: new Date(Date.now() - 3600000).toISOString(), regreso_estimado: regreso, alcance: "sectores" });
+const EVENTO = (regreso, otros = 0) => ({ ubicado: true, en_evento: true, otros_eventos: otros, evento: { codigo: "EVS-000007", tipo: "suspension", tipo_nombre: "Suspensión del servicio", causa: "ZT fuga simulada",
+  zona: "sectores", zona_nombre: "Subsector 1.1", desde: new Date(Date.now() - 3600000).toISOString(), regreso_estimado: regreso, texto: "Sin agua en Subsector 1.1 desde … por ZT fuga simulada. Regreso estimado: …" } });
+const FUERA = { ubicado: true, en_evento: false, evento: null, otros_eventos: 0 };
 // contratos ENCONTRADOS en el análisis para cada caso (copias del completo, con otro número)
-for (const c of ["1000009", "1000500", "1000777", "1000404"]) RESP[c] = [200, { ...COMPLETO, contrato: c }];
-const ESC = { "1000001": [200, EVENTO(new Date(Date.now() + 4 * 3600000).toISOString()), 0], "1000009": [200, EVENTO(null), 0], "1000003": [200, { en_evento: false }, 0], "1000010": [200, EVENTO(null), 0], "1000002": [200, { en_evento: false }, 0],
+for (const c of ["1000009", "1000500", "1000777", "1000404", "1000403", "1000011", "1000012", "1000013", "1000014"]) RESP[c] = [200, { ...COMPLETO, contrato: c }];
+const ESC = { "1000001": [200, EVENTO(new Date(Date.now() + 4 * 3600000).toISOString()), 0], "1000009": [200, EVENTO(null), 0], "1000003": [200, FUERA, 0], "1000010": [200, EVENTO(null), 0], "1000002": [200, FUERA, 0],
   "1000500": [500, { error: "falla" }, 0], "1000777": [200, EVENTO(new Date(Date.now() + 3600000).toISOString()), 3000], "12345": [200, EVENTO(new Date(Date.now() + 2 * 3600000).toISOString()), 0],
-  "1000404": [400, { error: "Acción no soportada." }, 0] };
+  "1000404": [400, { error: "Acción no soportada." }, 0], "1000403": [403, { error: "No tiene permiso para esta acción." }, 0],
+  "1000011": [200, EVENTO(new Date(Date.now() + 3600000).toISOString(), 1), 0], "1000012": [200, EVENTO(null, 2), 0],
+  "1000013": [200, { ...EVENTO(null), contrato: "9999999" }, 0], "1000014": [200, { en_evento: true, codigo: "EVS-1", regreso_estimado: null }, 0] };
 function redes(accion, url, r, no) {
   if (accion !== "evento_contrato") return no(400, "Acción no soportada.");
-  const x = ESC[url.searchParams.get("contrato")] ?? [200, { en_evento: false }, 0];
-  setTimeout(() => { if (r.writableEnded) return; r.writeHead(x[0], cab); r.end(JSON.stringify(x[1])); }, x[2]);
+  const x = ESC[url.searchParams.get("contrato")] ?? [200, FUERA, 0];
+  const cuerpo = x[0] === 200 && !("contrato" in x[1]) && "ubicado" in x[1] ? { contrato: url.searchParams.get("contrato"), consultado_en: new Date().toISOString(), ...x[1] } : x[1];
+  setTimeout(() => { if (r.writableEnded) return; r.writeHead(x[0], cab); r.end(JSON.stringify(cuerpo)); }, x[2]);
 }
 const CAT_ACTA = { capacidades: { capturar: true, supervisar: false, administrar: false }, aviso_registro: "Registro digital.", tipos_hallazgo: [{ codigo: "otro", nombre: "Otro", nota: null, exige_texto: true, excluyente: false, habilita_accion: null }],
   calidades_atendiente: [], estados_medidor: [], estados_sellos: [], diametros: [], acciones: [], tipos_foto: [{ codigo: "fachada", nombre: "Fachada", exigida_con_irregularidad: true, acta_fisica: false }],
@@ -228,6 +234,16 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
   ok(`${T} A7 si la consulta tarda más de 2 s (3 s): no espera por ella (la tarjeta sale enseguida) y el aviso NO aparece ni después`, (await aviso(pg)) === null && tarjetaMs < 2000, `${tarjetaMs} ms`);
   await consultar(pg, "1000404"); await esp(900);
   ok(`${T} A8 si la ruta todavía no existe (400 «Acción no soportada»): sin aviso, sin errores`, (await aviso(pg)) === null);
+  await consultar(pg, "1000403"); await esp(900);
+  ok(`${T} A9 perfil sin permiso para la ruta (403, por ejemplo quien solo tiene el acta): sin aviso`, (await aviso(pg)) === null && !!(await pg.$("[data-testid=tarjeta]")));
+  await consultar(pg, "1000011"); await pg.waitForSelector("[data-testid=aviso-sin-agua]", { timeout: 5000 }).catch(() => {}); a = await aviso(pg);
+  ok(`${T} A10 otro evento abierto también toca el predio: «… Regreso estimado: <hora>. (y 1 evento más)»`, /^Sin prestación del servicio en este momento\. Regreso estimado: (\d{1,2} de [a-zñ]{3,5}\.?, )?\d{1,2}:\d{2}\s?[ap]\.\s?m\. \(y 1 evento más\) Llame al usuario/.test(a?.txt ?? ""), a?.txt);
+  await consultar(pg, "1000012"); await pg.waitForSelector("[data-testid=aviso-sin-agua]", { timeout: 5000 }).catch(() => {}); a = await aviso(pg);
+  ok(`${T} A11 sin hora y con 2 eventos más: «… Todavía no hay hora estimada de regreso. (y 2 eventos más)»`, (a?.txt ?? "").startsWith("Sin prestación del servicio en este momento. Todavía no hay hora estimada de regreso. (y 2 eventos más)"), a?.txt);
+  await consultar(pg, "1000013"); await esp(900);
+  ok(`${T} A12 una respuesta de OTRO contrato (llegó tarde) se descarta: sin aviso`, (await aviso(pg)) === null);
+  await consultar(pg, "1000014"); await esp(900);
+  ok(`${T} A13 una respuesta con otra forma (la simulada vieja, sin «evento») se descarta: sin aviso`, (await aviso(pg)) === null);
   await pg.close();
 
   // ===== B. Formatos de actividad =====
@@ -261,9 +277,11 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
   await clicTexto(pg, "button", "Nueva acta"); await pg.waitForSelector("#acta-contrato");
   await escribir(pg, "#acta-contrato", "12345"); await esp(800);
   ok(`${T} D1 Acta: con el contrato escrito pero SIN verificar no hay aviso (se identifica al verificar)`, (await aviso(pg)) === null);
+  const consultasAntes = consultasEvento().length;
   await clicTexto(pg, "button", "Verificar"); await pg.waitForSelector("[data-testid=aviso-sin-agua]", { timeout: 5000 }).catch(() => {});
   a = await aviso(pg);
-  ok(`${T} D2 al verificar un contrato que está en un evento activo: el aviso, junto a la dirección del predio`, !!a && TEXTO_HORA.test(a.txt) && /CRA 0 00 00/.test(await texto(pg)), a?.txt);
+  ok(`${T} D2 al verificar un contrato que está en un evento activo: el aviso, junto a la dirección del predio (una consulta, con el contrato tal cual)`, !!a && TEXTO_HORA.test(a.txt) && /CRA 0 00 00/.test(await texto(pg))
+     && consultasEvento().length === consultasAntes + 1 && consultasEvento().at(-1).qs.contrato === "12345", a?.txt);
   await pg.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Abrir registro" && !b.disabled), { timeout: 8000 }).catch(() => {});
   ok(`${T} D3 no bloquea: «Abrir registro» queda habilitado igual`, await pg.evaluate(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Abrir registro" && !b.disabled)));
   await pg.evaluate(() => document.querySelector("[data-testid=aviso-sin-agua]")?.scrollIntoView({ block: "center" })); await esp(200); await pg.screenshot({ path: join(CAP, `despues_aviso_acta_${ancho}.png`) });
