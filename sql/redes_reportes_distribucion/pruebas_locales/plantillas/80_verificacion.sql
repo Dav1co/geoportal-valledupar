@@ -3,10 +3,10 @@
 -- Todas las filas deben decir OK. Nota: después de este paquete, la fila de la huella del conjunto de la verificación del aviso por contrato deja de valer.
 -- =====================================================================
 select k, v from (
-  select 1 as o, '01 las 3 RPC: security definer, search_path fijo, solo service_role' as k,
-         case when (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = any (array['geoportal_redes_reporte_iniciar', 'geoportal_redes_reporte_pagina', 'geoportal_redes_reporte_cerrar']) and p.prosecdef and p.proconfig is not null
+  select 1 as o, '01 las 4 RPC: security definer, search_path fijo, solo service_role' as k,
+         case when (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = any (array['geoportal_redes_reporte_iniciar', 'geoportal_redes_reporte_pagina', 'geoportal_redes_reporte_cerrar', 'geoportal_redes_reporte_sectores']) and p.prosecdef and p.proconfig is not null
                      and has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute')
-                     and not exists (select 1 from aclexplode(p.proacl) x where x.grantee = 0)) = 3 then 'OK' else 'MAL' end as v
+                     and not exists (select 1 from aclexplode(p.proacl) x where x.grantee = 0)) = 4 then 'OK' else 'MAL' end as v
   union all select 2, '02 ninguna función interna de redes la ejecuta la API',
          case when not exists (select 1 from pg_proc p where p.pronamespace = 'redes'::regnamespace
                                 and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('service_role', p.oid, 'execute'))) then 'OK' else 'MAL' end

@@ -1,0 +1,11 @@
+== 20-11-2026 16:52 los dos paquetes juntos
+-- orden: dist ptap · conjunto de redes 3f3c89e603629d92e1cc5065de33d0c1
+   verificación Distribución: 6 OK de 6
+   verificación PTAP: 6 OK de 6
+-- orden: ptap dist · conjunto de redes 3f3c89e603629d92e1cc5065de33d0c1
+   verificación Distribución: 6 OK de 6
+   verificación PTAP: 6 OK de 6
+-- con los dos aplicados: una descarga guardada en cada uno y las reversas deben negarse
+   reversa Distribución: psql:/Users/ddiaz/geoportal-emdupar-repsrv/sql/redes_reportes_distribucion/reversa_redes_reportes_distribucion_editor.sql:17: ERROR:  Ya hay descargas guardadas en redes.reporte_descargas: la reversa no las borra. Avise (se puede quitar solo la Edge y dejar el SQL)
+   reversa PTAP: psql:/Users/ddiaz/geoportal-emdupar-repsrv/sql/tecnica_reportes_ptap/reversa_tecnica_reportes_ptap_editor.sql:16: ERROR:  Ya hay descargas guardadas en tecnica.reporte_descargas: la reversa no las borra. Avise (se puede quitar solo la Edge y dejar el SQL)
+-- base local devuelta a la plantilla limpia

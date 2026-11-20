@@ -24,8 +24,9 @@ begin
      or to_regprocedure('tecnica.f_autorizar_supervision(text)') is null or to_regprocedure('tecnica.f_error(text,text)') is null
      or to_regprocedure('tecnica.f_auditar(text,text,text,jsonb,text)') is null or to_regprocedure('tecnica.f_formularios()') is null
      or to_regprocedure('tecnica.f_referencia_vigente(bigint,bigint,bigint)') is null or to_regprocedure('tecnica.f_marca_rango(numeric,numeric,numeric)') is null
-     or to_regprocedure('tecnica.f_solo_agregar()') is null or to_regprocedure('redes.f_evento_reportes(bigint)') is null then
-    raise exception 'Faltan tablas o funciones de planta, de químicos o del Corte 15: deténgase y avise';
+     or to_regprocedure('tecnica.f_solo_agregar()') is null or to_regprocedure('redes.f_evento_reportes(bigint)') is null
+     or to_regclass('redes.tipos_dano') is null or to_regclass('redes.causas') is null or to_regclass('redes.tipos_tercero') is null or to_regclass('redes.tipos_intervencion') is null then
+    raise exception 'Faltan tablas o funciones de planta, de químicos, de los catálogos de daños o del Corte 15: deténgase y avise';
   end if;
   if (select count(*) from pg_attribute where not attisdropped and attnum > 0 and (
         (attrelid = 'tecnica.v_registros_estado'::regclass and attname in ('id', 'lote_id', 'formulario', 'variable_id', 'planta_id', 'punto_id', 'valor', 'fecha_muestra',
@@ -33,7 +34,9 @@ begin
      or (attrelid = 'tecnica.quimico_movimientos'::regclass and attname in ('tipo', 'quimico_id', 'planta_id', 'para_que', 'cantidad', 'unidad', 'cantidad_kg', 'dia',
            'dosis_optima_ppm', 'proveedor', 'remision', 'lote_fabricante', 'vence', 'remision_foto', 'autor', 'registrado_en'))
      or (attrelid = 'tecnica.puntos'::regclass and attname in ('codigo', 'nombre', 'tipo', 'zona', 'numero_informe', 'planta_id'))
-     or (attrelid = 'tecnica.variables'::regclass and attname in ('codigo', 'nombre', 'unidad', 'decimales', 'activa')))) <> 13 + 16 + 6 + 5 then
+     or (attrelid = 'tecnica.variables'::regclass and attname in ('codigo', 'nombre', 'unidad', 'decimales', 'activa'))
+     or (attrelid = 'redes.danos'::regclass and attname in ('id', 'codigo', 'tipo_codigo', 'causa_clase', 'causa_codigo', 'tercero_tipo'))
+     or (attrelid = 'redes.intervenciones'::regclass and attname in ('id', 'codigo', 'dano_id', 'tipo_codigo')))) <> 13 + 16 + 6 + 5 + 6 + 4 then
     raise exception 'Las vistas o tablas de planta no tienen las columnas esperadas: deténgase y avise';
   end if;
 end $$;

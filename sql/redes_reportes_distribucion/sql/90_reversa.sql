@@ -1,5 +1,5 @@
 -- =====================================================================
--- TÉCNICA · FASE 1 · DESCARGAS DE DISTRIBUCIÓN · 90 — REVERSA (PROPUESTA). Quita las 3 RPC, las funciones internas y las 2 tablas.
+-- TÉCNICA · FASE 1 · DESCARGAS DE DISTRIBUCIÓN · 90 — REVERSA (PROPUESTA). Quita las 4 RPC, las funciones internas y las 2 tablas.
 -- SE NIEGA si alguna función cambió después de la migración, y SE NIEGA si ya hay descargas guardadas (son registro de auditoría: nada se borra;
 -- la auditoría común también las tiene). Antes de la reversa, devuelva la Edge a la anterior.
 -- =====================================================================
@@ -7,7 +7,7 @@ do $$
 begin
   if to_regprocedure('public.geoportal_redes_reporte_iniciar(text,text,jsonb,text,boolean,text)') is null then raise exception 'No hay nada que revertir: las descargas de Distribución no están aplicadas'; end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> 'ef5fc9df2a7ba17df5797bc2971d2f04' then
+       where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) <> '3f3c89e603629d92e1cc5065de33d0c1' then
     raise exception 'Las funciones cambiaron después de la migración: la reversa se niega a pisarlas; avise';
   end if;
   if exists (select 1 from redes.reporte_descargas) then
@@ -17,7 +17,8 @@ end $$;
 drop function redes.f_rep_valvulas(jsonb,timestamp with time zone,text,integer,boolean);
 drop function redes.f_rep_ts(timestamp with time zone);
 drop function redes.f_rep_sensibles(jsonb,boolean,timestamp with time zone,text,integer,boolean);
-drop function redes.f_rep_sector_geom(integer);
+drop function redes.f_rep_sectores();
+drop function redes.f_rep_sector_geom(text);
 drop function redes.f_rep_rotulo(text);
 drop function redes.f_rep_punto(geometry);
 drop function redes.f_rep_max_filas();
@@ -33,6 +34,7 @@ drop function redes.f_rep_col(text,text,text,text,integer);
 drop function redes.f_rep_catalogo();
 drop function redes.f_rep_bot(jsonb,boolean,timestamp with time zone,text,integer,boolean);
 drop function redes.f_rep_activos(jsonb,boolean,timestamp with time zone,text,integer,boolean);
+drop function geoportal_redes_reporte_sectores(text);
 drop function geoportal_redes_reporte_pagina(text,bigint,text,integer);
 drop function geoportal_redes_reporte_iniciar(text,text,jsonb,text,boolean,text);
 drop function geoportal_redes_reporte_cerrar(text,bigint,integer,text,text);

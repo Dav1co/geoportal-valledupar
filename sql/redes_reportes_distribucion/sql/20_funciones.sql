@@ -1,7 +1,9 @@
 -- =====================================================================
 -- 20 — FUNCIONES INTERNAS de las descargas de Distribución (nadie de la API las ejecuta; las llaman las RPC del 26).
 -- Cada reporte devuelve (k, fila): «k» es la llave de orden y de paginación y «fila» el objeto con las claves de sus columnas.
--- Sin textos libres (observaciones, motivos, causas, descripción y dirección del ciudadano, la palabra del nombre que marcó a un sensible). Contrato sí.
+-- Sin textos libres (observaciones, motivos, la causa ESCRITA del evento, descripción y dirección del ciudadano, la palabra del nombre que marcó a un sensible).
+-- Contrato sí. Del evento sí salen el tipo y la causa DE CATÁLOGO del daño asociado (David, 20-nov). El filtro de sector es el código de un sector o subsector
+-- de la capa (activo SEC, como en el Corte 15); la lista la da geoportal_redes_reporte_sectores.
 -- =====================================================================
 
 create function redes.f_rep_catalogo() returns table (clave text, titulo text, orden integer, filtros text[], usa_ocultos boolean, periodo boolean, periodo_sobre text)
@@ -25,11 +27,17 @@ language sql immutable set search_path to 'pg_catalog' as $$
 create function redes.f_rep_rotulo(p text) returns text language sql immutable set search_path to 'pg_catalog' as $$
   select case p when 'en_atencion' then 'En atención' when 'por_confirmar' then 'Por confirmar' when 'en_revision' then 'En revisión'
                 else upper(left(p, 1)) || replace(substr(p, 2), '_', ' ') end $$;
--- La zona de un sector (todos sus polígonos y los de sus subsectores en la capa de sectores), para filtrar por sector.
-create function redes.f_rep_sector_geom(p_sector integer) returns geometry
+-- La zona de un sector o subsector de la capa de sectores (por su código SEC-…, vigente), para filtrar por sector.
+create function redes.f_rep_sector_geom(p_codigo text) returns geometry
 language sql stable set search_path to 'redes', 'public', 'extensions', 'pg_temp' as $$
-  select ST_Union(m.geom) from redes.activo_vigente_mat m join redes.activo_versiones v on v.activo_id = m.activo_id and v.version = m.version
-   where m.prefijo = 'SEC' and not m.retirado and not m.oculto and redes.f_num(v.atributos -> 'modelo' -> 'sector') = p_sector $$;
+  select m.geom from redes.activo_vigente_mat m where m.prefijo = 'SEC' and not m.retirado and not m.oculto and m.codigo = p_codigo $$;
+-- Los sectores y subsectores de la capa (los mismos del Corte 15), con su número de sector y su subsector del modelo, para la lista del filtro.
+create function redes.f_rep_sectores() returns table (codigo text, nombre text, clase text, sector integer, subsector text)
+language sql stable set search_path to 'redes', 'public', 'extensions', 'pg_temp' as $$
+  select m.codigo, coalesce(nullif(btrim(m.nombre), ''), m.codigo), coalesce(m.clase, 'sector'),
+         redes.f_num(v.atributos -> 'modelo' -> 'sector')::integer, nullif(btrim(v.atributos -> 'modelo' ->> 'subsector'), '')
+    from redes.activo_vigente_mat m join redes.activo_versiones v on v.activo_id = m.activo_id and v.version = m.version
+   where m.prefijo = 'SEC' and not m.retirado and not m.oculto $$;
 -- Un punto del activo para las columnas lat/lon (el mismo si es un punto; sobre la línea si es un tramo).
 create function redes.f_rep_punto(p geometry) returns geometry language sql immutable set search_path to 'public', 'extensions', 'pg_temp' as $$
   select case when p is null then null when GeometryType(p) = 'POINT' then p else ST_PointOnSurface(p) end $$;
@@ -55,11 +63,12 @@ begin
     if v_hasta - v_desde > 365 then perform tecnica.f_error('El periodo va hasta de un año: acórtelo.'); end if;
     v_r := jsonb_build_object('desde', v_desde, 'hasta', v_hasta);
   end if;
-  v_t := nullif(btrim(v_f ->> 'sector'), '');
+  v_t := upper(nullif(btrim(v_f ->> 'sector'), ''));
   if v_t is not null then
-    if v_t !~ '^[0-9]{1,3}$' or v_t::integer not between 1 and 100 then perform tecnica.f_error('Ese sector no es válido.'); end if;
-    if redes.f_rep_sector_geom(v_t::integer) is null then perform tecnica.f_error('Ese sector no está en la capa de sectores.'); end if;
-    v_r := v_r || jsonb_build_object('sector', v_t::integer);
+    if v_t !~ '^SEC-[0-9]{1,9}$' then perform tecnica.f_error('Elija el sector de la lista.'); end if;
+    select s.nombre into v_n from redes.f_rep_sectores() s where s.codigo = v_t;
+    if not found then perform tecnica.f_error('Ese sector no está en la capa de sectores.'); end if;
+    v_r := v_r || jsonb_build_object('sector', v_t, 'sector_nombre', v_n);
   end if;
   v_t := nullif(btrim(v_f ->> 'tipo'), '');
   if v_t is not null and p_reporte = 'sensibles' then
@@ -104,7 +113,8 @@ begin
     redes.f_rep_col('duracion_h', 'Duración', 'decimal', 'h', 1), redes.f_rep_col('contratos', 'Contratos afectados', 'entero'),
     redes.f_rep_col('sensibles', 'Usuarios sensibles afectados', 'entero'), redes.f_rep_col('reportes', 'Reportes asociados', 'entero'),
     redes.f_rep_col('reportes_bot', 'Del bot', 'entero'), redes.f_rep_col('reportes_116', 'De la 116', 'entero'), redes.f_rep_col('reportes_danos', 'Daños', 'entero'),
-    redes.f_rep_col('reportes_campo', 'De campo', 'entero'), redes.f_rep_col('dano', 'Daño', 'texto'), redes.f_rep_col('intervencion', 'Intervención', 'texto'),
+    redes.f_rep_col('reportes_campo', 'De campo', 'entero'), redes.f_rep_col('dano', 'Daño', 'texto'), redes.f_rep_col('tipo', 'Tipo de daño o falla', 'texto'),
+    redes.f_rep_col('causa', 'Causa del daño', 'texto'), redes.f_rep_col('intervencion', 'Intervención', 'texto'), redes.f_rep_col('tipo_intervencion', 'Tipo de intervención', 'texto'),
     redes.f_rep_col('declaro', 'Declaró (correo)', 'texto'), redes.f_rep_col('cerro', 'Cerró o anuló (correo)', 'texto'))
   when 'l116' then jsonb_build_array(
     redes.f_rep_col('reporte', 'Reporte de la 116', 'entero'), redes.f_rep_col('registrado_116', 'Registrado en la 116', 'fecha_hora'), redes.f_rep_col('dia', 'Día', 'fecha'),
@@ -131,7 +141,7 @@ end $$;
 -- 3. Encontrar o reportar activo (puntos LEV)
 create function redes.f_rep_levantamientos(p_f jsonb, p_incl boolean, p_corte timestamptz, p_cursor text, p_limite integer, p_solo_llave boolean default false) returns table (k text, fila jsonb)
 language sql stable set search_path to 'redes', 'public', 'extensions', 'pg_temp' as $$
-  with sg as (select redes.f_rep_sector_geom((p_f ->> 'sector')::integer) as g where p_f ? 'sector'),
+  with sg as (select redes.f_rep_sector_geom(p_f ->> 'sector') as g where p_f ? 'sector'),
   x as (select p.* from redes.v_levantar_punto p
          where p.registrado_en >= ((p_f ->> 'desde')::date::timestamp at time zone 'America/Bogota')
            and p.registrado_en < (((p_f ->> 'hasta')::date + 1)::timestamp at time zone 'America/Bogota') and p.registrado_en <= p_corte
@@ -148,7 +158,7 @@ language sql stable set search_path to 'redes', 'public', 'extensions', 'pg_temp
 -- 4. Válvulas cerradas: una fila por cierre, con su apertura y los cambios de regreso.
 create function redes.f_rep_valvulas(p_f jsonb, p_corte timestamptz, p_cursor text, p_limite integer, p_solo_llave boolean default false) returns table (k text, fila jsonb)
 language sql stable set search_path to 'redes', 'public', 'extensions', 'pg_temp' as $$
-  with sg as (select redes.f_rep_sector_geom((p_f ->> 'sector')::integer) as g where p_f ? 'sector'),
+  with sg as (select redes.f_rep_sector_geom(p_f ->> 'sector') as g where p_f ? 'sector'),
   x as (select c.*, a.codigo as valvula, a.geom as vgeom from redes.valvula_maniobras c join redes.activo_vigente_mat a on a.activo_id = c.valvula_id
          where c.tipo = 'cerrar' and c.hecho_en >= ((p_f ->> 'desde')::date::timestamp at time zone 'America/Bogota')
            and c.hecho_en < (((p_f ->> 'hasta')::date + 1)::timestamp at time zone 'America/Bogota') and c.registrado_en <= p_corte
@@ -167,10 +177,11 @@ language sql stable set search_path to 'redes', 'public', 'extensions', 'pg_temp
     from x left join lateral (select r.id, r.hecho_en, r.autor from redes.valvula_maniobras r where r.cierre_id = x.id and r.tipo = 'abrir' and r.registrado_en <= p_corte limit 1) ab on true
    order by x.id $$;
 
--- 5. Eventos de suspensión (todos los alcances). Contratos y sensibles como números. Sin la causa.
+-- 5. Eventos de suspensión (todos los alcances). Contratos y sensibles como números. Sin la causa escrita (texto libre); sí el tipo y la causa de catálogo
+--    del daño asociado (el del evento o el de su intervención) y el tipo de la intervención.
 create function redes.f_rep_eventos(p_f jsonb, p_incl boolean, p_corte timestamptz, p_cursor text, p_limite integer, p_solo_llave boolean default false) returns table (k text, fila jsonb)
 language sql stable set search_path to 'redes', 'public', 'tecnica', 'extensions', 'pg_temp' as $$
-  with sg as (select redes.f_rep_sector_geom((p_f ->> 'sector')::integer) as g where p_f ? 'sector'),
+  with sg as (select redes.f_rep_sector_geom(p_f ->> 'sector') as g where p_f ? 'sector'),
   x as (select e.* from redes.v_evento_suspension e
          where e.creado_en <= p_corte
            and e.desde < (((p_f ->> 'hasta')::date + 1)::timestamp at time zone 'America/Bogota')
@@ -186,9 +197,20 @@ language sql stable set search_path to 'redes', 'public', 'tecnica', 'extensions
            'cambios_regreso', (select count(*) from redes.evento_suspension_eventos z where z.evento_id = x.id and z.tipo = 'regreso'),
            'fin', redes.f_rep_ts(x.fin_en), 'duracion_h', case when x.fin_en is not null then round(extract(epoch from x.fin_en - x.desde) / 3600.0, 1) end,
            'contratos', x.contratos, 'sensibles', x.sensibles, 'reportes', r.n, 'reportes_bot', r.bot, 'reportes_116', r.l116, 'reportes_danos', r.dano, 'reportes_campo', r.campo,
-           'dano', (select d.codigo from redes.danos d where d.id = x.dano_id), 'intervencion', (select i.codigo from redes.intervenciones i where i.id = x.intervencion_id),
+           'dano', cat.dano, 'tipo', cat.tipo, 'causa', cat.causa, 'intervencion', cat.intervencion, 'tipo_intervencion', cat.tipo_intervencion,
            'declaro', x.autor, 'cerro', x.fin_autor) end
-    from x cross join lateral (select count(*) as n, count(*) filter (where v.origen = 'bot') as bot, count(*) filter (where v.origen = 'l116') as l116,
+    from x
+    left join lateral (select case when x.dano_id is not null then d.codigo end as dano, td.nombre as tipo, i.codigo as intervencion, ti.nombre as tipo_intervencion,
+                              case d.causa_clase when 'propia' then coalesce(ca.nombre, 'Propia') when 'terceros' then 'Terceros' || coalesce(': ' || tt.nombre, '')
+                                                 when 'desconocida' then 'Desconocida' end as causa
+                         from (select 1) u
+                         left join redes.intervenciones i on i.id = x.intervencion_id
+                         left join redes.tipos_intervencion ti on ti.codigo = i.tipo_codigo
+                         left join redes.danos d on d.id = coalesce(x.dano_id, i.dano_id)
+                         left join redes.tipos_dano td on td.codigo = d.tipo_codigo
+                         left join redes.causas ca on ca.codigo = d.causa_codigo
+                         left join redes.tipos_tercero tt on tt.codigo = d.tercero_tipo) cat on not p_solo_llave
+    cross join lateral (select count(*) as n, count(*) filter (where v.origen = 'bot') as bot, count(*) filter (where v.origen = 'l116') as l116,
                                       count(*) filter (where v.origen = 'dano') as dano, count(*) filter (where v.origen = 'campo') as campo
                                  from redes.f_evento_reportes(x.id) v) r
    order by x.id $$;
@@ -203,14 +225,14 @@ language sql stable set search_path to 'redes', 'public', 'extensions', 'pg_temp
            'lat', round(ST_Y(v.geom)::numeric, 6), 'lon', round(ST_X(v.geom)::numeric, 6)) end
     from redes.l116_vigente v join redes.l116_reportes r on r.id = v.reporte_id
    where v.dia between (p_f ->> 'desde')::date and (p_f ->> 'hasta')::date and r.creado_en <= p_corte
-     and (p_incl or not v.oculto) and (not p_f ? 'sector' or v.sector = (p_f ->> 'sector')::integer)
+     and (p_incl or not v.oculto) and (not p_f ? 'sector' or ST_Intersects(v.geom, (select redes.f_rep_sector_geom(p_f ->> 'sector'))))
      and (p_cursor is null or v.reporte_id > p_cursor::bigint)
    order by v.reporte_id limit p_limite $$;
 
 -- 7. Reportes del bot (sin la descripción ni la dirección que escribió el ciudadano)
 create function redes.f_rep_bot(p_f jsonb, p_incl boolean, p_corte timestamptz, p_cursor text, p_limite integer, p_solo_llave boolean default false) returns table (k text, fila jsonb)
 language sql stable set search_path to 'redes', 'public', 'extensions', 'pg_temp' as $$
-  with sg as (select redes.f_rep_sector_geom((p_f ->> 'sector')::integer) as g where p_f ? 'sector'),
+  with sg as (select redes.f_rep_sector_geom(p_f ->> 'sector') as g where p_f ? 'sector'),
   x as (select b.*, to_char(b.recibido_en at time zone 'UTC', 'YYYYMMDDHH24MISSUS') || '|' || b.id::text as kk from redes.v_reporte_externo b
          where b.recibido_en >= ((p_f ->> 'desde')::date::timestamp at time zone 'America/Bogota')
            and b.recibido_en < (((p_f ->> 'hasta')::date + 1)::timestamp at time zone 'America/Bogota') and b.registrado_en <= p_corte
@@ -276,7 +298,7 @@ language sql stable set search_path to 'public', 'redes', 'tecnica', 'pg_temp' a
 
 create function redes.f_rep_leame(p_reporte text, p_f jsonb, p_incl boolean, p_email text, p_corte timestamptz) returns jsonb
 language plpgsql stable set search_path to 'public', 'redes', 'tecnica', 'pg_temp' as $$
-declare c record; v_trae text[]; v_no text[] := array['Textos libres (descripciones, observaciones, motivos y causas): pueden traer datos de personas y se ven solo en pantalla.',
+declare c record; v_trae text[]; v_no text[] := array['Textos libres (descripciones, observaciones, motivos y causas escritas): pueden traer datos de personas y se ven solo en pantalla.',
                                                        'Teléfonos y nombres de suscriptores, del ciudadano que reporta o de terceros.'];
   v_filtros text[] := '{}'; v_ex text;
 begin
@@ -285,7 +307,8 @@ begin
     when 'levantamientos' then array['Una fila por punto de «Encontrar o reportar activo» (código LEV), con su estado vigente, el activo creado si se levantó y su ubicación.']
     when 'valvulas' then array['Una fila por cierre de una válvula, con el regreso estimado vigente, la apertura y la duración. Una válvula que sigue cerrada no tiene apertura.']
     when 'eventos' then array['Una fila por evento de suspensión vigente algún momento del periodo: zona, desde cuándo, regreso estimado (al declarar y el vigente), fin y duración.',
-                              'Contratos y usuarios sensibles afectados como números (los que se calcularon al declarar) y los reportes asociados hoy, por origen.']
+                              'Contratos y usuarios sensibles afectados como números (los que se calcularon al declarar) y los reportes asociados hoy, por origen.',
+                              'El tipo de daño o falla y la causa del daño salen del catálogo del daño asociado (el del evento o el de su intervención); vacíos si el evento no tiene daño.']
     when 'l116' then array['Una fila por reporte de la línea 116 cargado, con su estado vigente, el contrato y la ubicación (por contrato o sin ubicar).']
     when 'bot' then array['Una fila por reporte recibido del bot, con su estado y el daño en que se convirtió, si se convirtió.']
     when 'sensibles' then array['Una fila por contrato marcado como usuario sensible, con su tipo y estado de hoy (inventario a la fecha de la descarga).']
@@ -293,12 +316,13 @@ begin
   end;
   if p_reporte = 'bot' then v_no := v_no || array['La descripción y la dirección que escribió el ciudadano.']; end if;
   if p_reporte = 'sensibles' then v_no := v_no || array['El nombre del suscriptor ni la palabra del nombre que lo marcó.']; end if;
+  if p_reporte = 'eventos' then v_no := v_no || array['La causa escrita al declarar el evento ni los motivos de cierre o anulación (texto libre).']; end if;
   if c.periodo then
     v_filtros := array['Periodo: ' || to_char((p_f ->> 'desde')::date, 'DD/MM/YYYY') || ' a ' || to_char((p_f ->> 'hasta')::date, 'DD/MM/YYYY') || ' (según ' || c.periodo_sobre || ')'];
   else
     v_filtros := array['Inventario al ' || to_char(p_corte at time zone 'America/Bogota', 'DD/MM/YYYY HH24:MI')];
   end if;
-  if p_f ? 'sector' then v_filtros := v_filtros || ('Sector: ' || (p_f ->> 'sector')); end if;
+  if p_f ? 'sector' then v_filtros := v_filtros || ('Sector: ' || (p_f ->> 'sector_nombre') || ' (' || (p_f ->> 'sector') || ')'); end if;
   if p_f ? 'tipo' then v_filtros := v_filtros || ('Tipo: ' || (p_f ->> 'tipo_nombre')); end if;
   if p_f ? 'sistema' then v_filtros := v_filtros || ('Sistema: ' || redes.f_rep_rotulo(p_f ->> 'sistema')); end if;
   v_ex := case when not c.usa_ocultos then null

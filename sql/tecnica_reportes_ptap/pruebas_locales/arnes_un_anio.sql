@@ -4,7 +4,7 @@
 -- Requiere los dos paquetes aplicados (sh rehacer_base.sh con_todo). Todo en una transacción que se deshace al final.
 -- Volumen: Entrada 2 plantas × 24 envíos al día × 6 variables (105.120 valores) con su dosis; Salida 2 plantas × 12 × 4 + 6 tanques × 4 × 2;
 -- Muestreo 30 puntos × 2 por semana × 6; 400 valores fuera de referencia; químicos 4 × (uso diario por planta + entrada semanal);
--- 30.000 reportes de la 116; 2.900 del bot; 1.000 LEV; 2.000 cierres de válvula; 300 eventos (60 de planta); 300 usuarios sensibles. Activos: los 35.781 reales.
+-- 30.000 reportes de la 116; 2.900 del bot; 1.000 LEV; 2.000 cierres de válvula; 300 eventos (60 de planta), cada uno con su daño; 300 usuarios sensibles. Activos: los 35.781 reales.
 -- =====================================================================
 \set ON_ERROR_STOP 1
 begin;
@@ -95,9 +95,15 @@ select v.activo_id, 'cerrar', 'ARNES cierre', clock_timestamp() - make_interval(
   from generate_series(1, 2000) i join lateral (select activo_id from redes.activo_vigente_mat where prefijo = 'VAL' order by activo_id offset (i % 700) limit 1) v on true;
 insert into redes.valvula_maniobras (valvula_id, tipo, cierre_id, hecho_en, autor, registrado_en)
 select c.valvula_id, 'abrir', c.id, c.hecho_en + interval '3 hours', c.autor, c.hecho_en + interval '3 hours' from redes.valvula_maniobras c where c.tipo = 'cerrar' and c.motivo = 'ARNES cierre' and c.id % 4 <> 0;
-insert into redes.eventos_suspension (codigo, alcance, todo, geom, sectores, planta_id, zona_nombre, causa, desde, regreso_estimado, contratos, sensibles, autor)
+-- cada evento amarrado a un daño de catálogo (para medir el tipo y la causa del daño en Eventos)
+insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, no_ident_que_es, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, causa_codigo, autor)
+select gen_random_uuid(), 'DAN-7' || lpad(i::text, 5, '0'), 'dano', 'fuga', 'acueducto', 'ARNES tubería', round(ST_Y(p.geom)::numeric, 6), round(ST_X(p.geom)::numeric, 6), 'gps',
+       clock_timestamp() - make_interval(hours => i * 29 + 1), 'medio', 'propia', 'desgaste', 'arnes.rep.sup@emdupar.gov.co'
+  from _pts p where p.i <= 300;
+insert into redes.eventos_suspension (codigo, alcance, todo, geom, sectores, planta_id, zona_nombre, causa, dano_id, desde, regreso_estimado, contratos, sensibles, autor)
 select 'EVS-7' || lpad(i::text, 5, '0'), 'total', false, ST_Multi(ST_Buffer(p.geom, 0.003)), '{}', case when i % 5 = 0 then (select id from tecnica.plantas where codigo = 'arnes_a') end,
-       'ARNES zona', 'ARNES causa', clock_timestamp() - make_interval(hours => i * 29), clock_timestamp() - make_interval(hours => i * 29 - 6), 500, 2, 'arnes.rep.sup@emdupar.gov.co'
+       'ARNES zona', 'ARNES causa', (select d.id from redes.danos d where d.codigo = 'DAN-7' || lpad(i::text, 5, '0')),
+       clock_timestamp() - make_interval(hours => i * 29), clock_timestamp() - make_interval(hours => i * 29 - 6), 500, 2, 'arnes.rep.sup@emdupar.gov.co'
   from _pts p where p.i <= 300;
 insert into redes.evento_suspension_eventos (evento_id, tipo, motivo, hecho_en, autor)
 select e.id, 'cerrar', 'ARNES se cerró el evento', e.desde + interval '8 hours', e.autor from redes.eventos_suspension e where e.causa = 'ARNES causa';
@@ -105,6 +111,8 @@ insert into redes.usuarios_sensibles (contrato, tipo, origen, autor)
 select ct.contrato, (array['hospital', 'clinica', 'colegio', 'otro'])[1 + (row_number() over ()) % 4], 'manual', 'arnes.rep.sup@emdupar.gov.co'
   from (select distinct contrato from redes.contrato_tramo order by contrato limit 300) ct on conflict do nothing;
 analyze;
+-- el código del sector grande, para el filtro de sector (ahora se filtra por el código SEC-… de la lista)
+select set_config('arnes.sector', (select codigo from redes.activo_vigente_mat where prefijo = 'SEC' and nombre = 'ARNES sector 5'), true);
 
 -- ---------- las llamadas, como la Edge ----------
 create temp table _t (reporte text, filtros text, total integer, paginas integer, ms_iniciar numeric, ms_pagina_max numeric, ms_total numeric) on commit drop;
@@ -115,12 +123,13 @@ set local lock_timeout = '8s';
 do $$
 declare r record; j jsonb; p jsonb; v_c text; v_n integer; t0 timestamptz; t1 timestamptz; v_ini numeric; v_max numeric; v_tot numeric; v_pag integer; v_filas integer; u text := 'arnes.rep.sup@emdupar.gov.co';
   hoy date := (clock_timestamp() at time zone 'America/Bogota')::date; anio jsonb := jsonb_build_object('desde', (hoy - 365)::text, 'hasta', hoy::text);
+  sec jsonb := jsonb_build_object('sector', current_setting('arnes.sector'));
 begin
   for r in select * from (values
       ('tec', 'entrada', anio), ('tec', 'entrada', anio || '{"planta": "arnes_a"}'), ('tec', 'salida', anio), ('tec', 'muestreo', anio), ('tec', 'uso_quimicos', anio),
       ('tec', 'entrada_quimicos', anio), ('tec', 'kardex_quimicos', anio), ('tec', 'eventos_planta', anio), ('tec', 'fuera_referencia', anio),
-      ('redes', 'levantamientos', anio), ('redes', 'levantamientos', anio || '{"sector": "5"}'), ('redes', 'valvulas', anio), ('redes', 'eventos', anio), ('redes', 'l116', anio),
-      ('redes', 'l116', anio || '{"sector": "5"}'), ('redes', 'bot', anio), ('redes', 'bot', anio || '{"sector": "5"}'), ('redes', 'sensibles', '{}'::jsonb), ('redes', 'activos', '{}'::jsonb)) x(esq, rep, f)
+      ('redes', 'levantamientos', anio), ('redes', 'levantamientos', anio || sec), ('redes', 'valvulas', anio), ('redes', 'eventos', anio), ('redes', 'l116', anio),
+      ('redes', 'l116', anio || sec), ('redes', 'bot', anio), ('redes', 'bot', anio || sec), ('redes', 'sensibles', '{}'::jsonb), ('redes', 'activos', '{}'::jsonb)) x(esq, rep, f)
   loop
     t0 := clock_timestamp();
     j := case r.esq when 'tec' then public.geoportal_tec_reporte_iniciar(u, r.rep, r.f, 'xlsx', false, null) else public.geoportal_redes_reporte_iniciar(u, r.rep, r.f, 'xlsx', false, null) end;
@@ -135,6 +144,9 @@ begin
     if v_filas <> (j ->> 'total')::integer then raise exception 'ARNES %: las páginas trajeron % filas y «iniciar» dijo %', r.rep, v_filas, j ->> 'total'; end if;
     insert into _t values (r.rep, (r.f - 'desde' - 'hasta')::text, v_filas, v_pag, round(v_ini), round(v_max), round(extract(epoch from clock_timestamp() - t0) * 1000));
   end loop;
+  -- la lista del filtro de sector
+  t0 := clock_timestamp(); j := public.geoportal_redes_reporte_sectores(u);
+  insert into _t values ('lista de sectores', '', jsonb_array_length(j -> 'sectores'), 0, round(extract(epoch from clock_timestamp() - t0) * 1000), null, round(extract(epoch from clock_timestamp() - t0) * 1000));
 end $$;
 reset role;
 select reporte, filtros, total, paginas, ms_iniciar as "iniciar ms", ms_pagina_max as "página más lenta ms", ms_total as "todo ms" from _t;

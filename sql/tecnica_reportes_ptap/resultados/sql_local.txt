@@ -1,7 +1,6 @@
-== 20-11-2026 11:51 ensayo tecnica_reportes_ptap (base: producción al 20-nov, huella b474fbbe…)
-
-TIEMPOS con un año de Entrada simulado (2174 envíos, 4352 valores): iniciar 23 ms · primera página de 1.000 56 ms · la segunda 46 ms (tope de la API: 30 s por llamada)
-RESULTADO: 59 de 59 pruebas correctas — SIN FALLAS
+== 20-11-2026 16:52 ensayo tecnica_reportes_ptap (base: producción al 20-nov, huella b474fbbe…)
+TIEMPOS con un año de Entrada simulado (2174 envíos, 4352 valores): iniciar 23 ms · primera página de 1.000 58 ms · la segunda 48 ms (tope de la API: 30 s por llamada)
+RESULTADO: 61 de 61 pruebas correctas — SIN FALLAS
 == huellas antes
 0 funciones de redes (conjunto)|b474fbbe3e0f7a3a7e6dbc04c53e02e7|PUBLICADA (aviso por contrato)
 1 las 22 funciones nuevas||NO EXISTE (sin aplicar)
@@ -14,7 +13,7 @@ RESULTADO: 59 de 59 pruebas correctas — SIN FALLAS
 1 las 22 funciones nuevas||NUEVA (aplicada)
 2 lo que se lee (registros de planta, revisiones, dosis, químicos, eventos de planta y permisos)||ESTÁ
 3 tablas nuevas (tecnica.reporte_descargas, tecnica.reporte_descarga_cierres)||EXISTEN (aplicado)
-4 INFO huella de técnica (esquema tecnica y geoportal_tec_*; anótela)|ba7868b64a1d69bdd05ce34979a0c818|INFORMATIVA
+4 INFO huella de técnica (esquema tecnica y geoportal_tec_*; anótela)|dd60ee8d6ae023ef9965981c6218df65|INFORMATIVA
 5 INFO datos: registros de planta · envíos · fuera de referencia sin excluir · movimientos de químicos · eventos de planta||77 · 77 · 0 · 0 · 0
 == verificación
 01 las 4 RPC: security definer, search_path fijo, solo service_role|OK
@@ -24,7 +23,9 @@ RESULTADO: 59 de 59 pruebas correctas — SIN FALLAS
 05 la huella de redes no cambió con este paquete|OK
 06 las 2 tablas nuevas: RLS, solo inserción y sin permisos para la API|OK
 INFO descargas iniciadas · cerradas|0 · 0
+== migración aplicada otra vez (debe negarse)
+psql:/Users/ddiaz/geoportal-emdupar-repsrv/sql/tecnica_reportes_ptap/migracion_tecnica_reportes_ptap_editor.sql:43: ERROR:  Los reportes del PTAP ya están aplicados: deténgase y avise
 == reversa
-0 funciones de redes (conjunto)|b474fbbe3e0f7a3a7e6dbc04c53e02e7|PUBLICADA (aviso por contrato)
-1 las 22 funciones nuevas||NO EXISTE (sin aplicar)
-2 lo que se lee (registros de planta, revisiones, dosis, químicos, eventos de planta y permisos)||ESTÁ
+conjunto de redes tras la reversa: b474fbbe3e0f7a3a7e6dbc04c53e02e7 (debe ser b474fbbe3e0f7a3a7e6dbc04c53e02e7)
+== reversa otra vez (debe negarse)
+psql:/Users/ddiaz/geoportal-emdupar-repsrv/sql/tecnica_reportes_ptap/reversa_tecnica_reportes_ptap_editor.sql:16: ERROR:  No hay nada que revertir: los reportes del PTAP no están aplicados

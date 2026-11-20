@@ -57,7 +57,7 @@ declare
   hoy date := (clock_timestamp() at time zone 'America/Bogota')::date; per jsonb; pf jsonb; j jsonb; j2 jsonb; f jsonb; v_id bigint; v_id2 bigint; v_n integer;
   v_pl bigint; v_m1 bigint; v_m2 bigint; v_t1 bigint; v_q bigint; v_coag bigint; e1 uuid := gen_random_uuid(); e2 uuid := gen_random_uuid(); e3 uuid := gen_random_uuid();
   s1 uuid := gen_random_uuid(); s2 uuid := gen_random_uuid(); m1 uuid := gen_random_uuid(); m2 uuid := gen_random_uuid(); v_r_alto bigint; v_r_excl bigint;
-  v_mov_foto bigint; v_mov_uso bigint; v_ev1 bigint; v_ev2 bigint; v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_ms3 numeric; v_info text; v_total integer; v_bien integer; v_fallas text;
+  v_mov_foto bigint; v_mov_uso bigint; v_ev1 bigint; v_ev2 bigint; v_txt text; v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_ms3 numeric; v_info text; v_total integer; v_bien integer; v_fallas text;
 begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (adm, 'ZTREP Admin', 'admin', 'sin_restriccion', 'todos');
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, ver_dashboard_tecnico, horario, dias) values (sp, 'ZTREP Supervisor de planta', 'consulta', true, true, 'sin_restriccion', 'todos');
@@ -193,9 +193,14 @@ begin
     and (select bool_and(x -> 'saldo_kg' = 'null') from jsonb_array_elements(j -> 'filas') x), (j -> 'filas')::text);
 
   -- ---------- 09. Eventos de planta ----------
-  insert into redes.eventos_suspension (codigo, alcance, todo, geom, sectores, planta_id, zona_nombre, causa, desde, regreso_estimado, contratos, sensibles, autor)
+  -- un daño de prueba (falla eléctrica causada por un vehículo; su descripción no debe salir) al que se amarra el evento cerrado
+  insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, no_ident_que_es, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, tercero_tipo, descripcion, autor)
+  values (gen_random_uuid(), 'DAN-' || lpad(((select coalesce(max(substr(d.codigo, 5)::integer), 0) from redes.danos d) + 1)::text, 6, '0'), 'falla', 'electrica', 'acueducto',
+          'ZTREP transformador de la planta', 10.1305, -73.5795, 'gps', clock_timestamp() - interval '11 hours', 'alto', 'terceros', 'vehiculo', libre, sd)
+  returning codigo into v_txt;
+  insert into redes.eventos_suspension (codigo, alcance, todo, geom, sectores, planta_id, zona_nombre, causa, dano_id, desde, regreso_estimado, contratos, sensibles, autor)
   values ('EVS-990001', 'total', false, ST_Multi(ST_MakeEnvelope(-73.58, 10.13, -73.579, 10.131, 4326)), '{}', v_pl, 'lo que surte la planta ZTREP Planta', libre,
-          clock_timestamp() - interval '10 hours', clock_timestamp() - interval '2 hours', 120, 3, sd) returning id into v_ev1;
+          (select d.id from redes.danos d where d.codigo = v_txt), clock_timestamp() - interval '10 hours', clock_timestamp() - interval '2 hours', 120, 3, sd) returning id into v_ev1;
   insert into redes.evento_suspension_eventos (evento_id, tipo, regreso_estimado, hecho_en, autor) values (v_ev1, 'regreso', clock_timestamp() - interval '1 hour', clock_timestamp() - interval '5 hours', sd);
   insert into redes.evento_suspension_eventos (evento_id, tipo, motivo, hecho_en, autor) values (v_ev1, 'cerrar', 'ZTREP volvió el agua a la planta', clock_timestamp() - interval '30 minutes', sp);
   insert into redes.eventos_suspension (codigo, alcance, todo, geom, sectores, planta_id, zona_nombre, causa, desde, contratos, sensibles, autor)
@@ -208,6 +213,9 @@ begin
     jsonb_array_length(j -> 'filas') = 1 and f ->> 'estado' = 'Cerrado' and (f ->> 'cambios_regreso')::integer = 1 and (f ->> 'duracion_h')::numeric = 9.5 and (f ->> 'contratos')::integer = 120
     and (f ->> 'sensibles')::integer = 3 and f ->> 'reanudado' is not null and f ->> 'regreso_estimado' <> f ->> 'regreso_estimado_inicial' and f ->> 'declaro' = sd and f ->> 'cerro' = sp
     and position('Pedro' in (j)::text) = 0 and pg_temp.claves(f) = pg_temp.ccols(j -> 'ini' -> 'columnas'), f::text);
+  perform pg_temp.reg('09.01b del catálogo del daño amarrado: tipo «Falla eléctrica» y causa «Terceros: Vehículo»; sin intervención; el Léame dice que la causa escrita no sale',
+    f ->> 'dano' = v_txt and f ->> 'tipo' = 'Falla eléctrica' and f ->> 'causa' = 'Terceros: Vehículo' and f -> 'intervencion' = 'null' and f -> 'tipo_intervencion' = 'null'
+    and (j -> 'ini' -> 'leame' -> 'que_no_trae')::text like '%causa escrita al declarar%', f::text);
   j := pg_temp.bajar(sp, 'eventos_planta', pf, true);
   perform pg_temp.reg('09.02 con «Incluir excluidos»: también el anulado (sin reanudación ni duración)',
     jsonb_array_length(j -> 'filas') = 2 and pg_temp.fila(j -> 'filas', 'evento', 'EVS-990002') ->> 'estado' = 'Anulado' and pg_temp.fila(j -> 'filas', 'evento', 'EVS-990002') -> 'duracion_h' = 'null');
@@ -223,6 +231,12 @@ begin
   j := pg_temp.bajar(sp, 'fuera_referencia', pf || '{"formulario": "entrada"}', true);
   perform pg_temp.reg('10.03 con «Incluir excluidos» vuelve, marcado «excluido»', (pg_temp.fila(j -> 'filas', 'registro_id', v_r_alto::text) ->> 'excluido')::boolean = true);
   insert into tecnica.exclusiones (registro_id, accion, motivo, autor) values (v_r_alto, 'REINCLUIR', 'ZTREP se vuelve a incluir el valor alto', sp);
+  insert into tecnica.revisiones_fuera_referencia (registro_id, accion, nota, creado_por) values (v_r_alto, 'reabierto', 'ZTREP ' || libre, sp);
+  j := pg_temp.bajar(sp, 'fuera_referencia', pf);
+  perform pg_temp.reg('10.05 solo la revisión vigente: tras reabrirla, el valor sale UNA vez, «Reabierto», con quién y cuándo (no el historial); sin la nota',
+    (select count(*) from jsonb_array_elements(j -> 'filas') x where x ->> 'registro_id' = v_r_alto::text) = 1
+    and pg_temp.fila(j -> 'filas', 'registro_id', v_r_alto::text) ->> 'revision' = 'Reabierto' and pg_temp.fila(j -> 'filas', 'registro_id', v_r_alto::text) ->> 'revisado_por' = sp
+    and pg_temp.fila(j -> 'filas', 'registro_id', v_r_alto::text) ->> 'revisado_en' is not null and position('Pedro' in (j)::text) = 0, (j -> 'filas')::text);
 
   perform pg_temp.reg('10.04 la marca, la referencia y la exclusión de cada valor del periodo (una referencia por combinación) son las mismas de tecnica.v_registros_detalle',
     (select count(*) from tecnica.f_rep_valores(array['entrada', 'salida', 'muestreo'], per, clock_timestamp(), null, null))

@@ -2,7 +2,8 @@
 -- 26 — RPC de las descargas de Distribución (solo supervisor de distribución y administrador: redes.f_supervisor). Solo service_role las ejecuta (la Edge).
 --   iniciar → valida, cuenta, guarda la descarga (filtros y el instante de la foto) y la deja en la auditoría;
 --   pagina  → hasta 5.000 filas con los filtros GUARDADOS, solo lo que existía al iniciar; vence a las 2 horas y no sirve a otra persona;
---   cerrar  → guarda el cierre (una vez) y lo deja en la auditoría.
+--   cerrar  → guarda el cierre (una vez) y lo deja en la auditoría;
+--   sectores → la lista del filtro de sector: los sectores y subsectores de la capa (código, nombre, clase, número de sector y subsector). No se audita.
 -- =====================================================================
 create function public.geoportal_redes_reporte_iniciar(p_solicitante text, p_reporte text, p_filtros jsonb default '{}'::jsonb, p_formato text default 'xlsx',
                                                        p_incluir_excluidos boolean default false, p_ip text default null) returns jsonb
@@ -28,7 +29,7 @@ begin
                             jsonb_build_object('reporte', v_rep, 'filtros', v_f, 'incluir_ocultos', v_incl, 'formato', v_formato, 'filas', v_total), p_ip);
   return jsonb_build_object('descarga_id', v_id, 'reporte', v_rep, 'titulo', c.titulo,
                             'archivo', 'distribucion_' || v_rep || coalesce('_' || (v_f ->> 'desde') || '_a_' || (v_f ->> 'hasta'), '_' || to_char(v_corte at time zone 'America/Bogota', 'YYYY-MM-DD')),
-                            'total', v_total, 'max', v_max, 'formato', v_formato, 'incluir_excluidos', v_incl, 'filtros', v_f - 'tipo_nombre',
+                            'total', v_total, 'max', v_max, 'formato', v_formato, 'incluir_excluidos', v_incl, 'filtros', v_f - 'tipo_nombre' - 'sector_nombre',
                             'columnas', redes.f_rep_columnas(v_rep), 'leame', redes.f_rep_leame(v_rep, v_f, v_incl, v_email, v_corte));
 end $$;
 
@@ -61,4 +62,13 @@ begin
   if v_n = 0 then return jsonb_build_object('descarga_id', d.id, 'cerrada', true, 'repetida', true); end if;
   perform tecnica.f_auditar(v_email, 'redes_reporte_cerrar', d.id::text, jsonb_build_object('reporte', d.reporte, 'filas_entregadas', p_filas, 'resultado', v_res), p_ip);
   return jsonb_build_object('descarga_id', d.id, 'cerrada', true, 'repetida', false);
+end $$;
+
+create function public.geoportal_redes_reporte_sectores(p_solicitante text) returns jsonb
+language plpgsql stable security definer set search_path to 'public', 'redes', 'tecnica', 'pg_temp' as $$
+declare v_email text := redes.f_supervisor(p_solicitante, 'descargan los datos de distribución');
+begin
+  return jsonb_build_object('sectores', coalesce((select jsonb_agg(jsonb_build_object('codigo', s.codigo, 'nombre', s.nombre, 'clase', s.clase, 'sector', s.sector, 'subsector', s.subsector)
+                                                     order by s.sector nulls last, s.clase = 'subsector', s.subsector nulls first, s.nombre, s.codigo)
+                                                    from redes.f_rep_sectores() s), '[]'::jsonb));
 end $$;

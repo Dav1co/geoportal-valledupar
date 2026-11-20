@@ -73,7 +73,7 @@ declare
   libre text := 'ZTREP Pedro Prueba 3009990000';
   hoy date := (clock_timestamp() at time zone 'America/Bogota')::date; per jsonb; j jsonb; j2 jsonb; f jsonb; v_id bigint; v_id2 bigint; v_n integer; v_m integer; v_txt text;
   v_carga bigint; v_lev1 uuid := gen_random_uuid(); v_lev2 uuid := gen_random_uuid(); v_lev3 uuid := gen_random_uuid(); v_c1 bigint; v_c2 bigint; v_rep uuid; v_rep2 uuid;
-  e1 text; e2 text; v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_info text; v_total integer; v_bien integer; v_fallas text; v_aud integer;
+  e1 text; e2 text; e3 text; v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_info text; v_total integer; v_bien integer; v_fallas text; v_aud integer;
 begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (adm, 'ZTREP Admin', 'admin', 'sin_restriccion', 'todos');
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, ver_dashboard_redes, horario, dias) values (sd, 'ZTREP Supervisor de distribución', 'consulta', true, true, 'sin_restriccion', 'todos');
@@ -107,7 +107,8 @@ begin
   perform pg_temp.err('02.04 sin periodo en un reporte con periodo', format('select public.geoportal_redes_reporte_iniciar(%L, %L, %L)', sd, 'l116', '{}'), null, 'Elija el periodo');
   perform pg_temp.err('02.05 más de un año', format('select public.geoportal_redes_reporte_iniciar(%L, %L, %L)', sd, 'l116', jsonb_build_object('desde', (hoy - 366)::text, 'hasta', hoy::text)), null, 'hasta de un año');
   perform pg_temp.err('02.06 desde después de hasta', format('select public.geoportal_redes_reporte_iniciar(%L, %L, %L)', sd, 'l116', jsonb_build_object('desde', hoy::text, 'hasta', (hoy - 1)::text)), null, 'posterior');
-  perform pg_temp.err('02.07 un sector que no está en la capa', format('select public.geoportal_redes_reporte_iniciar(%L, %L, %L)', sd, 'l116', per || '{"sector": "99"}'), null, 'capa de sectores');
+  perform pg_temp.err('02.07 un sector escrito como número ya no vale: se elige de la lista', format('select public.geoportal_redes_reporte_iniciar(%L, %L, %L)', sd, 'l116', per || '{"sector": "99"}'), null, 'de la lista');
+  perform pg_temp.err('02.07b un código de sector que no está en la capa', format('select public.geoportal_redes_reporte_iniciar(%L, %L, %L)', sd, 'l116', per || '{"sector": "SEC-999999999"}'), null, 'capa de sectores');
   perform pg_temp.err('02.08 un tipo de activo que no existe', format('select public.geoportal_redes_reporte_iniciar(%L, %L, %L)', sd, 'activos', '{"tipo": "XYZ"}'), null, 'tipo de activo');
   perform pg_temp.err('02.09 sin datos con esos filtros: 404', format('select public.geoportal_redes_reporte_iniciar(%L, %L, %L)', sd, 'valvulas', jsonb_build_object('desde', '2001-01-01', 'hasta', '2001-01-31')), 'P0002', 'No hay datos');
   perform pg_temp.reg('02.10 un año exacto (366 días con los dos extremos) sí se acepta', (redes.f_rep_filtros('l116', jsonb_build_object('desde', (hoy - 365)::text, 'hasta', hoy::text)) ->> 'desde') = (hoy - 365)::text);
@@ -125,11 +126,15 @@ begin
     and pg_temp.hay(j -> 'filas', 'activo', pg_temp.cod('V1')) and pg_temp.hay(j -> 'filas', 'estado', 'Levantado')
     and pg_temp.claves(j -> 'filas' -> 0) = pg_temp.cols('levantamientos') and pg_temp.claves(j -> 'filas' -> 0) = (select string_agg(x ->> 'clave', ',' order by x ->> 'clave') from jsonb_array_elements(j -> 'ini' -> 'columnas') x),
     left((j -> 'filas')::text, 300));
-  j := pg_temp.bajar(sd, 'levantamientos', per || '{"sector": "97"}', true);
+  j := pg_temp.bajar(sd, 'levantamientos', per || jsonb_build_object('sector', pg_temp.cod('S97')), true);
   perform pg_temp.reg('03.02 por sector 97 y con «Incluir ocultos»: los dos del sector 97 (el descartado también), con su número de sector; el del 98 no',
     jsonb_array_length(j -> 'filas') = 2 and pg_temp.hay(j -> 'filas', 'codigo', 'LEV-900003') and pg_temp.hay(j -> 'filas', 'estado', 'Descartado')
     and not pg_temp.hay(j -> 'filas', 'codigo', 'LEV-900002') and (select bool_and((x ->> 'sector')::integer = 97) from jsonb_array_elements(j -> 'filas') x), (j -> 'filas')::text);
   perform pg_temp.reg('03.03 la observación y el motivo (texto libre) no salen', position('Pedro' in (j)::text) = 0);
+  j := pg_temp.bajar(sd, 'levantamientos', per || jsonb_build_object('sector', lower(pg_temp.cod('S97A'))), true);
+  perform pg_temp.reg('03.04 por subsector (S97A, el código en minúsculas también vale): los dos que caen en él; el Léame dice el nombre y el código del sector',
+    jsonb_array_length(j -> 'filas') = 2 and j -> 'ini' -> 'filtros' ->> 'sector' = pg_temp.cod('S97A') and not (j -> 'ini' -> 'filtros') ? 'sector_nombre'
+    and (j -> 'ini' -> 'leame' -> 'filtros')::text like '%Sector: ZTREP S97A (' || pg_temp.cod('S97A') || ')%', (j -> 'ini')::text);
 
   -- ---------- 04. Válvulas cerradas ----------
   insert into redes.valvula_maniobras (valvula_id, tipo, motivo, regreso_estimado, hecho_en, autor) values (pg_temp.id('V1'), 'cerrar', libre, clock_timestamp() - interval '1 day', clock_timestamp() - interval '2 days', sd) returning id into v_c1;
@@ -143,12 +148,19 @@ begin
   select x into f from jsonb_array_elements(j -> 'filas') x where x ->> 'valvula' = pg_temp.cod('V2');
   perform pg_temp.reg('04.02 la que sigue cerrada: Cerrada, sin apertura ni duración; sector 98', f ->> 'estado' = 'Cerrada' and f -> 'abierta' = 'null' and f -> 'duracion_h' = 'null' and (f ->> 'sector')::integer = 98, f::text);
   perform pg_temp.reg('04.03 por sector 98 solo sale la V2, y el motivo no sale',
-    jsonb_array_length((pg_temp.bajar(sd, 'valvulas', per || '{"sector": "98"}')) -> 'filas') = 1 and position('Pedro' in (j)::text) = 0);
+    jsonb_array_length((pg_temp.bajar(sd, 'valvulas', per || jsonb_build_object('sector', pg_temp.cod('S98')))) -> 'filas') = 1 and position('Pedro' in (j)::text) = 0);
 
   -- ---------- 05. Eventos de suspensión ----------
+  -- dos daños de prueba, fuera de las zonas (no se asocian solos): una falla de bombeo por desgaste y una fuga causada por un vehículo; su descripción no debe salir
+  v_txt := (select coalesce(max(substr(d.codigo, 5)::integer), 0) from redes.danos d);
+  insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, activo_id, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, causa_codigo, tercero_tipo, descripcion, autor)
+  values (gen_random_uuid(), 'DAN-' || lpad((v_txt::integer + 1)::text, 6, '0'), 'falla', 'bombeo', 'acueducto', pg_temp.id('T1'), pg_temp.lat(100), pg_temp.lon(1500), 'gps', clock_timestamp() - interval '1 hour', 'medio', 'propia', 'desgaste', null, libre, sd),
+         (gen_random_uuid(), 'DAN-' || lpad((v_txt::integer + 2)::text, 6, '0'), 'dano', 'fuga', 'acueducto', pg_temp.id('T1'), pg_temp.lat(100), pg_temp.lon(1600), 'gps', clock_timestamp() - interval '1 hour', 'bajo', 'terceros', null, 'vehiculo', libre, sd);
   e1 := public.geoportal_redes_evento_declarar(sd, jsonb_build_object('alcance', 'sectores', 'sectores', jsonb_build_array(pg_temp.cod('S97')), 'causa', libre,
+                                                                      'registro', 'DAN-' || lpad((v_txt::integer + 1)::text, 6, '0'),
                                                                       'regreso', to_char(clock_timestamp() + interval '4 hours', 'YYYY-MM-DD"T"HH24:MI:SSOF'))) ->> 'codigo';
-  e2 := public.geoportal_redes_evento_declarar(sd, jsonb_build_object('alcance', 'sectores', 'sectores', jsonb_build_array(pg_temp.cod('S98')), 'causa', 'ZTREP evento que se anula')) ->> 'codigo';
+  e2 := public.geoportal_redes_evento_declarar(sd, jsonb_build_object('alcance', 'sectores', 'sectores', jsonb_build_array(pg_temp.cod('S98')), 'causa', 'ZTREP evento que se anula',
+                                                                      'registro', 'DAN-' || lpad((v_txt::integer + 2)::text, 6, '0'))) ->> 'codigo';
   perform public.geoportal_redes_evento_anular(sd, e2, 'ZTREP se declaró por error');
   j := pg_temp.bajar(sd, 'eventos', per);
   select x into f from jsonb_array_elements(j -> 'filas') x where x ->> 'evento' = e1;
@@ -156,9 +168,29 @@ begin
     f is not null and f ->> 'alcance' = 'Sectores' and f ->> 'estado' = 'Abierto' and f ->> 'regreso_estimado' is not null and f ->> 'zona' like '%ZTREP S97%'
     and (f ->> 'contratos') is not null and (f ->> 'reportes')::integer = 0 and not pg_temp.hay(j -> 'filas', 'evento', e2) and position('Pedro' in (j)::text) = 0
     and pg_temp.claves(f) = pg_temp.cols('eventos'), f::text);
-  j := pg_temp.bajar(sd, 'eventos', per || '{"sector": "98"}', true);
-  perform pg_temp.reg('05.02 por sector 98 y con «Incluir ocultos»: el anulado (con su fin y quién lo anuló), y no el del 97',
-    pg_temp.hay(j -> 'filas', 'evento', e2) and pg_temp.hay(j -> 'filas', 'estado', 'Anulado') and pg_temp.hay(j -> 'filas', 'cerro', sd) and not pg_temp.hay(j -> 'filas', 'evento', e1), (j -> 'filas')::text);
+  perform pg_temp.reg('05.01b del catálogo del daño asociado: tipo «Falla de bombeo» y causa «Desgaste o vejez de la tubería»; sin intervención; ni la causa escrita ni la descripción del daño',
+    f ->> 'dano' = 'DAN-' || lpad((v_txt::integer + 1)::text, 6, '0') and f ->> 'tipo' = 'Falla de bombeo' and f ->> 'causa' = 'Desgaste o vejez de la tubería'
+    and f -> 'intervencion' = 'null' and f -> 'tipo_intervencion' = 'null' and position('Pedro' in (j)::text) = 0
+    and (j -> 'ini' -> 'leame' -> 'que_no_trae')::text like '%causa escrita al declarar%', f::text);
+  j := pg_temp.bajar(sd, 'eventos', per || jsonb_build_object('sector', pg_temp.cod('S98')), true);
+  perform pg_temp.reg('05.02 por sector 98 y con «Incluir ocultos»: el anulado (con su fin y quién lo anuló), y no el del 97; su daño: «Fuga o tubería rota», causa «Terceros: Vehículo»',
+    pg_temp.hay(j -> 'filas', 'evento', e2) and pg_temp.hay(j -> 'filas', 'estado', 'Anulado') and pg_temp.hay(j -> 'filas', 'cerro', sd) and not pg_temp.hay(j -> 'filas', 'evento', e1)
+    and pg_temp.hay(j -> 'filas', 'tipo', 'Fuga o tubería rota') and pg_temp.hay(j -> 'filas', 'causa', 'Terceros: Vehículo'), (j -> 'filas')::text);
+  -- un evento declarado sobre una INTERVENCIÓN que nace de un daño (falla eléctrica, causa desconocida): el tipo y la causa salen del daño de la intervención
+  insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, activo_id, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, descripcion, autor)
+  values (gen_random_uuid(), 'DAN-' || lpad((v_txt::integer + 3)::text, 6, '0'), 'falla', 'electrica', 'acueducto', pg_temp.id('T1'), pg_temp.lat(100), pg_temp.lon(1700), 'gps', clock_timestamp() - interval '1 hour', 'alto', 'desconocida', libre, sd);
+  v_n := (select coalesce(max(substr(i.codigo, 5)::integer), 0) + 1 from redes.intervenciones i);
+  insert into redes.intervenciones (id, codigo, nace_de, dano_id, tipo_codigo, sistema, activo_id, lat, lon, ubicacion_origen, t_inicio, t_fin, descripcion, ejecutor, autor)
+  select gen_random_uuid(), 'ITV-' || lpad(v_n::text, 6, '0'), 'dano', d.id, 'reparacion', 'acueducto', pg_temp.id('T1'), pg_temp.lat(100), pg_temp.lon(1700), 'gps',
+         clock_timestamp() - interval '50 minutes', clock_timestamp() - interval '10 minutes', libre, 'emdupar', sd
+    from redes.danos d where d.codigo = 'DAN-' || lpad((v_txt::integer + 3)::text, 6, '0');
+  e3 := public.geoportal_redes_evento_declarar(sd, jsonb_build_object('alcance', 'circulo', 'lat', pg_temp.lat(100), 'lon', pg_temp.lon(3000), 'radio_m', 30, 'causa', 'ZTREP evento por una intervención',
+                                                                      'registro', 'ITV-' || lpad(v_n::text, 6, '0'))) ->> 'codigo';
+  perform public.geoportal_redes_evento_anular(sd, e3, 'ZTREP solo para la prueba del tipo');
+  select x into f from jsonb_array_elements((pg_temp.bajar(sd, 'eventos', per, true)) -> 'filas') x where x ->> 'evento' = e3;
+  perform pg_temp.reg('05.03 evento sobre una intervención: «Reparación», y del daño de la intervención «Falla eléctrica» y causa «Desconocida»; alcance «Círculo»',
+    f ->> 'intervencion' = 'ITV-' || lpad(v_n::text, 6, '0') and f ->> 'tipo_intervencion' = 'Reparación' and f ->> 'tipo' = 'Falla eléctrica' and f ->> 'causa' = 'Desconocida'
+    and f -> 'dano' = 'null' and f ->> 'alcance' = 'Círculo' and position('Pedro' in f::text) = 0, f::text);
 
   -- ---------- 06. Línea 116 ----------
   insert into redes.cargas (capa_codigo, sha256, formato, srid_origen, columna_llave, filas_esperadas, nota, autor)
@@ -177,7 +209,7 @@ begin
     pg_temp.hay(j -> 'filas', 'reporte', '990000001') and pg_temp.hay(j -> 'filas', 'reporte', '990000002') and not pg_temp.hay(j -> 'filas', 'reporte', '990000003')
     and pg_temp.hay(j -> 'filas', 'contrato', '999999990001') and pg_temp.hay(j -> 'filas', 'comuna', 'Comuna 9') and pg_temp.hay(j -> 'filas', 'ubicacion', 'Sin ubicar')
     and pg_temp.hay(j -> 'filas', 'estado', 'Atendido'), (j -> 'filas')::text);
-  j := pg_temp.bajar(sd, 'l116', per || '{"sector": "97"}', true);
+  j := pg_temp.bajar(sd, 'l116', per || jsonb_build_object('sector', pg_temp.cod('S97')), true);
   perform pg_temp.reg('06.02 por sector 97 y con «Incluir ocultos»: los dos ubicados (el oculto marcado «sí»), no el sin ubicar',
     jsonb_array_length(j -> 'filas') = 2 and pg_temp.hay(j -> 'filas', 'oculto', 'true') and not pg_temp.hay(j -> 'filas', 'reporte', '990000002'), (j -> 'filas')::text);
 
@@ -191,7 +223,7 @@ begin
   perform pg_temp.reg('07.01 los del bot sin el descartado, con radicado, canal, tipo, estado y sector; sin la descripción ni la dirección',
     pg_temp.hay(j -> 'filas', 'radicado', 'ZTREP-B1') and not pg_temp.hay(j -> 'filas', 'radicado', 'ZTREP-B2') and pg_temp.hay(j -> 'filas', 'estado', 'Recibido')
     and position('Pedro' in (j)::text) = 0 and (select (x ->> 'sector')::integer from jsonb_array_elements(j -> 'filas') x where x ->> 'radicado' = 'ZTREP-B1') = 97, (j -> 'filas')::text);
-  j := pg_temp.bajar(sd, 'bot', per || '{"sector": "98"}', true);
+  j := pg_temp.bajar(sd, 'bot', per || jsonb_build_object('sector', pg_temp.cod('S98')), true);
   perform pg_temp.reg('07.02 por sector 98 y con «Incluir ocultos»: el descartado', jsonb_array_length(j -> 'filas') = 1 and pg_temp.hay(j -> 'filas', 'estado', 'Descartado'), (j -> 'filas')::text);
 
   -- ---------- 08. Usuarios sensibles (inventario a hoy) ----------
@@ -263,12 +295,12 @@ begin
   perform pg_temp.reg('13.03 la auditoría de estas descargas no guarda filas ni textos libres', not exists (select 1 from public.geoportal_auditoria a where a.accion like 'redes\_reporte\_%' and (a.detalle ? 'filas_json' or position('Pedro' in a.detalle::text) > 0)));
 
   -- ---------- 14. Seguridad del esquema ----------
-  perform pg_temp.reg('14.01 las 3 RPC: security definer, search_path fijo, solo service_role (ni anon, ni authenticated, ni PUBLIC)',
-    (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = any (array['geoportal_redes_reporte_iniciar', 'geoportal_redes_reporte_pagina', 'geoportal_redes_reporte_cerrar']) and p.prosecdef and p.proconfig is not null
+  perform pg_temp.reg('14.01 las 4 RPC: security definer, search_path fijo, solo service_role (ni anon, ni authenticated, ni PUBLIC)',
+    (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = any (array['geoportal_redes_reporte_iniciar', 'geoportal_redes_reporte_pagina', 'geoportal_redes_reporte_cerrar', 'geoportal_redes_reporte_sectores']) and p.prosecdef and p.proconfig is not null
        and has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute')
-       and not exists (select 1 from aclexplode(p.proacl) x where x.grantee = 0)) = 3);
+       and not exists (select 1 from aclexplode(p.proacl) x where x.grantee = 0)) = 4);
   perform pg_temp.reg('14.02 las funciones internas f_rep_*: nadie más que su dueño',
-    not exists (select 1 from pg_proc p where p.pronamespace = 'redes'::regnamespace and p.proname = any (array['f_rep_catalogo', 'f_rep_max_filas', 'f_rep_ts', 'f_rep_col', 'f_rep_rotulo', 'f_rep_sector_geom', 'f_rep_punto', 'f_rep_filtros', 'f_rep_columnas', 'f_rep_levantamientos', 'f_rep_valvulas', 'f_rep_eventos', 'f_rep_l116', 'f_rep_bot', 'f_rep_sensibles', 'f_rep_activos', 'f_rep_filas', 'f_rep_contar', 'f_rep_leame']) and exists (select 1 from aclexplode(p.proacl) x where x.grantee <> p.proowner)));
+    not exists (select 1 from pg_proc p where p.pronamespace = 'redes'::regnamespace and p.proname = any (array['f_rep_catalogo', 'f_rep_max_filas', 'f_rep_ts', 'f_rep_col', 'f_rep_rotulo', 'f_rep_sector_geom', 'f_rep_sectores', 'f_rep_punto', 'f_rep_filtros', 'f_rep_columnas', 'f_rep_levantamientos', 'f_rep_valvulas', 'f_rep_eventos', 'f_rep_l116', 'f_rep_bot', 'f_rep_sensibles', 'f_rep_activos', 'f_rep_filas', 'f_rep_contar', 'f_rep_leame']) and exists (select 1 from aclexplode(p.proacl) x where x.grantee <> p.proowner)));
   perform pg_temp.reg('14.03 las 2 tablas nuevas: RLS y sin permisos para la API',
     (select count(*) from pg_class c where c.oid in ('redes.reporte_descargas'::regclass, 'redes.reporte_descarga_cierres'::regclass) and c.relrowsecurity
        and not has_table_privilege('anon', c.oid, 'select') and not has_table_privilege('authenticated', c.oid, 'select') and not has_table_privilege('service_role', c.oid, 'select')) = 2);
@@ -284,6 +316,19 @@ begin
   v_info := format('TIEMPOS con el volumen real: Activos de la red (%s activos) iniciar %s ms · primera página de 5.000 %s ms (tope de la API: 30 s por llamada)',
                    j ->> 'total', round(v_ms1), round(v_ms2));
   perform pg_temp.reg('15.01 TIEMPOS: iniciar «Activos de la red» completo y su primera página de 5.000, cada uno en menos de 5 s', (j2 ->> 'devueltos')::integer = least(5000, (j ->> 'total')::integer) and v_ms1 < 5000 and v_ms2 < 5000, v_info);
+
+  -- ---------- 17. La lista del filtro de sector ----------
+  j := public.geoportal_redes_reporte_sectores(sd);
+  select x into f from jsonb_array_elements(j -> 'sectores') x where x ->> 'codigo' = pg_temp.cod('S97A');
+  perform pg_temp.reg('17.01 la lista trae todos los sectores y subsectores vigentes de la capa, con código, nombre, clase, número de sector y subsector',
+    jsonb_array_length(j -> 'sectores') = (select count(*) from redes.activo_vigente_mat where prefijo = 'SEC' and not retirado and not oculto)
+    and f ->> 'nombre' = 'ZTREP S97A' and f ->> 'clase' = 'subsector' and (f ->> 'sector')::integer = 97 and f ->> 'subsector' = '97A'
+    and pg_temp.claves(f) = 'clase,codigo,nombre,sector,subsector', f::text);
+  perform pg_temp.reg('17.02 en orden: el sector 97, luego su subsector 97A, luego el 98',
+    (select array_agg(x ->> 'codigo' order by o) from jsonb_array_elements(j -> 'sectores') with ordinality t(x, o) where x ->> 'codigo' in (pg_temp.cod('S97'), pg_temp.cod('S97A'), pg_temp.cod('S98')))
+      = array[pg_temp.cod('S97'), pg_temp.cod('S97A'), pg_temp.cod('S98')], (j -> 'sectores')::text);
+  perform pg_temp.err('17.03 la lista es solo del supervisor de distribución y el administrador (el de planta: 403)', format('select public.geoportal_redes_reporte_sectores(%L)', sp), '42501');
+  perform pg_temp.reg('17.04 la lista no se audita', not exists (select 1 from public.geoportal_auditoria a where a.accion like '%sectores%' and a.email = sd));
 
   -- ---------- 16. El tope de filas (se baja solo dentro de esta prueba) ----------
   create or replace function redes.f_rep_max_filas() returns integer language sql immutable set search_path to 'pg_catalog' as $f$ select 2 $f$;

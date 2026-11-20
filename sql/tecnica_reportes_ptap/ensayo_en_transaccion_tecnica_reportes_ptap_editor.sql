@@ -7,7 +7,7 @@ begin;
 -- · Lee lo publicado: registros con su estado de exclusión (v_registros_estado), la referencia vigente (f_referencia_vigente) y la marca de rango
 --   (f_marca_rango) de planta (Torre B), las revisiones, químicos (7a y 7c), la dosis de Entrada y los eventos de
 --   suspensión de planta del Corte 15 (redes). Por eso exige la huella de redes publicada: b474fbbe3e0f7a3a7e6dbc04c53e02e7 (aviso por contrato) o, si ya se aplicaron las
---   descargas de Distribución, ef5fc9df2a7ba17df5797bc2971d2f04. El esquema «tecnica» no tiene huella de conjunto publicada: se exige que exista lo que se lee
+--   descargas de Distribución, 3f3c89e603629d92e1cc5065de33d0c1. El esquema «tecnica» no tiene huella de conjunto publicada: se exige que exista lo que se lee
 --   (tablas, columnas y funciones con su firma); el paso de huellas (05) imprime la huella de técnica para anotarla.
 -- =====================================================================
 do $$
@@ -17,7 +17,7 @@ begin
   end if;
   if (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
        where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%'))
-     not in ('b474fbbe3e0f7a3a7e6dbc04c53e02e7', 'ef5fc9df2a7ba17df5797bc2971d2f04') then
+     not in ('b474fbbe3e0f7a3a7e6dbc04c53e02e7', '3f3c89e603629d92e1cc5065de33d0c1') then
     raise exception 'Las funciones de redes no son las publicadas (huella b474fbbe3e0f7a3a7e6dbc04c53e02e7): deténgase y avise';
   end if;
   if to_regclass('tecnica.v_registros_estado') is null or to_regclass('tecnica.revisiones_fuera_referencia') is null or to_regclass('tecnica.v_uso_quimicos_estado') is null
@@ -25,8 +25,9 @@ begin
      or to_regprocedure('tecnica.f_autorizar_supervision(text)') is null or to_regprocedure('tecnica.f_error(text,text)') is null
      or to_regprocedure('tecnica.f_auditar(text,text,text,jsonb,text)') is null or to_regprocedure('tecnica.f_formularios()') is null
      or to_regprocedure('tecnica.f_referencia_vigente(bigint,bigint,bigint)') is null or to_regprocedure('tecnica.f_marca_rango(numeric,numeric,numeric)') is null
-     or to_regprocedure('tecnica.f_solo_agregar()') is null or to_regprocedure('redes.f_evento_reportes(bigint)') is null then
-    raise exception 'Faltan tablas o funciones de planta, de químicos o del Corte 15: deténgase y avise';
+     or to_regprocedure('tecnica.f_solo_agregar()') is null or to_regprocedure('redes.f_evento_reportes(bigint)') is null
+     or to_regclass('redes.tipos_dano') is null or to_regclass('redes.causas') is null or to_regclass('redes.tipos_tercero') is null or to_regclass('redes.tipos_intervencion') is null then
+    raise exception 'Faltan tablas o funciones de planta, de químicos, de los catálogos de daños o del Corte 15: deténgase y avise';
   end if;
   if (select count(*) from pg_attribute where not attisdropped and attnum > 0 and (
         (attrelid = 'tecnica.v_registros_estado'::regclass and attname in ('id', 'lote_id', 'formulario', 'variable_id', 'planta_id', 'punto_id', 'valor', 'fecha_muestra',
@@ -34,7 +35,9 @@ begin
      or (attrelid = 'tecnica.quimico_movimientos'::regclass and attname in ('tipo', 'quimico_id', 'planta_id', 'para_que', 'cantidad', 'unidad', 'cantidad_kg', 'dia',
            'dosis_optima_ppm', 'proveedor', 'remision', 'lote_fabricante', 'vence', 'remision_foto', 'autor', 'registrado_en'))
      or (attrelid = 'tecnica.puntos'::regclass and attname in ('codigo', 'nombre', 'tipo', 'zona', 'numero_informe', 'planta_id'))
-     or (attrelid = 'tecnica.variables'::regclass and attname in ('codigo', 'nombre', 'unidad', 'decimales', 'activa')))) <> 13 + 16 + 6 + 5 then
+     or (attrelid = 'tecnica.variables'::regclass and attname in ('codigo', 'nombre', 'unidad', 'decimales', 'activa'))
+     or (attrelid = 'redes.danos'::regclass and attname in ('id', 'codigo', 'tipo_codigo', 'causa_clase', 'causa_codigo', 'tercero_tipo'))
+     or (attrelid = 'redes.intervenciones'::regclass and attname in ('id', 'codigo', 'dano_id', 'tipo_codigo')))) <> 13 + 16 + 6 + 5 + 6 + 4 then
     raise exception 'Las vistas o tablas de planta no tienen las columnas esperadas: deténgase y avise';
   end if;
 end $$;
@@ -215,7 +218,9 @@ begin
                            tecnica.f_rep_col('reanudado', 'Reanudado', 'fecha_hora'), tecnica.f_rep_col('duracion_h', 'Duración', 'decimal', 'h', 1),
                            tecnica.f_rep_col('contratos', 'Contratos afectados', 'entero'), tecnica.f_rep_col('sensibles', 'Usuarios sensibles afectados', 'entero'),
                            tecnica.f_rep_col('reportes', 'Reportes asociados', 'entero'), tecnica.f_rep_col('dano', 'Daño', 'texto'),
-                           tecnica.f_rep_col('intervencion', 'Intervención', 'texto'), tecnica.f_rep_col('declaro', 'Declaró (correo)', 'texto'),
+                           tecnica.f_rep_col('tipo', 'Tipo de daño o falla', 'texto'), tecnica.f_rep_col('causa', 'Causa del daño', 'texto'),
+                           tecnica.f_rep_col('intervencion', 'Intervención', 'texto'), tecnica.f_rep_col('tipo_intervencion', 'Tipo de intervención', 'texto'),
+                           tecnica.f_rep_col('declaro', 'Declaró (correo)', 'texto'),
                            tecnica.f_rep_col('cerro', 'Cerró o anuló (correo)', 'texto'));
   when 'fuera_referencia' then
     c := jsonb_build_array(tecnica.f_rep_col('muestra', 'Fecha y hora de la muestra', 'fecha_hora'), tecnica.f_rep_col('formulario', 'Formulario', 'texto'),
@@ -393,9 +398,20 @@ language sql stable set search_path to 'public', 'tecnica', 'redes', 'pg_temp' a
            'reanudado', case when e.estado = 'cerrado' then tecnica.f_rep_ts(e.fin_en) end,
            'duracion_h', case when e.estado = 'cerrado' then round(extract(epoch from e.fin_en - e.desde) / 3600.0, 1) end,
            'contratos', e.contratos, 'sensibles', e.sensibles, 'reportes', (select count(*) from redes.f_evento_reportes(e.id)),
-           'dano', (select d.codigo from redes.danos d where d.id = e.dano_id), 'intervencion', (select i.codigo from redes.intervenciones i where i.id = e.intervencion_id),
+           'dano', cat.dano, 'tipo', cat.tipo, 'causa', cat.causa, 'intervencion', cat.intervencion, 'tipo_intervencion', cat.tipo_intervencion,
            'declaro', e.autor, 'cerro', e.fin_autor)
     from redes.v_evento_suspension e join tecnica.plantas pl on pl.id = e.planta_id
+    -- del catálogo (David, 20-nov): el tipo y la causa del daño asociado (el del evento o el de su intervención) y el tipo de la intervención; la causa ESCRITA no
+    left join lateral (select case when e.dano_id is not null then d.codigo end as dano, td.nombre as tipo, i.codigo as intervencion, ti.nombre as tipo_intervencion,
+                              case d.causa_clase when 'propia' then coalesce(ca.nombre, 'Propia') when 'terceros' then 'Terceros' || coalesce(': ' || tt.nombre, '')
+                                                 when 'desconocida' then 'Desconocida' end as causa
+                         from (select 1) u
+                         left join redes.intervenciones i on i.id = e.intervencion_id
+                         left join redes.tipos_intervencion ti on ti.codigo = i.tipo_codigo
+                         left join redes.danos d on d.id = coalesce(e.dano_id, i.dano_id)
+                         left join redes.tipos_dano td on td.codigo = d.tipo_codigo
+                         left join redes.causas ca on ca.codigo = d.causa_codigo
+                         left join redes.tipos_tercero tt on tt.codigo = d.tercero_tipo) cat on true
    where e.planta_id is not null and e.creado_en <= p_corte
      and e.desde < (((p_f ->> 'hasta')::date + 1)::timestamp at time zone 'America/Bogota')
      and coalesce(e.fin_en, 'infinity'::timestamptz) >= ((p_f ->> 'desde')::date::timestamp at time zone 'America/Bogota')
@@ -472,10 +488,11 @@ begin
                                       'Antes del primer inventario inicial de un químico el saldo es desconocido y la celda va vacía.',
                                       'Hoy hay una sola bodega de químicos.']
     when 'eventos_planta' then array['Una fila por evento de suspensión declarado para una planta, vigente algún momento del periodo: suspensión, regreso estimado (al declarar y el vigente), reanudación y duración.',
-                                     'Contratos y usuarios sensibles afectados como números (los que se calcularon al declarar), y cuántos reportes tiene asociados hoy.']
-    when 'fuera_referencia' then array['Una fila por valor de Entrada, Salida o Muestreo fuera de su referencia vigente, con la revisión más reciente del supervisor.']
+                                     'Contratos y usuarios sensibles afectados como números (los que se calcularon al declarar), y cuántos reportes tiene asociados hoy.',
+                                     'El tipo de daño o falla y la causa del daño salen del catálogo del daño asociado (el del evento o el de su intervención); vacíos si el evento no tiene daño.']
+    when 'fuera_referencia' then array['Una fila por valor de Entrada, Salida o Muestreo fuera de su referencia vigente, con la revisión vigente (la más reciente): su estado, quién y cuándo. No trae el historial de revisiones.']
   end;
-  if p_reporte = 'eventos_planta' then v_no := v_no || array['La causa del evento (texto libre).']; end if;
+  if p_reporte = 'eventos_planta' then v_no := v_no || array['La causa escrita al declarar el evento ni los motivos de cierre o anulación (texto libre).']; end if;
   if p_reporte = 'fuera_referencia' then v_no := v_no || array['La nota de la revisión (texto libre).']; end if;
   if p_reporte in ('uso_quimicos', 'entrada_quimicos', 'kardex_quimicos') then v_no := v_no || array['Los motivos de inventarios y ajustes (texto libre).']; end if;
   v_filtros := array['Periodo: ' || to_char((p_f ->> 'desde')::date, 'DD/MM/YYYY') || ' a ' || to_char((p_f ->> 'hasta')::date, 'DD/MM/YYYY') || ' (según ' || c.periodo_sobre || ')'];
@@ -649,7 +666,7 @@ declare
   hoy date := (clock_timestamp() at time zone 'America/Bogota')::date; per jsonb; pf jsonb; j jsonb; j2 jsonb; f jsonb; v_id bigint; v_id2 bigint; v_n integer;
   v_pl bigint; v_m1 bigint; v_m2 bigint; v_t1 bigint; v_q bigint; v_coag bigint; e1 uuid := gen_random_uuid(); e2 uuid := gen_random_uuid(); e3 uuid := gen_random_uuid();
   s1 uuid := gen_random_uuid(); s2 uuid := gen_random_uuid(); m1 uuid := gen_random_uuid(); m2 uuid := gen_random_uuid(); v_r_alto bigint; v_r_excl bigint;
-  v_mov_foto bigint; v_mov_uso bigint; v_ev1 bigint; v_ev2 bigint; v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_ms3 numeric; v_info text; v_total integer; v_bien integer; v_fallas text;
+  v_mov_foto bigint; v_mov_uso bigint; v_ev1 bigint; v_ev2 bigint; v_txt text; v_t0 timestamptz; v_ms1 numeric; v_ms2 numeric; v_ms3 numeric; v_info text; v_total integer; v_bien integer; v_fallas text;
 begin
   insert into public.geoportal_lista_blanca (email, nombre, rol, horario, dias) values (adm, 'ZTREP Admin', 'admin', 'sin_restriccion', 'todos');
   insert into public.geoportal_lista_blanca (email, nombre, rol, ver_registro_tecnico, ver_dashboard_tecnico, horario, dias) values (sp, 'ZTREP Supervisor de planta', 'consulta', true, true, 'sin_restriccion', 'todos');
@@ -785,9 +802,14 @@ begin
     and (select bool_and(x -> 'saldo_kg' = 'null') from jsonb_array_elements(j -> 'filas') x), (j -> 'filas')::text);
 
   -- ---------- 09. Eventos de planta ----------
-  insert into redes.eventos_suspension (codigo, alcance, todo, geom, sectores, planta_id, zona_nombre, causa, desde, regreso_estimado, contratos, sensibles, autor)
+  -- un daño de prueba (falla eléctrica causada por un vehículo; su descripción no debe salir) al que se amarra el evento cerrado
+  insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, no_ident_que_es, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, tercero_tipo, descripcion, autor)
+  values (gen_random_uuid(), 'DAN-' || lpad(((select coalesce(max(substr(d.codigo, 5)::integer), 0) from redes.danos d) + 1)::text, 6, '0'), 'falla', 'electrica', 'acueducto',
+          'ZTREP transformador de la planta', 10.1305, -73.5795, 'gps', clock_timestamp() - interval '11 hours', 'alto', 'terceros', 'vehiculo', libre, sd)
+  returning codigo into v_txt;
+  insert into redes.eventos_suspension (codigo, alcance, todo, geom, sectores, planta_id, zona_nombre, causa, dano_id, desde, regreso_estimado, contratos, sensibles, autor)
   values ('EVS-990001', 'total', false, ST_Multi(ST_MakeEnvelope(-73.58, 10.13, -73.579, 10.131, 4326)), '{}', v_pl, 'lo que surte la planta ZTREP Planta', libre,
-          clock_timestamp() - interval '10 hours', clock_timestamp() - interval '2 hours', 120, 3, sd) returning id into v_ev1;
+          (select d.id from redes.danos d where d.codigo = v_txt), clock_timestamp() - interval '10 hours', clock_timestamp() - interval '2 hours', 120, 3, sd) returning id into v_ev1;
   insert into redes.evento_suspension_eventos (evento_id, tipo, regreso_estimado, hecho_en, autor) values (v_ev1, 'regreso', clock_timestamp() - interval '1 hour', clock_timestamp() - interval '5 hours', sd);
   insert into redes.evento_suspension_eventos (evento_id, tipo, motivo, hecho_en, autor) values (v_ev1, 'cerrar', 'ZTREP volvió el agua a la planta', clock_timestamp() - interval '30 minutes', sp);
   insert into redes.eventos_suspension (codigo, alcance, todo, geom, sectores, planta_id, zona_nombre, causa, desde, contratos, sensibles, autor)
@@ -800,6 +822,9 @@ begin
     jsonb_array_length(j -> 'filas') = 1 and f ->> 'estado' = 'Cerrado' and (f ->> 'cambios_regreso')::integer = 1 and (f ->> 'duracion_h')::numeric = 9.5 and (f ->> 'contratos')::integer = 120
     and (f ->> 'sensibles')::integer = 3 and f ->> 'reanudado' is not null and f ->> 'regreso_estimado' <> f ->> 'regreso_estimado_inicial' and f ->> 'declaro' = sd and f ->> 'cerro' = sp
     and position('Pedro' in (j)::text) = 0 and pg_temp.claves(f) = pg_temp.ccols(j -> 'ini' -> 'columnas'), f::text);
+  perform pg_temp.reg('09.01b del catálogo del daño amarrado: tipo «Falla eléctrica» y causa «Terceros: Vehículo»; sin intervención; el Léame dice que la causa escrita no sale',
+    f ->> 'dano' = v_txt and f ->> 'tipo' = 'Falla eléctrica' and f ->> 'causa' = 'Terceros: Vehículo' and f -> 'intervencion' = 'null' and f -> 'tipo_intervencion' = 'null'
+    and (j -> 'ini' -> 'leame' -> 'que_no_trae')::text like '%causa escrita al declarar%', f::text);
   j := pg_temp.bajar(sp, 'eventos_planta', pf, true);
   perform pg_temp.reg('09.02 con «Incluir excluidos»: también el anulado (sin reanudación ni duración)',
     jsonb_array_length(j -> 'filas') = 2 and pg_temp.fila(j -> 'filas', 'evento', 'EVS-990002') ->> 'estado' = 'Anulado' and pg_temp.fila(j -> 'filas', 'evento', 'EVS-990002') -> 'duracion_h' = 'null');
@@ -815,6 +840,12 @@ begin
   j := pg_temp.bajar(sp, 'fuera_referencia', pf || '{"formulario": "entrada"}', true);
   perform pg_temp.reg('10.03 con «Incluir excluidos» vuelve, marcado «excluido»', (pg_temp.fila(j -> 'filas', 'registro_id', v_r_alto::text) ->> 'excluido')::boolean = true);
   insert into tecnica.exclusiones (registro_id, accion, motivo, autor) values (v_r_alto, 'REINCLUIR', 'ZTREP se vuelve a incluir el valor alto', sp);
+  insert into tecnica.revisiones_fuera_referencia (registro_id, accion, nota, creado_por) values (v_r_alto, 'reabierto', 'ZTREP ' || libre, sp);
+  j := pg_temp.bajar(sp, 'fuera_referencia', pf);
+  perform pg_temp.reg('10.05 solo la revisión vigente: tras reabrirla, el valor sale UNA vez, «Reabierto», con quién y cuándo (no el historial); sin la nota',
+    (select count(*) from jsonb_array_elements(j -> 'filas') x where x ->> 'registro_id' = v_r_alto::text) = 1
+    and pg_temp.fila(j -> 'filas', 'registro_id', v_r_alto::text) ->> 'revision' = 'Reabierto' and pg_temp.fila(j -> 'filas', 'registro_id', v_r_alto::text) ->> 'revisado_por' = sp
+    and pg_temp.fila(j -> 'filas', 'registro_id', v_r_alto::text) ->> 'revisado_en' is not null and position('Pedro' in (j)::text) = 0, (j -> 'filas')::text);
 
   perform pg_temp.reg('10.04 la marca, la referencia y la exclusión de cada valor del periodo (una referencia por combinación) son las mismas de tecnica.v_registros_detalle',
     (select count(*) from tecnica.f_rep_valores(array['entrada', 'salida', 'muestreo'], per, clock_timestamp(), null, null))
@@ -874,7 +905,7 @@ begin
   perform pg_temp.reg('15.06 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE', not exists (select 1 from redes.f_funciones_sin_where()));
   perform pg_temp.reg('15.07 la huella de redes no cambia con este paquete',
     (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p
-      where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) in ('b474fbbe3e0f7a3a7e6dbc04c53e02e7', 'ef5fc9df2a7ba17df5797bc2971d2f04'));
+      where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_redes\_%')) in ('b474fbbe3e0f7a3a7e6dbc04c53e02e7', '3f3c89e603629d92e1cc5065de33d0c1'));
 
   -- ---------- 16. Tiempos: un año de Entrada en la planta de prueba (6 envíos al día, 2 variables) ----------
   insert into tecnica.registros (lote_id, formulario, variable_id, planta_id, valor, fecha_muestra, hora_muestra, autor, registrado_en)

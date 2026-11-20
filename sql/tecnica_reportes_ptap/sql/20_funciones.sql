@@ -143,7 +143,9 @@ begin
                            tecnica.f_rep_col('reanudado', 'Reanudado', 'fecha_hora'), tecnica.f_rep_col('duracion_h', 'Duración', 'decimal', 'h', 1),
                            tecnica.f_rep_col('contratos', 'Contratos afectados', 'entero'), tecnica.f_rep_col('sensibles', 'Usuarios sensibles afectados', 'entero'),
                            tecnica.f_rep_col('reportes', 'Reportes asociados', 'entero'), tecnica.f_rep_col('dano', 'Daño', 'texto'),
-                           tecnica.f_rep_col('intervencion', 'Intervención', 'texto'), tecnica.f_rep_col('declaro', 'Declaró (correo)', 'texto'),
+                           tecnica.f_rep_col('tipo', 'Tipo de daño o falla', 'texto'), tecnica.f_rep_col('causa', 'Causa del daño', 'texto'),
+                           tecnica.f_rep_col('intervencion', 'Intervención', 'texto'), tecnica.f_rep_col('tipo_intervencion', 'Tipo de intervención', 'texto'),
+                           tecnica.f_rep_col('declaro', 'Declaró (correo)', 'texto'),
                            tecnica.f_rep_col('cerro', 'Cerró o anuló (correo)', 'texto'));
   when 'fuera_referencia' then
     c := jsonb_build_array(tecnica.f_rep_col('muestra', 'Fecha y hora de la muestra', 'fecha_hora'), tecnica.f_rep_col('formulario', 'Formulario', 'texto'),
@@ -321,9 +323,20 @@ language sql stable set search_path to 'public', 'tecnica', 'redes', 'pg_temp' a
            'reanudado', case when e.estado = 'cerrado' then tecnica.f_rep_ts(e.fin_en) end,
            'duracion_h', case when e.estado = 'cerrado' then round(extract(epoch from e.fin_en - e.desde) / 3600.0, 1) end,
            'contratos', e.contratos, 'sensibles', e.sensibles, 'reportes', (select count(*) from redes.f_evento_reportes(e.id)),
-           'dano', (select d.codigo from redes.danos d where d.id = e.dano_id), 'intervencion', (select i.codigo from redes.intervenciones i where i.id = e.intervencion_id),
+           'dano', cat.dano, 'tipo', cat.tipo, 'causa', cat.causa, 'intervencion', cat.intervencion, 'tipo_intervencion', cat.tipo_intervencion,
            'declaro', e.autor, 'cerro', e.fin_autor)
     from redes.v_evento_suspension e join tecnica.plantas pl on pl.id = e.planta_id
+    -- del catálogo (David, 20-nov): el tipo y la causa del daño asociado (el del evento o el de su intervención) y el tipo de la intervención; la causa ESCRITA no
+    left join lateral (select case when e.dano_id is not null then d.codigo end as dano, td.nombre as tipo, i.codigo as intervencion, ti.nombre as tipo_intervencion,
+                              case d.causa_clase when 'propia' then coalesce(ca.nombre, 'Propia') when 'terceros' then 'Terceros' || coalesce(': ' || tt.nombre, '')
+                                                 when 'desconocida' then 'Desconocida' end as causa
+                         from (select 1) u
+                         left join redes.intervenciones i on i.id = e.intervencion_id
+                         left join redes.tipos_intervencion ti on ti.codigo = i.tipo_codigo
+                         left join redes.danos d on d.id = coalesce(e.dano_id, i.dano_id)
+                         left join redes.tipos_dano td on td.codigo = d.tipo_codigo
+                         left join redes.causas ca on ca.codigo = d.causa_codigo
+                         left join redes.tipos_tercero tt on tt.codigo = d.tercero_tipo) cat on true
    where e.planta_id is not null and e.creado_en <= p_corte
      and e.desde < (((p_f ->> 'hasta')::date + 1)::timestamp at time zone 'America/Bogota')
      and coalesce(e.fin_en, 'infinity'::timestamptz) >= ((p_f ->> 'desde')::date::timestamp at time zone 'America/Bogota')
@@ -400,10 +413,11 @@ begin
                                       'Antes del primer inventario inicial de un químico el saldo es desconocido y la celda va vacía.',
                                       'Hoy hay una sola bodega de químicos.']
     when 'eventos_planta' then array['Una fila por evento de suspensión declarado para una planta, vigente algún momento del periodo: suspensión, regreso estimado (al declarar y el vigente), reanudación y duración.',
-                                     'Contratos y usuarios sensibles afectados como números (los que se calcularon al declarar), y cuántos reportes tiene asociados hoy.']
-    when 'fuera_referencia' then array['Una fila por valor de Entrada, Salida o Muestreo fuera de su referencia vigente, con la revisión más reciente del supervisor.']
+                                     'Contratos y usuarios sensibles afectados como números (los que se calcularon al declarar), y cuántos reportes tiene asociados hoy.',
+                                     'El tipo de daño o falla y la causa del daño salen del catálogo del daño asociado (el del evento o el de su intervención); vacíos si el evento no tiene daño.']
+    when 'fuera_referencia' then array['Una fila por valor de Entrada, Salida o Muestreo fuera de su referencia vigente, con la revisión vigente (la más reciente): su estado, quién y cuándo. No trae el historial de revisiones.']
   end;
-  if p_reporte = 'eventos_planta' then v_no := v_no || array['La causa del evento (texto libre).']; end if;
+  if p_reporte = 'eventos_planta' then v_no := v_no || array['La causa escrita al declarar el evento ni los motivos de cierre o anulación (texto libre).']; end if;
   if p_reporte = 'fuera_referencia' then v_no := v_no || array['La nota de la revisión (texto libre).']; end if;
   if p_reporte in ('uso_quimicos', 'entrada_quimicos', 'kardex_quimicos') then v_no := v_no || array['Los motivos de inventarios y ajustes (texto libre).']; end if;
   v_filtros := array['Periodo: ' || to_char((p_f ->> 'desde')::date, 'DD/MM/YYYY') || ' a ' || to_char((p_f ->> 'hasta')::date, 'DD/MM/YYYY') || ' (según ' || c.periodo_sobre || ')'];

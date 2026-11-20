@@ -38,6 +38,25 @@ sqlq(`do $$ declare v_pl bigint; v_var bigint; v_q bigint; begin
   insert into tecnica.quimico_movimientos (tipo, quimico_id, cantidad, unidad, cantidad_kg, dia, proveedor, remision, remision_foto, autor)
   values ('entrada', v_q, 1, 't', 1000, current_date - 1, 'ZTEDGE Proveedor', 'R-1', 'remisiones/2026-11/0b0f8e8c-1111-2222-3333-444455556666.jpg', '${EMAILS.O}');
 end $$`);
+// datos simulados de redes: un sector de prueba en la capa (SEC), un punto LEV dentro y un evento amarrado a un daño de catálogo (falla de bombeo por desgaste)
+sqlq(`do $$ declare v_id bigint; v_c bigint; v_cod text; g geometry := ST_Multi(ST_MakeEnvelope(-73.58, 10.13, -73.578, 10.132, 4326)); v_d uuid := gen_random_uuid(); begin
+  update redes.consecutivos set ultimo = ultimo + 1 where prefijo = 'SEC' returning ultimo into v_c;
+  v_cod := 'SEC-' || lpad(v_c::text, 6, '0');
+  insert into redes.activos (codigo, prefijo, origen_alta, creado_por) values (v_cod, 'SEC', 'carga', '${EMAILS.A}') returning id into v_id;
+  insert into redes.activo_versiones (activo_id, version, geom, nombre, clase, estado_codigo, atributos, huella, autor)
+  values (v_id, 1, g, 'ZTEDGE Sector 77', 'sector', 'en_operacion', '{"modelo": {"sector": 77}}', md5(v_cod), '${EMAILS.A}');
+  insert into redes.activo_origen (activo_id, version, origen, nota, autor) values (v_id, 1, 'emdupar', 'ZTEDGE', '${EMAILS.A}');
+  perform redes.f_mat_refrescar_uno(v_id);
+  insert into redes.levantar_puntos (id, codigo, servicio, tipo, lat, lon, geom, precision_m, precision_baja, area, autor)
+  values (gen_random_uuid(), 'LEV-977001', 'acueducto', 'valvula', 10.131, -73.579, ST_SetSRID(ST_MakePoint(-73.579, 10.131), 4326), 4, false, 'tecnica', '${EMAILS.O}');
+  insert into redes.danos (id, codigo, clase, tipo_codigo, sistema, no_ident_que_es, lat, lon, ubicacion_origen, t_detectado, riesgo, causa_clase, causa_codigo, descripcion, autor)
+  values (v_d, 'DAN-' || lpad(((select coalesce(max(substr(d.codigo, 5)::integer), 0) from redes.danos d) + 1)::text, 6, '0'), 'falla', 'bombeo', 'acueducto', 'ZTEDGE bomba', 10.5, -73.0,
+          'gps', clock_timestamp() - interval '3 hours', 'medio', 'propia', 'desgaste', 'ZTEDGE Pedro Prueba 3009990000', '${EMAILS.Y}');
+  insert into redes.eventos_suspension (codigo, alcance, todo, geom, sectores, zona_nombre, causa, dano_id, desde, contratos, sensibles, autor)
+  values ('EVS-977001', 'sectores', false, g, array[v_id], 'ZTEDGE Sector 77', 'ZTEDGE Pedro Prueba 3009990000', v_d, clock_timestamp() - interval '2 hours', 0, 0, '${EMAILS.Y}');
+end $$`);
+const SEC = sqlq("select codigo from redes.activo_vigente_mat where prefijo = 'SEC' and nombre = 'ZTEDGE Sector 77'");
+const N_SEC = Number(sqlq("select count(*) from redes.activo_vigente_mat where prefijo = 'SEC' and not retirado and not oculto"));
 const MOV = Number(sqlq("select id from tecnica.quimico_movimientos where remision = 'R-1' and proveedor = 'ZTEDGE Proveedor'"));
 const N_VAL = Number(sqlq("select count(*) from redes.activo_vigente_mat where prefijo = 'VAL' and not retirado and not oculto"));
 const N_ACT = Number(sqlq("select count(*) from redes.activo_vigente_mat where not retirado and not oculto"));
@@ -162,6 +181,25 @@ try {
   ok("D3 un reporte con periodo sin periodo: 400 «Elija el periodo»", r.s === 400 && /Elija el periodo/.test(r.c?.error ?? ""), r.txt);
   r = await E("Y", R, "reporte_iniciar", { cuerpo: { reporte: "sensibles", formato: "xlsx", tipo: "hospital" } });
   ok("D4 sin usuarios sensibles en la base: 404 sin datos (y no 500)", r.s === 404, r.txt);
+
+  // ===== E. El filtro de sector (la lista) y el tipo y la causa de catálogo en Eventos =====
+  r = await E("Y", R, "reporte_sectores");
+  const sec = r.c?.sectores?.find((x) => x.codigo === SEC);
+  ok(`E1 reporte_sectores: la lista con los ${N_SEC} sectores y subsectores vigentes de la capa (código, nombre, clase, sector y subsector)`,
+    r.s === 200 && r.c.sectores.length === N_SEC && sec?.nombre === "ZTEDGE Sector 77" && sec?.clase === "sector" && sec?.sector === 77 && sec?.subsector === null
+    && Object.keys(sec).sort().join() === "clase,codigo,nombre,sector,subsector", r.txt.slice(0, 400));
+  ok("E2 la lista: el supervisor de planta y el operador reciben 403; por POST, 405", (await E("S", R, "reporte_sectores")).s === 403 && (await E("O", R, "reporte_sectores")).s === 403
+    && (await E("Y", R, "reporte_sectores", { metodo: "POST", cuerpo: {} })).s === 405);
+  b = await bajar("Y", R, { reporte: "levantamientos", desde: hace(1), hasta: hoy, sector: SEC.toLowerCase(), formato: "csv" });
+  ok("E3 Encontrar o reportar activo por el sector de la lista (el código, aunque venga en minúsculas): el LEV del sector; el Léame dice el nombre",
+    b.i.s === 200 && b.filas.length === 1 && b.filas[0].codigo === "LEV-977001" && b.i.c.filtros.sector === SEC && b.i.c.leame.filtros.some((x) => x.includes("ZTEDGE Sector 77")), b.i.txt.slice(0, 400));
+  r = await E("Y", R, "reporte_iniciar", { cuerpo: { reporte: "levantamientos", desde: hace(1), hasta: hoy, sector: "77", formato: "csv" } });
+  ok("E4 un sector escrito como número: 400 «Elija el sector de la lista.» (lo dice la Edge, sin llegar a la base)", r.s === 400 && r.c?.error === "Elija el sector de la lista.", r.txt);
+  b = await bajar("Y", R, { reporte: "eventos", desde: hace(1), hasta: hoy, sector: SEC, formato: "xlsx" });
+  const ev = b.filas.find((f) => f.evento === "EVS-977001");
+  ok("E5 Eventos: tipo «Falla de bombeo» y causa «Desgaste o vejez de la tubería» del catálogo del daño; la causa escrita y la descripción no salen",
+    b.i.s === 200 && ev?.tipo === "Falla de bombeo" && ev?.causa === "Desgaste o vejez de la tubería" && ev?.tipo_intervencion === null
+    && b.i.c.columnas.some((c) => c.clave === "tipo" && c.titulo === "Tipo de daño o falla") && !JSON.stringify(b).includes("Pedro"), JSON.stringify(ev));
 
   // ===== Z. Lo que no debe salir =====
   ok("Z1 ninguna respuesta trae teléfonos ni nombres de las personas de prueba (los correos sí: son de funcionarios)", !todo.some((t) => /ZTEDGE (Admin|Supervisor|Operador|Comercial|Sin)/.test(t) || /\b3\d{9}\b/.test(t)));

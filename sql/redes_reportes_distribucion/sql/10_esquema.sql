@@ -5,7 +5,7 @@
 -- (no se toca); aquí van las siete nuevas: Encontrar o reportar activo, Válvulas cerradas, Eventos de suspensión, Línea 116, Reportes del bot,
 -- Usuarios sensibles y Activos de la red.
 -- · Presupone el aviso por contrato publicado: huella del conjunto de funciones de redes b474fbbe3e0f7a3a7e6dbc04c53e02e7.
--- · Solo AGREGA: 2 tablas (las descargas y sus cierres, solo inserción), funciones internas de lectura y 3 RPC. No reemplaza nada.
+-- · Solo AGREGA: 2 tablas (las descargas y sus cierres, solo inserción), funciones internas de lectura y 4 RPC (la cuarta, la lista del filtro de sector). No reemplaza nada.
 -- =====================================================================
 do $$
 begin

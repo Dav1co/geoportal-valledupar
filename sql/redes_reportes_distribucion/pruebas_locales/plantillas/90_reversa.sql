@@ -1,5 +1,5 @@
 -- =====================================================================
--- TÉCNICA · FASE 1 · DESCARGAS DE DISTRIBUCIÓN · 90 — REVERSA (PROPUESTA). Quita las 3 RPC, las funciones internas y las 2 tablas.
+-- TÉCNICA · FASE 1 · DESCARGAS DE DISTRIBUCIÓN · 90 — REVERSA (PROPUESTA). Quita las 4 RPC, las funciones internas y las 2 tablas.
 -- SE NIEGA si alguna función cambió después de la migración, y SE NIEGA si ya hay descargas guardadas (son registro de auditoría: nada se borra;
 -- la auditoría común también las tiene). Antes de la reversa, devuelva la Edge a la anterior.
 -- =====================================================================

@@ -13,8 +13,8 @@ ENV = dict(os.environ, PGHOST='localhost', PGPORT='55432', PGUSER='postgres', PG
 CONJ = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p "
         "where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%')")
 MD5_BASE = os.environ.get('MD5_BASE', 'b474fbbe3e0f7a3a7e6dbc04c53e02e7')      # aviso por contrato, publicado el 19-nov (23:40)
-NOMBRES = ['f_rep_catalogo', 'f_rep_max_filas', 'f_rep_ts', 'f_rep_col', 'f_rep_rotulo', 'f_rep_sector_geom', 'f_rep_punto', 'f_rep_filtros', 'f_rep_columnas', 'f_rep_levantamientos', 'f_rep_valvulas', 'f_rep_eventos', 'f_rep_l116', 'f_rep_bot', 'f_rep_sensibles', 'f_rep_activos', 'f_rep_filas', 'f_rep_contar', 'f_rep_leame']
-RPC = ['geoportal_redes_reporte_iniciar', 'geoportal_redes_reporte_pagina', 'geoportal_redes_reporte_cerrar']
+NOMBRES = ['f_rep_catalogo', 'f_rep_max_filas', 'f_rep_ts', 'f_rep_col', 'f_rep_rotulo', 'f_rep_sector_geom', 'f_rep_sectores', 'f_rep_punto', 'f_rep_filtros', 'f_rep_columnas', 'f_rep_levantamientos', 'f_rep_valvulas', 'f_rep_eventos', 'f_rep_l116', 'f_rep_bot', 'f_rep_sensibles', 'f_rep_activos', 'f_rep_filas', 'f_rep_contar', 'f_rep_leame']
+RPC = ['geoportal_redes_reporte_iniciar', 'geoportal_redes_reporte_pagina', 'geoportal_redes_reporte_cerrar', 'geoportal_redes_reporte_sectores']
 # por NOMBRE EXACTO (un patrón «geoportal_redes_reporte_%» abarcaría también las publicadas reporte_convertir y reporte_descartar)
 NUEVAS_Q = ("select string_agg(p.oid::regprocedure::text, '|' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text) from pg_proc p "
             f"where (p.pronamespace = 'redes'::regnamespace and p.proname = any (array{NOMBRES})) or (p.pronamespace = 'public'::regnamespace and p.proname = any (array{RPC}))")
