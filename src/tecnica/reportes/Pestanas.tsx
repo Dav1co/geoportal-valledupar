@@ -4,6 +4,7 @@ import { apiQuimicos } from "../apiQuimicos";
 import { apiGestion } from "../apiRedes";
 import { REPORTES_DISTRIBUCION, REPORTES_PTAP, type FuenteFiltro, type Opcion } from "./catalogo";
 import { PanelReportes, type Listas } from "./PanelReportes";
+import { sectoresReporte } from "./apiReportes";
 
 // Las dos pestañas: «Reportes» del Dashboard PTAP y «Descargas» del Dashboard distribución. Cada una junta las listas de sus filtros (de lo que el dashboard
 // ya tiene, o de una ruta que ya existe) y usa la tarjeta común. Si una lista no carga, su filtro queda en «Todos…» y la tarjeta lo dice.
@@ -29,17 +30,19 @@ export function ReportesPTAP({ catalogo }: { catalogo: Catalogo }) {
     sinPermiso="Solo el supervisor de planta o el administrador descargan reportes." />;
 }
 
-/** Dashboard distribución: los tipos de activo, del catálogo de redes (la ruta de la pestaña Catálogo). El sector se escribe (número). */
+/** Dashboard distribución: los tipos de activo, del catálogo de redes (la ruta de la pestaña Catálogo); los sectores y subsectores, de «reporte_sectores». */
 export function DescargasDistribucion() {
   const [tipos, setTipos] = useState<Opcion[] | null>(null);
+  const [sectores, setSectores] = useState<Opcion[] | null>(null);
   const [error, setError] = useState<FuenteFiltro[]>([]);
   useEffect(() => {
     let vivo = true;
     apiGestion.catalogo().then((c) => { if (vivo) setTipos(c.tipos.filter((t) => t.activo).map((t) => ({ codigo: t.prefijo, nombre: `${t.nombre_visible || t.nombre} (${t.prefijo})` })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))); })
-      .catch(() => { if (vivo) setError(["tipos_activo"]); });
+      .catch(() => { if (vivo) setError((e) => [...e, "tipos_activo"]); });
+    sectoresReporte().then((s) => { if (vivo) setSectores(s); }).catch(() => { if (vivo) setError((e) => [...e, "sectores"]); });
     return () => { vivo = false; };
   }, []);
-  return <PanelReportes titulo="Descargas" prefijo="dsc" reportes={REPORTES_DISTRIBUCION} listas={{ tipos_activo: tipos ?? [] }} listasConError={error}
+  return <PanelReportes titulo="Descargas" prefijo="dsc" reportes={REPORTES_DISTRIBUCION} listas={{ tipos_activo: tipos ?? [], sectores: sectores ?? [] }} listasConError={error}
     ayuda="Una descarga por formulario, en Excel o CSV: una fila por registro y cada dato en su columna. Toque una tarjeta para elegir el periodo y los filtros."
     sinPermiso="Solo el supervisor de distribución o el administrador descargan." />;
 }

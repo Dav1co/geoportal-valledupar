@@ -11,7 +11,9 @@ import { COLUMNAS_GESTION } from "./columnasGestion";
 //        Sin datos → 404 «No hay datos con esos filtros.»; más del tope → 400 con el texto para la pantalla.
 //   POST ?accion=reporte_pagina  { descarga_id, cursor, limite } → { filas, devueltos, cursor }   (cursor null = no hay más)
 //   POST ?accion=reporte_cerrar  { descarga_id, filas, resultado } → { descarga_id, cerrada, repetida }
-//   GET  geoportal-tecnica?accion=reporte_remision_foto&movimiento=N → { movimiento, url, vence_en_s }   (la página de la foto de la remisión)
+//   GET  geoportal-redes?accion=reporte_sectores → { sectores: [{ codigo: "SEC-…", nombre, clase: "sector"|"subsector", sector, subsector }] }  (la lista del filtro;
+//        cada sector seguido de sus subsectores; el filtro «sector» lleva el código)
+//   GET  geoportal-tecnica?accion=reporte_remision_foto&movimiento=N → { movimiento, url, expira_en }   (la página de la foto de la remisión)
 
 export type LeameServidor = { que_trae?: string[]; que_no_trae?: string[]; filtros?: string[]; generado_por?: string; generado_en?: string };
 export type ReporteIniciado = {
@@ -66,9 +68,17 @@ export function fuenteDe(def: DefReporte): FuenteReporte {
   };
 }
 
+export type SectorReporte = { codigo: string; nombre: string; clase: "sector" | "subsector"; sector: number | null; subsector: string | null };
+/** Las opciones del filtro de sector, en el orden del servidor (cada sector y después sus subsectores, que se ven sangrados con «— »). */
+export async function sectoresReporte(): Promise<{ codigo: string; nombre: string }[]> {
+  const r = await pedir<{ sectores: SectorReporte[] }>("reporte_sectores", { funcion: "geoportal-redes" });
+  return (Array.isArray(r?.sectores) ? r.sectores : []).filter((s) => typeof s?.codigo === "string" && s.codigo)
+    .map((s) => ({ codigo: s.codigo, nombre: `${s.clase === "subsector" ? "— " : ""}${s.nombre || s.codigo}` }));
+}
+
 /** La URL firmada (60 s) de la foto de una remisión: la usa la página que abre el enlace del Excel. */
 export const fotoRemision = (movimiento: string) =>
-  pedir<{ movimiento: number; url: string; vence_en_s: number }>("reporte_remision_foto", { qs: { movimiento } });
+  pedir<{ movimiento: number; url: string; expira_en?: string }>("reporte_remision_foto", { qs: { movimiento } });
 
 /** «24/10/2026 10:44» (hora de Bogotá). Acepta un ISO con zona o una hora de Bogotá sin zona (la forma del Code A); si ya viene armado, se deja igual. */
 export function fechaBogota(v: string | undefined | null): string {

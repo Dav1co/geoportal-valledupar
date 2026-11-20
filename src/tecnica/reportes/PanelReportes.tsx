@@ -42,7 +42,6 @@ export function PanelReportes({ titulo, ayuda, reportes, listas, listasConError 
 const opcionesDe = (f: FiltroReporte, listas: Listas): Opcion[] => (f.fuente === "fija" ? f.opciones ?? [] : listas[f.fuente] ?? []);
 /** El valor de un filtro se guarda por clave Y fuente: «tipo» de Usuarios sensibles (lista fija) y «tipo» de Activos (prefijos) no se mezclan. */
 const claveEstado = (f: FiltroReporte) => `${f.clave}|${f.fuente}`;
-const SECTOR_VALIDO = /^\d{1,4}$/;
 
 function TarjetaReporte(p: {
   def: DefReporte; abierta: boolean; bloqueada: boolean; prefijo: string; onAbrir: () => void; onOcupado: (b: boolean) => void; sinPermiso: string;
@@ -65,12 +64,8 @@ function TarjetaReporte(p: {
     const filtrosTexto: string[] = [];
     for (const f of def.filtros) {
       const v = (p.filtros[claveEstado(f)] ?? "").trim(); if (!v) continue;
-      if (f.fuente === "numero") {
-        if (!SECTOR_VALIDO.test(v)) { setMsg({ tipo: "error", t: `${f.rotulo}: escriba solo el número (por ejemplo, 5), o déjelo vacío para todos.` }); return; }
-        pedido.filtros[f.clave] = v; filtrosTexto.push(`${f.rotulo}: ${v}`); continue;
-      }
       const o = opcionesDe(f, p.listas).find((x) => x.codigo === v); if (!o) continue;      // un valor que ya no está en la lista no se manda
-      pedido.filtros[f.clave] = v; filtrosTexto.push(`${f.rotulo}: ${o.nombre}`);
+      pedido.filtros[f.clave] = v; filtrosTexto.push(`${f.rotulo}: ${o.nombre.replace(/^— /, "")}`);
     }
     const c = new AbortController(); ctl.current = c;
     setMsg(null); p.onOcupado(true);
@@ -85,7 +80,7 @@ function TarjetaReporte(p: {
   }
 
   const trabajando = progreso !== null;
-  const sinLista = def.filtros.filter((f) => f.fuente !== "fija" && f.fuente !== "numero" && p.listasConError.includes(f.fuente)).map((f) => `«${f.rotulo}»`);
+  const sinLista = def.filtros.filter((f) => f.fuente !== "fija" && p.listasConError.includes(f.fuente)).map((f) => `«${f.rotulo}»`);
   return (
     <article ref={caja} className={`rep-tarjeta${p.abierta ? " rep-abierta" : ""}`} data-reporte={def.clave}>
       <button type="button" className="rep-cab" aria-expanded={p.abierta} aria-controls={`${id}-form`} disabled={p.bloqueada} onClick={p.onAbrir}>
@@ -101,11 +96,7 @@ function TarjetaReporte(p: {
               <div className="td-campo"><label htmlFor={`${id}-hasta`}>Hasta</label>
                 <input id={`${id}-hasta`} type="date" value={p.hasta} min={p.desde || undefined} disabled={trabajando} onChange={(e) => p.setHasta(e.target.value)} /></div>
             </> : null}
-            {def.filtros.map((f) => f.fuente === "numero" ? (
-              <div key={f.clave} className="td-campo rep-campo-numero"><label htmlFor={`${id}-${f.clave}`}>{f.rotulo}</label>
-                <input id={`${id}-${f.clave}`} type="text" inputMode="numeric" maxLength={4} placeholder={f.todos} value={p.filtros[claveEstado(f)] ?? ""} disabled={trabajando}
-                  onChange={(e) => p.setFiltro(claveEstado(f), e.target.value.replace(/\D+/g, ""))} /></div>
-            ) : (
+            {def.filtros.map((f) => (
               <div key={f.clave} className="td-campo"><label htmlFor={`${id}-${f.clave}`}>{f.rotulo}</label>
                 <select id={`${id}-${f.clave}`} value={opcionesDe(f, p.listas).some((o) => o.codigo === p.filtros[claveEstado(f)]) ? p.filtros[claveEstado(f)] : ""} disabled={trabajando}
                   onChange={(e) => p.setFiltro(claveEstado(f), e.target.value)}>
@@ -117,7 +108,7 @@ function TarjetaReporte(p: {
           {def.ocultos ? <label className="td-check rep-check"><input type="checkbox" checked={p.ocultos} disabled={trabajando} onChange={(e) => p.setOcultos(e.target.checked)} /> {def.ocultos}</label> : null}
           <p className="rep-ayuda">
             {def.periodo ? `Hasta un año por descarga, por ${def.periodoPor ?? "la fecha del registro"}. ` : "Es el inventario de hoy: no lleva periodo. "}
-            {def.filtros.some((f) => f.fuente === "numero") ? "Sector: el número del sector hidráulico, o vacío para todos. " : ""}
+            {def.filtros.some((f) => f.fuente === "sectores") ? "Sector: un sector o uno de sus subsectores. " : ""}
             Sin teléfonos ni nombres de personas. Cada descarga queda registrada con quién la hizo.
             {sinLista.length ? ` No se pudo cargar la lista ${sinLista.join(" y ")}: se descarga sin ese filtro.` : ""}
           </p>

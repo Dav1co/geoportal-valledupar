@@ -78,7 +78,8 @@ const COLS = {
   levantamientos: [c("codigo", "Código", "texto"), c("reportado", "Reportado", "fecha_hora"), c("tipo", "Tipo", "texto"), c("estado", "Estado", "texto"), c("precision_m", "Precisión", "decimal", "m"), c("sector", "Sector", "entero"), c("lat", "Latitud", "decimal"), c("lon", "Longitud", "decimal")],
   valvulas: [c("valvula", "Válvula", "texto"), c("cerrada", "Cerrada", "fecha_hora"), c("abierta", "Abierta", "fecha_hora"), c("duracion_h", "Duración", "decimal", "h"), c("estado", "Estado", "texto"), c("sector", "Sector", "entero")],
   eventos: [c("evento", "Evento", "texto"), c("alcance", "Alcance", "texto"), c("zona", "Zona", "texto"), c("desde", "Desde", "fecha_hora"), c("regreso_estimado", "Regreso estimado", "fecha_hora"), c("fin", "Fin", "fecha_hora"),
-    c("contratos", "Contratos afectados", "entero"), c("sensibles", "Usuarios sensibles afectados", "entero"), c("reportes", "Reportes asociados", "entero")],
+    c("contratos", "Contratos afectados", "entero"), c("sensibles", "Usuarios sensibles afectados", "entero"), c("reportes", "Reportes asociados", "entero"),
+    c("dano", "Daño", "texto"), c("tipo", "Tipo de daño o falla", "texto"), c("causa", "Causa del daño", "texto"), c("intervencion", "Intervención", "texto"), c("tipo_intervencion", "Tipo de intervención", "texto")],
   l116: [c("reporte", "Reporte", "texto"), c("registrado_116", "Registrado en la 116", "fecha_hora"), c("contrato", "Contrato", "texto"), c("estado", "Estado", "texto"), c("sector", "Sector", "entero"), c("oculto", "Oculto", "si_no")],
   bot: [c("radicado", "Radicado", "texto"), c("recibido", "Recibido", "fecha_hora"), c("estado", "Estado", "texto"), c("sector", "Sector", "entero")],
   sensibles: [c("contrato", "Contrato", "texto"), c("tipo", "Tipo", "texto"), c("estado", "Estado", "texto"), c("desde", "Desde", "fecha_hora"), c("sector", "Sector", "entero")],
@@ -98,6 +99,9 @@ const CATALOGO = { formularios: [{ clave: "entrada", nombre: "Entrada", descripc
 const QUIMICOS = { quimicos: [{ codigo: "pac", nombre: "ZT PAC", activo: true }, { codigo: "cloro", nombre: "ZT Cloro gaseoso", activo: true }, { codigo: "viejo", nombre: "ZT Viejo", activo: false }], parametros: {}, puede_editar: false };
 const TIPOS = { puede_editar: false, tipos: [{ prefijo: "VAL", nombre: "Válvula", nombre_visible: "Válvula", activo: true, sistema: "acueducto" }, { prefijo: "HID", nombre: "Hidrante", nombre_visible: "Hidrante", activo: true, sistema: "acueducto" },
   { prefijo: "XXX", nombre: "Retirado", nombre_visible: "Retirado", activo: false, sistema: "acueducto" }], materiales: [], estados: [], contratistas: [], aportantes: [], tipos_intervencion: [], tipos_dano: [] };
+// La lista de sectores (ruta reporte_sectores del Code A, CAMBIO del 20-nov): cada sector y después sus subsectores; el filtro lleva el código SEC-…
+const SECTORES = { sectores: [{ codigo: "SEC-000005", nombre: "Sector 5 ZT", clase: "sector", sector: 5, subsector: null }, { codigo: "SEC-000051", nombre: "Subsector 5A ZT", clase: "subsector", sector: 5, subsector: "5A" },
+  { codigo: "SEC-000006", nombre: "Sector 6 ZT", clase: "sector", sector: 6, subsector: null }] };
 const dias = (d, h) => Math.round((Date.parse(`${h}T00:00:00Z`) - Date.parse(`${d}T00:00:00Z`)) / 86400000) + 1;
 const fechaN = (desde, i) => new Date(Date.parse(`${desde}T00:00:00Z`) + i * 86400000).toISOString().slice(0, 10);
 /** Cuántas filas da un pedido (un año de Entrada sin planta = 3 plantas × 24 envíos × 365 días). */
@@ -127,18 +131,19 @@ function fila(rep, i, b) {
       entra_kg: i % 3 ? null : 500, sale_kg: i % 3 && i ? 120.25 : null, saldo_kg: 5000 - i * 10.5 };
     case "eventos_planta": return { evento: `ZT-EVS-${i + 1}`, planta, estado: "Cerrado", suspendido: loc, reanudado: `${d}T23:00:00`, duracion_h: 4.8 };
     case "fuera_referencia": return { muestra: loc, variable: "Turbiedad", valor: 2.4, ref_max: 2, revision: "Revisado", revisado_en: `${d}T20:00:00` };
-    case "levantamientos": return { codigo: `ZT-LEV-${i + 1}`, reportado: loc, tipo: "Válvula", estado: "Levantado", precision_m: 4.5, sector: Number(b.sector ?? 5), lat: 10.46, lon: -73.25 };
-    case "valvulas": return { valvula: `ZT-V${i + 1}`, cerrada: loc, abierta: `${d}T23:00:00`, duracion_h: 3.5, estado: "Abierta", sector: Number(b.sector ?? 5) };
-    case "eventos": return { evento: `ZT-EVS-${i + 1}`, alcance: "Sectores", zona: "los sectores 5 y 6", desde: loc, regreso_estimado: `${d}T18:00:00`, fin: null, contratos: 1520, sensibles: 3, reportes: 7 };
-    case "l116": return { reporte: `ZT-116-${i + 1}`, registrado_116: loc, contrato: String(1000000 + i), estado: "Registrado", sector: Number(b.sector ?? 6), oculto: false };
-    case "bot": return { radicado: `ZT-BOT-${i + 1}`, recibido: loc, estado: "Recibido", sector: Number(b.sector ?? 6) };
+    case "levantamientos": return { codigo: `ZT-LEV-${i + 1}`, reportado: loc, tipo: "Válvula", estado: "Levantado", precision_m: 4.5, sector: 5, lat: 10.46, lon: -73.25 };
+    case "valvulas": return { valvula: `ZT-V${i + 1}`, cerrada: loc, abierta: `${d}T23:00:00`, duracion_h: 3.5, estado: "Abierta", sector: 5 };
+    case "eventos": return { evento: `ZT-EVS-${i + 1}`, alcance: "Sectores", zona: "los sectores 5 y 6", desde: loc, regreso_estimado: `${d}T18:00:00`, fin: null, contratos: 1520, sensibles: 3, reportes: 7,
+      dano: i % 2 ? null : `ZT-DAN-${i + 1}`, tipo: i % 2 ? null : "Fuga", causa: i % 2 ? null : "Terceros: Vehículo", intervencion: i % 2 ? null : `ZT-ITV-${i + 1}`, tipo_intervencion: i % 2 ? null : "Reparación" };
+    case "l116": return { reporte: `ZT-116-${i + 1}`, registrado_116: loc, contrato: String(1000000 + i), estado: "Registrado", sector: 6, oculto: false };
+    case "bot": return { radicado: `ZT-BOT-${i + 1}`, recibido: loc, estado: "Recibido", sector: 6 };
     case "sensibles": return { contrato: String(2000000 + i), tipo: "Hospital", estado: "Confirmado", desde: "2026-01-15T08:00:00", sector: 5 };
     case "activos": return { codigo: `ZT-A${i + 1}`, tipo: b.tipo === "HID" ? "Hidrante" : "Válvula", prefijo: b.tipo ?? "VAL", sistema: b.sistema ?? "acueducto", diametro_mm: 150, sector: 5, lat: 10.46, lon: -73.25 };
     default: return {};
   }
 }
 const CLAVES_CUERPO = new Set(["reporte", "desde", "hasta", "formato", "incluir_excluidos", "planta", "punto", "zona", "quimico", "formulario", "sector", "tipo", "sistema"]);
-const MODO = { iniciar: null, pagina: null, lento: 0, quimicos: "ok", foto: "ok" };       // los casos de error los fija la prueba
+const MODO = { iniciar: null, pagina: null, lento: 0, quimicos: "ok", foto: "ok", sectores: "ok" };       // los casos de error los fija la prueba
 const descargas = new Map(); let sigId = 100;
 const peticiones = [];
 const cab = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -155,10 +160,11 @@ const srv = http.createServer((q, r) => {
     if (fn === "geoportal-tecnica" && accion === "reporte_remision_foto") {
       if (MODO.foto === 403) return no(403, "No tiene permiso para esta acción.");
       if (url.searchParams.get("movimiento") === "404") return no(404, "Ese movimiento no tiene foto de la remisión.");
-      return ok({ movimiento: Number(url.searchParams.get("movimiento")), url: `http://127.0.0.1:${PUERTO + 1}/foto_zt.png?firma=zt`, vence_en_s: 60 });
+      return ok({ movimiento: Number(url.searchParams.get("movimiento")), url: `http://127.0.0.1:${PUERTO + 1}/foto_zt.png?firma=zt`, expira_en: new Date(Date.now() + 60000).toISOString() });
     }
     if (fn === "geoportal-redes" && accion === "mi_perfil") return ok({ perfil: "supervisor", email: "supervisor.zt@emdupar.gov.co" });
     if (fn === "geoportal-redes" && accion === "catalogo") return ok(TIPOS);
+    if (fn === "geoportal-redes" && accion === "reporte_sectores") return MODO.sectores === "ok" ? ok(SECTORES) : no(500, "falla");
     if (fn === "geoportal-redes" && accion === "descarga") {        // la ruta de Daños y fallas e Intervenciones (Corte 4b), sin paginar
       const n = 3; const filas = Array.from({ length: n }, (_, i) => b.conjunto === "danos"
         ? { codigo: `ZT-DAN-${i + 1}`, clase: "Daño", tipo: "Fuga", sistema: "Acueducto", activo: "ZT-V1", prefijo: "VAL", tipo_activo: "Válvula", estado: "Atendido", t_detectado: `${b.desde}T15:00:00Z`,
@@ -174,7 +180,8 @@ const srv = http.createServer((q, r) => {
       if (Object.keys(b).some((k) => !["reporte", "desde", "hasta", "formato", "incluir_excluidos"].includes(k) && !ACEPTA[b.reporte].includes(k))) return no(400, "Ese filtro no aplica a este reporte.");
       if (SIN_EXCLUIDOS.has(b.reporte) && "incluir_excluidos" in b) return no(400, "Ese filtro no aplica a este reporte.");
       if (!INVENTARIO.has(b.reporte) && (!b.desde || !b.hasta || dias(b.desde, b.hasta) > 366)) return no(400, "El periodo es obligatorio y de 366 días como máximo.");
-      if (b.sector !== undefined && !/^\d+$/.test(b.sector)) return no(400, "El sector es un número.");
+      if (b.sector !== undefined && /^\d+$/.test(b.sector)) return no(400, "Elija el sector de la lista.");
+      if (b.sector !== undefined && !SECTORES.sectores.some((x) => x.codigo === b.sector)) return no(400, "Ese sector no está en la capa de sectores.");
       const total = MODO.iniciar === "cero" ? 0 : cuantas(b);
       if (total === 0) return no(404, "No hay datos con esos filtros.");
       if (total > 50000) return no(400, `La descarga supera el máximo de 50.000 filas (hay ${total}). Acote el periodo o los filtros.`);
@@ -462,18 +469,18 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
   f = await archivoNuevo(antes, ".csv"); const ci2 = f ? readFileSync(f, "utf8").split("\r\n") : [];
   ok(`${T} D4 Intervenciones ahora también en CSV («Resuelve el daño» = Sí, «Valor total» sin separador de miles)`, ci2[0]?.startsWith("﻿Código;Nace de;") && /;Sí;/.test(ci2[1] ?? "") && /;350000;/.test(ci2[1] ?? ""), ci2.slice(0, 2).join(" | "));
 
-  // Válvulas cerradas: sector escrito; sin «Incluir…» (no aplica)
+  // Válvulas cerradas: el sector se elige de la lista (sectores y subsectores); sin «Incluir…» (no aplica)
   await tarjeta(pg, "valvulas"); await esp(150);
   const fv = await rotulos(pg, "valvulas");
-  ok(`${T} D5 Válvulas cerradas: el sector se escribe (número; vacío = todos); sin la casilla «Incluir…»`, fv.includes("Sector") && !fv.some((l) => l.startsWith("Incluir"))
-     && await pg.evaluate(() => { const e = document.querySelector("#dsc-valvulas-sector"); return e?.getAttribute("inputmode") === "numeric" && e.placeholder === "Todos"; }), JSON.stringify(fv));
-  await pg.type("#dsc-valvulas-sector", "5a"); antes = readdirSync(BAJADAS);
-  const escrito = await pg.evaluate(() => document.querySelector("#dsc-valvulas-sector").value);
+  ok(`${T} D5 Válvulas cerradas: «Sector» es una lista (reporte_sectores): cada sector y debajo sus subsectores, sangrados; sin la casilla «Incluir…»`, fv.includes("Sector") && !fv.some((l) => l.startsWith("Incluir"))
+     && JSON.stringify(await opcionesDe(pg, "#dsc-valvulas-sector")) === JSON.stringify(["Todos los sectores", "Sector 5 ZT", "— Subsector 5A ZT", "Sector 6 ZT"])
+     && peticiones.some((p) => p.fn === "geoportal-redes" && p.accion === "reporte_sectores"), JSON.stringify(fv));
+  await fijar(pg, "#dsc-valvulas-sector", "SEC-000051"); antes = readdirSync(BAJADAS);
   await enTarjeta(pg, "valvulas", "Descargar Excel"); await esperarAviso(pg, "valvulas");
   f = await archivoNuevo(antes, ".xlsx"); x = f ? leerXlsx(f) : null;
   const pv = pedidosDe("reporte_iniciar", "valvulas").at(-1);
-  ok(`${T} D6 solo deja números («5a» queda «5»); va a geoportal-redes como texto «5», sin «incluir_excluidos»; «Duración (h)»`, escrito === "5" && pv?.fn === "geoportal-redes"
-     && JSON.stringify(pv?.cuerpo) === JSON.stringify({ reporte: "valvulas", formato: "xlsx", desde: "2026-11-01", hasta: "2026-11-10", sector: "5" }) && x?.enc.includes("Duración (h)") && x?.f1[x.enc.indexOf("Sector")] === 5, JSON.stringify(pv));
+  ok(`${T} D6 un subsector va a geoportal-redes con su código («SEC-000051»), sin «incluir_excluidos»; «Duración (h)»; la columna «Sector» sigue siendo el número`, pv?.fn === "geoportal-redes"
+     && JSON.stringify(pv?.cuerpo) === JSON.stringify({ reporte: "valvulas", formato: "xlsx", desde: "2026-11-01", hasta: "2026-11-10", sector: "SEC-000051" }) && x?.enc.includes("Duración (h)") && x?.f1[x.enc.indexOf("Sector")] === 5, JSON.stringify(pv));
 
   // Usuarios sensibles: inventario a hoy, con su tipo
   await tarjeta(pg, "sensibles"); await esp(150);
@@ -507,23 +514,37 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
 
   // Eventos de suspensión, Línea 116, Reportes del bot y Encontrar: cada uno con su clave del contrato y su archivo
   for (const [k, ext, n, ocu] of [["eventos", ".xlsx", 10, "Incluir los anulados"], ["l116", ".csv", 10, "Incluir los ocultos"], ["bot", ".xlsx", 10, "Incluir los descartados"], ["levantamientos", ".csv", 10, "Incluir los descartados"]]) {
-    await tarjeta(pg, k); await esp(150); await fijar(pg, `#dsc-${k}-desde`, "2026-11-01"); await fijar(pg, `#dsc-${k}-hasta`, "2026-11-10"); await fijar(pg, `#dsc-${k}-sector`, "6");
+    await tarjeta(pg, k); await esp(150); await fijar(pg, `#dsc-${k}-desde`, "2026-11-01"); await fijar(pg, `#dsc-${k}-hasta`, "2026-11-10"); await fijar(pg, `#dsc-${k}-sector`, "SEC-000006");
     antes = readdirSync(BAJADAS);
     await enTarjeta(pg, k, ext === ".xlsx" ? "Descargar Excel" : "Descargar CSV"); await esperarAviso(pg, k);
     f = await archivoNuevo(antes, ext);
     const filas = !f ? -1 : ext === ".xlsx" ? leerXlsx(f).n : readFileSync(f, "utf8").split("\r\n").filter(Boolean).length - 1;
     const pk = pedidosDe("reporte_iniciar", k).at(-1);
-    ok(`${T} D12 ${k}: «${ocu}», pedido a geoportal-redes con el sector «6», ${n} filas en ${ext}, auditoría cerrada`, filas === n && pk?.fn === "geoportal-redes" && pk?.cuerpo?.sector === "6"
+    ok(`${T} D12 ${k}: «${ocu}», pedido a geoportal-redes con el sector «SEC-000006», ${n} filas en ${ext}, auditoría cerrada`, filas === n && pk?.fn === "geoportal-redes" && pk?.cuerpo?.sector === "SEC-000006"
        && (await rotulos(pg, k)).some((l) => l.includes(ocu)) && ultimaDescarga(k)?.cerrada?.resultado === "completa", `${f} ${filas} ${await avisoDe(pg, k)}`);
     if (k === "eventos") {
       const xe = leerXlsx(f);
-      ok(`${T} D13 eventos: contratos y sensibles afectados como números; «Fin» vacío`, xe.f1[xe.enc.indexOf("Contratos afectados")] === 1520 && xe.f1[xe.enc.indexOf("Usuarios sensibles afectados")] === 3
-         && xe.f1[xe.enc.indexOf("Fin")] === null, JSON.stringify(xe.f1));
+      const ie = (h) => xe.enc.indexOf(h);
+      ok(`${T} D13 eventos: contratos y sensibles afectados como números; «Fin» vacío; las columnas nuevas «Tipo de daño o falla», «Causa del daño» y «Tipo de intervención» (vacías si no hay daño)`,
+         xe.f1[ie("Contratos afectados")] === 1520 && xe.f1[ie("Usuarios sensibles afectados")] === 3 && xe.f1[ie("Fin")] === null
+         && ie("Tipo de daño o falla") === ie("Daño") + 1 && ie("Causa del daño") === ie("Daño") + 2 && ie("Tipo de intervención") === ie("Intervención") + 1
+         && xe.f1[ie("Causa del daño")] === "Terceros: Vehículo" && xe.f1[ie("Tipo de intervención")] === "Reparación" && xe.f2[ie("Causa del daño")] === null && xe.f2[ie("Tipo de daño o falla")] === null, JSON.stringify([xe.enc, xe.f1, xe.f2]));
     }
   }
-  await fijar(pg, "#dsc-levantamientos-sector", ""); await pg.type("#dsc-levantamientos-sector", "12345");
-  ok(`${T} D14 el sector admite hasta 4 cifras`, (await pg.evaluate(() => document.querySelector("#dsc-levantamientos-sector").value)) === "1234");
+  ok(`${T} D14 el sector elegido se conserva entre tarjetas (el mismo filtro): Encontrar quedó con «Sector 6 ZT»`, (await pg.evaluate(() => { const e = document.querySelector("#dsc-levantamientos-sector"); return e?.options[e.selectedIndex]?.textContent; })) === "Sector 6 ZT");
   ok(`${T} D15 Descargas no desborda`, await sinDesborde(pg));
+  await pg.close();
+  // Sin la lista de sectores: el filtro queda en «Todos los sectores» y lo dice; la descarga sigue y no manda sector
+  MODO.sectores = "falla"; pg = await abrir("p=dist"); await pestana(pg, "Descargas"); await pg.waitForSelector(".rep-tarjeta", { timeout: 8000 }).catch(() => {});
+  await tarjeta(pg, "l116"); await esp(300);
+  const sinS = await pg.evaluate(() => ({ ops: [...document.querySelectorAll("#dsc-l116-sector option")].map((o) => o.textContent), txt: document.querySelector('[data-reporte="l116"]').textContent }));
+  await enTarjeta(pg, "l116", "Descargar CSV"); await esperarAviso(pg, "l116");
+  ok(`${T} D15b si la lista de sectores no carga: solo «Todos los sectores» y el aviso; la descarga sale sin sector`,
+     JSON.stringify(sinS.ops) === JSON.stringify(["Todos los sectores"]) && /No se pudo cargar la lista «Sector»: se descarga sin ese filtro/.test(sinS.txt)
+     && !("sector" in (pedidosDe("reporte_iniciar", "l116").at(-1)?.cuerpo ?? { sector: 1 })) && /Listo/.test(await avisoDe(pg, "l116")), JSON.stringify(sinS));
+  MODO.sectores = "ok"; await pg.close();
+  pg = await abrir("p=dist"); await pestana(pg, "Descargas"); await pg.waitForSelector(".rep-tarjeta", { timeout: 8000 }).catch(() => {});
+  await tarjeta(pg, "levantamientos"); await esp(200);
   await pg.screenshot({ path: join(CAP, `despues_descargas_abierta_${ancho}.png`), fullPage: true });
   ok(`${T} D16 ningún pedido de reportes fue rechazado por el servidor simulado (filtros y claves del contrato)`, !peticiones.some((p) => p.accion === "reporte_iniciar" && p.rechazo && !/supera el máximo/.test(p.rechazo)),
      JSON.stringify(peticiones.filter((p) => p.rechazo).map((p) => [p.cuerpo, p.rechazo])));
@@ -537,7 +558,7 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
       boton: Math.min(...[...document.querySelectorAll(".rem-boton, .rem-boton-sec")].map((b) => b.getBoundingClientRect().height)), cab: getComputedStyle(document.querySelector(".rem-cab")).backgroundColor }; });
     const pf = peticiones.filter((p) => p.accion === "reporte_remision_foto").at(-1);
     ok(`${T} R1 remision.html?movimiento=7: pide reporte_remision_foto (GET, movimiento 7) y muestra la foto firmada; botones de 44 px; encabezado de Plantas`,
-       pf?.fn === "geoportal-tecnica" && pf?.qs?.movimiento === "7" && rf.carga && /foto_zt\.png\?firma=zt/.test(rf.src ?? "") && /Movimiento 7/.test(rf.txt) && /dura 60 segundos/.test(rf.txt) && rf.boton >= 44 && rf.cab === "rgb(10, 37, 64)", JSON.stringify(rf));
+       pf?.fn === "geoportal-tecnica" && pf?.qs?.movimiento === "7" && rf.carga && /foto_zt\.png\?firma=zt/.test(rf.src ?? "") && /Movimiento 7/.test(rf.txt) && /vence en un minuto/.test(rf.txt) && rf.boton >= 44 && rf.cab === "rgb(10, 37, 64)", JSON.stringify(rf));
     ok(`${T} R2 la página de la foto no desborda`, await sinDesborde(pg));
     await pg.screenshot({ path: join(CAP, `despues_remision_${ancho}.png`), fullPage: true }); await pg.close();
     pg = await abrir("movimiento=404", "remision.html"); await pg.waitForSelector(".rem-aviso", { timeout: 8000 }).catch(() => {});

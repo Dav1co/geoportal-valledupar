@@ -5,8 +5,8 @@
 // nombre o placa de terceros ni texto libre: lo garantiza el servidor (§1.5 del contrato).
 
 export type Opcion = { codigo: string; nombre: string };
-/** De dónde salen las opciones de un filtro: listas del dashboard, una lista fija o un número escrito (el sector hidráulico). */
-export type FuenteFiltro = "plantas" | "puntos" | "zonas" | "quimicos" | "tipos_activo" | "fija" | "numero";
+/** De dónde salen las opciones de un filtro: listas del dashboard, una lista fija o la de sectores y subsectores (ruta reporte_sectores del Code A). */
+export type FuenteFiltro = "plantas" | "puntos" | "zonas" | "quimicos" | "tipos_activo" | "sectores" | "fija";
 export type FiltroReporte = { clave: string; rotulo: string; todos: string; fuente: FuenteFiltro; opciones?: Opcion[] };
 export type TipoColumna = "texto" | "entero" | "decimal" | "numero" | "fecha" | "hora" | "fecha_hora" | "si_no" | "enlace";
 export type ColumnaReporte = { clave: string; titulo: string; tipo: TipoColumna; unidad?: string | null; decimales?: number; ancho?: number };
@@ -35,7 +35,7 @@ const ZONA: FiltroReporte = { clave: "zona", rotulo: "Zona", todos: "Todas las z
 const QUIMICO: FiltroReporte = { clave: "quimico", rotulo: "Químico", todos: "Todos los químicos", fuente: "quimicos" };
 const FORMULARIO: FiltroReporte = { clave: "formulario", rotulo: "Formulario", todos: "Todos los formularios", fuente: "fija",
   opciones: [{ codigo: "entrada", nombre: "Entrada" }, { codigo: "salida", nombre: "Salida" }, { codigo: "muestreo", nombre: "Muestreo" }] };
-const SECTOR: FiltroReporte = { clave: "sector", rotulo: "Sector", todos: "Todos", fuente: "numero" };
+const SECTOR: FiltroReporte = { clave: "sector", rotulo: "Sector", todos: "Todos los sectores", fuente: "sectores" };      // un sector o un subsector (código SEC-…)
 const TIPO_SENSIBLE: FiltroReporte = { clave: "tipo", rotulo: "Tipo", todos: "Todos los tipos", fuente: "fija",
   opciones: [{ codigo: "hospital", nombre: "Hospital" }, { codigo: "clinica", nombre: "Clínica o centro de salud" }, { codigo: "colegio", nombre: "Colegio" },
     { codigo: "sede_propia", nombre: "Sede propia" }, { codigo: "otro", nombre: "Otro" }] };
@@ -68,7 +68,7 @@ export const REPORTES_PTAP: DefReporte[] = [
     noTrae: SIN_PERSONALES, archivo: "ptap_kardex_quimicos" },
   { clave: "eventos_planta", titulo: "Eventos de planta", descripcion: "Suspensiones de cada planta y su reanudación.", funcion: T,
     periodo: true, periodoPor: "los eventos que tocan el periodo", filtros: [PLANTA], ocultos: "Incluir los anulados",
-    trae: "Un evento de suspensión de una planta por fila: desde, regreso estimado (inicial y vigente), reanudación, duración, contratos y sensibles afectados, y reportes asociados.",
+    trae: "Un evento de suspensión de una planta por fila: desde, regreso estimado (inicial y vigente), reanudación, duración, contratos y sensibles afectados, reportes asociados, y el daño (con su tipo y causa de catálogo) y la intervención (con su tipo).",
     noTrae: SIN_PERSONALES, archivo: "ptap_eventos_planta" },
   { clave: "fuera_referencia", titulo: "Fuera de referencia", descripcion: "Valores fuera de la referencia, con la revisión del supervisor.", funcion: T,
     periodo: true, periodoPor: "la fecha de la muestra", filtros: [PLANTA, FORMULARIO, PUNTO], ocultos: "Incluir los excluidos",
@@ -96,7 +96,7 @@ export const REPORTES_DISTRIBUCION: DefReporte[] = [
     trae: "Un cierre de válvula por fila: cerrada, regreso estimado, abierta, duración, estado, daño e intervención, sector y quién cerró y abrió.", noTrae: SIN_PERSONALES, archivo: "valvulas_cerradas" },
   { clave: "eventos", titulo: "Eventos de suspensión", descripcion: "Zona, duración, regreso estimado y real, y afectados.", funcion: R,
     periodo: true, periodoPor: "los eventos que tocan el periodo", filtros: [SECTOR], ocultos: "Incluir los anulados",
-    trae: "Un evento por fila: alcance, zona, desde, regreso estimado (inicial y vigente), fin, duración, contratos y sensibles afectados (como números) y reportes asociados por canal.",
+    trae: "Un evento por fila: alcance, zona, desde, regreso estimado (inicial y vigente), fin, duración, contratos y sensibles afectados (como números), reportes asociados por canal, y el daño (con su tipo y causa de catálogo) y la intervención (con su tipo).",
     noTrae: `${SIN_PERSONALES} La lista de contratos: solo cuántos.`, archivo: "eventos_suspension" },
   { clave: "l116", titulo: "Línea 116", descripcion: "Reportes recibidos por la Línea 116.", funcion: R,
     periodo: true, periodoPor: "el día del reporte", filtros: [SECTOR], ocultos: "Incluir los ocultos",
