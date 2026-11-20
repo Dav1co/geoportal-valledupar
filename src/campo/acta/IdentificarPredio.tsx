@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { AvisoSinAgua } from "../AvisoSinAgua";
 import "./acta.css";
 import { avisoDeError, ErrorCampo } from "../apiCampo";
 import { apiActa } from "./apiActa";
@@ -65,6 +66,8 @@ export function IdentificarPredio({ modo, contrato, bloqueado, onModo, onContrat
               onChange={(e) => { onContrato(e.target.value.replace(/[^A-Za-z0-9-]/g, "")); setMensaje(null); }} />
             <button type="button" className="tec-boton" onClick={() => void verificar()} disabled={bloqueado || verificando || contrato.trim() === ""}>{verificando ? "Buscando…" : opcional ? "Precargar" : "Verificar"}</button>
           </div>
+          {/* contrato verificado: si el predio está en un evento de suspensión activo, se avisa (solo informa) */}
+          {precarga?.existe ? <AvisoSinAgua contrato={contrato} espera={0} /> : null}
           {precarga?.existe && (
             <dl className="campo-auto">
               <div><dt>Dirección</dt><dd>{precarga.direccion ?? "Sin dato"}</dd></div>
