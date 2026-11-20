@@ -1,0 +1,23 @@
+     reporte      |        filtros        | total | paginas | iniciar ms | página más lenta ms | todo ms 
+------------------+-----------------------+-------+---------+------------+---------------------+---------
+ entrada          | {}                    | 17568 |       4 |        282 |                 659 |    2273
+ entrada          | {"planta": "arnes_a"} |  8748 |       2 |        152 |                 520 |    1051
+ salida           | {}                    | 17496 |       4 |        169 |                 379 |    1334
+ muestreo         | {}                    |  3635 |       1 |         59 |                 318 |     377
+ uso_quimicos     | {}                    |  2912 |       1 |         19 |                  26 |      46
+ entrada_quimicos | {}                    |   208 |       1 |          3 |                   3 |       5
+ kardex_quimicos  | {}                    |  3132 |       1 |         59 |                  68 |     127
+ eventos_planta   | {}                    |    60 |       1 |          6 |                   2 |       8
+ fuera_referencia | {}                    |    80 |       1 |        925 |                 886 |    1811
+ levantamientos   | {}                    |  1000 |       1 |          7 |                 118 |     126
+ levantamientos   | {"sector": "5"}       |   471 |       1 |          3 |                  49 |      52
+ valvulas         | {}                    |  2000 |       1 |          6 |                 219 |     226
+ eventos          | {}                    |   300 |       1 |          3 |                  10 |      13
+ l116             | {}                    | 29317 |       6 |         34 |                  89 |     551
+ l116             | {"sector": "5"}       |  1495 |       1 |         16 |                  40 |      56
+ bot              | {}                    |  2900 |       1 |         31 |                 234 |     265
+ bot              | {"sector": "5"}       |  1422 |       1 |         14 |                 155 |     169
+ sensibles        | {}                    |   300 |       1 |          2 |                  31 |      33
+ activos          | {}                    | 35782 |       8 |         42 |                 503 |    3374
+(19 filas)
+
