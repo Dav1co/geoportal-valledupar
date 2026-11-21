@@ -1,0 +1,15 @@
+OK    A1 tubo_sectores_fijar: permiten A e Y; S, O, D y N reciben 403
+OK    A2 evento_causal_fijar: permiten A e Y; S, O, D y N reciben 403
+OK    A3 sin sesión: 401
+OK    B1 fijar el tubo 2 (código y sectores en minúsculas valen): devuelve el tubo, su nombre y sus sectores
+OK    B2 el catálogo trae causales (con las 5 de David) y tubos con nombre, planta y sectores; los sectores por planta, vacíos
+OK    B3 planta_sectores_fijar: 400 «Los sectores ya no se asignan por planta…»
+OK    C1 sin origen: 400 «Indique el origen…» (lo dice la base)
+OK    C2 vista previa por los dos tubos: alcance «sectores», con zona y conteos
+OK    C3 declarar por dos tubos: queda por sectores (2), con los dos tubos {codigo, nombre}, origen Trabajo y causal «Trabajo programado en redes»
+OK    C4 el detalle trae lo mismo
+OK    C5 evento_contrato: el contrato de prueba está en el evento por tubo, zona «sectores» (la forma de la respuesta no cambia)
+OK    D1 Distribución · Eventos (por el sector de prueba): «Por tubo», los tubos, origen y causal; la observación no sale
+OK    Z1 las descargas y las respuestas de los ajustes no traen nombres de personas ni teléfonos (la observación tampoco sale en la descarga)
+OK    Z2 ninguna RPC que no exista en la base
+RESULTADO: 14 de 14 — SIN FALLAS
