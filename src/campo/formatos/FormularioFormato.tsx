@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { IconoCamara } from "../../tecnica/IconoCamara";
 import { AvisoSinAgua } from "../AvisoSinAgua";
 import "./formatos.css";
 import { ConfirmarCancelar, type Destino as DestinoCancelar } from "../../components/ConfirmarCancelar";
@@ -321,7 +322,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
                       )}
                     </>
                   ) : (
-                    <button type="button" className="tec-boton campo-boton-foto" onClick={() => setCamaraEn({ tipo: "etiqueta", codigo: e.codigo, nombre: e.nombre })} disabled={fotosFijas || !camaraDisponible() || nFotos >= maximo}>📷 Tomar foto</button>
+                    <button type="button" className="tec-boton campo-boton-foto" onClick={() => setCamaraEn({ tipo: "etiqueta", codigo: e.codigo, nombre: e.nombre })} disabled={fotosFijas || !camaraDisponible() || nFotos >= maximo}><IconoCamara />Tomar foto</button>
                   )}
                 </div>
               );
@@ -341,11 +342,11 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
           </div>
           {(usaEtiquetas || adicionales.length === 0) && (
             <button type="button" className="tec-boton-sec" onClick={() => setCamaraEn({ tipo: "adicional", indice: null, nombre: usaEtiquetas ? "Foto adicional" : `Foto ${adicionales.length + 1}` })} disabled={!puedeMas || !camaraDisponible()}>
-              {usaEtiquetas ? "📷 Agregar foto adicional" : "📷 Tomar foto"}
+              <IconoCamara />{usaEtiquetas ? "Agregar foto adicional" : "Tomar foto"}
             </button>
           )}
           {!usaEtiquetas && adicionales.length > 0 && (
-            <button type="button" className="tec-boton-sec" onClick={() => setCamaraEn({ tipo: "adicional", indice: null, nombre: `Foto ${adicionales.length + 1}` })} disabled={!puedeMas || !camaraDisponible()}>📷 Agregar otra foto</button>
+            <button type="button" className="tec-boton-sec" onClick={() => setCamaraEn({ tipo: "adicional", indice: null, nombre: `Foto ${adicionales.length + 1}` })} disabled={!puedeMas || !camaraDisponible()}><IconoCamara />Agregar otra foto</button>
           )}
           {preparada && fase !== "guardado" && <p className="campo-sub">Las fotos y el resultado ya están reservados para este envío; no se pueden cambiar hasta enviarlo.</p>}
           <p className="campo-sub">Las fotos se toman con la cámara y quedan solo en la memoria de esta pantalla: no se guardan en el celular ni en la galería.</p>

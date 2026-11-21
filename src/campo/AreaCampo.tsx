@@ -3,6 +3,7 @@ import { lazyConRecarga } from "../lib/recarga";
 import { fijarAreaCampo } from "./area";
 import "../tecnica/tecnica.css";
 import "./campo.css";
+import "./comercial.css";      // modelo visual de Comercial (guía visual, §3–§5): tokens con el color #782a27 en la clase «com-modulo»
 import { apiCampo, avisoDeError, ErrorCampo, type FormularioCampo } from "./apiCampo";
 import { ReporteGeneral } from "./ReporteGeneral";
 import { FormatosCampo } from "./formatos/FormatosCampo";
@@ -34,7 +35,13 @@ const ROTULO_PERFIL: Record<FormularioCampo["perfil"], string> = { admin: "Admin
 /** Permisos que decide el servidor (App los toma del perfil). `acta`: puede capturar actas (si no se informa, la entrada del acta no aparece). `campo`: tiene permiso de campo; por omisión sí (como antes).
  *  Quien solo tiene acta (`campo` falso) NO pide el formulario de campo (su Edge le respondería 403) y ve únicamente las entradas del acta. `dashboardActa`: supervisor de actas (marcador, sin pantalla aún).
  *  `analisis`: permiso `analisis_contrato` (o administrador). Quien solo tiene este (usuario comercial, decisión 12) tampoco pide el formulario y ve solo la tarjeta «Análisis de contrato». */
-export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = false, analisis = false }: { correo: string; acta?: boolean; campo?: boolean; dashboardActa?: boolean; analisis?: boolean }) {
+type PropsCampo = { correo: string; acta?: boolean; campo?: boolean; dashboardActa?: boolean; analisis?: boolean };
+/** Formatos de campo con el modelo visual de Comercial: la envoltura (sin caja) fija los tokens de Comercial para esta pantalla y todo lo que abre. */
+export function AreaCampo(p: PropsCampo) {
+  return <div className="com-modulo com-envoltura"><PantallasCampo {...p} /></div>;
+}
+
+function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = false, analisis = false }: PropsCampo) {
   const [def, setDef] = useState<FormularioCampo | null>(null);
   const [error, setError] = useState<ErrorCampo | null>(null);
   const [intento, setIntento] = useState(0);
@@ -124,8 +131,8 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
   });
 
   return (
-    <div className="tec-pagina campo-pagina">
-      <section className="tec-tarjeta">
+    <div className="tec-pagina campo-pagina com-inicio">
+      <section className="tec-tarjeta com-hoja">
         <h1>{campo || !acta ? "Formatos de campo" : "Reportar posible pérdida"}</h1>
         <p className="campo-sub">{def ? ROTULO_PERFIL[def.perfil] : acta ? "Registro digital de actas" : "Consulta de contratos"}</p>
         <div className="campo-formatos">
@@ -137,13 +144,13 @@ export function AreaCampo({ correo, acta = false, campo = true, dashboardActa = 
                 {separar ? <hr className="campo-separador" aria-hidden="true" /> : null}
                 {e.pendiente ? (
                   <div className={`${clase} campo-formato-proximo`} aria-disabled="true">
-                    <strong>{e.titulo}</strong>
-                    <span>Próximamente. {e.descripcion}</span>
+                    <span className="com-tarjeta-ini" data-ini={e.titulo.charAt(0)} aria-hidden="true" />
+                    <span className="com-tarjeta-txt"><strong>{e.titulo}</strong><span>Próximamente. {e.descripcion}</span></span>
                   </div>
                 ) : (
                   <button type="button" className={`${clase} campo-formato-activo`} onClick={() => setAbierta(e.id)} disabled={!e.habilitada}>
-                    <strong>{e.titulo}</strong>
-                    {e.descripcion ? <span>{e.descripcion}</span> : null}
+                    <span className="com-tarjeta-ini" data-ini={e.titulo.charAt(0)} aria-hidden="true" />
+                    <span className="com-tarjeta-txt"><strong>{e.titulo}</strong>{e.descripcion ? <span>{e.descripcion}</span> : null}</span>
                     {e.abreMas ? <span className="campo-formato-flecha" aria-hidden="true">›</span> : null}
                   </button>
                 )}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { IconoCamara } from "../tecnica/IconoCamara";
 import { AvisoSinAgua } from "./AvisoSinAgua";
 import { apiCampo, avisoDeError, ErrorCampo, type Confirmacion, type FormularioCampo, type Preparacion } from "./apiCampo";
 import { maxDescripcion } from "./limites";
@@ -246,7 +247,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
                   </>
                 ) : (
                   <button type="button" className="tec-boton campo-boton-foto" onClick={() => setCamaraEn(i)} disabled={fotosFijas || !camaraDisponible() || (i > 0 && !fotos[0])}>
-                    📷 Tomar foto {i + 1}
+                    <IconoCamara />Tomar foto {i + 1}
                   </button>
                 )}
               </div>

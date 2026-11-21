@@ -1,28 +1,28 @@
 /* Formatos de actividad (Paso D). Se apoya en las clases de campo.css y tecnica.css; aquí solo lo nuevo. Objetivos táctiles de 44 px o más. */
 .campo-grupo-formatos { display: grid; gap: 10px; }
-.campo-grupo-titulo { margin: 0; font-size: 16px; color: #22313f; }
+.campo-grupo-titulo { margin: 0; font-size: 16px; color: var(--t-texto, #22313f); }
 .campo-res { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.campo-res label { display: flex; align-items: center; justify-content: center; min-height: 56px; border: 2px solid #c3ced6; border-radius: 10px; font-size: 17px; font-weight: 700; cursor: pointer; text-align: center; padding: 6px; }
+.campo-res label { display: flex; align-items: center; justify-content: center; min-height: 56px; border: 2px solid var(--t-borde, #d5dde6); border-radius: 10px; font-size: 17px; font-weight: 700; cursor: pointer; text-align: center; padding: 6px; }
 .campo-res input { position: absolute; opacity: 0; pointer-events: none; }
-.campo-res label:has(input:checked) { border-color: #0f766e; background: #f2fbf9; color: #0a2540; }
-.campo-res label.campo-res-no:has(input:checked) { border-color: #b42318; background: #fdf1ef; color: #7a1a10; }
-.campo-res label:has(input:focus-visible) { outline: 3px solid #4a90d9; outline-offset: 2px; }
+.campo-res label:has(input:checked) { border-color: var(--t-modo, #0a2540); background: var(--t-modo-suave, #eef2f5); color: var(--t-titulo, #0a2540); }
+.campo-res label.campo-res-no:has(input:checked) { border-color: var(--t-rojo, #b3261e); background: var(--t-rojo-suave, #fdecea); color: var(--t-texto, #22313f); }
+.campo-res label:has(input:focus-visible) { outline: 3px solid var(--t-foco, #4a90d9); outline-offset: 2px; }
 .campo-res label:has(input:disabled) { opacity: .6; cursor: not-allowed; }
-.campo-propio input[type="text"], .campo-propio input[type="datetime-local"], .campo-propio select { width: 100%; box-sizing: border-box; min-height: 48px; border: 1px solid #7b8b99; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 16px; color: #22313f; background: #fff; }
-.campo-propio input[aria-invalid="true"], .campo-propio select[aria-invalid="true"] { border-color: #b42318; border-width: 2px; }
-.campo-propio .campo-unidad { font-size: 13px; color: #52626f; }
+.campo-propio input[type="text"], .campo-propio input[type="datetime-local"], .campo-propio select { width: 100%; box-sizing: border-box; min-height: 48px; border: 1px solid var(--t-borde-campo, #7b8b99); border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 16px; color: var(--t-texto, #22313f); background: var(--t-tarjeta, #fff); }
+.campo-propio input[aria-invalid="true"], .campo-propio select[aria-invalid="true"] { border-color: var(--t-rojo, #b3261e); border-width: 2px; }
+.campo-propio .campo-unidad { font-size: 13px; color: var(--t-texto-2, #52626f); }
 .campo-opciones { display: grid; gap: 8px; }
 .campo-opciones label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 16px; }
 .campo-opciones input { width: 24px; height: 24px; flex: none; }
-.campo-sensible { font-size: 12px; color: #5c4000; background: #fff8e1; border: 1px solid #b07a00; border-radius: 6px; padding: 1px 6px; margin-left: 6px; }
-.campo-foto-soporte { border-color: #0f766e; }
+.campo-sensible { font-size: 12px; color: var(--t-texto, #22313f); background: var(--t-naranja-suave, #fff4e5); border: 1px solid var(--t-naranja, #c25e00); border-radius: 6px; padding: 1px 6px; margin-left: 6px; }
+.campo-foto-soporte { border-color: var(--t-modo, #0a2540); }
 .campo-contador-fotos { font-size: 15px; font-weight: 700; }
-.campo-contador-fotos.campo-contador-ok { color: #0f766e; }
-.campo-consecutivo { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: .5px; color: #0a2540; word-break: break-all; }
+.campo-contador-fotos.campo-contador-ok { color: var(--t-modo, #0a2540); }
+.campo-consecutivo { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: .5px; color: var(--t-titulo, #0a2540); word-break: break-all; }
 
 /* Secciones del formulario (formatos con campos agrupados por «seccion») */
-.campo-seccion { border: 1px solid #c3ced6; border-radius: 8px; margin: 10px 0; padding: 0 12px 8px; }
+.campo-seccion { border: 1px solid var(--t-borde, #d5dde6); border-radius: 8px; margin: 10px 0; padding: 0 12px 8px; }
 .campo-seccion > summary { cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; list-style: none; }
 .campo-seccion > summary::-webkit-details-marker { display: none; }
 .campo-seccion-estado { font-weight: 400; font-size: 0.85em; opacity: 0.8; }
-.campo-seccion-falta { color: #b42318; opacity: 1; font-weight: 600; }
+.campo-seccion-falta { color: var(--t-rojo, #b3261e); opacity: 1; font-weight: 600; }

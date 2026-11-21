@@ -164,7 +164,7 @@ export function PanelIndicadores({ stats, abierto, onToggle }: {
   onToggle: () => void;
 }) {
   return (
-    <div className={`panel-ind ${abierto ? "panel-ind-abierto" : ""}`}>
+    <div className={`panel-ind com-modulo ${abierto ? "panel-ind-abierto" : ""}`}>
       <button className="pi-toggle" onClick={onToggle}>
         {abierto ? "▾ Ocultar indicadores" : "▴ Ver indicadores de lo visible"}
       </button>

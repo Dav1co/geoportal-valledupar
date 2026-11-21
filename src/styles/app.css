@@ -970,3 +970,31 @@ body {
 .modo-wrap-campo { flex: none; background: var(--surface-2); }
 .campo-contenedor { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .modo-wrap-campo .modo-sel { min-height: 44px; font-size: 16px; }
+
+/* ---------- Comercial · estandarización visual («comercial-estilo», 20-nov-2026; guía visual, §3, §5 y §6) ----------
+   El panel lateral del mapa comercial, el selector «Modo de trabajo», el botón «Controles» y el panel de indicadores llevan «com-modulo» (src/campo/tokens.css):
+   ahí el acento azul del panel pasa a ser el color de Comercial. El mapa queda neutro (sus capas y mapas de calor conservan sus colores de leyenda) y el Tablero
+   comercial (src/dashboard/) no cambia. El encabezado general azul del geoportal tampoco cambia. */
+.com-modulo { --azul: var(--comercial); --azul-suave: var(--comercial-suave); color: var(--t-texto, #22313f); }
+/* Cápsula de modos (como la de Técnica): pestañas dentro de una cápsula gris; la elegida, en el color del módulo con texto blanco */
+.modo-capsula { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--t-suave, #eef2f5); border-radius: var(--t-radio-tarjeta, 12px); }
+.modo-opcion { min-height: var(--t-toque, 44px); border: none; border-radius: 9px; background: transparent; padding: 4px 8px; font-family: var(--t-fuente, Arial, sans-serif);
+  font-size: 14px; font-weight: 700; color: var(--t-texto, #22313f); cursor: pointer; line-height: 1.2; }
+.modo-opcion:hover { background: var(--t-tarjeta, #fff); }
+.modo-opcion[aria-checked="true"] { background: var(--t-modo, #782a27); color: #fff; }
+.modo-opcion:focus-visible { outline: 3px solid var(--t-foco, #4a90d9); outline-offset: 2px; }
+.modo-lbl { font-family: var(--t-fuente, Arial, sans-serif); }
+.com-modulo .modo-lbl { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--t-texto-2, #52626f); }
+/* Arriba de Formatos de campo, a lo ancho: una sola fila que se parte si no cabe */
+.modo-wrap-campo .modo-capsula { display: flex; flex-wrap: wrap; }
+.modo-wrap-campo .modo-opcion { flex: 1 1 120px; }
+@media (min-width: 760px) { .modo-wrap-campo .modo-opcion { flex: 0 0 auto; min-width: 128px; } .modo-wrap-campo .modo-capsula { display: inline-flex; } }
+/* Panel lateral: los controles del modo en el color de Comercial */
+.com-modulo .seg-activo, .com-modulo .filtro-segmentado .seg.seg-activo { background: var(--t-modo, #782a27); color: #fff; }
+.com-modulo .pi-toggle:hover { background: var(--t-modo, #782a27); box-shadow: 0 0 0 2px var(--t-modo-suave, #f6e8e7) inset; }
+/* La leyenda del mapa conserva el color de su capa (guía, §6): el azul de los predios con contrato no es un control */
+.com-modulo .leyenda { --azul: #1e5aa8; }
+/* Desplegables del panel (modo de búsqueda, barrio…): campos neutros de la guía, con la flecha en el color del módulo */
+.com-modulo .modo-sel { color: var(--t-texto, #22313f); background-color: var(--t-tarjeta, #fff); border-color: var(--t-borde-campo, #7b8b99); min-height: var(--t-toque, 44px);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%23782a27' stroke-width='1.5' fill='none'/></svg>"); }
+.com-modulo .modo-sel:focus-visible { outline: 3px solid var(--t-foco, #4a90d9); outline-offset: 2px; }

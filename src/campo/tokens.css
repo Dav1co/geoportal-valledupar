@@ -1,0 +1,64 @@
+/* =====================================================================
+   Comercial · TOKENS (rama «comercial-estilo», 20-nov-2026; guía visual del geoportal, §3, §4 y §8)
+   Los mismos nombres y valores que src/tecnica/tokens.css y src/aseo/tokens.css, salvo el color del módulo: vino tirando a ladrillo #782a27
+   (texto blanco encima: contraste ≈ 9,7 a 1) y su fondo suave #f6e8e7. Aprobado por David el 20-nov.
+   Los errores (--t-rojo #b3261e) llevan siempre texto o ícono, nunca solo el color, para no confundirse con el color del módulo.
+   Toda pantalla de Comercial lleva la clase «com-modulo» en su raíz (Formatos de campo y todo lo que abre: la cámara, el acta, el análisis, la supervisión,
+   «Encontrar o reportar activo» abierto desde Campo; y el panel lateral del mapa comercial). Ahí se fijan los tokens, para que las clases tec-*, td-*, campo-*
+   y rv-* que Comercial comparte tomen su color sin tocar las hojas de Técnica. El Tablero comercial (src/dashboard/) NO lleva esta clase: no cambia.
+   ===================================================================== */
+:root {
+  --comercial: #782a27;          /* color del módulo: encabezado de sección, botón principal, borde de tarjeta */
+  --comercial-suave: #f6e8e7;    /* fondo suave derivado del color del módulo */
+}
+.com-modulo {
+  --t-fuente: var(--sans, Arial, Helvetica, "Helvetica Neue", sans-serif);
+  --t-fuente-codigo: var(--mono, "Courier New", Courier, monospace);
+
+  /* módulo */
+  --t-modo: var(--comercial);
+  --t-modo-suave: var(--comercial-suave);
+
+  /* superficies y texto */
+  --t-fondo: #f2f5f8;
+  --t-tarjeta: #ffffff;
+  --t-borde: #d5dde6;
+  --t-borde-campo: #7b8b99;
+  --t-suave: #eef2f5;
+  --t-texto: #22313f;
+  --t-texto-2: #52626f;
+  --t-titulo: #0a2540;
+
+  /* estados */
+  --t-rojo: #b3261e;
+  --t-rojo-suave: #fdecea;
+  --t-naranja: #c25e00;
+  --t-naranja-suave: #fff4e5;
+  --t-ok: #1b6b3a;
+  --t-ok-suave: #e7f4ec;
+  --t-info-suave: #eaf2fb;
+  --t-foco: #4a90d9;
+
+  /* tamaños, espacios, radios */
+  --t-txt-chico: 13px;
+  --t-txt: 15px;
+  --t-txt-campo: 16px;
+  --t-txt-grande: 17px;
+  --t-titulo-1: 22px;
+  --t-titulo-2: 18px;
+  --t-esp-1: 4px;
+  --t-esp-2: 8px;
+  --t-esp-3: 12px;
+  --t-esp-4: 16px;
+  --t-esp-5: 24px;
+  --t-radio: 8px;
+  --t-radio-tarjeta: 12px;
+  --t-toque: 44px;
+  --t-borde-modo: 5px;
+
+  font-family: var(--t-fuente);
+}
+/* Envoltura sin caja: fija los tokens sin cambiar el armado de la pantalla */
+.com-envoltura { display: contents; }
+/* «Encontrar o reportar activo» es una pantalla de Técnica que dice su modo (distribución); abierta desde Campo, toma el color de Comercial */
+.com-modulo .tec-modo-distribucion, .com-modulo .tec-modo-plantas { --t-modo: var(--comercial); --t-modo-suave: var(--comercial-suave); }

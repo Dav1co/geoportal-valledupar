@@ -1,0 +1,45 @@
+/* Comercial · modelo visual (rama «comercial-estilo», 20-nov-2026; guía visual del geoportal, §2–§5). Todo sale de los tokens de tokens.css (clase «com-modulo»).
+   Es el mismo armado de Aseo (src/aseo/aseo.css) y de Técnica: solo cambia el color del módulo. Sin cambios de lógica, de PDF ni de textos. */
+@import "./tokens.css";
+
+/* ---------- Fuente única y botones de 44 px o más ---------- */
+.com-modulo button, .com-modulo input, .com-modulo select, .com-modulo textarea { font-family: var(--t-fuente); }
+.com-modulo .mono { font-family: var(--t-fuente-codigo); }
+.com-modulo .tec-boton, .com-modulo .tec-boton-sec { min-height: var(--t-toque); }
+.com-modulo .tec-icono-camara { flex: 0 0 auto; display: inline-block; vertical-align: -3px; margin-right: var(--t-esp-2); }
+
+/* ---------- Encabezado de sección: barra del color del módulo con «← Volver» y el título ---------- */
+.com-modulo .campo-cab { background: var(--t-modo); color: #fff; border-radius: var(--t-radio-tarjeta); padding: var(--t-esp-2) var(--t-esp-3); }
+.com-modulo .campo-cab h1, .com-modulo .campo-cab h2 { color: #fff; font-size: 20px; margin: 0; }
+.com-modulo .campo-cab .tec-boton-sec { background: transparent; color: #fff; border-color: #fff; }
+.com-modulo .campo-cab .tec-boton-sec:hover { background: rgba(255, 255, 255, .14); }
+.com-modulo .campo-cab .campo-sub { color: #fff; }
+
+/* ---------- Inicio de Formatos de campo: tarjetas con el cuadro de la inicial (como el inicio de Técnica y de Aseo) y rejilla ---------- */
+.com-modulo .tec-tarjeta.com-hoja { background: transparent; border: none; border-radius: 0; padding: 0; gap: var(--t-esp-3); box-shadow: none; }
+.com-modulo .tec-tarjeta.com-hoja > h1 { font-size: var(--t-titulo-1); color: var(--t-titulo); }
+.com-modulo.com-envoltura .com-inicio, .com-modulo .com-inicio { padding-top: var(--t-esp-4); }
+.com-modulo .com-inicio .campo-formato { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; min-height: 68px; }
+.com-tarjeta-ini { flex: 0 0 var(--t-toque); width: var(--t-toque); height: var(--t-toque); border-radius: var(--t-radio-tarjeta); background: var(--t-modo); color: #fff; font-size: 20px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+.com-tarjeta-ini::before { content: attr(data-ini); }
+.com-modulo .campo-formato .com-tarjeta-ini { color: #fff; }
+.com-modulo .campo-formato-proximo .com-tarjeta-ini { background: var(--t-texto-2); }
+.com-tarjeta-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.com-modulo .com-inicio > * { max-width: 1120px; }
+@media (min-width: 760px) {
+  .com-modulo .com-inicio .campo-formatos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .com-modulo .com-inicio .campo-separador { grid-column: 1 / -1; }
+  .com-modulo .com-inicio .campo-formato { min-height: 84px; }
+}
+@media (min-width: 1000px) { .com-modulo .com-inicio .campo-formatos { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* ---------- Formularios: cada sección es una tarjeta con su título ---------- */
+.com-modulo .campo-fieldset { background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo) solid var(--t-modo); border-radius: var(--t-radio-tarjeta); padding: var(--t-esp-4); box-sizing: border-box; }
+.com-modulo .campo-fieldset .campo-fieldset { border-left-width: 1px; }
+.com-modulo .campo-fieldset > legend { color: var(--t-titulo); font-weight: 700; }
+
+/* ---------- «Encontrar o reportar activo» abierto desde Campo: sus opciones (hoja de Técnica) con los neutros de la guía ---------- */
+.com-modulo .dan-opcion { color: var(--t-texto); border-color: var(--t-borde-campo); font-family: var(--t-fuente); }
+.com-modulo .dan-opcion[aria-pressed="true"] { color: #fff; border-color: var(--t-modo); }
+.com-modulo .dan-opcion-off { color: var(--t-texto-2); background: var(--t-suave); }

@@ -26,6 +26,8 @@ import { CabeceraApp } from "./areas/CabeceraApp";
 import { VentanaEntrada } from "./areas/VentanaEntrada";
 import { AreaTecnica } from "./tecnica/AreaTecnica";
 import { AreaCampo } from "./campo/AreaCampo";
+import { SelectorModoTrabajo, type OpcionModo } from "./components/SelectorModoTrabajo";
+import "./campo/tokens.css";      // tokens de Comercial («com-modulo»): el panel lateral y el selector «Modo de trabajo» toman el color del módulo
 // Interventoría de Aseo (Torre C): carga diferida; MapLibre solo entra cuando se abre el mapa de rutas.
 const AreaAseo = lazyConRecarga(() => import("./aseo/AreaAseo").then((m) => ({ default: m.AreaAseo })));
 import { SinModulos } from "./areas/SinModulos";
@@ -587,16 +589,15 @@ export default function App() {
     setVista("mapa");
     elegirModo(valor as Modo);
   }
-  const opcionesModo = (
-    <>
-      <option value="explorar">Explorar</option>
-      {puedeVerFocalizacion && <option value="focalizacion">Focalización</option>}
-      {puedeVerComercial && <option value="comercial">Comercial</option>}
-      {puedeVerRutas && <option value="rutas">Rutas de lectura</option>}
-      {puedeVerDashboard && <option value="dashboard">Dashboard</option>}
-      {areas.campo && <option value="campo">Formatos de campo</option>}
-    </>
-  );
+  // Opciones del selector (cápsula de modos de la guía visual, «comercial-estilo»): las mismas de antes, en el mismo orden.
+  const opcionesModo: OpcionModo[] = [
+    { valor: "explorar", nombre: "Explorar" },
+    ...(puedeVerFocalizacion ? [{ valor: "focalizacion", nombre: "Focalización" }] : []),
+    ...(puedeVerComercial ? [{ valor: "comercial", nombre: "Comercial" }] : []),
+    ...(puedeVerRutas ? [{ valor: "rutas", nombre: "Rutas de lectura" }] : []),
+    ...(puedeVerDashboard ? [{ valor: "dashboard", nombre: "Dashboard" }] : []),
+    ...(areas.campo ? [{ valor: "campo", nombre: "Formatos de campo" }] : []),
+  ];
 
     function textoConteo() {
     if (!conteo.disponible) return "Acércate para contar los predios en pantalla.";
@@ -641,18 +642,16 @@ export default function App() {
         </div>
       ) : vista === "campo" ? (
         <div className="cuerpo cuerpo-campo">
-          <div className="modo-wrap modo-wrap-campo">
+          <div className="modo-wrap modo-wrap-campo com-modulo">
             <span className="modo-lbl">Modo de trabajo</span>
-            <select className="modo-sel" value="campo" onChange={(e) => cambiarModoSelector(e.target.value)} aria-label="Modo de trabajo">
-              {opcionesModo}
-            </select>
+            <SelectorModoTrabajo opciones={opcionesModo} valor="campo" onCambio={cambiarModoSelector} />
           </div>
-          <div className="campo-contenedor"><AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true || esAdmin} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} analisis={esAdmin || perfil?.permisos?.analisis_contrato === true} /></div>
+          <div className="campo-contenedor com-modulo"><AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true || esAdmin} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} analisis={esAdmin || perfil?.permisos?.analisis_contrato === true} /></div>
         </div>
       ) : (
         <div className="cuerpo">
           <button
-            className="btn-panel-movil"
+            className="btn-panel-movil com-modulo"
             onClick={() => setPanelMovilAbierto(true)}
             aria-label="Abrir controles"
           >
@@ -665,7 +664,7 @@ export default function App() {
           {panelMovilAbierto && (
             <div className="panel-overlay" onClick={() => setPanelMovilAbierto(false)} />
           )}
-          <aside className={`lateral ${panelMovilAbierto ? "abierto" : ""}`}>
+          <aside className={`lateral com-modulo ${panelMovilAbierto ? "abierto" : ""}`}>
             <button
               className="btn-cerrar-panel"
               onClick={() => setPanelMovilAbierto(false)}
@@ -675,9 +674,7 @@ export default function App() {
             {/* Selector de modo */}
             <div className="modo-wrap">
               <span className="modo-lbl">Modo de trabajo</span>
-              <select className="modo-sel" value={modo} onChange={(e) => cambiarModoSelector(e.target.value)}>
-                {opcionesModo}
-              </select>
+              <SelectorModoTrabajo opciones={opcionesModo} valor={modo} onCambio={cambiarModoSelector} />
               <div className="modo-desc">{DESC_MODO[modo]}</div>
             </div>
 

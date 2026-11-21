@@ -1,12 +1,12 @@
 /* Constancia por correo: archivo propio (no se toca app.css ni acta.css). Toques de al menos 44 px. */
-.constancia { margin: 12px 0; border: 2px solid #dde5ea; border-radius: 10px; padding: 0 12px; background: #fff; }
-.constancia-resumen { min-height: 44px; display: flex; align-items: center; font-weight: 600; font-size: 16px; color: #0a2540; cursor: pointer; }
+.constancia { margin: 12px 0; border: 2px solid var(--t-borde, #d5dde6); border-radius: 10px; padding: 0 12px; background: var(--t-tarjeta, #fff); }
+.constancia-resumen { min-height: 44px; display: flex; align-items: center; font-weight: 600; font-size: 16px; color: var(--t-titulo, #0a2540); cursor: pointer; }
 .constancia-cuerpo { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 14px; }
 .constancia-casilla { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; font-size: 16px; line-height: 1.35; }
 .constancia-casilla input { width: 24px; height: 24px; flex: none; margin-top: 2px; }
-.constancia-texto { margin: 0; font-size: 14px; line-height: 1.4; color: #3d4d5a; background: #f3f6f8; border-radius: 8px; padding: 10px 12px; }
+.constancia-texto { margin: 0; font-size: 14px; line-height: 1.4; color: var(--t-texto-2, #52626f); background: var(--t-suave, #eef2f5); border-radius: 8px; padding: 10px 12px; }
 .constancia-input { min-height: 44px; }
 .constancia-admin { display: flex; flex-direction: column; gap: 16px; }
 .constancia-admin textarea { width: 100%; min-height: 96px; box-sizing: border-box; }
-.constancia-doc { border: 1px solid #dde5ea; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.constancia-texto-lectura { white-space: pre-wrap; background: #f6f8fa; border-radius: 8px; padding: 10px; margin: 0; font-size: 14px; }
+.constancia-doc { border: 1px solid var(--t-borde, #d5dde6); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.constancia-texto-lectura { white-space: pre-wrap; background: var(--t-suave, #eef2f5); border-radius: 8px; padding: 10px; margin: 0; font-size: 14px; }
