@@ -63,6 +63,9 @@ begin
   v_i := public.geoportal_redes_reporte_iniciar(p_quien, p_rep, p_f, 'xlsx', p_incl, '10.0.0.1');
   return jsonb_build_object('ini', v_i, 'filas', pg_temp.todas(p_quien, (v_i ->> 'descarga_id')::bigint, p_lim));
 end $$;
+-- solo las filas de PRUEBA (la base real puede tener filas en el mismo sector o del mismo tipo: los conteos se hacen sobre las de prueba)
+create function pg_temp.de_prueba(p_filas jsonb, p_clave text, p_patron text) returns jsonb language sql as $$
+  select coalesce(jsonb_agg(f), '[]'::jsonb) from jsonb_array_elements(p_filas) f where f ->> p_clave like p_patron $$;
 create function pg_temp.hay(p_filas jsonb, p_clave text, p_valor text) returns boolean language sql as $$
   select exists (select 1 from jsonb_array_elements(p_filas) f where f ->> p_clave = p_valor) $$;
 
@@ -128,12 +131,12 @@ begin
     left((j -> 'filas')::text, 300));
   j := pg_temp.bajar(sd, 'levantamientos', per || jsonb_build_object('sector', pg_temp.cod('S97')), true);
   perform pg_temp.reg('03.02 por sector 97 y con «Incluir ocultos»: los dos del sector 97 (el descartado también), con su número de sector; el del 98 no',
-    jsonb_array_length(j -> 'filas') = 2 and pg_temp.hay(j -> 'filas', 'codigo', 'LEV-900003') and pg_temp.hay(j -> 'filas', 'estado', 'Descartado')
-    and not pg_temp.hay(j -> 'filas', 'codigo', 'LEV-900002') and (select bool_and((x ->> 'sector')::integer = 97) from jsonb_array_elements(j -> 'filas') x), (j -> 'filas')::text);
+    jsonb_array_length(pg_temp.de_prueba(j -> 'filas', 'codigo', 'LEV-9000__')) = 2 and pg_temp.hay(j -> 'filas', 'codigo', 'LEV-900003') and pg_temp.hay(pg_temp.de_prueba(j -> 'filas', 'codigo', 'LEV-9000__'), 'estado', 'Descartado')
+    and not pg_temp.hay(j -> 'filas', 'codigo', 'LEV-900002') and (select bool_and((x ->> 'sector')::integer = 97) from jsonb_array_elements(pg_temp.de_prueba(j -> 'filas', 'codigo', 'LEV-9000__')) x), (j -> 'filas')::text);
   perform pg_temp.reg('03.03 la observación y el motivo (texto libre) no salen', position('Pedro' in (j)::text) = 0);
   j := pg_temp.bajar(sd, 'levantamientos', per || jsonb_build_object('sector', lower(pg_temp.cod('S97A'))), true);
   perform pg_temp.reg('03.04 por subsector (S97A, el código en minúsculas también vale): los dos que caen en él; el Léame dice el nombre y el código del sector',
-    jsonb_array_length(j -> 'filas') = 2 and j -> 'ini' -> 'filtros' ->> 'sector' = pg_temp.cod('S97A') and not (j -> 'ini' -> 'filtros') ? 'sector_nombre'
+    jsonb_array_length(pg_temp.de_prueba(j -> 'filas', 'codigo', 'LEV-9000__')) = 2 and j -> 'ini' -> 'filtros' ->> 'sector' = pg_temp.cod('S97A') and not (j -> 'ini' -> 'filtros') ? 'sector_nombre'
     and (j -> 'ini' -> 'leame' -> 'filtros')::text like '%Sector: ZTREP S97A (' || pg_temp.cod('S97A') || ')%', (j -> 'ini')::text);
 
   -- ---------- 04. Válvulas cerradas ----------
@@ -148,7 +151,9 @@ begin
   select x into f from jsonb_array_elements(j -> 'filas') x where x ->> 'valvula' = pg_temp.cod('V2');
   perform pg_temp.reg('04.02 la que sigue cerrada: Cerrada, sin apertura ni duración; sector 98', f ->> 'estado' = 'Cerrada' and f -> 'abierta' = 'null' and f -> 'duracion_h' = 'null' and (f ->> 'sector')::integer = 98, f::text);
   perform pg_temp.reg('04.03 por sector 98 solo sale la V2, y el motivo no sale',
-    jsonb_array_length((pg_temp.bajar(sd, 'valvulas', per || jsonb_build_object('sector', pg_temp.cod('S98')))) -> 'filas') = 1 and position('Pedro' in (j)::text) = 0);
+    (select count(*) from jsonb_array_elements((pg_temp.bajar(sd, 'valvulas', per || jsonb_build_object('sector', pg_temp.cod('S98')))) -> 'filas') x
+      where x ->> 'valvula' in (pg_temp.cod('V1'), pg_temp.cod('V2'))) = 1
+    and pg_temp.hay((pg_temp.bajar(sd, 'valvulas', per || jsonb_build_object('sector', pg_temp.cod('S98')))) -> 'filas', 'valvula', pg_temp.cod('V2')) and position('Pedro' in (j)::text) = 0);
 
   -- ---------- 05. Eventos de suspensión ----------
   -- dos daños de prueba, fuera de las zonas (no se asocian solos): una falla de bombeo por desgaste y una fuga causada por un vehículo; su descripción no debe salir
@@ -211,7 +216,8 @@ begin
     and pg_temp.hay(j -> 'filas', 'estado', 'Atendido'), (j -> 'filas')::text);
   j := pg_temp.bajar(sd, 'l116', per || jsonb_build_object('sector', pg_temp.cod('S97')), true);
   perform pg_temp.reg('06.02 por sector 97 y con «Incluir ocultos»: los dos ubicados (el oculto marcado «sí»), no el sin ubicar',
-    jsonb_array_length(j -> 'filas') = 2 and pg_temp.hay(j -> 'filas', 'oculto', 'true') and not pg_temp.hay(j -> 'filas', 'reporte', '990000002'), (j -> 'filas')::text);
+    jsonb_array_length(pg_temp.de_prueba(j -> 'filas', 'reporte', '99000000_')) = 2 and pg_temp.hay(pg_temp.de_prueba(j -> 'filas', 'reporte', '99000000_'), 'oculto', 'true')
+    and not pg_temp.hay(j -> 'filas', 'reporte', '990000002'), (j -> 'filas')::text);
 
   -- ---------- 07. Reportes del bot ----------
   insert into redes.reportes_externos (radicado, canal, tipo_bot, lat, lon, direccion, descripcion, recibido_en) values
@@ -224,7 +230,9 @@ begin
     pg_temp.hay(j -> 'filas', 'radicado', 'ZTREP-B1') and not pg_temp.hay(j -> 'filas', 'radicado', 'ZTREP-B2') and pg_temp.hay(j -> 'filas', 'estado', 'Recibido')
     and position('Pedro' in (j)::text) = 0 and (select (x ->> 'sector')::integer from jsonb_array_elements(j -> 'filas') x where x ->> 'radicado' = 'ZTREP-B1') = 97, (j -> 'filas')::text);
   j := pg_temp.bajar(sd, 'bot', per || jsonb_build_object('sector', pg_temp.cod('S98')), true);
-  perform pg_temp.reg('07.02 por sector 98 y con «Incluir ocultos»: el descartado', jsonb_array_length(j -> 'filas') = 1 and pg_temp.hay(j -> 'filas', 'estado', 'Descartado'), (j -> 'filas')::text);
+  perform pg_temp.reg('07.02 por sector 98 y con «Incluir ocultos»: el descartado (de los de prueba, solo el ZTREP-B2)',
+    jsonb_array_length(pg_temp.de_prueba(j -> 'filas', 'radicado', 'ZTREP-B%')) = 1 and pg_temp.hay(j -> 'filas', 'radicado', 'ZTREP-B2')
+    and pg_temp.hay(pg_temp.de_prueba(j -> 'filas', 'radicado', 'ZTREP-B%'), 'estado', 'Descartado'), (j -> 'filas')::text);
 
   -- ---------- 08. Usuarios sensibles (inventario a hoy) ----------
   insert into redes.usuarios_sensibles (contrato, tipo, palabra, origen, autor) values ('999999990001', 'hospital', 'ZTREPHOSPITALPEDRO', 'nombre', adm),
@@ -234,10 +242,14 @@ begin
   j := pg_temp.bajar(sd, 'sensibles', '{}');
   perform pg_temp.reg('08.01 sin periodo: los sensibles de hoy sin el descartado, con tipo, estado y origen; sin la palabra del nombre',
     pg_temp.hay(j -> 'filas', 'contrato', '999999990001') and pg_temp.hay(j -> 'filas', 'contrato', '999999990002') and not pg_temp.hay(j -> 'filas', 'contrato', '999999990003')
-    and pg_temp.hay(j -> 'filas', 'estado', 'Confirmado') and pg_temp.hay(j -> 'filas', 'tipo', 'Hospital') and pg_temp.hay(j -> 'filas', 'origen', 'Por el nombre')
+    and pg_temp.hay(pg_temp.de_prueba(j -> 'filas', 'contrato', '99999999000_'), 'estado', 'Confirmado') and pg_temp.hay(pg_temp.de_prueba(j -> 'filas', 'contrato', '99999999000_'), 'tipo', 'Hospital')
+    and pg_temp.hay(pg_temp.de_prueba(j -> 'filas', 'contrato', '99999999000_'), 'origen', 'Por el nombre') and jsonb_array_length(pg_temp.de_prueba(j -> 'filas', 'contrato', '99999999000_')) = 2
     and position('ZTREPHOSPITAL' in (j)::text) = 0 and position('Periodo' in (j -> 'ini' -> 'leame')::text) = 0 and position('Inventario al' in (j -> 'ini' -> 'leame')::text) > 0, left((j -> 'filas')::text, 300));
   j := pg_temp.bajar(sd, 'sensibles', '{"tipo": "clinica"}', true);
-  perform pg_temp.reg('08.02 por tipo «clinica» y con «Incluir ocultos»: solo el descartado', jsonb_array_length(j -> 'filas') = 1 and pg_temp.hay(j -> 'filas', 'estado', 'Descartado'), (j -> 'filas')::text);
+  perform pg_temp.reg('08.02 por tipo «clinica» y con «Incluir ocultos»: de los de prueba solo sale la clínica descartada (999999990003); todas las filas son clínicas',
+    jsonb_array_length(pg_temp.de_prueba(j -> 'filas', 'contrato', '99999999000_')) = 1 and pg_temp.hay(pg_temp.de_prueba(j -> 'filas', 'contrato', '99999999000_'), 'contrato', '999999990003')
+    and pg_temp.hay(pg_temp.de_prueba(j -> 'filas', 'contrato', '99999999000_'), 'estado', 'Descartado')
+    and (select bool_and(x ->> 'tipo' = (select t.nombre from redes.tipos_sensible t where t.codigo = 'clinica')) from jsonb_array_elements(j -> 'filas') x), left((j -> 'filas')::text, 300));
 
   -- ---------- 09. Activos de la red ----------
   j := pg_temp.bajar(sd, 'activos', '{"tipo": "SEC"}');
