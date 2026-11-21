@@ -274,6 +274,7 @@ const errorVisto = (p) => p.evaluate(() => [...document.querySelectorAll("[data-
 const altoMin = (p, sel) => p.evaluate((s) => Math.min(...[...document.querySelectorAll(s)].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect().height)), sel);
 
 
+// desde el corte de eventos (20-nov) declarar exige el origen: aquí, una causal de catálogo
 const declarar = (quien, zona) => JSON.parse(sqlq(`select public.geoportal_redes_evento_declarar('${EMAILS[quien]}', ${lit(zona)})`)).codigo;
 const enInicio = (p, modo) => p.evaluate(async (modo, sel) => {      // las tarjetas de un modo del inicio (o del único que haya)
   const tab = [...document.querySelectorAll(sel)].find((x) => x.textContent.trim() === modo); if (tab) { tab.click(); await new Promise((x) => setTimeout(x, 50)); }
@@ -293,8 +294,8 @@ for (const ancho of ANCHOS) {
   const A = (t) => `${ancho} · ${t}`;
   if (ancho !== ANCHOS[0]) rehacer();
   let p, r, b;
-  const EV1 = declarar("dist", { alcance: "sectores", sectores: [SUB], causa: "ZT daño en la tubería principal del sector" });
-  const EV2 = declarar("planta", { alcance: "total", total: "ciudad", causa: "ZT parada de la planta por turbiedad" });
+  const EV1 = declarar("dist", { alcance: "sectores", sectores: [SUB], causa: "ZT daño en la tubería principal del sector", causal: "trabajo_programado" });
+  const EV2 = declarar("planta", { alcance: "total", total: "ciudad", causa: "ZT parada de la planta por turbiedad", causal: "parametros_entrada" });
 
   // ===== A. Supervisor de distribución: la tarjeta en Supervisión =====
   p = await abrir(ancho, "dist"); await esperarTexto(p, /Dashboard distribución/);
