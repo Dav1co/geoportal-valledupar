@@ -37,9 +37,9 @@ def main():
     out("PRUEBAS LOCALES · Comercial 21-nov · (a) Personal y cuadrillas"); out("")
     srv, uri, con = bc.preparar()
     h = bc.huellas(con)
-    ok("B.01 la base local tiene las md5 de producción de las 8 funciones y los conjuntos de acta y salida",
-       all(h[k] == v for k, v in bc.PRODUCCION.items() if k != "conjunto:campo"), str({k: h[k] for k in bc.PRODUCCION if h[k] != bc.PRODUCCION[k]}))
-    out(f"      (conjunto de campo local {h['conjunto:campo']} ≠ producción cf40d2a2…: por eso la guardia se prueba con la huella local; ver ENTRADA)")
+    ok("B.01 la base local tiene las huellas de producción: conjuntos de campo (cf40d2a2…), acta y salida, y las 8 funciones",
+       all(h[k] == v for k, v in bc.PRODUCCION.items()), str({k: h[k] for k in bc.PRODUCCION if h[k] != bc.PRODUCCION[k]}))
+    out("      (redes y técnica no están completas en esta base: solo esas dos huellas se sustituyen por las locales)")
     e = correr(con, leer(f"ensayo_en_transaccion_{N}_editor.sql"))
     ok("E.01 con las huellas de producción, la guardia detiene el ensayo en esta base (no es producción)", e is not None and "deténgase y avise" in e, (e or "")[:200])
     t0 = time.time(); e = correr(con, local(leer(f"ensayo_en_transaccion_{N}_editor.sql"))); dt = time.time() - t0

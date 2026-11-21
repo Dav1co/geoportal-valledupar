@@ -2,7 +2,7 @@
  "locales": {
   "HUELLA_REDES": "fbdc520bd368603a94700ee64738a009",
   "HUELLA_TECNICA": "0c7f5364ab1d3bc04b6222762934306a",
-  "HUELLA_CAMPO": "bda09093ae1d6dedc04ad56aac1ba2e2"
+  "HUELLA_CAMPO": "cf40d2a279c385d17a6cc5da2aac3fa9"
  },
  "nuevas": {
   "public.geoportal_campo_personal_fijar(text,text,text,jsonb,text)": "fc362a2894e064767cfca039fa5ed299",

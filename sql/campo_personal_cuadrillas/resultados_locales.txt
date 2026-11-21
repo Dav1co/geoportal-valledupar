@@ -1,7 +1,7 @@
 PRUEBAS LOCALES · Comercial 21-nov · (a) Personal y cuadrillas
 
-OK    B.01 la base local tiene las md5 de producción de las 8 funciones y los conjuntos de acta y salida
-      (conjunto de campo local bda09093ae1d6dedc04ad56aac1ba2e2 ≠ producción cf40d2a2…: por eso la guardia se prueba con la huella local; ver ENTRADA)
+OK    B.01 la base local tiene las huellas de producción: conjuntos de campo (cf40d2a2…), acta y salida, y las 8 funciones
+      (redes y técnica no están completas en esta base: solo esas dos huellas se sustituyen por las locales)
 OK    E.01 con las huellas de producción, la guardia detiene el ensayo en esta base (no es producción)
 ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 82 de 82 pruebas correctas — SIN FALLAS
 OK    E.02 el ensayo termina en ERROR esperado con todas sus pruebas correctas (0.1 s)

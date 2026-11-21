@@ -50,6 +50,11 @@ def preparar():
     con.execute(re.search(r"CREATE OR REPLACE FUNCTION campo\.f_formularios_personal\(\).*?\$function\$;", r, re.S).group(0))
     con.execute("alter table campo.personal_eventos drop constraint personal_eventos_formulario_check;"
                 "alter table campo.personal_eventos add constraint personal_eventos_formulario_check check (formulario is null or formulario ~ '^(reporte_general|acta|activo_campo|tipo:[a-z][a-z0-9_]{1,59})$');")
+    # como en producción: campo.f_grupos_cercanos es la del Paso A con PostGIS (la cadena local la sustituye porque aquí no hay PostGIS). Se crea con el texto
+    # publicado y sin validar el cuerpo (no se llama en estas pruebas), para que el conjunto de campo sea el de producción (cf40d2a2…; MD5_CAMPO_PRODUCCION_21nov.md).
+    f30 = (CAMPO / "paquete_campo_base/sql/30_funciones_internas.sql").read_text()
+    gc = re.search(r"create function campo\.f_grupos_cercanos\(p_eps_m numeric, p_ids uuid\[\]\).*?\n\$\$;", f30, re.S).group(0)
+    con.execute("set check_function_bodies = off; " + gc.replace("create function", "create or replace function", 1) + " reset check_function_bodies;")
     # como en producción: redes.f_funciones_sin_where (Corte 6c), la que el ensayo y la verificación exigen en cero
     r6 = (H / "geoportal-emdupar/sql/redes_corte6c/sql/26_rpc.sql").read_text()
     con.execute(re.search(r"create function redes\.f_funciones_sin_where\(\).*?\$\$;", r6, re.S).group(0))
