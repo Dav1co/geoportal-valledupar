@@ -314,8 +314,13 @@ begin
     and v_ms1 < 5000 and v_ms2 < 5000 and v_ms3 < 5000, v_info);
 
   -- ---------- 17. El tope de filas (se baja solo dentro de esta prueba) ----------
+  -- Con los datos de PRUEBA (la Entrada de la planta de prueba, que tras la 16 tiene 2.174 envíos), no con Muestreo de todos los puntos: en producción, sin
+  -- muestreos reales en los últimos 30 días, Muestreo traía solo los 2 de prueba y no superaba el tope de 2 (60 de 61, 20-nov).
+  perform pg_temp.reg('17.00 el tope real es 50.000 (la función publicada y lo que devolvió iniciar en la 16)', tecnica.f_rep_max_filas() = 50000 and (j ->> 'max')::integer = 50000, j ->> 'max');
   create or replace function tecnica.f_rep_max_filas() returns integer language sql immutable set search_path to 'pg_catalog' as $f$ select 2 $f$;
-  perform pg_temp.err('17.01 más filas que el tope: «Acote el periodo o los filtros»', format('select public.geoportal_tec_reporte_iniciar(%L, %L, %L)', sp, 'muestreo', per), null, 'Acote el periodo');
+  perform pg_temp.reg('17.02 el tope bajado está vigente en esta prueba', tecnica.f_rep_max_filas() = 2);
+  perform pg_temp.err('17.01 más filas que el tope: «Acote el periodo o los filtros» (la Entrada de la planta de prueba, más de 2 envíos)',
+    format('select public.geoportal_tec_reporte_iniciar(%L, %L, %L)', sp, 'entrada', per || '{"planta": "zt_rep_pl"}'), null, 'Acote el periodo');
 
   select count(*), count(*) filter (where ok), coalesce(string_agg('  FALLA ' || nombre || ' → ' || coalesce(detalle, ''), E'\n' order by _r.n) filter (where not ok), '') into v_total, v_bien, v_fallas from _r;
   raise exception E'PRUEBAS DE TÉCNICA · reportes del PTAP (esperado: este ERROR deshace todo lo de la prueba)\n%\n%\nRESULTADO: % de % pruebas correctas — %', v_fallas, v_info, v_bien, v_total, case when v_bien = v_total then 'SIN FALLAS' else (v_total - v_bien) || ' FALLA(S)' end;
