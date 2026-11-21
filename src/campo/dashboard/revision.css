@@ -163,3 +163,17 @@
 .rv-per-evento { border-left: 3px solid var(--t-borde, #d5dde6); padding: 4px 10px; overflow-wrap: anywhere; }
 .rv-per-ev-cab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .rv-per-forms .rv-check, .rv-per-tarjeta .rv-boton-sec { min-height: 44px; }
+
+/* Personal y cuadrillas (21-nov): área, cuadrilla, actividades con su origen, «Quién puede hacer…», Cuadrillas y «Áreas y actividades». Solo tokens de la guía. */
+.rv-per-filtros { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; }
+.rv-per-quien { display: grid; gap: 6px; min-width: 0; }
+.rv-per-quien-res { background: var(--t-info-suave, #eaf2fb); border: 1px solid var(--t-borde, #d5dde6); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+.rv-per-quien-res ul { margin: 6px 0 0; padding-left: 18px; }
+.rv-per-origen { color: var(--t-texto-2, #52626f); font-size: 12px; }
+.rv-per-desact { color: var(--t-texto-2, #52626f); font-style: italic; }
+.rv-per-chip-off { background: var(--t-suave, #eef2f5); color: var(--t-texto-2, #52626f); }
+.rv-per-usted { margin-left: 6px; }
+.rv-fila-cat { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.rv-cat-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.rv-cat-lista .rv-cat-item { border-bottom: 1px solid var(--t-borde, #d5dde6); padding: 6px 0; }
+.rv-cat-acc .rv-enlace, .rv-cat-acc .rv-boton-sec { min-height: 44px; }

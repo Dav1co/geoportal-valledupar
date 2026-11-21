@@ -76,12 +76,34 @@ export type PersonaCampo = {
   email: string; nombre: string | null; perfil: "operario" | "supervisor";
   permisos: { campo: boolean; dashboard_campo: boolean; acta: boolean; dashboard_acta: boolean };
   cargo: string | null; formularios: string[]; sin_asignacion: boolean; ultimo_cambio: string | null;
+  /** Personal y cuadrillas (21-nov): llegan con el paquete (a) del Code A; un servidor anterior no los manda. */
+  area?: CodigoNombreActivo | null; cuadrilla?: CuadrillaRef | null; actividades?: ActividadPersona[]; propia?: boolean;
 };
-export type PersonalResp = { puede_editar: boolean; formularios: FormularioPersonal[]; personas: PersonaCampo[] };
-export type TipoCambioPersonal = "fijar_cargo" | "asignar_formulario" | "quitar_formulario";
+export type CodigoNombre = { codigo: string; nombre: string };
+export type CodigoNombreActivo = CodigoNombre & { activa: boolean };
+export type CuadrillaRef = { id: number; nombre: string; activa?: boolean };
+export type OrigenActividad = "cuadrilla" | "propia" | "ambas";
+export type ActividadPersona = CodigoNombreActivo & { origen: OrigenActividad };
+/** Qué puede cambiar quien consulta, campo por campo (21-nov). `cuadrilla` = poner o sacar a una persona; `cuadrillas` = gestionar las cuadrillas y sus actividades. */
+export type PuedePersonal = { cargo: boolean; area: boolean; cuadrilla: boolean; cuadrillas: boolean; actividades: boolean; formularios: boolean; catalogos: boolean };
+export type PersonalResp = {
+  puede_editar: boolean; formularios: FormularioPersonal[]; personas: PersonaCampo[];
+  yo?: string; areas?: CodigoNombre[]; cuadrillas?: CuadrillaRef[]; actividades?: CodigoNombre[]; puede?: PuedePersonal;
+};
+export type TipoCambioPersonal = "fijar_cargo" | "asignar_formulario" | "quitar_formulario" | "fijar_area" | "fijar_cuadrilla" | "asignar_actividad" | "quitar_actividad";
+export type TipoEventoCuadrilla = "cuadrilla_crear" | "cuadrilla_renombrar" | "cuadrilla_desactivar" | "cuadrilla_activar" | "cuadrilla_agregar_actividad" | "cuadrilla_quitar_actividad";
+export type Cuadrilla = { id: number; nombre: string; activa: boolean; miembros: { email: string; nombre: string | null }[]; n_miembros?: number; actividades: CodigoNombre[]; creada_en: string; autor: string };
+export type TipoCambioCuadrilla = "crear" | "renombrar" | "desactivar" | "activar" | "agregar_actividad" | "quitar_actividad";
+export type ItemCatalogo = { codigo: string; nombre: string; activa: boolean; orden: number };
+export type CatalogosResp = { areas: ItemCatalogo[]; actividades: ItemCatalogo[] };
+export type PersonaActividad = { email: string; nombre: string | null; cuadrilla: { id: number; nombre: string } | null; origen: OrigenActividad };
 export type EventoPersonal = {
-  id: number; persona: string; nombre: string | null; tipo_evento: TipoCambioPersonal; formulario: string | null; formulario_nombre: string | null;
+  id: number; persona: string | null; nombre: string | null; tipo_evento: TipoCambioPersonal | TipoEventoCuadrilla; formulario: string | null; formulario_nombre: string | null;
   cargo: string | null; motivo: string | null; autor: string; creado_en: string; vigente: boolean;
+  /** 21-nov: el área, la cuadrilla, la actividad o el nombre nuevo del cambio (null si no aplica); en los eventos de una cuadrilla, la cuadrilla. */
+  valor_codigo?: string | null; valor_nombre?: string | null; cuadrilla?: { id: number; nombre: string } | null;
+  /** Llave única en pantalla («p:<id>» de persona, «c:<id>» de cuadrilla: los id de las dos tablas pueden repetirse). En el historial de una cuadrilla, `entra` dice si la persona entró o salió. */
+  clave?: string; entra?: boolean;
 };
 export type HistorialPersonalResp = { eventos: EventoPersonal[]; siguiente: number | null };
 
@@ -105,9 +127,19 @@ export const apiRev = {
   parametro: (cambios: { clave: string; valor: number }[], motivo: string) => pedir<{ cambios: CambioParametro[] }>("parametro", { cuerpo: { cambios, motivo } }),
   catalogoLectura: () => pedir<CatalogoLectura>("catalogo_lectura"),
   personal: (buscar = "") => pedir<PersonalResp>("personal", { cuerpo: buscar.trim() ? { buscar: buscar.trim() } : {} }),
-  personalCambiar: (c: { persona: string; tipo: TipoCambioPersonal; formulario?: string | null; cargo?: string | null; motivo?: string | null }) =>
+  personalCambiar: (c: { persona: string; tipo: TipoCambioPersonal; formulario?: string | null; cargo?: string | null; motivo?: string | null; area?: string; actividad?: string }) =>
     pedir<{ id: number; cambio: boolean }>("personal_cambiar", { cuerpo: sinVacios(c) }),
-  historialPersonal: (f: { persona?: string; despues_de?: number; limite?: number }) => pedir<HistorialPersonalResp>("historial_personal", { cuerpo: sinVacios(f) }),
+  /** `cuadrilla_id: null` saca a la persona de su cuadrilla: va explícito (sinVacios lo quitaría). */
+  fijarCuadrilla: (persona: string, cuadrillaId: number | null, motivo: string | null) =>
+    pedir<{ id: number; cambio: boolean }>("personal_cambiar", { cuerpo: { persona, tipo: "fijar_cuadrilla", cuadrilla_id: cuadrillaId, ...(motivo ? { motivo } : {}) } }),
+  historialPersonal: (f: { persona?: string; cuadrilla_id?: number; despues_de?: number; limite?: number }) => pedir<HistorialPersonalResp>("historial_personal", { cuerpo: sinVacios(f) }),
+  cuadrillas: (incluirInactivas = false) => pedir<{ cuadrillas: Cuadrilla[] }>("cuadrillas", { cuerpo: incluirInactivas ? { incluir_inactivas: true } : {} }),
+  cuadrillaCambiar: (c: { tipo: TipoCambioCuadrilla; cuadrilla_id?: number; nombre?: string; actividad?: string; motivo?: string }) =>
+    pedir<{ id?: number; cambio?: boolean }>("cuadrilla_cambiar", { cuerpo: sinVacios(c) }),
+  catalogos: () => pedir<CatalogosResp>("catalogos", { cuerpo: {} }),
+  catalogoCambiar: (c: { catalogo: "area" | "actividad"; tipo: "crear" | "renombrar" | "desactivar" | "activar"; codigo?: string; nombre?: string; motivo?: string }) =>
+    pedir<{ codigo?: string; cambio?: boolean }>("catalogo_cambiar", { cuerpo: sinVacios(c) }),
+  personalActividad: (actividad: string) => pedir<{ personas: PersonaActividad[] }>("personal_actividad", { cuerpo: { actividad } }),
   catalogo: (entidad: string, accion: string, datos: Record<string, unknown>) => pedir<{ entidad: string; accion: string; antes: unknown; despues: unknown }>("catalogo", { cuerpo: { entidad, accion, datos } }),
 };
 

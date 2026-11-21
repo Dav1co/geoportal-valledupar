@@ -7,12 +7,13 @@ import { Parametros } from "./Parametros";
 import { Catalogo } from "./Catalogo";
 import { ConstanciasAdmin } from "../constancia/ConstanciasAdmin";
 import { PersonalCampo } from "./PersonalCampo";
+import { Cuadrillas } from "./Cuadrillas";
 import { supabase } from "../../lib/supabase";
 
 // «Supervisión y dashboard» (antes «Revisión de reportes», Paso C): pantalla del supervisor y del administrador de Formatos de campo. Se carga bajo demanda (React.lazy desde AreaCampo): quien no tiene el permiso no descarga este código.
 // Qué se muestra lo decide el SERVIDOR (`puede` y `perfil` de «formulario»). Pasada 14/11: Catálogo y Parámetros los VE el supervisor (solo lectura, ruta «catalogo_lectura»);
-// solo el administrador los edita (y la base rechaza cualquier escritura de otro perfil). Personal: lo ve el supervisor; lo edita el administrador.
-type Seccion = "reportes" | "indicadores" | "catalogo" | "parametros" | "personal";
+// solo el administrador los edita (y la base rechaza cualquier escritura de otro perfil). Personal: lo ve el supervisor; qué edita cada quien lo dice el servidor (desde el 21-nov también el supervisor: cuadrilla, actividades y formularios). Cuadrillas (21-nov): pestaña propia.
+type Seccion = "reportes" | "indicadores" | "catalogo" | "parametros" | "personal" | "cuadrillas";
 
 export default function Revision({ correo, onVolver }: { correo: string; onVolver: () => void }) {
   const [def, setDef] = useState<FormularioRev | null>(null);
@@ -42,6 +43,7 @@ export default function Revision({ correo, onVolver }: { correo: string; onVolve
   const secciones: { clave: Seccion; titulo: string }[] = [
     { clave: "reportes", titulo: "Reportes" }, { clave: "indicadores", titulo: "Indicadores" },
     { clave: "catalogo", titulo: "Catálogo" }, { clave: "parametros", titulo: "Parámetros" }, { clave: "personal", titulo: "Personal" },
+    { clave: "cuadrillas", titulo: "Cuadrillas" },
   ];
   const esperaLectura = errLectura ? <div className="rv-aviso rv-aviso-error" role="alert">{errLectura} <button type="button" className="rv-enlace" onClick={() => setIntLectura((x) => x + 1)}>Reintentar</button></div>
     : <p className="rv-sub" role="status">Cargando…</p>;
@@ -75,6 +77,7 @@ export default function Revision({ correo, onVolver }: { correo: string; onVolve
           : seccion === "catalogo" ? (lectura ? <><Catalogo alCambiar={() => undefined} lectura={lectura} /><ConstanciasAdmin lectura={lectura.constancias} /></> : esperaLectura)
           : seccion === "parametros" ? (lectura ? <Parametros def={{ ...def, parametros: lectura.parametros }} alCambiar={() => undefined} soloLectura /> : esperaLectura)
           : seccion === "personal" ? <PersonalCampo />
+          : seccion === "cuadrillas" ? <Cuadrillas />
           : null}
       </div>
     </div>
