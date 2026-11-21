@@ -373,7 +373,7 @@ begin
                'tipo_evento', pe.tipo_evento, 'cuadrilla', jsonb_build_object('id', q.id, 'nombre', q.nombre),
                'formulario', null, 'formulario_nombre', null, 'cargo', null,
                'valor_codigo', pe.valor, 'valor_nombre', (select c.nombre from campo.cuadrillas c where c.id = pe.valor::bigint),
-               'entra', pe.valor = v_cuad::text, 'motivo', pe.motivo, 'autor', pe.autor, 'creado_en', pe.creado_en, 'vigente', null) as fila
+               'entra', coalesce(pe.valor = v_cuad::text, false), 'motivo', pe.motivo, 'autor', pe.autor, 'creado_en', pe.creado_en, 'vigente', null) as fila
         from pe join campo.cuadrillas q on q.id = v_cuad where pe.valor = v_cuad::text or pe.anterior = v_cuad::text
     ), todo as (select * from ce union all select * from pm order by 1 desc limit 500)
     select coalesce(jsonb_agg(fila order by creado_en desc), '[]'::jsonb) into v_filas from todo;

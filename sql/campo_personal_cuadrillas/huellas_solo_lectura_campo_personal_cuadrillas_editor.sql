@@ -11,7 +11,7 @@ select o, k, v, estado from (
   union all
   select 3, '3 ' || a.f || ' (se reemplaza)', md5(pg_get_functiondef(to_regprocedure(a.f))),
          case md5(pg_get_functiondef(to_regprocedure(a.f))) when a.m then 'LA PUBLICADA' when n.m then 'REEMPLAZADA (aplicado)' else 'OTRA: deténgase y avise' end
-    from (values ('public.geoportal_campo_personal(text,jsonb,text)', 'f8a83b02da97e8f6a729767f57a394c4'), ('public.geoportal_campo_historial_personal(text,jsonb,text)', 'e82377f5de26a2dcc1a007403889ba48')) a(f, m) join (values ('public.geoportal_campo_personal(text,jsonb,text)', '7028ce4016505ed5fd8ae706db91464c'), ('public.geoportal_campo_historial_personal(text,jsonb,text)', '639b9652575bffbe6390aa527f3d36f8')) n(f, m) on n.f = a.f
+    from (values ('public.geoportal_campo_personal(text,jsonb,text)', 'f8a83b02da97e8f6a729767f57a394c4'), ('public.geoportal_campo_historial_personal(text,jsonb,text)', 'e82377f5de26a2dcc1a007403889ba48')) a(f, m) join (values ('public.geoportal_campo_personal(text,jsonb,text)', '7028ce4016505ed5fd8ae706db91464c'), ('public.geoportal_campo_historial_personal(text,jsonb,text)', '3c47558e7a14a883e8f4f768e6498c54')) n(f, m) on n.f = a.f
   union all
   select 4, '4 ' || n.f || ' (nueva)', case when to_regprocedure(n.f) is not null then md5(pg_get_functiondef(to_regprocedure(n.f))) end,
          case when to_regprocedure(n.f) is null then 'NO EXISTE (sin aplicar)' when md5(pg_get_functiondef(to_regprocedure(n.f))) = n.m then 'NUEVA (aplicada)' else 'OTRA: deténgase y avise' end

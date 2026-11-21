@@ -373,7 +373,7 @@ begin
                'tipo_evento', pe.tipo_evento, 'cuadrilla', jsonb_build_object('id', q.id, 'nombre', q.nombre),
                'formulario', null, 'formulario_nombre', null, 'cargo', null,
                'valor_codigo', pe.valor, 'valor_nombre', (select c.nombre from campo.cuadrillas c where c.id = pe.valor::bigint),
-               'entra', pe.valor = v_cuad::text, 'motivo', pe.motivo, 'autor', pe.autor, 'creado_en', pe.creado_en, 'vigente', null) as fila
+               'entra', coalesce(pe.valor = v_cuad::text, false), 'motivo', pe.motivo, 'autor', pe.autor, 'creado_en', pe.creado_en, 'vigente', null) as fila
         from pe join campo.cuadrillas q on q.id = v_cuad where pe.valor = v_cuad::text or pe.anterior = v_cuad::text
     ), todo as (select * from ce union all select * from pm order by 1 desc limit 500)
     select coalesce(jsonb_agg(fila order by creado_en desc), '[]'::jsonb) into v_filas from todo;
@@ -872,6 +872,7 @@ begin
   perform pg_temp.ok('08.03 historial de la cuadrilla: sus eventos (persona nula) y la entrada y salida de op1',
     (select count(*) from jsonb_array_elements(r -> 'eventos') x where x -> 'persona' = 'null'::jsonb and x ->> 'tipo_evento' like 'cuadrilla\_%' and x ->> 'clave' like 'c:%') = 5
     and (select count(*) from jsonb_array_elements(r -> 'eventos') x where x ->> 'persona' = 'ztcom.op1@emdupar.gov.co') = 2
+    and (select string_agg(x ->> 'entra', ',' order by (x ->> 'id')::bigint) from jsonb_array_elements(r -> 'eventos') x where x ->> 'persona' = 'ztcom.op1@emdupar.gov.co') = 'true,false'
     and exists (select 1 from jsonb_array_elements(r -> 'eventos') x where x ->> 'tipo_evento' = 'cuadrilla_agregar_actividad' and x ->> 'valor_nombre' = 'Corte')
     and r -> 'siguiente' = 'null'::jsonb, left(r::text, 400));
   r := pg_temp.rpc('public.geoportal_campo_historial_personal(' || SA || ', ''{"cuadrilla_id": 999999999}'')');

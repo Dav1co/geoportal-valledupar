@@ -219,6 +219,7 @@ begin
   perform pg_temp.ok('08.03 historial de la cuadrilla: sus eventos (persona nula) y la entrada y salida de op1',
     (select count(*) from jsonb_array_elements(r -> 'eventos') x where x -> 'persona' = 'null'::jsonb and x ->> 'tipo_evento' like 'cuadrilla\_%' and x ->> 'clave' like 'c:%') = 5
     and (select count(*) from jsonb_array_elements(r -> 'eventos') x where x ->> 'persona' = 'ztcom.op1@emdupar.gov.co') = 2
+    and (select string_agg(x ->> 'entra', ',' order by (x ->> 'id')::bigint) from jsonb_array_elements(r -> 'eventos') x where x ->> 'persona' = 'ztcom.op1@emdupar.gov.co') = 'true,false'
     and exists (select 1 from jsonb_array_elements(r -> 'eventos') x where x ->> 'tipo_evento' = 'cuadrilla_agregar_actividad' and x ->> 'valor_nombre' = 'Corte')
     and r -> 'siguiente' = 'null'::jsonb, left(r::text, 400));
   r := pg_temp.rpc('public.geoportal_campo_historial_personal(' || SA || ', ''{"cuadrilla_id": 999999999}'')');

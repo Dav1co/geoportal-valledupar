@@ -23,6 +23,6 @@
   "campo.f_motivo_personal(text,boolean)": "4d7f94c08ca8e75bb724e21d9b93e272",
   "campo.f_no_borrar_catalogo()": "740c50291aa0bb31a38f64724d6b3fd9",
   "public.geoportal_campo_personal(text,jsonb,text)": "7028ce4016505ed5fd8ae706db91464c",
-  "public.geoportal_campo_historial_personal(text,jsonb,text)": "639b9652575bffbe6390aa527f3d36f8"
+  "public.geoportal_campo_historial_personal(text,jsonb,text)": "3c47558e7a14a883e8f4f768e6498c54"
  }
 }
