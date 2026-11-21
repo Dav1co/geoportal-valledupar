@@ -1,0 +1,72 @@
+== 20-11-2026 21:38 ensayo redes_eventos_origen_tubos (base: producción al 20-nov 21:08, huella 3f3c89e6…, + doble de los sectores por planta)
+TIEMPOS: catálogo de eventos 1 ms (3 tubos, 6 sectores) · vista previa por tubo 2 ms (tope de la API: 30 s por llamada)
+RESULTADO: 49 de 49 pruebas correctas — SIN FALLAS
+== huellas antes
+0 funciones de redes (conjunto)|3f3c89e603629d92e1cc5065de33d0c1|PUBLICADA (reportes del PTAP y Distribución; lista para este corte)
+1 public.geoportal_redes_evento_catalogo(text) (se reemplaza)|129674a1c44946f4c81bcff95b595353|LA PUBLICADA
+1 public.geoportal_redes_evento_declarar(text,jsonb) (se reemplaza)|ddf3e36525c21605a4dbf36789082c92|LA PUBLICADA
+1 public.geoportal_redes_planta_sectores_fijar(text,text,text[],text) (se reemplaza)|4446a2f9bf36d700330c0c2062a2bc9f|LA PUBLICADA
+1 redes.f_evento_json(bigint,boolean) (se reemplaza)|4bbabe20fdf321767e3125915b7880ea|LA PUBLICADA
+1 redes.f_evento_zona(jsonb) (se reemplaza)|71f7f27f97954858a61fcfab9f6a692f|LA PUBLICADA
+1 redes.f_rep_columnas(text) (se reemplaza)|73f3fbcf2bbcf893e980783226e53031|LA PUBLICADA
+1 redes.f_rep_eventos(jsonb,boolean,timestamp with time zone,text,integer,boolean) (se reemplaza)|8c6565348cac64d2bf1c21b825698024|LA PUBLICADA
+1 redes.f_rep_leame(text,jsonb,boolean,text,timestamp with time zone) (se reemplaza)|9ec53194c4550a39509601d9bcfe374f|LA PUBLICADA
+1 tecnica.f_rep_columnas(text,jsonb) (se reemplaza)|d178a29b3e4408b96b07bbaeae20f476|LA PUBLICADA
+1 tecnica.f_rep_eventos_planta(jsonb,boolean,timestamp with time zone,text,integer) (se reemplaza)|5b97ed0684b94b94c14ec420aa1c212a|LA PUBLICADA
+1 tecnica.f_rep_leame(text,jsonb,boolean,text,timestamp with time zone) (se reemplaza)|5f894b795ad896a7cc965b3ec5d37745|LA PUBLICADA
+2 public.geoportal_redes_evento_causal_fijar(text,text,text,boolean,text) (nueva)||NO EXISTE (sin aplicar)
+2 public.geoportal_redes_tubo_sectores_fijar(text,text,text[],text) (nueva)||NO EXISTE (sin aplicar)
+2 redes.f_evento_origen(bigint) (nueva)||NO EXISTE (sin aplicar)
+2 redes.f_tubo_es_distribucion() (nueva)||NO EXISTE (sin aplicar)
+2 redes.f_tubo_zona(text[]) (nueva)||NO EXISTE (sin aplicar)
+3 las 31 que no se tocan (evento_contrato, aviso, SCRR, disparadores, bot, demás rutas de eventos)||SIN CAMBIO
+4 tablas nuevas (6)||NO EXISTEN (sin aplicar)
+5 INFO sectores por planta activos · plantas con alguno · tubos de salida (tipo distribución) · eventos · eventos de planta||6 · 2 · 0 · 0 · 0
+6 INFO huella de técnica (esquema tecnica y geoportal_tec_*; anótela antes y después)|dd60ee8d6ae023ef9965981c6218df65|INFORMATIVA
+== migración aplicada; huellas después
+0 funciones de redes (conjunto)|1ba192724c2fddcf321104700829f3cc|EVENTOS: ORIGEN Y TUBOS (aplicado)
+1 public.geoportal_redes_evento_catalogo(text) (se reemplaza)|845a7401e73af489e42e716241bbd06f|REEMPLAZADA (aplicado)
+1 public.geoportal_redes_evento_declarar(text,jsonb) (se reemplaza)|fdf51a96463dac4088a66632fb926d06|REEMPLAZADA (aplicado)
+1 public.geoportal_redes_planta_sectores_fijar(text,text,text[],text) (se reemplaza)|147efbf990088feecd07994db03732aa|REEMPLAZADA (aplicado)
+1 redes.f_evento_json(bigint,boolean) (se reemplaza)|45f59666e3984baa767aa251e20ef79a|REEMPLAZADA (aplicado)
+1 redes.f_evento_zona(jsonb) (se reemplaza)|795f3c6c45b34306060d375ebe1f370d|REEMPLAZADA (aplicado)
+1 redes.f_rep_columnas(text) (se reemplaza)|a6955a401c14a8692d68402294db810e|REEMPLAZADA (aplicado)
+1 redes.f_rep_eventos(jsonb,boolean,timestamp with time zone,text,integer,boolean) (se reemplaza)|bef95e9511f4eaf360ede1023e8c40a4|REEMPLAZADA (aplicado)
+1 redes.f_rep_leame(text,jsonb,boolean,text,timestamp with time zone) (se reemplaza)|41c7b3680290ba3bcfe7a98cae9fe7dc|REEMPLAZADA (aplicado)
+1 tecnica.f_rep_columnas(text,jsonb) (se reemplaza)|433cc539c24e1e14b07f96d79e974f65|REEMPLAZADA (aplicado)
+1 tecnica.f_rep_eventos_planta(jsonb,boolean,timestamp with time zone,text,integer) (se reemplaza)|1f3ac41ec397b2ce20d0d818c63b0b15|REEMPLAZADA (aplicado)
+1 tecnica.f_rep_leame(text,jsonb,boolean,text,timestamp with time zone) (se reemplaza)|fe08987ea0b82be59420fc5d964459ff|REEMPLAZADA (aplicado)
+2 public.geoportal_redes_evento_causal_fijar(text,text,text,boolean,text) (nueva)|5330bd20fe560e627d4a8532dd7e11b2|NUEVA (aplicada)
+2 public.geoportal_redes_tubo_sectores_fijar(text,text,text[],text) (nueva)|03657c4afcbcdb5374bb5812103439b6|NUEVA (aplicada)
+2 redes.f_evento_origen(bigint) (nueva)|81107c71dfa94d8c79fef3ca595e7788|NUEVA (aplicada)
+2 redes.f_tubo_es_distribucion() (nueva)|9d5b37643892051a53684a1cdfd82e4c|NUEVA (aplicada)
+2 redes.f_tubo_zona(text[]) (nueva)|a15f2de42924d7c6c0da5f1f73ea880e|NUEVA (aplicada)
+3 las 31 que no se tocan (evento_contrato, aviso, SCRR, disparadores, bot, demás rutas de eventos)||SIN CAMBIO
+4 tablas nuevas (6)||EXISTEN (aplicado)
+5 INFO sectores por planta activos · plantas con alguno · tubos de salida (tipo distribución) · eventos · eventos de planta||0 · 0 · 0 · 0 · 0
+6 INFO huella de técnica (esquema tecnica y geoportal_tec_*; anótela antes y después)|bf7f10549862e9ed8c24f7962ed6ee73|INFORMATIVA
+== verificación
+01 las 2 RPC nuevas: security definer, search_path fijo, solo service_role|OK
+02 ninguna función interna de redes la ejecuta la API|OK
+03 huellas md5: las 11 reemplazadas, las 5 nuevas y el conjunto de redes|OK
+04 no se tocó evento_contrato, el aviso, el SCRR, los disparadores, el bot ni las demás rutas de eventos (31 funciones)|OK
+05 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE|OK
+06 las 6 tablas nuevas: RLS y sin permisos para la API; las de hechos, solo inserción|OK
+07 los sectores por planta quedaron todos inactivos, con su hecho (nada se borró)|OK
+08 las 5 causales de David, activas|OK
+INFO causales · tubos con sectores · eventos con causal · eventos por tubo|5 · 0 · 0 · 0
+== migración otra vez (debe negarse)
+psql:migracion_redes_eventos_origen_tubos_editor.sql:29: ERROR:  El corte de eventos (origen y tubos) ya está aplicado: deténgase y avise
+== un evento por tubo (hecho nuevo) y la reversa (debe negarse)
+psql:reversa_redes_eventos_origen_tubos_editor.sql:20: ERROR:  Ya hay hechos nuevos (eventos con causal o por tubo, sectores de un tubo o causales ajustadas): la reversa no los borra. Avise
+== reversa
+conjunto de redes tras la reversa: 3f3c89e603629d92e1cc5065de33d0c1 (debe ser 3f3c89e603629d92e1cc5065de33d0c1)
+sectores por planta activos tras la reversa: 6 (antes: 6)
+== reversa otra vez (debe negarse)
+psql:reversa_redes_eventos_origen_tubos_editor.sql:20: ERROR:  No hay nada que revertir: el corte de eventos (origen y tubos) no está aplicado
+== ensayo con un evento de TODA LA CIUDAD abierto en la base (como podría estar producción)
+RESULTADO: 48 de 48 pruebas correctas — SIN FALLAS
+== tiempo de declarar un evento de planta (toda la ciudad: cuenta todos los contratos) con el volumen real
+104325
+
+TIEMPO declarar un evento de planta (toda la ciudad, 104325 contratos) como service_role: 63 ms
