@@ -1,0 +1,41 @@
+== 20-11-2026 16:52 ensayo redes_reportes_distribucion (base: producción al 20-nov, huella b474fbbe…)
+TIEMPOS con el volumen real: Activos de la red (35787 activos) iniciar 36 ms · primera página de 5.000 312 ms (tope de la API: 30 s por llamada)
+RESULTADO: 64 de 64 pruebas correctas — SIN FALLAS
+== huellas antes
+0 funciones de redes (conjunto)|b474fbbe3e0f7a3a7e6dbc04c53e02e7|AVISO POR CONTRATO (lista para las descargas)
+1 las 24 funciones nuevas||NO EXISTE (sin aplicar)
+2 public.geoportal_redes_descarga(text,text,date,date,boolean,text) (no se toca)|6a45b63d76ee2e96d68439a14f238c1f|LA PUBLICADA
+2 public.geoportal_redes_reporte_convertir(text,uuid,jsonb) (no se toca)|c51e28695635e028403f0c85c7ded5f9|LA PUBLICADA
+2 public.geoportal_redes_reporte_descartar(text,uuid,text) (no se toca)|f070fb817ea878564a0274154ce5c042|LA PUBLICADA
+2 redes.f_evento_reportes(bigint) (no se toca)|e9d6c5b2d72868e188e2bc5eeda47ddd|LA PUBLICADA
+2 redes.f_perfil_lectura(text) (no se toca)|b16cdc53435687d24704b0af7770b0ff|LA PUBLICADA
+2 redes.f_sector_de(geometry) (no se toca)|455378c9b8cf43343ff821a2896eae37|LA PUBLICADA
+2 redes.f_supervisor(text,text) (no se toca)|da1844d42f25ce4ba6abeebe207869b3|LA PUBLICADA
+3 tablas nuevas (reporte_descargas, reporte_descarga_cierres)||NO EXISTEN (sin aplicar)
+4 INFO datos: LEV · cierres de válvula · eventos · 116 · bot · sensibles · activos · sectores||0 · 0 · 0 · 0 · 0 · 0 · 35781 · 0
+== migración aplicada; huellas después
+0 funciones de redes (conjunto)|3f3c89e603629d92e1cc5065de33d0c1|DESCARGAS DE DISTRIBUCIÓN (aplicado)
+1 las 24 funciones nuevas||NUEVA (aplicada)
+2 public.geoportal_redes_descarga(text,text,date,date,boolean,text) (no se toca)|6a45b63d76ee2e96d68439a14f238c1f|LA PUBLICADA
+2 public.geoportal_redes_reporte_convertir(text,uuid,jsonb) (no se toca)|c51e28695635e028403f0c85c7ded5f9|LA PUBLICADA
+2 public.geoportal_redes_reporte_descartar(text,uuid,text) (no se toca)|f070fb817ea878564a0274154ce5c042|LA PUBLICADA
+2 redes.f_evento_reportes(bigint) (no se toca)|e9d6c5b2d72868e188e2bc5eeda47ddd|LA PUBLICADA
+2 redes.f_perfil_lectura(text) (no se toca)|b16cdc53435687d24704b0af7770b0ff|LA PUBLICADA
+2 redes.f_sector_de(geometry) (no se toca)|455378c9b8cf43343ff821a2896eae37|LA PUBLICADA
+2 redes.f_supervisor(text,text) (no se toca)|da1844d42f25ce4ba6abeebe207869b3|LA PUBLICADA
+3 tablas nuevas (reporte_descargas, reporte_descarga_cierres)||EXISTEN (aplicado)
+4 INFO datos: LEV · cierres de válvula · eventos · 116 · bot · sensibles · activos · sectores||0 · 0 · 0 · 0 · 0 · 0 · 35781 · 0
+== verificación
+01 las 4 RPC: security definer, search_path fijo, solo service_role|OK
+02 ninguna función interna de redes la ejecuta la API|OK
+03 huellas md5 de las 24 nuevas y del conjunto de funciones de redes|OK
+04 pg-safeupdate: ninguna función con DELETE o UPDATE sin WHERE|OK
+05 no se tocó nada de lo publicado que se lee ni las rutas del bot de nombre parecido (supervisor, perfil, sector, reportes de un evento, descarga de daños e intervenciones, reporte_convertir y reporte_descartar)|OK
+06 las 2 tablas nuevas: RLS, solo inserción y sin permisos para la API|OK
+INFO descargas iniciadas · cerradas|0 · 0
+== migración aplicada otra vez (debe negarse)
+psql:/Users/ddiaz/geoportal-emdupar-repsrv/sql/redes_reportes_distribucion/migracion_redes_reportes_distribucion_editor.sql:26: ERROR:  Las descargas de Distribución ya están aplicadas: deténgase y avise
+== reversa
+conjunto de redes tras la reversa: b474fbbe3e0f7a3a7e6dbc04c53e02e7 (debe ser b474fbbe3e0f7a3a7e6dbc04c53e02e7)
+== reversa otra vez (debe negarse)
+psql:/Users/ddiaz/geoportal-emdupar-repsrv/sql/redes_reportes_distribucion/reversa_redes_reportes_distribucion_editor.sql:17: ERROR:  No hay nada que revertir: las descargas de Distribución no están aplicadas

@@ -1,0 +1,27 @@
+OK    A1 PTAP (reporte_iniciar): permiten A y S; Y, O, D y N reciben 403
+OK    A2 Distribución (reporte_iniciar): permiten A e Y; S, O, D y N reciben 403
+OK    A3 sin sesión: 401 en las dos
+OK    A4 la página de una descarga que no existe: 404 con su texto
+OK    A5 sin datos con esos filtros: 404 «No hay datos con esos filtros.»
+OK    A6 un filtro que no aplica al reporte: 400 con su texto (lo dice la base)
+OK    B1 Entrada: 30 envíos en 5 páginas de 7; cada fila trae exactamente las claves de «columnas»; sin caché; cerrar responde «cerrada»
+OK    B2 la columna de la variable trae su título, la unidad y los decimales; el Léame trae qué trae, qué no, los filtros, quién y cuándo
+OK    B3 las fechas van como hora de Bogotá sin zona («AAAA-MM-DDTHH:MM:SS»)
+OK    B4 cerrada la descarga, sus páginas: 409 «ya terminó»
+OK    B5 la descarga de otra persona (el administrador pide la del supervisor): 404
+OK    C1 Entrada de químicos: la foto va como el número del movimiento (enlace), nunca la ruta
+OK    C2 reporte_remision_foto: URL firmada de 60 s del bucket privado, sin la ruta, sin caché
+OK    C3 la foto: el supervisor de distribución recibe 403 y el operador también
+OK    D1 Activos tipo VAL: 758 filas en 4 páginas de 200, sin repetir ni saltar (= los 758 vigentes de la base)
+   TIEMPOS por la Edge: Activos de la red completo (35782 filas, 8 páginas) en 3644 ms; iniciar 152 ms; la página más lenta 488 ms
+OK    D2 TIEMPOS: Activos de la red completo por la Edge (35782 filas en 8 páginas): ninguna llamada pasa de 5 s
+OK    D3 un reporte con periodo sin periodo: 400 «Elija el periodo»
+OK    D4 sin usuarios sensibles en la base: 404 sin datos (y no 500)
+OK    E1 reporte_sectores: la lista con los 1 sectores y subsectores vigentes de la capa (código, nombre, clase, sector y subsector)
+OK    E2 la lista: el supervisor de planta y el operador reciben 403; por POST, 405
+OK    E3 Encontrar o reportar activo por el sector de la lista (el código, aunque venga en minúsculas): el LEV del sector; el Léame dice el nombre
+OK    E4 un sector escrito como número: 400 «Elija el sector de la lista.» (lo dice la Edge, sin llegar a la base)
+OK    E5 Eventos: tipo «Falla de bombeo» y causa «Desgaste o vejez de la tubería» del catálogo del daño; la causa escrita y la descripción no salen
+OK    Z1 ninguna respuesta trae teléfonos ni nombres de las personas de prueba (los correos sí: son de funcionarios)
+OK    Z2 ninguna RPC que no exista en la base
+RESULTADO: 25 de 25 — SIN FALLAS

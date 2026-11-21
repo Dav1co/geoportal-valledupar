@@ -1,0 +1,23 @@
+      reporte      |         filtros          | total | paginas | iniciar ms | página más lenta ms | todo ms 
+-------------------+--------------------------+-------+---------+------------+---------------------+---------
+ entrada           | {}                       | 17578 |       4 |        285 |                 609 |    2229
+ entrada           | {"planta": "arnes_a"}    |  8753 |       2 |        149 |                 533 |    1048
+ salida            | {}                       | 17508 |       4 |        167 |                 362 |    1302
+ muestreo          | {}                       |  3635 |       1 |         58 |                 338 |     395
+ uso_quimicos      | {}                       |  2912 |       1 |         23 |                  28 |      52
+ entrada_quimicos  | {}                       |   208 |       1 |          3 |                   3 |       6
+ kardex_quimicos   | {}                       |  3132 |       1 |         61 |                  71 |     133
+ eventos_planta    | {}                       |    60 |       1 |          8 |                   3 |      10
+ fuera_referencia  | {}                       |    80 |       1 |       1055 |                 892 |    1947
+ levantamientos    | {}                       |  1000 |       1 |          8 |                  72 |      80
+ levantamientos    | {"sector": "SEC-000001"} |   478 |       1 |          2 |                  46 |      48
+ valvulas          | {}                       |  2000 |       1 |          5 |                 170 |     176
+ eventos           | {}                       |   300 |       1 |          5 |                  12 |      17
+ l116              | {}                       | 29317 |       6 |         35 |                 100 |     591
+ l116              | {"sector": "SEC-000001"} | 14568 |       3 |         38 |                 101 |     331
+ bot               | {}                       |  2900 |       1 |         33 |                 217 |     250
+ bot               | {"sector": "SEC-000001"} |  1415 |       1 |         18 |                 144 |     163
+ sensibles         | {}                       |   300 |       1 |          2 |                  25 |      27
+ activos           | {}                       | 35782 |       8 |         23 |                 455 |    3079
+ lista de sectores |                          |     1 |       0 |          0 |                     |       0
+(20 filas)
