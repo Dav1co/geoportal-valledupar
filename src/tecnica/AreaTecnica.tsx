@@ -21,6 +21,9 @@ import type { Bandeja } from "./apiAvisos";
 import { EncontrarActivo } from "./EncontrarActivo";      // Corte 14
 import { EventosSuspension } from "./EventosSuspension";      // Corte 15: «Suspensiones» en el inicio y el aviso que abre su evento
 import { supabase } from "../lib/supabase";
+import { DashboardPTAR } from "./ptar/DashboardPTAR";      // PTAR-2 (Code C): el cuarto modo «PTAR» y su Dashboard
+import { apiPtar, type PerfilPtar } from "./ptar/apiPtar";
+import "./ptar/tokens_ptar.css";
 
 // Área Técnica (Torre B) en el celular. Qué formularios ve cada persona y qué perfil tiene lo decide el SERVIDOR (ruta mis_formularios); aquí solo se dibuja.
 // Formularios que ya tienen pantalla construida (el resto se muestra deshabilitado, «Próximamente»). Esta lista no contiene variables ni nombres de campos.
@@ -31,10 +34,10 @@ const ROTULO_PERFIL: Record<MisFormularios["perfil"], string> = { admin: "Admini
 // Corte 11 (render aprobado por David, 16-nov 13:30): el inicio de Técnica va por MODOS de trabajo (Planta, Redes y Supervisión), con tarjetas grandes.
 // Ningún formulario se abre solo; cada persona ve solo los modos en los que tiene algo (lo decide el servidor: formularios asignados, dashboards y geovisor);
 // con un solo modo no hay selector. Aquí no hay permisos nuevos: solo se reparte lo que ya llegaba.
-type Modo = "planta" | "redes" | "supervision";
+type Modo = "planta" | "redes" | "supervision" | "ptar";      // PTAR-2 (D5): cuarto modo, en pizarra
 // Corte 13 (David, 16:30): «Planta» pasa a «Plantas» y «Redes» a «Distribución». Las claves internas no cambian (el modo recordado de cada persona sigue sirviendo).
-const MODOS: { clave: Modo; nombre: string }[] = [{ clave: "planta", nombre: "Plantas" }, { clave: "redes", nombre: "Distribución" }, { clave: "supervision", nombre: "Supervisión" }];
-const CLASE_MODO: Record<Modo, string> = { planta: "tec-modo-plantas", redes: "tec-modo-distribucion", supervision: "tec-modo-supervision" };
+const MODOS: { clave: Modo; nombre: string }[] = [{ clave: "planta", nombre: "Plantas" }, { clave: "redes", nombre: "Distribución" }, { clave: "supervision", nombre: "Supervisión" }, { clave: "ptar", nombre: "PTAR" }];
+const CLASE_MODO: Record<Modo, string> = { planta: "tec-modo-plantas", redes: "tec-modo-distribucion", supervision: "tec-modo-supervision", ptar: "tec-modo-ptar" };
 const FORMULARIOS_REDES = new Set(["danos_fallas", "mantenimiento", "anomalia_compartida", "revision_compartida"]);      // Corte 8: los compartidos van en Redes      // los demás formularios asignados son de planta
 const ORDEN_FORM = ["entrada", "salida", "muestreo", "entrada_quimicos", "uso_quimicos", "danos_fallas", "mantenimiento", "anomalia_compartida", "revision_compartida"];
 const DESCRIPCION: Record<string, string> = {
@@ -47,7 +50,7 @@ const DESCRIPCION_PROPIA = new Set(["danos_fallas", "mantenimiento"]);
 type Tarjeta = { clave: string; nombre: string; descripcion: string; estado: "lista" | "pronto" | "sin_campos"; abrir: () => void; contador?: { n: number; nivel: "rojo" | "naranja" | "info" } };
 const CLAVE_MODO = "tec_modo";
 function modoGuardado(): Modo | null {
-  try { const m = window.localStorage.getItem(CLAVE_MODO); return m === "planta" || m === "redes" || m === "supervision" ? m : null; } catch { return null; }
+  try { const m = window.localStorage.getItem(CLAVE_MODO); return m === "planta" || m === "redes" || m === "supervision" || m === "ptar" ? m : null; } catch { return null; }
 }
 function guardarModo(m: Modo) { try { window.localStorage.setItem(CLAVE_MODO, m); } catch { /* sin almacenamiento: se elige de nuevo la próxima vez */ } }
 
@@ -64,18 +67,20 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const [desdeDano, setDesdeDano] = useState<DesdeDano | null>(null);      // «Registrar la reparación» desde el daño recién guardado
   const [activoItv, setActivoItv] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // desde la ficha
   const [activoDano, setActivoDano] = useState<{ codigo: string; sistema: "acueducto" | "alcantarillado"; lat: number; lon: number } | null>(null);   // Corte 6a: desde el geovisor
-  const [vista, setVista] = useState<"inicio" | "captura" | "dashboard" | "activos" | "redes" | "geovisor" | "avisos" | "encontrar" | "suspensiones">("inicio");      // Corte 15: «suspensiones»      // Corte 14: «encontrar»      // Corte 12: «avisos»      // Corte 11: se entra al inicio por modos
+  const [vista, setVista] = useState<"inicio" | "captura" | "dashboard" | "activos" | "redes" | "geovisor" | "avisos" | "encontrar" | "suspensiones" | "ptar">("inicio");      // PTAR-2: «ptar» = Dashboard PTAR      // Corte 15: «suspensiones»      // Corte 14: «encontrar»      // Corte 12: «avisos»      // Corte 11: se entra al inicio por modos
   const [eventoSusp, setEventoSusp] = useState<{ codigo: string | null; vez: number; desde: "inicio" | "avisos" | "dashboard" | "redes" }>({ codigo: null, vez: 0, desde: "inicio" });      // el evento que se abre directo (desde su aviso) y a dónde vuelve
   const [modo, setModo] = useState<Modo | null>(modoGuardado);
   // Corte 6b (§30.2): un enlace compartido del geovisor (#geovisor=<código>) se consume una vez: se quita de la barra de direcciones y abre el geovisor
   const [vistaId, setVistaId] = useState<string | null>(() => /(?:^|[#&])geovisor=([a-z0-9]{10})(?:&|$)/.exec(window.location.hash)?.[1] ?? null);
   const [avisoEnlace, setAvisoEnlace] = useState<string | null>(null);
   const [redesListo, setRedesListo] = useState(false);      // Corte 6a: «geovisor» (N-13: supervisores, administrador y el operador con la casilla)     // Corte 4a: «redes» = Dashboard distribución (supervisor de distribución y administrador)
-  const [redes, setRedes] = useState<MiPerfilRedes | null>(null);      // perfil de redes (ver_dashboard_redes), del servidor     // el Dashboard PTAP y la ficha de activos (Corte 1b) son solo para supervisor y administrador en esta pantalla (el servidor lo vuelve a verificar en cada ruta)
+  const [redes, setRedes] = useState<MiPerfilRedes | null>(null);
+  const [ptar, setPtar] = useState<PerfilPtar | null>(null);      // PTAR-2: alcance PTAP / PTAR (D6), del servidor; si la ruta falla, todo queda como antes (PTAP sí, PTAR no)      // perfil de redes (ver_dashboard_redes), del servidor     // el Dashboard PTAP y la ficha de activos (Corte 1b) son solo para supervisor y administrador en esta pantalla (el servidor lo vuelve a verificar en cada ruta)
 
   useEffect(() => {
     let vivo = true;
     setErrorMis(null);
+    apiPtar.perfil().then((r) => { if (vivo) setPtar(r); }).catch(() => { if (vivo) setPtar(null); });
     apiDash.miPerfil().then((r) => { if (vivo) setRedes(r); }).catch(() => { if (vivo) setRedes(null); }).finally(() => { if (vivo) setRedesListo(true); });
     apiTec.misFormularios()
       .then((r) => {
@@ -87,7 +92,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   }, [intento]);
 
   // Corte 12: los avisos (solo supervisores y administrador; el servidor decide qué áreas). Se piden cuando se sabe que la persona supervisa.
-  const supervisaAlgo = (mis?.perfil === "admin" || mis?.perfil === "supervisor") || redes?.dashboard_redes === true;
+  const supervisaAlgo = ((mis?.perfil === "admin" || mis?.perfil === "supervisor") && ptar?.ptap !== false) || redes?.dashboard_redes === true;      // PTAR-2: quien solo tiene la PTAR no recibe los avisos de la PTAP
   const avisos = useAvisos(supervisaAlgo);
 
   const cargarDef = useCallback((clave: string, silencioso: boolean) => {
@@ -133,12 +138,15 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const perfil: MisFormularios["perfil"] = mis?.perfil ?? "operador";
   const rotuloPerfil = soloRedes ? (redes?.dashboard_redes ? "Supervisor de distribución" : "Técnica") : ROTULO_PERFIL[perfil];
 
-  const puedeSupervisar = perfil === "admin" || perfil === "supervisor";      // Dashboard PTAP (planta)
+  const puedeSupervisar = (perfil === "admin" || perfil === "supervisor") && ptar?.ptap !== false;      // Dashboard PTAP (planta); PTAR-2 (D6): sin el alcance PTAP, no
+  const puedePtar = ptar?.ptar === true;                                                                // Dashboard PTAR y su mapa (D6: alcance PTAR)
   const puedeRedes = redes?.dashboard_redes === true;                                  // Dashboard distribución (Corte 4a)
   // selector arriba de cada dashboard, cuando la persona tiene los dos (§1 de la bitácora: no se solapan)
   // §34: va DENTRO del encabezado de cada dashboard (antes era un bloque aparte que partía la pantalla en dos)
-  const selector = puedeSupervisar && puedeRedes
-    ? <SelectorDashboards actual={vista === "redes" ? "distribucion" : "ptap"} onElegir={(d) => setVista(d === "ptap" ? "dashboard" : "redes")} /> : null;
+  // PTAR-2: con el Dashboard PTAR son hasta tres; el selector sale cuando hay dos o más
+  const tableros = [...(puedeSupervisar ? ["ptap" as const] : []), ...(puedePtar ? ["ptar" as const] : []), ...(puedeRedes ? ["distribucion" as const] : [])];
+  const selector = tableros.length > 1
+    ? <SelectorDashboards opciones={tableros} actual={vista === "redes" ? "distribucion" : vista === "ptar" ? "ptar" : "ptap"} onElegir={(d) => { setVista(d === "ptap" ? "dashboard" : d === "ptar" ? "ptar" : "redes"); window.scrollTo?.(0, 0); }} /> : null;
 
   // Corte 12: un aviso abre su bandeja (el dashboard y la pestaña que corresponde)
   // Corte 15: los eventos de suspensión los ven el administrador, el supervisor de planta y el de distribución (el servidor lo vuelve a decidir en cada ruta)
@@ -159,6 +167,7 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
     </div>);
   if ((puedeSupervisar || puedeRedes) && vista === "avisos") return <PantallaAvisos estado={avisos} tieneDistribucion={puedeRedes} onAbrir={abrirBandeja} onVolver={() => setVista("inicio")} />;
   if (puedeSupervisar && vista === "dashboard") return <AvisosContexto.Provider value={ctxAvisos("ptap")}><Dashboard correo={correo} rotuloPerfil={rotuloPerfil} selector={selector} onVolver={() => setVista("inicio")} /></AvisosContexto.Provider>;
+  if (puedePtar && vista === "ptar") return <DashboardPTAR correo={correo} rotuloPerfil={rotuloPerfil} admin={ptar?.admin === true} selector={selector} onVolver={() => setVista("inicio")} />;
   if (puedeRedes && vista === "redes") return <AvisosContexto.Provider value={ctxAvisos("distribucion")}><DashboardRedes correo={correo} selector={selector} onVolver={() => setVista("inicio")} onGeovisor={redes?.geovisor ? () => setVista("geovisor") : undefined} /></AvisosContexto.Provider>;
   const tieneItv = formularios.some((f) => f.clave === "mantenimiento");
   const abrirItv = (d: DesdeDano | null, a: typeof activoItv) => { setDesdeDano(d); setActivoItv(a); setVezItv((v) => v + 1); setElegido("mantenimiento"); setVista("captura"); window.scrollTo?.(0, 0); };
@@ -192,7 +201,8 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   const supervisa = puedeSupervisar || puedeRedes;
   // «Encontrar o reportar activo» (David, 17-nov): en Distribución para todo el que lo tiene; en Plantas para quien tiene formularios de planta,
   // los supervisores y el administrador. Ya no va en Supervisión.
-  const formulariosPlanta = ordenados.filter((f) => !FORMULARIOS_REDES.has(f.clave));
+  // PTAR-2 (D6): quien solo tiene la PTAR no ve los formularios de la PTAP (el servidor los cierra en PTAR-4, f_autorizar_captura)
+  const formulariosPlanta = ptar?.ptap === false ? [] : ordenados.filter((f) => !FORMULARIOS_REDES.has(f.clave));
   const porModo: Record<Modo, Tarjeta[]> = {
     planta: [
       ...formulariosPlanta.map(tarjetaForm),
@@ -215,6 +225,13 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
       ...(tieneGeovisor && supervisa ? [{ clave: "geovisor", nombre: "Geovisor técnico", descripcion: "La red, las actividades y los contratos en el mapa", estado: "lista" as const, abrir: () => setVista("geovisor") }] : []),
       ...(editaFicha ? [{ clave: "ficha_editar", nombre: "Ficha de activos (editar)", descripcion: "Corregir alias, placa y datos de un activo, con motivo", estado: "lista" as const, abrir: () => setVista("activos") }] : []),
     ],
+    // PTAR-2 (D5): el cuarto modo. El Dashboard PTAR (con el mapa) funciona; los tres formularios quedan en «Próximamente» hasta PTAR-4
+    ptar: puedePtar ? [
+      { clave: "dashboard_ptar", nombre: "Dashboard PTAR", descripcion: "El mapa de la PTAR El Salguero: lagunas, colectores, pozos y su ficha", estado: "lista" as const, abrir: () => { setVista("ptar"); window.scrollTo?.(0, 0); } },
+      { clave: "ptar_afluente", nombre: "Afluente", descripcion: "El agua residual que llega a la planta", estado: "pronto" as const, abrir: () => {} },
+      { clave: "ptar_lagunas", nombre: "Entre lagunas", descripcion: "Las mediciones entre una laguna y la siguiente", estado: "pronto" as const, abrir: () => {} },
+      { clave: "ptar_efluente", nombre: "Efluente", descripcion: "El agua tratada que sale al río", estado: "pronto" as const, abrir: () => {} },
+    ] : [],
   };
   const modosVisibles = MODOS.filter((m) => porModo[m.clave].length > 0);
   // La primera vez (sin modo recordado): quien no tiene formularios propios y sí supervisa (el supervisor de distribución) abre en Supervisión (David, 16-nov 14:39)
