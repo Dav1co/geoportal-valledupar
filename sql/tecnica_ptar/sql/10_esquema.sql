@@ -63,7 +63,7 @@ union all select 'ptap_gota_fria', 'PTAP Gota Fría', 'potable', id, 24 from tec
 union all select 'ptar', 'PTAR El Salguero', 'residual', null, 168;
 
 -- ---------------------------------------------------------------------
--- 2. Elementos de la planta (mapa): perímetro, lagunas, tramos (entre lagunas, colectores y conductos internos), puntos de medición y pozos.
+-- 2. Elementos de la planta (mapa): perímetro, lagunas, tramos (entre lagunas, colectores y conductos internos), puntos de medición, pozos y descargas (VER).
 --    origen 'dibujo' = GeoJSON de David; 'redes' = copia de solo lectura de un activo de redes (D12). El activo sigue siendo uno solo, el de redes: aquí solo su código.
 --    D9: ninguna columna se edita; corregir = desactivar con motivo y crear la fila nueva con reemplaza_id (mismo código).
 -- ---------------------------------------------------------------------
@@ -71,7 +71,7 @@ create table tecnica.elementos_planta (
   id               bigint generated always as identity primary key,
   codigo           text not null check (codigo ~ '^[A-Z0-9][A-Z0-9_-]{1,39}$'),
   instalacion_id   bigint not null references tecnica.instalaciones (id),
-  tipo             text not null check (tipo in ('perimetro', 'laguna', 'tramo', 'punto_medicion', 'pozo')),
+  tipo             text not null check (tipo in ('perimetro', 'laguna', 'tramo', 'punto_medicion', 'pozo', 'descarga')),
   nombre           text not null check (length(btrim(nombre)) between 2 and 120),
   orden            smallint not null default 0 check (orden between 0 and 999),
   geom             geometry(Geometry, 4326) not null,
@@ -90,7 +90,7 @@ create table tecnica.elementos_planta (
   constraint elementos_planta_forma check (
        (tipo in ('perimetro', 'laguna') and geometrytype(geom) in ('POLYGON', 'MULTIPOLYGON'))
     or (tipo = 'tramo' and geometrytype(geom) in ('LINESTRING', 'MULTILINESTRING'))
-    or (tipo in ('punto_medicion', 'pozo') and geometrytype(geom) = 'POINT')),
+    or (tipo in ('punto_medicion', 'pozo', 'descarga') and geometrytype(geom) = 'POINT')),
   constraint elementos_planta_valida check (st_isvalid(geom) and not st_isempty(geom)),
   constraint elementos_planta_punto check (punto_id is null or tipo = 'punto_medicion'),
   constraint elementos_planta_flujo check ((desde_id is null and hasta_id is null) or tipo = 'tramo'),

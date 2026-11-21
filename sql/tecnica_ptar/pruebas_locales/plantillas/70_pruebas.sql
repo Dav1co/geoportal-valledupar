@@ -71,7 +71,9 @@ begin
   perform pg_temp.el(v_inst, 'PRUEBA-PER', 'perimetro', pg_temp.cuadro(-74.501, 4.499, 0.01));
   perform pg_temp.el(v_inst, 'PRUEBA-PM-1', 'punto_medicion', pt);
   perform pg_temp.el(v_inst, 'PRUEBA-COL-1', 'tramo', ln, p_origen => 'redes', p_activo => 'COL-999991');
-  perform pg_temp.reg('02.01 se cargan laguna, tramo con desde/hasta, pozo de redes, perímetro, punto y conducto', (select count(*) from tecnica.elementos_planta where instalacion_id = v_inst) = 7);
+  perform pg_temp.el(v_inst, 'PRUEBA-VER-1', 'descarga', '{"type":"Point","coordinates":[-74.4995,4.5005]}', p_origen => 'redes', p_activo => 'VER-999991');
+  perform pg_temp.err('02.20 una descarga no puede ser una línea', format('select pg_temp.el(%s, %L, %L, %L)', v_inst, 'PRUEBA-X9', 'descarga', ln), '23514', 'elementos_planta_forma');
+  perform pg_temp.reg('02.01 se cargan laguna, tramo con desde/hasta, pozo y descarga de redes, perímetro, punto y conducto', (select count(*) from tecnica.elementos_planta where instalacion_id = v_inst) = 8);
   perform pg_temp.err('02.02 una laguna no puede ser un punto', format('select pg_temp.el(%s, %L, %L, %L)', v_inst, 'PRUEBA-X1', 'laguna', pt), '23514', 'elementos_planta_forma');
   perform pg_temp.err('02.03 un pozo no puede ser una línea', format('select pg_temp.el(%s, %L, %L, %L)', v_inst, 'PRUEBA-X2', 'pozo', ln), '23514', 'elementos_planta_forma');
   perform pg_temp.err('02.04 un polígono inválido (corbatín) no entra', format('select pg_temp.el(%s, %L, %L, %L)', v_inst, 'PRUEBA-X3', 'laguna', mono), '23514', 'elementos_planta_valida');
@@ -148,12 +150,12 @@ begin
   -- ---------- 06. Mapa ----------
   perform public.geoportal_tec_ptar_alias_fijar(sr, 'prueba-lag-1', 'Anaerobia N1', 'PRUEBA el jefe le pone el nombre corto');
   j := public.geoportal_tec_ptar_mapa(sr, 'prueba_ptar');
-  perform pg_temp.reg('06.01 el jefe de la PTAR ve el mapa: 7 activos de su planta (el desactivado no sale; el que lo reemplaza sí)', (j ->> 'total')::integer = 7
-    and (j -> 'por_tipo' ->> 'laguna')::integer = 2 and (j -> 'por_tipo' ->> 'tramo')::integer = 2 and (j -> 'por_tipo' ->> 'pozo')::integer = 1
+  perform pg_temp.reg('06.01 el jefe de la PTAR ve el mapa: 8 activos de su planta (el desactivado no sale; el que lo reemplaza sí)', (j ->> 'total')::integer = 8
+    and (j -> 'por_tipo' ->> 'laguna')::integer = 2 and (j -> 'por_tipo' ->> 'tramo')::integer = 2 and (j -> 'por_tipo' ->> 'pozo')::integer = 1 and (j -> 'por_tipo' ->> 'descarga')::integer = 1
     and (select count(*) from jsonb_array_elements(j -> 'elementos' -> 'features') f where (f -> 'properties' ->> 'codigo') = 'PRUEBA-POZ-1' and (f ->> 'id')::bigint = v_new) = 1, (j - 'elementos')::text);
   perform pg_temp.reg('06.02 orden de dibujo: el perímetro primero, los puntos al final; con el alias y el estado «sin_variables»',
     j -> 'elementos' -> 'features' -> 0 -> 'properties' ->> 'tipo' = 'perimetro'
-    and j -> 'elementos' -> 'features' -> 6 -> 'properties' ->> 'tipo' = 'punto_medicion'
+    and j -> 'elementos' -> 'features' -> 7 -> 'properties' ->> 'tipo' = 'punto_medicion'
     and exists (select 1 from jsonb_array_elements(j -> 'elementos' -> 'features') f where f -> 'properties' ->> 'codigo' = 'PRUEBA-LAG-1' and f -> 'properties' ->> 'alias' = 'Anaerobia N1')
     and (select bool_and(f -> 'properties' ->> 'estado' = 'sin_variables') from jsonb_array_elements(j -> 'elementos' -> 'features') f));
   perform pg_temp.reg('06.03 la caja del mapa encierra el perímetro de prueba', (j -> 'caja' ->> 0)::numeric <= -74.501 and (j -> 'caja' ->> 3)::numeric >= 4.509, j ->> 'caja');

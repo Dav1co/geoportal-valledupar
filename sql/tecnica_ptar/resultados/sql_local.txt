@@ -1,4 +1,4 @@
-huella de redes 1ba192724c2fddcf321104700829f3cc (no cambia) · técnica PRODUCCIÓN 3e9b0121e2b8beb313fad05de9e50f15 (guardia del _editor) · técnica local antes 4a10aa60971401954717fc3c74d3d869 → después 539cb3e062c6877f41656c2f973c1458 · f_autorizar_supervision 50f8be54db2465be1db2a03a37b26d20 → cf531900f6be5fc187b73395a2340e2b · 15 funciones nuevas o reemplazadas
+huella de redes 1ba192724c2fddcf321104700829f3cc (no cambia) · técnica PRODUCCIÓN 3e9b0121e2b8beb313fad05de9e50f15 (guardia del _editor) · técnica local antes 4a10aa60971401954717fc3c74d3d869 → después 3f41f7fd66c63520ad5da44452da9021 · f_autorizar_supervision 50f8be54db2465be1db2a03a37b26d20 → cf531900f6be5fc187b73395a2340e2b · 15 funciones nuevas o reemplazadas
 == verificación tras la migración (local)
 k                                           |                                                                                     valor                                                                                      | estado 
 ---------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------
@@ -15,19 +15,21 @@ k                                           |                                   
 == generar_carga.py
 GeoJSON md5 4112e460378f20d8b0d86a8b8a910b26: 35 elementos del dibujo (laguna 31, perimetro 1, punto_medicion 1, tramo 2); activos del dibujo excluidos de la copia D12: 'VER-000004', 'COL-004500', 'COL-005945'. Archivos en /Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/carga
 == carga
-psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/carga/carga_ptar_el_salguero_editor.sql:83: NOTICE:  CARGA PTAR: 35 del dibujo + 879 copiados de redes (471 pozos, 408 tramos) = 914 elementos
+psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/carga/carga_ptar_el_salguero_editor.sql:83: NOTICE:  CARGA PTAR: 35 del dibujo + 879 copiados de redes (470 pozos, 1 descargas, 408 tramos) = 914 elementos
 == verificación de la carga
 k                           |   valor    | estado 
 -------------------------------------------------------+------------+--------
  elementos del dibujo (esperado 35)                    | 35         | OK
- copiados de redes: pozos y descargas                  | 471        | OK
+ copiados de redes: pozos                              | 470        | OK
+ copiados de redes: descargas (VER)                    | 1          | OK
+ ningún activo del dibujo copiado otra vez             | 0          | OK
  copiados de redes: conductos (tramos sin desde/hasta) | 408        | OK
  perímetro (esperado 1)                                | 1          | OK
  lagunas                                               | 31         | OK
  copiados con su activo en redes                       | 879 de 879 | OK
  sin activos repetidos                                 | 0          | OK
  pg-safeupdate: funciones con DELETE/UPDATE sin WHERE  | 0          | OK
-(8 filas)
+(10 filas)
 == arnés del mapa (service_role, 30 s, 8 s)
 BEGIN
 SET
@@ -42,19 +44,19 @@ SET
 DO
 RESET
 psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/pruebas_locales/arnes_mapa.sql:43: ERROR:  ARNÉS DEL MAPA DE LA PTAR (esperado: este ERROR deshace todo)
-  mapa (peor de 5): 26.6 ms · 914 elementos, 271477 bytes, {"pozo": 471, "tramo": 410, "laguna": 31, "perimetro": 1, "punto_medicion": 1}
-  ficha del perímetro: 26.7 ms · {"area_ha": 63.23, "area_m2": 632301}
+  mapa (peor de 5): 26.7 ms · 914 elementos, 271496 bytes, {"pozo": 470, "tramo": 410, "laguna": 31, "descarga": 1, "perimetro": 1, "punto_medicion": 1}
+  ficha del perímetro: 27.4 ms · {"area_ha": 63.23, "area_m2": 632301}
   ficha de un conducto copiado de redes: 0.5 ms · COL-000193 {"longitud_m": 49.2}
-  alias: 0.8 ms · {"alias": "A-N1", "antes": null, "codigo": "PTAR-LAG-1"}
-  perfil: 0.6 ms · {"ptap": false, "ptar": true, "admin": false, "activa": true, "perfil": "supervisor", "instalaciones": [{"tipo": "residual", "codigo": "ptar", "nombre": "PTAR El Salguero", "elementos": 914}]}
+  alias: 2.4 ms · {"alias": "A-N1", "antes": null, "codigo": "PTAR-LAG-1"}
+  perfil: 0.7 ms · {"ptap": false, "ptar": true, "admin": false, "activa": true, "perfil": "supervisor", "instalaciones": [{"tipo": "residual", "codigo": "ptar", "nombre": "PTAR El Salguero", "elementos": 914}]}
 RESULTADO: cada llamada en menos de 2 s y 914 elementos — SIN FALLAS
 CONTEXTO:  PL/pgSQL function inline_code_block line 6 at RAISE
 == reversa con la carga hecha: se detiene (esperado)
 CONTEXTO:  PL/pgSQL function inline_code_block line 5 at RAISE
 == reversa en limpio: técnica vuelve a 4a10aa60971401954717fc3c74d3d869 y redes sigue en 1ba192724c2fddcf321104700829f3cc
 == ensayo (local)
-psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/pruebas_locales/local/ensayo_en_transaccion_tecnica_ptar_local.sql:655: NOTICE:  Self-intersection at or near point -74.495000000000005 4.5049999999999999
-psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/pruebas_locales/local/ensayo_en_transaccion_tecnica_ptar_local.sql:655: ERROR:  PRUEBAS DE TÉCNICA · PTAR-1 (esperado: este ERROR deshace todo lo de la prueba)
+psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/pruebas_locales/local/ensayo_en_transaccion_tecnica_ptar_local.sql:657: NOTICE:  Self-intersection at or near point -74.495000000000005 4.5049999999999999
+psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/pruebas_locales/local/ensayo_en_transaccion_tecnica_ptar_local.sql:657: ERROR:  PRUEBAS DE TÉCNICA · PTAR-1 (esperado: este ERROR deshace todo lo de la prueba)
 
-RESULTADO: 83 de 83 pruebas correctas — SIN FALLAS
-CONTEXTO:  PL/pgSQL function inline_code_block line 187 at RAISE
+RESULTADO: 84 de 84 pruebas correctas — SIN FALLAS
+CONTEXTO:  PL/pgSQL function inline_code_block line 189 at RAISE

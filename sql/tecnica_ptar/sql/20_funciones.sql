@@ -60,7 +60,7 @@ $$;
 create function tecnica.f_tipo_elemento_texto(p_tipo text) returns text
 language sql immutable set search_path to 'pg_catalog' as $$
   select case p_tipo when 'perimetro' then 'Perímetro' when 'laguna' then 'Laguna' when 'tramo' then 'Tramo' when 'punto_medicion' then 'Punto de medición'
-                     when 'pozo' then 'Pozo' else p_tipo end
+                     when 'pozo' then 'Pozo' when 'descarga' then 'Descarga' else p_tipo end
 $$;
 
 -- Instalación por código (activa); error de usuario si no existe.

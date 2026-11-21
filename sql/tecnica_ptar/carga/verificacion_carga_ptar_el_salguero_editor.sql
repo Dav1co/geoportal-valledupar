@@ -2,7 +2,10 @@
 with e as (select e.* from tecnica.elementos_planta e join tecnica.instalaciones i on i.id = e.instalacion_id where i.codigo = 'ptar' and e.activo)
 select k, valor, case when ok then 'OK' else 'REVISAR' end as estado from (
   select 1 as o, 'elementos del dibujo (esperado 35)' as k, count(*)::text as valor, count(*) = 35 as ok from e where origen = 'dibujo'
-  union all select 2, 'copiados de redes: pozos y descargas', count(*)::text, count(*) > 0 from e where origen = 'redes' and tipo = 'pozo'
+  union all select 2, 'copiados de redes: pozos', count(*)::text, count(*) > 0 from e where origen = 'redes' and tipo = 'pozo'
+  union all select 2, 'copiados de redes: descargas (VER)', count(*)::text, bool_and(activo_codigo like 'VER-%') is not false from e where origen = 'redes' and tipo = 'descarga'
+  union all select 2, 'ningún activo del dibujo copiado otra vez', (select count(*) from e x join e y on x.activo_codigo = y.activo_codigo and x.origen = 'dibujo' and y.origen = 'redes')::text,
+                   not exists (select 1 from e x join e y on x.activo_codigo = y.activo_codigo and x.origen = 'dibujo' and y.origen = 'redes') from (select 1) z
   union all select 3, 'copiados de redes: conductos (tramos sin desde/hasta)', count(*)::text, count(*) > 0 and bool_and(desde_id is null and hasta_id is null) from e where origen = 'redes' and tipo = 'tramo'
   union all select 4, 'perímetro (esperado 1)', count(*)::text, count(*) = 1 from e where tipo = 'perimetro'
   union all select 5, 'lagunas', count(*)::text, count(*) = 31 from e where tipo = 'laguna'
