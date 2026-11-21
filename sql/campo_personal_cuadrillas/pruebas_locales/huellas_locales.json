@@ -1,0 +1,28 @@
+{
+ "locales": {
+  "HUELLA_REDES": "fbdc520bd368603a94700ee64738a009",
+  "HUELLA_TECNICA": "0c7f5364ab1d3bc04b6222762934306a",
+  "HUELLA_CAMPO": "bda09093ae1d6dedc04ad56aac1ba2e2"
+ },
+ "nuevas": {
+  "public.geoportal_campo_personal_fijar(text,text,text,jsonb,text)": "fc362a2894e064767cfca039fa5ed299",
+  "public.geoportal_campo_cuadrillas(text,jsonb,text)": "76b1eb22a370ab461f977ba38be9e994",
+  "public.geoportal_campo_cuadrilla_cambiar(text,jsonb,text)": "30ed5a23163f13c822c7d2393132541d",
+  "public.geoportal_campo_catalogos(text,text)": "5bec9cab11e11387073e5783fb23638a",
+  "public.geoportal_campo_catalogo_cambiar(text,jsonb,text)": "b230fe8ad5d1944fbaf1106f51b47f68",
+  "public.geoportal_campo_personal_actividad(text,text,text)": "93ad0bd10c4222d4b1f24e0da0e43824",
+  "campo.f_persona_comercial(text)": "99af03344249f7260357528096e92829",
+  "campo.f_area_vigente(text)": "09ac12c5df5877b84fbce54e6d014470",
+  "campo.f_cuadrilla_vigente(text)": "f38549b2c3ad1edb8a8c26c6b57e3cb7",
+  "campo.f_actividades_propias(text)": "0670bad6770dbb5191dc21dd560359f7",
+  "campo.f_cuadrilla_actividades(bigint)": "826d0065c2a0c783d498cbc88e98d6cc",
+  "campo.f_miembros_cuadrillas()": "07dac444b04ec2c0939c6180fec91343",
+  "campo.f_actividades_persona(text)": "69bc9bd73d5797b826b3e504c1d92070",
+  "campo.f_quien_puede(text)": "5a381a87f432b8d2a6c88ad98a13fe3c",
+  "campo.f_codigo_desde_nombre(text)": "797333afba14f417857b033ff0d52f08",
+  "campo.f_motivo_personal(text,boolean)": "4d7f94c08ca8e75bb724e21d9b93e272",
+  "campo.f_no_borrar_catalogo()": "740c50291aa0bb31a38f64724d6b3fd9",
+  "public.geoportal_campo_personal(text,jsonb,text)": "7028ce4016505ed5fd8ae706db91464c",
+  "public.geoportal_campo_historial_personal(text,jsonb,text)": "639b9652575bffbe6390aa527f3d36f8"
+ }
+}
