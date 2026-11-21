@@ -41,11 +41,12 @@ if ruta is None:
 INSTALACION = 'ptar'
 AUTOR = 'carga.ptar@emdupar.gov.co'
 TIPOS_GEOM = {'perimetro': ('Polygon', 'MultiPolygon'), 'laguna': ('Polygon', 'MultiPolygon'), 'tramo': ('LineString', 'MultiLineString'),
-              'punto_medicion': ('Point',), 'pozo': ('Point',)}
+              'punto_medicion': ('Point',), 'pozo': ('Point',), 'descarga': ('Point',)}
 COD = re.compile(r'^[A-Z0-9][A-Z0-9_-]{1,39}$')
 ACT = re.compile(r'^[A-Z]{3}-[0-9]{6}$')
 BASICAS = {'nombre', 'tipo', 'planta', 'orden', 'codigo', 'punto', 'desde', 'hasta', 'activo_codigo'}
-# Capas de redes que se copian (D12): pozos y descargas como «pozo» (punto); conductos como «tramo» sin desde/hasta. Nombre por omisión según el prefijo.
+# Capas de redes que se copian (D12): pozos como «pozo», descargas (VER) como «descarga» (David, 21-nov) y conductos como «tramo» sin desde/hasta.
+# Se pintan TODOS los activos que tocan el perímetro, salvo los que el GeoJSON ya trae como activo_codigo (regla de David, 21-nov: nada pintado dos veces).
 CAPAS_D12 = ('alc_pozos', 'alc_conductos', 'alc_descargas')
 
 crudo = open(ruta, 'rb').read()
@@ -66,7 +67,7 @@ for n, f in enumerate(d['features'], 1):
             errores.append(f'{donde}: falta «{k}»')
     tipo, cod = p.get('tipo'), str(p.get('codigo') or '')
     if tipo not in TIPOS_GEOM:
-        errores.append(f'{donde}: tipo «{tipo}» no válido (perimetro, laguna, tramo, punto_medicion o pozo)'); continue
+        errores.append(f'{donde}: tipo «{tipo}» no válido (perimetro, laguna, tramo, punto_medicion, pozo o descarga)'); continue
     if g.get('type') not in TIPOS_GEOM[tipo]:
         errores.append(f'{donde}: un «{tipo}» no puede ser {g.get("type")}')
     if p.get('planta') != INSTALACION:
@@ -147,9 +148,9 @@ insert into tecnica.elementos_planta ({COLS}) values
 """ + (f"""insert into tecnica.elementos_planta ({COLS}) values
 {(','+chr(10)).join(fila(e, True) for e in con_flujo)};
 """ if con_flujo else '') + f"""
--- 2. Copia D12 desde redes: lo que toca el perímetro (pozos y descargas como «pozo»; conductos como «tramo» sin desde/hasta)
+-- 2. Copia D12 desde redes: lo que toca el perímetro (pozos, descargas y conductos como «tramo» sin desde/hasta), menos lo que ya trae el dibujo
 insert into tecnica.elementos_planta ({COLS})
-select (select id from _inst), 'PTAR-' || v.codigo, case when v.capa_codigo = 'alc_conductos' then 'tramo' else 'pozo' end,
+select (select id from _inst), 'PTAR-' || v.codigo, case v.capa_codigo when 'alc_conductos' then 'tramo' when 'alc_descargas' then 'descarga' else 'pozo' end,
        coalesce(nullif(btrim(v.nombre), ''), case v.prefijo when 'POZ' then 'Pozo ' when 'COL' then 'Conducto ' when 'VER' then 'Descarga ' else 'Activo ' end || v.codigo),
        0, v.geom, null, null, v.codigo,
        jsonb_strip_nulls(jsonb_build_object('capa', v.capa_codigo, 'prefijo', v.prefijo, 'version_redes', v.version, 'diametro_mm', v.diametro_mm,
@@ -162,18 +163,18 @@ select (select id from _inst), 'PTAR-' || v.codigo, case when v.capa_codigo = 'a
 
 -- 3. Comprobación (si algo no calza, ERROR y no queda nada)
 do $$
-declare v_d integer; v_r integer; v_p integer; v_t integer; v_fuera integer;
+declare v_d integer; v_r integer; v_p integer; v_t integer; v_v integer; v_fuera integer;
 begin
   select count(*) filter (where origen = 'dibujo'), count(*) filter (where origen = 'redes'), count(*) filter (where origen = 'redes' and tipo = 'pozo'),
-         count(*) filter (where origen = 'redes' and tipo = 'tramo')
-    into v_d, v_r, v_p, v_t from tecnica.elementos_planta where instalacion_id = (select id from _inst) and activo;
+         count(*) filter (where origen = 'redes' and tipo = 'tramo'), count(*) filter (where origen = 'redes' and tipo = 'descarga')
+    into v_d, v_r, v_p, v_t, v_v from tecnica.elementos_planta where instalacion_id = (select id from _inst) and activo;
   if v_d <> {n_dibujo} then raise exception 'CARGA PTAR: se cargaron % elementos del dibujo y el archivo trae {n_dibujo}', v_d; end if;
   if v_p = 0 or v_t = 0 then raise exception 'CARGA PTAR: la copia de redes no trajo pozos (%) o conductos (%)', v_p, v_t; end if;
   select count(*) into v_fuera from tecnica.elementos_planta e left join redes.activos a on a.codigo = e.activo_codigo
    where e.instalacion_id = (select id from _inst) and e.origen = 'redes' and a.id is null;
   if v_fuera > 0 then raise exception 'CARGA PTAR: % elementos copiados no tienen su activo en redes', v_fuera; end if;
   if exists (select 1 from redes.f_funciones_sin_where()) then raise exception 'CARGA PTAR: hay funciones con DELETE o UPDATE sin WHERE'; end if;
-  raise notice 'CARGA PTAR: % del dibujo + % copiados de redes (% pozos, % tramos) = % elementos', v_d, v_r, v_p, v_t, v_d + v_r;
+  raise notice 'CARGA PTAR: % del dibujo + % copiados de redes (% pozos, % descargas, % tramos) = % elementos', v_d, v_r, v_p, v_v, v_t, v_d + v_r;
 end $$;
 commit;
 """
@@ -182,7 +183,10 @@ verif = f"""-- TÉCNICA · PTAR · VERIFICACIÓN DE LA CARGA INICIAL (solo lectu
 with e as (select e.* from tecnica.elementos_planta e join tecnica.instalaciones i on i.id = e.instalacion_id where i.codigo = '{INSTALACION}' and e.activo)
 select k, valor, case when ok then 'OK' else 'REVISAR' end as estado from (
   select 1 as o, 'elementos del dibujo (esperado {n_dibujo})' as k, count(*)::text as valor, count(*) = {n_dibujo} as ok from e where origen = 'dibujo'
-  union all select 2, 'copiados de redes: pozos y descargas', count(*)::text, count(*) > 0 from e where origen = 'redes' and tipo = 'pozo'
+  union all select 2, 'copiados de redes: pozos', count(*)::text, count(*) > 0 from e where origen = 'redes' and tipo = 'pozo'
+  union all select 2, 'copiados de redes: descargas (VER)', count(*)::text, bool_and(activo_codigo like 'VER-%') is not false from e where origen = 'redes' and tipo = 'descarga'
+  union all select 2, 'ningún activo del dibujo copiado otra vez', (select count(*) from e x join e y on x.activo_codigo = y.activo_codigo and x.origen = 'dibujo' and y.origen = 'redes')::text,
+                   not exists (select 1 from e x join e y on x.activo_codigo = y.activo_codigo and x.origen = 'dibujo' and y.origen = 'redes') from (select 1) z
   union all select 3, 'copiados de redes: conductos (tramos sin desde/hasta)', count(*)::text, count(*) > 0 and bool_and(desde_id is null and hasta_id is null) from e where origen = 'redes' and tipo = 'tramo'
   union all select 4, 'perímetro (esperado 1)', count(*)::text, count(*) = 1 from e where tipo = 'perimetro'
   union all select 5, 'lagunas', count(*)::text, count(*) = {cuenta.get('laguna', 0)} from e where tipo = 'laguna'

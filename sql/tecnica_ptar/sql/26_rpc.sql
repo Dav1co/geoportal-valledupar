@@ -21,7 +21,7 @@ begin
 end $$;
 
 -- El mapa de una instalación: todos sus elementos activos en un GeoJSON (6 decimales ≈ 0,1 m), en el orden de dibujo
--- (perímetro, lagunas, tramos, pozos, puntos de medición). Mientras un elemento no tenga variables asignadas, su estado es «sin_variables».
+-- (perímetro, lagunas, tramos, pozos y descargas, puntos de medición). Mientras un elemento no tenga variables asignadas, su estado es «sin_variables».
 create function public.geoportal_tec_ptar_mapa(p_solicitante text, p_instalacion text default 'ptar') returns jsonb
 language plpgsql stable security definer set search_path to 'public', 'tecnica', 'extensions', 'pg_temp' as $$
 declare i tecnica.instalaciones; v_fc jsonb; v_caja jsonb; v_tipos jsonb;
@@ -32,7 +32,7 @@ begin
   with al as (
     select distinct on (a.codigo) a.codigo, a.alias from tecnica.elemento_alias_eventos a where a.instalacion_id = i.id order by a.codigo, a.id desc
   ), el as (
-    select e.*, al.alias, case e.tipo when 'perimetro' then 1 when 'laguna' then 2 when 'tramo' then 3 when 'pozo' then 4 else 5 end as capa
+    select e.*, al.alias, case e.tipo when 'perimetro' then 1 when 'laguna' then 2 when 'tramo' then 3 when 'pozo' then 4 when 'descarga' then 4 else 5 end as capa
       from tecnica.elementos_planta e left join al on al.codigo = e.codigo
      where e.instalacion_id = i.id and e.activo
   )

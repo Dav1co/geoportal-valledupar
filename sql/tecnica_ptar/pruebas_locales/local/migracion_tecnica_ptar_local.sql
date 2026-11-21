@@ -64,7 +64,7 @@ union all select 'ptap_gota_fria', 'PTAP Gota Fría', 'potable', id, 24 from tec
 union all select 'ptar', 'PTAR El Salguero', 'residual', null, 168;
 
 -- ---------------------------------------------------------------------
--- 2. Elementos de la planta (mapa): perímetro, lagunas, tramos (entre lagunas, colectores y conductos internos), puntos de medición y pozos.
+-- 2. Elementos de la planta (mapa): perímetro, lagunas, tramos (entre lagunas, colectores y conductos internos), puntos de medición, pozos y descargas (VER).
 --    origen 'dibujo' = GeoJSON de David; 'redes' = copia de solo lectura de un activo de redes (D12). El activo sigue siendo uno solo, el de redes: aquí solo su código.
 --    D9: ninguna columna se edita; corregir = desactivar con motivo y crear la fila nueva con reemplaza_id (mismo código).
 -- ---------------------------------------------------------------------
@@ -72,7 +72,7 @@ create table tecnica.elementos_planta (
   id               bigint generated always as identity primary key,
   codigo           text not null check (codigo ~ '^[A-Z0-9][A-Z0-9_-]{1,39}$'),
   instalacion_id   bigint not null references tecnica.instalaciones (id),
-  tipo             text not null check (tipo in ('perimetro', 'laguna', 'tramo', 'punto_medicion', 'pozo')),
+  tipo             text not null check (tipo in ('perimetro', 'laguna', 'tramo', 'punto_medicion', 'pozo', 'descarga')),
   nombre           text not null check (length(btrim(nombre)) between 2 and 120),
   orden            smallint not null default 0 check (orden between 0 and 999),
   geom             geometry(Geometry, 4326) not null,
@@ -91,7 +91,7 @@ create table tecnica.elementos_planta (
   constraint elementos_planta_forma check (
        (tipo in ('perimetro', 'laguna') and geometrytype(geom) in ('POLYGON', 'MULTIPOLYGON'))
     or (tipo = 'tramo' and geometrytype(geom) in ('LINESTRING', 'MULTILINESTRING'))
-    or (tipo in ('punto_medicion', 'pozo') and geometrytype(geom) = 'POINT')),
+    or (tipo in ('punto_medicion', 'pozo', 'descarga') and geometrytype(geom) = 'POINT')),
   constraint elementos_planta_valida check (st_isvalid(geom) and not st_isempty(geom)),
   constraint elementos_planta_punto check (punto_id is null or tipo = 'punto_medicion'),
   constraint elementos_planta_flujo check ((desde_id is null and hasta_id is null) or tipo = 'tramo'),
@@ -262,7 +262,7 @@ $$;
 create function tecnica.f_tipo_elemento_texto(p_tipo text) returns text
 language sql immutable set search_path to 'pg_catalog' as $$
   select case p_tipo when 'perimetro' then 'Perímetro' when 'laguna' then 'Laguna' when 'tramo' then 'Tramo' when 'punto_medicion' then 'Punto de medición'
-                     when 'pozo' then 'Pozo' else p_tipo end
+                     when 'pozo' then 'Pozo' when 'descarga' then 'Descarga' else p_tipo end
 $$;
 
 -- Instalación por código (activa); error de usuario si no existe.
@@ -297,7 +297,7 @@ begin
 end $$;
 
 -- El mapa de una instalación: todos sus elementos activos en un GeoJSON (6 decimales ≈ 0,1 m), en el orden de dibujo
--- (perímetro, lagunas, tramos, pozos, puntos de medición). Mientras un elemento no tenga variables asignadas, su estado es «sin_variables».
+-- (perímetro, lagunas, tramos, pozos y descargas, puntos de medición). Mientras un elemento no tenga variables asignadas, su estado es «sin_variables».
 create function public.geoportal_tec_ptar_mapa(p_solicitante text, p_instalacion text default 'ptar') returns jsonb
 language plpgsql stable security definer set search_path to 'public', 'tecnica', 'extensions', 'pg_temp' as $$
 declare i tecnica.instalaciones; v_fc jsonb; v_caja jsonb; v_tipos jsonb;
@@ -308,7 +308,7 @@ begin
   with al as (
     select distinct on (a.codigo) a.codigo, a.alias from tecnica.elemento_alias_eventos a where a.instalacion_id = i.id order by a.codigo, a.id desc
   ), el as (
-    select e.*, al.alias, case e.tipo when 'perimetro' then 1 when 'laguna' then 2 when 'tramo' then 3 when 'pozo' then 4 else 5 end as capa
+    select e.*, al.alias, case e.tipo when 'perimetro' then 1 when 'laguna' then 2 when 'tramo' then 3 when 'pozo' then 4 when 'descarga' then 4 else 5 end as capa
       from tecnica.elementos_planta e left join al on al.codigo = e.codigo
      where e.instalacion_id = i.id and e.activo
   )

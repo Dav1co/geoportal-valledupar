@@ -64,7 +64,7 @@ union all select 'ptap_gota_fria', 'PTAP Gota Fría', 'potable', id, 24 from tec
 union all select 'ptar', 'PTAR El Salguero', 'residual', null, 168;
 
 -- ---------------------------------------------------------------------
--- 2. Elementos de la planta (mapa): perímetro, lagunas, tramos (entre lagunas, colectores y conductos internos), puntos de medición y pozos.
+-- 2. Elementos de la planta (mapa): perímetro, lagunas, tramos (entre lagunas, colectores y conductos internos), puntos de medición, pozos y descargas (VER).
 --    origen 'dibujo' = GeoJSON de David; 'redes' = copia de solo lectura de un activo de redes (D12). El activo sigue siendo uno solo, el de redes: aquí solo su código.
 --    D9: ninguna columna se edita; corregir = desactivar con motivo y crear la fila nueva con reemplaza_id (mismo código).
 -- ---------------------------------------------------------------------
@@ -72,7 +72,7 @@ create table tecnica.elementos_planta (
   id               bigint generated always as identity primary key,
   codigo           text not null check (codigo ~ '^[A-Z0-9][A-Z0-9_-]{1,39}$'),
   instalacion_id   bigint not null references tecnica.instalaciones (id),
-  tipo             text not null check (tipo in ('perimetro', 'laguna', 'tramo', 'punto_medicion', 'pozo')),
+  tipo             text not null check (tipo in ('perimetro', 'laguna', 'tramo', 'punto_medicion', 'pozo', 'descarga')),
   nombre           text not null check (length(btrim(nombre)) between 2 and 120),
   orden            smallint not null default 0 check (orden between 0 and 999),
   geom             geometry(Geometry, 4326) not null,
@@ -91,7 +91,7 @@ create table tecnica.elementos_planta (
   constraint elementos_planta_forma check (
        (tipo in ('perimetro', 'laguna') and geometrytype(geom) in ('POLYGON', 'MULTIPOLYGON'))
     or (tipo = 'tramo' and geometrytype(geom) in ('LINESTRING', 'MULTILINESTRING'))
-    or (tipo in ('punto_medicion', 'pozo') and geometrytype(geom) = 'POINT')),
+    or (tipo in ('punto_medicion', 'pozo', 'descarga') and geometrytype(geom) = 'POINT')),
   constraint elementos_planta_valida check (st_isvalid(geom) and not st_isempty(geom)),
   constraint elementos_planta_punto check (punto_id is null or tipo = 'punto_medicion'),
   constraint elementos_planta_flujo check ((desde_id is null and hasta_id is null) or tipo = 'tramo'),
@@ -262,7 +262,7 @@ $$;
 create function tecnica.f_tipo_elemento_texto(p_tipo text) returns text
 language sql immutable set search_path to 'pg_catalog' as $$
   select case p_tipo when 'perimetro' then 'Perímetro' when 'laguna' then 'Laguna' when 'tramo' then 'Tramo' when 'punto_medicion' then 'Punto de medición'
-                     when 'pozo' then 'Pozo' else p_tipo end
+                     when 'pozo' then 'Pozo' when 'descarga' then 'Descarga' else p_tipo end
 $$;
 
 -- Instalación por código (activa); error de usuario si no existe.
@@ -297,7 +297,7 @@ begin
 end $$;
 
 -- El mapa de una instalación: todos sus elementos activos en un GeoJSON (6 decimales ≈ 0,1 m), en el orden de dibujo
--- (perímetro, lagunas, tramos, pozos, puntos de medición). Mientras un elemento no tenga variables asignadas, su estado es «sin_variables».
+-- (perímetro, lagunas, tramos, pozos y descargas, puntos de medición). Mientras un elemento no tenga variables asignadas, su estado es «sin_variables».
 create function public.geoportal_tec_ptar_mapa(p_solicitante text, p_instalacion text default 'ptar') returns jsonb
 language plpgsql stable security definer set search_path to 'public', 'tecnica', 'extensions', 'pg_temp' as $$
 declare i tecnica.instalaciones; v_fc jsonb; v_caja jsonb; v_tipos jsonb;
@@ -308,7 +308,7 @@ begin
   with al as (
     select distinct on (a.codigo) a.codigo, a.alias from tecnica.elemento_alias_eventos a where a.instalacion_id = i.id order by a.codigo, a.id desc
   ), el as (
-    select e.*, al.alias, case e.tipo when 'perimetro' then 1 when 'laguna' then 2 when 'tramo' then 3 when 'pozo' then 4 else 5 end as capa
+    select e.*, al.alias, case e.tipo when 'perimetro' then 1 when 'laguna' then 2 when 'tramo' then 3 when 'pozo' then 4 when 'descarga' then 4 else 5 end as capa
       from tecnica.elementos_planta e left join al on al.codigo = e.codigo
      where e.instalacion_id = i.id and e.activo
   )
@@ -507,7 +507,9 @@ begin
   perform pg_temp.el(v_inst, 'PRUEBA-PER', 'perimetro', pg_temp.cuadro(-74.501, 4.499, 0.01));
   perform pg_temp.el(v_inst, 'PRUEBA-PM-1', 'punto_medicion', pt);
   perform pg_temp.el(v_inst, 'PRUEBA-COL-1', 'tramo', ln, p_origen => 'redes', p_activo => 'COL-999991');
-  perform pg_temp.reg('02.01 se cargan laguna, tramo con desde/hasta, pozo de redes, perímetro, punto y conducto', (select count(*) from tecnica.elementos_planta where instalacion_id = v_inst) = 7);
+  perform pg_temp.el(v_inst, 'PRUEBA-VER-1', 'descarga', '{"type":"Point","coordinates":[-74.4995,4.5005]}', p_origen => 'redes', p_activo => 'VER-999991');
+  perform pg_temp.err('02.20 una descarga no puede ser una línea', format('select pg_temp.el(%s, %L, %L, %L)', v_inst, 'PRUEBA-X9', 'descarga', ln), '23514', 'elementos_planta_forma');
+  perform pg_temp.reg('02.01 se cargan laguna, tramo con desde/hasta, pozo y descarga de redes, perímetro, punto y conducto', (select count(*) from tecnica.elementos_planta where instalacion_id = v_inst) = 8);
   perform pg_temp.err('02.02 una laguna no puede ser un punto', format('select pg_temp.el(%s, %L, %L, %L)', v_inst, 'PRUEBA-X1', 'laguna', pt), '23514', 'elementos_planta_forma');
   perform pg_temp.err('02.03 un pozo no puede ser una línea', format('select pg_temp.el(%s, %L, %L, %L)', v_inst, 'PRUEBA-X2', 'pozo', ln), '23514', 'elementos_planta_forma');
   perform pg_temp.err('02.04 un polígono inválido (corbatín) no entra', format('select pg_temp.el(%s, %L, %L, %L)', v_inst, 'PRUEBA-X3', 'laguna', mono), '23514', 'elementos_planta_valida');
@@ -584,12 +586,12 @@ begin
   -- ---------- 06. Mapa ----------
   perform public.geoportal_tec_ptar_alias_fijar(sr, 'prueba-lag-1', 'Anaerobia N1', 'PRUEBA el jefe le pone el nombre corto');
   j := public.geoportal_tec_ptar_mapa(sr, 'prueba_ptar');
-  perform pg_temp.reg('06.01 el jefe de la PTAR ve el mapa: 7 activos de su planta (el desactivado no sale; el que lo reemplaza sí)', (j ->> 'total')::integer = 7
-    and (j -> 'por_tipo' ->> 'laguna')::integer = 2 and (j -> 'por_tipo' ->> 'tramo')::integer = 2 and (j -> 'por_tipo' ->> 'pozo')::integer = 1
+  perform pg_temp.reg('06.01 el jefe de la PTAR ve el mapa: 8 activos de su planta (el desactivado no sale; el que lo reemplaza sí)', (j ->> 'total')::integer = 8
+    and (j -> 'por_tipo' ->> 'laguna')::integer = 2 and (j -> 'por_tipo' ->> 'tramo')::integer = 2 and (j -> 'por_tipo' ->> 'pozo')::integer = 1 and (j -> 'por_tipo' ->> 'descarga')::integer = 1
     and (select count(*) from jsonb_array_elements(j -> 'elementos' -> 'features') f where (f -> 'properties' ->> 'codigo') = 'PRUEBA-POZ-1' and (f ->> 'id')::bigint = v_new) = 1, (j - 'elementos')::text);
   perform pg_temp.reg('06.02 orden de dibujo: el perímetro primero, los puntos al final; con el alias y el estado «sin_variables»',
     j -> 'elementos' -> 'features' -> 0 -> 'properties' ->> 'tipo' = 'perimetro'
-    and j -> 'elementos' -> 'features' -> 6 -> 'properties' ->> 'tipo' = 'punto_medicion'
+    and j -> 'elementos' -> 'features' -> 7 -> 'properties' ->> 'tipo' = 'punto_medicion'
     and exists (select 1 from jsonb_array_elements(j -> 'elementos' -> 'features') f where f -> 'properties' ->> 'codigo' = 'PRUEBA-LAG-1' and f -> 'properties' ->> 'alias' = 'Anaerobia N1')
     and (select bool_and(f -> 'properties' ->> 'estado' = 'sin_variables') from jsonb_array_elements(j -> 'elementos' -> 'features') f));
   perform pg_temp.reg('06.03 la caja del mapa encierra el perímetro de prueba', (j -> 'caja' ->> 0)::numeric <= -74.501 and (j -> 'caja' ->> 3)::numeric >= 4.509, j ->> 'caja');

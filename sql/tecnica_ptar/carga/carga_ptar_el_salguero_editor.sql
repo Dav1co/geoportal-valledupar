@@ -53,9 +53,9 @@ insert into tecnica.elementos_planta (instalacion_id, codigo, tipo, nombre, orde
   ((select id from _inst), 'PTAR-TR-COLN', 'tramo', 'Colector de entrada — tren norte', 1, st_setsrid(st_geomfromgeojson('{"type":"LineString","coordinates":[[-73.2394991,10.3923356],[-73.2386989,10.3918127]]}'), 4326), null, null, 'COL-004500', '{}'::jsonb, 'dibujo', 'carga.ptar@emdupar.gov.co'),
   ((select id from _inst), 'PTAR-TR-COLS', 'tramo', 'Colector de entrada — tren sur', 1, st_setsrid(st_geomfromgeojson('{"type":"LineString","coordinates":[[-73.2394956,10.3923044],[-73.2394903,10.3893829]]}'), 4326), null, null, 'COL-005945', '{}'::jsonb, 'dibujo', 'carga.ptar@emdupar.gov.co');
 
--- 2. Copia D12 desde redes: lo que toca el perímetro (pozos y descargas como «pozo»; conductos como «tramo» sin desde/hasta)
+-- 2. Copia D12 desde redes: lo que toca el perímetro (pozos, descargas y conductos como «tramo» sin desde/hasta), menos lo que ya trae el dibujo
 insert into tecnica.elementos_planta (instalacion_id, codigo, tipo, nombre, orden, geom, desde_id, hasta_id, activo_codigo, atributos, origen, creado_por)
-select (select id from _inst), 'PTAR-' || v.codigo, case when v.capa_codigo = 'alc_conductos' then 'tramo' else 'pozo' end,
+select (select id from _inst), 'PTAR-' || v.codigo, case v.capa_codigo when 'alc_conductos' then 'tramo' when 'alc_descargas' then 'descarga' else 'pozo' end,
        coalesce(nullif(btrim(v.nombre), ''), case v.prefijo when 'POZ' then 'Pozo ' when 'COL' then 'Conducto ' when 'VER' then 'Descarga ' else 'Activo ' end || v.codigo),
        0, v.geom, null, null, v.codigo,
        jsonb_strip_nulls(jsonb_build_object('capa', v.capa_codigo, 'prefijo', v.prefijo, 'version_redes', v.version, 'diametro_mm', v.diametro_mm,
@@ -68,17 +68,17 @@ select (select id from _inst), 'PTAR-' || v.codigo, case when v.capa_codigo = 'a
 
 -- 3. Comprobación (si algo no calza, ERROR y no queda nada)
 do $$
-declare v_d integer; v_r integer; v_p integer; v_t integer; v_fuera integer;
+declare v_d integer; v_r integer; v_p integer; v_t integer; v_v integer; v_fuera integer;
 begin
   select count(*) filter (where origen = 'dibujo'), count(*) filter (where origen = 'redes'), count(*) filter (where origen = 'redes' and tipo = 'pozo'),
-         count(*) filter (where origen = 'redes' and tipo = 'tramo')
-    into v_d, v_r, v_p, v_t from tecnica.elementos_planta where instalacion_id = (select id from _inst) and activo;
+         count(*) filter (where origen = 'redes' and tipo = 'tramo'), count(*) filter (where origen = 'redes' and tipo = 'descarga')
+    into v_d, v_r, v_p, v_t, v_v from tecnica.elementos_planta where instalacion_id = (select id from _inst) and activo;
   if v_d <> 35 then raise exception 'CARGA PTAR: se cargaron % elementos del dibujo y el archivo trae 35', v_d; end if;
   if v_p = 0 or v_t = 0 then raise exception 'CARGA PTAR: la copia de redes no trajo pozos (%) o conductos (%)', v_p, v_t; end if;
   select count(*) into v_fuera from tecnica.elementos_planta e left join redes.activos a on a.codigo = e.activo_codigo
    where e.instalacion_id = (select id from _inst) and e.origen = 'redes' and a.id is null;
   if v_fuera > 0 then raise exception 'CARGA PTAR: % elementos copiados no tienen su activo en redes', v_fuera; end if;
   if exists (select 1 from redes.f_funciones_sin_where()) then raise exception 'CARGA PTAR: hay funciones con DELETE o UPDATE sin WHERE'; end if;
-  raise notice 'CARGA PTAR: % del dibujo + % copiados de redes (% pozos, % tramos) = % elementos', v_d, v_r, v_p, v_t, v_d + v_r;
+  raise notice 'CARGA PTAR: % del dibujo + % copiados de redes (% pozos, % descargas, % tramos) = % elementos', v_d, v_r, v_p, v_v, v_t, v_d + v_r;
 end $$;
 commit;
