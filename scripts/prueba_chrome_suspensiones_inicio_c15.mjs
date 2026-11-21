@@ -306,7 +306,8 @@ for (const ancho of ANCHOS) {
   await clic(p, "[data-modo-actual] [data-tarjeta=suspensiones]"); await p.waitForSelector("[data-testid=evs-lista]", { timeout: 30000 }); await p.waitForSelector(`[data-testid=eventos] [data-evento="${EV1}"]`, { timeout: 30000 });
   b = await barra(p); r = await lista(p);
   ok(A("A3 abre la lista de eventos, con los dos abiertos y la barra «Volver»"), b.vista === "lista" && b.volver === "← Volver" && b.titulo === "Eventos de suspensión" && r === [EV1, EV2].sort().join(","), JSON.stringify(b) + " " + r);
-  ok(A("A4 la lista abierta desde el inicio no desborda y le ofrece declarar y los dos catálogos"), await sinDesborde(p) && !!(await p.$("[data-testid=evs-nuevo]")) && !!(await p.$("[data-testid=evs-ir-plantas]")) && !!(await p.$("[data-testid=evs-ir-tipos]")));
+  // el catálogo de sectores es «Tubo de salida → sectores» (evs-ir-tubos) desde el corte de eventos; antes «Planta → sectores» (evs-ir-plantas): vale cualquiera
+  ok(A("A4 la lista abierta desde el inicio no desborda y le ofrece declarar y los dos catálogos (tubos o plantas, y tipos)"), await sinDesborde(p) && !!(await p.$("[data-testid=evs-nuevo]")) && !!(await p.$("[data-testid=evs-ir-tubos], [data-testid=evs-ir-plantas]")) && !!(await p.$("[data-testid=evs-ir-tipos]")));
   await p.screenshot({ path: join(CAP, `suspensiones_dist_${ancho}.png`) });
   await clic(p, "[data-testid=eventos] .tec-volver"); await p.waitForSelector("[data-modo-actual]");
   ok(A("A5 «Volver» regresa al inicio"), !(await p.$("[data-testid=eventos]")) && !!(await p.$("[data-tarjeta=suspensiones]")));
@@ -344,7 +345,7 @@ for (const ancho of ANCHOS) {
   ok(A("D1 el supervisor de planta tiene «Suspensiones» en el modo Plantas"), !!r && r.modo === "Plantas" && r.tarjetas.includes("suspensiones") && r.alto >= 44, JSON.stringify(r));
   await p.screenshot({ path: join(CAP, `inicio_planta_${ancho}.png`) });
   await clic(p, "[data-modo-actual] [data-tarjeta=suspensiones]"); await p.waitForSelector("[data-testid=evs-lista]", { timeout: 30000 }); await p.waitForSelector(`[data-testid=eventos] [data-evento="${EV2}"]`, { timeout: 30000 });
-  ok(A("D2 abre la lista: puede declarar y no ve los dos catálogos (son del supervisor de distribución)"), !!(await p.$("[data-testid=evs-nuevo]")) && !(await p.$("[data-testid=evs-ir-plantas]")) && !(await p.$("[data-testid=evs-ir-tipos]")) && await sinDesborde(p));
+  ok(A("D2 abre la lista: puede declarar y no ve los dos catálogos (son del supervisor de distribución)"), !!(await p.$("[data-testid=evs-nuevo]")) && !(await p.$("[data-testid=evs-ir-tubos], [data-testid=evs-ir-plantas]")) && !(await p.$("[data-testid=evs-ir-tipos]")) && await sinDesborde(p));
   await clic(p, "[data-testid=eventos] .tec-volver"); await p.waitForSelector("[data-modo-actual]");
   await clicTexto(p, "button.tec-tarjeta-modo", "Avisos"); await p.waitForSelector(`[data-aviso="evento_suspension_${EV2.toLowerCase()}"]`, { timeout: 30000 });
   ok(A("D3 en sus Avisos, el del evento total dice «Abrir el evento …» (aviso del área de planta)"), (await avisosEvento(p)) === EV2 && (await avisoDe(p, EV2))?.boton === `Abrir el evento ${EV2}`, await avisosEvento(p));
