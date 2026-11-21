@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { lazyConRecarga } from "../lib/recarga";
 import { horaClara, instanteDeCampo, nContratos } from "./apiCierre";
-import { apiEventos, NOMBRE_ORIGEN, nReportes, textoReportes, type Asociado, type CatalogoEventos, type EventoDetalle as Detalle, type OrigenReporte } from "./apiEventos";
+import { apiEventos, NOMBRE_ORIGEN, nReportes, textoAlcance, textoOrigen, textoReportes, type Asociado, type CatalogoEventos, type EventoDetalle as Detalle, type OrigenReporte } from "./apiEventos";
 import { errorEvento } from "./EventoDeclarar";
 
 // Corte 15 · Detalle de un evento de suspensión: qué zona, por qué, desde cuándo y hasta cuándo; los contratos y los usuarios sensibles de la zona; los reportes
@@ -54,8 +54,11 @@ export function EventoDetalle({ codigo, cat, avisoInicial, alCambiar }: { codigo
         {aviso ? <p className="tec-aviso tec-aviso-ok" role="status" data-testid="evs-aviso">{aviso} <button type="button" className="tec-enlace" onClick={() => setAviso(null)}>Cerrar</button></p> : null}
         <p className="evs-franja-txt" data-testid="evs-franja">{d.franja}</p>
         <dl className="evs-lista-datos">
+          <div><dt>Alcance</dt><dd data-dato="alcance">{textoAlcance(d)}</dd></div>
+          {d.tubos?.length ? <div><dt>{d.tubos.length === 1 ? "Tubo de salida" : "Tubos de salida"}</dt><dd data-dato="tubos">{d.tubos.map((t, i) => <span key={t.codigo}>{i ? ", " : ""}{t.nombre} <small className="evs-tubo-cod tec-codigo">{t.codigo}</small></span>)}</dd></div> : null}
           <div><dt>Zona</dt><dd>{d.zona}{d.alcance === "circulo" && d.circulo ? ` (radio ${nf.format(Math.round(d.circulo.radio_m))} m)` : d.alcance === "sectores" ? ` (${d.sectores.length} ${d.sectores.length === 1 ? "sector o subsector" : "sectores o subsectores"})` : ""}</dd></div>
-          <div><dt>Causa</dt><dd>{d.causa}{d.registro ? ` · ${d.registro}` : ""}</dd></div>
+          {d.origen ? <div><dt>Origen</dt><dd data-dato="origen">{textoOrigen(d)}</dd></div> : null}
+          <div><dt>{d.origen ? "Observación (solo se ve en pantalla)" : "Causa"}</dt><dd data-dato="observacion">{d.causa}{!d.origen && d.registro ? ` · ${d.registro}` : ""}</dd></div>
           <div><dt>Sin agua desde</dt><dd>{horaClara(d.desde)}</dd></div>
           <div><dt>Regreso estimado</dt><dd data-dato="regreso">{d.regreso_estimado ? horaClara(d.regreso_estimado) : "Todavía no hay hora estimada"}</dd></div>
           <div><dt>Declarado</dt><dd>{horaClara(d.declarado_en)} · {d.declarado_por}</dd></div>

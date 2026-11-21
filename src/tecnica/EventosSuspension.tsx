@@ -7,17 +7,18 @@ import "./ficha.css";
 import "./cierre.css";
 import "./eventos.css";
 import { horaClara, nContratos } from "./apiCierre";
-import { apiEventos, nReportes, textoReportes, type CatalogoEventos, type Evento } from "./apiEventos";
+import { apiEventos, nReportes, textoAlcance, textoOrigen, textoReportes, textoTubos, type CatalogoEventos, type Evento } from "./apiEventos";
 import { EventoDeclarar, errorEvento } from "./EventoDeclarar";
 import { EventoDetalle } from "./EventoDetalle";
-import { EventoPlantas } from "./EventoPlantas";
+import { EventoTubos } from "./EventoTubos";
 import { EventoTipos } from "./EventoTipos";
 
 // Corte 15 · «Eventos de suspensión» (las pantallas; la lógica es del Code A). Cuando se va el agua en una zona llegan decenas de reportes del mismo problema:
 // el evento los agrupa, los controla y los cierra en bloque. Esta pantalla se abre desde el Dashboard distribución (pestaña «Suspensiones») y desde el geovisor
-// técnico (modo «Afectaciones»). Vistas: la lista, «Declarar evento», el detalle de un evento y los dos catálogos (sectores de cada planta y qué se asocia).
+// técnico (modo «Afectaciones»). Vistas: la lista, «Declarar evento», el detalle de un evento y los catálogos («Tubo de salida → sectores», que reemplaza a
+// «Sectores de cada planta» desde el corte «origen y tubos», y qué se asocia, con las causales de trabajo).
 // Quién puede cada cosa lo dice el servidor en el catálogo (`puede`) y lo vuelve a verificar en cada ruta.
-type Vista = { v: "lista" } | { v: "declarar" } | { v: "detalle"; codigo: string; aviso?: string } | { v: "plantas" } | { v: "tipos" };
+type Vista = { v: "lista" } | { v: "declarar" } | { v: "detalle"; codigo: string; aviso?: string } | { v: "tubos" } | { v: "tipos" };
 type Filtro = "abierto" | "cerrado" | "anulado" | "todos";
 const FILTROS: { c: Filtro; n: string }[] = [{ c: "abierto", n: "Abiertos" }, { c: "cerrado", n: "Cerrados" }, { c: "anulado", n: "Anulados" }, { c: "todos", n: "Todos" }];
 export const ESTADO_EVENTO: Record<Evento["estado"], string> = { abierto: "Abierto", cerrado: "Cerrado", anulado: "Anulado" };
@@ -39,7 +40,7 @@ export function EventosSuspension({ onVolver, rotuloVolver = "Volver", inicial, 
   const cambio = useCallback(() => { alCambiar?.(); }, [alCambiar]);
   const aLista = () => setVista({ v: "lista" });
 
-  const titulo = vista.v === "declarar" ? "Declarar evento de suspensión" : vista.v === "detalle" ? `Evento ${vista.codigo}` : vista.v === "plantas" ? "Sectores de cada planta" : vista.v === "tipos" ? "Qué reportes se asocian" : "Eventos de suspensión";
+  const titulo = vista.v === "declarar" ? "Declarar evento de suspensión" : vista.v === "detalle" ? `Evento ${vista.codigo}` : vista.v === "tubos" ? "Tubo de salida → sectores" : vista.v === "tipos" ? "Qué reportes se asocian" : "Eventos de suspensión";
   const volver = vista.v === "lista" ? onVolver : aLista;
   const barra = onVolver || vista.v !== "lista" ? (
     <div className="tec-volver-barra">
@@ -53,14 +54,14 @@ export function EventosSuspension({ onVolver, rotuloVolver = "Volver", inicial, 
   else if (vista.v === "declarar") cuerpo = <EventoDeclarar cat={cat} onCancelar={aLista}
     onDeclarado={(e) => { cambio(); setVista({ v: "detalle", codigo: e.codigo, aviso: `Evento ${e.codigo} declarado. ${e.asociados_al_declarar === 1 ? "1 reporte que ya estaba en la zona quedó asociado" : `${nf.format(e.asociados_al_declarar)} reportes que ya estaban en la zona quedaron asociados`}.` }); }} />;
   else if (vista.v === "detalle") cuerpo = <EventoDetalle key={vista.codigo} codigo={vista.codigo} cat={cat} avisoInicial={vista.aviso} alCambiar={cambio} />;
-  else if (vista.v === "plantas") cuerpo = <EventoPlantas cat={cat} alGuardar={() => { setVezCat((v) => v + 1); cambio(); }} />;
+  else if (vista.v === "tubos") cuerpo = <EventoTubos cat={cat} alGuardar={() => { setVezCat((v) => v + 1); cambio(); }} />;
   else if (vista.v === "tipos") cuerpo = <EventoTipos cat={cat} alGuardar={() => setVezCat((v) => v + 1)} />;
-  else cuerpo = <Lista cat={cat} onDeclarar={() => setVista({ v: "declarar" })} onAbrir={(codigo) => setVista({ v: "detalle", codigo })} onPlantas={() => setVista({ v: "plantas" })} onTipos={() => setVista({ v: "tipos" })} />;
+  else cuerpo = <Lista cat={cat} onDeclarar={() => setVista({ v: "declarar" })} onAbrir={(codigo) => setVista({ v: "detalle", codigo })} onTubos={() => setVista({ v: "tubos" })} onTipos={() => setVista({ v: "tipos" })} />;
 
   return <div className={`tec-modo-distribucion evs-pagina${onVolver ? " tec-pagina" : ""}`} data-testid="eventos" data-vista={vista.v}>{barra}<div className="dan itv evs">{cuerpo}</div></div>;
 }
 
-function Lista({ cat, onDeclarar, onAbrir, onPlantas, onTipos }: { cat: CatalogoEventos; onDeclarar: () => void; onAbrir: (codigo: string) => void; onPlantas: () => void; onTipos: () => void }) {
+function Lista({ cat, onDeclarar, onAbrir, onTubos, onTipos }: { cat: CatalogoEventos; onDeclarar: () => void; onAbrir: (codigo: string) => void; onTubos: () => void; onTipos: () => void }) {
   const [filtro, setFiltro] = useState<Filtro>("abierto");
   const [eventos, setEventos] = useState<Evento[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +75,7 @@ function Lista({ cat, onDeclarar, onAbrir, onPlantas, onTipos }: { cat: Catalogo
         <p className="red-texto">Cuando se va el agua en una zona, el evento agrupa todos los reportes del mismo problema (bot, línea 116, daños y formato de campo), le dice a quien reporta que ya se sabe del corte y los cierra todos al volver el servicio.</p>
         <div className="evs-barra">
           {puedeDeclarar ? <button type="button" className="tec-boton" data-testid="evs-nuevo" onClick={onDeclarar}>Declarar evento</button> : null}
-          {cat.puede.reportes ? <button type="button" className="tec-boton-sec" data-testid="evs-ir-plantas" onClick={onPlantas}>Sectores de cada planta</button> : null}
+          {cat.puede.reportes ? <button type="button" className="tec-boton-sec" data-testid="evs-ir-tubos" onClick={onTubos}>Tubo de salida → sectores</button> : null}
           {cat.puede.reportes ? <button type="button" className="tec-boton-sec" data-testid="evs-ir-tipos" onClick={onTipos}>Qué reportes se asocian</button> : null}
         </div>
         {!puedeDeclarar ? <p className="tec-ayuda">Su perfil puede ver los eventos, pero no declararlos.</p> : null}
@@ -95,6 +96,8 @@ export function TarjetaEvento({ e, onAbrir }: { e: Evento; onAbrir?: () => void 
       <h2><span className="tec-codigo">{e.codigo}</span> <span className={`itv-etiqueta evs-estado-${e.estado}`}>{ESTADO_EVENTO[e.estado]}</span></h2>
       <p className="evs-franja-txt">{e.franja}</p>
       <dl className="evs-lista-datos">
+        <div><dt>Alcance</dt><dd data-dato="alcance">{textoAlcance(e)}{e.tubos?.length ? `: ${textoTubos(e.tubos)}` : ""}</dd></div>
+        {e.origen ? <div><dt>Origen</dt><dd data-dato="origen">{textoOrigen(e)}</dd></div> : null}
         <div><dt>Contratos en la zona</dt><dd>{nContratos(e.contratos)}{e.sensibles ? ` · ${nf.format(e.sensibles)} ${e.sensibles === 1 ? "usuario sensible" : "usuarios sensibles"}` : ""}</dd></div>
         <div><dt>Reportes</dt><dd data-dato="reportes">{nReportes(e.reportes.total)}{e.reportes.total ? ` (${textoReportes(e.reportes)})` : ""}</dd></div>
         <div><dt>Declarado</dt><dd>{horaClara(e.declarado_en)} · {e.declarado_por}</dd></div>
@@ -104,3 +107,4 @@ export function TarjetaEvento({ e, onAbrir }: { e: Evento; onAbrir?: () => void 
     </section>
   );
 }
+
