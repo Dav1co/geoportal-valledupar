@@ -1,0 +1,69 @@
+/* PTAR-2 (Code C): Dashboard PTAR y su mapa. Solo tokens de la guía (tokens.css y tokens_ptar.css); el color del módulo solo en encabezado, botones y bordes. */
+.ptar-mapa-pagina { display: flex; flex-direction: column; gap: 12px; padding: 16px; max-width: 1400px; margin: 0 auto; box-sizing: border-box; }
+.ptar-mapa-cab { display: flex; flex-direction: column; gap: 8px; }
+.ptar-tit { margin: 0; font-size: 18px; font-weight: 700; color: var(--t-titulo); }
+.ptar-buscar { display: flex; gap: 8px; }
+.ptar-buscar input { flex: 1; min-width: 0; min-height: var(--t-toque, 44px); font: inherit; font-size: 16px; padding: 0 12px; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio, 8px); }
+.ptar-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ptar-aviso { margin: 0; font-size: 13px; color: var(--t-naranja); }
+.ptar-mapa-cuerpo { display: flex; flex-direction: column; gap: 12px; }
+.ptar-mapa-marco { position: relative; border: 1px solid var(--t-borde); border-radius: 12px; overflow: hidden; background: var(--t-suave); }
+.ptar-mapa { width: 100%; height: 62vh; min-height: 320px; }
+.ptar-fondo { position: absolute; left: 8px; top: 8px; display: flex; background: #fff; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio, 8px); overflow: hidden; }
+.ptar-fondo button { min-height: 40px; border: none; background: #fff; font: inherit; font-size: 14px; font-weight: 600; color: var(--t-texto); padding: 0 12px; cursor: pointer; }
+.ptar-fondo button[aria-pressed="true"] { background: var(--t-modo); color: #fff; }
+.ptar-lado { display: flex; flex-direction: column; gap: 12px; }
+.ptar-ayuda { margin: 0; padding: 12px; background: var(--t-info-suave); border-radius: 12px; font-size: 14px; color: var(--t-texto-2); }
+.ptar-ficha { background: var(--t-tarjeta); border: 1px solid var(--t-borde); border-left: var(--t-borde-modo, 5px) solid var(--t-modo); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ptar-ficha-cab { display: flex; justify-content: space-between; align-items: center; }
+.ptar-chip { background: var(--t-ptar-suave); color: var(--t-ptar); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 8px; border-radius: 8px; }
+.ptar-cerrar { min-width: 44px; min-height: 44px; border: none; background: transparent; font-size: 26px; line-height: 1; color: var(--t-texto-2); cursor: pointer; }
+.ptar-ficha h3 { margin: 0; font-size: 17px; font-weight: 600; color: var(--t-titulo); }
+.ptar-sub { margin: -6px 0 0; font-size: 13px; color: var(--t-texto-2); }
+.ptar-datos { margin: 0; display: grid; grid-template-columns: 1fr; gap: 6px; }
+.ptar-datos div { display: grid; grid-template-columns: 9.5em 1fr; gap: 8px; font-size: 14px; }
+.ptar-datos dt { color: var(--t-texto-2); }
+.ptar-datos dd { margin: 0; color: var(--t-texto); overflow-wrap: anywhere; }
+.ptar-indicadores { background: var(--t-suave); border-radius: 8px; padding: 10px 12px; }
+.ptar-indicadores h4 { margin: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t-texto-2); }
+.ptar-indicadores p { margin: 0; font-size: 14px; color: var(--t-texto); }
+.ptar-alias { display: flex; flex-direction: column; gap: 6px; }
+.ptar-alias label { font-size: 14px; font-weight: 600; color: var(--t-texto); }
+.ptar-alias input, .ptar-alias textarea { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio, 8px); }
+.ptar-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.ptar-ok { margin: 0; padding: 8px 10px; background: var(--t-ok-suave); color: var(--t-ok); border-radius: 8px; font-size: 14px; }
+.ptar-error { margin: 0; padding: 8px 10px; background: var(--t-rojo-suave); color: var(--t-rojo); border-radius: 8px; font-size: 14px; }
+.ptar-nota { margin: 0; font-size: 13px; color: var(--t-texto-2); }
+.ptar-historial { font-size: 13px; color: var(--t-texto-2); }
+.ptar-historial ul { margin: 6px 0 0; padding-left: 18px; }
+.ptar-capas { margin: 0; border: 1px solid var(--t-borde); border-radius: 12px; padding: 10px 14px; background: var(--t-tarjeta); display: flex; flex-direction: column; gap: 4px; }
+.ptar-capas legend { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t-texto-2); padding: 0 4px; }
+.ptar-capa { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; color: var(--t-texto); cursor: pointer; }
+.ptar-capa input { width: 20px; height: 20px; }
+.ptar-muestra { width: 22px; height: 14px; border-radius: 3px; background: #6b7a85; border: 1px solid var(--ptar-mapa-contorno); box-sizing: border-box; }
+.ptar-muestra-lagunas { background: var(--t-suave); border: 2px solid var(--t-texto-2); }
+.ptar-muestra-tramos { height: 4px; border: none; background: var(--t-texto-2); }
+.ptar-muestra-pozos { width: 12px; height: 12px; border-radius: 50%; background: var(--ptar-mapa-pozo); }
+.ptar-muestra-puntos { width: 14px; height: 14px; border-radius: 50%; background: var(--ptar-mapa-contorno); border: 3px solid var(--t-borde); }
+.ptar-alcances { padding: 16px; max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.ptar-alcances table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; }
+.ptar-alcances th, .ptar-alcances td { text-align: left; padding: 8px; border-bottom: 1px solid var(--t-borde); }
+.ptar-alcances th { background: var(--t-suave); font-weight: 600; }
+.ptar-alcances form { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.ptar-alcances label { font-size: 14px; font-weight: 600; }
+.ptar-alcances input, .ptar-alcances select, .ptar-alcances textarea { font: inherit; font-size: 16px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio, 8px); box-sizing: border-box; }
+.ptar-pronto { padding: 24px 16px; max-width: 900px; margin: 0 auto; }
+.ptar-pronto .ptar-ficha { border-left-color: var(--t-ptar); }
+@media (min-width: 900px) {
+  .ptar-mapa-cab { flex-direction: row; justify-content: space-between; align-items: flex-end; }
+  .ptar-buscar { width: 380px; }
+  .ptar-mapa-cuerpo { flex-direction: row; align-items: flex-start; }
+  .ptar-mapa-marco { flex: 1 1 auto; }
+  .ptar-mapa { height: calc(100vh - 260px); min-height: 480px; }
+  .ptar-lado { flex: 0 0 360px; max-height: calc(100vh - 260px); overflow: auto; }
+}
+/* En el celular las pestañas del Dashboard PTAR (casi todas en «Próximamente») van en una sola fila que se desliza, para que el mapa quede a la vista */
+@media (max-width: 899px) {
+  .tdash-ptar .tdash-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .tdash-ptar .tdash-tab { flex: 0 0 auto; white-space: nowrap; }
+}

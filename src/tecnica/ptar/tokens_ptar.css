@@ -1,0 +1,22 @@
+/* =====================================================================
+   Técnica · PTAR — TOKENS (PTAR-2, Code C, 21-nov). Color aprobado por David (21-nov, 17:10): pizarra #3d4a5c, fondo suave #eceef2 (contraste con blanco ≈ 9,0:1).
+   Mismos nombres que src/tecnica/tokens.css: el modo, las tarjetas, el encabezado de sección y el Dashboard PTAR toman el color por --t-modo / --tdash-color.
+   El MAPA no usa el color del módulo: los elementos van en neutros mientras no tengan variables («sin variables asignadas»); los colores de estado
+   (normal / fuera de referencia / sin dato reciente) llegan con los indicadores en PTAR-4. La selección usa el anillo de foco de la guía (--t-foco).
+   ===================================================================== */
+:root {
+  --t-ptar: #3d4a5c;
+  --t-ptar-suave: #eceef2;
+  /* mapa de la planta (neutros de la guía, legibles sobre la foto satelital) */
+  --ptar-mapa-perimetro: #f4f1ec;      /* --t-geo-claro */
+  --ptar-mapa-laguna: #ffffff;
+  --ptar-mapa-tramo: #ffffff;
+  --ptar-mapa-conducto: #d5dde6;      /* --t-borde */
+  --ptar-mapa-pozo: #eef2f5;          /* --t-suave */
+  --ptar-mapa-contorno: #22313f;      /* --t-texto */
+  --ptar-mapa-seleccion: #4a90d9;     /* --t-foco */
+}
+.tec-modo-ptar { --t-modo: var(--t-ptar); }
+.tec-tarjetas-ptar { --t-modo: var(--t-ptar); }
+.tec-modo[data-modo="ptar"][aria-selected="true"] { background: var(--t-ptar); }
+.tdash-ptar { --tdash-color: var(--t-ptar); --t-modo: var(--t-ptar); }

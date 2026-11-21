@@ -45,12 +45,14 @@ export function CabeceraDashboard({ titulo, sesion, onVolver, selector, pestanas
   );
 }
 
-/** El selector «Dashboard PTAP | Dashboard distribución», para quien tiene los dos. Va dentro del encabezado de cada uno. */
-export function SelectorDashboards({ actual, onElegir }: { actual: "ptap" | "distribucion"; onElegir: (d: "ptap" | "distribucion") => void }) {
+/** El selector «Dashboard PTAP | Dashboard PTAR | Dashboard distribución», para quien tiene dos o más. Va dentro del encabezado de cada uno.
+ *  PTAR-2 (Code C): «opciones» dice cuáles tiene la persona; sin «opciones», los dos de siempre (PTAP y distribución). */
+export type TableroDash = "ptap" | "ptar" | "distribucion";
+const NOMBRE_TABLERO: Record<TableroDash, string> = { ptap: "Dashboard PTAP", ptar: "Dashboard PTAR", distribucion: "Dashboard distribución" };
+export function SelectorDashboards({ actual, onElegir, opciones = ["ptap", "distribucion"] }: { actual: TableroDash; onElegir: (d: TableroDash) => void; opciones?: TableroDash[] }) {
   return (
     <div className="tdash-selector" role="group" aria-label="Dashboard">
-      <button type="button" className="tdash-sel" aria-pressed={actual === "ptap"} onClick={() => onElegir("ptap")}>Dashboard PTAP</button>
-      <button type="button" className="tdash-sel" aria-pressed={actual === "distribucion"} onClick={() => onElegir("distribucion")}>Dashboard distribución</button>
+      {opciones.map((d) => <button key={d} type="button" className="tdash-sel" aria-pressed={actual === d} onClick={() => onElegir(d)}>{NOMBRE_TABLERO[d]}</button>)}
     </div>
   );
 }
