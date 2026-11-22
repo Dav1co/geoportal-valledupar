@@ -12,7 +12,7 @@ k                               |                                               
  8 pg-safeupdate: funciones con DELETE/UPDATE sin WHERE        | 0                                                                                                                         | OK
 (8 filas)
 == carga del mapa (después de PTAR-3)
-psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/carga/carga_ptar_el_salguero_editor.sql:90: NOTICE:  CARGA PTAR: 39 del dibujo + 879 copiados de redes (470 pozos, 1 descargas, 408 tramos) = 918 elementos
+
 == verificación de la carga
 k                                |   valor    | estado 
 -----------------------------------------------------------------+------------+--------
@@ -30,10 +30,10 @@ k                                |   valor    | estado
 (11 filas)
 == arnés del Sistema de Control (un año de Caracterización; service_role, 30 s y 8 s)
 psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar_control/pruebas_locales/arnes_control.sql:57: ERROR:  ARNÉS DEL SISTEMA DE CONTROL PTAR (esperado: este ERROR deshace todo)
-  mapa con los estados (peor de 5): 77.1 ms · 918 elementos, 272752 bytes; registros de la Caracterización: 2500
-  ficha del afluente con sus 9 parámetros (peor de 5): 3.3 ms · con_datos
-  formulario de la Caracterización: 4.3 ms · 4 puntos
-  registrar un caudal: 3.2 ms · 1
+  mapa con los estados (peor de 5): 35.3 ms · 918 elementos, 272752 bytes; registros de la Caracterización: 2500
+  ficha del afluente con sus 9 parámetros (peor de 5): 2.6 ms · con_datos
+  formulario de la Caracterización: 4.7 ms · 4 puntos
+  registrar un caudal: 2.8 ms · 1
 RESULTADO: cada llamada en menos de 2 s — SIN FALLAS
 CONTEXTO:  PL/pgSQL function inline_code_block line 6 at RAISE
 == reversa con registros: se detiene (esperado)
