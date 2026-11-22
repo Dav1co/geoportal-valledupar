@@ -154,6 +154,8 @@ const esperarTexto = async (p, re, ms = 30000) => {
   const fin = Date.now() + ms;
   for (;;) {
     const esta = await p.evaluate(async (s, sel) => {
+      /* borradores (18-nov): la pasada de 390 px deja uno de «Registrar intervención»; a 1280 px se descarta para empezar en limpio (Code A, regresiones del 22-nov) */
+      if (/¿Continuar o descartar\?/.test(document.body.innerText)) { [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Descartar")?.click(); await new Promise((x) => setTimeout(x, 0)); }
       const r = new RegExp(s); if (r.test(document.body.innerText)) return true;
       if (!document.querySelector("[data-modo-actual]")) return false;
       for (const t of document.querySelectorAll(sel)) { t.click(); await new Promise((x) => setTimeout(x, 0)); if (r.test(document.body.innerText)) return true; }
