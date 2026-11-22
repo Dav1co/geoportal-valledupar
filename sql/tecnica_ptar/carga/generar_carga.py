@@ -112,7 +112,7 @@ def fila(e, flujo):
     desde = f"(select id from tecnica.elementos_planta where codigo = {lit(e['desde'])} and activo)" if flujo and e['desde'] else 'null'
     hasta = f"(select id from tecnica.elementos_planta where codigo = {lit(e['hasta'])} and activo)" if flujo and e['hasta'] else 'null'
     punto = f"(select id from tecnica.puntos where codigo = {lit(e['punto'])} and tipo = 'ptar' and activo)" if e['punto'] else 'null'
-    return (f"  ((select id from _inst), {lit(e['codigo'])}, {lit(e['tipo'])}, {lit(e['nombre'])}, {e['orden']}, st_setsrid(st_geomfromgeojson({lit(e['geom'])}), 4326), "
+    return (f"  ((select id from tecnica.instalaciones where codigo = '{INSTALACION}'), {lit(e['codigo'])}, {lit(e['tipo'])}, {lit(e['nombre'])}, {e['orden']}, st_setsrid(st_geomfromgeojson({lit(e['geom'])}), 4326), "
             f"{desde}, {hasta}, {punto}, {lit(e['activo'])}, {lit(e['atributos'])}::jsonb, 'dibujo', {lit(AUTOR)})")
 
 
@@ -145,7 +145,7 @@ begin
     raise exception 'CARGA PTAR: faltan los puntos de la PTAR ({', '.join(puntos_ptar)}): aplique antes PTAR-3 (tecnica_ptar_control)';
   end if;
 end $$;
-create temp table _inst on commit drop as select id from tecnica.instalaciones where codigo = '{INSTALACION}';
+-- (sin tablas temporales «on commit drop»: en el editor de Supabase se pierden antes del bloque final; David, 21-nov. La instalación va por subconsulta.)
 
 -- 1. El dibujo de David (primero lo que no lleva flujo; luego los tramos con desde/hasta, que apuntan a elementos ya cargados)
 insert into tecnica.elementos_planta ({COLS}) values
@@ -155,7 +155,7 @@ insert into tecnica.elementos_planta ({COLS}) values
 """ if con_flujo else '') + f"""
 -- 2. Copia D12 desde redes: lo que toca el perímetro (pozos, descargas y conductos como «tramo» sin desde/hasta), menos lo que ya trae el dibujo
 insert into tecnica.elementos_planta ({COLS})
-select (select id from _inst), 'PTAR-' || v.codigo, case v.capa_codigo when 'alc_conductos' then 'tramo' when 'alc_descargas' then 'descarga' else 'pozo' end,
+select (select id from tecnica.instalaciones where codigo = '{INSTALACION}'), 'PTAR-' || v.codigo, case v.capa_codigo when 'alc_conductos' then 'tramo' when 'alc_descargas' then 'descarga' else 'pozo' end,
        coalesce(nullif(btrim(v.nombre), ''), case v.prefijo when 'POZ' then 'Pozo ' when 'COL' then 'Conducto ' when 'VER' then 'Descarga ' else 'Activo ' end || v.codigo),
        0, v.geom, null, null, null, v.codigo,
        jsonb_strip_nulls(jsonb_build_object('capa', v.capa_codigo, 'prefijo', v.prefijo, 'version_redes', v.version, 'diametro_mm', v.diametro_mm,
@@ -172,11 +172,11 @@ declare v_d integer; v_r integer; v_p integer; v_t integer; v_v integer; v_fuera
 begin
   select count(*) filter (where origen = 'dibujo'), count(*) filter (where origen = 'redes'), count(*) filter (where origen = 'redes' and tipo = 'pozo'),
          count(*) filter (where origen = 'redes' and tipo = 'tramo'), count(*) filter (where origen = 'redes' and tipo = 'descarga')
-    into v_d, v_r, v_p, v_t, v_v from tecnica.elementos_planta where instalacion_id = (select id from _inst) and activo;
+    into v_d, v_r, v_p, v_t, v_v from tecnica.elementos_planta where instalacion_id = (select id from tecnica.instalaciones where codigo = '{INSTALACION}') and activo;
   if v_d <> {n_dibujo} then raise exception 'CARGA PTAR: se cargaron % elementos del dibujo y el archivo trae {n_dibujo}', v_d; end if;
   if v_p = 0 or v_t = 0 then raise exception 'CARGA PTAR: la copia de redes no trajo pozos (%) o conductos (%)', v_p, v_t; end if;
   select count(*) into v_fuera from tecnica.elementos_planta e left join redes.activos a on a.codigo = e.activo_codigo
-   where e.instalacion_id = (select id from _inst) and e.origen = 'redes' and a.id is null;
+   where e.instalacion_id = (select id from tecnica.instalaciones where codigo = '{INSTALACION}') and e.origen = 'redes' and a.id is null;
   if v_fuera > 0 then raise exception 'CARGA PTAR: % elementos copiados no tienen su activo en redes', v_fuera; end if;
   if exists (select 1 from redes.f_funciones_sin_where()) then raise exception 'CARGA PTAR: hay funciones con DELETE o UPDATE sin WHERE'; end if;
   raise notice 'CARGA PTAR: % del dibujo + % copiados de redes (% pozos, % descargas, % tramos) = % elementos', v_d, v_r, v_p, v_v, v_t, v_d + v_r;
