@@ -8,8 +8,11 @@
 //   Al arrancar siembra, por las Edges reales y como prueba.op.comercial, una revisión general (con firmas y 2 actividades derivadas, PDF generado) y una instalación de medidor
 //   que atiende una de ellas: así «Actas registradas» y «Actividades derivadas» tienen qué mostrar (R3).
 // Uso:
-//   node scripts/revision_admin.mjs --servir <chrome> <puppeteer-core> <deno> <supabase/functions> <psql_b> <plantilla>
-//   -h | --help  muestra este uso. Cualquier otra opción que empiece con «-» es un error. Ctrl+C para terminar.
+//   node scripts/revision_admin.mjs --servir <chrome> <puppeteer-core> <deno> <supabase/functions> <psql_b> <plantilla>              → deja todo corriendo para revisarlo
+//   node scripts/revision_admin.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> <psql_b> <plantilla> <carpeta de capturas> → la prueba de Administración en Chrome
+//        (390 y 1280 px) sobre su propia copia (<plantilla>_prueba) y termina. Con REV_RAIZ=<otra copia del repositorio> compila la app de ahí; con ANTES=1 solo toma las capturas
+//        de la pantalla de siempre (para las capturas de «antes», con REV_RAIZ apuntando a main).
+//   -h | --help  muestra este uso. Cualquier otra opción que empiece con «-» es un error. Ctrl+C para terminar el modo --servir.
 // Puertos del Code B: 55987 (páginas), 55988 (Auth, Storage y PostgREST), 55989 (Edges).
 import { createRequire } from "node:module";
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
@@ -19,17 +22,18 @@ import { fileURLToPath } from "node:url";
 import { spawn, spawnSync, execFileSync } from "node:child_process";
 import http from "node:http";
 
-const USO = "Uso: node scripts/revision_admin.mjs --servir <chrome> <puppeteer-core> <deno> <supabase/functions> <psql_b> <plantilla>";
+const USO = "Uso: node scripts/revision_admin.mjs --servir <chrome> <puppeteer-core> <deno> <supabase/functions> <psql_b> <plantilla>\n     node scripts/revision_admin.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> <psql_b> <plantilla> <capturas>";
 const args = process.argv.slice(2);
 if (args.includes("-h") || args.includes("--help")) { console.log(USO); process.exit(0); }
-if (args[0] !== "--servir") { console.error(`Falta --servir.\n${USO}`); process.exit(2); }
-for (const a of args.slice(1)) if (a.startsWith("-")) { console.error(`Opción desconocida: ${a}\n${USO}`); process.exit(2); }
+const SERVIR = args[0] === "--servir";
+for (const a of args.slice(SERVIR ? 1 : 0)) if (a.startsWith("-")) { console.error(`Opción desconocida: ${a}\n${USO}`); process.exit(2); }
 if (args.length !== 7) { console.error(`Faltan o sobran argumentos.\n${USO}`); process.exit(2); }
-const [, CHROME, PUP, DENO, FUNCIONES, PSQL, PLANTILLA] = args;
-const aqui = dirname(fileURLToPath(import.meta.url)), raiz = join(aqui, "..");
+const [CHROME, PUP, DENO, FUNCIONES, PSQL, PLANTILLA, CAP] = SERVIR ? args.slice(1).concat([null]) : args;
+const aqui = dirname(fileURLToPath(import.meta.url)), raiz = process.env.REV_RAIZ ? resolve(process.env.REV_RAIZ) : join(aqui, "..");
+const ANTES = process.env.ANTES === "1";
 const P_WEB = 55987, P_BASE = 55988, P_EDGE = 55989;
 const BASE = `http://127.0.0.1:${P_BASE}`;
-const DB = `${PLANTILLA}_rev`;
+const DB = `${PLANTILLA}_${SERVIR ? "rev" : "prueba"}`;
 const PGENV = { ...process.env, LC_ALL: "C", PGDATABASE: DB, PGOPTIONS: "-c client_min_messages=warning" };
 if (execFileSync(PSQL, ["-AtqX", "-d", "postgres", "-c", "show port"], { env: PGENV, encoding: "utf8" }).trim() !== "55442") { console.error("No es el clúster del Code B (55442)"); process.exit(2); }
 const sqlq = (s) => execFileSync(PSQL, ["-AtqX", "-v", "ON_ERROR_STOP=1", "-c", s], { env: PGENV, encoding: "utf8", maxBuffer: 64 << 20 }).trim();
@@ -224,8 +228,15 @@ try {
 } catch (e) { console.log("AVISO: la siembra falló; la revisión sigue, pero «Actas registradas» saldrá vacía:", String(e?.message ?? e).slice(0, 400), edgeLog.slice(-400)); }
 await nav.close();
 
-console.log(`
+if (SERVIR) {
+  console.log(`
 Revisión local lista (base ${DB} en 55442; Edges reales geoportal-admin, geoportal-campo y geoportal-acta; nada va a Supabase).
   Abra  http://127.0.0.1:${P_WEB}/   y entre con un correo prueba.*@emdupar.gov.co y cualquier clave. Ctrl+C para terminar.`);
-const fin = () => { try { edge.kill(); } catch { /* ya terminó */ } process.exit(0); };
-process.on("SIGINT", fin); process.on("SIGTERM", fin);
+  const fin = () => { try { edge.kill(); } catch { /* ya terminó */ } process.exit(0); };
+  process.on("SIGINT", fin); process.on("SIGTERM", fin);
+} else {
+  const { probar } = await import("./revision_admin_prueba.mjs");
+  const r = await probar({ puppeteer, CHROME, CAP, ANTES, sqlq, P_WEB, edgeLog: () => edgeLog, registro });
+  edge.kill(); base.close(); web.close();
+  process.exit(r ? 0 : 1);
+}

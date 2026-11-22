@@ -380,13 +380,15 @@ for (const ancho of [390, 1280]) {
   await p.goto(`http://127.0.0.1:${P_BASE}/?rol=adm&pantalla=admin`); await p.waitForFunction(() => window.__listo === true);
   await esperarTexto(p, /zt\.oper@emdupar\.gov\.co/);
   await p.evaluate(() => { const fila = [...document.querySelectorAll("tr")].find((r) => r.innerText.includes("zt.oper@emdupar.gov.co")); [...fila.querySelectorAll("button")].find((b) => /Editar|Permisos/.test(b.textContent))?.click(); });
-  await esperarTexto(p, /Dashboard distribución \(supervisor de distribución\)/);
+  // Encargo v2 (22-nov): el permiso se da con el perfil de Técnica «Supervisor de distribución» (registro_tecnico y dashboard_redes) y se quita con «Operario técnico»
+  await p.waitForSelector("select[data-perfil=tecnica]");
   const valor = ancho === 390;
-  await p.evaluate((v) => { const l = [...document.querySelectorAll("label")].find((x) => /Dashboard distribución \(supervisor de distribución\)/.test(x.textContent)); const i = l.querySelector("input") ?? document.getElementById(l.htmlFor);
-    if (i.checked !== v) i.click(); }, valor);
-  await p.evaluate(() => [...document.querySelectorAll("button")].find((b) => /^Guardar/.test(b.textContent.trim()) && b.offsetParent)?.click());
-  await esperarTexto(p, /Permisos actualizados para zt\.oper@emdupar\.gov\.co/);
-  ok(`${tag} Administración: la casilla «Dashboard distribución» ${valor ? "da" : "quita"} el permiso (Edge geoportal-admin real y función de la base)`,
+  await p.select("select[data-perfil=tecnica]", valor ? "sup_distribucion" : "operario");
+  await p.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Revisar cambios")?.click());
+  await p.waitForSelector("[data-testid=adm-resumen]");
+  await p.evaluate(() => [...document.querySelectorAll("[data-testid=adm-resumen] button")].find((b) => b.textContent.trim() === "Confirmar")?.click());
+  await esperarTexto(p, /Cambios guardados para zt\.oper@emdupar\.gov\.co/);
+  ok(`${tag} Administración: el perfil «Supervisor de distribución» ${valor ? "da" : "quita"} el permiso (Edge geoportal-admin real y función de la base)`,
      sqlq(`select ver_dashboard_redes from public.geoportal_lista_blanca where email = '${EMAILS.op}'`) === (valor ? "t" : "f"));
   ok(`${tag} Administración no desborda`, await sinDesborde(p));
   await p.screenshot({ path: join(CAP, `admin_permiso_${ancho}.png`), fullPage: false });

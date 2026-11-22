@@ -161,11 +161,11 @@ export function resumen(antes: Casillas, despues: Casillas, dAntes: Datos, dDesp
 }
 
 // ---------- Envío y verificación (§5 de la v1, §0.7) ----------
-export type EnvioPermisos = { email: string; horario: string; dias: string } & Partial<Casillas>;
+export type EnvioPermisos = { email: string; horario: string; dias: string; explorar: boolean; focalizacion: boolean; comercial: boolean; rutas: boolean; dashboard: boolean } & Partial<Casillas>;
 /** El cuerpo de la ruta `permisos`: TODAS las casillas que el servidor lista, como booleano explícito; ninguna que no liste (R11). Los 5 modos van siempre (la Edge los exige). */
 export function envio(email: string, c: Casillas, horario: string, dias: string, disp: Set<Casilla>): EnvioPermisos {
-  const e: EnvioPermisos = { email, horario, dias };
-  for (const x of CASILLAS) if (MODOS.includes(x) || disp.has(x)) e[x] = c[x] === true;
+  const e: EnvioPermisos = { email, horario, dias, explorar: c.explorar === true, focalizacion: c.focalizacion === true, comercial: c.comercial === true, rutas: c.rutas === true, dashboard: c.dashboard === true };
+  for (const x of CASILLAS) if (disp.has(x)) e[x] = c[x] === true;
   return e;
 }
 /** Compara lo enviado con lo que el servidor devuelve al releer (`listar`): cada casilla, y el nombre, el rol, el horario, los días y si está activo. Devuelve lo que NO quedó. */

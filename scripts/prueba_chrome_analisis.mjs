@@ -455,26 +455,33 @@ try {
     ok(`${T} sin el permiso analisis_contrato la entrada no aparece`, !(await texto(pg)).includes("Análisis de contrato"));
     await pg.close();
 
-    // ===== Administración =====
+    // ===== Administración (encargo v2, 22-nov): el análisis va con los formularios de Comercial (Operario o Supervisor), nunca suelto =====
+    const txt = (p, sel) => p.$eval(sel, (e) => e.innerText);
     pg = await abrir("p=admin&u=admc"); await esp(400);
     await clicTexto(pg, "button.btn-link", "Editar"); await esp(300);
-    const etiqueta = "Análisis de contrato (consulta un contrato: incluye nombre y teléfono)";
-    ok(`${T} Admin: la casilla aparece dentro de «Comercial · Formatos de campo» cuando el servidor trae ver_analisis_contrato`, await pg.evaluate((e) => [...document.querySelectorAll("section[aria-label='Comercial · Formatos de campo'] label.adm-check")].some((l) => l.textContent.trim() === e), etiqueta));
-    await pg.evaluate((e) => [...document.querySelectorAll("label.adm-check")].find((l) => l.textContent.trim() === e).querySelector("input").click(), etiqueta); await esp(150);
+    const opciones = await pg.$$eval("select[data-perfil=formularios] option", (l) => l.map((o) => [o.value, o.disabled]));
+    ok(`${T} Admin v2: «Formularios de campo» ofrece Sin formularios · Operario · Supervisor, habilitados cuando el servidor trae ver_analisis_contrato`, JSON.stringify(opciones) === JSON.stringify([["sin", false], ["operario", false], ["supervisor", false]]), JSON.stringify(opciones));
+    ok(`${T} Admin v2: sin columnas de Técnica ni de Aseo en el servidor, sus renglones dicen «No disponible» (R11)`, /No disponible en este servidor/.test(await txt(pg, "[data-renglon=tecnica]")) && /No disponible en este servidor/.test(await txt(pg, "[data-renglon=aseo]")));
+    await pg.select("select[data-perfil=formularios]", "operario"); await esp(150);
+    await clicTexto(pg, "button", "Revisar cambios"); await esp(200);
+    const res = await txt(pg, "[data-testid=adm-resumen]");
+    ok(`${T} Admin v2: el resumen enciende en verde Formatos de campo, el acta y el análisis, y destaca los datos personales`, (await pg.$$eval("[data-cambio=enciende]", (l) => l.map((x) => x.dataset.casilla))).join() === "campo,acta,analisis_contrato" && /nombre y el teléfono/.test(res), res);
     if (ancho === 1280) await pg.screenshot({ path: join(CAP, "admin_1280_analisis.png") });
     let antes = peticiones.length;
-    await clicTexto(pg, "button", "Guardar cambios"); await esp(800);
+    await clicTexto(pg, "[data-testid=adm-resumen] button", "Confirmar"); await esp(800);
     let cuerpoPerm = peticiones.slice(antes).find((p) => p.accion === "permisos")?.cuerpo;
-    ok(`${T} Admin: «Guardar» envía analisis_contrato: true y verifica (mensaje de éxito)`, cuerpoPerm?.analisis_contrato === true && (await texto(pg)).includes("Permisos actualizados"), JSON.stringify(cuerpoPerm));
-    USUARIOS.admc.ver_analisis_contrato = false;
+    ok(`${T} Admin v2: «Confirmar» envía analisis_contrato: true explícito con las demás casillas y verifica (mensaje de éxito)`, cuerpoPerm?.analisis_contrato === true && cuerpoPerm?.campo === true && cuerpoPerm?.explorar === true && (await texto(pg)).includes("Cambios guardados"), JSON.stringify(cuerpoPerm));
+    Object.assign(USUARIOS.admc, { ver_analisis_contrato: false, ver_campo: false, ver_acta: false });
     await pg.close();
     pg = await abrir("p=admin&u=adms"); await esp(400);
     await clicTexto(pg, "button.btn-link", "Editar"); await esp(300);
-    ok(`${T} Admin: sin el booleano en la lista, la casilla NO aparece`, !(await texto(pg)).includes("Análisis de contrato"));
+    const ops = await pg.$$eval("select[data-perfil=formularios] option", (l) => l.map((o) => [o.value, o.disabled]));
+    ok(`${T} Admin v2: sin el booleano en la lista, Operario y Supervisor (que llevan el análisis) no se pueden escoger (R11)`, JSON.stringify(ops) === JSON.stringify([["sin", false], ["operario", true], ["supervisor", true]]), JSON.stringify(ops));
     antes = peticiones.length;
-    await clicTexto(pg, "button", "Guardar cambios"); await esp(800);
+    await clicTexto(pg, "button", "Revisar cambios"); await esp(200);
+    await clicTexto(pg, "[data-testid=adm-resumen] button", "Confirmar"); await esp(800);
     cuerpoPerm = peticiones.slice(antes).find((p) => p.accion === "permisos")?.cuerpo;
-    ok(`${T} Admin: sin el booleano, el cuerpo NO lleva analisis_contrato`, !!cuerpoPerm && !("analisis_contrato" in cuerpoPerm), JSON.stringify(cuerpoPerm));
+    ok(`${T} Admin v2: sin el booleano, el cuerpo NO lleva analisis_contrato`, !!cuerpoPerm && !("analisis_contrato" in cuerpoPerm), JSON.stringify(cuerpoPerm));
     await pg.close();
   }
   ok("nada personal escrito en la consola del navegador", !consola.some(personal), consola.filter(personal).slice(0, 3).join(" | "));

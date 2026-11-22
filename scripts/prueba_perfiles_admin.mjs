@@ -108,6 +108,8 @@ ok("«Consulta» (solo modos) nunca lleva análisis: el análisis va solo con fo
 // «Consulta sin ningún modo» (§8 de la v1): en la v2 no es un error, es «Sin acceso» en Comercial
 ok("v2: Comercial sin modos y «Sin formularios» = «Sin acceso» (no se rechaza: es quitar el geoportal)", P.textoComercial(P.sinNada()) === "Sin acceso" && P.lineaUsuario(por("prueba.sin.acceso")) === "Sin acceso");
 
+ok("solo acta (sin campo): la lista NO dice «Sin acceso»: Comercial «Personalizado» (el acta cuenta)", P.lineaUsuario({ ...por("prueba.sin.acceso"), ver_acta: true }) === "Comercial: Personalizado");
+
 // ---- 5. Resumen (rojo y verde, destacados, datos) ----
 {
   const c0 = C("prueba.op.comercial"), c1 = P.ponerModo(P.aplicarFormularios(c0, "supervisor"), "explorar", true);

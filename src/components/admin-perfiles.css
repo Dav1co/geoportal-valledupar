@@ -1,0 +1,60 @@
+/* Administración por geoportal (encargo v2, 22-nov): los tres renglones, «Personalizado» con «Ajustes avanzados» y el resumen rojo/verde antes de guardar. */
+.adm-renglones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.adm-renglon { padding: 12px 14px; border: 1px solid #d5dde5; border-radius: 10px; background: #fff; min-width: 0; }
+.adm-renglon-com { border-top: 4px solid #782a27; }      /* color de Comercial (guía visual §6.1) */
+.adm-renglon-tec { border-top: 4px solid #138a7e; }
+.adm-renglon-aseo { border-top: 4px solid #c77700; }
+.adm-renglon-tit { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #12263a; }
+.adm-renglon-parte { margin-top: 8px; }
+.adm-renglon-parte + .adm-renglon-parte { padding-top: 8px; border-top: 1px dashed #e1e7ee; }
+.adm-renglon-desc { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: #5b6b7c; }
+.adm-modos { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.adm-modos .adm-check, .adm-avanzado-casillas .adm-check { min-height: 32px; font-size: 13px; }
+.adm-sel-perfil { width: 100%; min-height: 36px; font-size: 13px; padding: 6px 8px; margin-top: 4px; }
+.adm-renglones .adm-editor-et { font-size: 12px; color: #5b6b7c; font-weight: 600; }
+.adm-perso { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: #fff7e6; border: 1px solid #e8c37a; }
+.adm-perso-lista { margin: 0; font-size: 12px; line-height: 1.4; color: #5c3d00; }
+.adm-avanzado { margin-top: 6px; font-size: 12px; }
+.adm-avanzado summary { cursor: pointer; color: #1f6fb2; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.adm-avanzado-casillas { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.adm-horario { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 4px 0 8px; }
+.adm-campo-et { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5b6b7c; font-weight: 600; }
+.adm-campo-et .adm-sel { min-height: 36px; font-size: 13px; }
+.adm-campo-nombre { max-width: 420px; margin-bottom: 6px; }
+.adm-nota-admin { max-width: 520px; }
+.adm-linea { font-size: 12.5px; color: #12263a; line-height: 1.4; }
+.adm-linea-perso { color: #8a4b00; }
+/* Resumen antes de guardar */
+.adm-resumen { margin-top: 8px; padding: 12px 14px; border: 1px solid #9db4c8; border-radius: 10px; background: #f7fafc; max-width: 760px; }
+.adm-resumen-tit { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #12263a; }
+.adm-resumen-extra { margin: 0 0 8px; font-size: 12.5px; color: #33475b; }
+.adm-resumen-vacio { margin: 0 0 8px; font-size: 13px; color: #5b6b7c; }
+.adm-resumen-geo { margin-bottom: 8px; }
+.adm-resumen-linea { font-size: 13px; color: #12263a; }
+.adm-resumen-cambios, .adm-resumen-datos { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.adm-resumen-cambios li { font-size: 12.5px; padding: 3px 8px; border-radius: 6px; }
+.adm-apaga { color: #9b1c1c; background: #fdecec; border: 1px solid #f3b4b4; }
+.adm-enciende { color: #0f5d2c; background: #e7f6ec; border: 1px solid #9fd8b3; }
+.adm-resumen-datos li { font-size: 12.5px; color: #12263a; }
+.adm-resumen-destacado { margin: 8px 0 0; font-size: 12.5px; padding: 6px 8px; border-radius: 6px; background: #fff1de; border: 1px solid #e0a85a; color: #7a3d00; }
+.adm-resumen-botones { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+.adm-resumen-botones .btn-sm { min-height: 40px; padding: 0 18px; }
+.adm-alta { flex-direction: column; align-items: stretch; }
+.adm-alta-datos { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-alta-datos .field { flex: 1 1 180px; min-width: 140px; }
+.adm-alta .adm-renglones { margin-bottom: 4px; }
+.adm-editor .adm-aviso-horario, .adm-alta .adm-aviso-horario { max-width: 760px; }
+@media (max-width: 860px) {
+  .adm-renglones { grid-template-columns: minmax(0, 1fr); }
+}
+/* Lista de usuarios en el celular: cada fila es una tarjeta (antes la tabla se cortaba a la derecha y no se veían el acceso, el horario ni las acciones). Solo la lista; Accesos no cambia. */
+@media (max-width: 760px) {
+  .adm-tabla-caja .adm-tabla thead { display: none; }
+  .adm-tabla-caja .adm-tabla, .adm-tabla-caja .adm-tabla tbody, .adm-tabla-caja .adm-tabla tr, .adm-tabla-caja .adm-tabla td { display: block; width: auto; }
+  .adm-tabla-caja .adm-tabla tr { padding: 10px 0; border-top: 1px solid #eef1f4; }
+  .adm-tabla-caja .adm-tabla tr:first-child { border-top: 0; }
+  .adm-tabla-caja .adm-tabla td { border-top: 0; padding: 3px 14px; }
+  .adm-tabla-caja .adm-correo { overflow-wrap: anywhere; }
+  .adm-tabla-caja td.adm-c-acciones { text-align: left; display: flex; flex-wrap: wrap; gap: 2px 16px; }
+  .adm-tabla-caja td.adm-c-acciones .btn-link { margin-left: 0; min-height: 40px; }
+}

@@ -1,161 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type UsuarioAdmin, type EstadoPausa, type Accesos } from "../lib/api";
 import "./admin-tecnica.css";
+import "./admin-perfiles.css";
 import { apiGestion, type PersonaRedes } from "../tecnica/apiRedes";
+import {
+  CASILLAS_DE, FORMULARIOS_COMERCIAL, MODOS, NOMBRE_CASILLA, PERFILES_ASEO, PERFILES_FORMULARIOS, PERFILES_TECNICA,
+  aplicarAseo, aplicarFormularios, aplicarTecnica, avisoHorario, casillasDe, disponibles, envio, esPersonalizado, lineaUsuario, perfilDisponible, ponerCasilla, ponerModo,
+  reconocer, resumen, sinNada, verificar,
+  type Casilla, type Casillas, type Datos, type Geoportal, type PerfilAseo, type PerfilFormularios, type PerfilTecnica, type Resumen,
+} from "./perfilesAdmin";
+
+// Administración de usuarios (encargo v2 del 22-nov-2026). Administración solo decide a qué geoportal entra cada persona y con qué perfil general; lo de adentro
+// (área, alcance, formularios, cuadrillas, actividades) lo decide el supervisor en el Personal de cada geoportal. La traducción perfil ↔ casillas es pura (perfilesAdmin.ts).
+// Se envían SIEMPRE todas las casillas que el servidor lista (nada se conserva en silencio), con un resumen antes de guardar y una sola verificación después.
 
 type Props = { onVolver: () => void };
-
-const MODOS: [keyof UsuarioAdmin, string][] = [
-  ["ver_explorar", "Explorar"],
-  ["ver_focalizacion", "Focalización"],
-  ["ver_comercial", "Comercial"],
-  ["ver_rutas", "Rutas"],
-  ["ver_dashboard", "Dashboard"],
-];
-
-// Área técnica (fase 2). Todo lo técnico se muestra SOLO si el servidor ya trae esas columnas (paquete SQL aplicado); si no, Administración es idéntica a la de siempre.
-const MODOS_TECNICOS: [keyof UsuarioAdmin, string][] = [
-  ["ver_registro_tecnico", "Registro técnico"],
-  ["ver_dashboard_tecnico", "Dashboard PTAP"],
-  ["ver_dashboard_redes", "Dashboard distribución"],      // Corte 4a: solo aparece si el servidor ya trae la columna
-];
-// Formatos de campo (Torre A, Paso B3). Se muestran SOLO si el servidor ya trae esas columnas (Paso A aplicado).
-const MODOS_CAMPO: [keyof UsuarioAdmin, string][] = [
-  ["ver_campo", "Formatos de campo"],
-  ["ver_dashboard_campo", "Supervisor de reportes de campo"],
-];
-// Acta de inspección técnica (integración Torre A). Se muestran SOLO si el servidor ya trae esas columnas (SQL del acta aplicado).
-const MODOS_ACTA: [keyof UsuarioAdmin, string][] = [
-  ["ver_acta", "Registrar actas de revisión e irregularidades"],
-  ["ver_dashboard_acta", "Supervisor de actas de revisión e irregularidades"],
-];
-// Interventoría de Aseo (Torre C). Se muestran SOLO si el servidor ya trae esas columnas (SQL de aseo aplicado).
-const MODOS_ASEO: [keyof UsuarioAdmin, string][] = [
-  ["ver_aseo", "Interventoría de aseo"],
-  ["ver_dashboard_aseo", "Supervisor de aseo"],
-];
-type PerfilTecnico = "operador" | "supervisor";
-const PERFILES_TECNICOS: Record<PerfilTecnico, { nombre: string; registro: boolean; dashboard: boolean }> = {
-  operador: { nombre: "Operador técnico", registro: true, dashboard: false },
-  supervisor: { nombre: "Supervisor técnico", registro: true, dashboard: true },
-};
-const NOMBRES_PERFIL: Record<string, string> = { operador: "Operador técnico", supervisor: "Supervisor técnico" };
-
-/** Perfil técnico de un usuario no administrador: solo técnico (sin ningún modo comercial) con Registro técnico, con o sin Dashboard PTAP. */
-function perfilTecnicoDe(u: UsuarioAdmin): PerfilTecnico | null {
-  if (u.rol === "admin" || u.ver_registro_tecnico !== true) return null;
-  if (MODOS.some(([c]) => u[c] === true)) return null;
-  return u.ver_dashboard_tecnico === true ? "supervisor" : "operador";
-}
-
-type Borrador = {
-  explorar: boolean;
-  focalizacion: boolean;
-  comercial: boolean;
-  rutas: boolean;
-  dashboard: boolean;
-  horario: string;
-  dias: string;
-  registro_tecnico?: boolean;
-  dashboard_tecnico?: boolean;
-  campo?: boolean;
-  dashboard_campo?: boolean;
-  acta?: boolean;
-  dashboard_acta?: boolean;
-  aseo?: boolean;
-  dashboard_aseo?: boolean;
-  analisis_contrato?: boolean;
-  dashboard_redes?: boolean;
-};
-
-function aBorrador(u: UsuarioAdmin, conTecnica: boolean, conCampo: boolean, conActa: boolean, conAseo: boolean, conAnalisis = false, conRedes = false): Borrador {
-  return {
-    explorar: u.ver_explorar === true,
-    focalizacion: u.ver_focalizacion === true,
-    comercial: u.ver_comercial === true,
-    rutas: u.ver_rutas === true,
-    dashboard: u.ver_dashboard === true,
-    horario: u.horario ?? "laboral",
-    dias: u.dias ?? "habiles",
-    ...(conTecnica ? { registro_tecnico: u.ver_registro_tecnico === true, dashboard_tecnico: u.ver_dashboard_tecnico === true } : {}),
-    ...(conCampo ? { campo: u.ver_campo === true, dashboard_campo: u.ver_dashboard_campo === true } : {}),
-    ...(conActa ? { acta: u.ver_acta === true, dashboard_acta: u.ver_dashboard_acta === true } : {}),
-    ...(conAseo ? { aseo: u.ver_aseo === true, dashboard_aseo: u.ver_dashboard_aseo === true } : {}),
-    ...(conAnalisis ? { analisis_contrato: u.ver_analisis_contrato === true } : {}),
-    ...(conRedes ? { dashboard_redes: u.ver_dashboard_redes === true } : {}),
-  };
-}
-
-const CAMPOS_COMERCIAL: [keyof Borrador, string][] = [
-  ["explorar", "Explorar"],
-  ["focalizacion", "Focalización"],
-  ["comercial", "Comercial"],
-  ["rutas", "Rutas"],
-  ["dashboard", "Dashboard"],
-];
-const CAMPOS_TECNICA: [keyof Borrador, string][] = [
-  ["registro_tecnico", "Registro técnico"],
-  ["dashboard_tecnico", "Dashboard PTAP"],
-];
-// Técnica fase 1, Corte 4a: supervisor de distribución (D-12). Solo si el servidor ya lista `ver_dashboard_redes`.
-const CAMPO_REDES: [keyof Borrador, string] = ["dashboard_redes", "Dashboard distribución (supervisor de distribución)"];
-const CAMPOS_CAMPO: [keyof Borrador, string][] = [
-  ["campo", "Formatos de campo"],
-  ["dashboard_campo", "Supervisor de reportes de campo"],
-];
-// Análisis de contrato: va dentro del bloque de campo, SOLO si el servidor ya lista `ver_analisis_contrato`. El interruptor general del bloque no lo enciende (muestra datos personales).
-const CAMPO_ANALISIS: [keyof Borrador, string] = ["analisis_contrato", "Análisis de contrato (consulta un contrato: incluye nombre y teléfono)"];
-const CAMPOS_ACTA: [keyof Borrador, string][] = [
-  ["acta", "Registrar actas de revisión e irregularidades"],
-  ["dashboard_acta", "Supervisor de actas de revisión e irregularidades"],
-];
-const CAMPOS_ASEO: [keyof Borrador, string][] = [
-  ["aseo", "Interventoría de aseo"],
-  ["dashboard_aseo", "Supervisor de aseo"],
-];
-
-/** Aviso (no cambia nada): quien tenga un horario laboral o días hábiles no podrá reportar de noche ni en fines de semana. El administrador no tiene restricción de horario.
- *  Lo usan Campo y Acta (para acta se recomienda «Sin restricción horaria» y «Todos los días»). */
-function avisoHorario(b: Borrador, claves: (keyof Borrador)[], trabajo: string): string | null {
-  if (!claves.some((c) => b[c] === true)) return null;
-  if (b.horario === "sin_restriccion" && b.dias === "todos") return null;
-  return "Esta persona no podrá reportar de noche ni en fines de semana: su horario actual es " +
-    (b.horario === "sin_restriccion" ? "sin restricción" : b.horario === "extendido" ? "extendido (7:00–22:00)" : "laboral (7:50–18:00)") + " y " +
-    (b.dias === "todos" ? "todos los días" : "solo de lunes a viernes") +
-    `. Si ${trabajo} es nocturno o de fin de semana, cambie el horario a «Sin restricción horaria» y «Todos los días». El horario no se modifica automáticamente.`;
-}
-const avisoHorarioCampo = (b: Borrador) => avisoHorario(b, ["campo", "dashboard_campo"], "el trabajo de campo");
-const avisoHorarioActa = (b: Borrador) => avisoHorario(b, ["acta", "dashboard_acta"], "el trabajo de inspección");
-// Aseo: hay turnos de madrugada y de noche (22:00 a 06:00): se recomienda «Sin restricción horaria» y «Todos los días».
-const avisoHorarioAseo = (b: Borrador) => avisoHorario(b, ["aseo", "dashboard_aseo"], "la auditoría de aseo (hay turnos de madrugada y de noche)");
-
-/** Bloque de un área con interruptor general: encendido si algún modo del bloque lo está. Al apagarlo apaga todos los modos del bloque; al encenderlo enciende `alEncender`
- *  (por defecto todos; en Comercial solo Explorar, el modo básico). */
-function BloquePermisos({ titulo, campos, borrador, onCambio, tecnico, campo, alEncender, children }: {
-  titulo: string; campos: [keyof Borrador, string][]; borrador: Borrador; onCambio: (c: Partial<Borrador>) => void; tecnico?: boolean; campo?: boolean; alEncender?: (keyof Borrador)[]; children?: React.ReactNode;
-}) {
-  const activo = campos.some(([c]) => borrador[c] === true);
-  const todos = (v: boolean) => Object.fromEntries(campos.map(([c]) => [c, v && (!alEncender || alEncender.includes(c))])) as Partial<Borrador>;
-  return (
-    <section className={`adm-bloque${tecnico ? " adm-bloque-tec" : ""}${campo ? " adm-bloque-campo" : ""}${activo ? " on" : ""}`} aria-label={titulo}>
-      <div className="adm-bloque-cab">
-        <span className="adm-bloque-tit">{titulo}</span>
-        <button type="button" role="switch" aria-checked={activo} aria-label={`${titulo}: interruptor general`} className="adm-sw" onClick={() => onCambio(todos(!activo))}>
-          <span className="adm-sw-bola" />
-        </button>
-      </div>
-      <div className="adm-editor-checks">
-        {campos.map(([campo, et]) => (
-          <label key={String(campo)} className="adm-check">
-            <input type="checkbox" checked={borrador[campo] === true} onChange={(e) => onCambio({ [campo]: e.target.checked })} />
-            {et}
-          </label>
-        ))}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 // Técnica fase 1, Corte 4b (N-13 y §27.3): la casilla del geovisor del operador de distribución vive en Personal del Dashboard distribución.
 // Aquí solo se MUESTRA (una sola casilla, en un solo lugar). Se lee de geoportal-redes, que lo vuelve a verificar (el administrador puede).
@@ -173,50 +32,222 @@ function GeovisorSoloLectura({ email }: { email: string }) {
     {p?.area ? ` · Área: ${p.area === "ambas" ? "planta y distribución" : p.area === "distribucion" ? "distribución" : "planta"}` : ""}.</p>;
 }
 
+// ---------- Los tres renglones (Comercial, Técnica, Aseo) ----------
+const PERSO = "perso";
+const DESCRIPCION_FORMULARIOS: Record<PerfilFormularios, string> = {
+  sin: "Sin Formatos de campo ni Análisis de contrato.",
+  operario: "Reporta en Formatos de campo, registra el acta de posible pérdida y consulta contratos (Análisis de contrato, con nombre y teléfono). Sus formularios, cuadrilla y actividades los fija su supervisor en Personal.",
+  supervisor: "Lo del operario, más «Supervisión y dashboard», «Actas registradas», «Actividades derivadas» y el Personal de Comercial.",
+};
+const DESCRIPCION_TECNICA: Record<PerfilTecnica, string> = {
+  sin: "No entra a Técnica.",
+  operario: "Llena los formularios que su supervisor le asigne en Personal técnico o de distribución.",
+  sup_plantas: "Captura y supervisa plantas: Dashboard PTAP con Personal técnico.",
+  sup_distribucion: "Captura y supervisa distribución: Dashboard distribución con su Personal.",
+  sup_ambas: "Captura y supervisa plantas y distribución: los dos dashboards.",
+};
+const DESCRIPCION_ASEO: Record<PerfilAseo, string> = {
+  sin: "No entra a Aseo.",
+  auditor: "Audita rutas y registra la auditoría con fotos.",
+  supervisor: "Audita y además revisa: «Supervisión y dashboard» con el Personal de aseo.",
+};
+
+/** Lista en solo lectura de las casillas encendidas de un grupo «Personalizado», y sus «Ajustes avanzados» (R6) plegados. */
+function Personalizado({ geoportal, casillas, c, disp, onCambio }: { geoportal: Geoportal; casillas: Casilla[]; c: Casillas; disp: Set<Casilla>; onCambio: (n: Casillas) => void }) {
+  const activas = casillas.filter((x) => c[x]);
+  return (
+    <div className="adm-perso" data-personalizado={geoportal}>
+      <p className="adm-perso-lista">Tiene hoy: <strong>{activas.length ? activas.map((x) => NOMBRE_CASILLA[x]).join(" · ") : "ninguna"}</strong>. No calza con un perfil: escoja uno para simplificar. Si guarda sin tocarlo, queda tal cual.</p>
+      <details className="adm-avanzado">
+        <summary>Ajustes avanzados</summary>
+        <div className="adm-avanzado-casillas">
+          {casillas.map((x) => (
+            <label key={x} className="adm-check">
+              <input type="checkbox" checked={c[x]} disabled={!disp.has(x)} data-casilla={x} onChange={(e) => onCambio(ponerCasilla(c, geoportal, x, e.target.checked))} />
+              {NOMBRE_CASILLA[x]}{disp.has(x) ? "" : " (no disponible)"}
+            </label>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function Renglones({ c, original, disp, email, onCambio }: { c: Casillas; original: Casillas; disp: Set<Casilla>; email: string | null; onCambio: (n: Casillas) => void }) {
+  const r = reconocer(c), r0 = reconocer(original);
+  // «Personalizado» se ofrece en el selector solo si así estaba al abrir; volver a elegirlo restaura las casillas de ese grupo como estaban
+  const restaurar = (grupo: Casilla[]) => { const n = { ...c }; for (const x of grupo) n[x] = original[x]; onCambio(n); };
+  const hay = (g: Casilla[]) => g.some((x) => disp.has(x));
+  const tecnica = CASILLAS_DE.tecnica, aseo = CASILLAS_DE.aseo;
+  return (
+    <div className="adm-renglones">
+      <section className="adm-renglon adm-renglon-com" data-renglon="comercial" aria-label="Geoportal Comercial">
+        <h3 className="adm-renglon-tit">Comercial</h3>
+        <div className="adm-renglon-parte">
+          <div className="adm-editor-et">Modos del geovisor (mapa comercial)</div>
+          <div className="adm-modos">
+            {MODOS.map((m) => (
+              <label key={m} className="adm-check">
+                <input type="checkbox" checked={c[m]} data-modo={m} onChange={(e) => onCambio(ponerModo(c, m, e.target.checked))} />
+                {NOMBRE_CASILLA[m]}
+              </label>
+            ))}
+          </div>
+        </div>
+        {hay(FORMULARIOS_COMERCIAL) ? (
+          <div className="adm-renglon-parte">
+            <label className="adm-editor-et" htmlFor="adm-sel-formularios">Formularios de campo</label>
+            <select id="adm-sel-formularios" className="adm-sel adm-sel-perfil" data-perfil="formularios" value={r.formularios ?? PERSO}
+              onChange={(e) => (e.target.value === PERSO ? restaurar(FORMULARIOS_COMERCIAL) : onCambio(aplicarFormularios(c, e.target.value as PerfilFormularios)))}>
+              {(Object.keys(PERFILES_FORMULARIOS) as PerfilFormularios[]).map((p) => (
+                <option key={p} value={p} disabled={!perfilDisponible(PERFILES_FORMULARIOS[p].casillas, disp)}>{PERFILES_FORMULARIOS[p].nombre}</option>
+              ))}
+              {r0.formularios === null ? <option value={PERSO}>Personalizado (como está hoy)</option> : null}
+            </select>
+            {r.formularios === null
+              ? <Personalizado geoportal="comercial" casillas={FORMULARIOS_COMERCIAL} c={c} disp={disp} onCambio={onCambio} />
+              : <p className="adm-renglon-desc">{DESCRIPCION_FORMULARIOS[r.formularios]}{r.formularios === "sin" && MODOS.some((m) => c[m]) ? " Con modos marcados es «Consulta»: solo el mapa." : ""}</p>}
+          </div>
+        ) : <p className="adm-renglon-desc">Formularios de campo: no disponible en este servidor.</p>}
+      </section>
+
+      <section className="adm-renglon adm-renglon-tec" data-renglon="tecnica" aria-label="Geoportal Técnica">
+        <h3 className="adm-renglon-tit">Técnica</h3>
+        {hay(tecnica) ? (
+          <div className="adm-renglon-parte">
+            <label className="adm-editor-et" htmlFor="adm-sel-tecnica">Perfil</label>
+            <select id="adm-sel-tecnica" className="adm-sel adm-sel-perfil" data-perfil="tecnica" value={r.tecnica ?? PERSO}
+              onChange={(e) => (e.target.value === PERSO ? restaurar(tecnica) : onCambio(aplicarTecnica(c, e.target.value as PerfilTecnica)))}>
+              {(Object.keys(PERFILES_TECNICA) as PerfilTecnica[]).map((p) => (
+                <option key={p} value={p} disabled={!perfilDisponible(PERFILES_TECNICA[p].casillas, disp)}>{PERFILES_TECNICA[p].nombre}{perfilDisponible(PERFILES_TECNICA[p].casillas, disp) ? "" : " (no disponible)"}</option>
+              ))}
+              {r0.tecnica === null ? <option value={PERSO}>Personalizado (como está hoy)</option> : null}
+            </select>
+            {r.tecnica === null
+              ? <Personalizado geoportal="tecnica" casillas={tecnica} c={c} disp={disp} onCambio={onCambio} />
+              : <p className="adm-renglon-desc">{DESCRIPCION_TECNICA[r.tecnica]}{r.tecnica !== "sin" ? " El alcance PTAR, el área y los formularios se fijan en Personal técnico." : ""}</p>}
+            {email && disp.has("dashboard_redes") && c.registro_tecnico ? <GeovisorSoloLectura email={email} /> : null}
+          </div>
+        ) : <p className="adm-renglon-desc">No disponible en este servidor.</p>}
+      </section>
+
+      <section className="adm-renglon adm-renglon-aseo" data-renglon="aseo" aria-label="Geoportal Aseo">
+        <h3 className="adm-renglon-tit">Aseo</h3>
+        {hay(aseo) ? (
+          <div className="adm-renglon-parte">
+            <label className="adm-editor-et" htmlFor="adm-sel-aseo">Perfil</label>
+            <select id="adm-sel-aseo" className="adm-sel adm-sel-perfil" data-perfil="aseo" value={r.aseo ?? PERSO}
+              onChange={(e) => (e.target.value === PERSO ? restaurar(aseo) : onCambio(aplicarAseo(c, e.target.value as PerfilAseo)))}>
+              {(Object.keys(PERFILES_ASEO) as PerfilAseo[]).map((p) => <option key={p} value={p} disabled={!perfilDisponible(PERFILES_ASEO[p].casillas, disp)}>{PERFILES_ASEO[p].nombre}</option>)}
+              {r0.aseo === null ? <option value={PERSO}>Personalizado (como está hoy)</option> : null}
+            </select>
+            {r.aseo === null ? <Personalizado geoportal="aseo" casillas={aseo} c={c} disp={disp} onCambio={onCambio} /> : <p className="adm-renglon-desc">{DESCRIPCION_ASEO[r.aseo]}</p>}
+          </div>
+        ) : <p className="adm-renglon-desc">No disponible en este servidor.</p>}
+      </section>
+    </div>
+  );
+}
+
+function Horario({ horario, dias, onCambio }: { horario: string; dias: string; onCambio: (h: string, d: string) => void }) {
+  return (
+    <div className="adm-horario">
+      <label className="adm-campo-et">Horario
+        <select className="adm-sel" data-campo="horario" value={horario} onChange={(e) => onCambio(e.target.value, dias)}>
+          <option value="laboral">Laboral (7:50–18:00)</option>
+          <option value="extendido">Extendido (7:00–22:00)</option>
+          <option value="sin_restriccion">Sin restricción horaria</option>
+        </select>
+      </label>
+      <label className="adm-campo-et">Días
+        <select className="adm-sel" data-campo="dias" value={dias} onChange={(e) => onCambio(horario, e.target.value)}>
+          <option value="habiles">Lunes a viernes</option>
+          <option value="todos">Todos los días</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
+const NOMBRE_GEO: Record<Geoportal, string> = { comercial: "Comercial", tecnica: "Técnica", aseo: "Aseo" };
+const ETIQUETA_DATO: Record<keyof Datos, string> = { nombre: "Nombre", rol: "Tipo de cuenta", horario: "Horario", dias: "Días" };
+/** El resumen antes de guardar (§0.6): por geoportal, lo que se apaga en rojo y lo que se enciende en verde, y el nombre, el tipo de cuenta, el horario y los días. */
+function PanelResumen({ r, titulo, extra, onConfirmar, onVolver, ocupado }: { r: Resumen; titulo: string; extra?: string; onConfirmar: () => void; onVolver: () => void; ocupado: boolean }) {
+  return (
+    <section className="adm-resumen" data-testid="adm-resumen" aria-label="Resumen antes de guardar">
+      <h3 className="adm-resumen-tit">{titulo}</h3>
+      {extra ? <p className="adm-resumen-extra">{extra}</p> : null}
+      {r.vacio ? <p className="adm-resumen-vacio">No hay cambios: guardar no cambia nada.</p> : null}
+      {r.renglones.map((g) => (
+        <div key={g.geoportal} className="adm-resumen-geo" data-geoportal={g.geoportal}>
+          <div className="adm-resumen-linea"><strong>{NOMBRE_GEO[g.geoportal]}:</strong> {g.antes} → <strong>{g.despues}</strong></div>
+          <ul className="adm-resumen-cambios">
+            {r.cambios.filter((x) => x.geoportal === g.geoportal).map((x) => (
+              <li key={x.casilla} className={x.enciende ? "adm-enciende" : "adm-apaga"} data-cambio={x.enciende ? "enciende" : "apaga"} data-casilla={x.casilla}>
+                <span aria-hidden="true">{x.enciende ? "+" : "−"}</span> {x.enciende ? "Se enciende" : "Se apaga"}: {x.nombre}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {r.datos.length ? (
+        <ul className="adm-resumen-datos">
+          {r.datos.map((d) => <li key={d.campo} data-dato={d.campo}><strong>{ETIQUETA_DATO[d.campo]}:</strong> {d.antes} → <strong>{d.despues}</strong></li>)}
+        </ul>
+      ) : null}
+      {r.destacados.map((t) => <p key={t} className="adm-resumen-destacado" role="note">{t}</p>)}
+      <div className="adm-resumen-botones">
+        <button type="button" className="btn-sm" onClick={onConfirmar} disabled={ocupado}>{ocupado ? "Guardando…" : "Confirmar"}</button>
+        <button type="button" className="btn-link" onClick={onVolver} disabled={ocupado}>Volver</button>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Estado de una edición ----------
+type Edicion = {
+  modo: "editar" | "hacer_consulta";
+  email: string;
+  original: Casillas; c: Casillas;
+  nombre0: string; nombre: string; horario0: string; horario: string; dias0: string; dias: string;
+  rol0: string; activo: boolean;
+  paso: "editar" | "resumen";
+};
+type Alta = { email: string; nombre: string; clave: string; tipo: "usuario" | "admin"; c: Casillas; horario: string; dias: string; paso: "editar" | "resumen" };
+const altaVacia = (): Alta => ({ email: "", nombre: "", clave: "", tipo: "usuario", c: sinNada(), horario: "laboral", dias: "habiles", paso: "editar" });
+const DOMINIO = "@emdupar.gov.co";
+const normalizar = (e: string) => { const t = e.trim().toLowerCase(); return t.includes("@") ? t : t + DOMINIO; };
+const mensaje = (e: unknown, otro: string) => (e instanceof Error ? e.message : otro);
+
 export function Admin({ onVolver }: Props) {
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-
-  // Formulario de nuevo usuario
-  const [email, setEmail] = useState("");
-  const [nombre, setNombre] = useState("");
-  const [clave, setClave] = useState("");
-  const [rol, setRol] = useState("consulta");
-  const [guardando, setGuardando] = useState(false);
-  const [abierto, setAbierto] = useState(false);
-
-  // Edición de permisos
-  const [editando, setEditando] = useState<string | null>(null);
-  const [borrador, setBorrador] = useState<Borrador | null>(null);
-  const [salvando, setSalvando] = useState(false);
+  const [alta, setAlta] = useState<Alta | null>(null);
+  const [ed, setEd] = useState<Edicion | null>(null);
+  const [ocupado, setOcupado] = useState(false);
   const [pausa, setPausa] = useState<EstadoPausa | null>(null);
   const [cambiandoPausa, setCambiandoPausa] = useState(false);
   const [pestana, setPestana] = useState<"usuarios" | "accesos">("usuarios");
   const [accesos, setAccesos] = useState<Accesos | null>(null);
   const [cargandoAcc, setCargandoAcc] = useState(false);
-  // ¿El servidor ya trae los permisos técnicos? Si no, no se muestra nada técnico.
-  const conTecnica = useMemo(() => usuarios.some((u) => typeof u.ver_registro_tecnico === "boolean"), [usuarios]);
-  // ¿El servidor ya trae los permisos de campo (Paso A aplicado)? Si no, no se muestra nada de campo.
-  const conCampo = useMemo(() => usuarios.some((u) => typeof u.ver_campo === "boolean"), [usuarios]);
-  // ¿El servidor ya trae los permisos de acta (SQL del acta aplicado)? Si no, no se muestra nada de acta.
-  const conActa = useMemo(() => usuarios.some((u) => typeof u.ver_acta === "boolean"), [usuarios]);
-  // Igual para la interventoría de aseo (SQL de aseo aplicado).
-  const conAseo = useMemo(() => usuarios.some((u) => typeof u.ver_aseo === "boolean"), [usuarios]);
-  // Igual para el análisis de contrato (SQL del análisis aplicado): solo así se muestra la casilla y se envía `analisis_contrato`.
-  const conAnalisis = useMemo(() => usuarios.some((u) => typeof u.ver_analisis_contrato === "boolean"), [usuarios]);
-  // Igual para el Dashboard distribución (SQL del Corte 4a aplicado).
-  const conRedes = useMemo(() => usuarios.some((u) => typeof u.ver_dashboard_redes === "boolean"), [usuarios]);
+  // Las casillas que el servidor ya lista (R11): las demás se muestran «no disponible» y no se envían.
+  const disp = useMemo(() => disponibles(usuarios), [usuarios]);
+  // El editor va debajo de la lista: al abrirlo (o pasar al resumen) se lleva a la vista
+  const claveEd = ed ? `${ed.email}|${ed.modo}|${ed.paso}` : "";
+  useEffect(() => { if (claveEd) document.querySelector("[data-testid=adm-editor]")?.scrollIntoView?.({ block: "start" }); }, [claveEd]);
 
-  async function cargar() {
+  async function cargar(): Promise<UsuarioAdmin[]> {
     setCargando(true);
     setError(null);
     try {
       const { usuarios } = await api.admin.listar();
       setUsuarios(usuarios);
+      return usuarios;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error cargando usuarios.");
+      setError(mensaje(e, "Error cargando usuarios."));
+      return [];
     } finally {
       setCargando(false);
     }
@@ -265,163 +296,112 @@ export function Admin({ onVolver }: Props) {
     }
   }
 
-  // Defensa contra una publicación a medias: si la Edge o la base todavía no aplican los permisos técnicos, el servidor los ignoraría en silencio.
-  // Tras guardar se vuelve a leer el usuario y se comprueba que quedó como se pidió.
-  async function verificarTecnico(correo: string, registro: boolean, dashboard: boolean): Promise<boolean> {
-    const { usuarios: lista } = await api.admin.listar();
-    const u = lista.find((x) => x.email === correo.toLowerCase());
-    const ok = !!u && (u.ver_registro_tecnico === true) === registro && (u.ver_dashboard_tecnico === true) === dashboard;
-    if (!ok) setError("El servidor no aplicó los permisos técnicos de " + correo + ". Falta aplicar el paquete técnico (base y Edge) antes de usar esta opción.");
-    setUsuarios(lista);
-    return ok;
+  // ---------- Editar y «Hacer consulta» (R10) ----------
+  function abrir(u: UsuarioAdmin, modo: Edicion["modo"]) {
+    setError(null); setMsg(null); setAlta(null);
+    if (ed && ed.email === u.email && ed.modo === modo) { setEd(null); return; }
+    const c = casillasDe(u), nombre = u.nombre && u.nombre !== u.email ? u.nombre : "";
+    setEd({ modo, email: u.email, original: c, c, nombre0: nombre, nombre, horario0: u.horario ?? "laboral", horario: u.horario ?? "laboral", dias0: u.dias ?? "habiles", dias: u.dias ?? "habiles",
+            rol0: u.rol, activo: u.activo, paso: "editar" });
   }
+  const rolFinal = (e: Edicion) => (e.modo === "hacer_consulta" ? "consulta" : e.rol0);
+  const resumenDe = (e: Edicion) => (rolFinal(e) === "admin"
+    ? resumen(e.original, e.original, { nombre: e.nombre0, horario: "", dias: "", rol: e.rol0 }, { nombre: e.nombre.trim() || e.nombre0, horario: "", dias: "", rol: e.rol0 }, disp)
+    : resumen(e.original, e.c, { nombre: e.nombre0, horario: e.horario0, dias: e.dias0, rol: e.rol0 }, { nombre: e.nombre.trim() || e.nombre0, horario: e.horario, dias: e.dias, rol: rolFinal(e) }, disp));
 
-  // Igual para los permisos de campo: si la Edge o la base no los aplican, se volvería a leer el usuario y no coincidiría.
-  async function verificarCampo(correo: string, campo: boolean, dashboardCampo: boolean): Promise<boolean> {
-    const { usuarios: lista } = await api.admin.listar();
-    const u = lista.find((x) => x.email === correo.toLowerCase());
-    const ok = !!u && (u.ver_campo === true) === campo && (u.ver_dashboard_campo === true) === dashboardCampo;
-    if (!ok) setError("El servidor no aplicó los permisos de campo de " + correo + ". Falta desplegar la Edge geoportal-admin del Paso B o aplicar el Paso A en la base.");
-    setUsuarios(lista);
-    return ok;
-  }
-
-  // Igual para los permisos de acta.
-  async function verificarActa(correo: string, acta: boolean, dashboardActa: boolean): Promise<boolean> {
-    const { usuarios: lista } = await api.admin.listar();
-    const u = lista.find((x) => x.email === correo.toLowerCase());
-    const ok = !!u && (u.ver_acta === true) === acta && (u.ver_dashboard_acta === true) === dashboardActa;
-    if (!ok) setError("El servidor no aplicó los permisos de acta de " + correo + ". Falta desplegar la Edge geoportal-admin de la integración o aplicar el SQL del acta en la base.");
-    setUsuarios(lista);
-    return ok;
-  }
-
-  // Igual para los permisos de aseo.
-  async function verificarAseo(correo: string, aseo: boolean, dashboardAseo: boolean): Promise<boolean> {
-    const { usuarios: lista } = await api.admin.listar();
-    const u = lista.find((x) => x.email === correo.toLowerCase());
-    const ok = !!u && (u.ver_aseo === true) === aseo && (u.ver_dashboard_aseo === true) === dashboardAseo;
-    if (!ok) setError("El servidor no aplicó los permisos de aseo de " + correo + ". Falta desplegar la Edge geoportal-admin o aplicar el SQL de aseo en la base.");
-    setUsuarios(lista);
-    return ok;
-  }
-
-  // Igual para el análisis de contrato.
-  async function verificarAnalisis(correo: string, analisis: boolean): Promise<boolean> {
-    const { usuarios: lista } = await api.admin.listar();
-    const u = lista.find((x) => x.email === correo.toLowerCase());
-    const ok = !!u && (u.ver_analisis_contrato === true) === analisis;
-    if (!ok) setError("El servidor no aplicó el permiso de análisis de contrato de " + correo + ". Falta desplegar la Edge geoportal-admin o aplicar el SQL del análisis de contrato en la base.");
-    setUsuarios(lista);
-    return ok;
-  }
-
-  async function verificarRedes(correo: string, redes: boolean): Promise<boolean> {
-    const { usuarios: lista } = await api.admin.listar();
-    const u = lista.find((x) => x.email === correo.toLowerCase());
-    const ok = !!u && (u.ver_dashboard_redes === true) === redes;
-    if (!ok) setError("El servidor no aplicó el permiso del Dashboard distribución de " + correo + ". Falta desplegar la Edge geoportal-admin o aplicar el SQL del Corte 4a.");
-    setUsuarios(lista);
-    return ok;
-  }
-
-  async function agregar() {
-    setMsg(null);
-    if (!email.includes("@")) {
-      setError("Escribe un correo válido.");
-      return;
-    }
-    if (clave.length < 8) {
-      setError("La clave debe tener al menos 8 caracteres.");
-      return;
-    }
-    setGuardando(true);
-    setError(null);
+  async function confirmarEdicion(e: Edicion) {
+    setOcupado(true); setError(null); setMsg(null);
+    const sigueAdmin = rolFinal(e) === "admin";
+    const cambiaNombre = e.nombre.trim() !== "" && e.nombre.trim() !== e.nombre0.trim();
+    const cambiaRol = rolFinal(e) !== e.rol0;
+    let permisosOk = false;
     try {
-      const perfilTec = rol === "operador" || rol === "supervisor" ? (rol as PerfilTecnico) : undefined;
-      const r = await api.admin.guardar({
-        email,
-        nombre: nombre || undefined,
-        rol: perfilTec ? "consulta" : rol,
-        activo: true,
-        password: clave,
-        ...(perfilTec ? { perfil_tecnico: perfilTec } : {}),
-      });
-      if (perfilTec && !(await verificarTecnico(email, PERFILES_TECNICOS[perfilTec].registro, PERFILES_TECNICOS[perfilTec].dashboard))) return;
-      setMsg(
-        perfilTec
-          ? `Usuario ${email} ${r.auth === "creado" ? "creado" : "actualizado"} como ${PERFILES_TECNICOS[perfilTec].nombre}: solo ${perfilTec === "operador" ? "Registro técnico" : "Registro técnico y Dashboard PTAP"}, con los modos comerciales apagados.`
-          : r.auth === "creado"
-            ? `Usuario ${email} creado con su clave.`
-            : `Usuario ${email} actualizado (clave nueva).`,
-      );
-      setEmail("");
-      setNombre("");
-      setClave("");
-      setRol("consulta");
-      setAbierto(false);
-      await cargar();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error guardando.");
+      // 1. Las casillas (un administrador que sigue siéndolo no las usa: no se envían)
+      if (!sigueAdmin) { await api.admin.permisos(envio(e.email, e.c, e.horario, e.dias, disp)); permisosOk = true; }
+      // 2. El nombre y el tipo de cuenta, por `guardar`: siempre con el rol y el estado que corresponden (sin rol degradaría a un administrador) y nunca con perfil_tecnico
+      if (cambiaNombre || cambiaRol) {
+        try { await api.admin.guardar({ email: e.email, nombre: cambiaNombre ? e.nombre.trim() : undefined, rol: rolFinal(e), activo: e.activo }); }
+        catch (x) {
+          const falta = [cambiaNombre ? "el nombre" : "", cambiaRol ? "el cambio de tipo de cuenta" : ""].filter(Boolean).join(" ni ");
+          setError(`${permisosOk ? "Los permisos se guardaron, pero no se guardó " : "No se guardó "}${falta}: ${mensaje(x, "error")}. ${permisosOk ? "El cambio quedó a medias: vuelva a abrir y guarde de nuevo." : ""}`.trim());
+          await cargar(); setEd(null); return;
+        }
+      }
+      // 3. Una sola verificación: se relee y se compara cada casilla enviada, el nombre, el rol, el horario, los días y el estado
+      const lista = await cargar();
+      const leido = lista.find((x) => x.email === e.email);
+      const faltas = verificar(e.email, sigueAdmin && leido ? casillasDe(leido) : e.c,
+        { nombre: e.nombre, horario: sigueAdmin ? e.horario0 : e.horario, dias: sigueAdmin ? e.dias0 : e.dias, rol: rolFinal(e), activo: e.activo }, disp, lista, { nombre: cambiaNombre });
+      if (faltas.length) { setError(`El servidor no aplicó: ${faltas.join(", ")} (${e.email}).`); setEd(null); return; }
+      setMsg(`Cambios guardados para ${e.email}.`);
+      setEd(null);
+    } catch (x) {
+      // permisos rechazado (p. ej. el 409 de la compuerta de aislamiento): el texto de la Edge, tal cual; no se cambió nada
+      setError(mensaje(x, "No se pudo guardar."));
+      setEd({ ...e, paso: "editar" });
     } finally {
-      setGuardando(false);
+      setOcupado(false);
     }
   }
 
-  function abrirEdicion(u: UsuarioAdmin) {
-    setError(null);
-    setMsg(null);
-    if (editando === u.email) {
-      setEditando(null);
-      setBorrador(null);
-      return;
-    }
-    setEditando(u.email);
-    setBorrador(aBorrador(u, conTecnica, conCampo, conActa, conAseo, conAnalisis, conRedes));
+  // ---------- Nuevo usuario (§0.8, R9) ----------
+  function validarAlta(a: Alta): string | null {
+    const correo = normalizar(a.email);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo)) return "Escribe un correo válido.";
+    if (usuarios.some((u) => u.email === correo)) return "Ese usuario ya existe: use Editar o Nueva clave.";
+    if (a.clave.length < 8) return "La clave debe tener al menos 8 caracteres.";
+    return null;
   }
+  const resumenAlta = (a: Alta) => resumen(sinNada(), a.tipo === "admin" ? sinNada() : a.c, { nombre: "", horario: "", dias: "", rol: "" },
+    { nombre: a.nombre, horario: a.tipo === "admin" ? "" : a.horario, dias: a.tipo === "admin" ? "" : a.dias, rol: a.tipo === "admin" ? "admin" : "consulta" }, disp);
 
-  async function guardarPermisos(u: UsuarioAdmin) {
-    if (!borrador) return;
-    setSalvando(true);
-    setError(null);
-    setMsg(null);
+  async function confirmarAlta(a: Alta) {
+    const correo = normalizar(a.email);
+    const v = validarAlta(a); if (v) { setError(v); setAlta({ ...a, paso: "editar" }); return; }
+    setOcupado(true); setError(null); setMsg(null);
+    let paso = "crear la cuenta";
     try {
-      // `analisis_contrato` viaja solo si el servidor lo lista (la Edge lo reenvía únicamente si llega como booleano).
-      const { analisis_contrato, dashboard_redes, ...resto } = borrador;
-      await api.admin.permisos({ email: u.email, ...resto, ...(conAnalisis && typeof analisis_contrato === "boolean" ? { analisis_contrato } : {}),
-                                 ...(conRedes && typeof dashboard_redes === "boolean" ? { dashboard_redes } : {}) });
-      if (conTecnica && !(await verificarTecnico(u.email, borrador.registro_tecnico === true, borrador.dashboard_tecnico === true))) return;
-      if (conCampo && !(await verificarCampo(u.email, borrador.campo === true, borrador.dashboard_campo === true))) return;
-      if (conActa && !(await verificarActa(u.email, borrador.acta === true, borrador.dashboard_acta === true))) return;
-      if (conAseo && !(await verificarAseo(u.email, borrador.aseo === true, borrador.dashboard_aseo === true))) return;
-      if (conAnalisis && !(await verificarAnalisis(u.email, borrador.analisis_contrato === true))) return;
-      if (conRedes && !(await verificarRedes(u.email, borrador.dashboard_redes === true))) return;
-      setMsg(`Permisos actualizados para ${u.email}.`);
-      setEditando(null);
-      setBorrador(null);
+      if (a.tipo === "admin") {
+        const r = await api.admin.guardar({ email: correo, nombre: a.nombre.trim() || undefined, rol: "admin", activo: true, password: a.clave });
+        paso = "verificar";
+        const faltas = verificar(correo, sinNada(), { nombre: a.nombre, horario: "", dias: "", rol: "admin", activo: true }, new Set(), await cargar(), { nombre: !!a.nombre.trim() });
+        if (faltas.length) { setError(`El servidor no aplicó: ${faltas.join(", ")} (${correo}).`); return; }
+        setMsg(`Administrador ${correo} ${r.auth === "creado" ? "creado" : "agregado"} con su clave.`); setAlta(null); return;
+      }
+      // 1. Se crea INACTIVO (sin perfil técnico): mientras no tenga sus permisos, no entra
+      await api.admin.guardar({ email: correo, nombre: a.nombre.trim() || undefined, rol: "consulta", activo: false, password: a.clave });
+      // 2. Sus permisos: todas las casillas, explícitas
+      paso = "guardar sus permisos";
+      await api.admin.permisos(envio(correo, a.c, a.horario, a.dias, disp));
+      paso = "verificar sus permisos";
+      let faltas = verificar(correo, a.c, { nombre: a.nombre, horario: a.horario, dias: a.dias, rol: "consulta", activo: false }, disp, await cargar(), { nombre: !!a.nombre.trim() });
+      if (faltas.length) { setError(`El servidor no aplicó: ${faltas.join(", ")} (${correo}). La cuenta quedó INACTIVA: corríjala con Editar y actívela.`); setAlta(null); return; }
+      // 3. Se activa
+      paso = "activarlo";
+      await api.admin.guardar({ email: correo, rol: "consulta", activo: true });
+      const lista = await cargar();
+      faltas = verificar(correo, a.c, { nombre: a.nombre, horario: a.horario, dias: a.dias, rol: "consulta", activo: true }, disp, lista);
+      if (faltas.length) { setError(`El servidor no aplicó: ${faltas.join(", ")} (${correo}). La cuenta quedó INACTIVA.`); setAlta(null); return; }
+      const u = lista.find((x) => x.email === correo);
+      setMsg(`Usuario ${correo} creado y activo${u ? `: ${lineaUsuario(u)}` : ""}.`);
+      setAlta(null);
+    } catch (x) {
+      setError(`No se pudo ${paso}: ${mensaje(x, "error")}.${paso === "crear la cuenta" ? "" : " La cuenta quedó INACTIVA: corríjala con Editar y actívela."}`);
       await cargar();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo guardar.");
+      setAlta(paso === "crear la cuenta" ? { ...a, paso: "editar" } : null);
     } finally {
-      setSalvando(false);
+      setOcupado(false);
     }
   }
 
-  async function cambiar(
-    u: UsuarioAdmin,
-    cambios: Partial<{ rol: string; activo: boolean }>,
-  ) {
+  async function cambiar(u: UsuarioAdmin, cambios: Partial<{ rol: string; activo: boolean }>) {
     setMsg(null);
     setError(null);
     try {
-      await api.admin.guardar({
-        email: u.email,
-        rol: cambios.rol ?? u.rol,
-        activo: cambios.activo ?? u.activo,
-      });
+      await api.admin.guardar({ email: u.email, rol: cambios.rol ?? u.rol, activo: cambios.activo ?? u.activo });
       await cargar();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error guardando.");
+      setError(mensaje(e, "Error guardando."));
     }
   }
 
@@ -436,10 +416,11 @@ export function Admin({ onVolver }: Props) {
     api.admin
       .guardar({ email: u.email, rol: u.rol, activo: u.activo, password: c })
       .then(() => setMsg(`Clave actualizada para ${u.email}.`))
-      .catch((e) => setError(e instanceof Error ? e.message : "Error."));
+      .catch((e) => setError(mensaje(e, "Error.")));
   }
 
   const totalAdmin = usuarios.filter((u) => u.rol === "admin").length;
+  const nPerso = usuarios.filter((u) => u.rol !== "admin" && esPersonalizado(casillasDe(u)).length > 0).length;
 
   return (
     <div className="adm">
@@ -474,12 +455,12 @@ export function Admin({ onVolver }: Props) {
         <div>
           <h2 className="adm-titulo">Administración de usuarios</h2>
           <p className="adm-sub">
-            {usuarios.length} usuarios · {totalAdmin} administradores
+            {usuarios.length} usuarios · {totalAdmin} administradores{nPerso ? ` · ${nPerso} con algún geoportal «Personalizado»` : ""}
           </p>
         </div>
         <div className="adm-cab-acciones">
-          <button className="btn-sm" onClick={() => setAbierto((v) => !v)}>
-            {abierto ? "Cancelar" : "Nuevo usuario"}
+          <button className="btn-sm" onClick={() => { setError(null); setMsg(null); setEd(null); setAlta(alta ? null : altaVacia()); }}>
+            {alta ? "Cancelar" : "Nuevo usuario"}
           </button>
           <button className="btn-link" onClick={onVolver}>
             Volver
@@ -487,45 +468,38 @@ export function Admin({ onVolver }: Props) {
         </div>
       </div>
 
-      {abierto && (
-        <div className="adm-nuevo">
-          <input
-            className="field"
-            placeholder="correo@emdupar.gov.co"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            className="field"
-            placeholder="Nombre (opcional)"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-          />
-          <input
-            className="field"
-            placeholder="Clave inicial (mín. 8)"
-            type="text"
-            value={clave}
-            onChange={(e) => setClave(e.target.value)}
-          />
-          <select
-            className="field"
-            value={rol}
-            onChange={(e) => setRol(e.target.value)}
-          >
-            <option value="consulta">Consulta</option>
-            <option value="admin">Administrador</option>
-            {conTecnica && <option value="operador">Operador técnico (solo Registro técnico)</option>}
-            {conTecnica && <option value="supervisor">Supervisor técnico (Registro técnico y Dashboard PTAP)</option>}
-          </select>
-          <button className="btn-sm" onClick={agregar} disabled={guardando}>
-            {guardando ? "…" : "Guardar"}
-          </button>
+      {alta && (
+        <div className="adm-nuevo adm-alta" data-testid="adm-alta">
+          <div className="adm-alta-datos">
+            <input className="field" placeholder="correo@emdupar.gov.co" value={alta.email} data-campo="correo" onChange={(e) => setAlta({ ...alta, email: e.target.value, paso: "editar" })} />
+            <input className="field" placeholder="Nombre (opcional)" value={alta.nombre} data-campo="nombre" onChange={(e) => setAlta({ ...alta, nombre: e.target.value, paso: "editar" })} />
+            <input className="field" placeholder="Clave inicial (mín. 8)" type="text" value={alta.clave} data-campo="clave" onChange={(e) => setAlta({ ...alta, clave: e.target.value, paso: "editar" })} />
+            <select className="field" value={alta.tipo} data-campo="tipo" onChange={(e) => setAlta({ ...alta, tipo: e.target.value as Alta["tipo"], paso: "editar" })}>
+              <option value="usuario">Usuario (acceso por geoportal)</option>
+              <option value="admin">Administrador (entra a todo)</option>
+            </select>
+          </div>
+          {alta.tipo === "usuario" && alta.paso === "editar" ? (
+            <>
+              <Renglones c={alta.c} original={sinNada()} disp={disp} email={null} onCambio={(c) => setAlta({ ...alta, c })} />
+              <Horario horario={alta.horario} dias={alta.dias} onCambio={(horario, dias) => setAlta({ ...alta, horario, dias })} />
+              {avisoHorario(alta.c, alta.horario, alta.dias) ? <p className="adm-aviso-horario" role="alert">{avisoHorario(alta.c, alta.horario, alta.dias)}</p> : null}
+            </>
+          ) : null}
+          {alta.paso === "editar" ? (
+            <div className="adm-resumen-botones">
+              <button type="button" className="btn-sm" onClick={() => { const v = validarAlta(alta); if (v) { setError(v); return; } setError(null); setAlta({ ...alta, paso: "resumen" }); }}>Revisar y crear</button>
+            </div>
+          ) : (
+            <PanelResumen r={resumenAlta(alta)} titulo={`Crear ${normalizar(alta.email)}`} ocupado={ocupado}
+              extra={alta.tipo === "admin" ? "Será administrador: entra a todos los geoportales." : "Se crea inactivo, se guardan sus permisos, se verifican y solo entonces se activa."}
+              onConfirmar={() => void confirmarAlta(alta)} onVolver={() => setAlta({ ...alta, paso: "editar" })} />
+          )}
         </div>
       )}
 
-      {error && <p className="error">{error}</p>}
-      {msg && <p className="hint">{msg}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+      {msg && <p className="hint" role="status">{msg}</p>}
       {cargando && <p className="hint">Cargando…</p>}
 
       <div className="adm-pestanas">
@@ -601,29 +575,23 @@ export function Admin({ onVolver }: Props) {
           <thead>
             <tr>
               <th className="adm-c-usuario">Usuario</th>
-              <th className="adm-c-modos">Modos</th>
-              <th className="adm-c-acceso">Acceso</th>
+              <th className="adm-c-modos">Acceso</th>
+              <th className="adm-c-acceso">Horario</th>
               <th className="adm-c-acciones">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {usuarios.map((u) => {
               const esAdmin = u.rol === "admin";
-              const permitidos = MODOS.filter(([c]) => u[c] === true);
-              const tecnicos = MODOS_TECNICOS.filter(([c]) => u[c] === true);
-              const deCampo = [...MODOS_CAMPO, ["ver_analisis_contrato", "Análisis de contrato"] as [keyof UsuarioAdmin, string]].filter(([c]) => u[c] === true);
-              const deActa = MODOS_ACTA.filter(([c]) => u[c] === true);
-              const deAseo = MODOS_ASEO.filter(([c]) => u[c] === true);
-              const perfilTec = perfilTecnicoDe(u);
+              const perso = esAdmin ? [] : esPersonalizado(casillasDe(u));
               return (
-                <tr key={u.email} className={u.activo ? "" : "adm-inactivo"}>
+                <tr key={u.email} className={u.activo ? "" : "adm-inactivo"} data-usuario={u.email}>
                   <td>
                     {u.nombre && u.nombre !== u.email ? (
                       <>
                         <div className="adm-nombre">
                           {u.nombre}
                           {esAdmin && <span className="adm-tag-admin">Admin</span>}
-                          {perfilTec && <span className="adm-tag-perfil">{NOMBRES_PERFIL[perfilTec]}</span>}
                         </div>
                         <div className="adm-correo">{u.email}</div>
                       </>
@@ -631,45 +599,12 @@ export function Admin({ onVolver }: Props) {
                       <div className="adm-correo adm-correo-solo">
                         {u.email}
                         {esAdmin && <span className="adm-tag-admin">Admin</span>}
-                        {perfilTec && <span className="adm-tag-perfil">{NOMBRES_PERFIL[perfilTec]}</span>}
                       </div>
                     )}
                     {!u.activo && <div className="adm-estado">Inactivo</div>}
                   </td>
                   <td>
-                    {esAdmin ? (
-                      <span className="adm-nota">Todos los modos</span>
-                    ) : permitidos.length === 0 && tecnicos.length === 0 && deCampo.length === 0 && deActa.length === 0 && deAseo.length === 0 ? (
-                      <span className="adm-nota">Sin acceso</span>
-                    ) : (
-                      <div className="adm-etiquetas">
-                        {permitidos.map(([c, et]) => (
-                          <span key={String(c)} className="adm-etiqueta">
-                            {et}
-                          </span>
-                        ))}
-                        {tecnicos.map(([c, et]) => (
-                          <span key={String(c)} className="adm-etiqueta adm-etiqueta-tec">
-                            {et}
-                          </span>
-                        ))}
-                        {deCampo.map(([c, et]) => (
-                          <span key={String(c)} className="adm-etiqueta adm-etiqueta-campo">
-                            {et}
-                          </span>
-                        ))}
-                        {deActa.map(([c, et]) => (
-                          <span key={String(c)} className="adm-etiqueta adm-etiqueta-campo">
-                            {et}
-                          </span>
-                        ))}
-                        {deAseo.map(([c, et]) => (
-                          <span key={String(c)} className="adm-etiqueta adm-etiqueta-campo">
-                            {et}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <span className={"adm-linea" + (perso.length ? " adm-linea-perso" : "")} data-linea>{lineaUsuario(u)}</span>
                   </td>
                   <td>
                     {esAdmin ? (
@@ -685,17 +620,18 @@ export function Admin({ onVolver }: Props) {
                     )}
                   </td>
                   <td className="adm-c-acciones">
-                    <button className="btn-link" onClick={() => abrirEdicion(u)}>
-                      {editando === u.email ? "Cerrar" : "Editar"}
+                    <button className="btn-link" onClick={() => abrir(u, "editar")}>
+                      {ed?.email === u.email && ed.modo === "editar" ? "Cerrar" : "Editar"}
                     </button>
-                    <button
-                      className="btn-link"
-                      onClick={() =>
-                        cambiar(u, { rol: esAdmin ? "consulta" : "admin" })
-                      }
-                    >
-                      {esAdmin ? "Hacer consulta" : "Hacer admin"}
-                    </button>
+                    {esAdmin ? (
+                      <button className="btn-link" onClick={() => abrir(u, "hacer_consulta")}>
+                        {ed?.email === u.email && ed.modo === "hacer_consulta" ? "Cerrar" : "Hacer consulta"}
+                      </button>
+                    ) : (
+                      <button className="btn-link" onClick={() => { if (window.confirm(`¿Hacer administrador a ${u.email}? Entrará a todos los geoportales.`)) void cambiar(u, { rol: "admin" }); }}>
+                        Hacer admin
+                      </button>
+                    )}
                     <button
                       className="btn-link"
                       onClick={() => cambiar(u, { activo: !u.activo })}
@@ -714,150 +650,35 @@ export function Admin({ onVolver }: Props) {
       </div>
       )}
 
-      {editando && borrador && (
-        <div className="adm-editor">
+      {ed && (
+        <div className="adm-editor" data-testid="adm-editor" data-modo={ed.modo}>
           <div className="adm-editor-tit">
-            Editando <span className="mono">{editando}</span>
+            {ed.modo === "hacer_consulta" ? "Hacer consulta: " : "Editando "}<span className="mono">{ed.email}</span>
           </div>
-          <div className="adm-editor-campos">
-            <div className="adm-bloques">
-              <BloquePermisos
-                titulo="Geoportal Comercial"
-                campos={CAMPOS_COMERCIAL}
-                alEncender={["explorar"]}
-                borrador={borrador}
-                onCambio={(c) => setBorrador({ ...borrador, ...c })}
-              />
-              {conTecnica && (
-                <BloquePermisos
-                  titulo="Geoportal Técnica"
-                  tecnico
-                  campos={conRedes ? [...CAMPOS_TECNICA, CAMPO_REDES] : CAMPOS_TECNICA}
-                  borrador={borrador}
-                  onCambio={(c) => setBorrador({ ...borrador, ...c })}
-                >
-                  <select
-                    className="adm-sel adm-perfil-rapido"
-                    value=""
-                    aria-label="Aplicar un perfil técnico"
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (!v) return;
-                      // Corte 4a: supervisor de distribución = Registro técnico + Dashboard distribución (§16)
-                      const p = (v === "distribucion" ? "operador" : v) as PerfilTecnico;
-                      setBorrador({ explorar: false, focalizacion: false, comercial: false, rutas: false, dashboard: false, horario: "sin_restriccion", dias: "todos",
-                                    registro_tecnico: PERFILES_TECNICOS[p].registro, dashboard_tecnico: PERFILES_TECNICOS[p].dashboard,
-                                    ...(conRedes ? { dashboard_redes: v === "distribucion" } : {}),
-                                    ...(borrador.campo !== undefined ? { campo: borrador.campo, dashboard_campo: borrador.dashboard_campo } : {}),
-                                    ...(borrador.acta !== undefined ? { acta: borrador.acta, dashboard_acta: borrador.dashboard_acta } : {}),
-                                    ...(borrador.aseo !== undefined ? { aseo: borrador.aseo, dashboard_aseo: borrador.dashboard_aseo } : {}) });
-                    }}
-                  >
-                    <option value="">Aplicar perfil…</option>
-                    <option value="operador">Operador técnico</option>
-                    <option value="supervisor">Supervisor técnico</option>
-                    {conRedes && <option value="distribucion">Supervisor de distribución</option>}
-                  </select>
-                  {conRedes && borrador.registro_tecnico && <GeovisorSoloLectura email={editando} />}
-                  {(borrador.registro_tecnico || borrador.dashboard_tecnico || borrador.dashboard_redes) && (
-                    <p className="adm-aviso-tec">
-                      {CAMPOS_COMERCIAL.some(([c]) => borrador[c] === true)
-                        ? "Con modos comerciales y técnicos verá las dos áreas y la ventana de entrada."
-                        : "Solo verá el área técnica: entra directo, sin mapa ni datos comerciales."}
-                      {(borrador.horario !== "sin_restriccion" || borrador.dias !== "todos") &&
-                        " El área técnica opera todos los días a cualquier hora: con este horario el acceso se corta fuera de él."}
-                    </p>
-                  )}
-                </BloquePermisos>
+          {ed.paso === "editar" ? (
+            <>
+              <label className="adm-campo-et adm-campo-nombre">Nombre
+                <input className="field" value={ed.nombre} data-campo="nombre" placeholder="Nombre de la persona" onChange={(e) => setEd({ ...ed, nombre: e.target.value })} />
+              </label>
+              {ed.nombre0 && !ed.nombre.trim() ? <p className="adm-renglon-desc">El nombre no se puede dejar vacío: se conserva «{ed.nombre0}».</p> : null}
+              {rolFinal(ed) === "admin" ? (
+                <p className="adm-renglon-desc adm-nota-admin">Es administrador: entra a todos los geoportales, sin horario. Para darle perfiles por geoportal, use «Hacer consulta».</p>
+              ) : (
+                <>
+                  {ed.modo === "hacer_consulta" ? <p className="adm-resumen-extra">Hoy es administrador. Escoja a qué geoportales entra como usuario: al confirmar deja de ser administrador.</p> : null}
+                  <Renglones c={ed.c} original={ed.original} disp={disp} email={ed.email} onCambio={(c) => setEd({ ...ed, c })} />
+                  <Horario horario={ed.horario} dias={ed.dias} onCambio={(horario, dias) => setEd({ ...ed, horario, dias })} />
+                  {avisoHorario(ed.c, ed.horario, ed.dias) ? <p className="adm-aviso-horario" role="alert">{avisoHorario(ed.c, ed.horario, ed.dias)}</p> : null}
+                </>
               )}
-              {conCampo && (
-                <BloquePermisos
-                  titulo="Comercial · Formatos de campo"
-                  campo
-                  campos={conAnalisis ? [...CAMPOS_CAMPO, CAMPO_ANALISIS] : CAMPOS_CAMPO}
-                  alEncender={conAnalisis ? ["campo", "dashboard_campo"] : undefined}
-                  borrador={borrador}
-                  onCambio={(c) => setBorrador({ ...borrador, ...c })}
-                >
-                  <p className="adm-aviso-tec">
-                    «Formatos de campo» permite reportar. «Supervisor de reportes de campo» permite ver, clasificar y ocultar los reportes. Solo con esto, la persona no ve el mapa ni datos comerciales.
-                  </p>
-                  {conAnalisis && (
-                    <p className="adm-aviso-tec">
-                      «Análisis de contrato» muestra la cartera, el consumo, el medidor y las gestiones de un contrato, con el nombre y el teléfono del suscriptor (dato personal). Tiene un límite diario de consultas.
-                    </p>
-                  )}
-                  {avisoHorarioCampo(borrador) && <p className="adm-aviso-horario" role="alert">{avisoHorarioCampo(borrador)}</p>}
-                </BloquePermisos>
-              )}
-              {conActa && (
-                <BloquePermisos
-                  titulo="Comercial · Acta de revisión e irregularidades"
-                  campo
-                  campos={CAMPOS_ACTA}
-                  borrador={borrador}
-                  onCambio={(c) => setBorrador({ ...borrador, ...c })}
-                >
-                  <p className="adm-aviso-tec">
-                    «Registrar actas de revisión e irregularidades» permite registrar actas (el registro digital acompaña al acta física firmada). «Supervisor de actas de revisión e irregularidades» permite revisarlas, cambiar su estado, ocultarlas y corregirlas. Solo con esto, la persona no ve el mapa ni datos comerciales.
-                  </p>
-                  {avisoHorarioActa(borrador) && <p className="adm-aviso-horario" role="alert">{avisoHorarioActa(borrador)}</p>}
-                </BloquePermisos>
-              )}
-              {conAseo && (
-                <BloquePermisos
-                  titulo="Aseo · Interventoría"
-                  campo
-                  campos={CAMPOS_ASEO}
-                  borrador={borrador}
-                  onCambio={(c) => setBorrador({ ...borrador, ...c })}
-                >
-                  <p className="adm-aviso-tec">
-                    «Interventoría de aseo» permite auditar rutas y registrar la auditoría con fotos. «Supervisor de aseo» permite revisarlas y ocultarlas con motivo. Solo con esto, la persona no ve el mapa comercial ni datos de suscriptores.
-                  </p>
-                  {avisoHorarioAseo(borrador) && <p className="adm-aviso-horario" role="alert">{avisoHorarioAseo(borrador)}</p>}
-                </BloquePermisos>
-              )}
-            </div>
-            {![...CAMPOS_COMERCIAL, ...(conTecnica ? CAMPOS_TECNICA : []), ...(conRedes ? [CAMPO_REDES] : []), ...(conCampo ? CAMPOS_CAMPO : []), ...(conAnalisis ? [CAMPO_ANALISIS] : []), ...(conActa ? CAMPOS_ACTA : []), ...(conAseo ? CAMPOS_ASEO : [])].some(([c]) => borrador[c] === true) && (
-              <p className="adm-aviso-tec">Sin ningún modo asignado: al ingresar verá «Sin módulos asignados».</p>
-            )}
-            <div>
-              <div className="adm-editor-et">Horario</div>
-              <select
-                className="adm-sel"
-                value={borrador.horario}
-                onChange={(e) =>
-                  setBorrador({ ...borrador, horario: e.target.value })
-                }
-              >
-                <option value="laboral">Laboral</option>
-                <option value="extendido">Extendido</option>
-                <option value="sin_restriccion">Sin restricción horaria</option>
-              </select>
-            </div>
-            <div>
-              <div className="adm-editor-et">Días</div>
-              <select
-                className="adm-sel"
-                value={borrador.dias}
-                onChange={(e) => setBorrador({ ...borrador, dias: e.target.value })}
-              >
-                <option value="habiles">Lunes a viernes</option>
-                <option value="todos">Todos los días</option>
-              </select>
-            </div>
-            <button
-              className="btn-sm"
-              disabled={salvando}
-              onClick={() => {
-                const u = usuarios.find((x) => x.email === editando);
-                if (u) guardarPermisos(u);
-              }}
-            >
-              {salvando ? "…" : "Guardar cambios"}
-            </button>
-          </div>
+              <div className="adm-resumen-botones">
+                <button type="button" className="btn-sm" onClick={() => { setError(null); setMsg(null); setEd({ ...ed, paso: "resumen" }); }}>Revisar cambios</button>
+                <button type="button" className="btn-link" onClick={() => setEd(null)}>Cancelar</button>
+              </div>
+            </>
+          ) : (
+            <PanelResumen r={resumenDe(ed)} titulo={`Cambios para ${ed.email}`} ocupado={ocupado} onConfirmar={() => void confirmarEdicion(ed)} onVolver={() => setEd({ ...ed, paso: "editar" })} />
+          )}
         </div>
       )}
     </div>
