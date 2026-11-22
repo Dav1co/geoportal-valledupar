@@ -10,8 +10,8 @@ begin
   if to_regprocedure('campo.f_supervisor_comercial(text)') is null then
     raise exception 'El cambio de cargo y área por el supervisor no está aplicado (no existe campo.f_supervisor_comercial): no hay nada que revertir';
   end if;
-  if md5(pg_get_functiondef(to_regprocedure('public.geoportal_campo_personal_fijar(text,text,text,jsonb,text)'))) is distinct from '75b3027c7f061efebc964fae7ab52244'
-     or md5(pg_get_functiondef(to_regprocedure('public.geoportal_campo_personal(text,jsonb,text)'))) is distinct from '3f3905179662455700e48203a2bb010f' then
+  if md5(pg_get_functiondef(to_regprocedure('public.geoportal_campo_personal_fijar(text,text,text,jsonb,text)'))) is distinct from '8baf8468c6a9178df700cd94830cdd41'
+     or md5(pg_get_functiondef(to_regprocedure('public.geoportal_campo_personal(text,jsonb,text)'))) is distinct from '8298374d98bd0cfedb7f205e838ccf65' then
     raise exception 'geoportal_campo_personal_fijar o geoportal_campo_personal cambiaron después de este paquete: la reversa no las pisa; deténgase y avise';
   end if;
 end $$;

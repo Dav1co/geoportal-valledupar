@@ -1,7 +1,8 @@
 -- =====================================================================
 -- COMERCIAL 22-NOV · CARGO Y ÁREA POR EL SUPERVISOR DE CAMPO · 26 — REEMPLAZOS (misma firma; los textos de partida son los publicados el 21-nov, paquete (a))
--- · geoportal_campo_personal_fijar (fc362a28…): el supervisor de campo fija área y cargo de los operarios; de un supervisor o de un administrador, no (42501 con texto).
--- · geoportal_campo_personal (7028ce40…): puede.cargo y puede.area pasan a v_sup; cada persona trae «puede_area_cargo» (campo nuevo; la respuesta de hoy no cambia).
+-- · geoportal_campo_personal_fijar (fc362a28…): el supervisor de campo cambia SOLO a los operarios (área, cargo, formularios, cuadrilla y actividades); a un
+--   supervisor, a un administrador o a sí mismo, no (42501 con texto).
+-- · geoportal_campo_personal (7028ce40…): puede.cargo y puede.area pasan a v_sup; cada persona trae «puede_area_cargo» y «puede_asignar» (campos nuevos; la respuesta de hoy no cambia).
 -- La reversa vuelve a los dos textos publicados.
 -- =====================================================================
 
@@ -16,11 +17,18 @@ begin
   if p_tipo is null or p_tipo not in ('fijar_cargo', 'fijar_area', 'fijar_cuadrilla', 'asignar_formulario', 'quitar_formulario', 'asignar_actividad', 'quitar_actividad') then
     perform campo.f_error('El cambio debe ser fijar_cargo, fijar_area, fijar_cuadrilla, asignar_formulario, quitar_formulario, asignar_actividad o quitar_actividad');
   end if;
-  -- 22-nov (David): el supervisor de campo (dashboard_campo; ya lo exige f_autorizar_supervision) cambia el área y el cargo SOLO de los operarios.
-  -- Los de un supervisor (dashboard_campo o dashboard_acta) y los de un administrador los cambia el administrador.
-  if p_tipo in ('fijar_cargo', 'fijar_area') and not v_admin then
-    if public.geoportal_es_admin(v_p) then perform campo.f_error('El área y el cargo de un administrador no se cambian desde Personal', '42501'); end if;
-    if campo.f_supervisor_comercial(v_p) then perform campo.f_error('El área y el cargo de un supervisor los cambia el administrador', '42501'); end if;
+  -- 22-nov (David, 11:11 y 11:25): el supervisor de campo (dashboard_campo; ya lo exige f_autorizar_supervision) cambia SOLO a los operarios: área, cargo,
+  -- formularios, cuadrilla (poner o sacar) y actividades. Lo de un supervisor (dashboard_campo o dashboard_acta, también él mismo) y lo de un administrador
+  -- lo hace el administrador. Crear, renombrar y desactivar cuadrillas no cambia (geoportal_campo_cuadrilla_cambiar).
+  if not v_admin then
+    if public.geoportal_es_admin(v_p) then
+      perform campo.f_error(case when p_tipo in ('fijar_cargo', 'fijar_area') then 'El área y el cargo de un administrador no se cambian desde Personal'
+                                 else 'Las asignaciones de un administrador no se hacen desde Personal' end, '42501');
+    end if;
+    if campo.f_supervisor_comercial(v_p) then
+      perform campo.f_error(case when p_tipo in ('fijar_cargo', 'fijar_area') then 'El área y el cargo de un supervisor los cambia el administrador'
+                                 else 'Las asignaciones de un supervisor las hace el administrador' end, '42501');
+    end if;
   end if;
   if not campo.f_persona_comercial(v_p) then perform campo.f_error('Esa persona no tiene acceso activo a Formularios de campo ni al acta'); end if;
   if v_p = v_email then perform campo.f_error('No puede cambiar su propia ficha'); end if;
@@ -106,6 +114,8 @@ begin
                'propia', lb.email = v_email,
                -- 22-nov: ¿quien consulta puede cambiarle el área y el cargo a esta persona? (el administrador a todos; el supervisor de campo solo a los operarios; nadie a sí mismo)
                'puede_area_cargo', lb.email <> v_email and (v_admin or (v_sup and not (coalesce(lb.ver_dashboard_campo, false) or coalesce(lb.ver_dashboard_acta, false)))),
+               -- 22-nov (11:25): y lo mismo para formularios, cuadrilla y actividades (hoy el mismo valor que puede_area_cargo)
+               'puede_asignar', lb.email <> v_email and (v_admin or (v_sup and not (coalesce(lb.ver_dashboard_campo, false) or coalesce(lb.ver_dashboard_acta, false)))),
                'area', (select jsonb_build_object('codigo', a.codigo, 'nombre', a.nombre, 'activa', a.activa) from campo.areas_comercial a where a.codigo = campo.f_area_vigente(lb.email)),
                'cuadrilla', (select jsonb_build_object('id', q.id, 'nombre', q.nombre, 'activa', q.activa) from campo.cuadrillas q where q.id = campo.f_cuadrilla_vigente(lb.email)),
                'actividades', (select coalesce(jsonb_agg(jsonb_build_object('codigo', x.codigo, 'nombre', coalesce(a.nombre, x.codigo), 'activa', coalesce(a.activa, false), 'origen', x.origen)

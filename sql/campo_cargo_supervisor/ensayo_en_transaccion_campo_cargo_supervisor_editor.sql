@@ -30,7 +30,7 @@ end $$;
 -- COMERCIAL 22-NOV · CARGO Y ÁREA POR EL SUPERVISOR DE CAMPO · 20 — FUNCIÓN INTERNA NUEVA (sin permisos para los roles de la API; la usa la RPC SECURITY DEFINER)
 -- =====================================================================
 -- ¿Es supervisor de Comercial? Quien tenga dashboard_campo o dashboard_acta en una cuenta activa que no sea de administrador (el mismo criterio del «perfil»
--- que ya muestra geoportal_campo_personal). Sus áreas y cargos solo los cambia el administrador (David, 22-nov).
+-- que ya muestra geoportal_campo_personal). Su área, su cargo y sus asignaciones (formularios, cuadrilla y actividades) solo los cambia el administrador (David, 22-nov).
 create function campo.f_supervisor_comercial(p_email text) returns boolean
 language sql stable security definer set search_path to 'public', 'campo', 'pg_temp' as $$
   select exists (select 1 from public.geoportal_lista_blanca lb where lb.email = lower(btrim(coalesce(p_email, ''))) and lb.activo and lb.rol <> 'admin'
@@ -39,8 +39,9 @@ $$;
 
 -- =====================================================================
 -- COMERCIAL 22-NOV · CARGO Y ÁREA POR EL SUPERVISOR DE CAMPO · 26 — REEMPLAZOS (misma firma; los textos de partida son los publicados el 21-nov, paquete (a))
--- · geoportal_campo_personal_fijar (fc362a28…): el supervisor de campo fija área y cargo de los operarios; de un supervisor o de un administrador, no (42501 con texto).
--- · geoportal_campo_personal (7028ce40…): puede.cargo y puede.area pasan a v_sup; cada persona trae «puede_area_cargo» (campo nuevo; la respuesta de hoy no cambia).
+-- · geoportal_campo_personal_fijar (fc362a28…): el supervisor de campo cambia SOLO a los operarios (área, cargo, formularios, cuadrilla y actividades); a un
+--   supervisor, a un administrador o a sí mismo, no (42501 con texto).
+-- · geoportal_campo_personal (7028ce40…): puede.cargo y puede.area pasan a v_sup; cada persona trae «puede_area_cargo» y «puede_asignar» (campos nuevos; la respuesta de hoy no cambia).
 -- La reversa vuelve a los dos textos publicados.
 -- =====================================================================
 
@@ -55,11 +56,18 @@ begin
   if p_tipo is null or p_tipo not in ('fijar_cargo', 'fijar_area', 'fijar_cuadrilla', 'asignar_formulario', 'quitar_formulario', 'asignar_actividad', 'quitar_actividad') then
     perform campo.f_error('El cambio debe ser fijar_cargo, fijar_area, fijar_cuadrilla, asignar_formulario, quitar_formulario, asignar_actividad o quitar_actividad');
   end if;
-  -- 22-nov (David): el supervisor de campo (dashboard_campo; ya lo exige f_autorizar_supervision) cambia el área y el cargo SOLO de los operarios.
-  -- Los de un supervisor (dashboard_campo o dashboard_acta) y los de un administrador los cambia el administrador.
-  if p_tipo in ('fijar_cargo', 'fijar_area') and not v_admin then
-    if public.geoportal_es_admin(v_p) then perform campo.f_error('El área y el cargo de un administrador no se cambian desde Personal', '42501'); end if;
-    if campo.f_supervisor_comercial(v_p) then perform campo.f_error('El área y el cargo de un supervisor los cambia el administrador', '42501'); end if;
+  -- 22-nov (David, 11:11 y 11:25): el supervisor de campo (dashboard_campo; ya lo exige f_autorizar_supervision) cambia SOLO a los operarios: área, cargo,
+  -- formularios, cuadrilla (poner o sacar) y actividades. Lo de un supervisor (dashboard_campo o dashboard_acta, también él mismo) y lo de un administrador
+  -- lo hace el administrador. Crear, renombrar y desactivar cuadrillas no cambia (geoportal_campo_cuadrilla_cambiar).
+  if not v_admin then
+    if public.geoportal_es_admin(v_p) then
+      perform campo.f_error(case when p_tipo in ('fijar_cargo', 'fijar_area') then 'El área y el cargo de un administrador no se cambian desde Personal'
+                                 else 'Las asignaciones de un administrador no se hacen desde Personal' end, '42501');
+    end if;
+    if campo.f_supervisor_comercial(v_p) then
+      perform campo.f_error(case when p_tipo in ('fijar_cargo', 'fijar_area') then 'El área y el cargo de un supervisor los cambia el administrador'
+                                 else 'Las asignaciones de un supervisor las hace el administrador' end, '42501');
+    end if;
   end if;
   if not campo.f_persona_comercial(v_p) then perform campo.f_error('Esa persona no tiene acceso activo a Formularios de campo ni al acta'); end if;
   if v_p = v_email then perform campo.f_error('No puede cambiar su propia ficha'); end if;
@@ -145,6 +153,8 @@ begin
                'propia', lb.email = v_email,
                -- 22-nov: ¿quien consulta puede cambiarle el área y el cargo a esta persona? (el administrador a todos; el supervisor de campo solo a los operarios; nadie a sí mismo)
                'puede_area_cargo', lb.email <> v_email and (v_admin or (v_sup and not (coalesce(lb.ver_dashboard_campo, false) or coalesce(lb.ver_dashboard_acta, false)))),
+               -- 22-nov (11:25): y lo mismo para formularios, cuadrilla y actividades (hoy el mismo valor que puede_area_cargo)
+               'puede_asignar', lb.email <> v_email and (v_admin or (v_sup and not (coalesce(lb.ver_dashboard_campo, false) or coalesce(lb.ver_dashboard_acta, false)))),
                'area', (select jsonb_build_object('codigo', a.codigo, 'nombre', a.nombre, 'activa', a.activa) from campo.areas_comercial a where a.codigo = campo.f_area_vigente(lb.email)),
                'cuadrilla', (select jsonb_build_object('id', q.id, 'nombre', q.nombre, 'activa', q.activa) from campo.cuadrillas q where q.id = campo.f_cuadrilla_vigente(lb.email)),
                'actividades', (select coalesce(jsonb_agg(jsonb_build_object('codigo', x.codigo, 'nombre', coalesce(a.nombre, x.codigo), 'activa', coalesce(a.activa, false), 'origen', x.origen)
@@ -209,7 +219,7 @@ do $$
 declare
   A text := 'ztcar.adm@emdupar.gov.co'; S text := 'ztcar.sup@emdupar.gov.co'; SC text := 'ztcar.supcampo@emdupar.gov.co'; SA text := 'ztcar.supacta@emdupar.gov.co';
   O1 text := 'ztcar.op1@emdupar.gov.co'; O2 text := 'ztcar.op2@emdupar.gov.co'; A2 text := 'ztcar.adm2@emdupar.gov.co';
-  r jsonb; p jsonb; t0 timestamptz; n0 bigint;
+  r jsonb; p jsonb; t0 timestamptz; n0 bigint; Q bigint; M text := 'Las asignaciones de un supervisor las hace el administrador'; MA text := 'Las asignaciones de un administrador no se hacen desde Personal';
 begin
   -- 00: áreas de prueba (las crea el administrador, como siempre)
   r := pg_temp.rpc(format('public.geoportal_campo_catalogo_cambiar(%L, %L::jsonb)', A, '{"catalogo": "area", "tipo": "crear", "nombre": "ZTCAR Facturación"}'));
@@ -276,14 +286,71 @@ begin
   r := pg_temp.fijar(SA, O2, 'quitar_formulario', '{"formulario": "acta", "motivo": "ZTCAR prueba de retiro de formulario"}');
   perform pg_temp.ok('05.02 el de solo dashboard_acta sigue sin cambiar fichas (como hoy)', pg_temp.err(r) = '42501', r::text);
 
+  -- 09: «solo operarios» también para formularios, cuadrilla y actividades (David, 22-nov 11:25). Crear y desactivar cuadrillas no cambia.
+  r := pg_temp.rpc(format('public.geoportal_campo_catalogo_cambiar(%L, %L::jsonb)', A, '{"catalogo": "actividad", "tipo": "crear", "nombre": "ZTCAR Lectura"}'));
+  perform pg_temp.ok('09.00 actividad de prueba ZTCAR Lectura', r ->> 'codigo' = 'ztcar_lectura', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_cuadrilla_cambiar(%L, %L::jsonb)', S, '{"tipo": "crear", "nombre": "ZTCAR Cuadrilla Norte"}'));
+  Q := (r ->> 'id')::bigint;
+  perform pg_temp.ok('09.01 el supervisor sigue creando cuadrillas', pg_temp.err(r) = 'OK' and Q is not null, r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_cuadrilla_cambiar(%L, %L::jsonb)', S, jsonb_build_object('tipo', 'agregar_actividad', 'cuadrilla_id', Q, 'actividad', 'ztcar_lectura')::text));
+  perform pg_temp.ok('09.02 y les agrega actividades', pg_temp.err(r) = 'OK' and 'ztcar_lectura' = any (campo.f_cuadrilla_actividades(Q)), r::text);
+  -- a un OPERARIO: sí
+  r := pg_temp.fijar(S, O2, 'fijar_cuadrilla', jsonb_build_object('cuadrilla_id', Q)::text);
+  perform pg_temp.ok('09.03 pone a un operario en una cuadrilla', pg_temp.err(r) = 'OK' and campo.f_cuadrilla_vigente(O2) = Q, r::text);
+  r := pg_temp.fijar(S, O2, 'asignar_actividad', '{"actividad": "ztcar_lectura"}');
+  perform pg_temp.ok('09.04 le asigna una actividad propia', pg_temp.err(r) = 'OK' and 'ztcar_lectura' = any (campo.f_actividades_propias(O2)), r::text);
+  r := pg_temp.fijar(S, O2, 'quitar_actividad', '{"actividad": "ztcar_lectura", "motivo": "ZTCAR ya la tiene por la cuadrilla"}');
+  perform pg_temp.ok('09.05 y se la quita con motivo', pg_temp.err(r) = 'OK' and not ('ztcar_lectura' = any (campo.f_actividades_propias(O2))), r::text);
+  -- a otro SUPERVISOR, a un ADMINISTRADOR o a SÍ MISMO: no, con mensaje claro y sin escribir nada
+  n0 := (select count(*) from campo.personal_eventos e where e.persona in (SC, SA, A2, S) and e.tipo_evento in ('fijar_cuadrilla', 'asignar_formulario', 'quitar_formulario', 'asignar_actividad', 'quitar_actividad'));
+  r := pg_temp.fijar(S, SC, 'fijar_cuadrilla', jsonb_build_object('cuadrilla_id', Q)::text);
+  perform pg_temp.ok('09.06 no pone a otro supervisor en una cuadrilla: 403 «Las asignaciones de un supervisor las hace el administrador»', pg_temp.err(r) = '42501' and r ->> 'msg' = M, r::text);
+  r := pg_temp.fijar(S, SC, 'asignar_formulario', '{"formulario": "acta"}');
+  perform pg_temp.ok('09.07 no le asigna formularios', pg_temp.err(r) = '42501' and r ->> 'msg' = M, r::text);
+  r := pg_temp.fijar(S, SC, 'asignar_actividad', '{"actividad": "ztcar_lectura"}');
+  perform pg_temp.ok('09.08 ni actividades', pg_temp.err(r) = '42501' and r ->> 'msg' = M, r::text);
+  r := pg_temp.fijar(S, SA, 'asignar_formulario', '{"formulario": "acta"}');
+  perform pg_temp.ok('09.09 ni al supervisor de actas (solo dashboard_acta)', pg_temp.err(r) = '42501' and r ->> 'msg' = M, r::text);
+  perform pg_temp.ok('09.10 a un administrador: cuadrilla, formularios y actividades, 403 «… no se hacen desde Personal»',
+    pg_temp.fijar(S, A2, 'fijar_cuadrilla', jsonb_build_object('cuadrilla_id', Q)::text) ->> 'msg' = MA
+    and pg_temp.fijar(S, A2, 'asignar_formulario', '{"formulario": "acta"}') ->> 'msg' = MA
+    and pg_temp.fijar(S, A2, 'asignar_actividad', '{"actividad": "ztcar_lectura"}') ->> 'msg' = MA);
+  perform pg_temp.ok('09.11 a sí mismo: cuadrilla, formularios y actividades, 403',
+    pg_temp.err(pg_temp.fijar(S, S, 'fijar_cuadrilla', jsonb_build_object('cuadrilla_id', Q)::text)) = '42501'
+    and pg_temp.err(pg_temp.fijar(S, S, 'asignar_formulario', '{"formulario": "acta"}')) = '42501'
+    and pg_temp.err(pg_temp.fijar(S, S, 'asignar_actividad', '{"actividad": "ztcar_lectura"}')) = '42501'
+    and pg_temp.err(pg_temp.fijar(SC, SC, 'asignar_actividad', '{"actividad": "ztcar_lectura"}')) = '42501');
+  perform pg_temp.ok('09.12 ninguno de esos rechazos escribió eventos', (select count(*) from campo.personal_eventos e where e.persona in (SC, SA, A2, S)
+    and e.tipo_evento in ('fijar_cuadrilla', 'asignar_formulario', 'quitar_formulario', 'asignar_actividad', 'quitar_actividad')) = n0);
+  -- el administrador sigue pudiendo con todos
+  r := pg_temp.fijar(A, SC, 'fijar_cuadrilla', jsonb_build_object('cuadrilla_id', Q)::text);
+  perform pg_temp.ok('09.13 el administrador pone a un supervisor en la cuadrilla', pg_temp.err(r) = 'OK' and campo.f_cuadrilla_vigente(SC) = Q, r::text);
+  r := pg_temp.fijar(A, SC, 'asignar_formulario', '{"formulario": "acta"}');
+  perform pg_temp.ok('09.14 y le asigna formularios', pg_temp.err(r) = 'OK' and 'acta' = any (campo.f_formularios_asignados(SC)), r::text);
+  -- un supervisor que ya está en una cuadrilla SIGUE apareciendo (el cambio solo decide quién lo cambia)
+  perform pg_temp.ok('09.15 f_quien_puede sigue mostrando al supervisor que está en la cuadrilla (y al operario)',
+    exists (select 1 from campo.f_quien_puede('ztcar_lectura') x where x.persona = SC and x.cuadrilla_id = Q and x.origen = 'cuadrilla')
+    and exists (select 1 from campo.f_quien_puede('ztcar_lectura') x where x.persona = O2 and x.cuadrilla_id = Q));
+  perform pg_temp.ok('09.16 y la lista de miembros de la cuadrilla también', (select count(*) from campo.f_miembros_cuadrillas() m where m.cuadrilla_id = Q and m.persona in (SC, O2)) = 2);
+  r := pg_temp.rpc(format('public.geoportal_campo_personal_actividad(%L, %L)', S, 'ztcar_lectura'));
+  perform pg_temp.ok('09.17 «quién puede» (personal_actividad) del supervisor lo muestra', exists (select 1 from jsonb_array_elements(r -> 'personas') x where x ->> 'email' = SC), left(r::text, 300));
+  r := pg_temp.rpc(format('public.geoportal_campo_cuadrillas(%L)', S));
+  perform pg_temp.ok('09.18 y la lista de cuadrillas cuenta sus 2 miembros', pg_temp.err(r) = 'OK' and position(SC in r::text) > 0, left(r::text, 300));
+  r := pg_temp.fijar(S, SC, 'fijar_cuadrilla', '{"cuadrilla_id": null, "motivo": "ZTCAR sacarlo de la cuadrilla"}');
+  perform pg_temp.ok('09.19 el supervisor no lo saca de la cuadrilla (403): eso lo hace el administrador', pg_temp.err(r) = '42501' and r ->> 'msg' = M and campo.f_cuadrilla_vigente(SC) = Q, r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_cuadrilla_cambiar(%L, %L::jsonb)', S, jsonb_build_object('tipo', 'desactivar', 'cuadrilla_id', Q, 'motivo', 'ZTCAR cuadrilla que se retira')::text));
+  perform pg_temp.ok('09.20 desactivar una cuadrilla con miembros sigue pidiendo sacarlos antes (como hoy)', pg_temp.err(r) = '55000', r::text);
+
   -- 06: la lista de Personal le dice a la pantalla qué puede cada quien
   r := pg_temp.rpc(format('public.geoportal_campo_personal(%L)', S));
   perform pg_temp.ok('06.01 supervisor de campo: puede.cargo y puede.area verdaderos; catálogos no', (r #>> '{puede,cargo}')::boolean and (r #>> '{puede,area}')::boolean
     and not (r #>> '{puede,catalogos}')::boolean and not (r ->> 'puede_editar')::boolean, left(r::text, 300));
-  perform pg_temp.ok('06.02 puede_area_cargo: operarios sí; otro supervisor, supervisor de actas y él mismo no',
+  perform pg_temp.ok('06.02 puede_area_cargo y puede_asignar: operarios sí; otro supervisor, supervisor de actas y él mismo no',
     (pg_temp.persona(r, O1) ->> 'puede_area_cargo')::boolean and (pg_temp.persona(r, O2) ->> 'puede_area_cargo')::boolean
     and not (pg_temp.persona(r, SC) ->> 'puede_area_cargo')::boolean and not (pg_temp.persona(r, SA) ->> 'puede_area_cargo')::boolean
-    and not (pg_temp.persona(r, S) ->> 'puede_area_cargo')::boolean);
+    and not (pg_temp.persona(r, S) ->> 'puede_area_cargo')::boolean
+    and (pg_temp.persona(r, O1) ->> 'puede_asignar')::boolean and not (pg_temp.persona(r, SC) ->> 'puede_asignar')::boolean and not (pg_temp.persona(r, SA) ->> 'puede_asignar')::boolean
+    and not (pg_temp.persona(r, S) ->> 'puede_asignar')::boolean);
   r := pg_temp.rpc(format('public.geoportal_campo_personal(%L)', SA));
   perform pg_temp.ok('06.03 solo dashboard_acta: ve Personal, pero puede.cargo falso y nadie editable', not (r #>> '{puede,cargo}')::boolean and not (r #>> '{puede,area}')::boolean
     and not (pg_temp.persona(r, O1) ->> 'puede_area_cargo')::boolean, left(r::text, 300));

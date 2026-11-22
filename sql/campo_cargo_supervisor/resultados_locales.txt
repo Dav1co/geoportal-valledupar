@@ -2,7 +2,7 @@ PRUEBAS LOCALES · Comercial 22-nov · el supervisor de campo cambia área y car
 
 OK    B.01 la base local tiene las huellas de producción (campo 3437a83d…, acta 111506c6…)
 OK    B.02 huellas de solo lectura ANTES: PUBLICADA y NO EXISTE
-ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 38 de 38 pruebas correctas — SIN FALLAS
+ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 59 de 59 pruebas correctas — SIN FALLAS
 OK    E.01 el ensayo termina en el ERROR esperado con «N de N … SIN FALLAS» (0.1 s)
 OK    E.02 el ensayo no dejó nada (huella de campo igual, sin función nueva, sin filas ZTCAR)
 OK    C.01 migración
@@ -20,6 +20,6 @@ OK    C.12 verificación tras volver a aplicar 6 de 6
 OK    C.13 la reversa no pisa una RPC que cambió después
 OK    G.01 con una función de campo distinta, la migración se detiene sin cambiar nada
 OK    G.02 y el ensayo también
-OK    D.01 el doble con el cambio carga en una base vacía y tiene la huella nueva (doble_admin_permisos_4a_con_cargo_supervisor.sql, md5 9e8d16d8cfee9c762d83ca4d8674e7bd)
+OK    D.01 el doble con el cambio carga en una base vacía y tiene la huella nueva (doble_admin_permisos_4a_con_cargo_supervisor.sql, md5 256705b1dc5cf9303a95d7032fda1b61)
 
-RESULTADO: 58 de 58 pruebas correctas — SIN FALLAS
+RESULTADO: 79 de 79 pruebas correctas — SIN FALLAS
