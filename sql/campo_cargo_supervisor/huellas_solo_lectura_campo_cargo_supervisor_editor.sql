@@ -1,0 +1,17 @@
+-- COMERCIAL 22-NOV · CARGO Y ÁREA POR EL SUPERVISOR DE CAMPO · HUELLAS (solo lectura; ANTES y DESPUÉS) (versión para el editor SQL de Supabase; generado por pruebas_locales/generar.py, no editar a mano)
+-- Solo lectura. ANTES: 1 «PUBLICADA (21-nov 19:45)», 2 «PUBLICADA», 3 y 4 «PUBLICADA», 5 «NO EXISTE». DESPUÉS: 1 «CON ESTE CAMBIO» (anótela), 2 igual, 3 y 4 «CON ESTE CAMBIO», 5 «NUEVA».
+select o, k, v, estado from (
+  select 1 as o, '1 funciones de campo (conjunto, todas)' as k, (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) as v,
+         case (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) when '3437a83d1d90055c9861b0964c8f8ffb' then 'PUBLICADA (21-nov 19:45): lista para este cambio' when '261bed3c9242f6261f845ec4e1374b3a' then 'CON ESTE CAMBIO' else 'OTRA: deténgase y avise' end as estado
+  union all
+  select 2, '2 funciones del acta (conjunto)', (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'acta'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_acta\_%')), case (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'acta'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_acta\_%')) when '111506c690249ad3b56ebf572566434c' then 'PUBLICADA (no cambia con este paquete)' else 'OTRA: deténgase y avise' end
+  union all
+  select 3, '3 public.geoportal_campo_personal_fijar(text,text,text,jsonb,text)', md5(pg_get_functiondef(to_regprocedure('public.geoportal_campo_personal_fijar(text,text,text,jsonb,text)'))),
+         case md5(pg_get_functiondef(to_regprocedure('public.geoportal_campo_personal_fijar(text,text,text,jsonb,text)'))) when 'fc362a2894e064767cfca039fa5ed299' then 'PUBLICADA' when '8baf8468c6a9178df700cd94830cdd41' then 'CON ESTE CAMBIO' else 'OTRA: deténgase y avise' end
+  union all
+  select 4, '4 public.geoportal_campo_personal(text,jsonb,text)', md5(pg_get_functiondef(to_regprocedure('public.geoportal_campo_personal(text,jsonb,text)'))),
+         case md5(pg_get_functiondef(to_regprocedure('public.geoportal_campo_personal(text,jsonb,text)'))) when '7028ce4016505ed5fd8ae706db91464c' then 'PUBLICADA' when '8298374d98bd0cfedb7f205e838ccf65' then 'CON ESTE CAMBIO' else 'OTRA: deténgase y avise' end
+  union all
+  select 5, '5 campo.f_supervisor_comercial(text) (nueva)', case when to_regprocedure('campo.f_supervisor_comercial(text)') is not null then md5(pg_get_functiondef(to_regprocedure('campo.f_supervisor_comercial(text)'))) end,
+         case when to_regprocedure('campo.f_supervisor_comercial(text)') is null then 'NO EXISTE (sin aplicar)' when md5(pg_get_functiondef(to_regprocedure('campo.f_supervisor_comercial(text)'))) = '4f3f9883cf4afc0e1f75677d4c5898bd' then 'NUEVA (aplicada)' else 'OTRA: deténgase y avise' end
+) t order by o;
