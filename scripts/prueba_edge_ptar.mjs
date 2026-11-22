@@ -121,7 +121,7 @@ try {
   const f = r.c?.elementos?.features ?? [];
   console.log(`   TIEMPOS por la Edge: mapa de la PTAR ${r.ms} ms, ${r.txt.length} bytes, ${f.length} elementos`);
   ok(`C1 el mapa de la PTAR: los ${N_MAPA} elementos activos, GeoJSON válido, sin caché, en menos de 3 s`, r.s === 200 && r.c.elementos.type === "FeatureCollection" && f.length === N_MAPA
-    && r.c.total === N_MAPA && f.every((x) => x.geometry?.type && x.properties?.codigo && x.properties?.estado === "sin_variables") && r.cache === "no-store" && r.ms < 3000, `${r.s} ${r.ms} ${f.length}`);
+    && r.c.total === N_MAPA && f.every((x) => x.geometry?.type && x.properties?.codigo && (x.properties.tipo === "punto_medicion" ? ["sin_registros", "sin_dato_reciente", "con_datos", "fuera"].includes(x.properties.estado) : x.properties.estado === "sin_variables")) && r.cache === "no-store" && r.ms < 3000, `${r.s} ${r.ms} ${f.length}`);
   ok("C2 las piezas: 1 perímetro, 31 lagunas con su tipo y tren, pozos y conductos copiados de redes con su activo", r.c.por_tipo.perimetro === 1 && r.c.por_tipo.laguna === 31
     && f.filter((x) => x.properties.tipo === "laguna").every((x) => x.properties.tipo_laguna && x.properties.tren)
     && f.filter((x) => x.properties.origen === "redes").every((x) => /^[A-Z]{3}-\d{6}$/.test(x.properties.activo)) && r.c.por_tipo.pozo > 400, JSON.stringify(r.c.por_tipo));
@@ -178,6 +178,28 @@ try {
   r = await E("A", "ptar_alcance", { cuerpo: { persona: EMAILS.X, alcance: "ptar", accion: "quitar", motivo: "ZTPTAR con un dato de más", ip: "1.2.3.4" } });
   ok("F7 una clave que no conoce (ip en el cuerpo): 400", r.s === 400 && /no corresponde/.test(r.c?.error ?? ""), r.txt);
   ok("F8 lo cambiado queda auditado (alias y alcance)", Number(sqlq(`select count(*) from public.geoportal_auditoria where accion in ('tec_ptar_alias', 'tec_ptar_alcance') and email in ('${EMAILS.R}', '${EMAILS.A}')`)) === 2);
+
+  // ===== G. PTAR-3: la Caracterización (formulario por punto, 7 días hacia atrás) y los parámetros en la ficha =====
+  r = await E("R", "formulario", { qs: { formulario: "ptar_caracterizacion" } });
+  ok("G1 el formulario Caracterización: los 4 puntos de la PTAR, 6 variables, 7 días hacia atrás", r.s === 200 && r.c.puntos.map((p) => p.codigo).sort().join() === "PTAR-AFL,PTAR-EFL,PTAR-RIO-ABJ,PTAR-RIO-ARR"
+    && r.c.variables.length === 6 && r.c.dias_atras_max === 7, r.txt.slice(0, 400));
+  ok("G2 el supervisor de la PTAP no abre la Caracterización: 403", (await E("S", "formulario", { qs: { formulario: "ptar_caracterizacion" } })).s === 403);
+  const hace3 = sqlq("select ((clock_timestamp() at time zone 'America/Bogota')::date - 3)::text"), hace9 = sqlq("select ((clock_timestamp() at time zone 'America/Bogota')::date - 9)::text");
+  r = await E("R", "registrar", { cuerpo: { formulario: "ptar_caracterizacion", punto: "PTAR-AFL", hora: "08:00", fecha_muestra: hace3, valores: [{ variable: "ar_caudal", valor: "412.5" }, { variable: "ar_dbo5", valor: "180" }] } });
+  ok("G3 el jefe registra la Caracterización del afluente con la fecha del laboratorio (hace 3 días)", r.s === 200 && r.c.guardados === 2 && r.c.fecha_muestra === hace3, r.txt);
+  r = await E("R", "registrar", { cuerpo: { formulario: "ptar_caracterizacion", punto: "PTAR-AFL", hora: "08:00", fecha_muestra: hace9, valores: [{ variable: "ar_caudal", valor: "1" }] } });
+  ok("G4 más de 7 días atrás: 400 con el texto de la base", r.s === 400 && /7 días/.test(r.c?.error ?? ""), r.txt);
+  r = await E("R", "registrar", { cuerpo: { formulario: "entrada", planta: "huaricha", hora: "08:00", fecha_muestra: hace3, valores: [{ variable: "x", valor: "1" }] } });
+  ok("G5 Entrada sigue sin admitir la fecha: 400 «La fecha la fija el servidor.»", r.s === 400 && r.c?.error === "La fecha la fija el servidor.", r.txt);
+  r = await E("S", "registrar", { cuerpo: { formulario: "ptar_caracterizacion", punto: "PTAR-AFL", hora: "08:00", valores: [{ variable: "ar_caudal", valor: "1" }] } });
+  ok("G6 el supervisor de la PTAP no registra la Caracterización: 403", r.s === 403, r.txt);
+  r = await E("R", "ptar_elemento", { qs: { codigo: "PTAR-PM-AFL" } });
+  const cau = r.c?.indicadores?.find((x) => x.codigo === "ar_caudal"), ph = r.c?.indicadores?.find((x) => x.codigo === "ar_ph");
+  ok("G7 la ficha del afluente: caudal 412,5 con su fecha («sin referencia»), pH de la sonda «sin registros»", r.s === 200 && cau?.valor === 412.5 && cau?.estado === "sin_referencia"
+    && String(cau?.muestra_ts).startsWith(hace3) && ph?.estado === "sin_registros" && r.c.estado === "con_datos", r.txt.slice(0, 600));
+  r = await E("R", "ptar_mapa");
+  ok("G8 en el mapa, el afluente con datos y los otros tres puntos sin registros", r.c.elementos.features.filter((f) => f.properties.tipo === "punto_medicion").map((f) => `${f.properties.punto}=${f.properties.estado}`).sort().join()
+    === "PTAR-AFL=con_datos,PTAR-EFL=sin_registros,PTAR-RIO-ABJ=sin_registros,PTAR-RIO-ARR=sin_registros", r.txt.slice(0, 300));
 
   // ===== Z. Lo que no debe salir =====
   r = await E("R", "ptar_no_existe");

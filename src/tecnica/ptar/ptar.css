@@ -67,3 +67,30 @@
   .tdash-ptar .tdash-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
   .tdash-ptar .tdash-tab { flex: 0 0 auto; white-space: nowrap; }
 }
+/* PTAR-3: el Sistema de Control (pantalla propia), los parámetros en la ficha y la leyenda de estados */
+.ptar-mapa-completo { max-width: none; }
+.ptar-mapa-completo .ptar-mapa { height: 70vh; }
+.ptar-par-grupo h4 { margin: 8px 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t-texto-2); }
+.ptar-par { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ptar-par li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 0; border-bottom: 1px solid var(--t-borde); font-size: 14px; }
+.ptar-par-nom { color: var(--t-texto); font-weight: 600; }
+.ptar-par-val { color: var(--t-texto); text-align: right; }
+.ptar-par li[data-estado="sin_registros"] .ptar-par-val { color: var(--t-texto-2); font-style: italic; }
+.ptar-par-fecha { font-size: 13px; color: var(--t-texto-2); }
+.ptar-par-est { font-size: 12px; font-weight: 600; justify-self: end; padding: 2px 6px; border-radius: 6px; background: var(--t-suave); color: var(--ptar-estado-sin); }
+.ptar-est-txt-normal { background: var(--t-ok-suave); color: var(--ptar-estado-normal); }
+.ptar-est-txt-fuera { background: var(--t-rojo-suave); color: var(--ptar-estado-fuera); }
+.ptar-est-txt-sin_dato_reciente { background: var(--t-naranja-suave); color: var(--ptar-estado-viejo); }
+.ptar-leyenda { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--t-texto); }
+.ptar-leyenda li { display: flex; align-items: center; gap: 8px; }
+.ptar-est { width: 14px; height: 14px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--t-borde-campo); }
+.ptar-est-con_datos { background: var(--ptar-estado-normal); }
+.ptar-est-fuera { background: var(--ptar-estado-fuera); }
+.ptar-est-sin_dato_reciente { background: var(--ptar-estado-viejo); }
+.ptar-est-sin_registros { background: var(--ptar-mapa-contorno); }
+.ptar-control { display: flex; flex-direction: column; min-height: 100vh; background: var(--t-fondo); }
+.ptar-control-cab { background: var(--t-ptar); color: #fff; padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.ptar-control-cab h1 { margin: 0; font-size: 22px; font-weight: 700; color: #fff; }
+.ptar-control-cab p { margin: 2px 0 0; font-size: 13px; color: #fff; opacity: 0.85; }
+.ptar-acceso { padding: 16px; max-width: 900px; margin: 0 auto; }
+@media (min-width: 900px) { .ptar-control-cab h1 { font-size: 28px; } .ptar-mapa-completo .ptar-mapa { height: calc(100vh - 230px); } .ptar-mapa-completo .ptar-lado { max-height: calc(100vh - 230px); } }

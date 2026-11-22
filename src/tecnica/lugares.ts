@@ -26,6 +26,8 @@ const TIPOS_PUNTO: Record<string, { titulo: string; lugar: string; ayuda: string
   distribucion: { titulo: "Distribución", lugar: "Punto de distribución", ayuda: "Elija el punto de distribución y escriba su medición. Un registro por punto." },
   muestreo: { titulo: "Puntos de muestreo", lugar: "Punto de muestreo", ayuda: "Elija el punto de muestreo. Un registro por punto." },
   macromedicion: { titulo: "Macromedición", lugar: "Punto de macromedición", ayuda: "Elija el punto de macromedición. Un registro por punto." },
+  // PTAR-3 (Code C): la Caracterización de la PTAR (afluente, efluente y el río Cesar). Ningún valor es obligatorio: el caudal (diario) puede ir solo.
+  ptar: { titulo: "Puntos de la PTAR", lugar: "Punto", ayuda: "Elija el punto (afluente, efluente o el río Cesar) y escriba los valores que tenga. Ninguno es obligatorio: el caudal puede ir solo." },
 };
 const TIPO_POR_DEFECTO = { titulo: "Por punto", lugar: "Punto", ayuda: "Elija el punto. Un registro por punto." };
 

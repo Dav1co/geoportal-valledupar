@@ -28,7 +28,7 @@ function color(nombre: string, respaldo: string) {
   return v || respaldo;
 }
 
-export function MapaPTAR({ instalacion = "ptar" }: { instalacion?: string }) {
+export function MapaPTAR({ instalacion = "ptar", completo = false }: { instalacion?: string; completo?: boolean }) {      // completo: el «Sistema de Control PTAR» (pantalla propia)
   const cont = useRef<HTMLDivElement | null>(null);
   const mapa = useRef<maplibregl.Map | null>(null);
   const [datos, setDatos] = useState<MapaPtar | null>(null);
@@ -52,7 +52,10 @@ export function MapaPTAR({ instalacion = "ptar" }: { instalacion?: string }) {
     const datos = datosRef.current;
     if (!datos || !cont.current) return;
     const c = { per: color("--ptar-mapa-perimetro", "#f4f1ec"), lag: color("--ptar-mapa-laguna", "#ffffff"), tra: color("--ptar-mapa-tramo", "#ffffff"),
-                con: color("--ptar-mapa-conducto", "#d5dde6"), poz: color("--ptar-mapa-pozo", "#eef2f5"), ctn: color("--ptar-mapa-contorno", "#22313f"), sel: color("--ptar-mapa-seleccion", "#4a90d9") };
+                con: color("--ptar-mapa-conducto", "#d5dde6"), poz: color("--ptar-mapa-pozo", "#eef2f5"), ctn: color("--ptar-mapa-contorno", "#22313f"), sel: color("--ptar-mapa-seleccion", "#4a90d9"),
+                ok: color("--ptar-estado-normal", "#1b6b3a"), fue: color("--ptar-estado-fuera", "#b3261e"), vie: color("--ptar-estado-viejo", "#c25e00") };
+    // PTAR-3: el punto de medición se pinta por el estado de sus parámetros (con datos, fuera de referencia, sin dato reciente); sin registros, oscuro
+    const colorEstado = ["match", ["get", "estado"], "con_datos", c.ok, "fuera", c.fue, "sin_dato_reciente", c.vie, c.ctn] as unknown as string;
     // la selección va por feature-state («sel»): la fuente usa el código como id (promoteId)
     const esSel = (a: unknown, b: unknown) => ["case", ["boolean", ["feature-state", "sel"], false], a, b] as unknown as maplibregl.ExpressionSpecification;
     const tipo = (t: string) => ["==", ["get", "tipo"], t] as maplibregl.FilterSpecification;
@@ -75,7 +78,7 @@ export function MapaPTAR({ instalacion = "ptar" }: { instalacion?: string }) {
             "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, esSel(6, 1.5), 18, esSel(8, 5)] as unknown as number, "circle-stroke-color": c.ctn, "circle-stroke-width": 1 } },
           { id: "ptar-descarga", type: "circle", source: "ptar", filter: tipo("descarga"), paint: { "circle-color": esSel(c.sel, c.poz) as unknown as string, "circle-radius": esSel(9, 6) as unknown as number,
             "circle-stroke-color": c.ctn, "circle-stroke-width": 2.5 } },
-          { id: "ptar-punto", type: "circle", source: "ptar", filter: tipo("punto_medicion"), paint: { "circle-color": c.ctn, "circle-radius": esSel(10, 7) as unknown as number,
+          { id: "ptar-punto", type: "circle", source: "ptar", filter: tipo("punto_medicion"), paint: { "circle-color": colorEstado, "circle-radius": esSel(10, 7) as unknown as number,
             "circle-stroke-color": esSel(c.sel, c.lag) as unknown as string, "circle-stroke-width": 3 } },
         ] },
     });
@@ -135,7 +138,7 @@ export function MapaPTAR({ instalacion = "ptar" }: { instalacion?: string }) {
   if (!datos) return <p className="td-sub" role="status">Cargando el mapa de la planta…</p>;
   const n = datos.por_tipo;
   return (
-    <div className="ptar-mapa-pagina" data-testid="ptar-mapa">
+    <div className={`ptar-mapa-pagina${completo ? " ptar-mapa-completo" : ""}`} data-testid="ptar-mapa">
       <div className="ptar-mapa-cab">
         <div>
           <h2 className="ptar-tit">{datos.instalacion.nombre}</h2>
@@ -167,12 +170,50 @@ export function MapaPTAR({ instalacion = "ptar" }: { instalacion?: string }) {
                 <span className={`ptar-muestra ptar-muestra-${g.clave}`} aria-hidden="true" />{g.nombre}
               </label>
             ))}
-            <p className="ptar-nota">El perímetro de la planta va punteado. Los colores de estado (normal, fuera de referencia, sin dato reciente) se verán cuando cada elemento tenga sus variables.</p>
+            <ul className="ptar-leyenda" aria-label="Estado de los puntos de medición">
+              <li><span className="ptar-est ptar-est-con_datos" aria-hidden="true" />Con datos recientes</li>
+              <li><span className="ptar-est ptar-est-fuera" aria-hidden="true" />Fuera de referencia</li>
+              <li><span className="ptar-est ptar-est-sin_dato_reciente" aria-hidden="true" />Sin dato reciente</li>
+              <li><span className="ptar-est ptar-est-sin_registros" aria-hidden="true" />Sin registros</li>
+            </ul>
+            <p className="ptar-nota">El perímetro de la planta va punteado. Lagunas, colectores y pozos tendrán color de estado cuando se les asignen sus variables.</p>
           </fieldset>
         </aside>
       </div>
     </div>
   );
+}
+
+const ESTADO_TXT: Record<string, string> = { normal: "Normal", fuera: "Fuera de referencia", sin_dato_reciente: "Sin dato reciente", sin_referencia: "Sin referencia", sin_registros: "Sin registros" };
+const fechaHora = (ts: string) => new Date(ts).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" });
+
+/** PTAR-3: los parámetros del punto del elemento (sonda multiparámetro y Caracterización) con su último valor, fecha y estado. Sin punto: «sin variables asignadas». */
+function Parametros({ f }: { f: FichaElemento }) {
+  if (f.indicadores.length === 0) return (
+    <div className="ptar-indicadores" data-testid="ptar-indicadores">
+      <h4>Indicadores</h4>
+      <p>Sin variables asignadas. Cuando se le asignen, aquí se verán sus últimos valores y su estado frente a la referencia.</p>
+    </div>);
+  const grupos: string[] = [];
+  for (const p of f.indicadores) if (!grupos.includes(p.grupo)) grupos.push(p.grupo);
+  return (
+    <div className="ptar-indicadores" data-testid="ptar-indicadores">
+      {f.punto ? <p className="ptar-nota">Punto de medición {f.punto.codigo}. Último valor de cada parámetro{f.horas_sin_dato ? `; «sin dato reciente» si tiene más de ${f.horas_sin_dato >= 48 ? `${Math.round(f.horas_sin_dato / 24)} días` : `${f.horas_sin_dato} horas`}` : ""}.</p> : null}
+      {grupos.map((g) => (
+        <div key={g} className="ptar-par-grupo">
+          <h4>{g}</h4>
+          <ul className="ptar-par">
+            {f.indicadores.filter((p) => p.grupo === g).map((p) => (
+              <li key={p.codigo} data-parametro={p.codigo} data-estado={p.estado}>
+                <span className="ptar-par-nom">{p.nombre}</span>
+                <span className="ptar-par-val">{p.valor === null || p.valor === undefined ? "sin registros"
+                  : `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: p.decimales }).format(p.valor)} ${p.unidad}`}</span>
+                {p.muestra_ts ? <span className="ptar-par-fecha">{fechaHora(p.muestra_ts)}</span> : null}
+                {p.valor !== null && p.valor !== undefined ? <span className={`ptar-par-est ptar-est-txt-${p.estado}`}>{ESTADO_TXT[p.estado] ?? p.estado}</span> : null}
+              </li>))}
+          </ul>
+        </div>))}
+    </div>);
 }
 
 function FichaPTAR({ codigo, onCerrar, onAlias, onIr }: { codigo: string; onCerrar: () => void; onAlias: (codigo: string, alias: string | null) => void; onIr: (codigo: string) => void }) {
@@ -210,7 +251,7 @@ function FichaPTAR({ codigo, onCerrar, onAlias, onIr }: { codigo: string; onCerr
   if (a.diametro_mm) filas.push(["Diámetro", `${nf.format(Number(a.diametro_mm))} mm`]);
   if (a.material) filas.push(["Material", String(a.material)]);
   if (a.profundidad_m) filas.push(["Profundidad", `${nf.format(Number(a.profundidad_m))} m`]);
-  if (a.punto_previsto) filas.push(["Punto de medición previsto", String(a.punto_previsto)]);
+  if (a.punto_previsto && !f.punto) filas.push(["Punto de medición previsto", String(a.punto_previsto)]);      // con su punto enlazado (PTAR-3) lo dicen los parámetros
   return (
     <section className="ptar-ficha" data-testid="ptar-ficha" data-codigo={f.codigo} aria-labelledby="ptar-ficha-tit">
       <div className="ptar-ficha-cab">
@@ -223,10 +264,7 @@ function FichaPTAR({ codigo, onCerrar, onAlias, onIr }: { codigo: string; onCerr
         {f.desde ? <div><dt>Viene de</dt><dd><button type="button" className="td-enlace" onClick={() => onIr(f.desde!.codigo)}>{f.desde.nombre}</button></dd></div> : null}
         {f.hasta ? <div><dt>Va a</dt><dd><button type="button" className="td-enlace" onClick={() => onIr(f.hasta!.codigo)}>{f.hasta.nombre}</button></dd></div> : null}
       </dl>
-      <div className="ptar-indicadores" data-testid="ptar-indicadores">
-        <h4>Indicadores</h4>
-        <p>Sin variables asignadas. Cuando se le asignen, aquí se verán sus últimos valores y su estado frente a la referencia.</p>
-      </div>
+      <Parametros f={f} />
       {aviso ? <p className={aviso.tipo === "ok" ? "ptar-ok" : "ptar-error"} role={aviso.tipo === "ok" ? "status" : "alert"}>{aviso.texto}</p> : null}
       {editar ? (
         <form className="ptar-alias" onSubmit={guardar}>
