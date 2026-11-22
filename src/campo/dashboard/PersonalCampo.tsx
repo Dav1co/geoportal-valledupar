@@ -243,7 +243,12 @@ export function textoEvento(e: EventoPersonal): string {
     case "asignar_formulario": return `Asignó «${e.formulario_nombre ?? e.formulario}»`;
     case "quitar_formulario": return `Quitó «${e.formulario_nombre ?? e.formulario}»`;
     case "fijar_area": return `Área: «${v}»`;
-    case "fijar_cuadrilla": return e.entra === true ? `Entró a la cuadrilla «${e.cuadrilla?.nombre ?? v}»` : e.entra === false ? `Salió de la cuadrilla «${e.cuadrilla?.nombre ?? ""}»` : v ? `Cuadrilla: «${v}»` : "Salió de la cuadrilla";
+    case "fijar_cuadrilla": {
+      // En el historial de una cuadrilla llega `cuadrilla` (y `entra`); sin valor nuevo, la persona salió. Así se lee bien aunque `entra` venga nulo.
+      const entro = e.entra === true || (e.entra !== false && !!v);
+      if (e.cuadrilla) return entro ? `Entró a la cuadrilla «${e.cuadrilla.nombre}»` : `Salió de la cuadrilla «${e.cuadrilla.nombre}»`;
+      return v ? `Cuadrilla: «${v}»` : "Salió de la cuadrilla";
+    }
     case "asignar_actividad": return `Actividad propia: asignó «${v}»`;
     case "quitar_actividad": return `Actividad propia: quitó «${v}»`;
     case "cuadrilla_crear": return `Creó la cuadrilla «${c}»`;
