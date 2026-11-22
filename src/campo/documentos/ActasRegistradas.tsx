@@ -15,7 +15,11 @@ import { PdfRegistro } from "./Registro";
 // - Aperturas sin registrar (la pantalla de siempre, solo con el permiso del acta) y Personal y Cuadrillas en solo lectura.
 type Seccion = "actas" | "derivadas" | "aperturas" | "personal";
 const texto = (e: unknown) => (e instanceof ErrorCampo ? e.message : "No se pudo completar la operación.");
-const fecha = (f: string) => new Date(f).toLocaleString("es-CO", { timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+/** El instante si llega (registrado_en); si solo hay el día (AAAA-MM-DD), el día sin hora. */
+const fecha = (f: string) => (/^\d{4}-\d{2}-\d{2}$/.test(f) ? new Date(`${f}T12:00:00`).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" })
+  : new Date(f).toLocaleString("es-CO", { timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }));
+const pdfListo = (r: FilaActa) => r.pdf?.estado === "generado";
+const RESULTADO: Record<string, string> = { efectivo: "Visita efectiva", inefectivo: "Visita inefectiva" };
 const ESTADO_USUARIO: Record<string, string> = { firmo: "firmó el usuario", no_firmo: "el usuario no firmó", nadie_atendio: "nadie atendió" };
 
 export function ActasRegistradas({ correo, onVolver, nombres, puedeAperturas, puedeCerrarDerivadas }: {
@@ -80,7 +84,7 @@ function ListaActas({ nombres, via }: { nombres: Map<string, string>; via: Esque
       do { const r = await apiDocumentos.actasRegistradasDescarga(via, { ...aplicados, despues: despues ?? undefined, limite: 5000 }); todas.push(...r.filas); despues = r.siguiente; setDescarga(`Preparando la descarga… ${todas.length.toLocaleString("es-CO")} filas`); } while (despues);
       const col = ["Consecutivo", "Número físico", "Tipo", "Fecha", "Operario", "Contrato", "Barrio", "Resultado", "PDF", "Nombre del PDF", "Derivadas", "Derivadas pendientes", "Firma del operario", "Usuario", "Firma de testigo"];
       const q = (v: unknown) => { const t = v === null || v === undefined ? "" : String(v); return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
-      const lineas = todas.map((r) => [r.consecutivo, r.numero_fisico, r.tipo_nombre, r.fecha, r.operario, r.contrato, r.barrio, r.resultado, r.pdf.estado, r.pdf.nombre, r.derivadas.total, r.derivadas.pendientes,
+      const lineas = todas.map((r) => [r.consecutivo, r.numero_fisico, r.tipo_nombre, r.fecha, r.operario, r.contrato, r.barrio, r.resultado, pdfListo(r) ? "generado" : "pendiente", r.pdf?.nombre ?? "", r.derivadas.total, r.derivadas.pendientes,
         r.firmas.operario ? "sí" : "no", r.firmas.usuario ? ESTADO_USUARIO[r.firmas.usuario] ?? r.firmas.usuario : "", r.firmas.testigo ? "sí" : "no"].map(q).join(";"));
       const blob = new Blob(["﻿" + [col.join(";"), ...lineas].join("\r\n")], { type: "text/csv;charset=utf-8" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `actas_registradas_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -121,17 +125,17 @@ function FilaRegistro({ r, nombreTipo }: { r: FilaActa; nombreTipo: string }) {
     <li className="rv-per-tarjeta" data-registro={r.registro_id} data-esquema={r.esquema}>
       <div className="rv-per-cab">
         <div><strong>{r.consecutivo ?? "Sin consecutivo"}</strong>{r.numero_fisico ? <span className="rv-tenue"> · papel {r.numero_fisico}</span> : null}<div className="rv-tenue">{r.tipo_nombre || nombreTipo}</div></div>
-        <span className={`rv-marca ${r.pdf.estado === "generado" ? "rv-marca-info" : "rv-marca-amar"}`}>{r.pdf.estado === "generado" ? "PDF listo" : "PDF pendiente"}</span>
+        <span className={`rv-marca ${pdfListo(r) ? "rv-marca-info" : "rv-marca-amar"}`}>{pdfListo(r) ? "PDF listo" : "PDF pendiente"}</span>
       </div>
       <dl className="rv-per-dl">
-        <dt>Fecha</dt><dd>{fecha(r.fecha)}</dd>
+        <dt>Fecha</dt><dd>{fecha(r.registrado_en ?? r.fecha)}</dd>
         <dt>Operario</dt><dd>{r.operario}</dd>
         <dt>Contrato</dt><dd>{r.contrato ?? <span className="rv-tenue">Sin contrato</span>}{r.barrio ? ` · ${r.barrio}` : ""}</dd>
-        {r.resultado ? <><dt>Resultado</dt><dd>{r.resultado}</dd></> : null}
+        {r.resultado ? <><dt>Resultado</dt><dd>{RESULTADO[r.resultado] ?? r.resultado}</dd></> : null}
         <dt>Firmas</dt><dd data-dato="firmas">{firmas}</dd>
         {r.derivadas.total ? <><dt>Derivadas</dt><dd data-dato="derivadas">{r.derivadas.total} {r.derivadas.total === 1 ? "actividad" : "actividades"}{r.derivadas.pendientes ? ` · ${r.derivadas.pendientes} pendiente${r.derivadas.pendientes === 1 ? "" : "s"}` : " · atendidas"}</dd></> : null}
       </dl>
-      {r.pdf.estado === "generado" ? <PdfRegistro esquema={r.esquema as Esquema} registroId={r.registro_id} soloLeer />
+      {pdfListo(r) ? <PdfRegistro esquema={r.esquema as Esquema} registroId={r.registro_id} soloLeer />
         : pedirPdf ? <PdfRegistro esquema={r.esquema as Esquema} registroId={r.registro_id} />
         : <div className="rv-botones"><button type="button" className="rv-boton-sec" onClick={() => setPedirPdf(true)}>Generar el PDF</button></div>}
     </li>
@@ -172,8 +176,9 @@ function Derivadas({ puedeCerrar }: { puedeCerrar: boolean }) {
               <span className={`rv-marca ${d.estado === "pendiente" ? "rv-marca-amar" : "rv-marca-gris"}`}>{d.estado === "pendiente" ? "Pendiente" : d.estado === "atendida" ? "Atendida" : d.estado === "atendida_fuera" ? "Atendida sin formulario" : d.estado === "anulada" ? "Anulada" : d.estado}</span></div>
             <dl className="rv-per-dl">
               <dt>Viene de</dt><dd>{d.origen.consecutivo ?? d.origen.tipo} · {cuando(d.origen.fecha)}</dd>
-              {d.atendida_por ? <><dt>La atendió</dt><dd>{d.atendida_por.consecutivo ?? d.atendida_por.tipo} · {cuando(d.atendida_por.fecha)}</dd></> : null}
-              {d.motivo ? <><dt>Motivo</dt><dd>{d.motivo}</dd></> : null}
+              {d.cierre?.tipo === "atendida" ? <><dt>La atendió</dt><dd>{d.cierre.consecutivo ?? "un registro"} · {cuando(d.cierre.en)}</dd></> : null}
+              {d.cierre && d.cierre.tipo !== "atendida" ? <><dt>{d.cierre.tipo === "anulada" ? "Anulada" : "Cerrada sin formulario"}</dt><dd>{cuando(d.cierre.en)} · por {d.cierre.autor}</dd></> : null}
+              {d.cierre?.motivo ? <><dt>Motivo</dt><dd>{d.cierre.motivo}</dd></> : null}
             </dl>
             {puedeCerrar && d.estado === "pendiente" ? <div className="rv-botones"><button type="button" className="rv-boton-sec" onClick={() => { setAviso(null); setCerrar(d); }}>Cerrar sin formulario</button></div> : null}
           </li>))}

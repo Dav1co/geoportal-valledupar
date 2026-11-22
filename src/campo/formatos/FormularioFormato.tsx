@@ -149,7 +149,7 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
     setErrorEnvio(null);
     if (recalcularInicio.current) { inicio.current = recalcularReloj(inicio.current); recalcularInicio.current = false; }
     const { datos } = aplanarDatos(tipo, valores);
-    if (reqDerivado && datos) datos.req_cambio_medidor = Array.isArray(datos.da_lugar) && datos.da_lugar.includes("cambio_medidor") ? "si" : "no";
+    if (reqDerivado && datos) datos.req_cambio_medidor = Array.isArray(datos.da_lugar) && datos.da_lugar.includes("cambio_medidor");   // sí/no viaja como booleano
     try {
       const ordenadas = ordenarFotos<FotoLocal>(tipo, refEtq.current, refAdic.current);
       let p = prep.current;

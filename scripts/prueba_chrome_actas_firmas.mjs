@@ -78,11 +78,11 @@ let est;
 function reiniciar() { est = { firmas: {}, registrados: new Set(), pdfFallas: 0, pdfs: {}, cerradas: [], viejo: false }; }
 reiniciar();
 const fila = (n, esquema, tipo, tipo_nombre, pdf, der = { total: 0, pendientes: 0 }) => ({ registro_id: `00000000-0000-4000-8000-00000000000${n}`, esquema, tipo, tipo_nombre, consecutivo: `${tipo === "acta" ? "AI-2026" : "RPV"}-00000${n}`, numero_fisico: n === 1 ? "4521" : null,
-  fecha: new Date(Date.now() - n * 3600e3).toISOString(), operario: "zt.ana@emdupar.gov.co", contrato: "123456", barrio: "Los Músicos", resultado: null, pdf: pdf ? { estado: "generado", nombre: `20261121090000-RPV-00000${n}.pdf`, version: 1 } : { estado: "pendiente", nombre: null, version: null },
+  fecha: new Date(Date.now() - n * 3600e3).toISOString(), operario: "zt.ana@emdupar.gov.co", contrato: "123456", barrio: "Los Músicos", resultado: null, pdf: pdf ? { estado: "generado", nombre: `20261121090000-RPV-00000${n}.pdf`, version: 1 } : null,
   derivadas: der, firmas: { operario: true, usuario: n === 2 ? "no_firmo" : "firmo", testigo: n === 2 } });
 const FILAS = [fila(1, "acta", "acta", "Reportar posible pérdida", true), fila(2, "campo", "revision_previa", "Revisiones generales", false, { total: 2, pendientes: 1 }), fila(3, "campo", "corte", "Corte", true)];
-const DERIVADAS = [{ id: 41, actividad: "cambio_medidor", actividad_nombre: "Cambio de medidor", contrato: "123456", estado: "pendiente", origen: { registro_id: FILAS[1].registro_id, tipo: "revision_previa", consecutivo: "RPV-000002", fecha: FILAS[1].fecha }, atendida_por: null },
-  { id: 42, actividad: "fuga_externa", actividad_nombre: "Reparación de fuga (afuera)", contrato: "123456", estado: "atendida", origen: { registro_id: FILAS[1].registro_id, tipo: "revision_previa", consecutivo: "RPV-000002", fecha: FILAS[1].fecha }, atendida_por: { registro_id: "x", tipo: "instalacion_medidor", consecutivo: "IME-000009", fecha: FILAS[0].fecha } }];
+const DERIVADAS = [{ id: 41, actividad: "cambio_medidor", actividad_nombre: "Cambio de medidor", contrato: "123456", estado: "pendiente", origen: { registro_id: FILAS[1].registro_id, tipo: "revision_previa", consecutivo: "RPV-000002", fecha: FILAS[1].fecha }, cierre: null },
+  { id: 42, actividad: "fuga_externa", actividad_nombre: "Reparación de fuga (afuera)", contrato: "123456", estado: "atendida", origen: { registro_id: FILAS[1].registro_id, tipo: "revision_previa", consecutivo: "RPV-000002", fecha: FILAS[1].fecha }, cierre: { en: FILAS[0].fecha, tipo: "atendida", autor: "zt.ana@emdupar.gov.co", esquema: "campo", consecutivo: "IME-000009", registro_id: "x" } }];
 const peticiones = [];
 const cab = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Content-Type": "application/json" };
 const srv = http.createServer((q, r) => {
@@ -109,7 +109,7 @@ const srv = http.createServer((q, r) => {
       case "crear": {
         if (est.registrados.has(b.reporte_id)) return ok({ id: b.reporte_id, registrado_en: new Date().toISOString(), repetido: true, contrato_verificado: true, aviso_zona: false, consecutivo: "RPV-000010" });
         if (!est.viejo && !est.firmas[`${b.reporte_id}:operario`]) return no(400, "Falta la firma del operario");
-        if (Array.isArray(b.datos?.da_lugar) && (b.datos.req_cambio_medidor === "si") !== b.datos.da_lugar.includes("cambio_medidor")) return no(400, "¿Se requiere cambio de medidor? no coincide con las actividades derivadas");
+        if (Array.isArray(b.datos?.da_lugar) && b.datos.req_cambio_medidor !== b.datos.da_lugar.includes("cambio_medidor")) return no(400, "¿Se requiere cambio de medidor? no coincide con las actividades derivadas");
         est.registrados.add(b.reporte_id);
         return ok({ id: b.reporte_id, registrado_en: new Date().toISOString(), repetido: false, contrato_verificado: true, aviso_zona: false, consecutivo: "RPV-000010" });
       }
@@ -122,7 +122,7 @@ const srv = http.createServer((q, r) => {
       case "origen_vincular": return ok({ cambio: true });
       case "actas_registradas": { const f = FILAS.filter((x) => !b.tipo || x.tipo === b.tipo).filter((x) => !b.derivadas || (b.derivadas === "pendientes" ? x.derivadas.pendientes > 0 : x.derivadas.total > 0)); return ok({ filas: f, siguiente: null }); }
       case "actas_registradas_descarga": return b.despues ? ok({ filas: FILAS.slice(2), siguiente: null }) : ok({ filas: FILAS.slice(0, 2), siguiente: 2 });
-      case "derivadas": return ok({ filas: DERIVADAS.filter((d) => !b.filtros?.estado || d.estado === b.filtros.estado), siguiente: null });
+      case "derivadas": return ok({ filas: DERIVADAS.filter((d) => !b.estado || d.estado === b.estado), siguiente: null });
       case "derivada_cerrar": if (rol === "act") return no(403, "No tiene permiso para esta acción."); est.cerradas.push(b); return ok({ cambio: true });
       case "personal": return ok({ puede_editar: false, formularios: [], personas: [], puede: { cargo: false, area: false, cuadrilla: false, cuadrillas: false, actividades: false, formularios: false, catalogos: false }, actividades: [], areas: [], cuadrillas: [] });
       case "historial_personal": return ok({ eventos: [], siguiente: null });
@@ -213,7 +213,7 @@ try {
     ok(`[${ancho}] REV · firma del operario (JPEG en base64, sin nombre) y del usuario con el nombre del formulario`, fs[0]?.rol === "operario" && fs[0]?.estado === "firmo" && !fs[0]?.nombre && fs[0]?.imagen?.length > 200 && fs[0]?.registro_id === RID
       && fs[1]?.rol === "usuario" && fs[1]?.estado === "firmo" && fs[1]?.nombre === "Rosa Prueba" && fs[1]?.imagen?.length > 200, JSON.stringify(fs.map((x) => ({ ...x, imagen: x.imagen?.length }))));
     const cr = pide(antes, "crear")[0];
-    ok(`[${ancho}] REV · crear lleva da_lugar y req_cambio_medidor = «si» (derivado; la base lo exige)`, JSON.stringify(cr?.datos?.da_lugar) === JSON.stringify(["cambio_medidor", "fuga_externa"]) && cr?.datos?.req_cambio_medidor === "si", JSON.stringify(cr?.datos));
+    ok(`[${ancho}] REV · crear lleva da_lugar y req_cambio_medidor = true (derivado, booleano como todo sí/no; la base lo exige)`, JSON.stringify(cr?.datos?.da_lugar) === JSON.stringify(["cambio_medidor", "fuga_externa"]) && cr?.datos?.req_cambio_medidor === true, JSON.stringify(cr?.datos));
     ok(`[${ancho}] REV · origen_vincular con el acta elegida, después de registrar`, JSON.stringify(pide(antes, "origen_vincular")[0]) === JSON.stringify({ registro_id: RID, acta_id: "aaaaaaaa-0000-4000-8000-000000000001" }));
     t = await texto(pg, "[data-testid=pdf-registro]");
     ok(`[${ancho}] REV · «PDF listo» con su nombre y tamaño; «Descargar el PDF» abre la URL firmada`, t.includes("20261121184501-RPV-000010.pdf") && t.includes("793 KB"), t);

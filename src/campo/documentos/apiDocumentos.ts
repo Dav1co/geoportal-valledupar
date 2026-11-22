@@ -14,12 +14,15 @@ export type TipoActa = "acta" | "revision_previa" | "revision_pqr" | "instalacio
 export type FiltrosActas = { tipo?: string; desde?: string; hasta?: string; operario?: string; contrato?: string; barrio?: string; resultado?: string; derivadas?: "con" | "pendientes" | "atendidas"; antes?: string | number; limite?: number };
 export type FilaActa = {
   registro_id: string; esquema: Esquema; tipo: string; tipo_nombre: string; consecutivo: string | null; numero_fisico: string | null; fecha: string; operario: string; contrato: string | null; barrio: string | null;
-  resultado: string | null; pdf: { estado: "generado" | "pendiente"; nombre: string | null; version: number | null }; derivadas: { total: number; pendientes: number };
+  /** Sin PDF: {estado: "pendiente"} (Edges de924af; la 2a249ef lo mandaba nulo, y también se acepta). `fecha` es el día; `registrado_en`, el instante (y el cursor). */
+  resultado: string | null; pdf: { estado: "generado" | "pendiente"; nombre: string | null; version: number | null } | null; derivadas: { total: number; pendientes: number }; registrado_en?: string;
   firmas: { operario: boolean; usuario: EstadoUsuario | null; testigo: boolean };
 };
 export type PaginaActas = { filas: FilaActa[]; siguiente: string | number | null };
 export type Derivada = { id: number; actividad: string; actividad_nombre: string; origen: { registro_id: string; tipo: string; consecutivo: string | null; fecha: string } };
-export type FilaDerivada = Derivada & { contrato: string | null; estado: string; atendida_por?: { registro_id: string; tipo: string; consecutivo: string | null; fecha: string } | null; motivo?: string | null };
+/** Una fila de «derivadas» (forma de la Edge real 2a249ef): el cierre dice si la atendió un registro (esquema y consecutivo) o se cerró a mano (atendida_fuera o anulada), quién y cuándo. */
+export type FilaDerivada = Derivada & { contrato: string | null; estado: string; creada_en?: string;
+  cierre: { en: string; tipo: string; autor: string; esquema: Esquema | null; consecutivo: string | null; registro_id: string | null; motivo?: string | null } | null };
 export type ActaAbierta = { acta_id: string; consecutivo: string | null; fecha: string; numero_fisico?: string | null };
 
 /** El cliente de la Edge que corresponde: geoportal-acta para el acta AI, geoportal-campo para los formatos. */
@@ -40,7 +43,7 @@ export const apiDocumentos = {
   derivadaAtender: (derivada_id: number, registro_id: string) => pedir<{ cambio?: boolean }>("campo", "derivada_atender", { derivada_id, registro_id }),
   derivadaCerrar: (derivada_id: number, tipo: "atendida_fuera" | "anulada", motivo: string) => pedir<{ cambio?: boolean }>("campo", "derivada_cerrar", { derivada_id, tipo, motivo }),
   derivadas: (filtros: { estado?: string; contrato?: string; actividad?: string; desde?: string; hasta?: string; antes?: string | number; limite?: number }) =>
-    pedir<{ filas: FilaDerivada[]; siguiente: string | number | null }>("campo", "derivadas", { filtros: sinVacios(filtros) }, 60000),
+    pedir<{ filas: FilaDerivada[]; siguiente: string | number | null }>("campo", "derivadas", sinVacios(filtros), 60000),       // los filtros van en el cuerpo, planos
   actasAbiertas: (contrato: string) => pedir<{ actas: ActaAbierta[] }>("campo", "actas_abiertas", { contrato }),
   origenVincular: (registro_id: string, acta_id: string) => pedir<{ cambio?: boolean }>("campo", "origen_vincular", { registro_id, acta_id }),
 };

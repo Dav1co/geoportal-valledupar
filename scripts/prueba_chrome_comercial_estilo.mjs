@@ -107,6 +107,10 @@ const mock = http.createServer((q, res) => {
           case "personal": return json({ puede_editar: true, formularios: [{ clave: "reporte_general", nombre: "Reportar anomalía", grupo: "Campo" }, { clave: "instalacion_medidor", nombre: "Instalación de medidor", grupo: "Formatos" }],
             personas: [{ email: "zt.op@emdupar.gov.co", nombre: "ZT Operario", perfil: "operario", permisos: { campo: true, dashboard_campo: false, acta: true, dashboard_acta: false }, cargo: "Técnico", formularios: ["reporte_general"], sin_asignacion: false, ultimo_cambio: iso(3) }] });
           case "historial_personal": return json({ eventos: [], siguiente: null });
+          case "documentos_catalogo": return json({ formularios: [{ formulario: "tipo:instalacion_medidor", lleva_pdf: true, firmas: { operario: "obligatoria", usuario: "opcional", testigo: "opcional" } }] });
+          case "actas_registradas": return json({ filas: [{ registro_id: "00000000-0000-4000-8000-000000000001", esquema: "campo", tipo: "instalacion_medidor", tipo_nombre: "Instalación de medidor", consecutivo: "IME-000001", numero_fisico: null, fecha: "2026-11-21", registrado_en: new Date().toISOString(), operario: "zt.ana@emdupar.gov.co", contrato: "1000001", barrio: "BARRIO DE PRUEBA", resultado: "efectivo", pdf: { estado: "pendiente", nombre: null, version: null }, derivadas: { total: 0, pendientes: 0 }, firmas: { operario: true, usuario: "nadie_atendio", testigo: false } }], siguiente: null });
+          case "derivadas": return json({ filas: [], siguiente: null });
+          case "cuadrillas": return json({ cuadrillas: [] });
           case "constancia_estado": return json({ texto: null, documentos: [{ documento: "constancia_visita", habilitado: false, copias_internas: [] }], cola: {}, fallos_ultimos_30_dias: 0 });
           case "analisis_contrato": return json(u.searchParams.get("contrato") === "1000001" ? ANALISIS : { encontrado: false, contrato: u.searchParams.get("contrato") });
           case "analisis_cercanos": return json({ radio_m: 300, contratos: [], cupo: { limite: 30, usadas: 0, restantes: 30, sin_limite: false } });
@@ -117,6 +121,8 @@ const mock = http.createServer((q, res) => {
           case "formulario": return json(CAT_ACTA);
           case "mis_actas": return json({ filas: [], hay_mas: false, max_filas: 50 });
           case "motivos_cancelacion": return json({ motivos: [{ codigo: "duplicada", nombre: "Apertura duplicada", activo: true }] });
+          case "documentos_catalogo": return json({ formularios: [{ formulario: "acta", lleva_pdf: true, firmas: { operario: "obligatoria", usuario: "opcional", testigo: "opcional" } }] });
+          case "actas_registradas": return json({ filas: [], siguiente: null });
           case "aperturas_sin_registrar": return json({ resumen: { en_curso: 1, vencidas: 1, canceladas: 0 }, max_filas: 200,
             filas: [{ acta_id: "a1", consecutivo: "ACT-000101", autor: "zt.op@emdupar.gov.co", abierto_en: iso(0.1), vence_en: iso(-0.4), situacion: "abierta_en_curso" },
                     { acta_id: "a2", consecutivo: "ACT-000099", autor: "zt.op@emdupar.gov.co", abierto_en: iso(2), vence_en: iso(1.5), situacion: "abierta_vencida_sin_registrar" }] });
@@ -255,7 +261,7 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
     const cols = await pg.evaluate(() => new Set([...document.querySelectorAll("button.campo-formato")].map((b) => Math.round(b.getBoundingClientRect().left))).size);
     ok(`${T} C2 rejilla: ${ancho < 500 ? "una columna en el celular" : "varias columnas en el PC"}`, ancho < 500 ? cols === 1 : cols >= 2, String(cols));
   }
-  const ENTRADAS = [["21_reportar_anomalia", "Reportar anomalía"], ["22_formatos", "Formatos de actividad"], ["24_acta", "Reportar posible pérdida"], ["25_aperturas", "Aperturas sin registrar"],
+  const ENTRADAS = [["21_reportar_anomalia", "Reportar anomalía"], ["22_formatos", "Formatos de actividad"], ["24_acta", "Reportar posible pérdida"], ["25_actas_registradas", "Actas registradas"],
     ["26_analisis", "Análisis de contrato"], ["27_encontrar", "Encontrar o reportar activo"], ["28_supervision", "Supervisión y dashboard"]];
   for (const [nom, t] of ENTRADAS) {
     if (!(await clic(pg, "button.campo-formato, button", t))) { console.log(`(no se encontró la entrada «${t}»)`); continue; }
@@ -264,18 +270,25 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
     else if (nom === "26_analisis") {
       await foto(pg, nom);
       const c = await pg.$("#ac-contrato"); if (c) { await c.type("1000001"); await pg.keyboard.press("Enter"); await esperarTexto(pg, /BARRIO DE PRUEBA|Consumo/); await esp(1200); await foto(pg, "26b_analisis_resultado"); }
+    } else if (nom === "25_actas_registradas") {
+      await foto(pg, nom);
+      for (const [k, s2] of [["b_derivadas", "Actividades derivadas"], ["c_aperturas", "Aperturas sin registrar"]]) { if (await clic(pg, "button.rv-tab", s2)) { await esp(900); await foto(pg, `25${k}`); } }
     } else if (nom === "28_supervision") {
       await foto(pg, nom);
       for (const [k, s] of [["b_indicadores", "Indicadores"], ["c_catalogo", "Catálogo"], ["d_parametros", "Parámetros"], ["e_personal", "Personal"]]) { if (await clic(pg, "button, [role=tab]", s)) { await esp(900); await foto(pg, `28${k}`); } }
     } else await foto(pg, nom);
     await revisar(pg, `C ${nom}`, T);
-    if (!SOLO_CAPTURAS && ["21_reportar_anomalia", "24_acta", "25_aperturas", "26_analisis"].includes(nom)) {
+    if (!SOLO_CAPTURAS && ["21_reportar_anomalia", "24_acta", "26_analisis"].includes(nom)) {
       const cab = await pg.evaluate(() => { const c = document.querySelector(".campo-cab"); const h = c?.querySelector("h1, h2"); return c ? { fondo: getComputedStyle(c).backgroundColor, color: h && getComputedStyle(h).color } : null; });
       ok(`${T} ${nom}: encabezado de sección en barra del color de Comercial, título en blanco`, cab?.fondo === VINO && cab?.color === "rgb(255, 255, 255)", JSON.stringify(cab));
     }
     if (!SOLO_CAPTURAS && nom === "21_reportar_anomalia") {
       const f = await pg.evaluate(() => { const b = [...document.querySelectorAll("button")].find((e) => /Tomar foto 1/.test(e.textContent)); return { svg: !!b?.querySelector("svg[data-icono=camara]"), emoji: /📷/.test(document.body.innerText), fondo: b && getComputedStyle(b).backgroundColor }; });
       ok(`${T} C3 «Tomar foto»: ícono de cámara en SVG (sin emoji) y botón principal en el color de Comercial`, f.svg && !f.emoji && f.fondo === VINO, JSON.stringify(f));
+    }
+    if (!SOLO_CAPTURAS && nom === "25_actas_registradas") {
+      const h = await pg.evaluate(() => { const c = document.querySelector(".rv-cab"); return { fondo: c && getComputedStyle(c).backgroundColor, n: document.querySelectorAll(".rv-tab").length }; });
+      ok(`${T} C5 Actas registradas (21-nov): el mismo encabezado de Supervisión en el color de Comercial, con sus pestañas`, h.fondo === VINO && h.n >= 3, JSON.stringify(h));
     }
     if (!SOLO_CAPTURAS && nom === "28_supervision") {
       const h = await pg.evaluate(() => { const c = document.querySelector(".rv-cab"), a = document.querySelector(".rv-tab[aria-current=page]"); return { fondo: c && getComputedStyle(c).backgroundColor, linea: a && getComputedStyle(a).borderBottomColor }; });
