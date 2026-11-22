@@ -1,9 +1,12 @@
-// PTAR-2 (Code C, 21-nov) · el inicio de Técnica con el modo «PTAR» y el Dashboard PTAR con su mapa, DE PUNTA A PUNTA EN LOCAL:
+// PTAR-2 y PTAR-3 (Code C, 21-nov) · el inicio de Técnica con el modo «PTAR», el Sistema de Control PTAR (el mapa en su vista propia), el Dashboard PTAR y la
+// Caracterización (formulario por punto), DE PUNTA A PUNTA EN LOCAL:
 //   pantallas compiladas (AreaTecnica real) → las Edges REALES geoportal-tecnica (rama tecnica-ptar-cascaron) y geoportal-redes en Deno → PostgREST mínimo en Node que
 //   llama las RPC REALES de la base local del Code C (clúster 55452, por psql_c) como service_role con 30 s y 8 s. Auth simulado (la sesión es la de ?rol=).
-//   Dobles SOLO para dos RPC de la Torre B que la base local no trae (geoportal_tec_mis_formularios con el perfil REAL de tecnica.f_perfil y geoportal_tec_avisos vacío).
+//   Plantilla: ptar_p3 = producción + PTAR-1 + el doble de captura de la Torre B (obtener_formulario, registrar_medicion y resumen_operador publicados) + PTAR-3 + la carga del mapa.
+//   Dobles en Node SOLO para dos RPC de la Torre B que la base local no trae (geoportal_tec_mis_formularios, armada con el perfil REAL de tecnica.f_perfil, f_formularios y
+//   lo asignado en personal_tecnico_eventos; y geoportal_tec_avisos vacío).
 //   Personas simuladas (ZTPTAR): A administrador · T supervisor técnico (PTAP y PTAR; David, 21-nov) · J jefe de la PTAR (solo PTAR) · S supervisor de planta (solo PTAP)
-//   · O operador · N sin Técnica. El mapa es la carga real (914 elementos). Puertos del Code C: 56001 (páginas), 56002 (Edges), 56003 (Auth y PostgREST).
+//   · O operador con la Caracterización asignada · N sin Técnica. El mapa es la carga real (918 elementos). Puertos del Code C: 56001 (páginas), 56002 (Edges), 56003 (Auth y PostgREST).
 // Uso:
 //   node scripts/revision_ptar.mjs --servir <deno> <supabase/functions> <psql_c> <plantilla>               → deja todo corriendo para revisarlo en el navegador:
 //        http://127.0.0.1:56001/?rol=T  (cambie la letra: A, T, J, S, O, N). Ctrl+C para terminar (la copia de la base se borra).
@@ -32,7 +35,8 @@ if (execFileSync(PSQL, ["-AtqX", "-d", "postgres", "-c", "show port"], { env: PG
 const lit = (v) => (v === null || v === undefined ? "null" : typeof v === "number" || typeof v === "boolean" ? String(v)
   : typeof v === "object" ? `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb` : `'${String(v).replace(/'/g, "''")}'`);
 execFileSync(PSQL, ["-qX", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", `drop database if exists ${DB}`, "-c", `create database ${DB} template ${PLANTILLA}`], { env: PGENV, stdio: ["ignore", "pipe", "pipe"] });
-if (sqlq("select count(*) from tecnica.elementos_planta where activo") === "0") { console.error(`La plantilla ${PLANTILLA} no tiene PTAR-1 con la carga del mapa`); process.exit(2); }
+if (sqlq("select count(*) from tecnica.elementos_planta where activo") === "0" || sqlq("select count(*) from tecnica.puntos where tipo = 'ptar'") !== "4") { console.error(`La plantilla ${PLANTILLA} no tiene PTAR-1, PTAR-3 y la carga del mapa`); process.exit(2); }
+const N_MAPA = Number(sqlq("select count(*) from tecnica.elementos_planta e join tecnica.instalaciones i on i.id = e.instalacion_id where i.codigo = 'ptar' and e.activo"));
 
 // ---------- 0. Personas simuladas ----------
 const EMAILS = { A: "ztptar.admin@emdupar.gov.co", T: "ztptar.suptec@emdupar.gov.co", J: "ztptar.jefe@emdupar.gov.co", S: "ztptar.sp@emdupar.gov.co", O: "ztptar.op@emdupar.gov.co", N: "ztptar.nada@emdupar.gov.co" };
@@ -42,6 +46,7 @@ lb(EMAILS.S, "ZTPTAR Supervisor de planta", ["ver_registro_tecnico", "ver_dashbo
 sqlq(`insert into tecnica.alcance_eventos (persona, alcance, tipo_evento, motivo, autor) values
   ('${EMAILS.T}', 'ptar', 'asignar', 'ZTPTAR el supervisor técnico tiene también la PTAR (David, 21-nov)', '${EMAILS.A}'),
   ('${EMAILS.J}', 'ptar', 'asignar', 'ZTPTAR jefe de la PTAR', '${EMAILS.A}'), ('${EMAILS.J}', 'ptap', 'quitar', 'ZTPTAR el jefe de la PTAR no ve la PTAP', '${EMAILS.A}')`);
+sqlq(`insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values ('${EMAILS.O}', 'asignar_formulario', 'ptar_caracterizacion', '${EMAILS.A}')`);
 
 // ---------- 1. Páginas: el AreaTecnica real con un doble del cliente de Supabase (la sesión es la de ?rol=, recordada) ----------
 const dir = mkdtempSync(join(tmpdir(), "ui_ptar_"));
@@ -90,7 +95,11 @@ function rpcBase(fn, a) {
 function dobleMisFormularios(a) {
   const perfil = sqlq(`select tecnica.f_perfil(${lit(a.p_solicitante)})`);
   if (!perfil) return { status: 400, cuerpo: { code: "42501", message: "Sin permiso para esta función" } };
-  const forms = perfil === "operador" ? [] : JSON.parse(sqlq("select coalesce(json_agg(json_build_object('clave', clave, 'nombre', nombre, 'descripcion', descripcion, 'con_campos', true) order by orden), '[]') from tecnica.f_formularios() where clave in ('entrada', 'salida', 'muestreo')"));
+  // supervisor y administrador: todos los formularios de f_formularios (con_campos si tienen variables); operador: los que tiene asignados (último evento)
+  const forms = JSON.parse(sqlq(`select coalesce(json_agg(json_build_object('clave', f.clave, 'nombre', f.nombre, 'descripcion', f.descripcion,
+      'con_campos', exists (select 1 from tecnica.formulario_variables fv where fv.formulario::text = f.clave and fv.activa)) order by f.orden), '[]') from tecnica.f_formularios() f
+    where f.clave in ('entrada', 'salida', 'muestreo', 'ptar_caracterizacion') and (${lit(perfil)} <> 'operador' or (select e.tipo_evento = 'asignar_formulario' from tecnica.personal_tecnico_eventos e
+      where e.persona = ${lit(a.p_solicitante)} and e.formulario::text = f.clave and e.tipo_evento in ('asignar_formulario', 'quitar_formulario') order by e.id desc limit 1))`));
   return { status: 200, cuerpo: { perfil, formularios: forms } };
 }
 const srv = http.createServer((req, res) => {
@@ -128,7 +137,7 @@ process.on("SIGINT", () => terminar(0));
 await new Promise((ok, mal) => { edge.stdout.on("data", (d) => { if (/edges listas/.test(String(d))) ok(); }); edge.on("exit", (c) => mal(new Error(`las Edges terminaron (${c}): ${edgeLog}`))); setTimeout(() => mal(new Error("las Edges no arrancaron: " + edgeLog)), 90000); });
 
 if (servir) {
-  console.log(`LISTO. Abra en el navegador (cambie la letra del rol):\n  http://127.0.0.1:${P_WEB}/?rol=T   supervisor técnico (PTAP y PTAR)\n  http://127.0.0.1:${P_WEB}/?rol=J   jefe de la PTAR (solo PTAR)\n  http://127.0.0.1:${P_WEB}/?rol=S   supervisor de planta (solo PTAP)\n  http://127.0.0.1:${P_WEB}/?rol=A   administrador (Personal técnico: alcances)\n  http://127.0.0.1:${P_WEB}/?rol=O   operador · ?rol=N sin Técnica\nCtrl+C para terminar.`);
+  console.log(`LISTO. Abra en el navegador (cambie la letra del rol):\n  http://127.0.0.1:${P_WEB}/?rol=T   supervisor técnico (PTAP y PTAR): modo PTAR → Sistema de Control PTAR y Caracterización\n  http://127.0.0.1:${P_WEB}/?rol=J   jefe de la PTAR (solo PTAR)\n  http://127.0.0.1:${P_WEB}/?rol=S   supervisor de planta (solo PTAP)\n  http://127.0.0.1:${P_WEB}/?rol=A   administrador (Personal técnico: alcances)\n  http://127.0.0.1:${P_WEB}/?rol=O   operador con la Caracterización asignada · ?rol=N sin Técnica\nCtrl+C para terminar.`);
 } else {
   // ---------- 4. Chrome ----------
   mkdirSync(CAP, { recursive: true });
@@ -153,35 +162,36 @@ if (servir) {
   const clic = async (pg, sel) => { await pg.waitForSelector(sel, { timeout: 15000 }); await pg.$eval(sel, (b) => b.scrollIntoView({ block: "center" })); await pg.click(sel); };
   const capturar = (pg, n) => pg.screenshot({ path: join(CAP, `${n}.png`), fullPage: false });
   try {
+    const hace3 = sqlq("select ((clock_timestamp() at time zone 'America/Bogota')::date - 3)::text");
+    const esperarMapa = async (pg) => { await pg.waitForSelector("[data-testid=ptar-mapa]", { timeout: 30000 });
+      await pg.waitForFunction(() => { const m = window.__mapaPtar; return m && m.loaded() && m.isStyleLoaded() && m.querySourceFeatures("ptar").length > 0; }, { timeout: 30000 }).catch(() => {}); await esp(600); };
     for (const ancho of [390, 1280]) {
       // ===== A. El inicio por modos =====
       let pg = await pagina("T", ancho);
       let m = await modos(pg);
-      ok(`A1 (${ancho}) supervisor técnico: los modos de siempre (Plantas, Distribución por «Encontrar o reportar activo», Supervisión) y PTAR, el cuarto`, m.join() === "Plantas,Distribución,Supervisión,PTAR", m);
+      ok(`A1 (${ancho}) supervisor técnico: Plantas, Distribución, Supervisión y PTAR (el cuarto)`, m.join() === "Plantas,Distribución,Supervisión,PTAR", m);
       await clic(pg, "[data-modo=ptar]");
       const tarj = await pg.$$eval("[data-modo-actual=ptar] [data-tarjeta]", (t) => t.map((x) => `${x.getAttribute("data-tarjeta")}:${x.classList.contains("tec-tarjeta-pronto") ? "pronto" : "lista"}`));
-      ok(`A2 (${ancho}) modo PTAR: Dashboard PTAR (abre) y Afluente, Entre lagunas, Efluente en «Próximamente»`, tarj.join() === "dashboard_ptar:lista,ptar_afluente:pronto,ptar_lagunas:pronto,ptar_efluente:pronto", tarj);
+      ok(`A2 (${ancho}) modo PTAR: Sistema de Control, Dashboard y Caracterización (abren); Afluente, Entre lagunas y Efluente en «Próximamente»`,
+        tarj.join() === "control_ptar:lista,dashboard_ptar:lista,ptar_caracterizacion:lista,ptar_afluente:pronto,ptar_lagunas:pronto,ptar_efluente:pronto", tarj);
+      await clic(pg, "[data-modo=planta]"); await pg.waitForSelector("[data-modo-actual=planta]", { timeout: 10000 });
+      const plantas = await pg.$$eval("[data-modo-actual] [data-tarjeta]", (t) => t.map((x) => x.getAttribute("data-tarjeta")));
+      ok(`A3 (${ancho}) la Caracterización NO sale en Plantas (es de la PTAR)`, !plantas.includes("ptar_caracterizacion") && plantas.includes("entrada"), plantas);
+      await clic(pg, "[data-modo=ptar]");
       const col = await pg.$eval("[data-modo-actual=ptar] .tec-tarjeta-ini", (e) => getComputedStyle(e).backgroundColor);
-      const tab = await pg.$eval("[data-modo=ptar]", (e) => getComputedStyle(e).backgroundColor);
-      ok(`A3 (${ancho}) el pizarra #3d4a5c en la tarjeta y en la pestaña del modo`, col === "rgb(61, 74, 92)" && tab === "rgb(61, 74, 92)", `${col} · ${tab}`);
+      ok(`A4 (${ancho}) pizarra #3d4a5c en las tarjetas del modo`, col === "rgb(61, 74, 92)", col);
       await capturar(pg, `inicio_ptar_${ancho}`);
-      // ===== B. El Dashboard PTAR y el mapa =====
-      await clic(pg, "[data-tarjeta=dashboard_ptar]");
-      await pg.waitForSelector("[data-testid=ptar-mapa]", { timeout: 30000 });
-      await pg.waitForFunction(() => { const m = window.__mapaPtar; return m && m.loaded() && m.isStyleLoaded(); }, { timeout: 30000 }).catch(() => {});
-      await esp(800);
-      const cab = await pg.$eval(".tdash-cab", (e) => getComputedStyle(e).backgroundColor);
-      ok(`B1 (${ancho}) Dashboard PTAR: encabezado en pizarra`, cab === "rgb(61, 74, 92)", cab);
-      const tabs = await pg.$$eval(".tdash-tabs .tdash-tab", (t) => t.map((x) => `${x.childNodes[0].textContent.trim()}:${x.disabled ? "pronto" : "ok"}`));
-      ok(`B2 (${ancho}) secciones: Mapa activa; Resumen, Registros, Eventos, Referencias, Personal técnico (no es administrador) y Reportes en «Próximamente»`,
-        tabs.join() === "Mapa:ok,Resumen:pronto,Registros:pronto,Eventos:pronto,Referencias:pronto,Personal técnico:pronto,Reportes:pronto", tabs);
-      const sel = await pg.$$eval(".tdash-selector .tdash-sel", (b) => b.map((x) => x.textContent.trim()));
-      ok(`B3 (${ancho}) selector: Dashboard PTAP | Dashboard PTAR (sin distribución: no lo tiene)`, sel.join() === "Dashboard PTAP,Dashboard PTAR", sel);
+      // ===== B. El Sistema de Control PTAR (vista propia) =====
+      await clic(pg, "[data-tarjeta=control_ptar]");
+      await esperarMapa(pg);
       let t = await texto(pg);
-      ok(`B4 (${ancho}) el mapa dice la planta y cuenta los 914 elementos`, t.includes("PTAR El Salguero") && /914 elementos: 31 lagunas/.test(t), t.slice(0, 300));
-      const nfeat = await pg.evaluate(() => window.__mapaPtar.querySourceFeatures("ptar").length);
-      ok(`B5 (${ancho}) el mapa cargó las piezas en su fuente`, nfeat > 800, nfeat);
-      await capturar(pg, `dashboard_ptar_mapa_${ancho}`);
+      const cab = await pg.$eval(".ptar-control-cab", (e) => getComputedStyle(e).backgroundColor);
+      ok(`B1 (${ancho}) Sistema de Control PTAR: vista propia con encabezado pizarra, «Volver al inicio» y los ${N_MAPA} elementos`, cab === "rgb(61, 74, 92)" && t.includes("Sistema de Control PTAR")
+        && t.includes("Volver al inicio") && t.includes(`${new Intl.NumberFormat("es-CO").format(N_MAPA)} elementos`), t.slice(0, 400));
+      ok(`B2 (${ancho}) el mapa cargó las piezas, con la foto satelital de fondo`, await pg.evaluate(() => window.__mapaPtar.querySourceFeatures("ptar").length > 800 && window.__mapaPtar.getSource("satelital").tiles[0].includes("World_Imagery")));
+      const est = await pg.evaluate(() => window.__mapaPtar.querySourceFeatures("ptar", { filter: ["==", ["get", "tipo"], "punto_medicion"] }).map((f) => `${f.properties.punto}=${f.properties.estado}`).sort().filter((x, i, a) => a.indexOf(x) === i).join());
+      ok(`B3 (${ancho}) los 4 puntos de medición en el mapa con su punto y estado`, est.split(",").length === 4 && est.includes("PTAR-RIO-ARR=") && est.includes("PTAR-EFL="), est);
+      await capturar(pg, `control_ptar_${ancho}`);
       // ===== C. Clic en una laguna → su ficha =====
       const punto = await pg.evaluate(() => { const m = window.__mapaPtar; const f = m.querySourceFeatures("ptar", { filter: ["==", ["get", "codigo"], "PTAR-LAG-1"] })[0];
         const c = f.geometry.coordinates[0]; let x = 0, y = 0; for (const p of c) { x += p[0]; y += p[1]; } x /= c.length; y /= c.length; m.jumpTo({ center: [x, y], zoom: 18 }); return [x, y]; });
@@ -190,58 +200,104 @@ if (servir) {
       await pg.mouse.click(px[0], px[1]);
       await pg.waitForSelector("[data-testid=ptar-ficha][data-codigo=PTAR-LAG-1]", { timeout: 15000 }).catch(() => {});
       t = await texto(pg);
-      ok(`C1 (${ancho}) clic en la laguna anaerobia 1 → su ficha: tipo, etapa, tren, área y «Sin variables asignadas»`, /Laguna anaerobia 1/.test(t) && t.includes("Anaerobia") && t.includes("1 · Anaerobia")
-        && /Tren\s*\n?\s*norte/.test(t) && /ha \(/.test(t) && t.includes("Sin variables asignadas"), t.slice(0, 900));
-      await capturar(pg, `ficha_laguna_${ancho}`);
+      ok(`C1 (${ancho}) clic en la laguna anaerobia 1 → su ficha (tipo, etapa, tren, área) y «Sin variables asignadas»`, t.includes("1 · Anaerobia") && /Tren\s*\n?\s*norte/.test(t) && /ha \(/.test(t)
+        && t.includes("Sin variables asignadas"), t.slice(0, 700));
       // ===== D. Alias con motivo =====
       await pg.evaluate(() => [...document.querySelectorAll("[data-testid=ptar-ficha] button")].find((b) => /alias/.test(b.textContent)).click());
       await pg.waitForSelector("#ptar-alias");
-      await pg.$eval("#ptar-alias", (e) => { e.select(); }); await pg.keyboard.press("Backspace"); await pg.type("#ptar-alias", `A-N1 ${ancho}`); await pg.type("#ptar-motivo", "ZTPTAR nombre corto que usa la planta");
+      await pg.$eval("#ptar-alias", (e) => { e.select(); }); await pg.keyboard.press("Backspace"); await pg.type("#ptar-alias", `A-N1 ${ancho}`);
+      await pg.type("#ptar-motivo", "ZTPTAR nombre corto que usa la planta");
       await pg.evaluate(() => [...document.querySelectorAll(".ptar-alias button[type=submit]")][0].click());
-      await pg.waitForSelector(".ptar-ok", { timeout: 15000 }).catch(() => {});
-      await pg.waitForSelector(".ptar-historial", { timeout: 15000 }).catch(() => {});
+      await pg.waitForSelector(".ptar-ok", { timeout: 15000 }).catch(() => {}); await pg.waitForSelector(".ptar-historial", { timeout: 15000 }).catch(() => {});
       t = await texto(pg);
-      ok(`D1 (${ancho}) el alias se guarda con motivo, la ficha lo muestra y queda el historial`, t.includes(`Alias guardado: «A-N1 ${ancho}»`) && t.includes("Historial del alias"), t.slice(0, 600));
-      ok(`D2 (${ancho}) quedó en la base (solo inserción) y auditado`, sqlq(`select count(*) from tecnica.elemento_alias_eventos where codigo = 'PTAR-LAG-1' and alias = 'A-N1 ${ancho}'`) === "1"
-        && Number(sqlq(`select count(*) from public.geoportal_auditoria where accion = 'tec_ptar_alias' and email = '${EMAILS.T}'`)) >= 1);
-      await capturar(pg, `ficha_alias_${ancho}`);
-      // ===== E. Buscar un pozo copiado de redes =====
-      const poz = sqlq("select activo_codigo from tecnica.elementos_planta where tipo = 'pozo' and activo order by activo_codigo limit 1");
-      await pg.$eval("#ptar-q", (e) => { e.value = ""; }); await pg.type("#ptar-q", poz); await pg.keyboard.press("Enter");
-      await pg.waitForSelector(`[data-testid=ptar-ficha][data-codigo=PTAR-${poz}]`, { timeout: 15000 }).catch(() => {});
+      ok(`D1 (${ancho}) el alias se guarda con motivo e historial, y queda auditado`, t.includes(`Alias guardado: «A-N1 ${ancho}»`) && t.includes("Historial del alias")
+        && sqlq(`select count(*) from tecnica.elemento_alias_eventos where codigo = 'PTAR-LAG-1' and alias = 'A-N1 ${ancho}'`) === "1", t.slice(0, 500));
+      await capturar(pg, `ficha_laguna_${ancho}`);
+      // ===== E. La ficha de un punto de medición: los parámetros =====
+      await pg.$eval("#ptar-q", (e) => { e.value = ""; }); await pg.type("#ptar-q", "PTAR-PM-RIO-ARR"); await pg.keyboard.press("Enter");
+      await pg.waitForSelector("[data-testid=ptar-ficha][data-codigo=PTAR-PM-RIO-ARR] [data-parametro=ar_ph]", { timeout: 15000 }).catch(() => {});
+      const pars = await pg.$$eval("[data-testid=ptar-ficha] [data-parametro]", (l) => l.map((x) => `${x.getAttribute("data-parametro")}:${x.getAttribute("data-estado")}`));
       t = await texto(pg);
-      ok(`E1 (${ancho}) buscar el activo ${poz} abre la ficha del pozo copiado (activo de redes, profundidad o coordenadas)`, t.includes(`Activo de redes`) && t.includes(poz) && t.includes("Coordenadas"), t.slice(0, 600));
+      // a 1280 ya tiene los valores que guardó la corrida de 390 (misma base): se mira la sonda y el orden; a 390, todo «sin registros»
+      ok(`E1 (${ancho}) ficha del río aguas arriba: primero la sonda (pH, temperatura, OD, «sin registros») y luego la Caracterización`,
+        pars.map((x) => x.split(":")[0]).join() === "ar_ph,ar_temperatura,ar_od,ar_caudal,ar_dbo5,ar_dqo,ar_sst,ar_nitrogeno_total,ar_fosforo_total"
+        && pars.slice(0, 3).every((x) => x.endsWith(":sin_registros")) && (ancho !== 390 || pars.every((x) => x.endsWith(":sin_registros")))
+        && /sonda multiparámetro/i.test(t) && /caracterización/i.test(t), pars);
+      await capturar(pg, `ficha_punto_${ancho}`);
       // ===== F. Foto satelital / Calles y grupos =====
       const vis = async () => pg.evaluate(() => [window.__mapaPtar.getLayoutProperty("satelital", "visibility") ?? "visible", window.__mapaPtar.getLayoutProperty("calles", "visibility")]);
-      ok(`F1 (${ancho}) el fondo es la foto satelital (ESRI World Imagery)`, (await vis()).join() === "visible,none" && await pg.evaluate(() => window.__mapaPtar.getSource("satelital").tiles[0].includes("World_Imagery")));
       await pg.evaluate(() => [...document.querySelectorAll(".ptar-fondo button")].find((b) => b.textContent === "Calles").click()); await esp(200);
-      ok(`F2 (${ancho}) «Calles» cambia el fondo`, (await vis()).join() === "none,visible");
+      ok(`F1 (${ancho}) «Calles» cambia el fondo`, (await vis()).join() === "none,visible");
       await pg.evaluate(() => [...document.querySelectorAll(".ptar-capa input")][2].click()); await esp(200);
-      ok(`F3 (${ancho}) apagar «Pozos y descargas» los quita del mapa`, await pg.evaluate(() => window.__mapaPtar.getLayoutProperty("ptar-pozo", "visibility") === "none"));
+      ok(`F2 (${ancho}) apagar «Pozos y descargas» los quita del mapa`, await pg.evaluate(() => window.__mapaPtar.getLayoutProperty("ptar-pozo", "visibility") === "none"));
+      // ===== G. Volver; el Dashboard PTAR y su acceso directo =====
+      await pg.evaluate(() => [...document.querySelectorAll(".ptar-control-cab button")][0].click());
+      await pg.waitForSelector("[data-tarjeta=dashboard_ptar]", { timeout: 15000 });
+      await clic(pg, "[data-tarjeta=dashboard_ptar]");
+      await pg.waitForSelector("[data-testid=ptar-acceso-control]", { timeout: 15000 });
+      const tabs = await pg.$$eval(".tdash-tabs .tdash-tab", (x) => x.map((b) => `${b.childNodes[0].textContent.trim()}:${b.disabled ? "pronto" : "ok"}`));
+      ok(`G1 (${ancho}) Dashboard PTAR: «Mapa» es el acceso directo; las demás en «Próximamente»`, tabs.join() === "Mapa:ok,Resumen:pronto,Registros:pronto,Eventos:pronto,Referencias:pronto,Personal técnico:pronto,Reportes:pronto", tabs);
+      await capturar(pg, `dashboard_ptar_${ancho}`);
+      await pg.evaluate(() => [...document.querySelectorAll("[data-testid=ptar-acceso-control] button")][0].click());
+      await esperarMapa(pg); t = await texto(pg);
+      ok(`G2 (${ancho}) el acceso abre el Sistema de Control, que vuelve al Dashboard`, t.includes("Sistema de Control PTAR") && t.includes("Volver al Dashboard PTAR"), t.slice(0, 300));
       await pg.close();
 
-      // ===== G. Quién ve qué (D6) =====
-      pg = await pagina("J", ancho); m = await modos(pg);
-      t = await texto(pg);
-      ok(`G1 (${ancho}) jefe de la PTAR: el modo PTAR, sin Plantas ni el Dashboard PTAP ni sus formularios`, m.includes("PTAR") && !m.includes("Plantas") && !t.includes("Dashboard PTAP"), `${m} · ${t.slice(0, 300)}`);
-      if (m.includes("Supervisión")) { await clic(pg, "[data-modo=supervision]"); t = await texto(pg); }
-      ok(`G1b (${ancho}) jefe de la PTAR: ni el Dashboard PTAP ni los avisos de la PTAP en ningún modo (modos: ${m.join(", ")})`, !t.includes("Dashboard PTAP") && !/Avisos\n/.test(t), t.slice(0, 400));
-      await capturar(pg, `inicio_jefe_ptar_${ancho}`);
-      await pg.close();
-      pg = await pagina("S", ancho); m = await modos(pg);
-      ok(`G2 (${ancho}) supervisor de planta (solo PTAP): sin el modo PTAR`, !m.includes("PTAR") && !(await texto(pg)).includes("Dashboard PTAR"), m);
-      await pg.close();
+      // ===== H. La Caracterización desde el celular del operador: del formulario a la ficha =====
       pg = await pagina("O", ancho); m = await modos(pg);
-      ok(`G3 (${ancho}) operador: sin el modo PTAR`, !m.includes("PTAR"), m);
+      const tarjO = await pg.$$eval("[data-tarjeta]", (t) => t.map((x) => x.getAttribute("data-tarjeta")));
+      ok(`H1 (${ancho}) operador con la Caracterización: la ve en PTAR, sin el Sistema de Control ni el Dashboard (no tiene el alcance)`, tarjO.join() === "ptar_caracterizacion" && !(m.includes("Plantas")), `${m} · ${tarjO}`);
+      await clic(pg, "[data-tarjeta=ptar_caracterizacion]");
+      await pg.waitForSelector('[id="tec-sel-punto:ptar"]', { timeout: 20000 });
+      const opciones = await pg.$$eval('[id="tec-sel-punto:ptar"] option', (o) => o.map((x) => x.value).filter(Boolean));
+      ok(`H2 (${ancho}) el formulario: lista de los 4 puntos de la PTAR y la fecha de la muestra (7 días)`, opciones.sort().join() === "PTAR-AFL,PTAR-EFL,PTAR-RIO-ABJ,PTAR-RIO-ARR" && !!(await pg.$("#tec-fecha[type=date]")), opciones);
+      const pin = await pg.$eval(".tec-pagina", (e) => getComputedStyle(e).getPropertyValue("--t-modo").trim());
+      ok(`H3 (${ancho}) el formulario va en pizarra (modo PTAR)`, pin === "#3d4a5c" || pin === "var(--t-ptar)" || pin.includes("3d4a5c"), pin);
+      await pg.select('[id="tec-sel-punto:ptar"]', "PTAR-RIO-ARR");
+      await pg.waitForSelector('[id="tec-c-ar_caudal@PTAR-RIO-ARR"]');
+      // el borrador de la corrida anterior (mismo Chrome) puede traer texto: se vacía antes de escribir
+      const escribir = async (sel, val) => { await pg.$eval(sel, (e) => { e.focus(); e.select(); }); await pg.keyboard.press("Backspace"); await pg.type(sel, val); };
+      await escribir('[id="tec-c-ar_caudal@PTAR-RIO-ARR"]', `21${ancho === 390 ? "5" : "6"}0`);
+      await escribir('[id="tec-c-ar_dbo5@PTAR-RIO-ARR"]', "4,5");
+      await pg.evaluate((f) => { const e = document.getElementById("tec-fecha"); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(e, f); e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true })); }, hace3);
+      await capturar(pg, `caracterizacion_form_${ancho}`);
+      await pg.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Guardar registro").click());
+      await pg.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Confirmar y guardar"), { timeout: 15000 }).catch(() => {});
+      t = await texto(pg); await capturar(pg, `caracterizacion_confirmar_${ancho}`);
+      if (!t.includes("Confirmar y guardar")) throw new Error("no apareció la confirmación: " + t.slice(0, 900));
+      ok(`H4 (${ancho}) la confirmación muestra la fecha del laboratorio (hace 3 días) y los dos valores`, /hace 3 días/.test(t) && t.includes("Río Cesar aguas arriba"), t.slice(0, 600));
+      await pg.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Confirmar y guardar").click());
+      await pg.waitForFunction(() => document.body.innerText.includes("valores guardados"), { timeout: 20000 }).catch(() => {});
+      t = await texto(pg);
+      ok(`H5 (${ancho}) guardado: 2 valores, por el servidor real (registrar_medicion) con la fecha elegida`, t.includes("2 valores guardados")
+        && sqlq(`select count(*) from tecnica.registros r join tecnica.puntos p on p.id = r.punto_id where p.codigo = 'PTAR-RIO-ARR' and r.autor = '${EMAILS.O}' and r.fecha_muestra = '${hace3}'`) === String(ancho === 390 ? 2 : 4), t.slice(0, 500));
+      await capturar(pg, `caracterizacion_guardada_${ancho}`);
+      await pg.close();
+      // el supervisor técnico ve el valor en la ficha del Sistema de Control
+      pg = await pagina("T", ancho); await clic(pg, "[data-modo=ptar]"); await clic(pg, "[data-tarjeta=control_ptar]"); await esperarMapa(pg);
+      await pg.type("#ptar-q", "PTAR-PM-RIO-ARR"); await pg.keyboard.press("Enter");
+      await pg.waitForSelector("[data-testid=ptar-ficha] [data-parametro=ar_caudal]", { timeout: 15000 }).catch(() => {});
+      const cau = await pg.$eval("[data-testid=ptar-ficha] [data-parametro=ar_caudal]", (e) => `${e.getAttribute("data-estado")}|${e.innerText.replace(/\s+/g, " ")}`).catch(() => "");
+      ok(`H6 (${ancho}) la ficha del río aguas arriba muestra el caudal recién guardado, con su fecha y «Sin referencia»`, cau.startsWith("sin_referencia|") && cau.includes(ancho === 390 ? "2.150" : "2.160") && cau.includes("Sin referencia"), cau);
+      const estRio = await pg.evaluate(() => window.__mapaPtar.querySourceFeatures("ptar", { filter: ["==", ["get", "codigo"], "PTAR-PM-RIO-ARR"] })[0]?.properties.estado);
+      ok(`H7 (${ancho}) …y en el mapa el punto queda «con datos»`, estRio === "con_datos", estRio);
+      await capturar(pg, `ficha_punto_con_dato_${ancho}`);
+      await pg.close();
+
+      // ===== I. Quién ve qué (D6) =====
+      pg = await pagina("J", ancho); m = await modos(pg); t = await texto(pg);
+      ok(`I1 (${ancho}) jefe de la PTAR: el modo PTAR, sin Plantas ni el Dashboard PTAP`, (m.includes("PTAR") || (m.length === 0 && t.includes("Sistema de Control PTAR"))) && !m.includes("Plantas") && !t.includes("Dashboard PTAP"), `${m} · ${t.slice(0, 300)}`);
+      await pg.close();
+      pg = await pagina("S", ancho); m = await modos(pg); t = await texto(pg);
+      ok(`I2 (${ancho}) supervisor de planta (solo PTAP): sin el modo PTAR ni la Caracterización`, !m.includes("PTAR") && !t.includes("Caracterización") && !t.includes("Sistema de Control"), m);
       await pg.close();
       pg = await pagina("A", ancho);
       await clic(pg, "[data-modo=ptar]"); await clic(pg, "[data-tarjeta=dashboard_ptar]");
-      await pg.waitForSelector("[data-testid=ptar-mapa]", { timeout: 30000 });
+      await pg.waitForSelector("[data-testid=ptar-acceso-control]", { timeout: 30000 });
       await pg.evaluate(() => [...document.querySelectorAll(".tdash-tab")].find((b) => b.textContent.startsWith("Personal técnico")).click());
       await pg.waitForSelector("[data-testid=ptar-alcances]", { timeout: 15000 }).catch(() => {});
       t = await texto(pg);
-      ok(`G4 (${ancho}) administrador: «Personal técnico» abre los alcances (el supervisor técnico con los dos, el jefe solo con la PTAR)`, t.includes("Alcance PTAP y PTAR") && t.includes(EMAILS.T) && t.includes(EMAILS.J), t.slice(0, 600));
-      await capturar(pg, `alcances_admin_${ancho}`);
+      ok(`I3 (${ancho}) administrador: «Personal técnico» abre los alcances`, t.includes("Alcance PTAP y PTAR") && t.includes(EMAILS.T) && t.includes(EMAILS.J), t.slice(0, 400));
       await pg.close();
     }
     ok("Z1 sin errores de JavaScript en ninguna página", errores.length === 0, errores.join(" | "));

@@ -15,6 +15,11 @@
   --ptar-mapa-pozo: #eef2f5;          /* --t-suave */
   --ptar-mapa-contorno: #22313f;      /* --t-texto */
   --ptar-mapa-seleccion: #4a90d9;     /* --t-foco */
+  /* PTAR-3: estado de los puntos de medición en el mapa y de los parámetros en la ficha (los estados de la guía, §4) */
+  --ptar-estado-normal: #1b6b3a;       /* --t-ok */
+  --ptar-estado-fuera: #b3261e;        /* --t-rojo */
+  --ptar-estado-viejo: #c25e00;        /* --t-naranja: sin dato reciente */
+  --ptar-estado-sin: #52626f;          /* --t-texto-2: sin registros o sin referencia */
 }
 .tec-modo-ptar { --t-modo: var(--t-ptar); }
 .tec-tarjetas-ptar { --t-modo: var(--t-ptar); }

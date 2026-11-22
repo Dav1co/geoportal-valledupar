@@ -4,24 +4,24 @@ import "./tokens_ptar.css";
 import "./ptar.css";
 import { CabeceraDashboard } from "../CabeceraDashboard";
 import { ErrorTec } from "../apiTecnica";
-import { MapaPTAR } from "./MapaPTAR";
 import { apiPtar, type AlcancesResp } from "./apiPtar";
 
+// PTAR-3 (David, 21-nov): el mapa salió del Dashboard a su vista propia, el «Sistema de Control PTAR»; aquí la sección «Mapa» es el acceso directo.
 // PTAR-2 (Code C, 21-nov): el cascarón del Dashboard PTAR (D4), en pizarra. Primera entrega: el MAPA interactivo funciona; Resumen, Registros, Eventos,
 // Referencias y Reportes quedan en «Próximamente» hasta que existan los formularios (PTAR-4). «Personal técnico» = el alcance PTAP / PTAR de cada persona (D6),
 // solo para el administrador. Mismo registro de secciones que el Dashboard PTAP: agregar una sección es registrarla con su componente.
-type Seccion = { clave: string; titulo: string; Componente?: () => JSX.Element; soloAdmin?: boolean };
+type Seccion = { clave: string; titulo: string; Componente?: (p: { onControl: () => void }) => JSX.Element; soloAdmin?: boolean };
 const SECCIONES: Seccion[] = [
-  { clave: "mapa", titulo: "Mapa", Componente: () => <MapaPTAR instalacion="ptar" /> },
+  { clave: "mapa", titulo: "Mapa", Componente: AccesoControl },
   { clave: "resumen", titulo: "Resumen" },
   { clave: "registros", titulo: "Registros" },
   { clave: "eventos", titulo: "Eventos" },
   { clave: "referencias", titulo: "Referencias" },
-  { clave: "personal", titulo: "Personal técnico", Componente: () => <AlcancesPTAR />, soloAdmin: true },
+  { clave: "personal", titulo: "Personal técnico", Componente: () => <AlcancesPTAR />, soloAdmin: true },      // los alcances PTAP / PTAR (D6)
   { clave: "reportes", titulo: "Reportes" },
 ];
 
-export function DashboardPTAR({ correo, rotuloPerfil, admin, onVolver, selector }: { correo: string; rotuloPerfil: string; admin: boolean; onVolver: () => void; selector?: ReactNode }) {
+export function DashboardPTAR({ correo, rotuloPerfil, admin, onVolver, onControl, selector }: { correo: string; rotuloPerfil: string; admin: boolean; onVolver: () => void; onControl: () => void; selector?: ReactNode }) {
   const [activa, setActiva] = useState("mapa");
   const pestanas = SECCIONES.map((s) => ({ clave: s.clave, titulo: s.titulo, pronto: !s.Componente || (s.soloAdmin && !admin) }));
   const seccion = SECCIONES.find((s) => s.clave === activa);
@@ -29,7 +29,20 @@ export function DashboardPTAR({ correo, rotuloPerfil, admin, onVolver, selector 
     <div className="tdash tdash-ptar" data-dashboard="ptar">
       <CabeceraDashboard titulo="Dashboard PTAR" sesion={`${correo} · ${rotuloPerfil}`} onVolver={onVolver} selector={selector} etiqueta="Secciones del Dashboard PTAR"
         pestanas={pestanas} activa={activa} onElegir={setActiva} />
-      <div className="tdash-cuerpo">{seccion?.Componente ? <seccion.Componente /> : null}</div>
+      <div className="tdash-cuerpo">{seccion?.Componente ? <seccion.Componente onControl={onControl} /> : null}</div>
+    </div>
+  );
+}
+
+/** La sección «Mapa»: el acceso directo al Sistema de Control PTAR (el mapa de la planta en su vista propia). */
+function AccesoControl({ onControl }: { onControl: () => void }) {
+  return (
+    <div className="ptar-acceso" data-testid="ptar-acceso-control">
+      <section className="ptar-ficha">
+        <h3>Sistema de Control PTAR</h3>
+        <p className="ptar-nota">El mapa de la PTAR El Salguero sobre la foto satelital: lagunas, colectores, pozos y puntos de medición. Toque un elemento para ver su ficha y, en los puntos de medición, el último valor de sus parámetros.</p>
+        <button type="button" className="tec-boton" onClick={onControl}>Abrir el Sistema de Control PTAR</button>
+      </section>
     </div>
   );
 }
