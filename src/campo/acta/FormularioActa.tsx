@@ -11,6 +11,10 @@ import { IdentificarPredio } from "./IdentificarPredio";
 import { PanelCancelarActa } from "./PanelCancelarActa";
 import type { Destino, MotivoCancelacion } from "../../components/ConfirmarCancelar";
 import { SeccionConstancia } from "../constancia/SeccionConstancia";
+import { FirmasRegistro } from "../documentos/FirmasRegistro";
+import { faltasFirmas, FIRMAS_VACIAS, fuenteDelActa, guardarFirmas, type FirmasLocal } from "../documentos/firmasLogica";
+import { useDocumento } from "../documentos/Registro";
+import { esFirmaDefinitiva } from "../documentos/apiDocumentos";
 import { useConstancia } from "../constancia/useConstancia";
 import * as L from "./logica";
 import type { BorradorActa, ConfirmacionActa, FormularioActa as Catalogo, Precarga } from "./tipos";
@@ -47,6 +51,12 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
   const [ahora, setAhora] = useState(() => new Date());
   const enviando = useRef(false);
   const cons = useConstancia("acta_inspeccion");     // sección opcional «Constancia por correo»: solo si el documento está habilitado
+  // Comercial 21-nov: firmas con el dedo (operario obligatoria; usuario y testigo opcionales) si el servidor dice que el acta las lleva (documentos_catalogo de geoportal-acta)
+  const doc = useDocumento("acta", "acta");
+  const reglas = doc?.firmas ?? null;
+  const [firmas, setFirmas] = useState<FirmasLocal>(FIRMAS_VACIAS);
+  const firmasRef = useRef(firmas); firmasRef.current = firmas;
+  const firmasEnviadas = useRef(new Set<string>());
 
   useEffect(() => { const t = setInterval(() => setAhora(new Date()), 30000); return () => clearInterval(t); }, []);
   const hayFotos = (entrada?.fotos.length ?? 0) > 0;
@@ -87,7 +97,9 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
   const fotosFijas = entrada.prep !== null;                                    // con la subida preparada no se cambian las fotos
   const set = (c: Partial<BorradorActa>) => almacenActa.parchar(actaId, (x) => ({ ...x, borrador: { ...x.borrador, ...c } }));
   const setHallazgo = (codigo: string) => almacenActa.parchar(actaId, (x) => ({ ...x, borrador: L.depurarAcciones(L.alternarHallazgo(x.borrador, cat, codigo), cat) }));
-  const faltas = [...L.faltas(b, entrada.fotos, cat, ahora), ...cons.faltas];
+  const fuenteFirmas = fuenteDelActa(b);
+  const faltasDoc = doc === undefined ? ["Cargando lo que lleva el acta…"] : faltasFirmas(reglas, firmas, fuenteFirmas);
+  const faltas = [...L.faltas(b, entrada.fotos, cat, ahora), ...cons.faltas, ...faltasDoc];
   const sin = L.sinIrregularidad(b, cat);
   const cont = L.contadores(b, entrada.fotos, cat);
   const tiposHallazgo = cat.tipos_foto.filter((t) => !t.acta_fisica);
@@ -138,7 +150,12 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
           }
         }
       }
-      if (!conf) conf = await apiActa.registrar(actaId, contenido, cons.bloque);
+      if (!conf) {
+        const r = almacenActa.obtener(actaId)!.borrador;
+        if (reglas) await guardarFirmas("acta", actaId, reglas, firmasRef.current, fuenteDelActa(r), firmasEnviadas.current)   // antes de registrar; repetirla reemplaza
+          .catch((e) => { if (!esFirmaDefinitiva(e)) throw e; });                                                           // ya registrada: registrar responde «repetido»
+        conf = await apiActa.registrar(actaId, contenido, cons.bloque);
+      }
       borrador.terminar();      // registrado: el borrador de este celular ya no hace falta
       setFase("guardado");
       onRegistrado(conf);
@@ -293,7 +310,7 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
         </Seccion>
 
         <Seccion titulo="4. Atención de la visita y firmas (lo que consta en el acta física)">
-          <p className="campo-nota" role="note">{L.TEXTO_PAPEL} Aquí solo se declara lo que ya consta en el papel; en esta pantalla nadie firma.</p>
+          <p className="campo-nota" role="note">{L.TEXTO_PAPEL} {reglas ? "Aquí se declara lo que consta en el papel; las firmas con el dedo van al final, en «Firmas»." : "Aquí solo se declara lo que ya consta en el papel; en esta pantalla nadie firma."}</p>
           <SiNo etiqueta="¿Atendió alguien la visita?" valor={b.nadieAtendio === null ? null : !b.nadieAtendio} bloqueado={bloqueado}
             onCambio={(atendio) => set({ nadieAtendio: !atendio, ...(atendio ? {} : { atNombre: "", atCalidad: "", atCalidadTexto: "", firmoAtendiente: null, seNego: false }) })} />
           {b.nadieAtendio === false && <>
@@ -356,6 +373,7 @@ export function FormularioActa({ cat, actaId, correo, onVolver, onRegistrado, mo
         </Seccion>
 
         <SeccionConstancia config={cons.config} valor={cons.valor} onCambio={cons.setValor} bloqueado={bloqueado} />
+        {reglas ? <FirmasRegistro reglas={reglas} valor={firmas} onCambio={setFirmas} fuente={fuenteFirmas} deshabilitado={bloqueado} nombreOperario={correo} /> : null}
 
         {faltas.length > 0 && (
           <div role="status" aria-live="polite">

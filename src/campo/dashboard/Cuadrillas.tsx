@@ -12,7 +12,7 @@ const nombreMalo = (n: string) => n.trim().length < 2 || n.trim().length > 60;
 const nMiembros = (c: Cuadrilla) => c.n_miembros ?? c.miembros.length;
 const miembrosTxt = (n: number) => (n === 0 ? "Sin miembros" : n === 1 ? "1 miembro" : `${n} miembros`);
 
-export function Cuadrillas() {
+export function Cuadrillas({ soloLectura = false }: { soloLectura?: boolean }) {
   const [per, setPer] = useState<PersonalResp | null>(null);
   const [lista, setLista] = useState<Cuadrilla[] | null>(null);
   const [inactivas, setInactivas] = useState(false);
@@ -28,7 +28,7 @@ export function Cuadrillas() {
       .catch((e) => { if (vivo) setError(textoError(e).texto); });
     return () => { vivo = false; };
   }, [inactivas, vez]);
-  const puede = puedeDe(per);
+  const puede = puedeDe(per, soloLectura);
   const hecho = (t: string) => { setDlg(null); setAviso(t); setVez((x) => x + 1); };
   const actividades: CodigoNombre[] = per?.actividades ?? [];
 

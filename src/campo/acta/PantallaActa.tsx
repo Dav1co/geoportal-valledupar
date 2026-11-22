@@ -1,3 +1,4 @@
+import { PdfRegistro, useDocumento } from "../documentos/Registro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./acta.css";
 import { avisoDeError, ErrorCampo } from "../apiCampo";
@@ -283,8 +284,15 @@ function Confirmado({ conf, papelPendiente, onVolver }: { conf: ConfirmacionActa
         <p className="campo-nota" role="note"><strong>Verifique que este consecutivo esté escrito en el acta física.</strong> {L.TEXTO_PAPEL}</p>
         {papelPendiente && <p className="campo-nota" role="alert">Quedó marcado «papel pendiente»: adjunte la foto del acta física firmada desde «Mis actas» en cuanto la tenga.</p>}
         {conf.aviso_zona && <p className="campo-sub">La ubicación quedó fuera de la zona de operación; se registró con esa marca.</p>}
+        <PdfDelActa actaId={conf.acta_id} />
         <button type="button" className="tec-boton" onClick={onVolver}>Volver a Mis actas</button>
       </section>
     </div>
   );
+}
+
+/** Comercial 21-nov: el PDF único del acta, si el servidor dice que la lleva (se pide una vez; si falla, «Reintentar» y queda pendiente en Actas registradas). */
+function PdfDelActa({ actaId }: { actaId: string }) {
+  const doc = useDocumento("acta", "acta");
+  return doc?.lleva_pdf ? <PdfRegistro esquema="acta" registroId={actaId} /> : null;
 }

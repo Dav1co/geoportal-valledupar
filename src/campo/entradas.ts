@@ -66,7 +66,8 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
     id: "analisis_contrato", titulo: "Análisis de contrato", seccion: 3, habilitada: true,
     descripcion: "Escriba un contrato y vea cartera, consumo, medidor, gestiones y ubicación.",
   });
-  if (c.puedeSupervisarActas) e.push({ id: "acta_supervision", titulo: "Aperturas sin registrar", seccion: 4, gestion: true, descripcion: "", habilitada: true });
+  // Comercial 21-nov (B2): «Actas registradas» reúne las actas con PDF, las actividades derivadas, «Aperturas sin registrar» y Personal en solo lectura (el id interno no cambia)
+  if (c.puedeSupervisarActas) e.push({ id: "acta_supervision", titulo: "Actas registradas", seccion: 4, gestion: true, descripcion: "", habilitada: true });
   // Paso C: «Supervisión y dashboard» (antes «Revisión de reportes»: lista, mapa, indicadores; y catálogo y parámetros para el administrador) solo con el permiso de supervisión
   if (c.puedeSupervisar) e.push({ id: "revision", titulo: "Supervisión y dashboard", seccion: 4, gestion: true, descripcion: "", habilitada: true });
   return e;

@@ -1,0 +1,24 @@
+/* Actas de Comercial (21-nov): firmas con el dedo, PDF, actas registradas y derivadas. Solo tokens de la guía (en Comercial, el color del módulo #782a27). */
+.doc-firmas { display: grid; gap: 14px; }
+.doc-firma-bloque { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--t-borde); }
+.doc-firma-bloque:first-of-type { border-top: 0; padding-top: 0; }
+.doc-firma-mini { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.doc-firma-mini img { max-width: 220px; max-height: 90px; background: #fff; border: 1px solid var(--t-borde); border-radius: 6px; }
+.doc-opciones { display: grid; gap: 6px; }
+.doc-opcion { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 1px solid var(--t-borde-campo); border-radius: var(--t-radio, 8px); background: var(--t-tarjeta); cursor: pointer; }
+.doc-opcion input { width: 20px; height: 20px; accent-color: var(--t-modo); }
+.doc-opcion-on { border-color: var(--t-modo); background: var(--t-modo-suave); font-weight: 600; }
+/* El momento dedicado de la firma es el de Aseo (FirmaPad, sin cambiarlo): sus reglas viven en aseo.css, que Campo no carga. Aquí van las mismas, en el color de Comercial. */
+.com-modulo .aseo-firma-capa, .doc-firma-envoltura .aseo-firma-capa { --t-modo: var(--comercial, #782a27); --t-modo-suave: var(--comercial-suave, #f6e8e7);
+  position: fixed; inset: 0; z-index: 3000; background: var(--t-fondo); display: flex; flex-direction: column; gap: 8px; padding: 8px; box-sizing: border-box; touch-action: none; }
+.aseo-firma-cab { font-size: var(--t-txt, 15px); } .aseo-firma-giro { color: var(--t-texto-2); }
+.aseo-firma-lienzo { flex: 1; min-height: 120px; width: 100%; background: #fff; border: 2px dashed var(--t-borde-campo); border-radius: 10px; touch-action: none; cursor: crosshair; }
+.aseo-firma-acc { display: flex; gap: 8px; justify-content: flex-end; } .aseo-firma-acc button { min-height: 52px; min-width: 110px; }
+.aseo-firma-error { margin: 0; color: var(--t-rojo); font-weight: 600; font-size: 14px; }
+/* PDF del registro */
+.doc-pdf { display: grid; gap: 6px; }
+.doc-pdf-nombre { font-family: var(--t-fuente-codigo, "Courier New", monospace); font-size: 13px; word-break: break-all; }
+
+/* Actas registradas */
+.doc-filtros { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 12px; align-items: end; }
+.doc-filtros .rv-botones { grid-column: 1 / -1; }

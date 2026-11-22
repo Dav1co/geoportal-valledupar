@@ -11,7 +11,8 @@ import type { AperturasSinRegistrar as Datos, FilaApertura } from "./tipos";
 // «Ver cancelados», los que ya se cancelaron con su motivo. Permite cancelar los colgados de otras personas (el servidor decide el permiso). No es el tablero de actas: no lista las registradas.
 const TEXTO: Record<FilaApertura["situacion"], string> = { abierta_en_curso: "En curso", abierta_vencida_sin_registrar: "Caducó sin registrar", cancelada: "Cancelada" };
 
-export function AperturasSinRegistrar({ onVolver }: { onVolver: () => void }) {
+/** `incrustada`: dentro de la entrada «Actas registradas» (Comercial 21-nov, B2), como pestaña: sin página propia ni «Volver». */
+export function AperturasSinRegistrar({ onVolver, incrustada = false }: { onVolver: () => void; incrustada?: boolean }) {
   const [verCancelados, setVerCancelados] = useState(false);
   const [datos, setDatos] = useState<Datos | null>(null);
   const [motivos, setMotivos] = useState<MotivoCancelacion[] | null>(null);
@@ -31,13 +32,12 @@ export function AperturasSinRegistrar({ onVolver }: { onVolver: () => void }) {
   }, [verCancelados, intento]);
   const recargar = useCallback(() => setIntento((i) => i + 1), []);
 
-  return (
-    <div className="tec-pagina campo-pagina">
+  const cuerpo = (
       <section className="tec-tarjeta">
-        <div className="campo-cab">
+        {incrustada ? <h2>Aperturas sin registrar</h2> : <div className="campo-cab">
           <h1>Aperturas sin registrar</h1>
           <button type="button" className="tec-boton-sec" onClick={onVolver}>Volver</button>
-        </div>
+        </div>}
         <p className="campo-sub">Consecutivos del acta de inspección que se entregaron y no llegaron a registrarse. Cancelar un registro deja el consecutivo justificado (motivo, quién y cuándo); no se borra nada.</p>
         <label className="campo-check">
           <input type="checkbox" checked={verCancelados} onChange={(e) => setVerCancelados(e.target.checked)} />
@@ -67,6 +67,6 @@ export function AperturasSinRegistrar({ onVolver }: { onVolver: () => void }) {
         </ul>
         {datos && datos.filas.length >= datos.max_filas && <p className="campo-sub">Se muestran las {datos.max_filas} más recientes.</p>}
       </section>
-    </div>
   );
+  return incrustada ? cuerpo : <div className="tec-pagina campo-pagina">{cuerpo}</div>;
 }

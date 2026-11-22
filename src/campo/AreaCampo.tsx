@@ -10,7 +10,7 @@ import { FormatosCampo } from "./formatos/FormatosCampo";
 import { formatosDisponibles } from "./formatos/tipos";
 import { entradasDeCampo, type EntradaId } from "./entradas";
 import { PantallaActa } from "./acta/PantallaActa";
-import { AperturasSinRegistrar } from "./acta/AperturasSinRegistrar";
+import { ActasRegistradas } from "./documentos/ActasRegistradas";
 import type { Destino } from "../components/ConfirmarCancelar";
 import { supabase } from "../lib/supabase";
 
@@ -102,7 +102,7 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
       onVolver={volver} puedeActa={acta} onAbrirActa={(c) => { setContratoPuente(c); setAbierta("acta"); }} formatoInicial={formatoInicial} valoresIniciales={valoresIniciales} />;
   }
   if (abierta === "acta_supervision" && dashboardActa) {
-    return <AperturasSinRegistrar onVolver={() => setAbierta(null)} />;
+    return <ActasRegistradas correo={correo} onVolver={() => setAbierta(null)} nombres={nombresFormularios(def)} puedeAperturas={dashboardActa} puedeCerrarDerivadas={def?.puede.supervisar === true} />;
   }
 
   if (abierta === "activo_campo" && campo) {
@@ -161,4 +161,11 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
       </section>
     </div>
   );
+}
+
+/** Nombre de cada formulario por su código (del catálogo de Formatos de campo) más el acta de posible pérdida: para el selector de «Actas registradas». */
+function nombresFormularios(def: FormularioCampo | null): Map<string, string> {
+  const m = new Map<string, string>([["acta", "Reportar posible pérdida"]]);
+  for (const g of def?.grupos ?? []) for (const t of g.tipos) m.set(t.codigo, t.nombre);
+  return m;
 }

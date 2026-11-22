@@ -14,6 +14,10 @@ import { useConstancia } from "../constancia/useConstancia";
 import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "../inicio";
 import { aplicarValoresIniciales, prellenarHoraInicio, agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
 import { etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
+import { FirmasRegistro } from "../documentos/FirmasRegistro";
+import { estadoDeFirmaAtendio, faltasFirmas, FIRMAS_VACIAS, guardarFirmas, SIN_FUENTE, type FirmasLocal, type FuenteFormulario } from "../documentos/firmasLogica";
+import { PdfRegistro, SIN_ORIGEN, useDocumento, VieneDe, vincularOrigen, type Origen } from "../documentos/Registro";
+import { esFirmaDefinitiva } from "../documentos/apiDocumentos";
 
 // Formulario de UN formato del Paso D (campos propios, fotos con etiqueta, resultado y causal, consecutivo). Pensado para el celular (380 px) y una mano.
 // - Todo (campos, fotos mínimas y máximas, causales) sale del catálogo que entrega el servidor; aquí no hay nombres de formatos.
@@ -29,7 +33,7 @@ type Destino = { tipo: "etiqueta"; codigo: string; nombre: string } | { tipo: "a
 
 export type EnvioPendiente = { tipo: string; resultado: Resultado | null; causal: string | null; datos: Record<string, unknown> | null; reporte_id: string | null };
 
-export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFallarRed, puedeActa = false, onAbrirActa, contratoInicial = "", destinos, onIrA, valoresIniciales }: {
+export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, onOtro, alFallarRed, puedeActa = false, onAbrirActa, contratoInicial = "", destinos, onIrA, valoresIniciales }: {
   def: FormularioCampo; tipo: TipoFormato; correo: string; onVolver: () => void; onOtro: () => void; alFallarRed?: (envio: EnvioPendiente) => void;
   /** Permiso `acta` (lo decide el servidor): solo con él se ofrece abrir el acta de inspección técnica. `onAbrirActa` recibe el contrato para precargarlo. */
   puedeActa?: boolean; onAbrirActa?: (contrato: string) => void;
@@ -38,6 +42,9 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   /** Valores que llegan ya marcados (atajo de «Análisis de contrato»: Instalación de medidor con «Cambio»). Se aplican sobre la hora de inicio; solo prellenan. */
   valoresIniciales?: Record<string, unknown>;
 }) {
+  // Comercial 21-nov (D13): en las revisiones, «¿Se requiere cambio de medidor?» se oculta y se llena solo con «¿Da lugar a otras actividades?» (cambio_medidor ∈ da_lugar).
+  const tipo = useMemo(() => sinReqCambio(tipoServidor), [tipoServidor]);
+  const reqDerivado = tipo !== tipoServidor;
   const [resultado, setResultado] = useState<Resultado | "">("");
   const [causal, setCausal] = useState("");
   const [subtipo, setSubtipo] = useState("");
@@ -61,7 +68,15 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
   const ubic = useUbicacion();
   const prep = useRef<Preparacion | null>(null);
   const enviando = useRef(false);
-  const cons = useConstancia(tipo.codigo);     // «Constancia por correo»: solo en los 4 formatos del acta de revisión o instalación y si el documento está habilitado
+  const cons = useConstancia(tipo.codigo);
+  // Comercial 21-nov: firmas con el dedo y PDF si el servidor dice que este formulario los lleva (documentos_catalogo); «¿Viene de…?» con las derivadas pendientes del contrato.
+  const doc = useDocumento("campo", `tipo:${tipo.codigo}`);
+  const reglas = doc?.firmas ?? null;
+  const [firmas, setFirmas] = useState<FirmasLocal>(FIRMAS_VACIAS);
+  const firmasEnviadas = useRef(new Set<string>());
+  const [origen, setOrigen] = useState<Origen>(SIN_ORIGEN);
+  const [registroId, setRegistroId] = useState<string | null>(null);
+  const [avisoOrigen, setAvisoOrigen] = useState<string | null>(null);     // «Constancia por correo»: solo en los 4 formatos del acta de revisión o instalación y si el documento está habilitado
   const refEtq = useRef(porEtiqueta); refEtq.current = porEtiqueta;
   const refAdic = useRef(adicionales); refAdic.current = adicionales;
 
@@ -94,7 +109,10 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
     // Sin etiquetas en el catálogo, todas las fotos van en «adicionales» (sin etiqueta): cuentan igual.
     adicionales: adicionales.length, tieneUbicacion: !!fix, tienePrecision: !!fix && Number.isFinite(fix.precision_m), topeGeneral: tope,
   });
-  const faltas = [...faltasFormato, ...cons.faltas];
+  const tiene = (c: string) => (tipo.campos ?? []).some((x) => x.codigo === c && x.activo !== false);
+  const fuente: FuenteFormulario = reglas ? { estado: tiene("firma_atendio") ? estadoDeFirmaAtendio(valores.firma_atendio) : undefined, nombre: tiene("atendio_nombre") ? String(valores.atendio_nombre ?? "") : undefined } : SIN_FUENTE;
+  const faltasDoc = doc === undefined ? ["Cargando lo que lleva este formulario…"] : faltasFirmas(reglas, firmas, fuente);
+  const faltas = [...faltasFormato, ...cons.faltas, ...faltasDoc];
   const { errores } = aplanarDatos(tipo, valores);
   const visibles = useMemo(() => camposVisibles(tipo, valores), [tipo, valores]);
   const secciones = useMemo(() => agruparSecciones(visibles), [visibles]);
@@ -131,6 +149,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
     setErrorEnvio(null);
     if (recalcularInicio.current) { inicio.current = recalcularReloj(inicio.current); recalcularInicio.current = false; }
     const { datos } = aplanarDatos(tipo, valores);
+    if (reqDerivado && datos) datos.req_cambio_medidor = Array.isArray(datos.da_lugar) && datos.da_lugar.includes("cambio_medidor") ? "si" : "no";
     try {
       const ordenadas = ordenarFotos<FotoLocal>(tipo, refEtq.current, refAdic.current);
       let p = prep.current;
@@ -148,6 +167,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         await apiCampo.subirFoto(destino.ruta, destino.token, o.foto.blob);
         o.foto.subida = true;
       }
+      if (reglas) await guardarFirmas("campo", p.reporte_id, reglas, firmas, fuente, firmasEnviadas.current)   // antes de registrar; repetirla reemplaza
+        .catch((e) => { if (!esFirmaDefinitiva(e)) throw e; });                                              // ya estaba registrado: crear responde «repetido»
       const conf = await apiFormatos.crear({
         reporte_id: p.reporte_id, tipo: tipo.codigo, subtipo: subtipo || null, descripcion: descripcion.trim() || null,
         contrato: tipo.requiere_contrato === "no" ? null : contrato || null,
@@ -158,6 +179,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         inicio_dispositivo: inicio.current.iso,
       });
       soltarTodo();
+      setRegistroId(p.reporte_id);
+      setAvisoOrigen(await vincularOrigen(p.reporte_id, origen));
       setInvitarActa(marcoIrr && puedeActa && onAbrirActa && tipo.requiere_contrato !== "no" && contrato ? { contrato } : null);
       setPorEtiqueta({});
       setAdicionales([]);
@@ -194,6 +217,8 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
             </div>
           )}
           {confirmacion.repetido && <p className="campo-nota" role="note">Este reporte ya estaba guardado; no se duplicó.</p>}
+          {doc?.lleva_pdf && registroId ? <PdfRegistro esquema="campo" registroId={registroId} /> : null}
+          {avisoOrigen ? <p className="campo-nota" role="alert">{avisoOrigen} El reporte sí quedó guardado; avísele al supervisor.</p> : null}
           <p className="campo-hora">Registrado el {fechaHora(confirmacion.registrado_en)}</p>
           {confirmacion.contrato_verificado === false && <p className="campo-nota" role="note">El número de contrato no se encontró; verifique que esté bien digitado.</p>}
           {confirmacion.aviso_zona && <p className="campo-nota" role="note">La ubicación está fuera de la zona de operación; el reporte se guardó y el supervisor lo revisará.</p>}
@@ -274,6 +299,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
             <AvisoSinAgua contrato={contrato} />
           </div>
         )}
+        {tipo.requiere_contrato !== "no" && <VieneDe contrato={contrato} formulario={`tipo:${tipo.codigo}`} conActas={tiene("da_lugar")} valor={origen} onCambio={setOrigen} deshabilitado={bloqueado} />}
 
         {/* Campos propios del formato */}
         {!conSecciones && visibles.map((c) => <CampoPropio key={c.codigo} c={c} valor={valores[c.codigo]} error={errores[c.codigo]} obligatorio={c.obligatorio && !inefectivo} deshabilitado={bloqueado} onCambio={(v) => ponerValor(c.codigo, v)} />)}
@@ -353,6 +379,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
         </div>
 
         <SeccionConstancia config={cons.config} valor={cons.valor} onCambio={cons.setValor} bloqueado={bloqueado} />
+        {reglas ? <FirmasRegistro reglas={reglas} valor={firmas} onCambio={setFirmas} fuente={fuente} deshabilitado={bloqueado} nombreOperario={correo} /> : null}
 
         {/* Automáticos */}
         <dl className="campo-auto">
@@ -371,6 +398,7 @@ export function FormularioFormato({ def, tipo, correo, onVolver, onOtro, alFalla
 
         {faltasFormato.length > 0 && fase === "editando" && hayInterac && <ul className="campo-faltas">{faltasFormato.map((m) => <li key={m}>{m}</li>)}</ul>}
         {cons.faltas.length > 0 && fase === "editando" && <ul className="campo-faltas">{cons.faltas.map((m) => <li key={m}>{m}</li>)}</ul>}
+        {faltasDoc.length > 0 && fase === "editando" && <ul className="campo-faltas" data-testid="faltas-firmas">{faltasDoc.map((m) => <li key={m}>{m}</li>)}</ul>}
         {sinSenal && <p className="campo-error" role="alert">No hay señal en este momento. Sus datos y fotos siguen aquí; envíe cuando recupere la conexión.</p>}
         {fase === "error" && aviso && <p className="campo-error" role="alert">{aviso.texto}</p>}
         {fase === "error" && errorEnvio?.tipo === "sesion" ? null : (
@@ -503,4 +531,12 @@ function PanelCamara({ rotulo, maxBytes, sello, onFoto, onCerrar, ladoMayor }: {
       </div>
     </div>
   );
+}
+
+/** D13 (Comercial 21-nov): si el formato trae «¿Da lugar a otras actividades?» (da_lugar), «¿Se requiere cambio de medidor?» (req_cambio_medidor) no se pinta ni se valida: se llena al
+ *  enviar con cambio_medidor ∈ da_lugar (la base rechaza el registro si no coinciden). Si el formato no trae da_lugar (servidor anterior), se deja como estaba. */
+function sinReqCambio(t: TipoFormato): TipoFormato {
+  const cs = t.campos ?? [];
+  if (!cs.some((c) => c.codigo === "da_lugar" && c.activo !== false) || !cs.some((c) => c.codigo === "req_cambio_medidor")) return t;
+  return { ...t, campos: cs.filter((c) => c.codigo !== "req_cambio_medidor") };
 }

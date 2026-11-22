@@ -104,3 +104,6 @@ export const apiActa = {
     throw new ErrorCampo("red", "No se pudo subir la foto: revise su señal.", 0);
   },
 };
+
+/** Para las rutas de documentos del acta (firmas, PDF, actas registradas; Comercial 21-nov): el mismo cliente, sin duplicarlo. */
+export { pedir as pedirActa };
