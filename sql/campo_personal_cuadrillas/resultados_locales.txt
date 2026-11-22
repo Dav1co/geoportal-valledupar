@@ -1,0 +1,28 @@
+PRUEBAS LOCALES · Comercial 21-nov · (a) Personal y cuadrillas
+
+OK    B.01 la base local tiene las huellas de producción: conjuntos de campo (cf40d2a2…), acta y salida, y las 8 funciones
+      (redes y técnica no están completas en esta base: solo esas dos huellas se sustituyen por las locales)
+OK    E.01 con las huellas de producción, la guardia detiene el ensayo en esta base (no es producción)
+ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 82 de 82 pruebas correctas — SIN FALLAS
+OK    E.02 el ensayo termina en ERROR esperado con todas sus pruebas correctas (0.1 s)
+OK    E.03 el ensayo no dejó nada
+OK    C.01 huellas antes: reemplazadas LA PUBLICADA, nuevas NO EXISTE, sin tocar SIN CAMBIO, tablas NO EXISTEN
+OK    C.02 migración
+OK    C.03 verificación 9 de 9 OK
+OK    C.04 huellas después: REEMPLAZADA, NUEVA, SIN CAMBIO, EXISTEN
+OK    C.05 repetir la migración se rechaza
+OK    C.06 reversa sin datos
+OK    C.07 tras la reversa: funciones, CHECK y conjunto de campo como antes; sin tablas ni columna nuevas
+OK    C.08 y las huellas vuelven al estado de antes
+OK    C.09 repetir la reversa se rechaza
+OK    C.10 la migración se vuelve a aplicar después de la reversa
+OK    C.11 reversa con datos
+OK    C.12 con datos, las tablas, la columna y los eventos se conservan (nada se borra) y las RPC nuevas se quitan
+OK    C.13 y las dos funciones reemplazadas vuelven a la md5 publicada
+OK    C.14 la Personal publicada sigue respondiendo con los eventos conservados
+OK    C.15 la migración se aplica encima de lo conservado
+OK    C.16 verificación tras re-aplicar 9 de 9
+OK    C.17 la persona sigue en su cuadrilla
+OK    G.01 con una función de Personal distinta, la migración se detiene
+
+RESULTADO: 103 de 103 pruebas correctas — SIN FALLAS

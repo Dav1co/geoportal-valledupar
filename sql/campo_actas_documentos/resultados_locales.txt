@@ -1,0 +1,25 @@
+PRUEBAS LOCALES · Comercial 21-nov · (b) Actas: firmas, PDF, actas registradas y derivadas
+
+OK    B.01 la base local es la de producción con (a) aplicado (huella de campo tras (a) determinista)
+OK    E.01 con las huellas de redes y técnica de producción, la guardia detiene el ensayo en esta base
+ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 66 de 66 pruebas correctas — SIN FALLAS
+OK    E.02 el ensayo termina en ERROR esperado con todas sus pruebas correctas (0.1 s)
+OK    E.03 el ensayo no dejó nada
+OK    C.01 huellas antes: (a) PUBLICADO, acta PUBLICADA, nuevas NO EXISTE, tablas NO EXISTEN
+OK    C.02 migración
+OK    C.03 verificación 10 de 10 OK
+OK    C.04 huellas después: NUEVA, EXISTEN, acta PUBLICADA
+OK    C.05 repetir la migración se rechaza
+OK    C.06 reversa sin datos
+OK    C.07 tras la reversa: conjunto de campo y disparadores como antes; sin tablas ni bucket; da_lugar desactivado (no borrado)
+OK    C.08 repetir la reversa se rechaza
+OK    C.09 la migración se vuelve a aplicar (reactiva da_lugar)
+OK    C.10 verificación tras re-aplicar 10 de 10
+OK    C.11 reversa con una firma guardada
+OK    C.12 con datos se conservan las firmas con su protección (nada se borra); las RPC se quitan
+OK    C.13 y el registro vuelve a ser el de hoy (sin disparadores en campo.reportes ni acta.actas)
+OK    C.14 la migración se aplica encima de lo conservado
+OK    C.15 verificación 10 de 10 y la firma sigue
+OK    G.01 con una función de campo distinta, la migración se detiene
+
+RESULTADO: 85 de 85 pruebas correctas — SIN FALLAS
