@@ -112,7 +112,8 @@ begin
   if p_esquema = 'campo' then
     select d.datos into v_sen from campo.reporte_datos_sensibles d where d.reporte_id = v_r.id;
     v_cab := jsonb_build_array(jsonb_build_array('Formato', v_t.nombre), jsonb_build_array('Consecutivo', v_r.consecutivo), jsonb_build_array('Contrato', coalesce(v_r.contrato, '—')),
-               jsonb_build_array('Resultado', coalesce(v_r.resultado, '—')), jsonb_build_array('Ubicación', v_r.lat || ', ' || v_r.lon || coalesce(' (precisión ' || v_r.precision_m || ' m)', '')));
+               jsonb_build_array('Resultado', case v_r.resultado when 'efectivo' then 'Efectivo (se realizó la actividad)' when 'inefectivo' then 'No efectivo (no se realizó)' else coalesce(v_r.resultado, '—') end
+                 || coalesce(' · Causal: ' || (select c.nombre from campo.causales c where c.id = v_r.causal_id), '')), jsonb_build_array('Ubicación', v_r.lat || ', ' || v_r.lon || coalesce(' (precisión ' || v_r.precision_m || ' m)', '')));
     with c as (
       select c.seccion, c.orden, c.nombre, c.tipo_dato, c.opciones, coalesce(v_r.datos -> c.codigo, v_sen -> c.codigo) as v
         from campo.tipo_campos c where c.tipo_id = v_t.id and (v_r.datos ? c.codigo or coalesce(v_sen, '{}'::jsonb) ? c.codigo)
@@ -122,6 +123,7 @@ begin
                                 when 'opcion' then coalesce((select o ->> 'nombre' from jsonb_array_elements(c.opciones) o where o ->> 'codigo' = c.v #>> '{}'), c.v #>> '{}')
                                 when 'opciones' then (select string_agg(coalesce((select o ->> 'nombre' from jsonb_array_elements(c.opciones) o where o ->> 'codigo' = x), x), '; ')
                                                         from jsonb_array_elements_text(case when jsonb_typeof(c.v) = 'array' then c.v else '[]'::jsonb end) x)
+                                when 'dia_hora' then replace(c.v #>> '{}', 'T', ' ')
                                 else c.v #>> '{}' end) as par
         from c
     )

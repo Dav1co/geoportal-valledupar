@@ -228,6 +228,8 @@ begin
     r ->> 'nombre' ~ '^[0-9]{14}-REV-IME[0-9]{6}\.pdf$' and jsonb_array_length(r -> 'fotos') = 3 and jsonb_array_length(r -> 'secciones') > 0
     and (select count(*) from jsonb_array_elements(r -> 'firmas') x where x ->> 'imagen' is not null) = 2 and r ->> 'sello' ~ '^[0-9a-f]{64}$'
     and r -> 'documento' = 'null'::jsonb and r ->> 'ruta' like 'campo/____-__/' || id1 || '/%.pdf', left(r::text, 400));
+  perform pg_temp.ok('08.01b el PDF dice el resultado en palabras y las horas sin la «T»', r -> 'cabecera' @> '[["Resultado", "Efectivo (se realizó la actividad)"]]'::jsonb
+    and r::text not like '%2026-11-14T08:00%' and r::text like '%2026-11-14 08:00%', left(r::text, 300));
   perform pg_temp.ok('08.02 el PDF interno sí lleva el nombre de quien atendió (D7)', exists (select 1 from jsonb_array_elements(r -> 'firmas') x where x ->> 'nombre' = 'ZTB Persona Atiende'));
   r := pg_temp.rpc(format('public.geoportal_campo_pdf_datos(''ztb.rep2@emdupar.gov.co'', ''campo'', %L)', id1));
   perform pg_temp.ok('08.03 otro operario no ve los datos del PDF (42501)', pg_temp.err(r) = '42501', r::text);
