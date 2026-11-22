@@ -92,7 +92,7 @@ for n, f in enumerate(d['features'], 1):
     if p.get('punto'):
         atrib['punto_previsto'] = p['punto']          # el punto de tecnica.puntos se crea con los formularios (corte aparte); aquí queda anotado
     elems.append({'codigo': cod, 'tipo': tipo, 'nombre': str(p['nombre']).strip(), 'orden': p.get('orden', 0), 'geom': json.dumps(g, separators=(',', ':')),
-                  'activo': act, 'desde': p.get('desde'), 'hasta': p.get('hasta'), 'atributos': json.dumps(atrib, ensure_ascii=False, separators=(',', ':'))})
+                  'activo': act, 'punto': p.get('punto'), 'desde': p.get('desde'), 'hasta': p.get('hasta'), 'atributos': json.dumps(atrib, ensure_ascii=False, separators=(',', ':'))})
 for e in elems:
     for k in ('desde', 'hasta'):
         if e[k] and e[k] not in vistos:
@@ -111,11 +111,13 @@ def lit(s):
 def fila(e, flujo):
     desde = f"(select id from tecnica.elementos_planta where codigo = {lit(e['desde'])} and activo)" if flujo and e['desde'] else 'null'
     hasta = f"(select id from tecnica.elementos_planta where codigo = {lit(e['hasta'])} and activo)" if flujo and e['hasta'] else 'null'
+    punto = f"(select id from tecnica.puntos where codigo = {lit(e['punto'])} and tipo = 'ptar' and activo)" if e['punto'] else 'null'
     return (f"  ((select id from _inst), {lit(e['codigo'])}, {lit(e['tipo'])}, {lit(e['nombre'])}, {e['orden']}, st_setsrid(st_geomfromgeojson({lit(e['geom'])}), 4326), "
-            f"{desde}, {hasta}, {lit(e['activo'])}, {lit(e['atributos'])}::jsonb, 'dibujo', {lit(AUTOR)})")
+            f"{desde}, {hasta}, {punto}, {lit(e['activo'])}, {lit(e['atributos'])}::jsonb, 'dibujo', {lit(AUTOR)})")
 
 
-COLS = 'instalacion_id, codigo, tipo, nombre, orden, geom, desde_id, hasta_id, activo_codigo, atributos, origen, creado_por'
+COLS = 'instalacion_id, codigo, tipo, nombre, orden, geom, desde_id, hasta_id, punto_id, activo_codigo, atributos, origen, creado_por'
+puntos_ptar = sorted({e['punto'] for e in elems if e['punto']})
 sin_flujo = [e for e in elems if not (e['desde'] or e['hasta'])]
 con_flujo = [e for e in elems if e['desde'] or e['hasta']]
 cuenta = {}
@@ -139,6 +141,9 @@ begin
   if exists (select 1 from tecnica.elementos_planta e join tecnica.instalaciones i on i.id = e.instalacion_id where i.codigo = '{INSTALACION}' and e.activo) then
     raise exception 'CARGA PTAR: la PTAR ya tiene elementos activos: esta carga es solo la inicial (para corregir, desactive con motivo y cree la fila nueva, D9)';
   end if;
+  if (select count(*) from tecnica.puntos where codigo in ({', '.join(lit(x) for x in puntos_ptar) or "''"}) and tipo = 'ptar' and activo) <> {len(puntos_ptar)} then
+    raise exception 'CARGA PTAR: faltan los puntos de la PTAR ({', '.join(puntos_ptar)}): aplique antes PTAR-3 (tecnica_ptar_control)';
+  end if;
 end $$;
 create temp table _inst on commit drop as select id from tecnica.instalaciones where codigo = '{INSTALACION}';
 
@@ -152,7 +157,7 @@ insert into tecnica.elementos_planta ({COLS}) values
 insert into tecnica.elementos_planta ({COLS})
 select (select id from _inst), 'PTAR-' || v.codigo, case v.capa_codigo when 'alc_conductos' then 'tramo' when 'alc_descargas' then 'descarga' else 'pozo' end,
        coalesce(nullif(btrim(v.nombre), ''), case v.prefijo when 'POZ' then 'Pozo ' when 'COL' then 'Conducto ' when 'VER' then 'Descarga ' else 'Activo ' end || v.codigo),
-       0, v.geom, null, null, v.codigo,
+       0, v.geom, null, null, null, v.codigo,
        jsonb_strip_nulls(jsonb_build_object('capa', v.capa_codigo, 'prefijo', v.prefijo, 'version_redes', v.version, 'diametro_mm', v.diametro_mm,
                                             'material', v.material_codigo, 'profundidad_m', v.profundidad_m)),
        'redes', {lit(AUTOR)}
@@ -190,6 +195,7 @@ select k, valor, case when ok then 'OK' else 'REVISAR' end as estado from (
   union all select 3, 'copiados de redes: conductos (tramos sin desde/hasta)', count(*)::text, count(*) > 0 and bool_and(desde_id is null and hasta_id is null) from e where origen = 'redes' and tipo = 'tramo'
   union all select 4, 'perímetro (esperado 1)', count(*)::text, count(*) = 1 from e where tipo = 'perimetro'
   union all select 5, 'lagunas', count(*)::text, count(*) = {cuenta.get('laguna', 0)} from e where tipo = 'laguna'
+  union all select 5, 'puntos de medición enlazados a su punto de la PTAR (esperado {len(puntos_ptar)})', count(punto_id)::text, count(punto_id) = {len(puntos_ptar)} from e where tipo = 'punto_medicion'
   union all select 6, 'copiados con su activo en redes', count(a.id)::text || ' de ' || count(*)::text, count(a.id) = count(*) from e left join redes.activos a on a.codigo = e.activo_codigo where e.origen = 'redes'
   union all select 7, 'sin activos repetidos', (count(*) - count(distinct activo_codigo))::text, count(*) = count(distinct activo_codigo) from e where activo_codigo is not null
   union all select 8, 'pg-safeupdate: funciones con DELETE/UPDATE sin WHERE', (select count(*) from redes.f_funciones_sin_where())::text, not exists (select 1 from redes.f_funciones_sin_where())

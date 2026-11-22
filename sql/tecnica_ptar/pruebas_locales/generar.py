@@ -2,7 +2,7 @@
 """Arma el paquete SQL de PTAR-1 y lo prueba en la base local del Code C (clúster PROPIO 55452, base ptar_base = producción a las 17:15 del 21-nov).
 Escribe las versiones _editor (producción: guardia con la huella de técnica PUBLICADA, 3e9b0121…) y las locales en pruebas_locales/local/
 (la misma guardia con la huella de técnica de la base local, que trae dobles de planta y no es igual a la de producción). La huella de redes es la misma en las dos.
-Luego, en copias de ptar_base: ensayo (debe terminar en el ERROR esperado SIN FALLAS), migración + verificación, carga del mapa + su verificación, y reversa.
+Luego, en copias de ptar_base: ensayo (debe terminar en el ERROR esperado SIN FALLAS), migración + verificación y reversa. La carga del mapa la prueba tecnica_ptar_control (va después de PTAR-3).
 Uso: python3 -I generar.py [-h]   ·   PSQL_C=<ruta de psql_c> (por omisión, la del scratchpad de esta sesión). No consulta Supabase."""
 import os
 import re
@@ -21,7 +21,6 @@ PSQL = os.environ.get('PSQL_C', '/private/tmp/claude-502/-Users-ddiaz-geoportal-
 BASE = 'ptar_base'
 MD5_REDES = '1ba192724c2fddcf321104700829f3cc'          # producción desde las 17:15 del 21-nov (corte de eventos publicado)
 MD5_TECNICA_PROD = '3e9b0121e2b8beb313fad05de9e50f15'   # producción desde las 17:15 del 21-nov
-GEOJSON = os.path.expanduser('~/geoportal-consultas/tecnica/paquete_fase1/ptar_cascaron/ptar_el_salguero_osm.geojson')
 HUELLA_REDES = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname)) from pg_proc p "
                 "where p.pronamespace = 'redes'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_redes\\_%')")
 HUELLA_TEC = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p "
@@ -121,24 +120,13 @@ informe = []
 p = corre('ptar_gen', os.path.join(LOCAL, f'verificacion_{NOMBRE}_local.sql'))
 informe += ['== verificación tras la migración (local)', p.stdout.strip()]
 assert p.returncode == 0 and 'REVISAR' not in p.stdout, p.stdout + p.stderr
-# 2. carga del mapa + su verificación, y la RPC del mapa como la llama la Edge
-carga_dir = os.path.join(RAIZ, 'carga')
-g = subprocess.run([sys.executable, '-I', os.path.join(carga_dir, 'generar_carga.py'), GEOJSON], capture_output=True, text=True)
-assert g.returncode == 0, g.stderr
-informe += ['== generar_carga.py', g.stdout.strip()]
-p = corre('ptar_gen', os.path.join(carga_dir, 'carga_ptar_el_salguero_editor.sql'))
-assert p.returncode == 0, p.stderr
-informe += ['== carga', p.stderr.strip()]
-p = corre('ptar_gen', os.path.join(carga_dir, 'verificacion_carga_ptar_el_salguero_editor.sql'))
-informe += ['== verificación de la carga', p.stdout.strip()]
-assert p.returncode == 0 and 'REVISAR' not in p.stdout, p.stdout
-p = corre('ptar_gen', os.path.join(AQUI, 'arnes_mapa.sql'))
-informe += ['== arnés del mapa (service_role, 30 s, 8 s)', (p.stdout + p.stderr).strip()]
-assert p.returncode != 0 and 'SIN FALLAS' in p.stderr, p.stdout + p.stderr
+# 2. La carga del mapa va DESPUÉS de PTAR-3 (necesita los puntos de la PTAR): la prueba el generador de tecnica_ptar_control, con su arnés.
 # 3. reversa: no se deja si hay datos (la carga) — en una copia limpia sí, y técnica vuelve a la de antes
+q("insert into tecnica.elementos_planta (instalacion_id, codigo, tipo, nombre, geom, origen, creado_por) select id, 'PRUEBA-REV', 'pozo', 'Prueba reversa', "
+  "st_setsrid(st_makepoint(-74.5, 4.5), 4326), 'dibujo', 'prueba.reversa@emdupar.gov.co' from tecnica.instalaciones where codigo = 'ptar'", 'ptar_gen')
 p = corre('ptar_gen', os.path.join(LOCAL, f'reversa_{NOMBRE}_local.sql'))
 assert p.returncode != 0 and 'ya tiene datos' in p.stderr, p.stderr
-informe += ['== reversa con la carga hecha: se detiene (esperado)', p.stderr.strip().splitlines()[-1]]
+informe += ['== reversa con un elemento cargado: se detiene (esperado)']
 copia('ptar_gen')
 assert corre('ptar_gen', os.path.join(LOCAL, f'migracion_{NOMBRE}_local.sql')).returncode == 0
 p = corre('ptar_gen', os.path.join(LOCAL, f'reversa_{NOMBRE}_local.sql'))
