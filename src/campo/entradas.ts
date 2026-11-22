@@ -42,6 +42,10 @@ export type CondicionesEntradas = {
 /** Entradas visibles, en orden (14/11/2026): «Reportar anomalía» · «Formatos de actividad» (solo si hay formatos activos) · «Reportar posible pérdida» (SOLO con el permiso de acta)
  *  y «Análisis de contrato» (solo con el permiso `analisis_contrato`) · al final, en color de gestión, «Aperturas sin registrar» y «Supervisión y dashboard».
  *  Solo cambian los nombres visibles: los id internos (reporte_general, acta, revision…) siguen iguales. */
+/** 22-nov (R3): «Actas registradas» la abren el supervisor de actas (dashboard_acta; lee por geoportal-acta, con «Aperturas sin registrar») y el supervisor de campo
+ *  (dashboard_campo, que el servidor declara como def.puede.supervisar; lee por geoportal-campo, sin «Aperturas sin registrar»). El administrador tiene las dos. */
+export const veActasRegistradas = (c: Pick<CondicionesEntradas, "puedeSupervisarActas" | "puedeSupervisar">) => c.puedeSupervisarActas === true || c.puedeSupervisar === true;
+
 export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
   const e: EntradaCampo[] = [];
   const campo = c.puedeCampo !== false;
@@ -66,8 +70,9 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
     id: "analisis_contrato", titulo: "Análisis de contrato", seccion: 3, habilitada: true,
     descripcion: "Escriba un contrato y vea cartera, consumo, medidor, gestiones y ubicación.",
   });
-  // Comercial 21-nov (B2): «Actas registradas» reúne las actas con PDF, las actividades derivadas, «Aperturas sin registrar» y Personal en solo lectura (el id interno no cambia)
-  if (c.puedeSupervisarActas) e.push({ id: "acta_supervision", titulo: "Actas registradas", seccion: 4, gestion: true, descripcion: "", habilitada: true });
+  // Comercial 21-nov (B2): «Actas registradas» reúne las actas con PDF, las actividades derivadas, «Aperturas sin registrar» y Personal en solo lectura (el id interno no cambia).
+  // 22-nov (R3, David): también el supervisor de campo (dashboard_campo); lee por geoportal-campo (campo.f_autorizar_registradas). Ver veActasRegistradas.
+  if (veActasRegistradas(c)) e.push({ id: "acta_supervision", titulo: "Actas registradas", seccion: 4, gestion: true, descripcion: "", habilitada: true });
   // Paso C: «Supervisión y dashboard» (antes «Revisión de reportes»: lista, mapa, indicadores; y catálogo y parámetros para el administrador) solo con el permiso de supervisión
   if (c.puedeSupervisar) e.push({ id: "revision", titulo: "Supervisión y dashboard", seccion: 4, gestion: true, descripcion: "", habilitada: true });
   return e;

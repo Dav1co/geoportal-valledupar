@@ -8,7 +8,7 @@ import { apiCampo, avisoDeError, ErrorCampo, type FormularioCampo } from "./apiC
 import { ReporteGeneral } from "./ReporteGeneral";
 import { FormatosCampo } from "./formatos/FormatosCampo";
 import { formatosDisponibles } from "./formatos/tipos";
-import { entradasDeCampo, type EntradaId } from "./entradas";
+import { entradasDeCampo, veActasRegistradas, type EntradaId } from "./entradas";
 import { PantallaActa } from "./acta/PantallaActa";
 import { ActasRegistradas } from "./documentos/ActasRegistradas";
 import type { Destino } from "../components/ConfirmarCancelar";
@@ -101,7 +101,8 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
     return <FormatosCampo key={version} def={def} correo={correo} contratoInicial={contratoPuente} destinos={destinosDesde("formatos")} onIrA={irA}
       onVolver={volver} puedeActa={acta} onAbrirActa={(c) => { setContratoPuente(c); setAbierta("acta"); }} formatoInicial={formatoInicial} valoresIniciales={valoresIniciales} />;
   }
-  if (abierta === "acta_supervision" && dashboardActa) {
+  // R3 (22-nov): también el supervisor de campo. Las aperturas y la lectura por geoportal-acta siguen solo con dashboardActa (ActasRegistradas elige la vía por puedeAperturas).
+  if (abierta === "acta_supervision" && veActasRegistradas({ puedeSupervisarActas: dashboardActa, puedeSupervisar: def?.puede.supervisar === true })) {
     return <ActasRegistradas correo={correo} onVolver={() => setAbierta(null)} nombres={nombresFormularios(def)} puedeAperturas={dashboardActa} puedeCerrarDerivadas={def?.puede.supervisar === true} />;
   }
 

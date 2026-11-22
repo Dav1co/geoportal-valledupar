@@ -73,6 +73,7 @@ await build({
     import "./src/styles/app.css"; import "./src/campo/tokens.css"; import "./src/tecnica/tecnica.css"; import "./src/campo/campo.css"; import "./src/campo/comercial.css";
     import { apiDocumentos, esFirmaDefinitiva } from "./src/campo/documentos/apiDocumentos.ts"; import { apiFormatos } from "./src/campo/formatos/apiFormatos.ts"; import { apiCampo, ErrorCampo } from "./src/campo/apiCampo.ts";
     import { ActasRegistradas } from "./src/campo/documentos/ActasRegistradas.tsx";
+    import { AreaCampo } from "./src/campo/AreaCampo.tsx";
     /** Una imagen JPEG de prueba (foto o firma) hecha con canvas. */
     async function jpeg(w, h, calidad) { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.strokeStyle = "#123"; g.lineWidth = 4;
       g.beginPath(); for (let i = 0; i < 40; i++) g.lineTo(10 + i * (w - 20) / 40, h / 2 + Math.sin(i / 3) * h / 3); g.stroke(); g.fillStyle = "#782a27"; g.fillRect(w / 4, h / 4, w / 6, h / 6);
@@ -93,6 +94,13 @@ await build({
     if (q.get("p") === "actas") {
       const nombres = new Map([["acta", "Reportar posible pérdida"], ["revision_previa", "Revisiones generales"], ["instalacion_medidor", "Instalación de medidor"]]);
       createRoot(document.getElementById("raiz")).render(<div className="com-modulo"><ActasRegistradas correo={q.get("rol") + "@prueba"} onVolver={() => {}} nombres={nombres} puedeAperturas={q.get("rol") === "act"} puedeCerrarDerivadas={q.get("rol") !== "act"} /></div>);
+    }
+    // R3 (22-nov): ?p=area monta Formatos de campo (AreaCampo) con las mismas props que App calcula del perfil del servidor (geoportal_mis_permisos):
+    // acta = ver_acta o ver_dashboard_acta · dashboardActa = ver_dashboard_acta (o admin) · campo = ver_campo o ver_dashboard_campo (o admin). La puerta de «Actas registradas» es la real.
+    if (q.get("p") === "area") {
+      const PROPS = { sup: { campo: true, acta: false, dashboardActa: false, analisis: false }, act: { campo: false, acta: true, dashboardActa: true, analisis: false },
+                      op: { campo: true, acta: true, dashboardActa: false, analisis: false }, adm: { campo: true, acta: true, dashboardActa: true, analisis: true } }[q.get("rol")];
+      createRoot(document.getElementById("raiz")).render(<div className="campo-contenedor com-modulo"><AreaCampo correo={q.get("rol") + "@prueba"} {...PROPS} /></div>);
     }
     setTimeout(() => { window.__listo = true; }, 300);` },
   bundle: true, platform: "browser", format: "iife", outfile: join(dir, "paquete.js"), jsx: "automatic", logLevel: "error",
@@ -287,6 +295,58 @@ try {
     await pg.waitForSelector("[data-testid=actas-registradas] [data-registro], [data-testid=actas-registradas] [role=alert], [data-testid=actas-registradas] .rv-vacio", { timeout: 30000 }); await esp(300);
     t = await texto(pg, "[data-testid=actas-registradas]");
     ok(`[${ancho}] supervisor de actas · lee por geoportal-acta (la misma RPC): ve las dos y sin la pestaña de derivadas`, t.includes(conf.consecutivo) && t.includes(confInst.consecutivo) && !(await pg.$$eval("button.rv-tab", (l) => l.map((x) => x.textContent))).includes("Actividades derivadas"), t.slice(0, 400));
+    await pg.close();
+  }
+  // 7. R3 (22-nov, David): la ENTRADA «Actas registradas» de Formatos de campo, con la puerta real de AreaCampo y el formulario real de geoportal-campo (def.puede.supervisar)
+  const entradas = (pg) => pg.$$eval(".campo-formatos button strong", (l) => l.map((x) => x.textContent.trim()));
+  const pestanas = (pg) => pg.$$eval("button.rv-tab", (l) => l.map((x) => x.textContent.trim()));
+  const pedidos = (pg) => { const l = []; pg.on("request", (r) => { const u = new URL(r.url()); if (u.port === String(P_EDGE)) l.push(`${u.pathname.split("/").pop()}:${u.searchParams.get("accion")}`); }); return l; };
+  const abrirArea = async (rol, ancho) => { const pg = await abrir(rol, ancho, "&p=area"); await pg.waitForSelector(".campo-formatos button", { timeout: 30000 }); await esp(400); return pg; };
+  for (const ancho of [390, 1280]) {
+    // supervisor de campo: solo dashboard_campo (sin acta ni dashboard_acta)
+    pg = await abrirArea("sup", ancho); let red = pedidos(pg);
+    let e = await entradas(pg);
+    ok(`[${ancho}] R3 · supervisor de campo (solo dashboard_campo): Formatos de campo le muestra «Actas registradas» y «Supervisión y dashboard», y no «Reportar posible pérdida»`,
+      e.includes("Actas registradas") && e.includes("Supervisión y dashboard") && !e.includes("Reportar posible pérdida"), JSON.stringify(e));
+    await pg.screenshot({ path: join(CAP, `r3_sup_campo_entradas_${ancho}.png`), fullPage: ancho < 500 });
+    await clicTexto(pg, ".campo-formatos button", "Actas registradas");
+    await pg.waitForSelector("[data-testid=actas-registradas] [data-registro]", { timeout: 30000 }); await esp(500);
+    ok(`[${ancho}] R3 · supervisor de campo: pestañas «Actas registradas», «Actividades derivadas» y «Personal»; sin «Aperturas sin registrar»`,
+      JSON.stringify(await pestanas(pg)) === JSON.stringify(["Actas registradas", "Actividades derivadas", "Personal"]), JSON.stringify(await pestanas(pg)));
+    let t = await texto(pg, "[data-testid=actas-registradas]");
+    // geoportal-acta solo se toca para documentos_catalogo (el selector de tipo junta los catálogos de las dos Edges); las actas en sí, nunca
+    ok(`[${ancho}] R3 · supervisor de campo: las actas llegan de la Edge real por geoportal-campo (de geoportal-acta solo el catálogo del selector)`,
+      t.includes(conf.consecutivo) && t.includes(confInst.consecutivo) && red.includes("geoportal-campo:actas_registradas")
+      && red.filter((x) => x.startsWith("geoportal-acta:")).every((x) => x === "geoportal-acta:documentos_catalogo"), JSON.stringify(red));
+    await pg.screenshot({ path: join(CAP, `r3_sup_campo_actas_${ancho}.png`), fullPage: ancho < 500 });
+    await clicTexto(pg, "button.rv-tab", "Actividades derivadas"); await pg.waitForSelector("[data-testid=derivadas]"); await esp(900);
+    await escribir(pg, "[data-filtro=estado]", ""); await esp(1200);
+    t = await texto(pg, "[data-testid=derivadas]");
+    ok(`[${ancho}] R3 · supervisor de campo: «Actividades derivadas» desde geoportal-campo (la atendida y la anulada de las pruebas anteriores)`,
+      red.includes("geoportal-campo:derivadas") && t.includes("La atendió") && t.includes("Anulada"), t.slice(0, 400));
+    await pg.screenshot({ path: join(CAP, `r3_sup_campo_derivadas_${ancho}.png`), fullPage: ancho < 500 });
+    await pg.close();
+    // supervisor de actas: lee por geoportal-acta, con aperturas y sin derivadas (como antes del R3)
+    pg = await abrirArea("act", ancho); red = pedidos(pg);
+    ok(`[${ancho}] R3 · supervisor de actas: sigue viendo «Actas registradas»`, (await entradas(pg)).includes("Actas registradas"), JSON.stringify(await entradas(pg)));
+    await clicTexto(pg, ".campo-formatos button", "Actas registradas");
+    await pg.waitForSelector("[data-testid=actas-registradas] [data-registro]", { timeout: 30000 }); await esp(500);
+    ok(`[${ancho}] R3 · supervisor de actas: pestañas «Actas registradas», «Aperturas sin registrar» y «Personal» (sin derivadas); lee por geoportal-acta`,
+      JSON.stringify(await pestanas(pg)) === JSON.stringify(["Actas registradas", "Aperturas sin registrar", "Personal"]) && red.includes("geoportal-acta:actas_registradas") && !red.includes("geoportal-campo:actas_registradas"), JSON.stringify([await pestanas(pg), red]));
+    await pg.close();
+    // operaria (campo y acta, sin supervisar): no la ve
+    pg = await abrirArea("op", ancho);
+    e = await entradas(pg);
+    ok(`[${ancho}] R3 · operaria (campo y acta): NO ve «Actas registradas» ni «Supervisión y dashboard»`, !e.includes("Actas registradas") && !e.includes("Supervisión y dashboard") && e.includes("Reportar posible pérdida"), JSON.stringify(e));
+    await pg.screenshot({ path: join(CAP, `r3_operaria_entradas_${ancho}.png`), fullPage: ancho < 500 });
+    await pg.close();
+    // administrador: una sola entrada, con todo (lee por geoportal-acta, como antes)
+    pg = await abrirArea("adm", ancho); red = pedidos(pg);
+    e = await entradas(pg);
+    ok(`[${ancho}] R3 · administrador: «Actas registradas» una sola vez`, e.filter((x) => x === "Actas registradas").length === 1, JSON.stringify(e));
+    await clicTexto(pg, ".campo-formatos button", "Actas registradas");
+    await pg.waitForSelector("[data-testid=actas-registradas] [data-registro]", { timeout: 30000 }); await esp(500);
+    ok(`[${ancho}] R3 · administrador: las cuatro pestañas, por geoportal-acta`, JSON.stringify(await pestanas(pg)) === JSON.stringify(["Actas registradas", "Actividades derivadas", "Aperturas sin registrar", "Personal"]) && red.includes("geoportal-acta:actas_registradas"), JSON.stringify([await pestanas(pg), red]));
     await pg.close();
   }
   const lentas = rpcs.filter((x) => !x.error).sort((a, b) => b.ms - a.ms).slice(0, 3);

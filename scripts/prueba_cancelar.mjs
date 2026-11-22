@@ -32,7 +32,10 @@ const lista = leer("src/campo/acta/PantallaActa.tsx");
 ok("acta: «Mis actas» ofrece Cancelar solo a las filas con puede_cancelar", /f\.puede_cancelar && cancelandoId !== f\.acta_id/.test(lista));
 const sup = leer("src/campo/acta/AperturasSinRegistrar.tsx");
 ok("supervisión: lista sin registradas, con filtro «Ver cancelados» y cancela con motivo", /Ver cancelados/.test(sup) && /apiActa\.aperturasSinRegistrar\(verCancelados\)/.test(sup) && /<PanelCancelarActa/.test(sup));
-ok("área: la entrada del supervisor solo abre con dashboardActa (el administrador lo recibe de App)", /abierta === "acta_supervision" && dashboardActa/.test(leer("src/campo/AreaCampo.tsx")) && /dashboard_acta === true \|\| esAdmin/.test(leer("src/App.tsx")));
+// R3 (22-nov): «Actas registradas» la abre también el supervisor de campo; las aperturas (la pantalla de Cancelar) siguen solo con dashboardActa
+ok("área: la entrada del supervisor abre con dashboardActa o con el supervisor de campo; «Aperturas sin registrar» solo con dashboardActa (el administrador lo recibe de App)",
+   /abierta === "acta_supervision" && veActasRegistradas\(\{ puedeSupervisarActas: dashboardActa, puedeSupervisar: def\?\.puede\.supervisar === true \}\)/.test(leer("src/campo/AreaCampo.tsx"))
+   && /puedeAperturas=\{dashboardActa\}/.test(leer("src/campo/AreaCampo.tsx")) && /dashboard_acta === true \|\| esAdmin/.test(leer("src/App.tsx")));
 
 const c = leer("src/tecnica/FormularioCaptura.tsx");
 ok("Técnica (Entrada/Salida): «Descartar borrador» conserva la marca «ya enviada» (solo borra el borrador si no está vigente)", /if \(!comunVigente\(comunEnviada\)\) borrarBorrador\(clave\)/.test(c) && /setTextos\(\{\}\)/.test(c));
