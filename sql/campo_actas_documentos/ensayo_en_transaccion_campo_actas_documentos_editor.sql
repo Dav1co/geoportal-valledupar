@@ -613,7 +613,8 @@ begin
   return query
   select jsonb_build_object('registro_id', g.registro_id, 'esquema', g.esquema, 'tipo', g.tipo, 'tipo_nombre', g.tipo_nombre, 'consecutivo', g.consecutivo, 'numero_fisico', g.numero_fisico,
            'fecha', g.fecha, 'registrado_en', g.registrado_en, 'operario', g.operario, 'contrato', g.contrato, 'barrio', g.barrio, 'resultado', g.resultado,
-           'pdf', (select jsonb_build_object('estado', 'generado', 'nombre', d.nombre, 'version', d.version) from campo.documentos_pdf d where d.esquema = g.esquema and d.registro_id = g.registro_id),
+           'pdf', coalesce((select jsonb_build_object('estado', 'generado', 'nombre', d.nombre, 'version', d.version) from campo.documentos_pdf d where d.esquema = g.esquema and d.registro_id = g.registro_id),
+                           jsonb_build_object('estado', 'pendiente', 'nombre', null, 'version', null)),
            'derivadas', jsonb_build_object('total', dv.total, 'pendientes', dv.pendientes),
            'firmas', jsonb_build_object('operario', exists (select 1 from campo.firmas x where x.esquema = g.esquema and x.registro_id = g.registro_id and x.rol = 'operario' and x.estado = 'firmo'),
                                         'usuario', (select x.estado from campo.firmas x where x.esquema = g.esquema and x.registro_id = g.registro_id and x.rol = 'usuario' and x.estado <> 'quitada'),
@@ -668,7 +669,7 @@ language sql stable security definer set search_path to 'campo', 'pg_temp' as $$
   select jsonb_build_object('id', d.id, 'actividad', d.actividad, 'actividad_nombre', c.nombre, 'contrato', d.contrato, 'estado', campo.f_derivada_estado(d.id), 'creada_en', d.creado_en,
            'destinos', to_jsonb(c.destinos), 'destino_omision', c.destino_omision,
            'origen', jsonb_build_object('registro_id', r.id, 'tipo', t.codigo, 'tipo_nombre', t.nombre, 'consecutivo', r.consecutivo, 'fecha', r.registrado_en, 'operario', r.autor),
-           'cierre', (select jsonb_build_object('tipo', e.tipo_evento, 'esquema', e.esquema, 'registro_id', e.registro_id, 'autor', e.autor, 'en', e.creado_en,
+           'cierre', (select jsonb_build_object('tipo', e.tipo_evento, 'esquema', e.esquema, 'registro_id', e.registro_id, 'autor', e.autor, 'en', e.creado_en, 'motivo', e.motivo,
                                                  'consecutivo', case e.esquema when 'campo' then (select x.consecutivo from campo.reportes x where x.id = e.registro_id)
                                                                                when 'acta' then (select x.consecutivo from acta.actas x where x.id = e.registro_id) end)
                         from campo.derivada_eventos e where e.derivada_id = d.id))
@@ -970,7 +971,7 @@ begin
   r := pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%s, %s, ''anulada'', null)', SUP, dv2));
   perform pg_temp.ok('05.06 anular exige motivo', pg_temp.err(r) = '22023', r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%s, %s, ''atendida_fuera'', ''ZTB se reparó en la visita de redes'')', SUP, dv2));
-  perform pg_temp.ok('05.07 el supervisor la cierra como atendida fuera del sistema', r ->> 'estado' = 'atendida_fuera', r::text);
+  perform pg_temp.ok('05.07 el supervisor la cierra como atendida fuera del sistema (el cierre trae el motivo)', r ->> 'estado' = 'atendida_fuera' and r -> 'cierre' ->> 'motivo' = 'ZTB se reparó en la visita de redes', r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_derivadas(%s, %L)', ACS, jsonb_build_object('contrato', pg_temp.con(), 'estado', 'pendiente')));
   perform pg_temp.ok('05.08 lista de derivadas: quedan pendientes las 2 de la otra instalación', (select count(*) from jsonb_array_elements(r -> 'filas') x where (x -> 'origen' ->> 'registro_id')::uuid in (id3, id4)) = 2, left(r::text, 300));
   m := pg_temp.msg(format('delete from campo.derivada_eventos where derivada_id = %s', dv));
@@ -998,7 +999,8 @@ begin
   perform pg_temp.ok('07.02 marcas por fila: firmas (operario, usuario) y derivadas', (select x -> 'firmas' = '{"operario": true, "usuario": "firmo", "testigo": false}'::jsonb
       from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id1)
     and (select x -> 'derivadas' = '{"total": 2, "pendientes": 0}'::jsonb from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id3)
-    and (select x -> 'firmas' ->> 'usuario' = 'nadie_atendio' from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = aid));
+    and (select x -> 'firmas' ->> 'usuario' = 'nadie_atendio' from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = aid)
+    and (select x -> 'pdf' = '{"estado": "pendiente", "nombre": null, "version": null}'::jsonb from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id3));
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || SUP || ', ''{"operario": "ztb.", "derivadas": "pendientes"}'')');
   perform pg_temp.ok('07.03 filtro «con derivadas pendientes» (supervisor de campo)', (select array_agg((x ->> 'registro_id')::uuid) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = array[id4], left(r::text, 300));
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || SUP || ', ''{"operario": "ztb.", "tipo": "acta"}'')');

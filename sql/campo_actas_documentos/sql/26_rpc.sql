@@ -216,7 +216,8 @@ begin
   return query
   select jsonb_build_object('registro_id', g.registro_id, 'esquema', g.esquema, 'tipo', g.tipo, 'tipo_nombre', g.tipo_nombre, 'consecutivo', g.consecutivo, 'numero_fisico', g.numero_fisico,
            'fecha', g.fecha, 'registrado_en', g.registrado_en, 'operario', g.operario, 'contrato', g.contrato, 'barrio', g.barrio, 'resultado', g.resultado,
-           'pdf', (select jsonb_build_object('estado', 'generado', 'nombre', d.nombre, 'version', d.version) from campo.documentos_pdf d where d.esquema = g.esquema and d.registro_id = g.registro_id),
+           'pdf', coalesce((select jsonb_build_object('estado', 'generado', 'nombre', d.nombre, 'version', d.version) from campo.documentos_pdf d where d.esquema = g.esquema and d.registro_id = g.registro_id),
+                           jsonb_build_object('estado', 'pendiente', 'nombre', null, 'version', null)),
            'derivadas', jsonb_build_object('total', dv.total, 'pendientes', dv.pendientes),
            'firmas', jsonb_build_object('operario', exists (select 1 from campo.firmas x where x.esquema = g.esquema and x.registro_id = g.registro_id and x.rol = 'operario' and x.estado = 'firmo'),
                                         'usuario', (select x.estado from campo.firmas x where x.esquema = g.esquema and x.registro_id = g.registro_id and x.rol = 'usuario' and x.estado <> 'quitada'),
@@ -271,7 +272,7 @@ language sql stable security definer set search_path to 'campo', 'pg_temp' as $$
   select jsonb_build_object('id', d.id, 'actividad', d.actividad, 'actividad_nombre', c.nombre, 'contrato', d.contrato, 'estado', campo.f_derivada_estado(d.id), 'creada_en', d.creado_en,
            'destinos', to_jsonb(c.destinos), 'destino_omision', c.destino_omision,
            'origen', jsonb_build_object('registro_id', r.id, 'tipo', t.codigo, 'tipo_nombre', t.nombre, 'consecutivo', r.consecutivo, 'fecha', r.registrado_en, 'operario', r.autor),
-           'cierre', (select jsonb_build_object('tipo', e.tipo_evento, 'esquema', e.esquema, 'registro_id', e.registro_id, 'autor', e.autor, 'en', e.creado_en,
+           'cierre', (select jsonb_build_object('tipo', e.tipo_evento, 'esquema', e.esquema, 'registro_id', e.registro_id, 'autor', e.autor, 'en', e.creado_en, 'motivo', e.motivo,
                                                  'consecutivo', case e.esquema when 'campo' then (select x.consecutivo from campo.reportes x where x.id = e.registro_id)
                                                                                when 'acta' then (select x.consecutivo from acta.actas x where x.id = e.registro_id) end)
                         from campo.derivada_eventos e where e.derivada_id = d.id))

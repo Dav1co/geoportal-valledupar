@@ -165,7 +165,7 @@ begin
   r := pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%s, %s, ''anulada'', null)', SUP, dv2));
   perform pg_temp.ok('05.06 anular exige motivo', pg_temp.err(r) = '22023', r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%s, %s, ''atendida_fuera'', ''ZTB se reparó en la visita de redes'')', SUP, dv2));
-  perform pg_temp.ok('05.07 el supervisor la cierra como atendida fuera del sistema', r ->> 'estado' = 'atendida_fuera', r::text);
+  perform pg_temp.ok('05.07 el supervisor la cierra como atendida fuera del sistema (el cierre trae el motivo)', r ->> 'estado' = 'atendida_fuera' and r -> 'cierre' ->> 'motivo' = 'ZTB se reparó en la visita de redes', r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_derivadas(%s, %L)', ACS, jsonb_build_object('contrato', pg_temp.con(), 'estado', 'pendiente')));
   perform pg_temp.ok('05.08 lista de derivadas: quedan pendientes las 2 de la otra instalación', (select count(*) from jsonb_array_elements(r -> 'filas') x where (x -> 'origen' ->> 'registro_id')::uuid in (id3, id4)) = 2, left(r::text, 300));
   m := pg_temp.msg(format('delete from campo.derivada_eventos where derivada_id = %s', dv));
@@ -193,7 +193,8 @@ begin
   perform pg_temp.ok('07.02 marcas por fila: firmas (operario, usuario) y derivadas', (select x -> 'firmas' = '{"operario": true, "usuario": "firmo", "testigo": false}'::jsonb
       from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id1)
     and (select x -> 'derivadas' = '{"total": 2, "pendientes": 0}'::jsonb from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id3)
-    and (select x -> 'firmas' ->> 'usuario' = 'nadie_atendio' from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = aid));
+    and (select x -> 'firmas' ->> 'usuario' = 'nadie_atendio' from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = aid)
+    and (select x -> 'pdf' = '{"estado": "pendiente", "nombre": null, "version": null}'::jsonb from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id3));
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || SUP || ', ''{"operario": "ztb.", "derivadas": "pendientes"}'')');
   perform pg_temp.ok('07.03 filtro «con derivadas pendientes» (supervisor de campo)', (select array_agg((x ->> 'registro_id')::uuid) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = array[id4], left(r::text, 300));
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || SUP || ', ''{"operario": "ztb.", "tipo": "acta"}'')');
