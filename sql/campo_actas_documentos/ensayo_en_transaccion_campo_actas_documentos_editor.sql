@@ -303,13 +303,13 @@ begin
   return null;
 end $$;
 
--- Disparador ANTES de insertar en acta.actas: firma del operario en la versión 1 (las correcciones heredan la firma del acta original)
+-- Disparador ANTES de insertar en acta.actas: firma del operario en TODAS las versiones (David, 21-nov: la corrección la firma quien corrige)
 create function campo.f_firmas_al_registrar_acta() returns trigger
 language plpgsql security definer set search_path to 'campo', 'pg_temp' as $$
 declare v_d campo.formularios_documento;
 begin
   v_d := campo.f_documento_de('acta');
-  if new.version = 1 and v_d.formulario is not null and v_d.firma_operario = 'obligatoria'
+  if v_d.formulario is not null and v_d.firma_operario = 'obligatoria'
      and not exists (select 1 from campo.firmas f where f.esquema = 'acta' and f.registro_id = new.id and f.rol = 'operario' and f.estado = 'firmo' and f.autor = new.autor) then
     perform campo.f_error('Falta la firma del operario');
   end if;
@@ -422,7 +422,10 @@ language plpgsql security definer set search_path to 'public', 'campo', 'acta', 
 declare v_email text; v_nombre text := nullif(regexp_replace(btrim(coalesce(p_nombre, '')), '\s+', ' ', 'g'), ''); v_img bytea; v_huella text; v_otro text; v_usuario text; v_estado text := p_estado;
 begin
   if p_esquema = 'campo' then v_email := campo.f_verificar(p_solicitante, 'campo');
-  elsif p_esquema = 'acta' then v_email := acta.f_autorizar(p_solicitante, 'capturar');
+  elsif p_esquema = 'acta' then
+    begin v_email := acta.f_autorizar(p_solicitante, 'capturar');
+    exception when sqlstate '42501' then v_email := acta.f_autorizar(p_solicitante, 'supervisar');   -- la corrección la registra (y la firma) el supervisor de actas
+    end;
   else perform campo.f_error('El tipo de registro no es válido'); end if;
   if p_registro_id is null then perform campo.f_error('Indique el registro'); end if;
   if p_rol is null or p_rol not in ('operario', 'usuario', 'testigo') then perform campo.f_error('La firma debe ser del operario, del usuario o del testigo'); end if;
@@ -492,9 +495,16 @@ begin
   end if;
   v_d := campo.f_documento_de(v_form);
   if v_d.formulario is null or not v_d.lleva_pdf then perform campo.f_error('Ese formulario no lleva PDF'); end if;
-  select coalesce(jsonb_agg(jsonb_build_object('rol', f.rol, 'estado', f.estado, 'nombre', f.nombre, 'imagen', encode(f.imagen, 'base64'), 'huella', f.huella)
-                            order by array_position(array['operario', 'usuario', 'testigo'], f.rol)), '[]'::jsonb)
-    into v_firmas from campo.firmas f where f.esquema = p_esquema and f.registro_id = p_registro_id and f.estado <> 'quitada';
+  -- Firmas: las de este registro («esta»). En una corrección del acta (versión 2 en adelante) va la del operario que corrige más las tres del acta original («original»).
+  select coalesce(jsonb_agg(jsonb_build_object('rol', x.rol, 'estado', x.estado, 'nombre', x.nombre, 'imagen', encode(x.imagen, 'base64'), 'huella', x.huella, 'de', x.de)
+                            order by x.o1, array_position(array['operario', 'usuario', 'testigo'], x.rol)), '[]'::jsonb)
+    into v_firmas
+    from (select f.*, 'esta'::text as de, case when v_ver > 1 then 2 else 1 end as o1
+            from campo.firmas f where f.esquema = p_esquema and f.registro_id = p_registro_id and f.estado <> 'quitada' and (v_ver = 1 or f.rol = 'operario')
+          union all
+          select f.*, 'original'::text, 1 from campo.firmas f
+           where v_ver > 1 and f.esquema = 'acta' and f.estado <> 'quitada'
+             and f.registro_id = (select o.id from acta.actas o where o.acta_raiz_id = v_a.acta_raiz_id and o.version = 1)) x;
   select coalesce(nullif(btrim(lb.nombre), ''), split_part(coalesce(v_r.autor, v_a.autor), '@', 1)) into v_op from public.geoportal_lista_blanca lb where lb.email = coalesce(v_r.autor, v_a.autor);
   if p_esquema = 'campo' then
     select d.datos into v_sen from campo.reporte_datos_sensibles d where d.reporte_id = v_r.id;
@@ -543,8 +553,8 @@ begin
     select coalesce(jsonb_agg(jsonb_build_object('bucket', 'acta-evidencias', 'ruta', p.ruta_storage, 'etiqueta', coalesce(tf.nombre, 'Foto ' || p.orden), 'bytes', p.tamano_bytes) order by p.orden), '[]'::jsonb)
       into v_fotos from acta.acta_fotos p left join acta.tipos_foto tf on tf.id = p.tipo_foto_id where p.acta_id = v_a.id;
     v_nombre := campo.f_nombre_pdf(v_a.registrado_en, v_d.sigla, v_a.consecutivo, v_a.version);
-    v_sello := encode(sha256(convert_to(coalesce((select s.sello_sha256 from acta.acta_sellos s where s.acta_id = v_a.id), '') || coalesce((select string_agg(f.huella, ',' order by f.rol)
-                 from campo.firmas f where f.esquema = 'acta' and f.registro_id = v_a.id and f.estado = 'firmo'), ''), 'UTF8')), 'hex');
+    v_sello := encode(sha256(convert_to(coalesce((select s.sello_sha256 from acta.acta_sellos s where s.acta_id = v_a.id), '') || coalesce((select string_agg(x ->> 'huella', ',' order by x ->> 'de', x ->> 'rol')
+                 from jsonb_array_elements(v_firmas) x where x ->> 'estado' = 'firmo'), ''), 'UTF8')), 'hex');
   end if;
   select jsonb_build_object('nombre', d.nombre, 'ruta', d.ruta, 'sha256', d.sha256, 'bytes', d.bytes, 'version', d.version) into v_doc
     from campo.documentos_pdf d where d.esquema = p_esquema and d.registro_id = p_registro_id;
@@ -992,25 +1002,40 @@ begin
   r := pg_temp.rpc(format('public.geoportal_campo_origen_vincular(%s, %L, %L)', REP, id1, aid));
   perform pg_temp.ok('06.05 una sola acta de origen por revisión (409)', pg_temp.err(r) = '55000', r::text);
 
+  -- 06b corrección del acta AI: la firma quien corrige (David, 21-nov) y el PDF -v2 junta su firma con las de la original
+  aid2 := (public.geoportal_acta_iniciar_correccion('ztb.acs@emdupar.gov.co', aid, 'ZTB se corrige la dirección escrita por error') ->> 'acta_id')::uuid;
+  m := pg_temp.msg(format('select public.geoportal_acta_registrar(%L, %L, %L::jsonb, %L::jsonb)', 'ztb.acs@emdupar.gov.co', aid2, pg_temp.cb(aid2) || '{"fotos": []}'::jsonb, pg_temp.huellas()));
+  perform pg_temp.ok('06.06 la corrección (versión 2) sin la firma de quien corrige no se registra', m = 'Falta la firma del operario', m);
+  r := pg_temp.rpc(format('public.geoportal_campo_firma_guardar(%s, ''acta'', %L, ''operario'', ''firmo'', null, %L)', ACS, aid2, pg_temp.jpg(8)));
+  perform pg_temp.ok('06.07 el supervisor de actas (quien corrige) guarda su firma', pg_temp.err(r) = 'OK' and (select nombre from campo.firmas where registro_id = aid2 and rol = 'operario') = 'ZTB Sup Actas', r::text);
+  m := pg_temp.msg(format('select public.geoportal_acta_registrar(%L, %L, %L::jsonb, %L::jsonb)', 'ztb.acs@emdupar.gov.co', aid2, pg_temp.cb(aid2) || '{"fotos": []}'::jsonb, pg_temp.huellas()));
+  perform pg_temp.ok('06.08 con la firma de quien corrige, la versión 2 se registra', m = 'OK', m);
+  r := pg_temp.rpc(format('public.geoportal_campo_pdf_datos(%s, ''acta'', %L)', ACS, aid2));
+  perform pg_temp.ok('06.09 el PDF de la corrección termina en -v2 y trae la firma de quien corrige junto a las de la original',
+    r ->> 'nombre' ~ '^[0-9]{14}-ITEC-AI-[0-9]{4}-[0-9]{6}-v2\.pdf$' and (r ->> 'version')::int = 2
+    and exists (select 1 from jsonb_array_elements(r -> 'firmas') x where x ->> 'de' = 'esta' and x ->> 'rol' = 'operario' and x ->> 'nombre' = 'ZTB Sup Actas')
+    and exists (select 1 from jsonb_array_elements(r -> 'firmas') x where x ->> 'de' = 'original' and x ->> 'rol' = 'operario' and x ->> 'nombre' = 'ZTB Operario Actas')
+    and exists (select 1 from jsonb_array_elements(r -> 'firmas') x where x ->> 'de' = 'original' and x ->> 'rol' = 'usuario' and x ->> 'estado' = 'nadie_atendio'), left(r::text, 500));
+
   -- 07 actas registradas (lista y descarga sin nombres ni imágenes)
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || ACS || ', ''{"operario": "ztb."}'')');
-  perform pg_temp.ok('07.01 el supervisor de actas ve las actas registradas: 4 instalaciones y 1 acta AI', (select count(*) from jsonb_array_elements(r -> 'filas') x
-    where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = 5, left(r::text, 300));
+  perform pg_temp.ok('07.01 el supervisor de actas ve las actas registradas: 4 instalaciones y 1 acta AI (su versión vigente, la corrección)', (select count(*) from jsonb_array_elements(r -> 'filas') x
+    where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid2)) = 5, left(r::text, 300));
   perform pg_temp.ok('07.02 marcas por fila: firmas (operario, usuario) y derivadas', (select x -> 'firmas' = '{"operario": true, "usuario": "firmo", "testigo": false}'::jsonb
       from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id1)
     and (select x -> 'derivadas' = '{"total": 2, "pendientes": 0}'::jsonb from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id3)
-    and (select x -> 'firmas' ->> 'usuario' = 'nadie_atendio' from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = aid)
+    and (select x -> 'firmas' ->> 'usuario' = 'nadie_atendio' from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = aid2) is null
     and (select x -> 'pdf' = '{"estado": "pendiente", "nombre": null, "version": null}'::jsonb from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id3));
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || SUP || ', ''{"operario": "ztb.", "derivadas": "pendientes"}'')');
-  perform pg_temp.ok('07.03 filtro «con derivadas pendientes» (supervisor de campo)', (select array_agg((x ->> 'registro_id')::uuid) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = array[id4], left(r::text, 300));
+  perform pg_temp.ok('07.03 filtro «con derivadas pendientes» (supervisor de campo)', (select array_agg((x ->> 'registro_id')::uuid) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid, aid2)) = array[id4], left(r::text, 300));
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || SUP || ', ''{"operario": "ztb.", "tipo": "acta"}'')');
-  perform pg_temp.ok('07.04 filtro por tipo (acta)', (select count(*) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = 1);
+  perform pg_temp.ok('07.04 filtro por tipo (acta)', (select count(*) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid, aid2)) = 1);
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || REP || ')');
   perform pg_temp.ok('07.05 un operario no ve las actas registradas (42501)', pg_temp.err(r) = '42501', r::text);
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas_descarga(' || ACS || ', ''{"operario": "ztb."}'')');
   perform pg_temp.ok('07.06 la descarga no lleva nombres de quien atendió ni del testigo, ni firmas, ni texto libre', pg_temp.err(r) = 'OK'
     and r::text not like '%ZTB Persona Atiende%' and r::text not like '%ZTB Testigo%' and r::text not like '%Revisar el andén%' and r::text not like '%/9j/%'
-    and (select count(*) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = 5, left(r::text, 200));
+    and (select count(*) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid2)) = 5, left(r::text, 200));
   perform pg_temp.ok('07.07 la descarga queda en la auditoría', exists (select 1 from public.geoportal_auditoria where email = 'ztb.acs@emdupar.gov.co' and accion = 'campo_actas_registradas_descarga'));
 
   -- 08 PDF: datos para la Edge, registro único, descarga

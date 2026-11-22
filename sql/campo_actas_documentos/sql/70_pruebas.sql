@@ -186,25 +186,40 @@ begin
   r := pg_temp.rpc(format('public.geoportal_campo_origen_vincular(%s, %L, %L)', REP, id1, aid));
   perform pg_temp.ok('06.05 una sola acta de origen por revisión (409)', pg_temp.err(r) = '55000', r::text);
 
+  -- 06b corrección del acta AI: la firma quien corrige (David, 21-nov) y el PDF -v2 junta su firma con las de la original
+  aid2 := (public.geoportal_acta_iniciar_correccion('ztb.acs@emdupar.gov.co', aid, 'ZTB se corrige la dirección escrita por error') ->> 'acta_id')::uuid;
+  m := pg_temp.msg(format('select public.geoportal_acta_registrar(%L, %L, %L::jsonb, %L::jsonb)', 'ztb.acs@emdupar.gov.co', aid2, pg_temp.cb(aid2) || '{"fotos": []}'::jsonb, pg_temp.huellas()));
+  perform pg_temp.ok('06.06 la corrección (versión 2) sin la firma de quien corrige no se registra', m = 'Falta la firma del operario', m);
+  r := pg_temp.rpc(format('public.geoportal_campo_firma_guardar(%s, ''acta'', %L, ''operario'', ''firmo'', null, %L)', ACS, aid2, pg_temp.jpg(8)));
+  perform pg_temp.ok('06.07 el supervisor de actas (quien corrige) guarda su firma', pg_temp.err(r) = 'OK' and (select nombre from campo.firmas where registro_id = aid2 and rol = 'operario') = 'ZTB Sup Actas', r::text);
+  m := pg_temp.msg(format('select public.geoportal_acta_registrar(%L, %L, %L::jsonb, %L::jsonb)', 'ztb.acs@emdupar.gov.co', aid2, pg_temp.cb(aid2) || '{"fotos": []}'::jsonb, pg_temp.huellas()));
+  perform pg_temp.ok('06.08 con la firma de quien corrige, la versión 2 se registra', m = 'OK', m);
+  r := pg_temp.rpc(format('public.geoportal_campo_pdf_datos(%s, ''acta'', %L)', ACS, aid2));
+  perform pg_temp.ok('06.09 el PDF de la corrección termina en -v2 y trae la firma de quien corrige junto a las de la original',
+    r ->> 'nombre' ~ '^[0-9]{14}-ITEC-AI-[0-9]{4}-[0-9]{6}-v2\.pdf$' and (r ->> 'version')::int = 2
+    and exists (select 1 from jsonb_array_elements(r -> 'firmas') x where x ->> 'de' = 'esta' and x ->> 'rol' = 'operario' and x ->> 'nombre' = 'ZTB Sup Actas')
+    and exists (select 1 from jsonb_array_elements(r -> 'firmas') x where x ->> 'de' = 'original' and x ->> 'rol' = 'operario' and x ->> 'nombre' = 'ZTB Operario Actas')
+    and exists (select 1 from jsonb_array_elements(r -> 'firmas') x where x ->> 'de' = 'original' and x ->> 'rol' = 'usuario' and x ->> 'estado' = 'nadie_atendio'), left(r::text, 500));
+
   -- 07 actas registradas (lista y descarga sin nombres ni imágenes)
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || ACS || ', ''{"operario": "ztb."}'')');
-  perform pg_temp.ok('07.01 el supervisor de actas ve las actas registradas: 4 instalaciones y 1 acta AI', (select count(*) from jsonb_array_elements(r -> 'filas') x
-    where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = 5, left(r::text, 300));
+  perform pg_temp.ok('07.01 el supervisor de actas ve las actas registradas: 4 instalaciones y 1 acta AI (su versión vigente, la corrección)', (select count(*) from jsonb_array_elements(r -> 'filas') x
+    where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid2)) = 5, left(r::text, 300));
   perform pg_temp.ok('07.02 marcas por fila: firmas (operario, usuario) y derivadas', (select x -> 'firmas' = '{"operario": true, "usuario": "firmo", "testigo": false}'::jsonb
       from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id1)
     and (select x -> 'derivadas' = '{"total": 2, "pendientes": 0}'::jsonb from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id3)
-    and (select x -> 'firmas' ->> 'usuario' = 'nadie_atendio' from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = aid)
+    and (select x -> 'firmas' ->> 'usuario' = 'nadie_atendio' from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = aid2) is null
     and (select x -> 'pdf' = '{"estado": "pendiente", "nombre": null, "version": null}'::jsonb from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid = id3));
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || SUP || ', ''{"operario": "ztb.", "derivadas": "pendientes"}'')');
-  perform pg_temp.ok('07.03 filtro «con derivadas pendientes» (supervisor de campo)', (select array_agg((x ->> 'registro_id')::uuid) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = array[id4], left(r::text, 300));
+  perform pg_temp.ok('07.03 filtro «con derivadas pendientes» (supervisor de campo)', (select array_agg((x ->> 'registro_id')::uuid) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid, aid2)) = array[id4], left(r::text, 300));
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || SUP || ', ''{"operario": "ztb.", "tipo": "acta"}'')');
-  perform pg_temp.ok('07.04 filtro por tipo (acta)', (select count(*) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = 1);
+  perform pg_temp.ok('07.04 filtro por tipo (acta)', (select count(*) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid, aid2)) = 1);
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas(' || REP || ')');
   perform pg_temp.ok('07.05 un operario no ve las actas registradas (42501)', pg_temp.err(r) = '42501', r::text);
   r := pg_temp.rpc('public.geoportal_campo_actas_registradas_descarga(' || ACS || ', ''{"operario": "ztb."}'')');
   perform pg_temp.ok('07.06 la descarga no lleva nombres de quien atendió ni del testigo, ni firmas, ni texto libre', pg_temp.err(r) = 'OK'
     and r::text not like '%ZTB Persona Atiende%' and r::text not like '%ZTB Testigo%' and r::text not like '%Revisar el andén%' and r::text not like '%/9j/%'
-    and (select count(*) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid)) = 5, left(r::text, 200));
+    and (select count(*) from jsonb_array_elements(r -> 'filas') x where (x ->> 'registro_id')::uuid in (id1, id3, id4, id5, aid2)) = 5, left(r::text, 200));
   perform pg_temp.ok('07.07 la descarga queda en la auditoría', exists (select 1 from public.geoportal_auditoria where email = 'ztb.acs@emdupar.gov.co' and accion = 'campo_actas_registradas_descarga'));
 
   -- 08 PDF: datos para la Edge, registro único, descarga

@@ -48,13 +48,13 @@ begin
   return null;
 end $$;
 
--- Disparador ANTES de insertar en acta.actas: firma del operario en la versión 1 (las correcciones heredan la firma del acta original)
+-- Disparador ANTES de insertar en acta.actas: firma del operario en TODAS las versiones (David, 21-nov: la corrección la firma quien corrige)
 create function campo.f_firmas_al_registrar_acta() returns trigger
 language plpgsql security definer set search_path to 'campo', 'pg_temp' as $$
 declare v_d campo.formularios_documento;
 begin
   v_d := campo.f_documento_de('acta');
-  if new.version = 1 and v_d.formulario is not null and v_d.firma_operario = 'obligatoria'
+  if v_d.formulario is not null and v_d.firma_operario = 'obligatoria'
      and not exists (select 1 from campo.firmas f where f.esquema = 'acta' and f.registro_id = new.id and f.rol = 'operario' and f.estado = 'firmo' and f.autor = new.autor) then
     perform campo.f_error('Falta la firma del operario');
   end if;

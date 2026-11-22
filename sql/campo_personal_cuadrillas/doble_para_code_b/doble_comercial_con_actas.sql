@@ -9,7 +9,7 @@ do $$ begin if not exists (select 1 from pg_roles where rolname = 'service_role'
 -- PostgreSQL database dump
 --
 
-\restrict aQNZCIi79sm67BwFboFKUG2kZBZ68WQutybxmh5DJoj17j9mizKcRCMZdO1ZceF
+\restrict 0d0W75beemWK9uFh5hE44ZO5cq0cVssbif3X5KZ3PeLq0ThruNGDj5ak3EU0igd
 
 -- Dumped from database version 16.2
 -- Dumped by pg_dump version 17.12 (Homebrew)
@@ -2391,7 +2391,7 @@ CREATE FUNCTION campo.f_firmas_al_registrar_acta() RETURNS trigger
 declare v_d campo.formularios_documento;
 begin
   v_d := campo.f_documento_de('acta');
-  if new.version = 1 and v_d.formulario is not null and v_d.firma_operario = 'obligatoria'
+  if v_d.formulario is not null and v_d.firma_operario = 'obligatoria'
      and not exists (select 1 from campo.firmas f where f.esquema = 'acta' and f.registro_id = new.id and f.rol = 'operario' and f.estado = 'firmo' and f.autor = new.autor) then
     perform campo.f_error('Falta la firma del operario');
   end if;
@@ -5128,7 +5128,10 @@ CREATE FUNCTION public.geoportal_campo_firma_guardar(p_solicitante text, p_esque
 declare v_email text; v_nombre text := nullif(regexp_replace(btrim(coalesce(p_nombre, '')), '\s+', ' ', 'g'), ''); v_img bytea; v_huella text; v_otro text; v_usuario text; v_estado text := p_estado;
 begin
   if p_esquema = 'campo' then v_email := campo.f_verificar(p_solicitante, 'campo');
-  elsif p_esquema = 'acta' then v_email := acta.f_autorizar(p_solicitante, 'capturar');
+  elsif p_esquema = 'acta' then
+    begin v_email := acta.f_autorizar(p_solicitante, 'capturar');
+    exception when sqlstate '42501' then v_email := acta.f_autorizar(p_solicitante, 'supervisar');   -- la corrección la registra (y la firma) el supervisor de actas
+    end;
   else perform campo.f_error('El tipo de registro no es válido'); end if;
   if p_registro_id is null then perform campo.f_error('Indique el registro'); end if;
   if p_rol is null or p_rol not in ('operario', 'usuario', 'testigo') then perform campo.f_error('La firma debe ser del operario, del usuario o del testigo'); end if;
@@ -5745,9 +5748,16 @@ begin
   end if;
   v_d := campo.f_documento_de(v_form);
   if v_d.formulario is null or not v_d.lleva_pdf then perform campo.f_error('Ese formulario no lleva PDF'); end if;
-  select coalesce(jsonb_agg(jsonb_build_object('rol', f.rol, 'estado', f.estado, 'nombre', f.nombre, 'imagen', encode(f.imagen, 'base64'), 'huella', f.huella)
-                            order by array_position(array['operario', 'usuario', 'testigo'], f.rol)), '[]'::jsonb)
-    into v_firmas from campo.firmas f where f.esquema = p_esquema and f.registro_id = p_registro_id and f.estado <> 'quitada';
+  -- Firmas: las de este registro («esta»). En una corrección del acta (versión 2 en adelante) va la del operario que corrige más las tres del acta original («original»).
+  select coalesce(jsonb_agg(jsonb_build_object('rol', x.rol, 'estado', x.estado, 'nombre', x.nombre, 'imagen', encode(x.imagen, 'base64'), 'huella', x.huella, 'de', x.de)
+                            order by x.o1, array_position(array['operario', 'usuario', 'testigo'], x.rol)), '[]'::jsonb)
+    into v_firmas
+    from (select f.*, 'esta'::text as de, case when v_ver > 1 then 2 else 1 end as o1
+            from campo.firmas f where f.esquema = p_esquema and f.registro_id = p_registro_id and f.estado <> 'quitada' and (v_ver = 1 or f.rol = 'operario')
+          union all
+          select f.*, 'original'::text, 1 from campo.firmas f
+           where v_ver > 1 and f.esquema = 'acta' and f.estado <> 'quitada'
+             and f.registro_id = (select o.id from acta.actas o where o.acta_raiz_id = v_a.acta_raiz_id and o.version = 1)) x;
   select coalesce(nullif(btrim(lb.nombre), ''), split_part(coalesce(v_r.autor, v_a.autor), '@', 1)) into v_op from public.geoportal_lista_blanca lb where lb.email = coalesce(v_r.autor, v_a.autor);
   if p_esquema = 'campo' then
     select d.datos into v_sen from campo.reporte_datos_sensibles d where d.reporte_id = v_r.id;
@@ -5796,8 +5806,8 @@ begin
     select coalesce(jsonb_agg(jsonb_build_object('bucket', 'acta-evidencias', 'ruta', p.ruta_storage, 'etiqueta', coalesce(tf.nombre, 'Foto ' || p.orden), 'bytes', p.tamano_bytes) order by p.orden), '[]'::jsonb)
       into v_fotos from acta.acta_fotos p left join acta.tipos_foto tf on tf.id = p.tipo_foto_id where p.acta_id = v_a.id;
     v_nombre := campo.f_nombre_pdf(v_a.registrado_en, v_d.sigla, v_a.consecutivo, v_a.version);
-    v_sello := encode(sha256(convert_to(coalesce((select s.sello_sha256 from acta.acta_sellos s where s.acta_id = v_a.id), '') || coalesce((select string_agg(f.huella, ',' order by f.rol)
-                 from campo.firmas f where f.esquema = 'acta' and f.registro_id = v_a.id and f.estado = 'firmo'), ''), 'UTF8')), 'hex');
+    v_sello := encode(sha256(convert_to(coalesce((select s.sello_sha256 from acta.acta_sellos s where s.acta_id = v_a.id), '') || coalesce((select string_agg(x ->> 'huella', ',' order by x ->> 'de', x ->> 'rol')
+                 from jsonb_array_elements(v_firmas) x where x ->> 'estado' = 'firmo'), ''), 'UTF8')), 'hex');
   end if;
   select jsonb_build_object('nombre', d.nombre, 'ruta', d.ruta, 'sha256', d.sha256, 'bytes', d.bytes, 'version', d.version) into v_doc
     from campo.documentos_pdf d where d.esquema = p_esquema and d.registro_id = p_registro_id;
@@ -10717,12 +10727,12 @@ COPY acta.accesos_evidencia (id, autor, acta_id, orden, accedido_en) FROM stdin;
 --
 
 COPY acta.acciones_correctivas (id, codigo, nombre, orden, campos, activo, creado_en) FROM stdin;
-1	suspension_inmediata	Suspensión inmediata del servicio desde la red	10	[{"tipo": "hora", "clave": "suspension_a_las", "etiqueta": "Hora de la suspensión", "obligatorio": true}]	t	2026-11-21 19:25:15.841525-05
-2	retiro_acometida_ilegal	Retiro de acometida ilegal, paralela o bypass	20	[{"tipo": "texto", "clave": "descripcion", "etiqueta": "Descripción de lo retirado", "obligatorio": true}]	t	2026-11-21 19:25:15.841663-05
-3	retiro_medidor	Retiro de medidor para calibración o laboratorio técnico	30	[{"tipo": "texto", "clave": "serie_retirada", "etiqueta": "Serie del medidor retirado", "obligatorio": true}, {"tipo": "numero", "clave": "lectura_retiro", "etiqueta": "Lectura al retiro (m³)", "obligatorio": true}, {"tipo": "texto", "clave": "sello_o_bolsa", "etiqueta": "Número de sello o bolsa de custodia", "obligatorio": true}, {"tipo": "texto", "clave": "destino", "etiqueta": "Destino", "obligatorio": true}]	t	2026-11-21 19:25:15.841673-05
-4	instalacion_medidor_o_sello	Instalación de nuevo medidor o sello de seguridad	40	[{"tipo": "texto", "clave": "serie_nueva", "etiqueta": "Serie del medidor nuevo", "obligatorio": false}, {"tipo": "numero", "clave": "lectura_inicial", "etiqueta": "Lectura inicial (m³)", "obligatorio": false}, {"tipo": "texto", "clave": "sello_instalado", "etiqueta": "Número de sello instalado", "obligatorio": false}, {"tipo": "texto", "clave": "diametro_acometida", "etiqueta": "Diámetro de la acometida", "obligatorio": false}]	t	2026-11-21 19:25:15.84168-05
-5	normalizacion_provisional	Normalización provisional de la acometida	50	[{"tipo": "texto", "clave": "descripcion", "etiqueta": "Descripción", "obligatorio": true}]	t	2026-11-21 19:25:15.841692-05
-6	corte_taponamiento	Corte o taponamiento	60	[{"tipo": "texto", "clave": "descripcion", "etiqueta": "Descripción", "obligatorio": true}, {"tipo": "hora", "clave": "realizado_a_las", "etiqueta": "Hora", "obligatorio": true}]	t	2026-11-21 19:25:15.8417-05
+1	suspension_inmediata	Suspensión inmediata del servicio desde la red	10	[{"tipo": "hora", "clave": "suspension_a_las", "etiqueta": "Hora de la suspensión", "obligatorio": true}]	t	2026-11-21 19:29:28.424396-05
+2	retiro_acometida_ilegal	Retiro de acometida ilegal, paralela o bypass	20	[{"tipo": "texto", "clave": "descripcion", "etiqueta": "Descripción de lo retirado", "obligatorio": true}]	t	2026-11-21 19:29:28.424529-05
+3	retiro_medidor	Retiro de medidor para calibración o laboratorio técnico	30	[{"tipo": "texto", "clave": "serie_retirada", "etiqueta": "Serie del medidor retirado", "obligatorio": true}, {"tipo": "numero", "clave": "lectura_retiro", "etiqueta": "Lectura al retiro (m³)", "obligatorio": true}, {"tipo": "texto", "clave": "sello_o_bolsa", "etiqueta": "Número de sello o bolsa de custodia", "obligatorio": true}, {"tipo": "texto", "clave": "destino", "etiqueta": "Destino", "obligatorio": true}]	t	2026-11-21 19:29:28.424538-05
+4	instalacion_medidor_o_sello	Instalación de nuevo medidor o sello de seguridad	40	[{"tipo": "texto", "clave": "serie_nueva", "etiqueta": "Serie del medidor nuevo", "obligatorio": false}, {"tipo": "numero", "clave": "lectura_inicial", "etiqueta": "Lectura inicial (m³)", "obligatorio": false}, {"tipo": "texto", "clave": "sello_instalado", "etiqueta": "Número de sello instalado", "obligatorio": false}, {"tipo": "texto", "clave": "diametro_acometida", "etiqueta": "Diámetro de la acometida", "obligatorio": false}]	t	2026-11-21 19:29:28.424545-05
+5	normalizacion_provisional	Normalización provisional de la acometida	50	[{"tipo": "texto", "clave": "descripcion", "etiqueta": "Descripción", "obligatorio": true}]	t	2026-11-21 19:29:28.424556-05
+6	corte_taponamiento	Corte o taponamiento	60	[{"tipo": "texto", "clave": "descripcion", "etiqueta": "Descripción", "obligatorio": true}, {"tipo": "hora", "clave": "realizado_a_las", "etiqueta": "Hora", "obligatorio": true}]	t	2026-11-21 19:29:28.424564-05
 \.
 
 
@@ -10795,11 +10805,11 @@ COPY acta.aperturas (id, seq, serie, numero, consecutivo, autor, abierto_en, lat
 --
 
 COPY acta.calidades_atendiente (id, codigo, nombre, exige_texto, orden, activo, creado_en) FROM stdin;
-1	propietario	Propietario	f	10	t	2026-11-21 19:25:15.84075-05
-2	arrendatario	Arrendatario	f	20	t	2026-11-21 19:25:15.840888-05
-3	poseedor	Poseedor	f	30	t	2026-11-21 19:25:15.840896-05
-4	residente	Residente	f	40	t	2026-11-21 19:25:15.840901-05
-5	otro	Otro	t	90	t	2026-11-21 19:25:15.840906-05
+1	propietario	Propietario	f	10	t	2026-11-21 19:29:28.423674-05
+2	arrendatario	Arrendatario	f	20	t	2026-11-21 19:29:28.423804-05
+3	poseedor	Poseedor	f	30	t	2026-11-21 19:29:28.423812-05
+4	residente	Residente	f	40	t	2026-11-21 19:29:28.423817-05
+5	otro	Otro	t	90	t	2026-11-21 19:29:28.423821-05
 \.
 
 
@@ -10816,7 +10826,7 @@ COPY acta.caso_eventos (id, acta_raiz_id, tipo_evento, estado_nuevo, motivo, cus
 --
 
 COPY acta.consecutivos (serie, prefijo, ultimo_numero, actualizado_en) FROM stdin;
-2026	AI	0	2026-11-21 19:25:15.84037-05
+2026	AI	0	2026-11-21 19:29:28.423319-05
 \.
 
 
@@ -10833,14 +10843,14 @@ COPY acta.consultas_contrato (id, autor, contrato, existe, consultado_en) FROM s
 --
 
 COPY acta.diametros_acometida (id, codigo, nombre, orden, activo, creado_en) FROM stdin;
-1	d_1_2	1/2 pulgada	10	t	2026-11-21 19:25:15.841278-05
-2	d_3_4	3/4 de pulgada	20	t	2026-11-21 19:25:15.841456-05
-3	d_1	1 pulgada	30	t	2026-11-21 19:25:15.841461-05
-4	d_1_1_2	1 1/2 pulgadas	40	t	2026-11-21 19:25:15.841466-05
-5	d_2	2 pulgadas	50	t	2026-11-21 19:25:15.841471-05
-6	d_3	3 pulgadas	60	t	2026-11-21 19:25:15.841475-05
-7	d_4	4 pulgadas	70	t	2026-11-21 19:25:15.841479-05
-8	otro	Otro (describir en observaciones)	99	t	2026-11-21 19:25:15.841483-05
+1	d_1_2	1/2 pulgada	10	t	2026-11-21 19:29:28.424172-05
+2	d_3_4	3/4 de pulgada	20	t	2026-11-21 19:29:28.424333-05
+3	d_1	1 pulgada	30	t	2026-11-21 19:29:28.424338-05
+4	d_1_1_2	1 1/2 pulgadas	40	t	2026-11-21 19:29:28.424343-05
+5	d_2	2 pulgadas	50	t	2026-11-21 19:29:28.424347-05
+6	d_3	3 pulgadas	60	t	2026-11-21 19:29:28.424351-05
+7	d_4	4 pulgadas	70	t	2026-11-21 19:29:28.424356-05
+8	otro	Otro (describir en observaciones)	99	t	2026-11-21 19:29:28.424359-05
 \.
 
 
@@ -10849,14 +10859,14 @@ COPY acta.diametros_acometida (id, codigo, nombre, orden, activo, creado_en) FRO
 --
 
 COPY acta.estados_caso (codigo, nombre, orden, inicial, inicial_sin_irregularidad, exige_motivo, cambio_manual, terminal, gestiona, activo, creado_en) FROM stdin;
-reportado	Reportado	10	t	f	f	f	f	sistema	t	2026-11-21 19:25:15.84192-05
-papel_recibido	Papel recibido	20	f	f	f	t	f	supervisor	t	2026-11-21 19:25:15.842059-05
-en_revision	En revisión	30	f	f	f	t	f	supervisor	t	2026-11-21 19:25:15.842066-05
-confirmado	Hallazgo confirmado (fraude)	40	f	f	t	t	f	supervisor	t	2026-11-21 19:25:15.842072-05
-descartado	Descartado	50	f	f	t	t	t	supervisor	t	2026-11-21 19:25:15.842077-05
-cerrado_constancia	Cerrado como constancia	60	f	t	f	f	t	sistema	t	2026-11-21 19:25:15.842083-05
-en_gestion_posterior	En gestión de jurídica o control de pérdidas	70	f	f	f	t	f	juridica	t	2026-11-21 19:25:15.842128-05
-cerrado	Cerrado	80	f	f	t	t	t	juridica	t	2026-11-21 19:25:15.842138-05
+reportado	Reportado	10	t	f	f	f	f	sistema	t	2026-11-21 19:29:28.424773-05
+papel_recibido	Papel recibido	20	f	f	f	t	f	supervisor	t	2026-11-21 19:29:28.424907-05
+en_revision	En revisión	30	f	f	f	t	f	supervisor	t	2026-11-21 19:29:28.424914-05
+confirmado	Hallazgo confirmado (fraude)	40	f	f	t	t	f	supervisor	t	2026-11-21 19:29:28.424919-05
+descartado	Descartado	50	f	f	t	t	t	supervisor	t	2026-11-21 19:29:28.424924-05
+cerrado_constancia	Cerrado como constancia	60	f	t	f	f	t	sistema	t	2026-11-21 19:29:28.42493-05
+en_gestion_posterior	En gestión de jurídica o control de pérdidas	70	f	f	f	t	f	juridica	t	2026-11-21 19:29:28.424973-05
+cerrado	Cerrado	80	f	f	t	t	t	juridica	t	2026-11-21 19:29:28.424982-05
 \.
 
 
@@ -10865,10 +10875,10 @@ cerrado	Cerrado	80	f	f	t	t	t	juridica	t	2026-11-21 19:25:15.842138-05
 --
 
 COPY acta.estados_custodia (codigo, nombre, orden, activo, creado_en) FROM stdin;
-en_campo	En poder de la cuadrilla	10	t	2026-11-21 19:25:15.842504-05
-entregado_almacen	Entregado al almacén	20	t	2026-11-21 19:25:15.842602-05
-en_laboratorio	En laboratorio	30	t	2026-11-21 19:25:15.842611-05
-resultado_recibido	Resultado recibido	40	t	2026-11-21 19:25:15.842617-05
+en_campo	En poder de la cuadrilla	10	t	2026-11-21 19:29:28.425332-05
+entregado_almacen	Entregado al almacén	20	t	2026-11-21 19:29:28.425423-05
+en_laboratorio	En laboratorio	30	t	2026-11-21 19:29:28.425432-05
+resultado_recibido	Resultado recibido	40	t	2026-11-21 19:29:28.425438-05
 \.
 
 
@@ -10877,11 +10887,11 @@ resultado_recibido	Resultado recibido	40	t	2026-11-21 19:25:15.842617-05
 --
 
 COPY acta.estados_medidor (id, codigo, nombre, orden, activo, creado_en) FROM stdin;
-1	funcionando	Funcionando	10	t	2026-11-21 19:25:15.840932-05
-2	frenado	Frenado	20	t	2026-11-21 19:25:15.841071-05
-3	invertido	Invertido	30	t	2026-11-21 19:25:15.841077-05
-4	empanado	Empañado	40	t	2026-11-21 19:25:15.841082-05
-5	destruido_ausente	Destruido o ausente	50	t	2026-11-21 19:25:15.841087-05
+1	funcionando	Funcionando	10	t	2026-11-21 19:29:28.423846-05
+2	frenado	Frenado	20	t	2026-11-21 19:29:28.423972-05
+3	invertido	Invertido	30	t	2026-11-21 19:29:28.423978-05
+4	empanado	Empañado	40	t	2026-11-21 19:29:28.423983-05
+5	destruido_ausente	Destruido o ausente	50	t	2026-11-21 19:29:28.423988-05
 \.
 
 
@@ -10890,10 +10900,10 @@ COPY acta.estados_medidor (id, codigo, nombre, orden, activo, creado_en) FROM st
 --
 
 COPY acta.estados_sellos (id, codigo, nombre, orden, activo, creado_en) FROM stdin;
-1	conformes	Conformes	10	t	2026-11-21 19:25:15.841112-05
-2	rotos	Rotos	20	t	2026-11-21 19:25:15.841241-05
-3	ausentes	Ausentes	30	t	2026-11-21 19:25:15.841247-05
-4	manipulados	Manipulados	40	t	2026-11-21 19:25:15.841252-05
+1	conformes	Conformes	10	t	2026-11-21 19:29:28.424013-05
+2	rotos	Rotos	20	t	2026-11-21 19:29:28.424139-05
+3	ausentes	Ausentes	30	t	2026-11-21 19:29:28.424144-05
+4	manipulados	Manipulados	40	t	2026-11-21 19:29:28.424149-05
 \.
 
 
@@ -10902,11 +10912,11 @@ COPY acta.estados_sellos (id, codigo, nombre, orden, activo, creado_en) FROM std
 --
 
 COPY acta.motivos_cancelacion (id, codigo, nombre, exige_texto, orden, activo, creado_en) FROM stdin;
-1	prueba	Prueba	f	10	t	2026-11-21 19:25:15.876876-05
-2	equivocacion_formulario	Me equivoqué de formulario	f	20	t	2026-11-21 19:25:15.877023-05
-3	visita_no_realizada	Visita no realizada	f	30	t	2026-11-21 19:25:15.877032-05
-4	duplicado	Duplicado	f	40	t	2026-11-21 19:25:15.877039-05
-5	otro	Otro (escriba cuál)	t	90	t	2026-11-21 19:25:15.877043-05
+1	prueba	Prueba	f	10	t	2026-11-21 19:29:28.457605-05
+2	equivocacion_formulario	Me equivoqué de formulario	f	20	t	2026-11-21 19:29:28.457734-05
+3	visita_no_realizada	Visita no realizada	f	30	t	2026-11-21 19:29:28.457743-05
+4	duplicado	Duplicado	f	40	t	2026-11-21 19:29:28.457749-05
+5	otro	Otro (escriba cuál)	t	90	t	2026-11-21 19:29:28.457753-05
 \.
 
 
@@ -10915,30 +10925,30 @@ COPY acta.motivos_cancelacion (id, codigo, nombre, exige_texto, orden, activo, c
 --
 
 COPY acta.parametros (clave, valor, unidad, descripcion, minimo, maximo, actualizado_en, actualizado_por) FROM stdin;
-min_fotos_irregularidad	2	fotos	Mínimo de fotos del hallazgo cuando hay irregularidad (fachada y hallazgo). PROPUESTA del diseño	1	20	2026-11-21 19:25:15.837728-05	\N
-min_fotos_sin_irregularidad	1	fotos	Mínimo de fotos del predio cuando NO hay irregularidad. PROPUESTA	0	20	2026-11-21 19:25:15.837915-05	\N
-max_fotos	10	fotos	Máximo de fotos del hallazgo (sin contar las del acta física). PROPUESTA del diseño	2	30	2026-11-21 19:25:15.837927-05	\N
-max_fotos_acta_fisica	2	fotos	Máximo de fotos del acta física firmada (páginas del papel)	1	6	2026-11-21 19:25:15.837933-05	\N
-max_bytes_foto	1572864	bytes	Tamaño máximo de una foto del hallazgo (1,5 MB, igual que campo)	102400	3145728	2026-11-21 19:25:15.837941-05	\N
-max_bytes_foto_acta_fisica	2621440	bytes	Tamaño máximo de una foto del acta física (2,5 MB: debe poder leerse el texto). PROPUESTA	102400	3145728	2026-11-21 19:25:15.837947-05	\N
-vigencia_apertura_horas	12	horas	Horas que dura una apertura antes de caducar. PROPUESTA	1	72	2026-11-21 19:25:15.83796-05	\N
-max_dias_acta_fisica_atras	30	días	Cuántos días atrás puede estar la fecha del acta física al registrar (no aplica a correcciones). PROPUESTA	0	365	2026-11-21 19:25:15.837967-05	\N
-alerta_meses	5	meses	Meses desde la fecha del acta física para la alerta de antigüedad (art. 150 Ley 142 de 1994: por confirmar con jurídica)	1	36	2026-11-21 19:25:15.837976-05	\N
-alerta_previa_dias	30	días	Días antes del límite en que la alerta pasa a «próxima». PROPUESTA, PENDIENTE de David	1	120	2026-11-21 19:25:15.837982-05	\N
-distancia_sugerencia_m	15	m	Distancia para sugerir predios con contrato cercanos y para detectar actas cercanas (igual que duplicados de campo)	1	500	2026-11-21 19:25:15.83799-05	\N
-url_lectura_segundos	60	segundos	Vigencia de la URL de lectura de una evidencia	10	600	2026-11-21 19:25:15.837997-05	\N
-limite_aperturas_hora	6	registros	Máximo de aperturas por persona por hora (el supervisor lo multiplica). PROPUESTA	1	200	2026-11-21 19:25:15.838005-05	\N
-limite_aperturas_dia	20	registros	Máximo de aperturas por persona por día (el supervisor lo multiplica). PROPUESTA	1	500	2026-11-21 19:25:15.838013-05	\N
-multiplo_supervisor	5	veces	Veces que el supervisor supera los topes de aperturas. El administrador no tiene tope. PROPUESTA	1	100	2026-11-21 19:25:15.838021-05	\N
-limite_precargas_dia	60	consultas	Máximo de consultas de contrato por persona por día (el contrato es enumerable). PROPUESTA	1	1000	2026-11-21 19:25:15.83803-05	\N
-limite_precargas_falsas_dia	5	consultas	Máximo de consultas de contratos que NO existen por persona por día (patrón de enumeración). PROPUESTA	1	100	2026-11-21 19:25:15.838038-05	\N
-limite_lecturas_minuto	30	lecturas	Máximo de evidencias que una persona de supervisión abre por minuto. PROPUESTA	1	600	2026-11-21 19:25:15.838047-05	\N
-limite_mis_actas_minuto	20	consultas	Máximo de consultas de «mis actas» por persona por minuto (el administrador no tiene tope). PROPUESTA	1	600	2026-11-21 19:25:15.838055-05	\N
-mis_actas_max_filas	50	filas	Filas que devuelve «mis actas» (las más recientes del propio operario). PROPUESTA	1	200	2026-11-21 19:25:15.838064-05	\N
-zona_lat_min	10.35	grados	Zona de operación: latitud mínima (valores de campo, con margen). Fuera de la zona se guarda con marca; no se rechaza	-90	90	2026-11-21 19:25:15.838072-05	\N
-zona_lat_max	10.56	grados	Zona de operación: latitud máxima	-90	90	2026-11-21 19:25:15.838078-05	\N
-zona_lon_min	-73.36	grados	Zona de operación: longitud mínima	-180	180	2026-11-21 19:25:15.838084-05	\N
-zona_lon_max	-73.18	grados	Zona de operación: longitud máxima	-180	180	2026-11-21 19:25:15.83809-05	\N
+min_fotos_irregularidad	2	fotos	Mínimo de fotos del hallazgo cuando hay irregularidad (fachada y hallazgo). PROPUESTA del diseño	1	20	2026-11-21 19:29:28.420442-05	\N
+min_fotos_sin_irregularidad	1	fotos	Mínimo de fotos del predio cuando NO hay irregularidad. PROPUESTA	0	20	2026-11-21 19:29:28.420623-05	\N
+max_fotos	10	fotos	Máximo de fotos del hallazgo (sin contar las del acta física). PROPUESTA del diseño	2	30	2026-11-21 19:29:28.420638-05	\N
+max_fotos_acta_fisica	2	fotos	Máximo de fotos del acta física firmada (páginas del papel)	1	6	2026-11-21 19:29:28.420643-05	\N
+max_bytes_foto	1572864	bytes	Tamaño máximo de una foto del hallazgo (1,5 MB, igual que campo)	102400	3145728	2026-11-21 19:29:28.42065-05	\N
+max_bytes_foto_acta_fisica	2621440	bytes	Tamaño máximo de una foto del acta física (2,5 MB: debe poder leerse el texto). PROPUESTA	102400	3145728	2026-11-21 19:29:28.420656-05	\N
+vigencia_apertura_horas	12	horas	Horas que dura una apertura antes de caducar. PROPUESTA	1	72	2026-11-21 19:29:28.420668-05	\N
+max_dias_acta_fisica_atras	30	días	Cuántos días atrás puede estar la fecha del acta física al registrar (no aplica a correcciones). PROPUESTA	0	365	2026-11-21 19:29:28.420675-05	\N
+alerta_meses	5	meses	Meses desde la fecha del acta física para la alerta de antigüedad (art. 150 Ley 142 de 1994: por confirmar con jurídica)	1	36	2026-11-21 19:29:28.420683-05	\N
+alerta_previa_dias	30	días	Días antes del límite en que la alerta pasa a «próxima». PROPUESTA, PENDIENTE de David	1	120	2026-11-21 19:29:28.420688-05	\N
+distancia_sugerencia_m	15	m	Distancia para sugerir predios con contrato cercanos y para detectar actas cercanas (igual que duplicados de campo)	1	500	2026-11-21 19:29:28.420696-05	\N
+url_lectura_segundos	60	segundos	Vigencia de la URL de lectura de una evidencia	10	600	2026-11-21 19:29:28.420703-05	\N
+limite_aperturas_hora	6	registros	Máximo de aperturas por persona por hora (el supervisor lo multiplica). PROPUESTA	1	200	2026-11-21 19:29:28.42071-05	\N
+limite_aperturas_dia	20	registros	Máximo de aperturas por persona por día (el supervisor lo multiplica). PROPUESTA	1	500	2026-11-21 19:29:28.420718-05	\N
+multiplo_supervisor	5	veces	Veces que el supervisor supera los topes de aperturas. El administrador no tiene tope. PROPUESTA	1	100	2026-11-21 19:29:28.420725-05	\N
+limite_precargas_dia	60	consultas	Máximo de consultas de contrato por persona por día (el contrato es enumerable). PROPUESTA	1	1000	2026-11-21 19:29:28.420734-05	\N
+limite_precargas_falsas_dia	5	consultas	Máximo de consultas de contratos que NO existen por persona por día (patrón de enumeración). PROPUESTA	1	100	2026-11-21 19:29:28.420741-05	\N
+limite_lecturas_minuto	30	lecturas	Máximo de evidencias que una persona de supervisión abre por minuto. PROPUESTA	1	600	2026-11-21 19:29:28.42075-05	\N
+limite_mis_actas_minuto	20	consultas	Máximo de consultas de «mis actas» por persona por minuto (el administrador no tiene tope). PROPUESTA	1	600	2026-11-21 19:29:28.420758-05	\N
+mis_actas_max_filas	50	filas	Filas que devuelve «mis actas» (las más recientes del propio operario). PROPUESTA	1	200	2026-11-21 19:29:28.420766-05	\N
+zona_lat_min	10.35	grados	Zona de operación: latitud mínima (valores de campo, con margen). Fuera de la zona se guarda con marca; no se rechaza	-90	90	2026-11-21 19:29:28.420773-05	\N
+zona_lat_max	10.56	grados	Zona de operación: latitud máxima	-90	90	2026-11-21 19:29:28.420779-05	\N
+zona_lon_min	-73.36	grados	Zona de operación: longitud mínima	-180	180	2026-11-21 19:29:28.420785-05	\N
+zona_lon_max	-73.18	grados	Zona de operación: longitud máxima	-180	180	2026-11-21 19:29:28.420791-05	\N
 \.
 
 
@@ -10947,13 +10957,13 @@ zona_lon_max	-73.18	grados	Zona de operación: longitud máxima	-180	180	2026-11
 --
 
 COPY acta.tipos_foto (id, codigo, nombre, orden, exigida_con_irregularidad, es_acta_fisica, activo, creado_en) FROM stdin;
-1	fachada	Fachada o nomenclatura	10	t	f	t	2026-11-21 19:25:15.841733-05
-2	medidor	Medidor y lectura	20	f	f	t	2026-11-21 19:25:15.841862-05
-3	sellos	Sellos	30	f	f	t	2026-11-21 19:25:15.841868-05
-4	hallazgo	Hallazgo	40	t	f	t	2026-11-21 19:25:15.841873-05
-5	acciones	Acciones ejecutadas	50	f	f	t	2026-11-21 19:25:15.841878-05
-6	otro	Otro	60	f	f	t	2026-11-21 19:25:15.841883-05
-7	acta_fisica	Acta física firmada (páginas del papel)	90	f	t	t	2026-11-21 19:25:15.841887-05
+1	fachada	Fachada o nomenclatura	10	t	f	t	2026-11-21 19:29:28.424594-05
+2	medidor	Medidor y lectura	20	f	f	t	2026-11-21 19:29:28.424718-05
+3	sellos	Sellos	30	f	f	t	2026-11-21 19:29:28.424724-05
+4	hallazgo	Hallazgo	40	t	f	t	2026-11-21 19:29:28.424728-05
+5	acciones	Acciones ejecutadas	50	f	f	t	2026-11-21 19:29:28.424733-05
+6	otro	Otro	60	f	f	t	2026-11-21 19:29:28.424738-05
+7	acta_fisica	Acta física firmada (páginas del papel)	90	f	t	t	2026-11-21 19:29:28.424742-05
 \.
 
 
@@ -10962,14 +10972,14 @@ COPY acta.tipos_foto (id, codigo, nombre, orden, exigida_con_irregularidad, es_a
 --
 
 COPY acta.tipos_hallazgo (id, codigo, nombre, nota, orden, exige_texto, excluyente, habilita_accion_codigo, activo, creado_en) FROM stdin;
-1	conexion_directa	Posible conexión directa a la red de distribución	Sin medidor o con bypass	10	f	f	\N	t	2026-11-21 19:25:15.840531-05
-2	acometida_paralela	Posible acometida paralela clandestina	Derivación antes del medidor	20	f	f	\N	t	2026-11-21 19:25:15.840675-05
-3	medidor_manipulado	Posible medidor manipulado o alterado en sus mecanismos internos	\N	30	f	f	\N	t	2026-11-21 19:25:15.840686-05
-4	reconexion_no_autorizada	Posible reconexión no autorizada	Servicio suspendido o cortado; habilita corte o taponamiento	40	f	f	corte_taponamiento	t	2026-11-21 19:25:15.840693-05
-5	sellos_alterados	Posible alteración de los sellos de seguridad de la Empresa	\N	50	f	f	\N	t	2026-11-21 19:25:15.840701-05
-6	uso_diferente	Posible uso del servicio diferente al contratado	Ejemplo: residencial facturado como comercial	60	f	f	\N	t	2026-11-21 19:25:15.840708-05
-7	otro	Otro	\N	90	t	f	\N	t	2026-11-21 19:25:15.840715-05
-8	sin_irregularidad	Sin irregularidad	No se combina con otros hallazgos; el caso se cierra como constancia	99	f	t	\N	t	2026-11-21 19:25:15.84072-05
+1	conexion_directa	Posible conexión directa a la red de distribución	Sin medidor o con bypass	10	f	f	\N	t	2026-11-21 19:29:28.423466-05
+2	acometida_paralela	Posible acometida paralela clandestina	Derivación antes del medidor	20	f	f	\N	t	2026-11-21 19:29:28.423602-05
+3	medidor_manipulado	Posible medidor manipulado o alterado en sus mecanismos internos	\N	30	f	f	\N	t	2026-11-21 19:29:28.423611-05
+4	reconexion_no_autorizada	Posible reconexión no autorizada	Servicio suspendido o cortado; habilita corte o taponamiento	40	f	f	corte_taponamiento	t	2026-11-21 19:29:28.423618-05
+5	sellos_alterados	Posible alteración de los sellos de seguridad de la Empresa	\N	50	f	f	\N	t	2026-11-21 19:29:28.423626-05
+6	uso_diferente	Posible uso del servicio diferente al contratado	Ejemplo: residencial facturado como comercial	60	f	f	\N	t	2026-11-21 19:29:28.423633-05
+7	otro	Otro	\N	90	t	f	\N	t	2026-11-21 19:29:28.423639-05
+8	sin_irregularidad	Sin irregularidad	No se combina con otros hallazgos; el caso se cierra como constancia	99	f	t	\N	t	2026-11-21 19:29:28.423645-05
 \.
 
 
@@ -11052,16 +11062,16 @@ COPY bi_interno.ficha_contrato_estado (id, firma, filas, calculado_en, duracion_
 --
 
 COPY campo.actividades (codigo, nombre, activa, orden, formularios, autor, creado_en) FROM stdin;
-suspension	Suspensión	t	1	{tipo:suspension}	migracion@geoportal	2026-11-21 19:25:15.997814-05
-corte	Corte	t	2	{tipo:corte}	migracion@geoportal	2026-11-21 19:25:15.997984-05
-reconexion	Reconexión	t	3	{tipo:reconexion_servicio,tipo:reinstalacion}	migracion@geoportal	2026-11-21 19:25:15.997991-05
-lectura	Lectura	t	4	{}	migracion@geoportal	2026-11-21 19:25:15.997996-05
-reparto	Reparto	t	5	{}	migracion@geoportal	2026-11-21 19:25:15.998001-05
-revision_previa	Revisiones generales	t	6	{tipo:revision_previa}	migracion@geoportal	2026-11-21 19:25:15.998005-05
-revision_pqr	Revisión PQR	t	7	{tipo:revision_pqr}	migracion@geoportal	2026-11-21 19:25:15.998012-05
-instalacion_medidor	Instalación o cambio de medidor	t	8	{tipo:instalacion_medidor}	migracion@geoportal	2026-11-21 19:25:15.998018-05
-instalacion_acometida	Instalación de acometida	t	9	{tipo:instalacion_acometida}	migracion@geoportal	2026-11-21 19:25:15.998028-05
-posible_perdida	Posible pérdida (acta)	t	10	{acta}	migracion@geoportal	2026-11-21 19:25:15.998036-05
+suspension	Suspensión	t	1	{tipo:suspension}	migracion@geoportal	2026-11-21 19:29:28.571025-05
+corte	Corte	t	2	{tipo:corte}	migracion@geoportal	2026-11-21 19:29:28.571178-05
+reconexion	Reconexión	t	3	{tipo:reconexion_servicio,tipo:reinstalacion}	migracion@geoportal	2026-11-21 19:29:28.571184-05
+lectura	Lectura	t	4	{}	migracion@geoportal	2026-11-21 19:29:28.57119-05
+reparto	Reparto	t	5	{}	migracion@geoportal	2026-11-21 19:29:28.571194-05
+revision_previa	Revisiones generales	t	6	{tipo:revision_previa}	migracion@geoportal	2026-11-21 19:29:28.571198-05
+revision_pqr	Revisión PQR	t	7	{tipo:revision_pqr}	migracion@geoportal	2026-11-21 19:29:28.571205-05
+instalacion_medidor	Instalación o cambio de medidor	t	8	{tipo:instalacion_medidor}	migracion@geoportal	2026-11-21 19:29:28.571211-05
+instalacion_acometida	Instalación de acometida	t	9	{tipo:instalacion_acometida}	migracion@geoportal	2026-11-21 19:29:28.571218-05
+posible_perdida	Posible pérdida (acta)	t	10	{acta}	migracion@geoportal	2026-11-21 19:29:28.571225-05
 \.
 
 
@@ -11070,10 +11080,10 @@ posible_perdida	Posible pérdida (acta)	t	10	{acta}	migracion@geoportal	2026-11-
 --
 
 COPY campo.areas_comercial (codigo, nombre, activa, orden, autor, creado_en) FROM stdin;
-facturacion	Facturación	t	1	migracion@geoportal	2026-11-21 19:25:15.997577-05
-cartera_scrr	Cartera / SCRR	t	2	migracion@geoportal	2026-11-21 19:25:15.997757-05
-perdidas	Pérdidas	t	3	migracion@geoportal	2026-11-21 19:25:15.997771-05
-pqr_atencion	PQR / Atención al usuario	t	4	migracion@geoportal	2026-11-21 19:25:15.997776-05
+facturacion	Facturación	t	1	migracion@geoportal	2026-11-21 19:29:28.570823-05
+cartera_scrr	Cartera / SCRR	t	2	migracion@geoportal	2026-11-21 19:29:28.57098-05
+perdidas	Pérdidas	t	3	migracion@geoportal	2026-11-21 19:29:28.570989-05
+pqr_atencion	PQR / Atención al usuario	t	4	migracion@geoportal	2026-11-21 19:29:28.570993-05
 \.
 
 
@@ -11082,20 +11092,20 @@ pqr_atencion	PQR / Atención al usuario	t	4	migracion@geoportal	2026-11-21 19:25
 --
 
 COPY campo.catalogo_eventos (id, catalogo, codigo, tipo_evento, nombre, motivo, autor, creado_en) FROM stdin;
-1	area	facturacion	crear	Facturación	\N	migracion@geoportal	2026-11-21 19:25:15.998562-05
-2	area	cartera_scrr	crear	Cartera / SCRR	\N	migracion@geoportal	2026-11-21 19:25:15.998767-05
-3	area	perdidas	crear	Pérdidas	\N	migracion@geoportal	2026-11-21 19:25:15.998775-05
-4	area	pqr_atencion	crear	PQR / Atención al usuario	\N	migracion@geoportal	2026-11-21 19:25:15.998779-05
-5	actividad	suspension	crear	Suspensión	\N	migracion@geoportal	2026-11-21 19:25:15.998789-05
-6	actividad	corte	crear	Corte	\N	migracion@geoportal	2026-11-21 19:25:15.998794-05
-7	actividad	reconexion	crear	Reconexión	\N	migracion@geoportal	2026-11-21 19:25:15.998797-05
-8	actividad	lectura	crear	Lectura	\N	migracion@geoportal	2026-11-21 19:25:15.998802-05
-9	actividad	reparto	crear	Reparto	\N	migracion@geoportal	2026-11-21 19:25:15.998805-05
-10	actividad	revision_previa	crear	Revisiones generales	\N	migracion@geoportal	2026-11-21 19:25:15.998809-05
-11	actividad	revision_pqr	crear	Revisión PQR	\N	migracion@geoportal	2026-11-21 19:25:15.998814-05
-12	actividad	instalacion_medidor	crear	Instalación o cambio de medidor	\N	migracion@geoportal	2026-11-21 19:25:15.998819-05
-13	actividad	instalacion_acometida	crear	Instalación de acometida	\N	migracion@geoportal	2026-11-21 19:25:15.998828-05
-14	actividad	posible_perdida	crear	Posible pérdida (acta)	\N	migracion@geoportal	2026-11-21 19:25:15.998834-05
+1	area	facturacion	crear	Facturación	\N	migracion@geoportal	2026-11-21 19:29:28.571652-05
+2	area	cartera_scrr	crear	Cartera / SCRR	\N	migracion@geoportal	2026-11-21 19:29:28.571821-05
+3	area	perdidas	crear	Pérdidas	\N	migracion@geoportal	2026-11-21 19:29:28.571828-05
+4	area	pqr_atencion	crear	PQR / Atención al usuario	\N	migracion@geoportal	2026-11-21 19:29:28.571832-05
+5	actividad	suspension	crear	Suspensión	\N	migracion@geoportal	2026-11-21 19:29:28.571838-05
+6	actividad	corte	crear	Corte	\N	migracion@geoportal	2026-11-21 19:29:28.571842-05
+7	actividad	reconexion	crear	Reconexión	\N	migracion@geoportal	2026-11-21 19:29:28.571846-05
+8	actividad	lectura	crear	Lectura	\N	migracion@geoportal	2026-11-21 19:29:28.57185-05
+9	actividad	reparto	crear	Reparto	\N	migracion@geoportal	2026-11-21 19:29:28.571853-05
+10	actividad	revision_previa	crear	Revisiones generales	\N	migracion@geoportal	2026-11-21 19:29:28.571857-05
+11	actividad	revision_pqr	crear	Revisión PQR	\N	migracion@geoportal	2026-11-21 19:29:28.571862-05
+12	actividad	instalacion_medidor	crear	Instalación o cambio de medidor	\N	migracion@geoportal	2026-11-21 19:29:28.571866-05
+13	actividad	instalacion_acometida	crear	Instalación de acometida	\N	migracion@geoportal	2026-11-21 19:29:28.571872-05
+14	actividad	posible_perdida	crear	Posible pérdida (acta)	\N	migracion@geoportal	2026-11-21 19:29:28.571878-05
 \.
 
 
@@ -11104,13 +11114,13 @@ COPY campo.catalogo_eventos (id, catalogo, codigo, tipo_evento, nombre, motivo, 
 --
 
 COPY campo.causales (id, codigo, nombre, general, orden, activo, creado_en) FROM stdin;
-1	no_hay_acceso	No hay acceso al predio	t	1	t	2026-11-21 19:25:15.776301-05
-2	usuario_impide	El usuario impide la actividad	t	2	t	2026-11-21 19:25:15.776443-05
-3	predio_no_ubicado	Predio no ubicado	t	3	t	2026-11-21 19:25:15.77645-05
-4	nadie_atiende	No hay quien atienda	t	4	t	2026-11-21 19:25:15.776456-05
-5	riesgo_seguridad	Riesgo para la seguridad del personal	t	5	t	2026-11-21 19:25:15.776461-05
-6	medidor_no_accesible	Medidor o caja no accesible	t	6	t	2026-11-21 19:25:15.776467-05
-7	ya_pago	El usuario presenta soporte de pago o acuerdo	f	7	t	2026-11-21 19:25:15.776474-05
+1	no_hay_acceso	No hay acceso al predio	t	1	t	2026-11-21 19:29:28.355888-05
+2	usuario_impide	El usuario impide la actividad	t	2	t	2026-11-21 19:29:28.35604-05
+3	predio_no_ubicado	Predio no ubicado	t	3	t	2026-11-21 19:29:28.356047-05
+4	nadie_atiende	No hay quien atienda	t	4	t	2026-11-21 19:29:28.356053-05
+5	riesgo_seguridad	Riesgo para la seguridad del personal	t	5	t	2026-11-21 19:29:28.356058-05
+6	medidor_no_accesible	Medidor o caja no accesible	t	6	t	2026-11-21 19:29:28.356064-05
+7	ya_pago	El usuario presenta soporte de pago o acuerdo	f	7	t	2026-11-21 19:29:28.356071-05
 \.
 
 
@@ -11119,8 +11129,8 @@ COPY campo.causales (id, codigo, nombre, general, orden, activo, creado_en) FROM
 --
 
 COPY campo.causales_tipos (causal_id, tipo_id, activo, creado_en) FROM stdin;
-7	19	t	2026-11-21 19:25:15.776533-05
-7	20	t	2026-11-21 19:25:15.776611-05
+7	19	t	2026-11-21 19:29:28.356131-05
+7	20	t	2026-11-21 19:29:28.356211-05
 \.
 
 
@@ -11185,13 +11195,13 @@ COPY campo.derivadas (id, origen_id, contrato, actividad, creado_en) FROM stdin;
 --
 
 COPY campo.derivadas_catalogo (codigo, nombre, destinos, destino_omision, activa, orden, autor, creado_en) FROM stdin;
-cambio_medidor	Cambio de medidor	{tipo:instalacion_medidor}	tipo:instalacion_medidor	t	1	migracion@geoportal	2026-11-21 19:25:16.014097-05
-instalacion_medidor	Instalación de medidor	{tipo:instalacion_medidor}	tipo:instalacion_medidor	t	2	migracion@geoportal	2026-11-21 19:25:16.014217-05
-accesorios	Instalación o cambio de accesorios	{tipo:instalacion_medidor}	tipo:instalacion_medidor	t	3	migracion@geoportal	2026-11-21 19:25:16.014226-05
-reubicacion_cajilla	Reubicación de cajilla	{tipo:instalacion_medidor}	tipo:instalacion_medidor	t	4	migracion@geoportal	2026-11-21 19:25:16.014231-05
-fuga_externa	Reparación de fuga por fuera de la casa (acometida, antes del medidor)	{tipo:instalacion_medidor,tipo:revision_previa}	tipo:instalacion_medidor	t	5	migracion@geoportal	2026-11-21 19:25:16.014236-05
-posible_perdida	Posible pérdida	{acta}	acta	t	6	migracion@geoportal	2026-11-21 19:25:16.014241-05
-otra	Otra	{}	\N	t	7	migracion@geoportal	2026-11-21 19:25:16.014246-05
+cambio_medidor	Cambio de medidor	{tipo:instalacion_medidor}	tipo:instalacion_medidor	t	1	migracion@geoportal	2026-11-21 19:29:28.586335-05
+instalacion_medidor	Instalación de medidor	{tipo:instalacion_medidor}	tipo:instalacion_medidor	t	2	migracion@geoportal	2026-11-21 19:29:28.586441-05
+accesorios	Instalación o cambio de accesorios	{tipo:instalacion_medidor}	tipo:instalacion_medidor	t	3	migracion@geoportal	2026-11-21 19:29:28.586448-05
+reubicacion_cajilla	Reubicación de cajilla	{tipo:instalacion_medidor}	tipo:instalacion_medidor	t	4	migracion@geoportal	2026-11-21 19:29:28.586453-05
+fuga_externa	Reparación de fuga por fuera de la casa (acometida, antes del medidor)	{tipo:instalacion_medidor,tipo:revision_previa}	tipo:instalacion_medidor	t	5	migracion@geoportal	2026-11-21 19:29:28.586458-05
+posible_perdida	Posible pérdida	{acta}	acta	t	6	migracion@geoportal	2026-11-21 19:29:28.586462-05
+otra	Otra	{}	\N	t	7	migracion@geoportal	2026-11-21 19:29:28.586466-05
 \.
 
 
@@ -11216,12 +11226,12 @@ COPY campo.documentos_pdf (id, esquema, registro_id, formulario, version, nombre
 --
 
 COPY campo.estados_reporte (codigo, nombre, orden, activo, inicial, exige_motivo, cambio_manual, creado_en) FROM stdin;
-reportado	Reportado	1	t	t	f	f	2026-11-21 19:25:15.741912-05
-en_revision	En revisión	2	t	f	f	t	2026-11-21 19:25:15.742092-05
-con_acta	Con acta	3	t	f	f	f	2026-11-21 19:25:15.742099-05
-atendido	Atendido	4	t	f	f	t	2026-11-21 19:25:15.742104-05
-descartado	Descartado	5	t	f	t	t	2026-11-21 19:25:15.742108-05
-duplicado	Duplicado	6	t	f	f	f	2026-11-21 19:25:15.742112-05
+reportado	Reportado	1	t	t	f	f	2026-11-21 19:29:28.305404-05
+en_revision	En revisión	2	t	f	f	t	2026-11-21 19:29:28.305568-05
+con_acta	Con acta	3	t	f	f	f	2026-11-21 19:29:28.305575-05
+atendido	Atendido	4	t	f	f	t	2026-11-21 19:29:28.30558-05
+descartado	Descartado	5	t	f	t	t	2026-11-21 19:29:28.305584-05
+duplicado	Duplicado	6	t	f	f	f	2026-11-21 19:29:28.305588-05
 \.
 
 
@@ -11238,15 +11248,15 @@ COPY campo.firmas (id, esquema, registro_id, rol, estado, nombre, imagen, huella
 --
 
 COPY campo.formularios_documento (formulario, sigla, lleva_pdf, firma_operario, firma_usuario, firma_testigo, activo, autor, creado_en) FROM stdin;
-acta	ITEC	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:25:16.008596-05
-tipo:revision_previa	REV	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:25:16.008878-05
-tipo:revision_pqr	REV	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:25:16.008893-05
-tipo:instalacion_medidor	REV	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:25:16.008904-05
-tipo:instalacion_acometida	REV	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:25:16.008916-05
-tipo:suspension	SCRR	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:25:16.008929-05
-tipo:corte	SCRR	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:25:16.008937-05
-tipo:reinstalacion	SCRR	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:25:16.008944-05
-tipo:reconexion_servicio	SCRR	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:25:16.008953-05
+acta	ITEC	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:29:28.58095-05
+tipo:revision_previa	REV	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:29:28.581211-05
+tipo:revision_pqr	REV	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:29:28.581226-05
+tipo:instalacion_medidor	REV	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:29:28.581237-05
+tipo:instalacion_acometida	REV	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:29:28.581249-05
+tipo:suspension	SCRR	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:29:28.581276-05
+tipo:corte	SCRR	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:29:28.581287-05
+tipo:reinstalacion	SCRR	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:29:28.581294-05
+tipo:reconexion_servicio	SCRR	t	obligatoria	opcional	opcional	t	migracion@geoportal	2026-11-21 19:29:28.581304-05
 \.
 
 
@@ -11255,15 +11265,15 @@ tipo:reconexion_servicio	SCRR	t	obligatoria	opcional	opcional	t	migracion@geopor
 --
 
 COPY campo.grupos_reporte (id, codigo, nombre, orden, activo, creado_en) FROM stdin;
-1	comercial_perdidas	Comercial y pérdidas	1	t	2026-11-21 19:25:15.742149-05
-2	red_acueducto	Red de acueducto	2	t	2026-11-21 19:25:15.742336-05
-3	alcantarillado	Alcantarillado	3	t	2026-11-21 19:25:15.742343-05
-4	terceros	Terceros	4	t	2026-11-21 19:25:15.742349-05
-5	otros	Otros	9	t	2026-11-21 19:25:15.742353-05
-6	cartera	Gestión de cartera	5	f	2026-11-21 19:25:15.772179-05
-7	perdidas_formatos	Pérdidas (instalaciones)	6	f	2026-11-21 19:25:15.772279-05
-8	pqr	PQR	7	f	2026-11-21 19:25:15.772288-05
-9	facturacion	Facturación	8	t	2026-11-21 19:25:15.860221-05
+1	comercial_perdidas	Comercial y pérdidas	1	t	2026-11-21 19:29:28.305622-05
+2	red_acueducto	Red de acueducto	2	t	2026-11-21 19:29:28.305801-05
+3	alcantarillado	Alcantarillado	3	t	2026-11-21 19:29:28.305808-05
+4	terceros	Terceros	4	t	2026-11-21 19:29:28.305813-05
+5	otros	Otros	9	t	2026-11-21 19:29:28.305818-05
+6	cartera	Gestión de cartera	5	f	2026-11-21 19:29:28.351555-05
+7	perdidas_formatos	Pérdidas (instalaciones)	6	f	2026-11-21 19:29:28.35165-05
+8	pqr	PQR	7	f	2026-11-21 19:29:28.35166-05
+9	facturacion	Facturación	8	t	2026-11-21 19:29:28.441278-05
 \.
 
 
@@ -11280,22 +11290,22 @@ COPY campo.origen_vinculos (id, reporte_id, acta_id, autor, creado_en) FROM stdi
 --
 
 COPY campo.parametros (clave, valor, unidad, descripcion, minimo, maximo, actualizado_en, actualizado_por) FROM stdin;
-distancia_duplicados_m	15	m	Distancia máxima entre reportes del mismo tipo para sugerirlos como posibles duplicados (PROPUESTA)	1	1000	2026-11-21 19:25:15.741618-05	\N
-max_fotos	2	fotos	Máximo de fotos por reporte	1	10	2026-11-21 19:25:15.741825-05	\N
-max_bytes_foto	1572864	bytes	Tamaño máximo de cada foto ya reducida (1,5 MB). El bucket tiene un tope duro de 2 MB	102400	2097152	2026-11-21 19:25:15.74184-05	\N
-zona_lat_min	10.35	grados	Límite sur de la zona de operación; fuera de la caja el reporte SE GUARDA con la marca fuera_de_zona (PROPUESTA: extensión de los predios + ~5 km)	-90	90	2026-11-21 19:25:15.741849-05	\N
-zona_lat_max	10.56	grados	Límite norte de la zona de operación (PROPUESTA)	-90	90	2026-11-21 19:25:15.741855-05	\N
-zona_lon_min	-73.36	grados	Límite occidental de la zona de operación (PROPUESTA)	-180	180	2026-11-21 19:25:15.741861-05	\N
-zona_lon_max	-73.18	grados	Límite oriental de la zona de operación (PROPUESTA)	-180	180	2026-11-21 19:25:15.741866-05	\N
-limite_reportes_ventana	20	reportes	Máximo de reportes que una persona puede crear dentro de la ventana (y de preparaciones abandonadas). PROPUESTA	1	1000	2026-11-21 19:25:15.74548-05	\N
-limite_contratos_ventana	10	reportes	Máximo de reportes CON número de contrato por persona dentro de la ventana: tope contra la enumeración de contratos. PROPUESTA	1	1000	2026-11-21 19:25:15.745515-05	\N
-multiplo_supervisor	5	veces	Veces que el supervisor puede superar el tope de reportes (el de contratos no se multiplica). El administrador no tiene tope. PROPUESTA	1	100	2026-11-21 19:25:15.745524-05	\N
-ventana_limite_minutos	60	minutos	Ancho de la ventana móvil de los topes (por omisión, una hora). PROPUESTA	5	1440	2026-11-21 19:25:15.74553-05	\N
-limite_contratos_falsos_dia	5	reportes	Máximo de reportes con número de contrato NO verificado (que no existe en la base comercial) por persona en las últimas 24 horas; al alcanzarlo, no puede enviar reportes con número de contrato hasta que pase la ventana (sin número, sí). El administrador no tiene tope; el supervisor tampoco tiene multiplicador. PROPUESTA	1	100	2026-11-21 19:25:15.745537-05	\N
-alerta_base_pct	80	por ciento	Umbral de alerta de capacidad: la verificación de solo lectura marca ALERTA si la base (y el Storage) superan este porcentaje del plan	50	99	2026-11-21 19:25:15.767378-05	\N
-max_descripcion	1000	caracteres	Máximo de caracteres de la descripción de un reporte (PROPUESTA: 1.000, que es lo que admite la tabla; solo puede bajar)	100	1000	2026-11-21 19:25:15.849094-05	\N
-max_horas_inicio	12	h	Horas máximas entre la apertura del formulario (hora del celular) y el registro; más antiguo se rechaza	1	72	2026-11-21 19:25:15.912112-05	\N
-limite_cercania_dia	30	búsquedas	Análisis de contrato: búsquedas «Contratos cerca de mí» que una persona puede hacer en 24 horas (el administrador no tiene límite)	1	200	2026-11-21 19:25:15.948621-05	\N
+distancia_duplicados_m	15	m	Distancia máxima entre reportes del mismo tipo para sugerirlos como posibles duplicados (PROPUESTA)	1	1000	2026-11-21 19:29:28.305132-05	\N
+max_fotos	2	fotos	Máximo de fotos por reporte	1	10	2026-11-21 19:29:28.305329-05	\N
+max_bytes_foto	1572864	bytes	Tamaño máximo de cada foto ya reducida (1,5 MB). El bucket tiene un tope duro de 2 MB	102400	2097152	2026-11-21 19:29:28.305342-05	\N
+zona_lat_min	10.35	grados	Límite sur de la zona de operación; fuera de la caja el reporte SE GUARDA con la marca fuera_de_zona (PROPUESTA: extensión de los predios + ~5 km)	-90	90	2026-11-21 19:29:28.305351-05	\N
+zona_lat_max	10.56	grados	Límite norte de la zona de operación (PROPUESTA)	-90	90	2026-11-21 19:29:28.305357-05	\N
+zona_lon_min	-73.36	grados	Límite occidental de la zona de operación (PROPUESTA)	-180	180	2026-11-21 19:29:28.305363-05	\N
+zona_lon_max	-73.18	grados	Límite oriental de la zona de operación (PROPUESTA)	-180	180	2026-11-21 19:29:28.305368-05	\N
+limite_reportes_ventana	20	reportes	Máximo de reportes que una persona puede crear dentro de la ventana (y de preparaciones abandonadas). PROPUESTA	1	1000	2026-11-21 19:29:28.324549-05	\N
+limite_contratos_ventana	10	reportes	Máximo de reportes CON número de contrato por persona dentro de la ventana: tope contra la enumeración de contratos. PROPUESTA	1	1000	2026-11-21 19:29:28.324622-05	\N
+multiplo_supervisor	5	veces	Veces que el supervisor puede superar el tope de reportes (el de contratos no se multiplica). El administrador no tiene tope. PROPUESTA	1	100	2026-11-21 19:29:28.324646-05	\N
+ventana_limite_minutos	60	minutos	Ancho de la ventana móvil de los topes (por omisión, una hora). PROPUESTA	5	1440	2026-11-21 19:29:28.324665-05	\N
+limite_contratos_falsos_dia	5	reportes	Máximo de reportes con número de contrato NO verificado (que no existe en la base comercial) por persona en las últimas 24 horas; al alcanzarlo, no puede enviar reportes con número de contrato hasta que pase la ventana (sin número, sí). El administrador no tiene tope; el supervisor tampoco tiene multiplicador. PROPUESTA	1	100	2026-11-21 19:29:28.324683-05	\N
+alerta_base_pct	80	por ciento	Umbral de alerta de capacidad: la verificación de solo lectura marca ALERTA si la base (y el Storage) superan este porcentaje del plan	50	99	2026-11-21 19:29:28.34684-05	\N
+max_descripcion	1000	caracteres	Máximo de caracteres de la descripción de un reporte (PROPUESTA: 1.000, que es lo que admite la tabla; solo puede bajar)	100	1000	2026-11-21 19:29:28.42997-05	\N
+max_horas_inicio	12	h	Horas máximas entre la apertura del formulario (hora del celular) y el registro; más antiguo se rechaza	1	72	2026-11-21 19:29:28.49019-05	\N
+limite_cercania_dia	30	búsquedas	Análisis de contrato: búsquedas «Contratos cerca de mí» que una persona puede hacer en 24 horas (el administrador no tiene límite)	1	200	2026-11-21 19:29:28.527984-05	\N
 \.
 
 
@@ -11352,21 +11362,21 @@ COPY campo.reportes (id, seq, tipo_id, subtipo_id, descripcion, contrato, contra
 --
 
 COPY campo.subtipos_reporte (id, tipo_id, codigo, nombre, orden, activo, creado_en) FROM stdin;
-1	3	medidor_ausente	Medidor ausente	4	t	2026-11-21 19:25:15.743001-05
-2	3	caja_sin_tapa	Caja sin tapa	3	t	2026-11-21 19:25:15.743143-05
-3	3	medidor_no_visible	Medidor no visible	2	t	2026-11-21 19:25:15.743151-05
-4	3	medidor_vandalizado	Medidor vandalizado o con luneta rayada	1	t	2026-11-21 19:25:15.743158-05
-5	4	doble_acometida	Doble acometida	3	t	2026-11-21 19:25:15.743166-05
-6	4	acometida_paralela	Acometida paralela	2	t	2026-11-21 19:25:15.743171-05
-7	4	bypass	Bypass	1	t	2026-11-21 19:25:15.743178-05
-8	6	ampliacion	Ampliación	2	t	2026-11-21 19:25:15.743183-05
-9	6	construccion_nueva	Construcción nueva	1	t	2026-11-21 19:25:15.743188-05
-10	9	sanitario_a_lluvias	Aguas sanitarias a alcantarillado de lluvias	2	t	2026-11-21 19:25:15.743194-05
-11	9	lluvias_a_sanitario	Aguas lluvias a sanitario	1	t	2026-11-21 19:25:15.743201-05
-12	16	drastica	Reconexión drástica	2	t	2026-11-21 19:25:15.772998-05
-13	16	sencilla	Reconexión sencilla	1	t	2026-11-21 19:25:15.77305-05
-14	19	drastico	Corte drástico (en red o taponamiento)	2	t	2026-11-21 19:25:15.773057-05
-15	19	sencillo	Corte sencillo	1	t	2026-11-21 19:25:15.773062-05
+1	3	medidor_ausente	Medidor ausente	4	t	2026-11-21 19:29:28.306407-05
+2	3	caja_sin_tapa	Caja sin tapa	3	t	2026-11-21 19:29:28.306542-05
+3	3	medidor_no_visible	Medidor no visible	2	t	2026-11-21 19:29:28.30655-05
+4	3	medidor_vandalizado	Medidor vandalizado o con luneta rayada	1	t	2026-11-21 19:29:28.306556-05
+5	4	doble_acometida	Doble acometida	3	t	2026-11-21 19:29:28.306564-05
+6	4	acometida_paralela	Acometida paralela	2	t	2026-11-21 19:29:28.30657-05
+7	4	bypass	Bypass	1	t	2026-11-21 19:29:28.306576-05
+8	6	ampliacion	Ampliación	2	t	2026-11-21 19:29:28.306581-05
+9	6	construccion_nueva	Construcción nueva	1	t	2026-11-21 19:29:28.306586-05
+10	9	sanitario_a_lluvias	Aguas sanitarias a alcantarillado de lluvias	2	t	2026-11-21 19:29:28.306592-05
+11	9	lluvias_a_sanitario	Aguas lluvias a sanitario	1	t	2026-11-21 19:29:28.306598-05
+12	16	drastica	Reconexión drástica	2	t	2026-11-21 19:29:28.352445-05
+13	16	sencilla	Reconexión sencilla	1	t	2026-11-21 19:29:28.352499-05
+14	19	drastico	Corte drástico (en red o taponamiento)	2	t	2026-11-21 19:29:28.352506-05
+15	19	sencillo	Corte sencillo	1	t	2026-11-21 19:29:28.352511-05
 \.
 
 
@@ -11375,342 +11385,342 @@ COPY campo.subtipos_reporte (id, tipo_id, codigo, nombre, orden, activo, creado_
 --
 
 COPY campo.tipo_campos (id, tipo_id, codigo, nombre, tipo_dato, obligatorio, opciones, minimo, maximo, unidad, ayuda, sensible, orden, activo, creado_en, seccion, visible_si) FROM stdin;
-1	22	hallazgo	Hallazgo	opcion	t	[{"codigo": "ubicado", "nombre": "Predio ubicado"}, {"codigo": "no_existe", "nombre": "No existe"}, {"codigo": "demolido", "nombre": "Demolido"}, {"codigo": "lote", "nombre": "Es un lote"}]	\N	\N	\N	\N	f	1	t	2026-11-21 19:25:15.773968-05	\N	\N
-2	22	direccion_encontrada	Dirección encontrada en terreno	texto	f	\N	\N	120	\N	\N	f	2	t	2026-11-21 19:25:15.774404-05	\N	\N
-3	21	diametro	Diámetro de la acometida	opcion	t	[{"codigo": "media", "nombre": "1/2 pulgada"}, {"codigo": "tres_cuartos", "nombre": "3/4 pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "mayor", "nombre": "Mayor de 1 pulgada"}, {"codigo": "no_determinado", "nombre": "No se pudo determinar"}]	\N	\N	\N	\N	f	1	t	2026-11-21 19:25:15.774433-05	\N	\N
-4	21	material	Material	opcion	t	[{"codigo": "pvc", "nombre": "PVC"}, {"codigo": "polietileno", "nombre": "Polietileno"}, {"codigo": "cobre", "nombre": "Cobre"}, {"codigo": "galvanizado", "nombre": "Hierro galvanizado"}, {"codigo": "otro", "nombre": "Otro"}, {"codigo": "no_determinado", "nombre": "No se pudo determinar"}]	\N	\N	\N	\N	f	2	t	2026-11-21 19:25:15.774469-05	\N	\N
-5	21	estado_acometida	Estado de la acometida	opcion	t	[{"codigo": "bueno", "nombre": "Bueno"}, {"codigo": "regular", "nombre": "Regular"}, {"codigo": "malo", "nombre": "Malo"}]	\N	\N	\N	\N	f	3	t	2026-11-21 19:25:15.774507-05	\N	\N
-6	21	tiene_medidor	¿Tiene medidor?	si_no	f	\N	\N	\N	\N	\N	f	4	t	2026-11-21 19:25:15.774531-05	\N	\N
-7	21	profundidad	Profundidad de la conexión	entero	f	\N	0	500	cm	\N	f	5	t	2026-11-21 19:25:15.774544-05	\N	\N
-8	20	lectura	Lectura del medidor	entero	t	\N	0	9999999	m³	\N	f	1	t	2026-11-21 19:25:15.774558-05	\N	\N
-9	20	serial_medidor	Serial del medidor	texto	t	\N	\N	30	\N	\N	f	2	t	2026-11-21 19:25:15.774569-05	\N	\N
-10	20	numero_sello	Número del sello instalado	texto	t	\N	\N	30	\N	\N	f	3	t	2026-11-21 19:25:15.774582-05	\N	\N
-11	19	forma_corte	Forma del corte	opcion	f	[{"codigo": "en_red", "nombre": "En red"}, {"codigo": "taponamiento", "nombre": "Taponamiento"}, {"codigo": "retiro_acometida", "nombre": "Retiro de la acometida"}]	\N	\N	\N	\N	f	1	t	2026-11-21 19:25:15.774595-05	\N	\N
-12	19	materiales	Materiales usados	texto	f	\N	\N	300	\N	\N	f	2	t	2026-11-21 19:25:15.774619-05	\N	\N
-13	19	reposicion_pavimento	¿Hubo reposición de pavimento?	si_no	t	\N	\N	\N	\N	\N	f	3	t	2026-11-21 19:25:15.774631-05	\N	\N
-14	18	estado_servicio	Estado del servicio	opcion	t	[{"codigo": "sigue_interrumpido", "nombre": "Sigue interrumpido"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}]	\N	\N	\N	\N	f	1	t	2026-11-21 19:25:15.774649-05	\N	\N
-15	17	lectura_inicial	Lectura inicial	entero	t	\N	0	9999999	m³	\N	f	1	t	2026-11-21 19:25:15.774676-05	\N	\N
-16	17	referencia_soporte	Referencia del soporte de pago o del acuerdo (solo el número)	texto	f	\N	\N	40	\N	\N	f	2	t	2026-11-21 19:25:15.774688-05	\N	\N
-17	16	lectura_inicial	Lectura inicial	entero	t	\N	0	9999999	m³	\N	f	1	t	2026-11-21 19:25:15.774705-05	\N	\N
-18	16	referencia_soporte	Referencia del soporte de pago o del acuerdo (solo el número)	texto	f	\N	\N	40	\N	\N	f	2	t	2026-11-21 19:25:15.774717-05	\N	\N
-19	15	serial_retirado	Serial del medidor retirado	texto	t	\N	\N	30	\N	\N	f	1	t	2026-11-21 19:25:15.774729-05	\N	\N
-20	15	lectura_retirado	Lectura del medidor retirado	entero	t	\N	0	9999999	m³	\N	f	2	t	2026-11-21 19:25:15.774741-05	\N	\N
-21	15	serial_nuevo	Serial del medidor nuevo	texto	t	\N	\N	30	\N	\N	f	3	t	2026-11-21 19:25:15.774753-05	\N	\N
-22	15	lectura_inicial	Lectura inicial del medidor nuevo	entero	t	\N	0	9999999	m³	\N	f	4	t	2026-11-21 19:25:15.774765-05	\N	\N
-31	15	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:25:15.775169-05	\N	\N
-32	15	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:25:15.775306-05	\N	\N
-33	15	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:25:15.775321-05	\N	\N
-34	15	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:25:15.775338-05	\N	\N
-35	15	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:25:15.775356-05	\N	\N
-36	16	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:25:15.77537-05	\N	\N
-37	16	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:25:15.775382-05	\N	\N
-38	16	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:25:15.775399-05	\N	\N
-39	16	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:25:15.775412-05	\N	\N
-40	16	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:25:15.775423-05	\N	\N
-41	17	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:25:15.775436-05	\N	\N
-42	17	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:25:15.775448-05	\N	\N
-43	17	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:25:15.775461-05	\N	\N
-44	17	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:25:15.775473-05	\N	\N
-45	17	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:25:15.775485-05	\N	\N
-46	18	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:25:15.775497-05	\N	\N
-47	18	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:25:15.775508-05	\N	\N
-48	18	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:25:15.775521-05	\N	\N
-49	18	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:25:15.775533-05	\N	\N
-50	18	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:25:15.775669-05	\N	\N
-51	19	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:25:15.775683-05	\N	\N
-52	19	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:25:15.775695-05	\N	\N
-53	19	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:25:15.775713-05	\N	\N
-54	19	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:25:15.775728-05	\N	\N
-55	19	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:25:15.77574-05	\N	\N
-56	20	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:25:15.775755-05	\N	\N
-57	20	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:25:15.775767-05	\N	\N
-58	20	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:25:15.77578-05	\N	\N
-59	20	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:25:15.775792-05	\N	\N
-60	20	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:25:15.775804-05	\N	\N
-61	21	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:25:15.775816-05	\N	\N
-62	21	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:25:15.775828-05	\N	\N
-63	21	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:25:15.77584-05	\N	\N
-64	21	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:25:15.775852-05	\N	\N
-65	21	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:25:15.775864-05	\N	\N
-66	22	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:25:15.77588-05	\N	\N
-67	22	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:25:15.775894-05	\N	\N
-68	22	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:25:15.775907-05	\N	\N
-69	22	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:25:15.775919-05	\N	\N
-70	22	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:25:15.775934-05	\N	\N
-29	25	numero_pqr	Número de la PQR	texto	t	\N	\N	30	\N	\N	f	1	f	2026-11-21 19:25:15.774887-05	\N	\N
-30	25	hallazgo_revision	Qué se encontró	texto	t	\N	\N	300	\N	\N	f	2	f	2026-11-21 19:25:15.774898-05	\N	\N
-73	25	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	f	2026-11-21 19:25:15.776247-05	\N	\N
-23	24	serial_nuevo	Serial del medidor instalado	texto	t	\N	\N	30	\N	\N	f	1	f	2026-11-21 19:25:15.774778-05	\N	\N
-24	24	lectura_inicial	Lectura inicial	entero	t	\N	0	9999999	m³	\N	f	2	f	2026-11-21 19:25:15.774789-05	\N	\N
-25	24	accesorios	Accesorios instalados	texto	f	\N	\N	300	\N	\N	f	3	f	2026-11-21 19:25:15.774804-05	\N	\N
-72	24	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	f	2026-11-21 19:25:15.776235-05	\N	\N
-26	23	diametro	Diámetro de la acometida	opcion	t	[{"codigo": "media", "nombre": "1/2 pulgada"}, {"codigo": "tres_cuartos", "nombre": "3/4 pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "mayor", "nombre": "Mayor de 1 pulgada"}]	\N	\N	\N	\N	f	1	f	2026-11-21 19:25:15.77482-05	\N	\N
-27	23	material	Material	opcion	t	[{"codigo": "pvc", "nombre": "PVC"}, {"codigo": "polietileno", "nombre": "Polietileno"}, {"codigo": "cobre", "nombre": "Cobre"}, {"codigo": "otro", "nombre": "Otro"}]	\N	\N	\N	\N	f	2	f	2026-11-21 19:25:15.774849-05	\N	\N
-28	23	longitud	Longitud instalada	decimal	f	\N	0	500	m	\N	f	3	f	2026-11-21 19:25:15.774875-05	\N	\N
-71	23	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	f	2026-11-21 19:25:15.776113-05	\N	\N
-74	25	serie_acta	Serie del acta física	texto	t	\N	\N	20	\N	La serie impresa en el papel.	f	101	t	2026-11-21 19:25:15.862538-05	1. Datos básicos	\N
-75	24	serie_acta	Serie del acta física	texto	t	\N	\N	20	\N	La serie impresa en el papel.	f	101	t	2026-11-21 19:25:15.862699-05	1. Datos básicos	\N
-76	23	serie_acta	Serie del acta física	texto	t	\N	\N	20	\N	La serie impresa en el papel.	f	101	t	2026-11-21 19:25:15.862715-05	1. Datos básicos	\N
-77	26	serie_acta	Serie del acta física	texto	t	\N	\N	20	\N	La serie impresa en el papel.	f	101	t	2026-11-21 19:25:15.862729-05	1. Datos básicos	\N
-78	25	orden_servicio	Orden de servicio	texto	t	\N	\N	20	\N	\N	f	102	t	2026-11-21 19:25:15.862742-05	1. Datos básicos	\N
-79	24	orden_servicio	Orden de servicio	texto	t	\N	\N	20	\N	\N	f	102	t	2026-11-21 19:25:15.862757-05	1. Datos básicos	\N
-80	23	orden_servicio	Orden de servicio	texto	t	\N	\N	20	\N	\N	f	102	t	2026-11-21 19:25:15.86277-05	1. Datos básicos	\N
-81	26	orden_servicio	Orden de servicio	texto	t	\N	\N	20	\N	\N	f	102	t	2026-11-21 19:25:15.862783-05	1. Datos básicos	\N
-82	25	tipo_orden	Tipo de orden	texto	f	\N	\N	40	\N	\N	f	103	t	2026-11-21 19:25:15.862796-05	1. Datos básicos	\N
-83	24	tipo_orden	Tipo de orden	texto	f	\N	\N	40	\N	\N	f	103	t	2026-11-21 19:25:15.862809-05	1. Datos básicos	\N
-84	23	tipo_orden	Tipo de orden	texto	f	\N	\N	40	\N	\N	f	103	t	2026-11-21 19:25:15.86282-05	1. Datos básicos	\N
-85	26	tipo_orden	Tipo de orden	texto	f	\N	\N	40	\N	\N	f	103	t	2026-11-21 19:25:15.862832-05	1. Datos básicos	\N
-86	25	contratista	Contratista	texto	f	\N	\N	60	\N	\N	f	104	t	2026-11-21 19:25:15.862845-05	1. Datos básicos	\N
-87	24	contratista	Contratista	texto	f	\N	\N	60	\N	\N	f	104	t	2026-11-21 19:25:15.862857-05	1. Datos básicos	\N
-88	23	contratista	Contratista	texto	f	\N	\N	60	\N	\N	f	104	t	2026-11-21 19:25:15.862869-05	1. Datos básicos	\N
-89	26	contratista	Contratista	texto	f	\N	\N	60	\N	\N	f	104	t	2026-11-21 19:25:15.862881-05	1. Datos básicos	\N
-241	26	fuga_imperceptible	¿Hay fugas imperceptibles?	si_no	f	\N	\N	\N	\N	\N	f	509	t	2026-11-21 19:25:15.866267-05	5. Instalaciones internas	\N
-90	25	tipo_servicio	Tipo de servicio	opcion	t	[{"codigo": "residencial", "nombre": "Residencial"}, {"codigo": "comercial", "nombre": "Comercial"}, {"codigo": "industrial", "nombre": "Industrial"}, {"codigo": "oficial", "nombre": "Oficial"}]	\N	\N	\N	\N	f	105	t	2026-11-21 19:25:15.862897-05	1. Datos básicos	\N
-91	24	tipo_servicio	Tipo de servicio	opcion	t	[{"codigo": "residencial", "nombre": "Residencial"}, {"codigo": "comercial", "nombre": "Comercial"}, {"codigo": "industrial", "nombre": "Industrial"}, {"codigo": "oficial", "nombre": "Oficial"}]	\N	\N	\N	\N	f	105	t	2026-11-21 19:25:15.862968-05	1. Datos básicos	\N
-92	23	tipo_servicio	Tipo de servicio	opcion	t	[{"codigo": "residencial", "nombre": "Residencial"}, {"codigo": "comercial", "nombre": "Comercial"}, {"codigo": "industrial", "nombre": "Industrial"}, {"codigo": "oficial", "nombre": "Oficial"}]	\N	\N	\N	\N	f	105	t	2026-11-21 19:25:15.863004-05	1. Datos básicos	\N
-93	26	tipo_servicio	Tipo de servicio	opcion	t	[{"codigo": "residencial", "nombre": "Residencial"}, {"codigo": "comercial", "nombre": "Comercial"}, {"codigo": "industrial", "nombre": "Industrial"}, {"codigo": "oficial", "nombre": "Oficial"}]	\N	\N	\N	\N	f	105	t	2026-11-21 19:25:15.863033-05	1. Datos básicos	\N
-94	25	hora_inicio	Hora de inicio	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	106	t	2026-11-21 19:25:15.863059-05	1. Datos básicos	\N
-95	24	hora_inicio	Hora de inicio	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	106	t	2026-11-21 19:25:15.863073-05	1. Datos básicos	\N
-96	23	hora_inicio	Hora de inicio	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	106	t	2026-11-21 19:25:15.863086-05	1. Datos básicos	\N
-97	26	hora_inicio	Hora de inicio	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	106	t	2026-11-21 19:25:15.863099-05	1. Datos básicos	\N
-98	25	hora_final	Hora final	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	107	t	2026-11-21 19:25:15.863111-05	1. Datos básicos	\N
-99	24	hora_final	Hora final	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	107	t	2026-11-21 19:25:15.863125-05	1. Datos básicos	\N
-100	23	hora_final	Hora final	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	107	t	2026-11-21 19:25:15.863137-05	1. Datos básicos	\N
-101	26	hora_final	Hora final	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	107	t	2026-11-21 19:25:15.863149-05	1. Datos básicos	\N
-102	25	habitantes	Habitantes del predio	entero	f	\N	0	99	\N	\N	f	108	t	2026-11-21 19:25:15.863166-05	1. Datos básicos	\N
-103	24	habitantes	Habitantes del predio	entero	f	\N	0	99	\N	\N	f	108	t	2026-11-21 19:25:15.863179-05	1. Datos básicos	\N
-104	23	habitantes	Habitantes del predio	entero	f	\N	0	99	\N	\N	f	108	t	2026-11-21 19:25:15.863192-05	1. Datos básicos	\N
-105	26	habitantes	Habitantes del predio	entero	f	\N	0	99	\N	\N	f	108	t	2026-11-21 19:25:15.863204-05	1. Datos básicos	\N
-106	25	acompanado	¿El usuario hizo uso del derecho a estar acompañado de un técnico o testigo?	si_no	f	\N	\N	\N	\N	\N	f	109	t	2026-11-21 19:25:15.863217-05	1. Datos básicos	\N
-107	24	acompanado	¿El usuario hizo uso del derecho a estar acompañado de un técnico o testigo?	si_no	f	\N	\N	\N	\N	\N	f	109	t	2026-11-21 19:25:15.86323-05	1. Datos básicos	\N
-108	23	acompanado	¿El usuario hizo uso del derecho a estar acompañado de un técnico o testigo?	si_no	f	\N	\N	\N	\N	\N	f	109	t	2026-11-21 19:25:15.863242-05	1. Datos básicos	\N
-109	26	acompanado	¿El usuario hizo uso del derecho a estar acompañado de un técnico o testigo?	si_no	f	\N	\N	\N	\N	\N	f	109	t	2026-11-21 19:25:15.863255-05	1. Datos básicos	\N
-110	25	me_lectura	Medidor encontrado · Lectura (enteros y decimales del registro)	decimal	f	\N	0	99999999	m³	\N	f	201	t	2026-11-21 19:25:15.863268-05	2. Medidor encontrado	\N
-112	23	me_lectura	Medidor encontrado · Lectura (enteros y decimales del registro)	decimal	f	\N	0	99999999	m³	\N	f	201	t	2026-11-21 19:25:15.863295-05	2. Medidor encontrado	\N
-113	26	me_lectura	Medidor encontrado · Lectura (enteros y decimales del registro)	decimal	f	\N	0	99999999	m³	\N	f	201	t	2026-11-21 19:25:15.863308-05	2. Medidor encontrado	\N
-114	25	me_marca	Medidor encontrado · Marca	texto	f	\N	\N	30	\N	\N	f	202	t	2026-11-21 19:25:15.863321-05	2. Medidor encontrado	\N
-116	23	me_marca	Medidor encontrado · Marca	texto	f	\N	\N	30	\N	\N	f	202	t	2026-11-21 19:25:15.863347-05	2. Medidor encontrado	\N
-117	26	me_marca	Medidor encontrado · Marca	texto	f	\N	\N	30	\N	\N	f	202	t	2026-11-21 19:25:15.86336-05	2. Medidor encontrado	\N
-122	25	me_serial	Medidor encontrado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	204	t	2026-11-21 19:25:15.863423-05	2. Medidor encontrado	\N
-124	23	me_serial	Medidor encontrado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	204	t	2026-11-21 19:25:15.86345-05	2. Medidor encontrado	\N
-125	26	me_serial	Medidor encontrado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	204	t	2026-11-21 19:25:15.863463-05	2. Medidor encontrado	\N
-126	25	me_serial_ilegible	Medidor encontrado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	205	t	2026-11-21 19:25:15.863476-05	2. Medidor encontrado	\N
-128	23	me_serial_ilegible	Medidor encontrado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	205	t	2026-11-21 19:25:15.863506-05	2. Medidor encontrado	\N
-129	26	me_serial_ilegible	Medidor encontrado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	205	t	2026-11-21 19:25:15.863521-05	2. Medidor encontrado	\N
-130	25	me_diametro	Medidor encontrado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	206	t	2026-11-21 19:25:15.863538-05	2. Medidor encontrado	\N
-242	25	geofono	¿Se hizo detección con geófono?	si_no	f	\N	\N	\N	\N	\N	f	510	t	2026-11-21 19:25:15.866283-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
-132	23	me_diametro	Medidor encontrado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	206	t	2026-11-21 19:25:15.863637-05	2. Medidor encontrado	\N
-133	26	me_diametro	Medidor encontrado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	206	t	2026-11-21 19:25:15.863677-05	2. Medidor encontrado	\N
-134	25	me_precinto_tipo	Medidor encontrado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	207	t	2026-11-21 19:25:15.863713-05	2. Medidor encontrado	\N
-136	23	me_precinto_tipo	Medidor encontrado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	207	t	2026-11-21 19:25:15.863743-05	2. Medidor encontrado	\N
-137	26	me_precinto_tipo	Medidor encontrado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	207	t	2026-11-21 19:25:15.863757-05	2. Medidor encontrado	\N
-138	25	me_precinto_serie	Medidor encontrado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	208	t	2026-11-21 19:25:15.863772-05	2. Medidor encontrado	\N
-140	23	me_precinto_serie	Medidor encontrado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	208	t	2026-11-21 19:25:15.863801-05	2. Medidor encontrado	\N
-141	26	me_precinto_serie	Medidor encontrado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	208	t	2026-11-21 19:25:15.863816-05	2. Medidor encontrado	\N
-142	25	me_anio	Medidor encontrado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	209	t	2026-11-21 19:25:15.863831-05	2. Medidor encontrado	\N
-144	23	me_anio	Medidor encontrado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	209	t	2026-11-21 19:25:15.863858-05	2. Medidor encontrado	\N
-145	26	me_anio	Medidor encontrado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	209	t	2026-11-21 19:25:15.86387-05	2. Medidor encontrado	\N
-146	25	me_talco	Talco	opciones	f	[{"codigo": "opaco", "nombre": "Opaco"}, {"codigo": "partido_fisurado", "nombre": "Partido o fisurado"}, {"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "transparente_ok", "nombre": "Transparente / ok"}, {"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "destruido", "nombre": "Destruido"}, {"codigo": "ilegible", "nombre": "Ilegible"}, {"codigo": "vidrio_roto", "nombre": "Vidrio roto"}, {"codigo": "sin_agujas", "nombre": "Sin agujas"}]	\N	\N	\N	\N	f	301	t	2026-11-21 19:25:15.863887-05	3. Estado del medidor	\N
-148	23	me_talco	Talco	opciones	f	[{"codigo": "opaco", "nombre": "Opaco"}, {"codigo": "partido_fisurado", "nombre": "Partido o fisurado"}, {"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "transparente_ok", "nombre": "Transparente / ok"}, {"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "destruido", "nombre": "Destruido"}, {"codigo": "ilegible", "nombre": "Ilegible"}, {"codigo": "vidrio_roto", "nombre": "Vidrio roto"}, {"codigo": "sin_agujas", "nombre": "Sin agujas"}]	\N	\N	\N	\N	f	301	t	2026-11-21 19:25:15.863981-05	3. Estado del medidor	\N
-149	26	me_talco	Talco	opciones	f	[{"codigo": "opaco", "nombre": "Opaco"}, {"codigo": "partido_fisurado", "nombre": "Partido o fisurado"}, {"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "transparente_ok", "nombre": "Transparente / ok"}, {"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "destruido", "nombre": "Destruido"}, {"codigo": "ilegible", "nombre": "Ilegible"}, {"codigo": "vidrio_roto", "nombre": "Vidrio roto"}, {"codigo": "sin_agujas", "nombre": "Sin agujas"}]	\N	\N	\N	\N	f	301	t	2026-11-21 19:25:15.864026-05	3. Estado del medidor	\N
-150	25	me_cuerpo	Cuerpo	opciones	f	[{"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "fisurado_roto", "nombre": "Fisurado o roto"}, {"codigo": "conexion_invertida", "nombre": "Conexión invertida"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	302	t	2026-11-21 19:25:15.864068-05	3. Estado del medidor	\N
-152	23	me_cuerpo	Cuerpo	opciones	f	[{"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "fisurado_roto", "nombre": "Fisurado o roto"}, {"codigo": "conexion_invertida", "nombre": "Conexión invertida"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	302	t	2026-11-21 19:25:15.864127-05	3. Estado del medidor	\N
-153	26	me_cuerpo	Cuerpo	opciones	f	[{"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "fisurado_roto", "nombre": "Fisurado o roto"}, {"codigo": "conexion_invertida", "nombre": "Conexión invertida"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	302	t	2026-11-21 19:25:15.864154-05	3. Estado del medidor	\N
-154	25	me_registro	Registro	opciones	f	[{"codigo": "detenido", "nombre": "Medidor detenido"}, {"codigo": "giro_irregular", "nombre": "Giro irregular"}, {"codigo": "obstruido", "nombre": "Medidor obstruido"}, {"codigo": "mal_estado", "nombre": "Registro en mal estado"}]	\N	\N	\N	\N	f	303	t	2026-11-21 19:25:15.864181-05	3. Estado del medidor	\N
-156	23	me_registro	Registro	opciones	f	[{"codigo": "detenido", "nombre": "Medidor detenido"}, {"codigo": "giro_irregular", "nombre": "Giro irregular"}, {"codigo": "obstruido", "nombre": "Medidor obstruido"}, {"codigo": "mal_estado", "nombre": "Registro en mal estado"}]	\N	\N	\N	\N	f	303	t	2026-11-21 19:25:15.864252-05	3. Estado del medidor	\N
-157	26	me_registro	Registro	opciones	f	[{"codigo": "detenido", "nombre": "Medidor detenido"}, {"codigo": "giro_irregular", "nombre": "Giro irregular"}, {"codigo": "obstruido", "nombre": "Medidor obstruido"}, {"codigo": "mal_estado", "nombre": "Registro en mal estado"}]	\N	\N	\N	\N	f	303	t	2026-11-21 19:25:15.864281-05	3. Estado del medidor	\N
-158	25	req_cambio_medidor	¿Se requiere cambio de medidor?	si_no	t	\N	\N	\N	\N	\N	f	304	t	2026-11-21 19:25:15.864308-05	3. Estado del medidor	\N
-160	23	req_cambio_medidor	¿Se requiere cambio de medidor?	si_no	f	\N	\N	\N	\N	\N	f	304	t	2026-11-21 19:25:15.86434-05	3. Estado del medidor	\N
-161	26	req_cambio_medidor	¿Se requiere cambio de medidor?	si_no	t	\N	\N	\N	\N	\N	f	304	t	2026-11-21 19:25:15.864355-05	3. Estado del medidor	\N
-162	25	calib_realizada	Prueba de calibración: ¿se realizó?	si_no	f	\N	\N	\N	\N	\N	f	305	t	2026-11-21 19:25:15.864369-05	3. Estado del medidor	\N
-164	23	calib_realizada	Prueba de calibración: ¿se realizó?	si_no	f	\N	\N	\N	\N	\N	f	305	t	2026-11-21 19:25:15.864397-05	3. Estado del medidor	\N
-165	26	calib_realizada	Prueba de calibración: ¿se realizó?	si_no	f	\N	\N	\N	\N	\N	f	305	t	2026-11-21 19:25:15.86441-05	3. Estado del medidor	\N
-166	25	calib_vol_patron	Volumen del patrón	decimal	f	\N	0	100000	L	\N	f	306	t	2026-11-21 19:25:15.864423-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
-168	23	calib_vol_patron	Volumen del patrón	decimal	f	\N	0	100000	L	\N	f	306	t	2026-11-21 19:25:15.864469-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
-169	26	calib_vol_patron	Volumen del patrón	decimal	f	\N	0	100000	L	\N	f	306	t	2026-11-21 19:25:15.864486-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
-170	25	calib_vol_cliente	Volumen del cliente	decimal	f	\N	0	100000	L	\N	f	307	t	2026-11-21 19:25:15.864504-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
-172	23	calib_vol_cliente	Volumen del cliente	decimal	f	\N	0	100000	L	\N	f	307	t	2026-11-21 19:25:15.86454-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
-173	26	calib_vol_cliente	Volumen del cliente	decimal	f	\N	0	100000	L	\N	f	307	t	2026-11-21 19:25:15.864558-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
-174	25	calib_error_pct	Error de la prueba	decimal	f	\N	-100	1000	%	\N	f	308	t	2026-11-21 19:25:15.864575-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
-176	23	calib_error_pct	Error de la prueba	decimal	f	\N	-100	1000	%	\N	f	308	t	2026-11-21 19:25:15.86461-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
-177	26	calib_error_pct	Error de la prueba	decimal	f	\N	-100	1000	%	\N	f	308	t	2026-11-21 19:25:15.864627-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
-178	25	acom_diametro	Acometida · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	401	t	2026-11-21 19:25:15.864646-05	4. Acometida y accesorios	\N
-179	24	acom_diametro	Acometida · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	401	t	2026-11-21 19:25:15.864683-05	4. Acometida y accesorios	\N
-180	23	acom_diametro	Acometida · Diámetro	opcion	t	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	401	t	2026-11-21 19:25:15.86472-05	4. Acometida y accesorios	\N
-181	26	acom_diametro	Acometida · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	401	t	2026-11-21 19:25:15.864755-05	4. Acometida y accesorios	\N
-182	25	acom_estado	Acometida · Estado	opciones	f	[{"codigo": "fugas_visibles", "nombre": "Fugas visibles"}, {"codigo": "derivacion_no_autorizada", "nombre": "Derivación no autorizada"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "conexion_directa", "nombre": "Conexión directa"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	402	t	2026-11-21 19:25:15.86479-05	4. Acometida y accesorios	\N
-183	24	acom_estado	Acometida · Estado	opciones	f	[{"codigo": "fugas_visibles", "nombre": "Fugas visibles"}, {"codigo": "derivacion_no_autorizada", "nombre": "Derivación no autorizada"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "conexion_directa", "nombre": "Conexión directa"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	402	t	2026-11-21 19:25:15.864826-05	4. Acometida y accesorios	\N
-184	23	acom_estado	Acometida · Estado	opciones	f	[{"codigo": "fugas_visibles", "nombre": "Fugas visibles"}, {"codigo": "derivacion_no_autorizada", "nombre": "Derivación no autorizada"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "conexion_directa", "nombre": "Conexión directa"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	402	t	2026-11-21 19:25:15.86486-05	4. Acometida y accesorios	\N
-185	26	acom_estado	Acometida · Estado	opciones	f	[{"codigo": "fugas_visibles", "nombre": "Fugas visibles"}, {"codigo": "derivacion_no_autorizada", "nombre": "Derivación no autorizada"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "conexion_directa", "nombre": "Conexión directa"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	402	t	2026-11-21 19:25:15.864951-05	4. Acometida y accesorios	\N
-186	25	cajilla	Cajilla	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "sin_fondo", "nombre": "Sin fondo"}, {"codigo": "tapada", "nombre": "Tapada"}, {"codigo": "sin_acceso", "nombre": "Sin acceso"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	403	t	2026-11-21 19:25:15.864985-05	4. Acometida y accesorios	\N
-187	24	cajilla	Cajilla	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "sin_fondo", "nombre": "Sin fondo"}, {"codigo": "tapada", "nombre": "Tapada"}, {"codigo": "sin_acceso", "nombre": "Sin acceso"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	403	t	2026-11-21 19:25:15.865019-05	4. Acometida y accesorios	\N
-188	23	cajilla	Cajilla	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "sin_fondo", "nombre": "Sin fondo"}, {"codigo": "tapada", "nombre": "Tapada"}, {"codigo": "sin_acceso", "nombre": "Sin acceso"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	403	t	2026-11-21 19:25:15.865054-05	4. Acometida y accesorios	\N
-189	26	cajilla	Cajilla	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "sin_fondo", "nombre": "Sin fondo"}, {"codigo": "tapada", "nombre": "Tapada"}, {"codigo": "sin_acceso", "nombre": "Sin acceso"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	403	t	2026-11-21 19:25:15.865085-05	4. Acometida y accesorios	\N
-190	25	reg_corte	Registro de corte	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	404	t	2026-11-21 19:25:15.865121-05	4. Acometida y accesorios	\N
-191	24	reg_corte	Registro de corte	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	404	t	2026-11-21 19:25:15.865146-05	4. Acometida y accesorios	\N
-192	23	reg_corte	Registro de corte	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	404	t	2026-11-21 19:25:15.865172-05	4. Acometida y accesorios	\N
-193	26	reg_corte	Registro de corte	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	404	t	2026-11-21 19:25:15.865197-05	4. Acometida y accesorios	\N
-194	25	llave_control	Llave de control	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	405	t	2026-11-21 19:25:15.865222-05	4. Acometida y accesorios	\N
-195	24	llave_control	Llave de control	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	405	t	2026-11-21 19:25:15.865248-05	4. Acometida y accesorios	\N
-196	23	llave_control	Llave de control	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	405	t	2026-11-21 19:25:15.865274-05	4. Acometida y accesorios	\N
-197	26	llave_control	Llave de control	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	405	t	2026-11-21 19:25:15.865299-05	4. Acometida y accesorios	\N
-198	25	req_instalar	Tras el diagnóstico, el cliente requiere INSTALAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	406	t	2026-11-21 19:25:15.865324-05	4. Acometida y accesorios	\N
-199	24	req_instalar	Tras el diagnóstico, el cliente requiere INSTALAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	406	t	2026-11-21 19:25:15.865355-05	4. Acometida y accesorios	\N
-200	23	req_instalar	Tras el diagnóstico, el cliente requiere INSTALAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	406	t	2026-11-21 19:25:15.865384-05	4. Acometida y accesorios	\N
-201	26	req_instalar	Tras el diagnóstico, el cliente requiere INSTALAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	406	t	2026-11-21 19:25:15.865413-05	4. Acometida y accesorios	\N
-202	25	req_adecuar	Tras el diagnóstico, el cliente requiere ADECUAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	407	t	2026-11-21 19:25:15.865442-05	4. Acometida y accesorios	\N
-243	24	geofono	¿Se hizo detección con geófono?	si_no	f	\N	\N	\N	\N	\N	f	510	t	2026-11-21 19:25:15.866301-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
-203	24	req_adecuar	Tras el diagnóstico, el cliente requiere ADECUAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	407	t	2026-11-21 19:25:15.86547-05	4. Acometida y accesorios	\N
-204	23	req_adecuar	Tras el diagnóstico, el cliente requiere ADECUAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	407	t	2026-11-21 19:25:15.865512-05	4. Acometida y accesorios	\N
-205	26	req_adecuar	Tras el diagnóstico, el cliente requiere ADECUAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	407	t	2026-11-21 19:25:15.865541-05	4. Acometida y accesorios	\N
-206	25	pt_llaves	Llaves o plumas · Cantidad	entero	f	\N	0	99	\N	\N	f	501	t	2026-11-21 19:25:15.865569-05	5. Instalaciones internas	\N
-207	24	pt_llaves	Llaves o plumas · Cantidad	entero	f	\N	0	99	\N	\N	f	501	t	2026-11-21 19:25:15.865583-05	5. Instalaciones internas	\N
-208	23	pt_llaves	Llaves o plumas · Cantidad	entero	f	\N	0	99	\N	\N	f	501	t	2026-11-21 19:25:15.865596-05	5. Instalaciones internas	\N
-209	26	pt_llaves	Llaves o plumas · Cantidad	entero	f	\N	0	99	\N	\N	f	501	t	2026-11-21 19:25:15.865608-05	5. Instalaciones internas	\N
-210	25	pt_duchas	Duchas · Cantidad	entero	f	\N	0	99	\N	\N	f	502	t	2026-11-21 19:25:15.865621-05	5. Instalaciones internas	\N
-211	24	pt_duchas	Duchas · Cantidad	entero	f	\N	0	99	\N	\N	f	502	t	2026-11-21 19:25:15.865633-05	5. Instalaciones internas	\N
-212	23	pt_duchas	Duchas · Cantidad	entero	f	\N	0	99	\N	\N	f	502	t	2026-11-21 19:25:15.86571-05	5. Instalaciones internas	\N
-213	26	pt_duchas	Duchas · Cantidad	entero	f	\N	0	99	\N	\N	f	502	t	2026-11-21 19:25:15.865725-05	5. Instalaciones internas	\N
-214	25	pt_sanitarios	Sanitarios · Cantidad	entero	f	\N	0	99	\N	\N	f	503	t	2026-11-21 19:25:15.865739-05	5. Instalaciones internas	\N
-215	24	pt_sanitarios	Sanitarios · Cantidad	entero	f	\N	0	99	\N	\N	f	503	t	2026-11-21 19:25:15.865753-05	5. Instalaciones internas	\N
-216	23	pt_sanitarios	Sanitarios · Cantidad	entero	f	\N	0	99	\N	\N	f	503	t	2026-11-21 19:25:15.865767-05	5. Instalaciones internas	\N
-217	26	pt_sanitarios	Sanitarios · Cantidad	entero	f	\N	0	99	\N	\N	f	503	t	2026-11-21 19:25:15.86578-05	5. Instalaciones internas	\N
-218	25	pt_valvula_riego	Válvula de riego · Cantidad	entero	f	\N	0	99	\N	\N	f	504	t	2026-11-21 19:25:15.865794-05	5. Instalaciones internas	\N
-219	24	pt_valvula_riego	Válvula de riego · Cantidad	entero	f	\N	0	99	\N	\N	f	504	t	2026-11-21 19:25:15.865809-05	5. Instalaciones internas	\N
-220	23	pt_valvula_riego	Válvula de riego · Cantidad	entero	f	\N	0	99	\N	\N	f	504	t	2026-11-21 19:25:15.865832-05	5. Instalaciones internas	\N
-221	26	pt_valvula_riego	Válvula de riego · Cantidad	entero	f	\N	0	99	\N	\N	f	504	t	2026-11-21 19:25:15.865846-05	5. Instalaciones internas	\N
-222	25	pt_otros	Otros puntos de agua · Cantidad	entero	f	\N	0	99	\N	\N	f	505	t	2026-11-21 19:25:15.86586-05	5. Instalaciones internas	\N
-223	24	pt_otros	Otros puntos de agua · Cantidad	entero	f	\N	0	99	\N	\N	f	505	t	2026-11-21 19:25:15.865874-05	5. Instalaciones internas	\N
-224	23	pt_otros	Otros puntos de agua · Cantidad	entero	f	\N	0	99	\N	\N	f	505	t	2026-11-21 19:25:15.865938-05	5. Instalaciones internas	\N
-225	26	pt_otros	Otros puntos de agua · Cantidad	entero	f	\N	0	99	\N	\N	f	505	t	2026-11-21 19:25:15.865953-05	5. Instalaciones internas	\N
-226	25	pt_con_fuga	Puntos de agua con fuga	opciones	f	[{"codigo": "llaves", "nombre": "Llaves o plumas"}, {"codigo": "duchas", "nombre": "Duchas"}, {"codigo": "sanitarios", "nombre": "Sanitarios"}, {"codigo": "valvula_riego", "nombre": "Válvula de riego"}, {"codigo": "otros", "nombre": "Otros"}]	\N	\N	\N	\N	f	506	t	2026-11-21 19:25:15.865969-05	5. Instalaciones internas	\N
-227	24	pt_con_fuga	Puntos de agua con fuga	opciones	f	[{"codigo": "llaves", "nombre": "Llaves o plumas"}, {"codigo": "duchas", "nombre": "Duchas"}, {"codigo": "sanitarios", "nombre": "Sanitarios"}, {"codigo": "valvula_riego", "nombre": "Válvula de riego"}, {"codigo": "otros", "nombre": "Otros"}]	\N	\N	\N	\N	f	506	t	2026-11-21 19:25:15.866001-05	5. Instalaciones internas	\N
-228	23	pt_con_fuga	Puntos de agua con fuga	opciones	f	[{"codigo": "llaves", "nombre": "Llaves o plumas"}, {"codigo": "duchas", "nombre": "Duchas"}, {"codigo": "sanitarios", "nombre": "Sanitarios"}, {"codigo": "valvula_riego", "nombre": "Válvula de riego"}, {"codigo": "otros", "nombre": "Otros"}]	\N	\N	\N	\N	f	506	t	2026-11-21 19:25:15.866031-05	5. Instalaciones internas	\N
-229	26	pt_con_fuga	Puntos de agua con fuga	opciones	f	[{"codigo": "llaves", "nombre": "Llaves o plumas"}, {"codigo": "duchas", "nombre": "Duchas"}, {"codigo": "sanitarios", "nombre": "Sanitarios"}, {"codigo": "valvula_riego", "nombre": "Válvula de riego"}, {"codigo": "otros", "nombre": "Otros"}]	\N	\N	\N	\N	f	506	t	2026-11-21 19:25:15.866061-05	5. Instalaciones internas	\N
-230	25	fuga_perceptible	¿Hay fugas perceptibles?	si_no	f	\N	\N	\N	\N	\N	f	507	t	2026-11-21 19:25:15.86609-05	5. Instalaciones internas	\N
-231	24	fuga_perceptible	¿Hay fugas perceptibles?	si_no	f	\N	\N	\N	\N	\N	f	507	t	2026-11-21 19:25:15.866105-05	5. Instalaciones internas	\N
-232	23	fuga_perceptible	¿Hay fugas perceptibles?	si_no	f	\N	\N	\N	\N	\N	f	507	t	2026-11-21 19:25:15.866119-05	5. Instalaciones internas	\N
-233	26	fuga_perceptible	¿Hay fugas perceptibles?	si_no	f	\N	\N	\N	\N	\N	f	507	t	2026-11-21 19:25:15.866133-05	5. Instalaciones internas	\N
-234	25	fuga_percep_obs	Fugas perceptibles · Observación	texto	f	\N	\N	150	\N	\N	f	508	t	2026-11-21 19:25:15.866147-05	5. Instalaciones internas	{"es": true, "campo": "fuga_perceptible"}
-235	24	fuga_percep_obs	Fugas perceptibles · Observación	texto	f	\N	\N	150	\N	\N	f	508	t	2026-11-21 19:25:15.866166-05	5. Instalaciones internas	{"es": true, "campo": "fuga_perceptible"}
-236	23	fuga_percep_obs	Fugas perceptibles · Observación	texto	f	\N	\N	150	\N	\N	f	508	t	2026-11-21 19:25:15.866184-05	5. Instalaciones internas	{"es": true, "campo": "fuga_perceptible"}
-237	26	fuga_percep_obs	Fugas perceptibles · Observación	texto	f	\N	\N	150	\N	\N	f	508	t	2026-11-21 19:25:15.866201-05	5. Instalaciones internas	{"es": true, "campo": "fuga_perceptible"}
-238	25	fuga_imperceptible	¿Hay fugas imperceptibles?	si_no	f	\N	\N	\N	\N	\N	f	509	t	2026-11-21 19:25:15.866219-05	5. Instalaciones internas	\N
-239	24	fuga_imperceptible	¿Hay fugas imperceptibles?	si_no	f	\N	\N	\N	\N	\N	f	509	t	2026-11-21 19:25:15.866234-05	5. Instalaciones internas	\N
-240	23	fuga_imperceptible	¿Hay fugas imperceptibles?	si_no	f	\N	\N	\N	\N	\N	f	509	t	2026-11-21 19:25:15.86625-05	5. Instalaciones internas	\N
-244	23	geofono	¿Se hizo detección con geófono?	si_no	f	\N	\N	\N	\N	\N	f	510	t	2026-11-21 19:25:15.866318-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
-245	26	geofono	¿Se hizo detección con geófono?	si_no	f	\N	\N	\N	\N	\N	f	510	t	2026-11-21 19:25:15.866347-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
-246	25	fuga_imperc_obs	Fugas imperceptibles · Localización u observación	texto	f	\N	\N	150	\N	\N	f	511	t	2026-11-21 19:25:15.866366-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
-247	24	fuga_imperc_obs	Fugas imperceptibles · Localización u observación	texto	f	\N	\N	150	\N	\N	f	511	t	2026-11-21 19:25:15.866385-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
-248	23	fuga_imperc_obs	Fugas imperceptibles · Localización u observación	texto	f	\N	\N	150	\N	\N	f	511	t	2026-11-21 19:25:15.866403-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
-249	26	fuga_imperc_obs	Fugas imperceptibles · Localización u observación	texto	f	\N	\N	150	\N	\N	f	511	t	2026-11-21 19:25:15.866422-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
-250	25	irr_hay	¿Se encontró irregularidad?	si_no	t	\N	\N	\N	\N	Si responde «Sí», al guardar podrá abrir el acta de inspección técnica sobre el mismo contrato.	f	801	t	2026-11-21 19:25:15.866441-05	8. Irregularidades	\N
-251	24	irr_hay	¿Se encontró irregularidad?	si_no	t	\N	\N	\N	\N	Si responde «Sí», al guardar podrá abrir el acta de inspección técnica sobre el mismo contrato.	f	801	t	2026-11-21 19:25:15.866455-05	8. Irregularidades	\N
-252	23	irr_hay	¿Se encontró irregularidad?	si_no	t	\N	\N	\N	\N	Si responde «Sí», al guardar podrá abrir el acta de inspección técnica sobre el mismo contrato.	f	801	t	2026-11-21 19:25:15.866469-05	8. Irregularidades	\N
-253	26	irr_hay	¿Se encontró irregularidad?	si_no	t	\N	\N	\N	\N	Si responde «Sí», al guardar podrá abrir el acta de inspección técnica sobre el mismo contrato.	f	801	t	2026-11-21 19:25:15.866482-05	8. Irregularidades	\N
-254	25	irr_tipos	Tipos de irregularidad	opciones	f	[{"codigo": "acometida_fraudulenta", "nombre": "Acometida fraudulenta"}, {"codigo": "conexiones_medidor_adulteradas", "nombre": "Conexiones del medidor adulteradas"}, {"codigo": "medidor_adulterado", "nombre": "Medidor adulterado"}, {"codigo": "medidor_desconectado", "nombre": "Medidor desconectado"}, {"codigo": "adulteracion_sellos", "nombre": "Adulteración de sellos"}, {"codigo": "servicio_no_facturado", "nombre": "Servicio no facturado"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}, {"codigo": "uso_no_autorizado", "nombre": "Uso no autorizado"}, {"codigo": "cajilla_interna", "nombre": "Cajilla interna"}]	\N	\N	\N	\N	f	802	t	2026-11-21 19:25:15.866499-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
-255	24	irr_tipos	Tipos de irregularidad	opciones	f	[{"codigo": "acometida_fraudulenta", "nombre": "Acometida fraudulenta"}, {"codigo": "conexiones_medidor_adulteradas", "nombre": "Conexiones del medidor adulteradas"}, {"codigo": "medidor_adulterado", "nombre": "Medidor adulterado"}, {"codigo": "medidor_desconectado", "nombre": "Medidor desconectado"}, {"codigo": "adulteracion_sellos", "nombre": "Adulteración de sellos"}, {"codigo": "servicio_no_facturado", "nombre": "Servicio no facturado"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}, {"codigo": "uso_no_autorizado", "nombre": "Uso no autorizado"}, {"codigo": "cajilla_interna", "nombre": "Cajilla interna"}]	\N	\N	\N	\N	f	802	t	2026-11-21 19:25:15.866565-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
-256	23	irr_tipos	Tipos de irregularidad	opciones	f	[{"codigo": "acometida_fraudulenta", "nombre": "Acometida fraudulenta"}, {"codigo": "conexiones_medidor_adulteradas", "nombre": "Conexiones del medidor adulteradas"}, {"codigo": "medidor_adulterado", "nombre": "Medidor adulterado"}, {"codigo": "medidor_desconectado", "nombre": "Medidor desconectado"}, {"codigo": "adulteracion_sellos", "nombre": "Adulteración de sellos"}, {"codigo": "servicio_no_facturado", "nombre": "Servicio no facturado"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}, {"codigo": "uso_no_autorizado", "nombre": "Uso no autorizado"}, {"codigo": "cajilla_interna", "nombre": "Cajilla interna"}]	\N	\N	\N	\N	f	802	t	2026-11-21 19:25:15.866663-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
-257	26	irr_tipos	Tipos de irregularidad	opciones	f	[{"codigo": "acometida_fraudulenta", "nombre": "Acometida fraudulenta"}, {"codigo": "conexiones_medidor_adulteradas", "nombre": "Conexiones del medidor adulteradas"}, {"codigo": "medidor_adulterado", "nombre": "Medidor adulterado"}, {"codigo": "medidor_desconectado", "nombre": "Medidor desconectado"}, {"codigo": "adulteracion_sellos", "nombre": "Adulteración de sellos"}, {"codigo": "servicio_no_facturado", "nombre": "Servicio no facturado"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}, {"codigo": "uso_no_autorizado", "nombre": "Uso no autorizado"}, {"codigo": "cajilla_interna", "nombre": "Cajilla interna"}]	\N	\N	\N	\N	f	802	t	2026-11-21 19:25:15.86675-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
-258	25	irr_descripcion	Descripción de la irregularidad	texto	f	\N	\N	300	\N	\N	f	803	t	2026-11-21 19:25:15.866809-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
-259	24	irr_descripcion	Descripción de la irregularidad	texto	f	\N	\N	300	\N	\N	f	803	t	2026-11-21 19:25:15.866826-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
-260	23	irr_descripcion	Descripción de la irregularidad	texto	f	\N	\N	300	\N	\N	f	803	t	2026-11-21 19:25:15.866844-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
-261	26	irr_descripcion	Descripción de la irregularidad	texto	f	\N	\N	300	\N	\N	f	803	t	2026-11-21 19:25:15.86686-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
-262	25	firma_atendio	Firma de quien atendió	opcion	t	[{"codigo": "atendio_firmo", "nombre": "Atendió y firmó el acta"}, {"codigo": "atendio_se_nego", "nombre": "Atendió y se negó a firmar"}, {"codigo": "nadie_atendio", "nombre": "Nadie atendió"}]	\N	\N	\N	Solo se declara; el acta física firmada es el documento con valor probatorio. No escriba nombres ni documentos.	f	901	t	2026-11-21 19:25:15.866879-05	9. Firmas y papel	\N
-263	24	firma_atendio	Firma de quien atendió	opcion	t	[{"codigo": "atendio_firmo", "nombre": "Atendió y firmó el acta"}, {"codigo": "atendio_se_nego", "nombre": "Atendió y se negó a firmar"}, {"codigo": "nadie_atendio", "nombre": "Nadie atendió"}]	\N	\N	\N	Solo se declara; el acta física firmada es el documento con valor probatorio. No escriba nombres ni documentos.	f	901	t	2026-11-21 19:25:15.866907-05	9. Firmas y papel	\N
-264	23	firma_atendio	Firma de quien atendió	opcion	t	[{"codigo": "atendio_firmo", "nombre": "Atendió y firmó el acta"}, {"codigo": "atendio_se_nego", "nombre": "Atendió y se negó a firmar"}, {"codigo": "nadie_atendio", "nombre": "Nadie atendió"}]	\N	\N	\N	Solo se declara; el acta física firmada es el documento con valor probatorio. No escriba nombres ni documentos.	f	901	t	2026-11-21 19:25:15.866936-05	9. Firmas y papel	\N
-265	26	firma_atendio	Firma de quien atendió	opcion	t	[{"codigo": "atendio_firmo", "nombre": "Atendió y firmó el acta"}, {"codigo": "atendio_se_nego", "nombre": "Atendió y se negó a firmar"}, {"codigo": "nadie_atendio", "nombre": "Nadie atendió"}]	\N	\N	\N	Solo se declara; el acta física firmada es el documento con valor probatorio. No escriba nombres ni documentos.	f	901	t	2026-11-21 19:25:15.866963-05	9. Firmas y papel	\N
-266	25	hubo_testigo	¿Hubo testigo?	si_no	f	\N	\N	\N	\N	\N	f	902	t	2026-11-21 19:25:15.867001-05	9. Firmas y papel	\N
-267	24	hubo_testigo	¿Hubo testigo?	si_no	f	\N	\N	\N	\N	\N	f	902	t	2026-11-21 19:25:15.867016-05	9. Firmas y papel	\N
-268	23	hubo_testigo	¿Hubo testigo?	si_no	f	\N	\N	\N	\N	\N	f	902	t	2026-11-21 19:25:15.86703-05	9. Firmas y papel	\N
-269	26	hubo_testigo	¿Hubo testigo?	si_no	f	\N	\N	\N	\N	\N	f	902	t	2026-11-21 19:25:15.867043-05	9. Firmas y papel	\N
-270	25	firmo_operario	¿El operario firmó el acta física?	si_no	t	\N	\N	\N	\N	\N	f	903	t	2026-11-21 19:25:15.867057-05	9. Firmas y papel	\N
-271	24	firmo_operario	¿El operario firmó el acta física?	si_no	t	\N	\N	\N	\N	\N	f	903	t	2026-11-21 19:25:15.867072-05	9. Firmas y papel	\N
-272	23	firmo_operario	¿El operario firmó el acta física?	si_no	t	\N	\N	\N	\N	\N	f	903	t	2026-11-21 19:25:15.867087-05	9. Firmas y papel	\N
-273	26	firmo_operario	¿El operario firmó el acta física?	si_no	t	\N	\N	\N	\N	\N	f	903	t	2026-11-21 19:25:15.867101-05	9. Firmas y papel	\N
-274	25	pqr_numero	Número de la PQR	texto	t	\N	\N	30	\N	Solo el número; no escriba nombres ni teléfonos.	f	110	t	2026-11-21 19:25:15.867116-05	1. Datos básicos	\N
-275	24	inst_tipo	Tipo de instalación	opcion	t	[{"codigo": "d1", "nombre": "D1"}, {"codigo": "d2", "nombre": "D2"}, {"codigo": "d3", "nombre": "D3"}]	\N	\N	\N	Se confirmará el significado de D1, D2 y D3.	f	701	t	2026-11-21 19:25:15.867133-05	7. Instalaciones y adecuaciones	\N
-276	23	inst_tipo	Tipo de instalación	opcion	t	[{"codigo": "d1", "nombre": "D1"}, {"codigo": "d2", "nombre": "D2"}, {"codigo": "d3", "nombre": "D3"}]	\N	\N	\N	Se confirmará el significado de D1, D2 y D3.	f	701	t	2026-11-21 19:25:15.867157-05	7. Instalaciones y adecuaciones	\N
-277	24	inst_materiales	Materiales usados	opciones	f	[{"codigo": "union_simple_pvc", "nombre": "Unión simple PVC"}, {"codigo": "codo_90_pvc", "nombre": "Codo 90 PVC"}, {"codigo": "adaptador_macho_pvc", "nombre": "Adaptador macho PVC"}, {"codigo": "adaptador_hembra_pvc", "nombre": "Adaptador hembra PVC"}, {"codigo": "buje_soldado", "nombre": "Buje soldado"}, {"codigo": "valvula_incorporacion", "nombre": "Válvula de incorporación"}, {"codigo": "buje_roscado", "nombre": "Buje roscado"}, {"codigo": "tapon_soldado", "nombre": "Tapón soldado"}, {"codigo": "tapon_roscado", "nombre": "Tapón roscado"}, {"codigo": "tee_pvc", "nombre": "Tee PVC"}, {"codigo": "galapago", "nombre": "Galápago"}, {"codigo": "pf_macho", "nombre": "PF macho"}, {"codigo": "collar_derivacion", "nombre": "Collar de derivación"}, {"codigo": "tuberia_pvc", "nombre": "Tubería PVC"}, {"codigo": "losa_concreto", "nombre": "Losa de concreto"}, {"codigo": "soldadura_liquida", "nombre": "Soldadura líquida"}, {"codigo": "cajilla", "nombre": "Cajilla"}, {"codigo": "pf_hembra", "nombre": "PF hembra"}, {"codigo": "valvula_antifraude", "nombre": "Válvula antifraude"}, {"codigo": "valvula_paso", "nombre": "Válvula de paso"}, {"codigo": "teflon", "nombre": "Teflón"}, {"codigo": "sellos", "nombre": "Sellos"}, {"codigo": "tuberia_pf", "nombre": "Tubería PF"}, {"codigo": "pf_a_pf", "nombre": "PF a PF"}]	\N	\N	\N	\N	f	702	t	2026-11-21 19:25:15.867188-05	7. Instalaciones y adecuaciones	\N
-278	23	inst_materiales	Materiales usados	opciones	f	[{"codigo": "union_simple_pvc", "nombre": "Unión simple PVC"}, {"codigo": "codo_90_pvc", "nombre": "Codo 90 PVC"}, {"codigo": "adaptador_macho_pvc", "nombre": "Adaptador macho PVC"}, {"codigo": "adaptador_hembra_pvc", "nombre": "Adaptador hembra PVC"}, {"codigo": "buje_soldado", "nombre": "Buje soldado"}, {"codigo": "valvula_incorporacion", "nombre": "Válvula de incorporación"}, {"codigo": "buje_roscado", "nombre": "Buje roscado"}, {"codigo": "tapon_soldado", "nombre": "Tapón soldado"}, {"codigo": "tapon_roscado", "nombre": "Tapón roscado"}, {"codigo": "tee_pvc", "nombre": "Tee PVC"}, {"codigo": "galapago", "nombre": "Galápago"}, {"codigo": "pf_macho", "nombre": "PF macho"}, {"codigo": "collar_derivacion", "nombre": "Collar de derivación"}, {"codigo": "tuberia_pvc", "nombre": "Tubería PVC"}, {"codigo": "losa_concreto", "nombre": "Losa de concreto"}, {"codigo": "soldadura_liquida", "nombre": "Soldadura líquida"}, {"codigo": "cajilla", "nombre": "Cajilla"}, {"codigo": "pf_hembra", "nombre": "PF hembra"}, {"codigo": "valvula_antifraude", "nombre": "Válvula antifraude"}, {"codigo": "valvula_paso", "nombre": "Válvula de paso"}, {"codigo": "teflon", "nombre": "Teflón"}, {"codigo": "sellos", "nombre": "Sellos"}, {"codigo": "tuberia_pf", "nombre": "Tubería PF"}, {"codigo": "pf_a_pf", "nombre": "PF a PF"}]	\N	\N	\N	\N	f	702	t	2026-11-21 19:25:15.867298-05	7. Instalaciones y adecuaciones	\N
-279	24	inst_mat_cantidades	Cantidades y diámetros de los materiales	texto	f	\N	\N	300	\N	Texto libre. Ejemplo: codo 90 PVC ½: 2; tubería PVC ½: 3 m.	f	703	t	2026-11-21 19:25:15.867408-05	7. Instalaciones y adecuaciones	\N
-280	23	inst_mat_cantidades	Cantidades y diámetros de los materiales	texto	f	\N	\N	300	\N	Texto libre. Ejemplo: codo 90 PVC ½: 2; tubería PVC ½: 3 m.	f	703	t	2026-11-21 19:25:15.867426-05	7. Instalaciones y adecuaciones	\N
-281	24	mi_lectura	Medidor instalado · Lectura (enteros y decimales del registro)	decimal	t	\N	0	99999999	m³	\N	f	704	t	2026-11-21 19:25:15.867442-05	7. Instalaciones y adecuaciones	\N
-282	23	mi_lectura	Medidor instalado · Lectura (enteros y decimales del registro)	decimal	f	\N	0	99999999	m³	\N	f	704	t	2026-11-21 19:25:15.867457-05	7. Instalaciones y adecuaciones	\N
-283	24	mi_marca	Medidor instalado · Marca	texto	f	\N	\N	30	\N	\N	f	705	t	2026-11-21 19:25:15.867472-05	7. Instalaciones y adecuaciones	\N
-284	23	mi_marca	Medidor instalado · Marca	texto	f	\N	\N	30	\N	\N	f	705	t	2026-11-21 19:25:15.867485-05	7. Instalaciones y adecuaciones	\N
-287	24	mi_serial	Medidor instalado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	707	t	2026-11-21 19:25:15.867528-05	7. Instalaciones y adecuaciones	\N
-288	23	mi_serial	Medidor instalado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	707	t	2026-11-21 19:25:15.867543-05	7. Instalaciones y adecuaciones	\N
-289	24	mi_serial_ilegible	Medidor instalado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	708	t	2026-11-21 19:25:15.867557-05	7. Instalaciones y adecuaciones	\N
-290	23	mi_serial_ilegible	Medidor instalado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	708	t	2026-11-21 19:25:15.867573-05	7. Instalaciones y adecuaciones	\N
-291	24	mi_diametro	Medidor instalado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	709	t	2026-11-21 19:25:15.867592-05	7. Instalaciones y adecuaciones	\N
-292	23	mi_diametro	Medidor instalado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	709	t	2026-11-21 19:25:15.867643-05	7. Instalaciones y adecuaciones	\N
-293	24	mi_precinto_tipo	Medidor instalado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	710	t	2026-11-21 19:25:15.86768-05	7. Instalaciones y adecuaciones	\N
-294	23	mi_precinto_tipo	Medidor instalado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	710	t	2026-11-21 19:25:15.867696-05	7. Instalaciones y adecuaciones	\N
-295	24	mi_precinto_serie	Medidor instalado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	711	t	2026-11-21 19:25:15.867712-05	7. Instalaciones y adecuaciones	\N
-296	23	mi_precinto_serie	Medidor instalado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	711	t	2026-11-21 19:25:15.867727-05	7. Instalaciones y adecuaciones	\N
-297	24	mi_anio	Medidor instalado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	712	t	2026-11-21 19:25:15.867743-05	7. Instalaciones y adecuaciones	\N
-298	23	mi_anio	Medidor instalado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	712	t	2026-11-21 19:25:15.867758-05	7. Instalaciones y adecuaciones	\N
-299	24	inst_forma_pago	Forma de pago	opcion	f	[{"codigo": "contado", "nombre": "Contado en la próxima facturación"}, {"codigo": "financiado", "nombre": "Financiado"}, {"codigo": "provisional", "nombre": "Provisional"}]	\N	\N	\N	\N	f	713	t	2026-11-21 19:25:15.867774-05	7. Instalaciones y adecuaciones	\N
-300	23	inst_forma_pago	Forma de pago	opcion	f	[{"codigo": "contado", "nombre": "Contado en la próxima facturación"}, {"codigo": "financiado", "nombre": "Financiado"}, {"codigo": "provisional", "nombre": "Provisional"}]	\N	\N	\N	\N	f	713	t	2026-11-21 19:25:15.867801-05	7. Instalaciones y adecuaciones	\N
-301	25	atendio_nombre	Nombre de quien atendió	texto	f	\N	\N	60	\N	Solo el nombre; sin cédula ni teléfono.	t	910	t	2026-11-21 19:25:15.871896-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
-302	25	atendio_relacion	Relación con el predio	opcion	f	[{"codigo": "propietario", "nombre": "Propietario"}, {"codigo": "familiar_propietario", "nombre": "Familiar del propietario"}, {"codigo": "arrendatario", "nombre": "Arrendatario (inquilino)"}, {"codigo": "poseedor", "nombre": "Poseedor"}, {"codigo": "residente", "nombre": "Residente u ocupante"}, {"codigo": "administrador", "nombre": "Administrador o encargado"}, {"codigo": "trabajador", "nombre": "Trabajador del predio (empleado, doméstico)"}, {"codigo": "otro", "nombre": "Otro (¿cuál?)"}]	\N	\N	\N	\N	f	911	t	2026-11-21 19:25:15.872153-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
-303	25	atendio_relacion_otra	¿Cuál otra relación?	texto	f	\N	\N	40	\N	No escriba nombres.	f	912	t	2026-11-21 19:25:15.872218-05	10. Quién atendió	{"es": "otro", "campo": "atendio_relacion"}
-304	24	atendio_nombre	Nombre de quien atendió	texto	f	\N	\N	60	\N	Solo el nombre; sin cédula ni teléfono.	t	910	t	2026-11-21 19:25:15.872242-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
-305	24	atendio_relacion	Relación con el predio	opcion	f	[{"codigo": "propietario", "nombre": "Propietario"}, {"codigo": "familiar_propietario", "nombre": "Familiar del propietario"}, {"codigo": "arrendatario", "nombre": "Arrendatario (inquilino)"}, {"codigo": "poseedor", "nombre": "Poseedor"}, {"codigo": "residente", "nombre": "Residente u ocupante"}, {"codigo": "administrador", "nombre": "Administrador o encargado"}, {"codigo": "trabajador", "nombre": "Trabajador del predio (empleado, doméstico)"}, {"codigo": "otro", "nombre": "Otro (¿cuál?)"}]	\N	\N	\N	\N	f	911	t	2026-11-21 19:25:15.872265-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
-306	24	atendio_relacion_otra	¿Cuál otra relación?	texto	f	\N	\N	40	\N	No escriba nombres.	f	912	t	2026-11-21 19:25:15.872315-05	10. Quién atendió	{"es": "otro", "campo": "atendio_relacion"}
-307	23	atendio_nombre	Nombre de quien atendió	texto	f	\N	\N	60	\N	Solo el nombre; sin cédula ni teléfono.	t	910	t	2026-11-21 19:25:15.872336-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
-308	23	atendio_relacion	Relación con el predio	opcion	f	[{"codigo": "propietario", "nombre": "Propietario"}, {"codigo": "familiar_propietario", "nombre": "Familiar del propietario"}, {"codigo": "arrendatario", "nombre": "Arrendatario (inquilino)"}, {"codigo": "poseedor", "nombre": "Poseedor"}, {"codigo": "residente", "nombre": "Residente u ocupante"}, {"codigo": "administrador", "nombre": "Administrador o encargado"}, {"codigo": "trabajador", "nombre": "Trabajador del predio (empleado, doméstico)"}, {"codigo": "otro", "nombre": "Otro (¿cuál?)"}]	\N	\N	\N	\N	f	911	t	2026-11-21 19:25:15.872358-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
-309	23	atendio_relacion_otra	¿Cuál otra relación?	texto	f	\N	\N	40	\N	No escriba nombres.	f	912	t	2026-11-21 19:25:15.872403-05	10. Quién atendió	{"es": "otro", "campo": "atendio_relacion"}
-310	26	atendio_nombre	Nombre de quien atendió	texto	f	\N	\N	60	\N	Solo el nombre; sin cédula ni teléfono.	t	910	t	2026-11-21 19:25:15.872423-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
-311	26	atendio_relacion	Relación con el predio	opcion	f	[{"codigo": "propietario", "nombre": "Propietario"}, {"codigo": "familiar_propietario", "nombre": "Familiar del propietario"}, {"codigo": "arrendatario", "nombre": "Arrendatario (inquilino)"}, {"codigo": "poseedor", "nombre": "Poseedor"}, {"codigo": "residente", "nombre": "Residente u ocupante"}, {"codigo": "administrador", "nombre": "Administrador o encargado"}, {"codigo": "trabajador", "nombre": "Trabajador del predio (empleado, doméstico)"}, {"codigo": "otro", "nombre": "Otro (¿cuál?)"}]	\N	\N	\N	\N	f	911	t	2026-11-21 19:25:15.872445-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
-312	26	atendio_relacion_otra	¿Cuál otra relación?	texto	f	\N	\N	40	\N	No escriba nombres.	f	912	t	2026-11-21 19:25:15.87249-05	10. Quién atendió	{"es": "otro", "campo": "atendio_relacion"}
-313	24	inst_modalidad	Instalación o cambio de medidor	opcion	t	[{"codigo": "instalacion", "nombre": "Instalación de medidor"}, {"codigo": "cambio", "nombre": "Cambio de medidor"}]	\N	\N	\N	Con «Cambio de medidor» aparecen los datos del medidor retirado.	f	100	t	2026-11-21 19:25:15.903823-05	1. Datos básicos	\N
-115	24	me_marca	Medidor retirado · Marca	texto	f	\N	\N	30	\N	\N	f	202	t	2026-11-21 19:25:15.863334-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-123	24	me_serial	Medidor retirado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	204	t	2026-11-21 19:25:15.863437-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-127	24	me_serial_ilegible	Medidor retirado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	205	t	2026-11-21 19:25:15.863491-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-131	24	me_diametro	Medidor retirado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	206	t	2026-11-21 19:25:15.863583-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-135	24	me_precinto_tipo	Medidor retirado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	207	t	2026-11-21 19:25:15.863729-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-139	24	me_precinto_serie	Medidor retirado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	208	t	2026-11-21 19:25:15.863787-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-143	24	me_anio	Medidor retirado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	209	t	2026-11-21 19:25:15.863844-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-147	24	me_talco	Talco	opciones	f	[{"codigo": "opaco", "nombre": "Opaco"}, {"codigo": "partido_fisurado", "nombre": "Partido o fisurado"}, {"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "transparente_ok", "nombre": "Transparente / ok"}, {"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "destruido", "nombre": "Destruido"}, {"codigo": "ilegible", "nombre": "Ilegible"}, {"codigo": "vidrio_roto", "nombre": "Vidrio roto"}, {"codigo": "sin_agujas", "nombre": "Sin agujas"}]	\N	\N	\N	\N	f	301	t	2026-11-21 19:25:15.863936-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-151	24	me_cuerpo	Cuerpo	opciones	f	[{"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "fisurado_roto", "nombre": "Fisurado o roto"}, {"codigo": "conexion_invertida", "nombre": "Conexión invertida"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	302	t	2026-11-21 19:25:15.864098-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-159	24	req_cambio_medidor	¿Se requiere cambio de medidor?	si_no	f	\N	\N	\N	\N	\N	f	304	t	2026-11-21 19:25:15.864323-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-163	24	calib_realizada	Prueba de calibración: ¿se realizó?	si_no	f	\N	\N	\N	\N	\N	f	305	t	2026-11-21 19:25:15.864383-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-155	24	me_registro	Registro	opciones	f	[{"codigo": "detenido", "nombre": "Medidor detenido"}, {"codigo": "giro_irregular", "nombre": "Giro irregular"}, {"codigo": "obstruido", "nombre": "Medidor obstruido"}, {"codigo": "mal_estado", "nombre": "Registro en mal estado"}]	\N	\N	\N	\N	f	303	t	2026-11-21 19:25:15.864209-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-167	24	calib_vol_patron	Volumen del patrón	decimal	f	\N	0	100000	L	\N	f	306	t	2026-11-21 19:25:15.86445-05	3. Estado del medidor retirado	{"es": true, "campo": "calib_realizada"}
-171	24	calib_vol_cliente	Volumen del cliente	decimal	f	\N	0	100000	L	\N	f	307	t	2026-11-21 19:25:15.864522-05	3. Estado del medidor retirado	{"es": true, "campo": "calib_realizada"}
-175	24	calib_error_pct	Error de la prueba	decimal	f	\N	-100	1000	%	\N	f	308	t	2026-11-21 19:25:15.864593-05	3. Estado del medidor retirado	{"es": true, "campo": "calib_realizada"}
-111	24	me_lectura	Medidor retirado · Lectura (enteros y decimales del registro)	decimal	t	\N	0	99999999	m³	\N	f	201	t	2026-11-21 19:25:15.863281-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-314	25	me_r	Medidor encontrado · R del medidor	opcion	f	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	210	t	2026-11-21 19:25:15.906467-05	2. Medidor encontrado	\N
-315	25	me_tipo_medidor	Medidor encontrado · Tipo de medidor	opcion	f	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	211	t	2026-11-21 19:25:15.906652-05	2. Medidor encontrado	\N
-316	24	me_r	Medidor retirado · R del medidor	opcion	t	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	210	t	2026-11-21 19:25:15.906699-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-317	24	me_tipo_medidor	Medidor retirado · Tipo de medidor	opcion	t	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	211	t	2026-11-21 19:25:15.906749-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-318	23	me_r	Medidor encontrado · R del medidor	opcion	f	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	210	t	2026-11-21 19:25:15.9068-05	2. Medidor encontrado	\N
-319	23	me_tipo_medidor	Medidor encontrado · Tipo de medidor	opcion	f	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	211	t	2026-11-21 19:25:15.90684-05	2. Medidor encontrado	\N
-320	26	me_r	Medidor encontrado · R del medidor	opcion	f	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	210	t	2026-11-21 19:25:15.906881-05	2. Medidor encontrado	\N
-321	26	me_tipo_medidor	Medidor encontrado · Tipo de medidor	opcion	f	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	211	t	2026-11-21 19:25:15.906918-05	2. Medidor encontrado	\N
-322	24	mi_r	Medidor instalado · R del medidor	opcion	t	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	712	t	2026-11-21 19:25:15.907077-05	7. Instalaciones y adecuaciones	\N
-323	24	mi_tipo_medidor	Medidor instalado · Tipo de medidor	opcion	t	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	712	t	2026-11-21 19:25:15.907258-05	7. Instalaciones y adecuaciones	\N
-324	23	mi_r	Medidor instalado · R del medidor	opcion	f	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	712	t	2026-11-21 19:25:15.907307-05	7. Instalaciones y adecuaciones	\N
-325	23	mi_tipo_medidor	Medidor instalado · Tipo de medidor	opcion	f	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	712	t	2026-11-21 19:25:15.907346-05	7. Instalaciones y adecuaciones	\N
-326	24	inst_lectura_remota	Lectura remota	opciones	f	[{"codigo": "remota", "nombre": "Se instaló lectura remota"}, {"codigo": "remota_pila", "nombre": "Se instaló lectura remota con pila"}]	\N	\N	\N	Marque solo lo que se instaló; si no se instaló, déjelo vacío.	f	714	t	2026-11-21 19:25:15.907469-05	7. Instalaciones y adecuaciones	\N
-327	24	inst_reubica_cajilla	¿Se reubicó la cajilla?	si_no	t	\N	\N	\N	\N	\N	f	715	t	2026-11-21 19:25:15.907708-05	7. Instalaciones y adecuaciones	\N
-328	23	inst_reubica_cajilla	¿Se reubicó la cajilla?	si_no	t	\N	\N	\N	\N	\N	f	715	t	2026-11-21 19:25:15.907869-05	7. Instalaciones y adecuaciones	\N
-118	25	me_tipo	Medidor encontrado · Tipo	texto	f	\N	\N	30	\N	\N	f	203	f	2026-11-21 19:25:15.863372-05	2. Medidor encontrado	\N
-120	23	me_tipo	Medidor encontrado · Tipo	texto	f	\N	\N	30	\N	\N	f	203	f	2026-11-21 19:25:15.863398-05	2. Medidor encontrado	\N
-121	26	me_tipo	Medidor encontrado · Tipo	texto	f	\N	\N	30	\N	\N	f	203	f	2026-11-21 19:25:15.863411-05	2. Medidor encontrado	\N
-285	24	mi_tipo	Medidor instalado · Tipo	texto	f	\N	\N	30	\N	\N	f	706	f	2026-11-21 19:25:15.8675-05	7. Instalaciones y adecuaciones	\N
-286	23	mi_tipo	Medidor instalado · Tipo	texto	f	\N	\N	30	\N	\N	f	706	f	2026-11-21 19:25:15.867514-05	7. Instalaciones y adecuaciones	\N
-119	24	me_tipo	Medidor retirado · Tipo	texto	f	\N	\N	30	\N	\N	f	203	f	2026-11-21 19:25:15.863385-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
-329	23	da_lugar_otra	¿Cuál otra actividad?	texto	f	\N	\N	120	\N	\N	f	1102	t	2026-11-21 19:25:16.018457-05	11. Actividades derivadas	{"es": "otra", "campo": "da_lugar"}
-330	25	da_lugar	¿Da lugar a otras actividades?	opciones	f	[{"codigo": "cambio_medidor", "nombre": "Cambio de medidor"}, {"codigo": "instalacion_medidor", "nombre": "Instalación de medidor"}, {"codigo": "accesorios", "nombre": "Instalación o cambio de accesorios"}, {"codigo": "reubicacion_cajilla", "nombre": "Reubicación de cajilla"}, {"codigo": "fuga_externa", "nombre": "Reparación de fuga por fuera de la casa (acometida, antes del medidor)"}, {"codigo": "posible_perdida", "nombre": "Posible pérdida"}, {"codigo": "otra", "nombre": "Otra"}]	\N	\N	\N	Marque las que correspondan; el supervisor las ve como pendientes hasta que se atiendan.	f	1101	t	2026-11-21 19:25:16.018718-05	11. Actividades derivadas	\N
-331	24	da_lugar_otra	¿Cuál otra actividad?	texto	f	\N	\N	120	\N	\N	f	1102	t	2026-11-21 19:25:16.018779-05	11. Actividades derivadas	{"es": "otra", "campo": "da_lugar"}
-332	26	da_lugar	¿Da lugar a otras actividades?	opciones	f	[{"codigo": "cambio_medidor", "nombre": "Cambio de medidor"}, {"codigo": "instalacion_medidor", "nombre": "Instalación de medidor"}, {"codigo": "accesorios", "nombre": "Instalación o cambio de accesorios"}, {"codigo": "reubicacion_cajilla", "nombre": "Reubicación de cajilla"}, {"codigo": "fuga_externa", "nombre": "Reparación de fuga por fuera de la casa (acometida, antes del medidor)"}, {"codigo": "posible_perdida", "nombre": "Posible pérdida"}, {"codigo": "otra", "nombre": "Otra"}]	\N	\N	\N	Marque las que correspondan; el supervisor las ve como pendientes hasta que se atiendan.	f	1101	t	2026-11-21 19:25:16.018798-05	11. Actividades derivadas	\N
-333	25	da_lugar_otra	¿Cuál otra actividad?	texto	f	\N	\N	120	\N	\N	f	1102	t	2026-11-21 19:25:16.01884-05	11. Actividades derivadas	{"es": "otra", "campo": "da_lugar"}
-334	24	da_lugar	¿Da lugar a otras actividades?	opciones	f	[{"codigo": "cambio_medidor", "nombre": "Cambio de medidor"}, {"codigo": "instalacion_medidor", "nombre": "Instalación de medidor"}, {"codigo": "accesorios", "nombre": "Instalación o cambio de accesorios"}, {"codigo": "reubicacion_cajilla", "nombre": "Reubicación de cajilla"}, {"codigo": "fuga_externa", "nombre": "Reparación de fuga por fuera de la casa (acometida, antes del medidor)"}, {"codigo": "posible_perdida", "nombre": "Posible pérdida"}, {"codigo": "otra", "nombre": "Otra"}]	\N	\N	\N	Marque las que correspondan; el supervisor las ve como pendientes hasta que se atiendan.	f	1101	t	2026-11-21 19:25:16.018856-05	11. Actividades derivadas	\N
-335	26	da_lugar_otra	¿Cuál otra actividad?	texto	f	\N	\N	120	\N	\N	f	1102	t	2026-11-21 19:25:16.0189-05	11. Actividades derivadas	{"es": "otra", "campo": "da_lugar"}
-336	23	da_lugar	¿Da lugar a otras actividades?	opciones	f	[{"codigo": "cambio_medidor", "nombre": "Cambio de medidor"}, {"codigo": "instalacion_medidor", "nombre": "Instalación de medidor"}, {"codigo": "accesorios", "nombre": "Instalación o cambio de accesorios"}, {"codigo": "reubicacion_cajilla", "nombre": "Reubicación de cajilla"}, {"codigo": "fuga_externa", "nombre": "Reparación de fuga por fuera de la casa (acometida, antes del medidor)"}, {"codigo": "posible_perdida", "nombre": "Posible pérdida"}, {"codigo": "otra", "nombre": "Otra"}]	\N	\N	\N	Marque las que correspondan; el supervisor las ve como pendientes hasta que se atiendan.	f	1101	t	2026-11-21 19:25:16.018915-05	11. Actividades derivadas	\N
+1	22	hallazgo	Hallazgo	opcion	t	[{"codigo": "ubicado", "nombre": "Predio ubicado"}, {"codigo": "no_existe", "nombre": "No existe"}, {"codigo": "demolido", "nombre": "Demolido"}, {"codigo": "lote", "nombre": "Es un lote"}]	\N	\N	\N	\N	f	1	t	2026-11-21 19:29:28.353489-05	\N	\N
+2	22	direccion_encontrada	Dirección encontrada en terreno	texto	f	\N	\N	120	\N	\N	f	2	t	2026-11-21 19:29:28.354017-05	\N	\N
+3	21	diametro	Diámetro de la acometida	opcion	t	[{"codigo": "media", "nombre": "1/2 pulgada"}, {"codigo": "tres_cuartos", "nombre": "3/4 pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "mayor", "nombre": "Mayor de 1 pulgada"}, {"codigo": "no_determinado", "nombre": "No se pudo determinar"}]	\N	\N	\N	\N	f	1	t	2026-11-21 19:29:28.354046-05	\N	\N
+4	21	material	Material	opcion	t	[{"codigo": "pvc", "nombre": "PVC"}, {"codigo": "polietileno", "nombre": "Polietileno"}, {"codigo": "cobre", "nombre": "Cobre"}, {"codigo": "galvanizado", "nombre": "Hierro galvanizado"}, {"codigo": "otro", "nombre": "Otro"}, {"codigo": "no_determinado", "nombre": "No se pudo determinar"}]	\N	\N	\N	\N	f	2	t	2026-11-21 19:29:28.354083-05	\N	\N
+5	21	estado_acometida	Estado de la acometida	opcion	t	[{"codigo": "bueno", "nombre": "Bueno"}, {"codigo": "regular", "nombre": "Regular"}, {"codigo": "malo", "nombre": "Malo"}]	\N	\N	\N	\N	f	3	t	2026-11-21 19:29:28.354121-05	\N	\N
+6	21	tiene_medidor	¿Tiene medidor?	si_no	f	\N	\N	\N	\N	\N	f	4	t	2026-11-21 19:29:28.354146-05	\N	\N
+7	21	profundidad	Profundidad de la conexión	entero	f	\N	0	500	cm	\N	f	5	t	2026-11-21 19:29:28.354159-05	\N	\N
+8	20	lectura	Lectura del medidor	entero	t	\N	0	9999999	m³	\N	f	1	t	2026-11-21 19:29:28.354173-05	\N	\N
+9	20	serial_medidor	Serial del medidor	texto	t	\N	\N	30	\N	\N	f	2	t	2026-11-21 19:29:28.354184-05	\N	\N
+10	20	numero_sello	Número del sello instalado	texto	t	\N	\N	30	\N	\N	f	3	t	2026-11-21 19:29:28.354196-05	\N	\N
+11	19	forma_corte	Forma del corte	opcion	f	[{"codigo": "en_red", "nombre": "En red"}, {"codigo": "taponamiento", "nombre": "Taponamiento"}, {"codigo": "retiro_acometida", "nombre": "Retiro de la acometida"}]	\N	\N	\N	\N	f	1	t	2026-11-21 19:29:28.35421-05	\N	\N
+12	19	materiales	Materiales usados	texto	f	\N	\N	300	\N	\N	f	2	t	2026-11-21 19:29:28.354234-05	\N	\N
+13	19	reposicion_pavimento	¿Hubo reposición de pavimento?	si_no	t	\N	\N	\N	\N	\N	f	3	t	2026-11-21 19:29:28.354246-05	\N	\N
+14	18	estado_servicio	Estado del servicio	opcion	t	[{"codigo": "sigue_interrumpido", "nombre": "Sigue interrumpido"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}]	\N	\N	\N	\N	f	1	t	2026-11-21 19:29:28.35426-05	\N	\N
+15	17	lectura_inicial	Lectura inicial	entero	t	\N	0	9999999	m³	\N	f	1	t	2026-11-21 19:29:28.354284-05	\N	\N
+16	17	referencia_soporte	Referencia del soporte de pago o del acuerdo (solo el número)	texto	f	\N	\N	40	\N	\N	f	2	t	2026-11-21 19:29:28.354296-05	\N	\N
+17	16	lectura_inicial	Lectura inicial	entero	t	\N	0	9999999	m³	\N	f	1	t	2026-11-21 19:29:28.354309-05	\N	\N
+18	16	referencia_soporte	Referencia del soporte de pago o del acuerdo (solo el número)	texto	f	\N	\N	40	\N	\N	f	2	t	2026-11-21 19:29:28.354321-05	\N	\N
+19	15	serial_retirado	Serial del medidor retirado	texto	t	\N	\N	30	\N	\N	f	1	t	2026-11-21 19:29:28.354334-05	\N	\N
+20	15	lectura_retirado	Lectura del medidor retirado	entero	t	\N	0	9999999	m³	\N	f	2	t	2026-11-21 19:29:28.354345-05	\N	\N
+21	15	serial_nuevo	Serial del medidor nuevo	texto	t	\N	\N	30	\N	\N	f	3	t	2026-11-21 19:29:28.354357-05	\N	\N
+22	15	lectura_inicial	Lectura inicial del medidor nuevo	entero	t	\N	0	9999999	m³	\N	f	4	t	2026-11-21 19:29:28.35437-05	\N	\N
+31	15	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:29:28.354769-05	\N	\N
+32	15	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:29:28.354908-05	\N	\N
+33	15	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:29:28.354923-05	\N	\N
+34	15	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:29:28.354936-05	\N	\N
+35	15	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:29:28.354952-05	\N	\N
+36	16	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:29:28.354966-05	\N	\N
+37	16	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:29:28.354978-05	\N	\N
+38	16	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:29:28.354992-05	\N	\N
+39	16	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:29:28.355004-05	\N	\N
+40	16	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:29:28.355016-05	\N	\N
+41	17	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:29:28.355029-05	\N	\N
+42	17	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:29:28.355045-05	\N	\N
+43	17	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:29:28.355058-05	\N	\N
+44	17	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:29:28.355071-05	\N	\N
+45	17	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:29:28.355082-05	\N	\N
+46	18	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:29:28.355095-05	\N	\N
+47	18	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:29:28.355106-05	\N	\N
+48	18	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:29:28.355119-05	\N	\N
+49	18	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:29:28.355131-05	\N	\N
+50	18	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:29:28.355273-05	\N	\N
+51	19	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:29:28.355288-05	\N	\N
+52	19	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:29:28.3553-05	\N	\N
+53	19	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:29:28.355314-05	\N	\N
+54	19	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:29:28.355326-05	\N	\N
+55	19	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:29:28.355338-05	\N	\N
+56	20	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:29:28.355351-05	\N	\N
+57	20	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:29:28.355363-05	\N	\N
+58	20	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:29:28.355376-05	\N	\N
+59	20	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:29:28.355388-05	\N	\N
+60	20	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:29:28.3554-05	\N	\N
+61	21	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:29:28.355412-05	\N	\N
+62	21	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:29:28.355424-05	\N	\N
+63	21	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:29:28.355436-05	\N	\N
+64	21	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:29:28.355449-05	\N	\N
+65	21	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:29:28.355461-05	\N	\N
+66	22	despeje_caja	Se hizo despeje de caja o adecuación del sitio	si_no	f	\N	\N	\N	\N	\N	f	90	t	2026-11-21 19:29:28.355473-05	\N	\N
+67	22	despeje_observacion	Qué se hizo en la caja (opcional, corto)	texto	f	\N	\N	120	\N	\N	f	91	t	2026-11-21 19:29:28.355485-05	\N	\N
+68	22	visita_concertada	Fue visita concertada o con acompañamiento	si_no	f	\N	\N	\N	\N	\N	f	92	t	2026-11-21 19:29:28.355498-05	\N	\N
+69	22	cita_acordada	Día y hora acordados con el usuario (visita concertada)	dia_hora	f	\N	\N	\N	\N	\N	f	93	t	2026-11-21 19:29:28.355511-05	\N	\N
+70	22	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	t	2026-11-21 19:29:28.355523-05	\N	\N
+29	25	numero_pqr	Número de la PQR	texto	t	\N	\N	30	\N	\N	f	1	f	2026-11-21 19:29:28.35448-05	\N	\N
+30	25	hallazgo_revision	Qué se encontró	texto	t	\N	\N	300	\N	\N	f	2	f	2026-11-21 19:29:28.35449-05	\N	\N
+73	25	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	f	2026-11-21 19:29:28.35583-05	\N	\N
+23	24	serial_nuevo	Serial del medidor instalado	texto	t	\N	\N	30	\N	\N	f	1	f	2026-11-21 19:29:28.354383-05	\N	\N
+24	24	lectura_inicial	Lectura inicial	entero	t	\N	0	9999999	m³	\N	f	2	f	2026-11-21 19:29:28.354394-05	\N	\N
+25	24	accesorios	Accesorios instalados	texto	f	\N	\N	300	\N	\N	f	3	f	2026-11-21 19:29:28.354406-05	\N	\N
+72	24	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	f	2026-11-21 19:29:28.355818-05	\N	\N
+26	23	diametro	Diámetro de la acometida	opcion	t	[{"codigo": "media", "nombre": "1/2 pulgada"}, {"codigo": "tres_cuartos", "nombre": "3/4 pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "mayor", "nombre": "Mayor de 1 pulgada"}]	\N	\N	\N	\N	f	1	f	2026-11-21 19:29:28.354419-05	\N	\N
+27	23	material	Material	opcion	t	[{"codigo": "pvc", "nombre": "PVC"}, {"codigo": "polietileno", "nombre": "Polietileno"}, {"codigo": "cobre", "nombre": "Cobre"}, {"codigo": "otro", "nombre": "Otro"}]	\N	\N	\N	\N	f	2	f	2026-11-21 19:29:28.354444-05	\N	\N
+28	23	longitud	Longitud instalada	decimal	f	\N	0	500	m	\N	f	3	f	2026-11-21 19:29:28.354467-05	\N	\N
+71	23	observacion	Observación (no escriba nombres, cédulas ni teléfonos)	texto	f	\N	\N	300	\N	\N	f	99	f	2026-11-21 19:29:28.355695-05	\N	\N
+74	25	serie_acta	Serie del acta física	texto	t	\N	\N	20	\N	La serie impresa en el papel.	f	101	t	2026-11-21 19:29:28.443485-05	1. Datos básicos	\N
+75	24	serie_acta	Serie del acta física	texto	t	\N	\N	20	\N	La serie impresa en el papel.	f	101	t	2026-11-21 19:29:28.44364-05	1. Datos básicos	\N
+76	23	serie_acta	Serie del acta física	texto	t	\N	\N	20	\N	La serie impresa en el papel.	f	101	t	2026-11-21 19:29:28.443656-05	1. Datos básicos	\N
+77	26	serie_acta	Serie del acta física	texto	t	\N	\N	20	\N	La serie impresa en el papel.	f	101	t	2026-11-21 19:29:28.443669-05	1. Datos básicos	\N
+78	25	orden_servicio	Orden de servicio	texto	t	\N	\N	20	\N	\N	f	102	t	2026-11-21 19:29:28.443682-05	1. Datos básicos	\N
+79	24	orden_servicio	Orden de servicio	texto	t	\N	\N	20	\N	\N	f	102	t	2026-11-21 19:29:28.443696-05	1. Datos básicos	\N
+80	23	orden_servicio	Orden de servicio	texto	t	\N	\N	20	\N	\N	f	102	t	2026-11-21 19:29:28.443709-05	1. Datos básicos	\N
+81	26	orden_servicio	Orden de servicio	texto	t	\N	\N	20	\N	\N	f	102	t	2026-11-21 19:29:28.443722-05	1. Datos básicos	\N
+82	25	tipo_orden	Tipo de orden	texto	f	\N	\N	40	\N	\N	f	103	t	2026-11-21 19:29:28.443734-05	1. Datos básicos	\N
+83	24	tipo_orden	Tipo de orden	texto	f	\N	\N	40	\N	\N	f	103	t	2026-11-21 19:29:28.443746-05	1. Datos básicos	\N
+84	23	tipo_orden	Tipo de orden	texto	f	\N	\N	40	\N	\N	f	103	t	2026-11-21 19:29:28.443757-05	1. Datos básicos	\N
+85	26	tipo_orden	Tipo de orden	texto	f	\N	\N	40	\N	\N	f	103	t	2026-11-21 19:29:28.443768-05	1. Datos básicos	\N
+86	25	contratista	Contratista	texto	f	\N	\N	60	\N	\N	f	104	t	2026-11-21 19:29:28.44378-05	1. Datos básicos	\N
+87	24	contratista	Contratista	texto	f	\N	\N	60	\N	\N	f	104	t	2026-11-21 19:29:28.443791-05	1. Datos básicos	\N
+88	23	contratista	Contratista	texto	f	\N	\N	60	\N	\N	f	104	t	2026-11-21 19:29:28.443803-05	1. Datos básicos	\N
+89	26	contratista	Contratista	texto	f	\N	\N	60	\N	\N	f	104	t	2026-11-21 19:29:28.443815-05	1. Datos básicos	\N
+241	26	fuga_imperceptible	¿Hay fugas imperceptibles?	si_no	f	\N	\N	\N	\N	\N	f	509	t	2026-11-21 19:29:28.447117-05	5. Instalaciones internas	\N
+90	25	tipo_servicio	Tipo de servicio	opcion	t	[{"codigo": "residencial", "nombre": "Residencial"}, {"codigo": "comercial", "nombre": "Comercial"}, {"codigo": "industrial", "nombre": "Industrial"}, {"codigo": "oficial", "nombre": "Oficial"}]	\N	\N	\N	\N	f	105	t	2026-11-21 19:29:28.443829-05	1. Datos básicos	\N
+91	24	tipo_servicio	Tipo de servicio	opcion	t	[{"codigo": "residencial", "nombre": "Residencial"}, {"codigo": "comercial", "nombre": "Comercial"}, {"codigo": "industrial", "nombre": "Industrial"}, {"codigo": "oficial", "nombre": "Oficial"}]	\N	\N	\N	\N	f	105	t	2026-11-21 19:29:28.443897-05	1. Datos básicos	\N
+92	23	tipo_servicio	Tipo de servicio	opcion	t	[{"codigo": "residencial", "nombre": "Residencial"}, {"codigo": "comercial", "nombre": "Comercial"}, {"codigo": "industrial", "nombre": "Industrial"}, {"codigo": "oficial", "nombre": "Oficial"}]	\N	\N	\N	\N	f	105	t	2026-11-21 19:29:28.443931-05	1. Datos básicos	\N
+93	26	tipo_servicio	Tipo de servicio	opcion	t	[{"codigo": "residencial", "nombre": "Residencial"}, {"codigo": "comercial", "nombre": "Comercial"}, {"codigo": "industrial", "nombre": "Industrial"}, {"codigo": "oficial", "nombre": "Oficial"}]	\N	\N	\N	\N	f	105	t	2026-11-21 19:29:28.443958-05	1. Datos básicos	\N
+94	25	hora_inicio	Hora de inicio	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	106	t	2026-11-21 19:29:28.443983-05	1. Datos básicos	\N
+95	24	hora_inicio	Hora de inicio	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	106	t	2026-11-21 19:29:28.443996-05	1. Datos básicos	\N
+96	23	hora_inicio	Hora de inicio	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	106	t	2026-11-21 19:29:28.444008-05	1. Datos básicos	\N
+97	26	hora_inicio	Hora de inicio	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	106	t	2026-11-21 19:29:28.444021-05	1. Datos básicos	\N
+98	25	hora_final	Hora final	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	107	t	2026-11-21 19:29:28.444032-05	1. Datos básicos	\N
+99	24	hora_final	Hora final	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	107	t	2026-11-21 19:29:28.444045-05	1. Datos básicos	\N
+100	23	hora_final	Hora final	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	107	t	2026-11-21 19:29:28.444057-05	1. Datos básicos	\N
+101	26	hora_final	Hora final	dia_hora	t	\N	\N	\N	\N	Día y hora.	f	107	t	2026-11-21 19:29:28.44407-05	1. Datos básicos	\N
+102	25	habitantes	Habitantes del predio	entero	f	\N	0	99	\N	\N	f	108	t	2026-11-21 19:29:28.444085-05	1. Datos básicos	\N
+103	24	habitantes	Habitantes del predio	entero	f	\N	0	99	\N	\N	f	108	t	2026-11-21 19:29:28.444098-05	1. Datos básicos	\N
+104	23	habitantes	Habitantes del predio	entero	f	\N	0	99	\N	\N	f	108	t	2026-11-21 19:29:28.44411-05	1. Datos básicos	\N
+105	26	habitantes	Habitantes del predio	entero	f	\N	0	99	\N	\N	f	108	t	2026-11-21 19:29:28.444122-05	1. Datos básicos	\N
+106	25	acompanado	¿El usuario hizo uso del derecho a estar acompañado de un técnico o testigo?	si_no	f	\N	\N	\N	\N	\N	f	109	t	2026-11-21 19:29:28.444134-05	1. Datos básicos	\N
+107	24	acompanado	¿El usuario hizo uso del derecho a estar acompañado de un técnico o testigo?	si_no	f	\N	\N	\N	\N	\N	f	109	t	2026-11-21 19:29:28.444146-05	1. Datos básicos	\N
+108	23	acompanado	¿El usuario hizo uso del derecho a estar acompañado de un técnico o testigo?	si_no	f	\N	\N	\N	\N	\N	f	109	t	2026-11-21 19:29:28.444158-05	1. Datos básicos	\N
+109	26	acompanado	¿El usuario hizo uso del derecho a estar acompañado de un técnico o testigo?	si_no	f	\N	\N	\N	\N	\N	f	109	t	2026-11-21 19:29:28.44417-05	1. Datos básicos	\N
+110	25	me_lectura	Medidor encontrado · Lectura (enteros y decimales del registro)	decimal	f	\N	0	99999999	m³	\N	f	201	t	2026-11-21 19:29:28.444182-05	2. Medidor encontrado	\N
+112	23	me_lectura	Medidor encontrado · Lectura (enteros y decimales del registro)	decimal	f	\N	0	99999999	m³	\N	f	201	t	2026-11-21 19:29:28.444207-05	2. Medidor encontrado	\N
+113	26	me_lectura	Medidor encontrado · Lectura (enteros y decimales del registro)	decimal	f	\N	0	99999999	m³	\N	f	201	t	2026-11-21 19:29:28.44422-05	2. Medidor encontrado	\N
+114	25	me_marca	Medidor encontrado · Marca	texto	f	\N	\N	30	\N	\N	f	202	t	2026-11-21 19:29:28.444232-05	2. Medidor encontrado	\N
+116	23	me_marca	Medidor encontrado · Marca	texto	f	\N	\N	30	\N	\N	f	202	t	2026-11-21 19:29:28.444257-05	2. Medidor encontrado	\N
+117	26	me_marca	Medidor encontrado · Marca	texto	f	\N	\N	30	\N	\N	f	202	t	2026-11-21 19:29:28.444268-05	2. Medidor encontrado	\N
+122	25	me_serial	Medidor encontrado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	204	t	2026-11-21 19:29:28.444329-05	2. Medidor encontrado	\N
+124	23	me_serial	Medidor encontrado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	204	t	2026-11-21 19:29:28.444354-05	2. Medidor encontrado	\N
+125	26	me_serial	Medidor encontrado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	204	t	2026-11-21 19:29:28.444366-05	2. Medidor encontrado	\N
+126	25	me_serial_ilegible	Medidor encontrado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	205	t	2026-11-21 19:29:28.444378-05	2. Medidor encontrado	\N
+128	23	me_serial_ilegible	Medidor encontrado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	205	t	2026-11-21 19:29:28.444407-05	2. Medidor encontrado	\N
+129	26	me_serial_ilegible	Medidor encontrado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	205	t	2026-11-21 19:29:28.44442-05	2. Medidor encontrado	\N
+130	25	me_diametro	Medidor encontrado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	206	t	2026-11-21 19:29:28.444437-05	2. Medidor encontrado	\N
+242	25	geofono	¿Se hizo detección con geófono?	si_no	f	\N	\N	\N	\N	\N	f	510	t	2026-11-21 19:29:28.447132-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
+132	23	me_diametro	Medidor encontrado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	206	t	2026-11-21 19:29:28.444528-05	2. Medidor encontrado	\N
+133	26	me_diametro	Medidor encontrado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	206	t	2026-11-21 19:29:28.444564-05	2. Medidor encontrado	\N
+134	25	me_precinto_tipo	Medidor encontrado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	207	t	2026-11-21 19:29:28.444598-05	2. Medidor encontrado	\N
+136	23	me_precinto_tipo	Medidor encontrado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	207	t	2026-11-21 19:29:28.444626-05	2. Medidor encontrado	\N
+137	26	me_precinto_tipo	Medidor encontrado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	207	t	2026-11-21 19:29:28.44464-05	2. Medidor encontrado	\N
+138	25	me_precinto_serie	Medidor encontrado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	208	t	2026-11-21 19:29:28.444653-05	2. Medidor encontrado	\N
+140	23	me_precinto_serie	Medidor encontrado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	208	t	2026-11-21 19:29:28.444682-05	2. Medidor encontrado	\N
+141	26	me_precinto_serie	Medidor encontrado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	208	t	2026-11-21 19:29:28.444695-05	2. Medidor encontrado	\N
+142	25	me_anio	Medidor encontrado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	209	t	2026-11-21 19:29:28.44471-05	2. Medidor encontrado	\N
+144	23	me_anio	Medidor encontrado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	209	t	2026-11-21 19:29:28.444735-05	2. Medidor encontrado	\N
+145	26	me_anio	Medidor encontrado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	209	t	2026-11-21 19:29:28.444748-05	2. Medidor encontrado	\N
+146	25	me_talco	Talco	opciones	f	[{"codigo": "opaco", "nombre": "Opaco"}, {"codigo": "partido_fisurado", "nombre": "Partido o fisurado"}, {"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "transparente_ok", "nombre": "Transparente / ok"}, {"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "destruido", "nombre": "Destruido"}, {"codigo": "ilegible", "nombre": "Ilegible"}, {"codigo": "vidrio_roto", "nombre": "Vidrio roto"}, {"codigo": "sin_agujas", "nombre": "Sin agujas"}]	\N	\N	\N	\N	f	301	t	2026-11-21 19:29:28.444764-05	3. Estado del medidor	\N
+148	23	me_talco	Talco	opciones	f	[{"codigo": "opaco", "nombre": "Opaco"}, {"codigo": "partido_fisurado", "nombre": "Partido o fisurado"}, {"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "transparente_ok", "nombre": "Transparente / ok"}, {"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "destruido", "nombre": "Destruido"}, {"codigo": "ilegible", "nombre": "Ilegible"}, {"codigo": "vidrio_roto", "nombre": "Vidrio roto"}, {"codigo": "sin_agujas", "nombre": "Sin agujas"}]	\N	\N	\N	\N	f	301	t	2026-11-21 19:29:28.44486-05	3. Estado del medidor	\N
+149	26	me_talco	Talco	opciones	f	[{"codigo": "opaco", "nombre": "Opaco"}, {"codigo": "partido_fisurado", "nombre": "Partido o fisurado"}, {"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "transparente_ok", "nombre": "Transparente / ok"}, {"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "destruido", "nombre": "Destruido"}, {"codigo": "ilegible", "nombre": "Ilegible"}, {"codigo": "vidrio_roto", "nombre": "Vidrio roto"}, {"codigo": "sin_agujas", "nombre": "Sin agujas"}]	\N	\N	\N	\N	f	301	t	2026-11-21 19:29:28.444902-05	3. Estado del medidor	\N
+150	25	me_cuerpo	Cuerpo	opciones	f	[{"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "fisurado_roto", "nombre": "Fisurado o roto"}, {"codigo": "conexion_invertida", "nombre": "Conexión invertida"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	302	t	2026-11-21 19:29:28.444943-05	3. Estado del medidor	\N
+152	23	me_cuerpo	Cuerpo	opciones	f	[{"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "fisurado_roto", "nombre": "Fisurado o roto"}, {"codigo": "conexion_invertida", "nombre": "Conexión invertida"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	302	t	2026-11-21 19:29:28.444998-05	3. Estado del medidor	\N
+153	26	me_cuerpo	Cuerpo	opciones	f	[{"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "fisurado_roto", "nombre": "Fisurado o roto"}, {"codigo": "conexion_invertida", "nombre": "Conexión invertida"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	302	t	2026-11-21 19:29:28.445024-05	3. Estado del medidor	\N
+154	25	me_registro	Registro	opciones	f	[{"codigo": "detenido", "nombre": "Medidor detenido"}, {"codigo": "giro_irregular", "nombre": "Giro irregular"}, {"codigo": "obstruido", "nombre": "Medidor obstruido"}, {"codigo": "mal_estado", "nombre": "Registro en mal estado"}]	\N	\N	\N	\N	f	303	t	2026-11-21 19:29:28.445051-05	3. Estado del medidor	\N
+156	23	me_registro	Registro	opciones	f	[{"codigo": "detenido", "nombre": "Medidor detenido"}, {"codigo": "giro_irregular", "nombre": "Giro irregular"}, {"codigo": "obstruido", "nombre": "Medidor obstruido"}, {"codigo": "mal_estado", "nombre": "Registro en mal estado"}]	\N	\N	\N	\N	f	303	t	2026-11-21 19:29:28.445118-05	3. Estado del medidor	\N
+157	26	me_registro	Registro	opciones	f	[{"codigo": "detenido", "nombre": "Medidor detenido"}, {"codigo": "giro_irregular", "nombre": "Giro irregular"}, {"codigo": "obstruido", "nombre": "Medidor obstruido"}, {"codigo": "mal_estado", "nombre": "Registro en mal estado"}]	\N	\N	\N	\N	f	303	t	2026-11-21 19:29:28.445145-05	3. Estado del medidor	\N
+158	25	req_cambio_medidor	¿Se requiere cambio de medidor?	si_no	t	\N	\N	\N	\N	\N	f	304	t	2026-11-21 19:29:28.445171-05	3. Estado del medidor	\N
+160	23	req_cambio_medidor	¿Se requiere cambio de medidor?	si_no	f	\N	\N	\N	\N	\N	f	304	t	2026-11-21 19:29:28.445201-05	3. Estado del medidor	\N
+161	26	req_cambio_medidor	¿Se requiere cambio de medidor?	si_no	t	\N	\N	\N	\N	\N	f	304	t	2026-11-21 19:29:28.445215-05	3. Estado del medidor	\N
+162	25	calib_realizada	Prueba de calibración: ¿se realizó?	si_no	f	\N	\N	\N	\N	\N	f	305	t	2026-11-21 19:29:28.445229-05	3. Estado del medidor	\N
+164	23	calib_realizada	Prueba de calibración: ¿se realizó?	si_no	f	\N	\N	\N	\N	\N	f	305	t	2026-11-21 19:29:28.445255-05	3. Estado del medidor	\N
+165	26	calib_realizada	Prueba de calibración: ¿se realizó?	si_no	f	\N	\N	\N	\N	\N	f	305	t	2026-11-21 19:29:28.445268-05	3. Estado del medidor	\N
+166	25	calib_vol_patron	Volumen del patrón	decimal	f	\N	0	100000	L	\N	f	306	t	2026-11-21 19:29:28.445281-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
+168	23	calib_vol_patron	Volumen del patrón	decimal	f	\N	0	100000	L	\N	f	306	t	2026-11-21 19:29:28.445435-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
+169	26	calib_vol_patron	Volumen del patrón	decimal	f	\N	0	100000	L	\N	f	306	t	2026-11-21 19:29:28.445452-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
+170	25	calib_vol_cliente	Volumen del cliente	decimal	f	\N	0	100000	L	\N	f	307	t	2026-11-21 19:29:28.445471-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
+172	23	calib_vol_cliente	Volumen del cliente	decimal	f	\N	0	100000	L	\N	f	307	t	2026-11-21 19:29:28.445507-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
+173	26	calib_vol_cliente	Volumen del cliente	decimal	f	\N	0	100000	L	\N	f	307	t	2026-11-21 19:29:28.445525-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
+174	25	calib_error_pct	Error de la prueba	decimal	f	\N	-100	1000	%	\N	f	308	t	2026-11-21 19:29:28.445542-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
+176	23	calib_error_pct	Error de la prueba	decimal	f	\N	-100	1000	%	\N	f	308	t	2026-11-21 19:29:28.445577-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
+177	26	calib_error_pct	Error de la prueba	decimal	f	\N	-100	1000	%	\N	f	308	t	2026-11-21 19:29:28.445594-05	3. Estado del medidor	{"es": true, "campo": "calib_realizada"}
+178	25	acom_diametro	Acometida · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	401	t	2026-11-21 19:29:28.445613-05	4. Acometida y accesorios	\N
+179	24	acom_diametro	Acometida · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	401	t	2026-11-21 19:29:28.445651-05	4. Acometida y accesorios	\N
+180	23	acom_diametro	Acometida · Diámetro	opcion	t	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	401	t	2026-11-21 19:29:28.445688-05	4. Acometida y accesorios	\N
+181	26	acom_diametro	Acometida · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	401	t	2026-11-21 19:29:28.445724-05	4. Acometida y accesorios	\N
+182	25	acom_estado	Acometida · Estado	opciones	f	[{"codigo": "fugas_visibles", "nombre": "Fugas visibles"}, {"codigo": "derivacion_no_autorizada", "nombre": "Derivación no autorizada"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "conexion_directa", "nombre": "Conexión directa"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	402	t	2026-11-21 19:29:28.445757-05	4. Acometida y accesorios	\N
+183	24	acom_estado	Acometida · Estado	opciones	f	[{"codigo": "fugas_visibles", "nombre": "Fugas visibles"}, {"codigo": "derivacion_no_autorizada", "nombre": "Derivación no autorizada"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "conexion_directa", "nombre": "Conexión directa"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	402	t	2026-11-21 19:29:28.445791-05	4. Acometida y accesorios	\N
+184	23	acom_estado	Acometida · Estado	opciones	f	[{"codigo": "fugas_visibles", "nombre": "Fugas visibles"}, {"codigo": "derivacion_no_autorizada", "nombre": "Derivación no autorizada"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "conexion_directa", "nombre": "Conexión directa"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	402	t	2026-11-21 19:29:28.445823-05	4. Acometida y accesorios	\N
+185	26	acom_estado	Acometida · Estado	opciones	f	[{"codigo": "fugas_visibles", "nombre": "Fugas visibles"}, {"codigo": "derivacion_no_autorizada", "nombre": "Derivación no autorizada"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "conexion_directa", "nombre": "Conexión directa"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	402	t	2026-11-21 19:29:28.445867-05	4. Acometida y accesorios	\N
+186	25	cajilla	Cajilla	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "sin_fondo", "nombre": "Sin fondo"}, {"codigo": "tapada", "nombre": "Tapada"}, {"codigo": "sin_acceso", "nombre": "Sin acceso"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	403	t	2026-11-21 19:29:28.4459-05	4. Acometida y accesorios	\N
+187	24	cajilla	Cajilla	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "sin_fondo", "nombre": "Sin fondo"}, {"codigo": "tapada", "nombre": "Tapada"}, {"codigo": "sin_acceso", "nombre": "Sin acceso"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	403	t	2026-11-21 19:29:28.445931-05	4. Acometida y accesorios	\N
+188	23	cajilla	Cajilla	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "sin_fondo", "nombre": "Sin fondo"}, {"codigo": "tapada", "nombre": "Tapada"}, {"codigo": "sin_acceso", "nombre": "Sin acceso"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	403	t	2026-11-21 19:29:28.445964-05	4. Acometida y accesorios	\N
+189	26	cajilla	Cajilla	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "sin_fondo", "nombre": "Sin fondo"}, {"codigo": "tapada", "nombre": "Tapada"}, {"codigo": "sin_acceso", "nombre": "Sin acceso"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	403	t	2026-11-21 19:29:28.445994-05	4. Acometida y accesorios	\N
+190	25	reg_corte	Registro de corte	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	404	t	2026-11-21 19:29:28.446023-05	4. Acometida y accesorios	\N
+191	24	reg_corte	Registro de corte	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	404	t	2026-11-21 19:29:28.446047-05	4. Acometida y accesorios	\N
+192	23	reg_corte	Registro de corte	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	404	t	2026-11-21 19:29:28.446071-05	4. Acometida y accesorios	\N
+193	26	reg_corte	Registro de corte	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	404	t	2026-11-21 19:29:28.446095-05	4. Acometida y accesorios	\N
+194	25	llave_control	Llave de control	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	405	t	2026-11-21 19:29:28.446119-05	4. Acometida y accesorios	\N
+195	24	llave_control	Llave de control	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	405	t	2026-11-21 19:29:28.446144-05	4. Acometida y accesorios	\N
+196	23	llave_control	Llave de control	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	405	t	2026-11-21 19:29:28.446168-05	4. Acometida y accesorios	\N
+197	26	llave_control	Llave de control	opciones	f	[{"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "mal_estado", "nombre": "En mal estado"}, {"codigo": "fuga", "nombre": "Presenta fuga"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	405	t	2026-11-21 19:29:28.446192-05	4. Acometida y accesorios	\N
+198	25	req_instalar	Tras el diagnóstico, el cliente requiere INSTALAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	406	t	2026-11-21 19:29:28.446216-05	4. Acometida y accesorios	\N
+199	24	req_instalar	Tras el diagnóstico, el cliente requiere INSTALAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	406	t	2026-11-21 19:29:28.446245-05	4. Acometida y accesorios	\N
+200	23	req_instalar	Tras el diagnóstico, el cliente requiere INSTALAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	406	t	2026-11-21 19:29:28.446273-05	4. Acometida y accesorios	\N
+201	26	req_instalar	Tras el diagnóstico, el cliente requiere INSTALAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	406	t	2026-11-21 19:29:28.4463-05	4. Acometida y accesorios	\N
+202	25	req_adecuar	Tras el diagnóstico, el cliente requiere ADECUAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	407	t	2026-11-21 19:29:28.446327-05	4. Acometida y accesorios	\N
+243	24	geofono	¿Se hizo detección con geófono?	si_no	f	\N	\N	\N	\N	\N	f	510	t	2026-11-21 19:29:28.447149-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
+203	24	req_adecuar	Tras el diagnóstico, el cliente requiere ADECUAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	407	t	2026-11-21 19:29:28.446354-05	4. Acometida y accesorios	\N
+204	23	req_adecuar	Tras el diagnóstico, el cliente requiere ADECUAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	407	t	2026-11-21 19:29:28.446392-05	4. Acometida y accesorios	\N
+205	26	req_adecuar	Tras el diagnóstico, el cliente requiere ADECUAR	opciones	f	[{"codigo": "acometida", "nombre": "Acometida"}, {"codigo": "registro_corte", "nombre": "Registro de corte"}, {"codigo": "llave_control", "nombre": "Llave de control"}, {"codigo": "cajilla", "nombre": "Cajilla"}]	\N	\N	\N	\N	f	407	t	2026-11-21 19:29:28.44642-05	4. Acometida y accesorios	\N
+206	25	pt_llaves	Llaves o plumas · Cantidad	entero	f	\N	0	99	\N	\N	f	501	t	2026-11-21 19:29:28.446447-05	5. Instalaciones internas	\N
+207	24	pt_llaves	Llaves o plumas · Cantidad	entero	f	\N	0	99	\N	\N	f	501	t	2026-11-21 19:29:28.44646-05	5. Instalaciones internas	\N
+208	23	pt_llaves	Llaves o plumas · Cantidad	entero	f	\N	0	99	\N	\N	f	501	t	2026-11-21 19:29:28.446473-05	5. Instalaciones internas	\N
+209	26	pt_llaves	Llaves o plumas · Cantidad	entero	f	\N	0	99	\N	\N	f	501	t	2026-11-21 19:29:28.446486-05	5. Instalaciones internas	\N
+210	25	pt_duchas	Duchas · Cantidad	entero	f	\N	0	99	\N	\N	f	502	t	2026-11-21 19:29:28.446499-05	5. Instalaciones internas	\N
+211	24	pt_duchas	Duchas · Cantidad	entero	f	\N	0	99	\N	\N	f	502	t	2026-11-21 19:29:28.446511-05	5. Instalaciones internas	\N
+212	23	pt_duchas	Duchas · Cantidad	entero	f	\N	0	99	\N	\N	f	502	t	2026-11-21 19:29:28.446586-05	5. Instalaciones internas	\N
+213	26	pt_duchas	Duchas · Cantidad	entero	f	\N	0	99	\N	\N	f	502	t	2026-11-21 19:29:28.446601-05	5. Instalaciones internas	\N
+214	25	pt_sanitarios	Sanitarios · Cantidad	entero	f	\N	0	99	\N	\N	f	503	t	2026-11-21 19:29:28.446613-05	5. Instalaciones internas	\N
+215	24	pt_sanitarios	Sanitarios · Cantidad	entero	f	\N	0	99	\N	\N	f	503	t	2026-11-21 19:29:28.446627-05	5. Instalaciones internas	\N
+216	23	pt_sanitarios	Sanitarios · Cantidad	entero	f	\N	0	99	\N	\N	f	503	t	2026-11-21 19:29:28.446641-05	5. Instalaciones internas	\N
+217	26	pt_sanitarios	Sanitarios · Cantidad	entero	f	\N	0	99	\N	\N	f	503	t	2026-11-21 19:29:28.446653-05	5. Instalaciones internas	\N
+218	25	pt_valvula_riego	Válvula de riego · Cantidad	entero	f	\N	0	99	\N	\N	f	504	t	2026-11-21 19:29:28.446667-05	5. Instalaciones internas	\N
+219	24	pt_valvula_riego	Válvula de riego · Cantidad	entero	f	\N	0	99	\N	\N	f	504	t	2026-11-21 19:29:28.446681-05	5. Instalaciones internas	\N
+220	23	pt_valvula_riego	Válvula de riego · Cantidad	entero	f	\N	0	99	\N	\N	f	504	t	2026-11-21 19:29:28.446702-05	5. Instalaciones internas	\N
+221	26	pt_valvula_riego	Válvula de riego · Cantidad	entero	f	\N	0	99	\N	\N	f	504	t	2026-11-21 19:29:28.446715-05	5. Instalaciones internas	\N
+222	25	pt_otros	Otros puntos de agua · Cantidad	entero	f	\N	0	99	\N	\N	f	505	t	2026-11-21 19:29:28.446729-05	5. Instalaciones internas	\N
+223	24	pt_otros	Otros puntos de agua · Cantidad	entero	f	\N	0	99	\N	\N	f	505	t	2026-11-21 19:29:28.446742-05	5. Instalaciones internas	\N
+224	23	pt_otros	Otros puntos de agua · Cantidad	entero	f	\N	0	99	\N	\N	f	505	t	2026-11-21 19:29:28.446802-05	5. Instalaciones internas	\N
+225	26	pt_otros	Otros puntos de agua · Cantidad	entero	f	\N	0	99	\N	\N	f	505	t	2026-11-21 19:29:28.446816-05	5. Instalaciones internas	\N
+226	25	pt_con_fuga	Puntos de agua con fuga	opciones	f	[{"codigo": "llaves", "nombre": "Llaves o plumas"}, {"codigo": "duchas", "nombre": "Duchas"}, {"codigo": "sanitarios", "nombre": "Sanitarios"}, {"codigo": "valvula_riego", "nombre": "Válvula de riego"}, {"codigo": "otros", "nombre": "Otros"}]	\N	\N	\N	\N	f	506	t	2026-11-21 19:29:28.446831-05	5. Instalaciones internas	\N
+227	24	pt_con_fuga	Puntos de agua con fuga	opciones	f	[{"codigo": "llaves", "nombre": "Llaves o plumas"}, {"codigo": "duchas", "nombre": "Duchas"}, {"codigo": "sanitarios", "nombre": "Sanitarios"}, {"codigo": "valvula_riego", "nombre": "Válvula de riego"}, {"codigo": "otros", "nombre": "Otros"}]	\N	\N	\N	\N	f	506	t	2026-11-21 19:29:28.446861-05	5. Instalaciones internas	\N
+228	23	pt_con_fuga	Puntos de agua con fuga	opciones	f	[{"codigo": "llaves", "nombre": "Llaves o plumas"}, {"codigo": "duchas", "nombre": "Duchas"}, {"codigo": "sanitarios", "nombre": "Sanitarios"}, {"codigo": "valvula_riego", "nombre": "Válvula de riego"}, {"codigo": "otros", "nombre": "Otros"}]	\N	\N	\N	\N	f	506	t	2026-11-21 19:29:28.44689-05	5. Instalaciones internas	\N
+229	26	pt_con_fuga	Puntos de agua con fuga	opciones	f	[{"codigo": "llaves", "nombre": "Llaves o plumas"}, {"codigo": "duchas", "nombre": "Duchas"}, {"codigo": "sanitarios", "nombre": "Sanitarios"}, {"codigo": "valvula_riego", "nombre": "Válvula de riego"}, {"codigo": "otros", "nombre": "Otros"}]	\N	\N	\N	\N	f	506	t	2026-11-21 19:29:28.446918-05	5. Instalaciones internas	\N
+230	25	fuga_perceptible	¿Hay fugas perceptibles?	si_no	f	\N	\N	\N	\N	\N	f	507	t	2026-11-21 19:29:28.446946-05	5. Instalaciones internas	\N
+231	24	fuga_perceptible	¿Hay fugas perceptibles?	si_no	f	\N	\N	\N	\N	\N	f	507	t	2026-11-21 19:29:28.44696-05	5. Instalaciones internas	\N
+232	23	fuga_perceptible	¿Hay fugas perceptibles?	si_no	f	\N	\N	\N	\N	\N	f	507	t	2026-11-21 19:29:28.446974-05	5. Instalaciones internas	\N
+233	26	fuga_perceptible	¿Hay fugas perceptibles?	si_no	f	\N	\N	\N	\N	\N	f	507	t	2026-11-21 19:29:28.446988-05	5. Instalaciones internas	\N
+234	25	fuga_percep_obs	Fugas perceptibles · Observación	texto	f	\N	\N	150	\N	\N	f	508	t	2026-11-21 19:29:28.447001-05	5. Instalaciones internas	{"es": true, "campo": "fuga_perceptible"}
+235	24	fuga_percep_obs	Fugas perceptibles · Observación	texto	f	\N	\N	150	\N	\N	f	508	t	2026-11-21 19:29:28.44702-05	5. Instalaciones internas	{"es": true, "campo": "fuga_perceptible"}
+236	23	fuga_percep_obs	Fugas perceptibles · Observación	texto	f	\N	\N	150	\N	\N	f	508	t	2026-11-21 19:29:28.447038-05	5. Instalaciones internas	{"es": true, "campo": "fuga_perceptible"}
+237	26	fuga_percep_obs	Fugas perceptibles · Observación	texto	f	\N	\N	150	\N	\N	f	508	t	2026-11-21 19:29:28.447055-05	5. Instalaciones internas	{"es": true, "campo": "fuga_perceptible"}
+238	25	fuga_imperceptible	¿Hay fugas imperceptibles?	si_no	f	\N	\N	\N	\N	\N	f	509	t	2026-11-21 19:29:28.447072-05	5. Instalaciones internas	\N
+239	24	fuga_imperceptible	¿Hay fugas imperceptibles?	si_no	f	\N	\N	\N	\N	\N	f	509	t	2026-11-21 19:29:28.447087-05	5. Instalaciones internas	\N
+240	23	fuga_imperceptible	¿Hay fugas imperceptibles?	si_no	f	\N	\N	\N	\N	\N	f	509	t	2026-11-21 19:29:28.447101-05	5. Instalaciones internas	\N
+244	23	geofono	¿Se hizo detección con geófono?	si_no	f	\N	\N	\N	\N	\N	f	510	t	2026-11-21 19:29:28.447166-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
+245	26	geofono	¿Se hizo detección con geófono?	si_no	f	\N	\N	\N	\N	\N	f	510	t	2026-11-21 19:29:28.447193-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
+246	25	fuga_imperc_obs	Fugas imperceptibles · Localización u observación	texto	f	\N	\N	150	\N	\N	f	511	t	2026-11-21 19:29:28.447211-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
+247	24	fuga_imperc_obs	Fugas imperceptibles · Localización u observación	texto	f	\N	\N	150	\N	\N	f	511	t	2026-11-21 19:29:28.447228-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
+248	23	fuga_imperc_obs	Fugas imperceptibles · Localización u observación	texto	f	\N	\N	150	\N	\N	f	511	t	2026-11-21 19:29:28.447247-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
+249	26	fuga_imperc_obs	Fugas imperceptibles · Localización u observación	texto	f	\N	\N	150	\N	\N	f	511	t	2026-11-21 19:29:28.447264-05	5. Instalaciones internas	{"es": true, "campo": "fuga_imperceptible"}
+250	25	irr_hay	¿Se encontró irregularidad?	si_no	t	\N	\N	\N	\N	Si responde «Sí», al guardar podrá abrir el acta de inspección técnica sobre el mismo contrato.	f	801	t	2026-11-21 19:29:28.447282-05	8. Irregularidades	\N
+251	24	irr_hay	¿Se encontró irregularidad?	si_no	t	\N	\N	\N	\N	Si responde «Sí», al guardar podrá abrir el acta de inspección técnica sobre el mismo contrato.	f	801	t	2026-11-21 19:29:28.447295-05	8. Irregularidades	\N
+252	23	irr_hay	¿Se encontró irregularidad?	si_no	t	\N	\N	\N	\N	Si responde «Sí», al guardar podrá abrir el acta de inspección técnica sobre el mismo contrato.	f	801	t	2026-11-21 19:29:28.447308-05	8. Irregularidades	\N
+253	26	irr_hay	¿Se encontró irregularidad?	si_no	t	\N	\N	\N	\N	Si responde «Sí», al guardar podrá abrir el acta de inspección técnica sobre el mismo contrato.	f	801	t	2026-11-21 19:29:28.44732-05	8. Irregularidades	\N
+254	25	irr_tipos	Tipos de irregularidad	opciones	f	[{"codigo": "acometida_fraudulenta", "nombre": "Acometida fraudulenta"}, {"codigo": "conexiones_medidor_adulteradas", "nombre": "Conexiones del medidor adulteradas"}, {"codigo": "medidor_adulterado", "nombre": "Medidor adulterado"}, {"codigo": "medidor_desconectado", "nombre": "Medidor desconectado"}, {"codigo": "adulteracion_sellos", "nombre": "Adulteración de sellos"}, {"codigo": "servicio_no_facturado", "nombre": "Servicio no facturado"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}, {"codigo": "uso_no_autorizado", "nombre": "Uso no autorizado"}, {"codigo": "cajilla_interna", "nombre": "Cajilla interna"}]	\N	\N	\N	\N	f	802	t	2026-11-21 19:29:28.447337-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
+255	24	irr_tipos	Tipos de irregularidad	opciones	f	[{"codigo": "acometida_fraudulenta", "nombre": "Acometida fraudulenta"}, {"codigo": "conexiones_medidor_adulteradas", "nombre": "Conexiones del medidor adulteradas"}, {"codigo": "medidor_adulterado", "nombre": "Medidor adulterado"}, {"codigo": "medidor_desconectado", "nombre": "Medidor desconectado"}, {"codigo": "adulteracion_sellos", "nombre": "Adulteración de sellos"}, {"codigo": "servicio_no_facturado", "nombre": "Servicio no facturado"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}, {"codigo": "uso_no_autorizado", "nombre": "Uso no autorizado"}, {"codigo": "cajilla_interna", "nombre": "Cajilla interna"}]	\N	\N	\N	\N	f	802	t	2026-11-21 19:29:28.447399-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
+256	23	irr_tipos	Tipos de irregularidad	opciones	f	[{"codigo": "acometida_fraudulenta", "nombre": "Acometida fraudulenta"}, {"codigo": "conexiones_medidor_adulteradas", "nombre": "Conexiones del medidor adulteradas"}, {"codigo": "medidor_adulterado", "nombre": "Medidor adulterado"}, {"codigo": "medidor_desconectado", "nombre": "Medidor desconectado"}, {"codigo": "adulteracion_sellos", "nombre": "Adulteración de sellos"}, {"codigo": "servicio_no_facturado", "nombre": "Servicio no facturado"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}, {"codigo": "uso_no_autorizado", "nombre": "Uso no autorizado"}, {"codigo": "cajilla_interna", "nombre": "Cajilla interna"}]	\N	\N	\N	\N	f	802	t	2026-11-21 19:29:28.447492-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
+257	26	irr_tipos	Tipos de irregularidad	opciones	f	[{"codigo": "acometida_fraudulenta", "nombre": "Acometida fraudulenta"}, {"codigo": "conexiones_medidor_adulteradas", "nombre": "Conexiones del medidor adulteradas"}, {"codigo": "medidor_adulterado", "nombre": "Medidor adulterado"}, {"codigo": "medidor_desconectado", "nombre": "Medidor desconectado"}, {"codigo": "adulteracion_sellos", "nombre": "Adulteración de sellos"}, {"codigo": "servicio_no_facturado", "nombre": "Servicio no facturado"}, {"codigo": "reconexion_no_autorizada", "nombre": "Reconexión no autorizada"}, {"codigo": "uso_no_autorizado", "nombre": "Uso no autorizado"}, {"codigo": "cajilla_interna", "nombre": "Cajilla interna"}]	\N	\N	\N	\N	f	802	t	2026-11-21 19:29:28.447579-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
+258	25	irr_descripcion	Descripción de la irregularidad	texto	f	\N	\N	300	\N	\N	f	803	t	2026-11-21 19:29:28.447635-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
+259	24	irr_descripcion	Descripción de la irregularidad	texto	f	\N	\N	300	\N	\N	f	803	t	2026-11-21 19:29:28.447652-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
+260	23	irr_descripcion	Descripción de la irregularidad	texto	f	\N	\N	300	\N	\N	f	803	t	2026-11-21 19:29:28.447669-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
+261	26	irr_descripcion	Descripción de la irregularidad	texto	f	\N	\N	300	\N	\N	f	803	t	2026-11-21 19:29:28.447684-05	8. Irregularidades	{"es": true, "campo": "irr_hay"}
+262	25	firma_atendio	Firma de quien atendió	opcion	t	[{"codigo": "atendio_firmo", "nombre": "Atendió y firmó el acta"}, {"codigo": "atendio_se_nego", "nombre": "Atendió y se negó a firmar"}, {"codigo": "nadie_atendio", "nombre": "Nadie atendió"}]	\N	\N	\N	Solo se declara; el acta física firmada es el documento con valor probatorio. No escriba nombres ni documentos.	f	901	t	2026-11-21 19:29:28.447701-05	9. Firmas y papel	\N
+263	24	firma_atendio	Firma de quien atendió	opcion	t	[{"codigo": "atendio_firmo", "nombre": "Atendió y firmó el acta"}, {"codigo": "atendio_se_nego", "nombre": "Atendió y se negó a firmar"}, {"codigo": "nadie_atendio", "nombre": "Nadie atendió"}]	\N	\N	\N	Solo se declara; el acta física firmada es el documento con valor probatorio. No escriba nombres ni documentos.	f	901	t	2026-11-21 19:29:28.447728-05	9. Firmas y papel	\N
+264	23	firma_atendio	Firma de quien atendió	opcion	t	[{"codigo": "atendio_firmo", "nombre": "Atendió y firmó el acta"}, {"codigo": "atendio_se_nego", "nombre": "Atendió y se negó a firmar"}, {"codigo": "nadie_atendio", "nombre": "Nadie atendió"}]	\N	\N	\N	Solo se declara; el acta física firmada es el documento con valor probatorio. No escriba nombres ni documentos.	f	901	t	2026-11-21 19:29:28.447755-05	9. Firmas y papel	\N
+265	26	firma_atendio	Firma de quien atendió	opcion	t	[{"codigo": "atendio_firmo", "nombre": "Atendió y firmó el acta"}, {"codigo": "atendio_se_nego", "nombre": "Atendió y se negó a firmar"}, {"codigo": "nadie_atendio", "nombre": "Nadie atendió"}]	\N	\N	\N	Solo se declara; el acta física firmada es el documento con valor probatorio. No escriba nombres ni documentos.	f	901	t	2026-11-21 19:29:28.44778-05	9. Firmas y papel	\N
+266	25	hubo_testigo	¿Hubo testigo?	si_no	f	\N	\N	\N	\N	\N	f	902	t	2026-11-21 19:29:28.447818-05	9. Firmas y papel	\N
+267	24	hubo_testigo	¿Hubo testigo?	si_no	f	\N	\N	\N	\N	\N	f	902	t	2026-11-21 19:29:28.447832-05	9. Firmas y papel	\N
+268	23	hubo_testigo	¿Hubo testigo?	si_no	f	\N	\N	\N	\N	\N	f	902	t	2026-11-21 19:29:28.447845-05	9. Firmas y papel	\N
+269	26	hubo_testigo	¿Hubo testigo?	si_no	f	\N	\N	\N	\N	\N	f	902	t	2026-11-21 19:29:28.447857-05	9. Firmas y papel	\N
+270	25	firmo_operario	¿El operario firmó el acta física?	si_no	t	\N	\N	\N	\N	\N	f	903	t	2026-11-21 19:29:28.447871-05	9. Firmas y papel	\N
+271	24	firmo_operario	¿El operario firmó el acta física?	si_no	t	\N	\N	\N	\N	\N	f	903	t	2026-11-21 19:29:28.447885-05	9. Firmas y papel	\N
+272	23	firmo_operario	¿El operario firmó el acta física?	si_no	t	\N	\N	\N	\N	\N	f	903	t	2026-11-21 19:29:28.447899-05	9. Firmas y papel	\N
+273	26	firmo_operario	¿El operario firmó el acta física?	si_no	t	\N	\N	\N	\N	\N	f	903	t	2026-11-21 19:29:28.447917-05	9. Firmas y papel	\N
+274	25	pqr_numero	Número de la PQR	texto	t	\N	\N	30	\N	Solo el número; no escriba nombres ni teléfonos.	f	110	t	2026-11-21 19:29:28.447949-05	1. Datos básicos	\N
+275	24	inst_tipo	Tipo de instalación	opcion	t	[{"codigo": "d1", "nombre": "D1"}, {"codigo": "d2", "nombre": "D2"}, {"codigo": "d3", "nombre": "D3"}]	\N	\N	\N	Se confirmará el significado de D1, D2 y D3.	f	701	t	2026-11-21 19:29:28.447983-05	7. Instalaciones y adecuaciones	\N
+276	23	inst_tipo	Tipo de instalación	opcion	t	[{"codigo": "d1", "nombre": "D1"}, {"codigo": "d2", "nombre": "D2"}, {"codigo": "d3", "nombre": "D3"}]	\N	\N	\N	Se confirmará el significado de D1, D2 y D3.	f	701	t	2026-11-21 19:29:28.448019-05	7. Instalaciones y adecuaciones	\N
+277	24	inst_materiales	Materiales usados	opciones	f	[{"codigo": "union_simple_pvc", "nombre": "Unión simple PVC"}, {"codigo": "codo_90_pvc", "nombre": "Codo 90 PVC"}, {"codigo": "adaptador_macho_pvc", "nombre": "Adaptador macho PVC"}, {"codigo": "adaptador_hembra_pvc", "nombre": "Adaptador hembra PVC"}, {"codigo": "buje_soldado", "nombre": "Buje soldado"}, {"codigo": "valvula_incorporacion", "nombre": "Válvula de incorporación"}, {"codigo": "buje_roscado", "nombre": "Buje roscado"}, {"codigo": "tapon_soldado", "nombre": "Tapón soldado"}, {"codigo": "tapon_roscado", "nombre": "Tapón roscado"}, {"codigo": "tee_pvc", "nombre": "Tee PVC"}, {"codigo": "galapago", "nombre": "Galápago"}, {"codigo": "pf_macho", "nombre": "PF macho"}, {"codigo": "collar_derivacion", "nombre": "Collar de derivación"}, {"codigo": "tuberia_pvc", "nombre": "Tubería PVC"}, {"codigo": "losa_concreto", "nombre": "Losa de concreto"}, {"codigo": "soldadura_liquida", "nombre": "Soldadura líquida"}, {"codigo": "cajilla", "nombre": "Cajilla"}, {"codigo": "pf_hembra", "nombre": "PF hembra"}, {"codigo": "valvula_antifraude", "nombre": "Válvula antifraude"}, {"codigo": "valvula_paso", "nombre": "Válvula de paso"}, {"codigo": "teflon", "nombre": "Teflón"}, {"codigo": "sellos", "nombre": "Sellos"}, {"codigo": "tuberia_pf", "nombre": "Tubería PF"}, {"codigo": "pf_a_pf", "nombre": "PF a PF"}]	\N	\N	\N	\N	f	702	t	2026-11-21 19:29:28.448054-05	7. Instalaciones y adecuaciones	\N
+278	23	inst_materiales	Materiales usados	opciones	f	[{"codigo": "union_simple_pvc", "nombre": "Unión simple PVC"}, {"codigo": "codo_90_pvc", "nombre": "Codo 90 PVC"}, {"codigo": "adaptador_macho_pvc", "nombre": "Adaptador macho PVC"}, {"codigo": "adaptador_hembra_pvc", "nombre": "Adaptador hembra PVC"}, {"codigo": "buje_soldado", "nombre": "Buje soldado"}, {"codigo": "valvula_incorporacion", "nombre": "Válvula de incorporación"}, {"codigo": "buje_roscado", "nombre": "Buje roscado"}, {"codigo": "tapon_soldado", "nombre": "Tapón soldado"}, {"codigo": "tapon_roscado", "nombre": "Tapón roscado"}, {"codigo": "tee_pvc", "nombre": "Tee PVC"}, {"codigo": "galapago", "nombre": "Galápago"}, {"codigo": "pf_macho", "nombre": "PF macho"}, {"codigo": "collar_derivacion", "nombre": "Collar de derivación"}, {"codigo": "tuberia_pvc", "nombre": "Tubería PVC"}, {"codigo": "losa_concreto", "nombre": "Losa de concreto"}, {"codigo": "soldadura_liquida", "nombre": "Soldadura líquida"}, {"codigo": "cajilla", "nombre": "Cajilla"}, {"codigo": "pf_hembra", "nombre": "PF hembra"}, {"codigo": "valvula_antifraude", "nombre": "Válvula antifraude"}, {"codigo": "valvula_paso", "nombre": "Válvula de paso"}, {"codigo": "teflon", "nombre": "Teflón"}, {"codigo": "sellos", "nombre": "Sellos"}, {"codigo": "tuberia_pf", "nombre": "Tubería PF"}, {"codigo": "pf_a_pf", "nombre": "PF a PF"}]	\N	\N	\N	\N	f	702	t	2026-11-21 19:29:28.448174-05	7. Instalaciones y adecuaciones	\N
+279	24	inst_mat_cantidades	Cantidades y diámetros de los materiales	texto	f	\N	\N	300	\N	Texto libre. Ejemplo: codo 90 PVC ½: 2; tubería PVC ½: 3 m.	f	703	t	2026-11-21 19:29:28.448288-05	7. Instalaciones y adecuaciones	\N
+280	23	inst_mat_cantidades	Cantidades y diámetros de los materiales	texto	f	\N	\N	300	\N	Texto libre. Ejemplo: codo 90 PVC ½: 2; tubería PVC ½: 3 m.	f	703	t	2026-11-21 19:29:28.448306-05	7. Instalaciones y adecuaciones	\N
+281	24	mi_lectura	Medidor instalado · Lectura (enteros y decimales del registro)	decimal	t	\N	0	99999999	m³	\N	f	704	t	2026-11-21 19:29:28.448323-05	7. Instalaciones y adecuaciones	\N
+282	23	mi_lectura	Medidor instalado · Lectura (enteros y decimales del registro)	decimal	f	\N	0	99999999	m³	\N	f	704	t	2026-11-21 19:29:28.448338-05	7. Instalaciones y adecuaciones	\N
+283	24	mi_marca	Medidor instalado · Marca	texto	f	\N	\N	30	\N	\N	f	705	t	2026-11-21 19:29:28.448352-05	7. Instalaciones y adecuaciones	\N
+284	23	mi_marca	Medidor instalado · Marca	texto	f	\N	\N	30	\N	\N	f	705	t	2026-11-21 19:29:28.448366-05	7. Instalaciones y adecuaciones	\N
+287	24	mi_serial	Medidor instalado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	707	t	2026-11-21 19:29:28.448407-05	7. Instalaciones y adecuaciones	\N
+288	23	mi_serial	Medidor instalado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	707	t	2026-11-21 19:29:28.44842-05	7. Instalaciones y adecuaciones	\N
+289	24	mi_serial_ilegible	Medidor instalado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	708	t	2026-11-21 19:29:28.448435-05	7. Instalaciones y adecuaciones	\N
+290	23	mi_serial_ilegible	Medidor instalado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	708	t	2026-11-21 19:29:28.44845-05	7. Instalaciones y adecuaciones	\N
+291	24	mi_diametro	Medidor instalado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	709	t	2026-11-21 19:29:28.448468-05	7. Instalaciones y adecuaciones	\N
+292	23	mi_diametro	Medidor instalado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	709	t	2026-11-21 19:29:28.448526-05	7. Instalaciones y adecuaciones	\N
+293	24	mi_precinto_tipo	Medidor instalado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	710	t	2026-11-21 19:29:28.448563-05	7. Instalaciones y adecuaciones	\N
+294	23	mi_precinto_tipo	Medidor instalado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	710	t	2026-11-21 19:29:28.448578-05	7. Instalaciones y adecuaciones	\N
+295	24	mi_precinto_serie	Medidor instalado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	711	t	2026-11-21 19:29:28.448593-05	7. Instalaciones y adecuaciones	\N
+296	23	mi_precinto_serie	Medidor instalado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	711	t	2026-11-21 19:29:28.448609-05	7. Instalaciones y adecuaciones	\N
+297	24	mi_anio	Medidor instalado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	712	t	2026-11-21 19:29:28.448624-05	7. Instalaciones y adecuaciones	\N
+298	23	mi_anio	Medidor instalado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	712	t	2026-11-21 19:29:28.448638-05	7. Instalaciones y adecuaciones	\N
+299	24	inst_forma_pago	Forma de pago	opcion	f	[{"codigo": "contado", "nombre": "Contado en la próxima facturación"}, {"codigo": "financiado", "nombre": "Financiado"}, {"codigo": "provisional", "nombre": "Provisional"}]	\N	\N	\N	\N	f	713	t	2026-11-21 19:29:28.448654-05	7. Instalaciones y adecuaciones	\N
+300	23	inst_forma_pago	Forma de pago	opcion	f	[{"codigo": "contado", "nombre": "Contado en la próxima facturación"}, {"codigo": "financiado", "nombre": "Financiado"}, {"codigo": "provisional", "nombre": "Provisional"}]	\N	\N	\N	\N	f	713	t	2026-11-21 19:29:28.448681-05	7. Instalaciones y adecuaciones	\N
+301	25	atendio_nombre	Nombre de quien atendió	texto	f	\N	\N	60	\N	Solo el nombre; sin cédula ni teléfono.	t	910	t	2026-11-21 19:29:28.452733-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
+302	25	atendio_relacion	Relación con el predio	opcion	f	[{"codigo": "propietario", "nombre": "Propietario"}, {"codigo": "familiar_propietario", "nombre": "Familiar del propietario"}, {"codigo": "arrendatario", "nombre": "Arrendatario (inquilino)"}, {"codigo": "poseedor", "nombre": "Poseedor"}, {"codigo": "residente", "nombre": "Residente u ocupante"}, {"codigo": "administrador", "nombre": "Administrador o encargado"}, {"codigo": "trabajador", "nombre": "Trabajador del predio (empleado, doméstico)"}, {"codigo": "otro", "nombre": "Otro (¿cuál?)"}]	\N	\N	\N	\N	f	911	t	2026-11-21 19:29:28.452956-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
+303	25	atendio_relacion_otra	¿Cuál otra relación?	texto	f	\N	\N	40	\N	No escriba nombres.	f	912	t	2026-11-21 19:29:28.453012-05	10. Quién atendió	{"es": "otro", "campo": "atendio_relacion"}
+304	24	atendio_nombre	Nombre de quien atendió	texto	f	\N	\N	60	\N	Solo el nombre; sin cédula ni teléfono.	t	910	t	2026-11-21 19:29:28.453035-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
+305	24	atendio_relacion	Relación con el predio	opcion	f	[{"codigo": "propietario", "nombre": "Propietario"}, {"codigo": "familiar_propietario", "nombre": "Familiar del propietario"}, {"codigo": "arrendatario", "nombre": "Arrendatario (inquilino)"}, {"codigo": "poseedor", "nombre": "Poseedor"}, {"codigo": "residente", "nombre": "Residente u ocupante"}, {"codigo": "administrador", "nombre": "Administrador o encargado"}, {"codigo": "trabajador", "nombre": "Trabajador del predio (empleado, doméstico)"}, {"codigo": "otro", "nombre": "Otro (¿cuál?)"}]	\N	\N	\N	\N	f	911	t	2026-11-21 19:29:28.453056-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
+306	24	atendio_relacion_otra	¿Cuál otra relación?	texto	f	\N	\N	40	\N	No escriba nombres.	f	912	t	2026-11-21 19:29:28.453102-05	10. Quién atendió	{"es": "otro", "campo": "atendio_relacion"}
+307	23	atendio_nombre	Nombre de quien atendió	texto	f	\N	\N	60	\N	Solo el nombre; sin cédula ni teléfono.	t	910	t	2026-11-21 19:29:28.453122-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
+308	23	atendio_relacion	Relación con el predio	opcion	f	[{"codigo": "propietario", "nombre": "Propietario"}, {"codigo": "familiar_propietario", "nombre": "Familiar del propietario"}, {"codigo": "arrendatario", "nombre": "Arrendatario (inquilino)"}, {"codigo": "poseedor", "nombre": "Poseedor"}, {"codigo": "residente", "nombre": "Residente u ocupante"}, {"codigo": "administrador", "nombre": "Administrador o encargado"}, {"codigo": "trabajador", "nombre": "Trabajador del predio (empleado, doméstico)"}, {"codigo": "otro", "nombre": "Otro (¿cuál?)"}]	\N	\N	\N	\N	f	911	t	2026-11-21 19:29:28.453142-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
+309	23	atendio_relacion_otra	¿Cuál otra relación?	texto	f	\N	\N	40	\N	No escriba nombres.	f	912	t	2026-11-21 19:29:28.453184-05	10. Quién atendió	{"es": "otro", "campo": "atendio_relacion"}
+310	26	atendio_nombre	Nombre de quien atendió	texto	f	\N	\N	60	\N	Solo el nombre; sin cédula ni teléfono.	t	910	t	2026-11-21 19:29:28.453203-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
+311	26	atendio_relacion	Relación con el predio	opcion	f	[{"codigo": "propietario", "nombre": "Propietario"}, {"codigo": "familiar_propietario", "nombre": "Familiar del propietario"}, {"codigo": "arrendatario", "nombre": "Arrendatario (inquilino)"}, {"codigo": "poseedor", "nombre": "Poseedor"}, {"codigo": "residente", "nombre": "Residente u ocupante"}, {"codigo": "administrador", "nombre": "Administrador o encargado"}, {"codigo": "trabajador", "nombre": "Trabajador del predio (empleado, doméstico)"}, {"codigo": "otro", "nombre": "Otro (¿cuál?)"}]	\N	\N	\N	\N	f	911	t	2026-11-21 19:29:28.453223-05	10. Quién atendió	{"campo": "firma_atendio", "no_es": "nadie_atendio"}
+312	26	atendio_relacion_otra	¿Cuál otra relación?	texto	f	\N	\N	40	\N	No escriba nombres.	f	912	t	2026-11-21 19:29:28.453266-05	10. Quién atendió	{"es": "otro", "campo": "atendio_relacion"}
+313	24	inst_modalidad	Instalación o cambio de medidor	opcion	t	[{"codigo": "instalacion", "nombre": "Instalación de medidor"}, {"codigo": "cambio", "nombre": "Cambio de medidor"}]	\N	\N	\N	Con «Cambio de medidor» aparecen los datos del medidor retirado.	f	100	t	2026-11-21 19:29:28.482787-05	1. Datos básicos	\N
+115	24	me_marca	Medidor retirado · Marca	texto	f	\N	\N	30	\N	\N	f	202	t	2026-11-21 19:29:28.444244-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+123	24	me_serial	Medidor retirado · Serial	texto	f	\N	\N	30	\N	Si no se alcanza a leer, deje vacío y marque «Serial ilegible».	f	204	t	2026-11-21 19:29:28.444342-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+127	24	me_serial_ilegible	Medidor retirado · Serial ilegible	si_no	f	\N	\N	\N	\N	\N	f	205	t	2026-11-21 19:29:28.444393-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+131	24	me_diametro	Medidor retirado · Diámetro	opcion	f	[{"codigo": "media", "nombre": "½ pulgada"}, {"codigo": "tres_cuartos", "nombre": "¾ pulgada"}, {"codigo": "una", "nombre": "1 pulgada"}, {"codigo": "una_media", "nombre": "1½ pulgadas"}, {"codigo": "dos", "nombre": "2 pulgadas"}, {"codigo": "tres", "nombre": "3 pulgadas"}, {"codigo": "cuatro", "nombre": "4 pulgadas"}]	\N	\N	\N	\N	f	206	t	2026-11-21 19:29:28.444478-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+135	24	me_precinto_tipo	Medidor retirado · Tipo de precintos	texto	f	\N	\N	30	\N	\N	f	207	t	2026-11-21 19:29:28.444613-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+139	24	me_precinto_serie	Medidor retirado · Serie de precintos	texto	f	\N	\N	30	\N	\N	f	208	t	2026-11-21 19:29:28.444668-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+143	24	me_anio	Medidor retirado · Año de fabricación	entero	f	\N	1950	2100	\N	\N	f	209	t	2026-11-21 19:29:28.444723-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+147	24	me_talco	Talco	opciones	f	[{"codigo": "opaco", "nombre": "Opaco"}, {"codigo": "partido_fisurado", "nombre": "Partido o fisurado"}, {"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "transparente_ok", "nombre": "Transparente / ok"}, {"codigo": "no_tiene", "nombre": "No tiene"}, {"codigo": "destruido", "nombre": "Destruido"}, {"codigo": "ilegible", "nombre": "Ilegible"}, {"codigo": "vidrio_roto", "nombre": "Vidrio roto"}, {"codigo": "sin_agujas", "nombre": "Sin agujas"}]	\N	\N	\N	\N	f	301	t	2026-11-21 19:29:28.44481-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+151	24	me_cuerpo	Cuerpo	opciones	f	[{"codigo": "perforado", "nombre": "Perforado"}, {"codigo": "fisurado_roto", "nombre": "Fisurado o roto"}, {"codigo": "conexion_invertida", "nombre": "Conexión invertida"}, {"codigo": "ok", "nombre": "Ok"}]	\N	\N	\N	\N	f	302	t	2026-11-21 19:29:28.444971-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+159	24	req_cambio_medidor	¿Se requiere cambio de medidor?	si_no	f	\N	\N	\N	\N	\N	f	304	t	2026-11-21 19:29:28.445185-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+163	24	calib_realizada	Prueba de calibración: ¿se realizó?	si_no	f	\N	\N	\N	\N	\N	f	305	t	2026-11-21 19:29:28.445242-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+155	24	me_registro	Registro	opciones	f	[{"codigo": "detenido", "nombre": "Medidor detenido"}, {"codigo": "giro_irregular", "nombre": "Giro irregular"}, {"codigo": "obstruido", "nombre": "Medidor obstruido"}, {"codigo": "mal_estado", "nombre": "Registro en mal estado"}]	\N	\N	\N	\N	f	303	t	2026-11-21 19:29:28.445079-05	3. Estado del medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+167	24	calib_vol_patron	Volumen del patrón	decimal	f	\N	0	100000	L	\N	f	306	t	2026-11-21 19:29:28.445415-05	3. Estado del medidor retirado	{"es": true, "campo": "calib_realizada"}
+171	24	calib_vol_cliente	Volumen del cliente	decimal	f	\N	0	100000	L	\N	f	307	t	2026-11-21 19:29:28.445489-05	3. Estado del medidor retirado	{"es": true, "campo": "calib_realizada"}
+175	24	calib_error_pct	Error de la prueba	decimal	f	\N	-100	1000	%	\N	f	308	t	2026-11-21 19:29:28.44556-05	3. Estado del medidor retirado	{"es": true, "campo": "calib_realizada"}
+111	24	me_lectura	Medidor retirado · Lectura (enteros y decimales del registro)	decimal	t	\N	0	99999999	m³	\N	f	201	t	2026-11-21 19:29:28.444195-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+314	25	me_r	Medidor encontrado · R del medidor	opcion	f	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	210	t	2026-11-21 19:29:28.485192-05	2. Medidor encontrado	\N
+315	25	me_tipo_medidor	Medidor encontrado · Tipo de medidor	opcion	f	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	211	t	2026-11-21 19:29:28.485367-05	2. Medidor encontrado	\N
+316	24	me_r	Medidor retirado · R del medidor	opcion	t	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	210	t	2026-11-21 19:29:28.485412-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+317	24	me_tipo_medidor	Medidor retirado · Tipo de medidor	opcion	t	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	211	t	2026-11-21 19:29:28.485459-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+318	23	me_r	Medidor encontrado · R del medidor	opcion	f	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	210	t	2026-11-21 19:29:28.485508-05	2. Medidor encontrado	\N
+319	23	me_tipo_medidor	Medidor encontrado · Tipo de medidor	opcion	f	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	211	t	2026-11-21 19:29:28.485547-05	2. Medidor encontrado	\N
+320	26	me_r	Medidor encontrado · R del medidor	opcion	f	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	210	t	2026-11-21 19:29:28.485587-05	2. Medidor encontrado	\N
+321	26	me_tipo_medidor	Medidor encontrado · Tipo de medidor	opcion	f	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	211	t	2026-11-21 19:29:28.485623-05	2. Medidor encontrado	\N
+322	24	mi_r	Medidor instalado · R del medidor	opcion	t	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	712	t	2026-11-21 19:29:28.485773-05	7. Instalaciones y adecuaciones	\N
+323	24	mi_tipo_medidor	Medidor instalado · Tipo de medidor	opcion	t	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	712	t	2026-11-21 19:29:28.485946-05	7. Instalaciones y adecuaciones	\N
+324	23	mi_r	Medidor instalado · R del medidor	opcion	f	[{"codigo": "r80", "nombre": "R80"}, {"codigo": "r160", "nombre": "R160"}, {"codigo": "r200", "nombre": "R200"}, {"codigo": "r315", "nombre": "R315"}, {"codigo": "r400", "nombre": "R400 (o superior)"}, {"codigo": "no_legible", "nombre": "No legible"}]	\N	\N	\N	\N	f	712	t	2026-11-21 19:29:28.485992-05	7. Instalaciones y adecuaciones	\N
+325	23	mi_tipo_medidor	Medidor instalado · Tipo de medidor	opcion	f	[{"codigo": "volumetrico", "nombre": "Volumétrico"}, {"codigo": "velocidad", "nombre": "Velocidad"}, {"codigo": "woltman", "nombre": "Woltman"}, {"codigo": "ultrasonico", "nombre": "Ultrasónico"}, {"codigo": "electromagnetico", "nombre": "Electromagnético"}]	\N	\N	\N	\N	f	712	t	2026-11-21 19:29:28.48603-05	7. Instalaciones y adecuaciones	\N
+326	24	inst_lectura_remota	Lectura remota	opciones	f	[{"codigo": "remota", "nombre": "Se instaló lectura remota"}, {"codigo": "remota_pila", "nombre": "Se instaló lectura remota con pila"}]	\N	\N	\N	Marque solo lo que se instaló; si no se instaló, déjelo vacío.	f	714	t	2026-11-21 19:29:28.486146-05	7. Instalaciones y adecuaciones	\N
+327	24	inst_reubica_cajilla	¿Se reubicó la cajilla?	si_no	t	\N	\N	\N	\N	\N	f	715	t	2026-11-21 19:29:28.486372-05	7. Instalaciones y adecuaciones	\N
+328	23	inst_reubica_cajilla	¿Se reubicó la cajilla?	si_no	t	\N	\N	\N	\N	\N	f	715	t	2026-11-21 19:29:28.486522-05	7. Instalaciones y adecuaciones	\N
+118	25	me_tipo	Medidor encontrado · Tipo	texto	f	\N	\N	30	\N	\N	f	203	f	2026-11-21 19:29:28.44428-05	2. Medidor encontrado	\N
+120	23	me_tipo	Medidor encontrado · Tipo	texto	f	\N	\N	30	\N	\N	f	203	f	2026-11-21 19:29:28.444305-05	2. Medidor encontrado	\N
+121	26	me_tipo	Medidor encontrado · Tipo	texto	f	\N	\N	30	\N	\N	f	203	f	2026-11-21 19:29:28.444317-05	2. Medidor encontrado	\N
+285	24	mi_tipo	Medidor instalado · Tipo	texto	f	\N	\N	30	\N	\N	f	706	f	2026-11-21 19:29:28.448379-05	7. Instalaciones y adecuaciones	\N
+286	23	mi_tipo	Medidor instalado · Tipo	texto	f	\N	\N	30	\N	\N	f	706	f	2026-11-21 19:29:28.448393-05	7. Instalaciones y adecuaciones	\N
+119	24	me_tipo	Medidor retirado · Tipo	texto	f	\N	\N	30	\N	\N	f	203	f	2026-11-21 19:29:28.444293-05	2. Medidor retirado	{"es": "cambio", "campo": "inst_modalidad"}
+329	23	da_lugar_otra	¿Cuál otra actividad?	texto	f	\N	\N	120	\N	\N	f	1102	t	2026-11-21 19:29:28.590407-05	11. Actividades derivadas	{"es": "otra", "campo": "da_lugar"}
+330	25	da_lugar	¿Da lugar a otras actividades?	opciones	f	[{"codigo": "cambio_medidor", "nombre": "Cambio de medidor"}, {"codigo": "instalacion_medidor", "nombre": "Instalación de medidor"}, {"codigo": "accesorios", "nombre": "Instalación o cambio de accesorios"}, {"codigo": "reubicacion_cajilla", "nombre": "Reubicación de cajilla"}, {"codigo": "fuga_externa", "nombre": "Reparación de fuga por fuera de la casa (acometida, antes del medidor)"}, {"codigo": "posible_perdida", "nombre": "Posible pérdida"}, {"codigo": "otra", "nombre": "Otra"}]	\N	\N	\N	Marque las que correspondan; el supervisor las ve como pendientes hasta que se atiendan.	f	1101	t	2026-11-21 19:29:28.590657-05	11. Actividades derivadas	\N
+331	24	da_lugar_otra	¿Cuál otra actividad?	texto	f	\N	\N	120	\N	\N	f	1102	t	2026-11-21 19:29:28.590717-05	11. Actividades derivadas	{"es": "otra", "campo": "da_lugar"}
+332	26	da_lugar	¿Da lugar a otras actividades?	opciones	f	[{"codigo": "cambio_medidor", "nombre": "Cambio de medidor"}, {"codigo": "instalacion_medidor", "nombre": "Instalación de medidor"}, {"codigo": "accesorios", "nombre": "Instalación o cambio de accesorios"}, {"codigo": "reubicacion_cajilla", "nombre": "Reubicación de cajilla"}, {"codigo": "fuga_externa", "nombre": "Reparación de fuga por fuera de la casa (acometida, antes del medidor)"}, {"codigo": "posible_perdida", "nombre": "Posible pérdida"}, {"codigo": "otra", "nombre": "Otra"}]	\N	\N	\N	Marque las que correspondan; el supervisor las ve como pendientes hasta que se atiendan.	f	1101	t	2026-11-21 19:29:28.590735-05	11. Actividades derivadas	\N
+333	25	da_lugar_otra	¿Cuál otra actividad?	texto	f	\N	\N	120	\N	\N	f	1102	t	2026-11-21 19:29:28.590776-05	11. Actividades derivadas	{"es": "otra", "campo": "da_lugar"}
+334	24	da_lugar	¿Da lugar a otras actividades?	opciones	f	[{"codigo": "cambio_medidor", "nombre": "Cambio de medidor"}, {"codigo": "instalacion_medidor", "nombre": "Instalación de medidor"}, {"codigo": "accesorios", "nombre": "Instalación o cambio de accesorios"}, {"codigo": "reubicacion_cajilla", "nombre": "Reubicación de cajilla"}, {"codigo": "fuga_externa", "nombre": "Reparación de fuga por fuera de la casa (acometida, antes del medidor)"}, {"codigo": "posible_perdida", "nombre": "Posible pérdida"}, {"codigo": "otra", "nombre": "Otra"}]	\N	\N	\N	Marque las que correspondan; el supervisor las ve como pendientes hasta que se atiendan.	f	1101	t	2026-11-21 19:29:28.590792-05	11. Actividades derivadas	\N
+335	26	da_lugar_otra	¿Cuál otra actividad?	texto	f	\N	\N	120	\N	\N	f	1102	t	2026-11-21 19:29:28.59083-05	11. Actividades derivadas	{"es": "otra", "campo": "da_lugar"}
+336	23	da_lugar	¿Da lugar a otras actividades?	opciones	f	[{"codigo": "cambio_medidor", "nombre": "Cambio de medidor"}, {"codigo": "instalacion_medidor", "nombre": "Instalación de medidor"}, {"codigo": "accesorios", "nombre": "Instalación o cambio de accesorios"}, {"codigo": "reubicacion_cajilla", "nombre": "Reubicación de cajilla"}, {"codigo": "fuga_externa", "nombre": "Reparación de fuga por fuera de la casa (acometida, antes del medidor)"}, {"codigo": "posible_perdida", "nombre": "Posible pérdida"}, {"codigo": "otra", "nombre": "Otra"}]	\N	\N	\N	Marque las que correspondan; el supervisor las ve como pendientes hasta que se atiendan.	f	1101	t	2026-11-21 19:29:28.590844-05	11. Actividades derivadas	\N
 \.
 
 
@@ -11719,54 +11729,54 @@ COPY campo.tipo_campos (id, tipo_id, codigo, nombre, tipo_dato, obligatorio, opc
 --
 
 COPY campo.tipo_fotos (id, tipo_id, codigo, nombre, obligatoria, soporte_inefectiva, orden, activo, creado_en) FROM stdin;
-1	22	fachada_nomenclatura	Fachada con nomenclatura	t	t	1	t	2026-11-21 19:25:15.773229-05
-2	22	predio_lote	Predio o lote	t	t	2	t	2026-11-21 19:25:15.77341-05
-3	22	vecino_referencia	Vecino o referencia	t	f	3	t	2026-11-21 19:25:15.773417-05
-4	21	punto_conexion	Punto de conexión a la red	t	f	1	t	2026-11-21 19:25:15.773424-05
-5	21	recorrido	Recorrido de la acometida	t	f	2	t	2026-11-21 19:25:15.773429-05
-6	21	caja_medidor	Caja o medidor (si existe)	f	f	3	t	2026-11-21 19:25:15.773434-05
-7	20	medidor_lectura_serial	Medidor con lectura y serial	t	f	1	t	2026-11-21 19:25:15.77344-05
-8	20	valvula_cerrada	Válvula cerrada	t	f	2	t	2026-11-21 19:25:15.773446-05
-9	20	sello_instalado	Sello instalado	t	f	3	t	2026-11-21 19:25:15.773451-05
-10	19	antes	Antes del corte	t	f	1	t	2026-11-21 19:25:15.773457-05
-11	19	punto_corte	Punto de corte	t	f	2	t	2026-11-21 19:25:15.773461-05
-12	19	tapon_retiro	Tapón o retiro	t	f	3	t	2026-11-21 19:25:15.773466-05
-13	19	reposicion_pavimento	Reposición del pavimento (si aplica)	f	f	4	t	2026-11-21 19:25:15.77347-05
-14	18	estado_sello_corte	Estado del sello o del corte	t	f	1	t	2026-11-21 19:25:15.773478-05
-15	17	medidor_lectura_inicial	Medidor con lectura inicial	t	f	1	t	2026-11-21 19:25:15.773483-05
-16	17	servicio_restablecido	Servicio restablecido	t	f	2	t	2026-11-21 19:25:15.773489-05
-17	16	medidor_lectura_inicial	Medidor con lectura inicial	t	f	1	t	2026-11-21 19:25:15.773495-05
-18	16	servicio_restablecido	Servicio restablecido	t	f	2	t	2026-11-21 19:25:15.773501-05
-19	15	medidor_retirado	Medidor retirado, con serial y lectura	t	f	1	t	2026-11-21 19:25:15.773507-05
-20	15	medidor_nuevo	Medidor nuevo, con serial y lectura	t	f	2	t	2026-11-21 19:25:15.773512-05
-26	15	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:25:15.773717-05
-27	16	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:25:15.773733-05
-28	17	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:25:15.773738-05
-29	18	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:25:15.773743-05
-30	19	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:25:15.773748-05
-31	20	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:25:15.773754-05
-32	21	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:25:15.773759-05
-22	24	sitio_terminado	Sitio terminado	t	f	2	f	2026-11-21 19:25:15.773523-05
-23	23	punto_conexion	Punto de conexión a la red	t	f	1	f	2026-11-21 19:25:15.773528-05
-24	23	acometida_terminada	Acometida terminada	t	f	2	f	2026-11-21 19:25:15.773533-05
-25	25	evidencia	Evidencia de lo revisado	t	f	1	f	2026-11-21 19:25:15.773539-05
-36	26	fachada_predio	Fachada o predio	t	t	1	t	2026-11-21 19:25:15.868698-05
-37	26	medidor_encontrado	Medidor encontrado	f	f	2	t	2026-11-21 19:25:15.868723-05
-38	26	acometida_encontrada	Acometida encontrada	f	f	3	t	2026-11-21 19:25:15.868731-05
-39	26	acta_fisica	Acta física firmada	t	f	9	t	2026-11-21 19:25:15.868737-05
-41	25	medidor_encontrado	Medidor encontrado	f	f	2	t	2026-11-21 19:25:15.868748-05
-42	25	acometida_encontrada	Acometida encontrada	f	f	3	t	2026-11-21 19:25:15.868753-05
-43	25	acta_fisica	Acta física firmada	t	f	9	t	2026-11-21 19:25:15.86876-05
-46	24	acometida_encontrada	Acometida encontrada	f	f	3	t	2026-11-21 19:25:15.868776-05
-48	24	acta_fisica	Acta física firmada	t	f	9	t	2026-11-21 19:25:15.868787-05
-50	23	medidor_encontrado	Medidor encontrado	f	f	2	t	2026-11-21 19:25:15.868797-05
-51	23	acometida_instalada	Acometida instalada	t	f	4	t	2026-11-21 19:25:15.868805-05
-52	23	acta_fisica	Acta física firmada	t	f	9	t	2026-11-21 19:25:15.868812-05
-33	23	fachada_predio	Fachada o predio	t	t	1	t	2026-11-21 19:25:15.773764-05
-34	24	fachada_predio	Fachada o predio	t	t	1	t	2026-11-21 19:25:15.77377-05
-35	25	fachada_predio	Fachada o predio	t	t	1	t	2026-11-21 19:25:15.773775-05
-21	24	medidor_instalado	Medidor instalado, con serial y lectura	t	f	4	t	2026-11-21 19:25:15.773518-05
-45	24	medidor_encontrado	Medidor retirado	f	f	2	t	2026-11-21 19:25:15.868769-05
+1	22	fachada_nomenclatura	Fachada con nomenclatura	t	t	1	t	2026-11-21 19:29:28.3527-05
+2	22	predio_lote	Predio o lote	t	t	2	t	2026-11-21 19:29:28.352879-05
+3	22	vecino_referencia	Vecino o referencia	t	f	3	t	2026-11-21 19:29:28.352887-05
+4	21	punto_conexion	Punto de conexión a la red	t	f	1	t	2026-11-21 19:29:28.352894-05
+5	21	recorrido	Recorrido de la acometida	t	f	2	t	2026-11-21 19:29:28.352899-05
+6	21	caja_medidor	Caja o medidor (si existe)	f	f	3	t	2026-11-21 19:29:28.352904-05
+7	20	medidor_lectura_serial	Medidor con lectura y serial	t	f	1	t	2026-11-21 19:29:28.35291-05
+8	20	valvula_cerrada	Válvula cerrada	t	f	2	t	2026-11-21 19:29:28.352916-05
+9	20	sello_instalado	Sello instalado	t	f	3	t	2026-11-21 19:29:28.352922-05
+10	19	antes	Antes del corte	t	f	1	t	2026-11-21 19:29:28.352929-05
+11	19	punto_corte	Punto de corte	t	f	2	t	2026-11-21 19:29:28.352933-05
+12	19	tapon_retiro	Tapón o retiro	t	f	3	t	2026-11-21 19:29:28.35294-05
+13	19	reposicion_pavimento	Reposición del pavimento (si aplica)	f	f	4	t	2026-11-21 19:29:28.352945-05
+14	18	estado_sello_corte	Estado del sello o del corte	t	f	1	t	2026-11-21 19:29:28.352952-05
+15	17	medidor_lectura_inicial	Medidor con lectura inicial	t	f	1	t	2026-11-21 19:29:28.352957-05
+16	17	servicio_restablecido	Servicio restablecido	t	f	2	t	2026-11-21 19:29:28.352963-05
+17	16	medidor_lectura_inicial	Medidor con lectura inicial	t	f	1	t	2026-11-21 19:29:28.35297-05
+18	16	servicio_restablecido	Servicio restablecido	t	f	2	t	2026-11-21 19:29:28.352976-05
+19	15	medidor_retirado	Medidor retirado, con serial y lectura	t	f	1	t	2026-11-21 19:29:28.352982-05
+20	15	medidor_nuevo	Medidor nuevo, con serial y lectura	t	f	2	t	2026-11-21 19:29:28.352987-05
+26	15	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:29:28.353215-05
+27	16	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:29:28.353232-05
+28	17	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:29:28.353237-05
+29	18	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:29:28.353242-05
+30	19	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:29:28.353247-05
+31	20	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:29:28.353254-05
+32	21	fachada_predio	Fachada o predio	f	t	90	t	2026-11-21 19:29:28.353259-05
+22	24	sitio_terminado	Sitio terminado	t	f	2	f	2026-11-21 19:29:28.352998-05
+23	23	punto_conexion	Punto de conexión a la red	t	f	1	f	2026-11-21 19:29:28.353004-05
+24	23	acometida_terminada	Acometida terminada	t	f	2	f	2026-11-21 19:29:28.353009-05
+25	25	evidencia	Evidencia de lo revisado	t	f	1	f	2026-11-21 19:29:28.353015-05
+36	26	fachada_predio	Fachada o predio	t	t	1	t	2026-11-21 19:29:28.449524-05
+37	26	medidor_encontrado	Medidor encontrado	f	f	2	t	2026-11-21 19:29:28.449551-05
+38	26	acometida_encontrada	Acometida encontrada	f	f	3	t	2026-11-21 19:29:28.449558-05
+39	26	acta_fisica	Acta física firmada	t	f	9	t	2026-11-21 19:29:28.449564-05
+41	25	medidor_encontrado	Medidor encontrado	f	f	2	t	2026-11-21 19:29:28.449574-05
+42	25	acometida_encontrada	Acometida encontrada	f	f	3	t	2026-11-21 19:29:28.449579-05
+43	25	acta_fisica	Acta física firmada	t	f	9	t	2026-11-21 19:29:28.449585-05
+46	24	acometida_encontrada	Acometida encontrada	f	f	3	t	2026-11-21 19:29:28.449601-05
+48	24	acta_fisica	Acta física firmada	t	f	9	t	2026-11-21 19:29:28.449612-05
+50	23	medidor_encontrado	Medidor encontrado	f	f	2	t	2026-11-21 19:29:28.449621-05
+51	23	acometida_instalada	Acometida instalada	t	f	4	t	2026-11-21 19:29:28.449629-05
+52	23	acta_fisica	Acta física firmada	t	f	9	t	2026-11-21 19:29:28.449636-05
+33	23	fachada_predio	Fachada o predio	t	t	1	t	2026-11-21 19:29:28.353265-05
+34	24	fachada_predio	Fachada o predio	t	t	1	t	2026-11-21 19:29:28.353271-05
+35	25	fachada_predio	Fachada o predio	t	t	1	t	2026-11-21 19:29:28.353276-05
+21	24	medidor_instalado	Medidor instalado, con serial y lectura	t	f	4	t	2026-11-21 19:29:28.352993-05
+45	24	medidor_encontrado	Medidor retirado	f	f	2	t	2026-11-21 19:29:28.449595-05
 \.
 
 
@@ -11775,34 +11785,34 @@ COPY campo.tipo_fotos (id, tipo_id, codigo, nombre, obligatoria, soporte_inefect
 --
 
 COPY campo.tipos_reporte (id, grupo_id, codigo, nombre, orden, exige_texto, exige_subtipo, activo, creado_en, fotos_min, fotos_max, requiere_contrato, genera_resultado, prefijo_consecutivo, limite_ventana) FROM stdin;
-1	1	predio_sin_contrato	Predio con servicio sin contrato asignado (por verificar)	6	f	f	t	2026-11-21 19:25:15.742491-05	\N	\N	opcional	f	\N	\N
-2	1	uso_distinto	Posible uso distinto del declarado	5	f	f	t	2026-11-21 19:25:15.742679-05	\N	\N	opcional	f	\N	\N
-3	1	anomalia_medicion	Posible anomalía en la medición	4	f	f	t	2026-11-21 19:25:15.742687-05	\N	\N	opcional	f	\N	\N
-4	1	fraude	Posible fraude	3	f	f	t	2026-11-21 19:25:15.742694-05	\N	\N	opcional	f	\N	\N
-5	1	reconexion	Posible reconexión	2	f	f	t	2026-11-21 19:25:15.742699-05	\N	\N	opcional	f	\N	\N
-6	1	acometida_sin_permiso	Posible acometida sin permiso	1	f	f	t	2026-11-21 19:25:15.742705-05	\N	\N	opcional	f	\N	\N
-7	2	tapa_caja_acueducto	Tapa o caja de medidor o válvula rota o faltante	2	f	f	t	2026-11-21 19:25:15.742716-05	\N	\N	opcional	f	\N	\N
-8	2	dano_red_acueducto	Daño en la red (fuga visible)	1	f	f	t	2026-11-21 19:25:15.742724-05	\N	\N	opcional	f	\N	\N
-9	3	conexion_errada	Conexión errada de alcantarillado	4	f	f	t	2026-11-21 19:25:15.742731-05	\N	\N	opcional	f	\N	\N
-10	3	rejilla_sumidero	Daño en rejilla o sumidero	3	f	f	t	2026-11-21 19:25:15.742738-05	\N	\N	opcional	f	\N	\N
-11	3	tapa_manhole	Daño en tapa de manhole (rota, hundida o faltante)	2	f	f	t	2026-11-21 19:25:15.742745-05	\N	\N	opcional	f	\N	\N
-12	3	dano_red_alcantarillado	Daño en la red (hundimiento, colapso, rebose)	1	f	f	t	2026-11-21 19:25:15.742752-05	\N	\N	opcional	f	\N	\N
-13	4	dano_obra_terceros	Daño por obra de terceros	1	f	f	t	2026-11-21 19:25:15.742763-05	\N	\N	opcional	f	\N	\N
-14	5	otro	Otro	1	t	f	t	2026-11-21 19:25:15.742771-05	\N	\N	opcional	f	\N	\N
-15	6	cambio_medidor	Cambio de medidor	8	f	f	f	2026-11-21 19:25:15.772484-05	2	6	si	t	CME	20
-16	6	reconexion_servicio	Reconexión del servicio (tras un corte)	7	f	t	f	2026-11-21 19:25:15.772633-05	2	4	si	t	REC	20
-17	6	reinstalacion	Reinstalación del servicio (tras una suspensión)	6	f	f	f	2026-11-21 19:25:15.772647-05	2	4	si	t	REI	20
-18	6	verificacion_posterior	Verificación posterior al corte o a la suspensión	5	f	f	f	2026-11-21 19:25:15.772657-05	1	4	si	t	VER	20
-19	6	corte	Corte	4	f	t	f	2026-11-21 19:25:15.772667-05	3	6	si	t	COR	20
-20	6	suspension	Suspensión	3	f	f	f	2026-11-21 19:25:15.772674-05	3	6	si	t	SUS	20
-21	6	levantamiento_acometida	Levantamiento de la acometida	2	f	f	f	2026-11-21 19:25:15.772689-05	2	6	si	t	LEV	20
-22	6	investigacion_ubicacion	Investigación de ubicación del predio	1	f	f	f	2026-11-21 19:25:15.7727-05	3	6	si	t	INV	20
-25	8	revision_pqr	Revisión PQR	1	f	f	f	2026-11-21 19:25:15.772732-05	2	6	si	t	PQR	20
-24	7	instalacion_medidor	Instalación de medidor	1	f	f	f	2026-11-21 19:25:15.772721-05	3	7	si	t	IME	20
-23	7	instalacion_acometida	Instalación de acometida	2	f	f	f	2026-11-21 19:25:15.77271-05	3	6	opcional	t	IAC	20
-26	9	revision_previa	Revisiones generales	1	f	f	t	2026-11-21 19:25:15.860842-05	2	6	si	t	RPV	20
-27	2	fuga_acometida	Fuga en acometida	3	f	f	t	2026-11-21 19:25:15.981569-05	\N	\N	opcional	f	\N	\N
-28	2	caja_medidor_danada	Caja de medidor dañada	4	f	f	t	2026-11-21 19:25:15.981632-05	\N	\N	opcional	f	\N	\N
+1	1	predio_sin_contrato	Predio con servicio sin contrato asignado (por verificar)	6	f	f	t	2026-11-21 19:29:28.305941-05	\N	\N	opcional	f	\N	\N
+2	1	uso_distinto	Posible uso distinto del declarado	5	f	f	t	2026-11-21 19:29:28.306115-05	\N	\N	opcional	f	\N	\N
+3	1	anomalia_medicion	Posible anomalía en la medición	4	f	f	t	2026-11-21 19:29:28.306123-05	\N	\N	opcional	f	\N	\N
+4	1	fraude	Posible fraude	3	f	f	t	2026-11-21 19:29:28.30613-05	\N	\N	opcional	f	\N	\N
+5	1	reconexion	Posible reconexión	2	f	f	t	2026-11-21 19:29:28.306135-05	\N	\N	opcional	f	\N	\N
+6	1	acometida_sin_permiso	Posible acometida sin permiso	1	f	f	t	2026-11-21 19:29:28.30614-05	\N	\N	opcional	f	\N	\N
+7	2	tapa_caja_acueducto	Tapa o caja de medidor o válvula rota o faltante	2	f	f	t	2026-11-21 19:29:28.306151-05	\N	\N	opcional	f	\N	\N
+8	2	dano_red_acueducto	Daño en la red (fuga visible)	1	f	f	t	2026-11-21 19:29:28.306159-05	\N	\N	opcional	f	\N	\N
+9	3	conexion_errada	Conexión errada de alcantarillado	4	f	f	t	2026-11-21 19:29:28.306167-05	\N	\N	opcional	f	\N	\N
+10	3	rejilla_sumidero	Daño en rejilla o sumidero	3	f	f	t	2026-11-21 19:29:28.306173-05	\N	\N	opcional	f	\N	\N
+11	3	tapa_manhole	Daño en tapa de manhole (rota, hundida o faltante)	2	f	f	t	2026-11-21 19:29:28.306181-05	\N	\N	opcional	f	\N	\N
+12	3	dano_red_alcantarillado	Daño en la red (hundimiento, colapso, rebose)	1	f	f	t	2026-11-21 19:29:28.306187-05	\N	\N	opcional	f	\N	\N
+13	4	dano_obra_terceros	Daño por obra de terceros	1	f	f	t	2026-11-21 19:29:28.306196-05	\N	\N	opcional	f	\N	\N
+14	5	otro	Otro	1	t	f	t	2026-11-21 19:29:28.306204-05	\N	\N	opcional	f	\N	\N
+15	6	cambio_medidor	Cambio de medidor	8	f	f	f	2026-11-21 19:29:28.351878-05	2	6	si	t	CME	20
+16	6	reconexion_servicio	Reconexión del servicio (tras un corte)	7	f	t	f	2026-11-21 19:29:28.352039-05	2	4	si	t	REC	20
+17	6	reinstalacion	Reinstalación del servicio (tras una suspensión)	6	f	f	f	2026-11-21 19:29:28.352054-05	2	4	si	t	REI	20
+18	6	verificacion_posterior	Verificación posterior al corte o a la suspensión	5	f	f	f	2026-11-21 19:29:28.352063-05	1	4	si	t	VER	20
+19	6	corte	Corte	4	f	t	f	2026-11-21 19:29:28.352075-05	3	6	si	t	COR	20
+20	6	suspension	Suspensión	3	f	f	f	2026-11-21 19:29:28.352082-05	3	6	si	t	SUS	20
+21	6	levantamiento_acometida	Levantamiento de la acometida	2	f	f	f	2026-11-21 19:29:28.352096-05	2	6	si	t	LEV	20
+22	6	investigacion_ubicacion	Investigación de ubicación del predio	1	f	f	f	2026-11-21 19:29:28.352107-05	3	6	si	t	INV	20
+25	8	revision_pqr	Revisión PQR	1	f	f	f	2026-11-21 19:29:28.35214-05	2	6	si	t	PQR	20
+24	7	instalacion_medidor	Instalación de medidor	1	f	f	f	2026-11-21 19:29:28.352129-05	3	7	si	t	IME	20
+23	7	instalacion_acometida	Instalación de acometida	2	f	f	f	2026-11-21 19:29:28.352118-05	3	6	opcional	t	IAC	20
+26	9	revision_previa	Revisiones generales	1	f	f	t	2026-11-21 19:29:28.441861-05	2	6	si	t	RPV	20
+27	2	fuga_acometida	Fuga en acometida	3	f	f	t	2026-11-21 19:29:28.555626-05	\N	\N	opcional	f	\N	\N
+28	2	caja_medidor_danada	Caja de medidor dañada	4	f	f	t	2026-11-21 19:29:28.555685-05	\N	\N	opcional	f	\N	\N
 \.
 
 
@@ -11882,8 +11892,8 @@ COPY public.catastro_valledupar (id, cod_usuario, direccion, barrio, estrato, cl
 --
 
 COPY public.geoportal_auditoria (id, email, accion, referencia, detalle, ip, creado_en) FROM stdin;
-1	migracion@analisis_contrato	admin_permiso_inicial_analisis_contrato	\N	{"regla": "ver_comercial o ver_campo o ver_acta o ver_dashboard_campo o ver_dashboard", "marcados": 0}	\N	2026-11-21 19:25:15.936455-05
-2	migracion@tecnica_corte8	migracion_tecnica_corte8	\N	{"vista": "redes.v_reportes_comercial", "columna": "campo.reportes.area", "dominio": "tecnica.formulario_clave", "rpc_nuevas": ["geoportal_campo_tec_formulario", "geoportal_campo_tec_preparar_subida", "geoportal_campo_tec_crear_reporte"], "reemplazadas": ["campo.f_autorizar_reporte", "tecnica.f_formularios"], "tipos_agregados": ["fuga_acometida", "caja_medidor_danada"]}	\N	2026-11-21 19:25:15.97795-05
+1	migracion@analisis_contrato	admin_permiso_inicial_analisis_contrato	\N	{"regla": "ver_comercial o ver_campo o ver_acta o ver_dashboard_campo o ver_dashboard", "marcados": 0}	\N	2026-11-21 19:29:28.515904-05
+2	migracion@tecnica_corte8	migracion_tecnica_corte8	\N	{"vista": "redes.v_reportes_comercial", "columna": "campo.reportes.area", "dominio": "tecnica.formulario_clave", "rpc_nuevas": ["geoportal_campo_tec_formulario", "geoportal_campo_tec_preparar_subida", "geoportal_campo_tec_crear_reporte"], "reemplazadas": ["campo.f_autorizar_reporte", "tecnica.f_formularios"], "tipos_agregados": ["fuga_acometida", "caja_medidor_danada"]}	\N	2026-11-21 19:29:28.552231-05
 \.
 
 
@@ -11919,11 +11929,11 @@ COPY public.predios_comercial_fuente_local (id, cod_usuario, deuda_total, barrio
 --
 
 COPY salida.config_documentos (documento, habilitado, copias_internas, actualizado_por, actualizado_en) FROM stdin;
-acta_inspeccion	f	{}	\N	2026-11-21 19:25:15.897417-05
-revision_previa	f	{}	\N	2026-11-21 19:25:15.897518-05
-revision_pqr	f	{}	\N	2026-11-21 19:25:15.89752-05
-instalacion_medidor	f	{}	\N	2026-11-21 19:25:15.897522-05
-instalacion_acometida	f	{}	\N	2026-11-21 19:25:15.897523-05
+acta_inspeccion	f	{}	\N	2026-11-21 19:29:28.476364-05
+revision_previa	f	{}	\N	2026-11-21 19:29:28.476482-05
+revision_pqr	f	{}	\N	2026-11-21 19:29:28.476484-05
+instalacion_medidor	f	{}	\N	2026-11-21 19:29:28.476486-05
+instalacion_acometida	f	{}	\N	2026-11-21 19:29:28.476487-05
 \.
 
 
@@ -11972,11 +11982,11 @@ COPY salida.fallos_encolado (id, esquema_origen, registro_id, mensaje, creado_en
 --
 
 COPY salida.parametros (clave, valor, descripcion, minimo, maximo, actualizado_en) FROM stdin;
-max_intentos	5	Intentos de envío antes de marcar error	1	20	2026-11-21 19:25:15.897254-05
-arriendo_segundos	300	Arriendo de un envío tomado (el Dell lo pide en tomar_envios; valor de referencia)	30	3600	2026-11-21 19:25:15.897376-05
-sondeo_segundos	60	Cada cuánto consulta el Dell (referencia, no la aplica la base)	10	3600	2026-11-21 19:25:15.897386-05
-ventana_posterior_min	30	Minutos tras registrar en que aún se puede reservar el contacto de un registro ya hecho	1	240	2026-11-21 19:25:15.897391-05
-retencion_meses	6	Meses tras el último envío exitoso o la anulación para enmascarar los contactos	1	120	2026-11-21 19:25:15.897397-05
+max_intentos	5	Intentos de envío antes de marcar error	1	20	2026-11-21 19:29:28.476155-05
+arriendo_segundos	300	Arriendo de un envío tomado (el Dell lo pide en tomar_envios; valor de referencia)	30	3600	2026-11-21 19:29:28.47632-05
+sondeo_segundos	60	Cada cuánto consulta el Dell (referencia, no la aplica la base)	10	3600	2026-11-21 19:29:28.476332-05
+ventana_posterior_min	30	Minutos tras registrar en que aún se puede reservar el contacto de un registro ya hecho	1	240	2026-11-21 19:29:28.476337-05
+retencion_meses	6	Meses tras el último envío exitoso o la anulación para enmascarar los contactos	1	120	2026-11-21 19:29:28.476343-05
 \.
 
 
@@ -11985,7 +11995,7 @@ retencion_meses	6	Meses tras el último envío exitoso o la anulación para enma
 --
 
 COPY salida.textos_autorizacion (version, texto, borrador, creado_por, creado_en) FROM stdin;
-1	BORRADOR pendiente de jurídica. Autorizo a EMDUPAR S.A. E.S.P. a tratar mi correo electrónico y mi número de celular únicamente para enviarme la constancia de este registro, de acuerdo con la Ley 1581 de 2012 y la política de tratamiento de datos de la empresa.	t	sistema	2026-11-21 19:25:15.897543-05
+1	BORRADOR pendiente de jurídica. Autorizo a EMDUPAR S.A. E.S.P. a tratar mi correo electrónico y mi número de celular únicamente para enviarme la constancia de este registro, de acuerdo con la Ley 1581 de 2012 y la política de tratamiento de datos de la empresa.	t	sistema	2026-11-21 19:29:28.476514-05
 \.
 
 
@@ -12021,11 +12031,11 @@ COPY tecnica.exclusiones (id, registro_id, lote_id, accion, motivo, autor, cread
 --
 
 COPY tecnica.formulario_variables (id, formulario, variable_id, orden, obligatoria, alcance, punto_id, activa, creado_en) FROM stdin;
-1	entrada	1	1	t	por_planta	\N	t	2026-11-21 19:25:15.970487-05
-2	entrada	2	2	f	ambas_plantas	\N	t	2026-11-21 19:25:15.970638-05
-3	entrada	3	3	f	ambas_plantas	\N	t	2026-11-21 19:25:15.970642-05
-4	entrada	4	4	f	ambas_plantas	\N	t	2026-11-21 19:25:15.970645-05
-5	entrada	5	5	f	ambas_plantas	\N	t	2026-11-21 19:25:15.970647-05
+1	entrada	1	1	t	por_planta	\N	t	2026-11-21 19:29:28.548162-05
+2	entrada	2	2	f	ambas_plantas	\N	t	2026-11-21 19:29:28.548313-05
+3	entrada	3	3	f	ambas_plantas	\N	t	2026-11-21 19:29:28.548317-05
+4	entrada	4	4	f	ambas_plantas	\N	t	2026-11-21 19:29:28.54832-05
+5	entrada	5	5	f	ambas_plantas	\N	t	2026-11-21 19:29:28.548322-05
 \.
 
 
@@ -12042,8 +12052,8 @@ COPY tecnica.personal_tecnico_eventos (id, persona, tipo_evento, formulario, mot
 --
 
 COPY tecnica.plantas (id, codigo, nombre, activa, creado_en) FROM stdin;
-1	huaricha	Huaricha	t	2026-11-21 19:25:15.969931-05
-2	gota_fria	Gota Fría	t	2026-11-21 19:25:15.97013-05
+1	huaricha	Huaricha	t	2026-11-21 19:29:28.547616-05
+2	gota_fria	Gota Fría	t	2026-11-21 19:29:28.547776-05
 \.
 
 
@@ -12076,11 +12086,11 @@ COPY tecnica.senal_cambio (id, tabla, planta_id, creado_en) FROM stdin;
 --
 
 COPY tecnica.variables (id, codigo, nombre, unidad, categoria, decimales, ref_min, ref_max, activa, creado_en) FROM stdin;
-1	caudal_qi	Caudal de ingreso Qi	L/s	caudal	0	\N	\N	t	2026-11-21 19:25:15.970177-05
-2	turbiedad_ingreso	Turbiedad de ingreso (Ti)	NTU	fisicoquimico	1	\N	\N	t	2026-11-21 19:25:15.970353-05
-3	alcalinidad_ingreso	Alcalinidad de ingreso	mg/L	fisicoquimico	0	\N	\N	t	2026-11-21 19:25:15.970362-05
-4	ph_ingreso	pH de ingreso	pH	fisicoquimico	2	\N	\N	t	2026-11-21 19:25:15.970369-05
-5	conductividad	Conductividad	µS/cm	fisicoquimico	0	\N	\N	t	2026-11-21 19:25:15.970375-05
+1	caudal_qi	Caudal de ingreso Qi	L/s	caudal	0	\N	\N	t	2026-11-21 19:29:28.547819-05
+2	turbiedad_ingreso	Turbiedad de ingreso (Ti)	NTU	fisicoquimico	1	\N	\N	t	2026-11-21 19:29:28.548009-05
+3	alcalinidad_ingreso	Alcalinidad de ingreso	mg/L	fisicoquimico	0	\N	\N	t	2026-11-21 19:29:28.548021-05
+4	ph_ingreso	pH de ingreso	pH	fisicoquimico	2	\N	\N	t	2026-11-21 19:29:28.548029-05
+5	conductividad	Conductividad	µS/cm	fisicoquimico	0	\N	\N	t	2026-11-21 19:29:28.548042-05
 \.
 
 
@@ -17638,5 +17648,5 @@ REFRESH MATERIALIZED VIEW public.predios_comercial;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict aQNZCIi79sm67BwFboFKUG2kZBZ68WQutybxmh5DJoj17j9mizKcRCMZdO1ZceF
+\unrestrict 0d0W75beemWK9uFh5hE44ZO5cq0cVssbif3X5KZ3PeLq0ThruNGDj5ak3EU0igd
 

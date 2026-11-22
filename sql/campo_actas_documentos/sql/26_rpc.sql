@@ -25,7 +25,10 @@ language plpgsql security definer set search_path to 'public', 'campo', 'acta', 
 declare v_email text; v_nombre text := nullif(regexp_replace(btrim(coalesce(p_nombre, '')), '\s+', ' ', 'g'), ''); v_img bytea; v_huella text; v_otro text; v_usuario text; v_estado text := p_estado;
 begin
   if p_esquema = 'campo' then v_email := campo.f_verificar(p_solicitante, 'campo');
-  elsif p_esquema = 'acta' then v_email := acta.f_autorizar(p_solicitante, 'capturar');
+  elsif p_esquema = 'acta' then
+    begin v_email := acta.f_autorizar(p_solicitante, 'capturar');
+    exception when sqlstate '42501' then v_email := acta.f_autorizar(p_solicitante, 'supervisar');   -- la corrección la registra (y la firma) el supervisor de actas
+    end;
   else perform campo.f_error('El tipo de registro no es válido'); end if;
   if p_registro_id is null then perform campo.f_error('Indique el registro'); end if;
   if p_rol is null or p_rol not in ('operario', 'usuario', 'testigo') then perform campo.f_error('La firma debe ser del operario, del usuario o del testigo'); end if;
@@ -95,9 +98,16 @@ begin
   end if;
   v_d := campo.f_documento_de(v_form);
   if v_d.formulario is null or not v_d.lleva_pdf then perform campo.f_error('Ese formulario no lleva PDF'); end if;
-  select coalesce(jsonb_agg(jsonb_build_object('rol', f.rol, 'estado', f.estado, 'nombre', f.nombre, 'imagen', encode(f.imagen, 'base64'), 'huella', f.huella)
-                            order by array_position(array['operario', 'usuario', 'testigo'], f.rol)), '[]'::jsonb)
-    into v_firmas from campo.firmas f where f.esquema = p_esquema and f.registro_id = p_registro_id and f.estado <> 'quitada';
+  -- Firmas: las de este registro («esta»). En una corrección del acta (versión 2 en adelante) va la del operario que corrige más las tres del acta original («original»).
+  select coalesce(jsonb_agg(jsonb_build_object('rol', x.rol, 'estado', x.estado, 'nombre', x.nombre, 'imagen', encode(x.imagen, 'base64'), 'huella', x.huella, 'de', x.de)
+                            order by x.o1, array_position(array['operario', 'usuario', 'testigo'], x.rol)), '[]'::jsonb)
+    into v_firmas
+    from (select f.*, 'esta'::text as de, case when v_ver > 1 then 2 else 1 end as o1
+            from campo.firmas f where f.esquema = p_esquema and f.registro_id = p_registro_id and f.estado <> 'quitada' and (v_ver = 1 or f.rol = 'operario')
+          union all
+          select f.*, 'original'::text, 1 from campo.firmas f
+           where v_ver > 1 and f.esquema = 'acta' and f.estado <> 'quitada'
+             and f.registro_id = (select o.id from acta.actas o where o.acta_raiz_id = v_a.acta_raiz_id and o.version = 1)) x;
   select coalesce(nullif(btrim(lb.nombre), ''), split_part(coalesce(v_r.autor, v_a.autor), '@', 1)) into v_op from public.geoportal_lista_blanca lb where lb.email = coalesce(v_r.autor, v_a.autor);
   if p_esquema = 'campo' then
     select d.datos into v_sen from campo.reporte_datos_sensibles d where d.reporte_id = v_r.id;
@@ -146,8 +156,8 @@ begin
     select coalesce(jsonb_agg(jsonb_build_object('bucket', 'acta-evidencias', 'ruta', p.ruta_storage, 'etiqueta', coalesce(tf.nombre, 'Foto ' || p.orden), 'bytes', p.tamano_bytes) order by p.orden), '[]'::jsonb)
       into v_fotos from acta.acta_fotos p left join acta.tipos_foto tf on tf.id = p.tipo_foto_id where p.acta_id = v_a.id;
     v_nombre := campo.f_nombre_pdf(v_a.registrado_en, v_d.sigla, v_a.consecutivo, v_a.version);
-    v_sello := encode(sha256(convert_to(coalesce((select s.sello_sha256 from acta.acta_sellos s where s.acta_id = v_a.id), '') || coalesce((select string_agg(f.huella, ',' order by f.rol)
-                 from campo.firmas f where f.esquema = 'acta' and f.registro_id = v_a.id and f.estado = 'firmo'), ''), 'UTF8')), 'hex');
+    v_sello := encode(sha256(convert_to(coalesce((select s.sello_sha256 from acta.acta_sellos s where s.acta_id = v_a.id), '') || coalesce((select string_agg(x ->> 'huella', ',' order by x ->> 'de', x ->> 'rol')
+                 from jsonb_array_elements(v_firmas) x where x ->> 'estado' = 'firmo'), ''), 'UTF8')), 'hex');
   end if;
   select jsonb_build_object('nombre', d.nombre, 'ruta', d.ruta, 'sha256', d.sha256, 'bytes', d.bytes, 'version', d.version) into v_doc
     from campo.documentos_pdf d where d.esquema = p_esquema and d.registro_id = p_registro_id;

@@ -2,7 +2,7 @@ PRUEBAS LOCALES · Comercial 21-nov · (b) Actas: firmas, PDF, actas registradas
 
 OK    B.01 la base local es la de producción con (a) aplicado (huella de campo tras (a) determinista)
 OK    E.01 con las huellas de redes y técnica de producción, la guardia detiene el ensayo en esta base
-ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 61 de 61 pruebas correctas — SIN FALLAS
+ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 65 de 65 pruebas correctas — SIN FALLAS
 OK    E.02 el ensayo termina en ERROR esperado con todas sus pruebas correctas (0.1 s)
 OK    E.03 el ensayo no dejó nada
 OK    C.01 huellas antes: (a) PUBLICADO, acta PUBLICADA, nuevas NO EXISTE, tablas NO EXISTEN
@@ -22,4 +22,4 @@ OK    C.14 la migración se aplica encima de lo conservado
 OK    C.15 verificación 10 de 10 y la firma sigue
 OK    G.01 con una función de campo distinta, la migración se detiene
 
-RESULTADO: 80 de 80 pruebas correctas — SIN FALLAS
+RESULTADO: 84 de 84 pruebas correctas — SIN FALLAS
