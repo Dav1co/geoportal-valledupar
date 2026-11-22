@@ -78,6 +78,8 @@ export type PersonaCampo = {
   cargo: string | null; formularios: string[]; sin_asignacion: boolean; ultimo_cambio: string | null;
   /** Personal y cuadrillas (21-nov): llegan con el paquete (a) del Code A; un servidor anterior no los manda. */
   area?: CodigoNombreActivo | null; cuadrilla?: CuadrillaRef | null; actividades?: ActividadPersona[]; propia?: boolean;
+  /** 22-nov (Code A, 5972d2d, «solo operarios»): ¿quien consulta le cambia el área y el cargo? ¿y los formularios, la cuadrilla y las actividades? Un servidor anterior no los manda. */
+  puede_area_cargo?: boolean; puede_asignar?: boolean;
 };
 export type CodigoNombre = { codigo: string; nombre: string };
 export type CodigoNombreActivo = CodigoNombre & { activa: boolean };

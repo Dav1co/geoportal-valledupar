@@ -7,11 +7,15 @@
 //   Storage simulado en memoria (fotos, firmas y PDF). Las demás Edges (mapa, Técnica, Aseo, tablero) NO están: esas áreas muestran su aviso de error, a propósito.
 //   Al arrancar siembra, por las Edges reales y como prueba.op.comercial, una revisión general (con firmas y 2 actividades derivadas, PDF generado) y una instalación de medidor
 //   que atiende una de ellas: así «Actas registradas» y «Actividades derivadas» tienen qué mostrar (R3).
+//   Personal «solo operarios» (22-nov): con la plantilla del doble CON el cambio del Code A (doble_admin_permisos_4a_con_cargo_supervisor.sql, 256705b1…; Personal trae
+//   puede_area_cargo y puede_asignar), en --servir y con PRUEBA=personal la copia suma prueba.sup.actas (supervisor de actas, sin supervisión de campo) y, por las Edges reales
+//   y como prueba.admin, la «Cuadrilla de prueba Norte» con un operario (prueba.op.comercial) y un supervisor (prueba.caso.todo).
 // Uso:
 //   node scripts/revision_admin.mjs --servir <chrome> <puppeteer-core> <deno> <supabase/functions> <psql_b> <plantilla>              → deja todo corriendo para revisarlo
 //   node scripts/revision_admin.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> <psql_b> <plantilla> <carpeta de capturas> → la prueba de Administración en Chrome
 //        (390 y 1280 px) sobre su propia copia (<plantilla>_prueba) y termina. Con REV_RAIZ=<otra copia del repositorio> compila la app de ahí; con ANTES=1 solo toma las capturas
-//        de la pantalla de siempre (para las capturas de «antes», con REV_RAIZ apuntando a main).
+//        de la pantalla de siempre (para las capturas de «antes», con REV_RAIZ apuntando a main). PRUEBA=personal corre en cambio la prueba de Personal
+//        (revision_personal_prueba.mjs; exige la plantilla con el cambio del Code A). PRUEBA solo admite «admin» (por omisión) o «personal».
 //   -h | --help  muestra este uso. Cualquier otra opción que empiece con «-» es un error. Ctrl+C para terminar el modo --servir.
 // Puertos del Code B: 55987 (páginas), 55988 (Auth, Storage y PostgREST), 55989 (Edges).
 import { createRequire } from "node:module";
@@ -31,6 +35,8 @@ if (args.length !== 7) { console.error(`Faltan o sobran argumentos.\n${USO}`); p
 const [CHROME, PUP, DENO, FUNCIONES, PSQL, PLANTILLA, CAP] = SERVIR ? args.slice(1).concat([null]) : args;
 const aqui = dirname(fileURLToPath(import.meta.url)), raiz = process.env.REV_RAIZ ? resolve(process.env.REV_RAIZ) : join(aqui, "..");
 const ANTES = process.env.ANTES === "1";
+const PRUEBA = process.env.PRUEBA ?? "admin";
+if (PRUEBA !== "admin" && PRUEBA !== "personal") { console.error(`PRUEBA=${PRUEBA} no se conoce (admin o personal)`); process.exit(2); }
 const P_WEB = 55987, P_BASE = 55988, P_EDGE = 55989;
 const BASE = `http://127.0.0.1:${P_BASE}`;
 const DB = `${PLANTILLA}_${SERVIR ? "rev" : "prueba"}`;
@@ -51,6 +57,12 @@ sqlq(`insert into public.geoportal_lista_blanca (email, nombre, rol, activo, cre
 // Solo en la copia de la revisión (como en las pruebas de actas): «Instalación de medidor» y su grupo vienen inactivos en el doble; hacen falta para la derivada sembrada
 sqlq(`update campo.tipos_reporte set activo = true where codigo = 'instalacion_medidor'`);
 sqlq(`update campo.grupos_reporte set activo = true where id = (select grupo_id from campo.tipos_reporte where codigo = 'instalacion_medidor')`);
+// Personal «solo operarios»: ¿la plantilla trae el cambio del Code A? (geoportal_campo_personal con puede_asignar)
+const CON_CARGO = sqlq(`select coalesce(bool_or(position('puede_asignar' in prosrc) > 0), false) from pg_proc where proname = 'geoportal_campo_personal' and pronamespace = 'public'::regnamespace`) === "t";
+const SEMBRAR_PERSONAL = CON_CARGO && (SERVIR || PRUEBA === "personal");
+if (PRUEBA === "personal" && !SERVIR && !CON_CARGO) { console.error(`La plantilla ${PLANTILLA} no trae el cambio «solo operarios» del Code A (doble_admin_permisos_4a_con_cargo_supervisor.sql)`); process.exit(2); }
+if (SEMBRAR_PERSONAL) sqlq(`insert into public.geoportal_lista_blanca (email, nombre, rol, activo, creado_por, horario, dias, ver_explorar, ver_focalizacion, ver_comercial, ver_rutas, ver_dashboard, ver_acta, ver_dashboard_acta)
+      values ('prueba.sup.actas@emdupar.gov.co', 'Prueba supervisor de actas', 'consulta', true, 'prueba.admin@emdupar.gov.co', 'sin_restriccion', 'todos', false, false, false, false, false, true, true)`);
 
 // ---------- 1. La app completa (Vite), apuntando a los servidores locales ----------
 const DIST = mkdtempSync(join(tmpdir(), "rev_admin_app_"));
@@ -72,10 +84,11 @@ await build({
   } }],
   stdin: { resolveDir: raiz, loader: "tsx", contents: `
     import { apiDocumentos } from "./src/campo/documentos/apiDocumentos.ts"; import { apiFormatos } from "./src/campo/formatos/apiFormatos.ts"; import { apiCampo } from "./src/campo/apiCampo.ts";
+    import { apiRev } from "./src/campo/dashboard/apiRevision.ts";
     async function jpeg(w, h, calidad) { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.strokeStyle = "#123"; g.lineWidth = 4;
       g.beginPath(); for (let i = 0; i < 40; i++) g.lineTo(10 + i * (w - 20) / 40, h / 2 + Math.sin(i / 3) * h / 3); g.stroke(); return await new Promise((ok) => c.toBlob(ok, "image/jpeg", calidad)); }
     const b64 = async (blob) => { const s = new Uint8Array(await blob.arrayBuffer()); let t = ""; for (const x of s) t += String.fromCharCode(x); return btoa(t); };
-    window.__api = { apiDocumentos, apiFormatos, apiCampo,
+    window.__api = { apiDocumentos, apiFormatos, apiCampo, apiRev,
       async preparar(tipo, etiquetas) { const p = await apiFormatos.prepararSubida(etiquetas.length, tipo); for (const f of p.fotos) await apiCampo.subirFoto(f.ruta, f.token, await jpeg(640, 480, 0.8));
         return { reporte_id: p.reporte_id, fotos: p.fotos.map((f, i) => ({ orden: f.orden, ruta: f.ruta, etiqueta: etiquetas[i] })) }; },
       firma: async () => b64(await jpeg(400, 140, 0.7)) };
@@ -226,6 +239,19 @@ try {
   if (cm) await ev((d, id) => window.__api.apiDocumentos.derivadaAtender(d, id), cm.id, inst.reporte_id);
   console.log(`Siembra (como ${OP}, por las Edges reales): revisión ${c1.consecutivo} (firmas, PDF, 2 derivadas) e instalación ${c2.consecutivo} (atiende «cambio de medidor»; «fuga afuera» queda pendiente)`);
 } catch (e) { console.log("AVISO: la siembra falló; la revisión sigue, pero «Actas registradas» saldrá vacía:", String(e?.message ?? e).slice(0, 400), edgeLog.slice(-400)); }
+if (SEMBRAR_PERSONAL) {
+  // Personal: una cuadrilla con un operario y un supervisor, por las Edges reales y como el administrador (así se ve que el supervisor sigue en su cuadrilla, pero solo el administrador lo saca)
+  const pg = await nav.newPage();
+  try {
+    await pg.goto(`${BASE}/siembra.html?u=${encodeURIComponent("prueba.admin@emdupar.gov.co")}`); await pg.waitForFunction("window.__listo === true", { timeout: 15000 });
+    const r = await pg.evaluate(async () => { const A = window.__api.apiRev; await A.cuadrillaCambiar({ tipo: "crear", nombre: "Cuadrilla de prueba Norte" });
+      const q = (await A.cuadrillas()).cuadrillas.find((c) => c.nombre === "Cuadrilla de prueba Norte");
+      for (const p of ["prueba.op.comercial@emdupar.gov.co", "prueba.caso.todo@emdupar.gov.co"]) await A.fijarCuadrilla(p, q.id, null);
+      return q.id; });
+    console.log(`Siembra de Personal (como prueba.admin, por las Edges reales): «Cuadrilla de prueba Norte» (n.º ${r}) con prueba.op.comercial (operario) y prueba.caso.todo (supervisor); prueba.sup.actas en la lista blanca`);
+  } catch (e) { console.log("AVISO: la siembra de Personal falló:", String(e?.message ?? e).slice(0, 400), edgeLog.slice(-400)); }
+  await pg.close();
+}
 await nav.close();
 
 if (SERVIR) {
@@ -235,7 +261,7 @@ Revisión local lista (base ${DB} en 55442; Edges reales geoportal-admin, geopor
   const fin = () => { try { edge.kill(); } catch { /* ya terminó */ } process.exit(0); };
   process.on("SIGINT", fin); process.on("SIGTERM", fin);
 } else {
-  const { probar } = await import("./revision_admin_prueba.mjs");
+  const { probar } = await import(PRUEBA === "personal" ? "./revision_personal_prueba.mjs" : "./revision_admin_prueba.mjs");
   const r = await probar({ puppeteer, CHROME, CAP, ANTES, sqlq, P_WEB, edgeLog: () => edgeLog, registro });
   edge.kill(); base.close(); web.close();
   process.exit(r ? 0 : 1);

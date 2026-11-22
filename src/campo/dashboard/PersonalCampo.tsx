@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { apiRev, textoError, type ActividadPersona, type EventoPersonal, type PersonaActividad, type PersonaCampo, type PersonalResp, type PuedePersonal } from "./apiRevision";
+import { apiRev, textoError, type ActividadPersona, type EventoPersonal, type PersonaActividad, type PersonaCampo, type PersonalResp, type PuedePersonal, type TipoCambioPersonal } from "./apiRevision";
+import { ErrorCampo } from "../apiCampo";
 import { fmtInstante } from "./formatoRevision";
+import { editaAlgo, porQueNo, puedeDe, puedeSobre, soloOperarios, textoRechazo } from "./personalPuede";
+export { puedeDe } from "./personalPuede";
 
 // «Supervisión y dashboard» · Personal (pasada 14/11; área, cuadrilla y actividades desde el 21-nov, paquete (a) del Code A). Personas activas con permiso de Formularios de campo o del acta:
 // su área, cargo, cuadrilla, actividades (las de su cuadrilla y las propias) y los formularios que puede llenar, con el historial. Las actividades y los formularios SOLO SE REGISTRAN:
@@ -9,11 +12,12 @@ import { fmtInstante } from "./formatoRevision";
 type Dialogo = { tipo: "editar"; p: PersonaCampo } | { tipo: "revertir"; e: EventoPersonal };
 const quien = (p: { nombre: string | null; email?: string; persona?: string | null }) => p.nombre ?? (p.email ?? p.persona ?? "").split("@")[0];
 const permisos = (p: PersonaCampo) => [p.permisos.campo && "Formularios de campo", p.permisos.dashboard_campo && "Supervisión de campo", p.permisos.acta && "Acta", p.permisos.dashboard_acta && "Supervisión de actas"].filter(Boolean).join(" · ");
-const NADA: PuedePersonal = { cargo: false, area: false, cuadrilla: false, cuadrillas: false, actividades: false, formularios: false, catalogos: false };
-/** Lo que puede cambiar quien consulta. Sin `puede` (servidor anterior), el administrador fija el cargo y los formularios, como antes. */
-export function puedeDe(d: PersonalResp | null, soloLectura = false): PuedePersonal {
-  if (!d || soloLectura) return NADA;
-  return d.puede ?? { ...NADA, cargo: d.puede_editar, formularios: d.puede_editar };
+// 22-nov («solo operarios», Code A 5972d2d): además, cada persona trae puede_area_cargo y puede_asignar; la ficha muestra solo los controles que el servidor permite sobre ella
+// (personalPuede.ts). Un 403 al guardar (la ficha cambió mientras tanto) cierra el diálogo, explica la regla y vuelve a cargar la lista.
+/** Texto de un error al guardar: el del 403 «solo operarios» si toca, o el de siempre. */
+function textoAlGuardar(e: unknown, tipo: TipoCambioPersonal, admin: boolean): { texto: string; rechazo: boolean } {
+  const r = e instanceof ErrorCampo ? textoRechazo(e.status, e.tipo, e.message, tipo, admin) : null;
+  return r ? { texto: r, rechazo: true } : { texto: textoError(e).texto, rechazo: false };
 }
 const ORIGEN: Record<ActividadPersona["origen"], string> = { cuadrilla: "de la cuadrilla", propia: "propia", ambas: "propia y de la cuadrilla" };
 const motivoMalo = (m: string) => m.trim().length < 10 || m.trim().length > 300;
@@ -35,10 +39,23 @@ export function PersonalCampo({ soloLectura = false }: { soloLectura?: boolean }
   }, [buscar]);
   useEffect(() => { const t = setTimeout(() => void cargar(), 250); return () => clearTimeout(t); }, [cargar]);
   const nombreForm = useMemo(() => new Map((datos?.formularios ?? []).map((f) => [f.clave, f.nombre])), [datos]);
-  const hecho = (t: string) => { setDlg(null); setAviso(t); setVersionHist((x) => x + 1); void cargar(); };
+  const [rechazo, setRechazo] = useState<string | null>(null);
+  const refRechazo = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (rechazo) refRechazo.current?.scrollIntoView({ block: "center" }); }, [rechazo]);   // en el celular la ficha queda lejos del aviso
+  const hecho = (t: string) => { setDlg(null); setRechazo(null); setAviso(t); setVersionHist((x) => x + 1); void cargar(); };
+  /** El servidor rechazó un cambio (403): se cierra el diálogo, se dice por qué y la lista se vuelve a pedir para mostrar lo que hoy se puede. */
+  const rechazado = (t: string) => { setDlg(null); setAviso(null); setRechazo(t); setVersionHist((x) => x + 1); void cargar(); };
   const puede = puedeDe(datos, soloLectura);
   const nuevo = !!datos?.puede;                              // servidor con área, cuadrilla y actividades
-  const edita = Object.entries(puede).some(([k, v]) => v && k !== "cuadrillas" && k !== "catalogos");
+  const edita = editaAlgo(puede);
+  const soloOps = soloOperarios(datos, puede);
+  const porPersona = useMemo(() => new Map((datos?.personas ?? []).map((p) => [p.email, p])), [datos]);
+  /** Revertir un formulario del historial: solo si a esa persona se le pueden cambiar los formularios (un supervisor, no; quien ya no está en la lista, tampoco). */
+  const puedeRevertir = (persona: string | null) => {
+    if (!puede.formularios || !persona) return false;
+    const p = porPersona.get(persona);
+    return p ? puedeSobre(puede, p).formularios : !nuevo;     // fuera de la lista: un servidor anterior al 21-nov, como antes; uno nuevo, no
+  };
   const lo = [puede.cargo && puede.area ? "fijar el área y el cargo" : puede.cargo ? "fijar el cargo" : puede.area ? "fijar el área" : null,
     puede.cuadrilla && "poner a cada persona en una cuadrilla", puede.actividades && "darle actividades propias", puede.formularios && "elegir sus formularios"].filter(Boolean) as string[];
 
@@ -49,7 +66,8 @@ export function PersonalCampo({ soloLectura = false }: { soloLectura?: boolean }
         <p className="rv-sub">Personas activas con permiso de Formularios de campo o del acta. <strong>Sin asignación pueden llenar todos los formularios activos.</strong> {nuevo ? "Por ahora las actividades y los formularios solo se registran: no bloquean la captura." : "Por ahora la asignación solo se registra: no bloquea la captura."}</p>
       </div>
       <div className="rv-per-cajitas">
-        {edita ? <div className="rv-per-cajita"><strong>Usted puede:</strong> {lo.join(", ").replace(/, ([^,]*)$/, " y $1")}. Cada cambio queda con quién, cuándo y por qué{puede.formularios ? ", y los formularios se pueden revertir" : ""}.{nuevo ? " Nadie cambia su propia ficha." : ""}</div>
+        {edita ? <div className="rv-per-cajita"><strong>Usted puede:</strong> {lo.join(", ").replace(/, ([^,]*)$/, " y $1")}. Cada cambio queda con quién, cuándo y por qué{puede.formularios ? ", y los formularios se pueden revertir" : ""}.{nuevo ? " Nadie cambia su propia ficha." : ""}
+          {soloOps ? <span data-testid="per-solo-operarios"> <strong>Solo a los operarios:</strong> el área, el cargo y las asignaciones de un supervisor los cambia el administrador.</span> : null}</div>
           : nuevo || soloLectura ? <div className="rv-per-cajita"><strong>Solo lectura.</strong> Usted ve el personal, su área, cargo, cuadrilla, actividades, formularios y el historial.</div>
           : <div className="rv-per-cajita"><strong>Solo el administrador puede editar.</strong> Usted ve el personal, sus formularios, su cargo y el historial.</div>}
       </div>
@@ -58,6 +76,7 @@ export function PersonalCampo({ soloLectura = false }: { soloLectura?: boolean }
         {nuevo && (datos?.actividades ?? []).length ? <QuienPuede actividades={datos?.actividades ?? []} version={versionHist} /> : null}
       </div>
       {aviso ? <div className="rv-aviso rv-aviso-ok" role="status">{aviso}</div> : null}
+      {rechazo ? <div ref={refRechazo} className="rv-aviso rv-aviso-error" role="alert" data-testid="per-rechazo">{rechazo} La lista se actualizó con lo que hoy puede cambiar. <button type="button" className="rv-enlace" onClick={() => setRechazo(null)}>Cerrar</button></div> : null}
       {error ? <div className="rv-aviso rv-aviso-error" role="alert">{error} <button type="button" className="rv-enlace" onClick={() => void cargar()}>Reintentar</button></div> : null}
       {!datos && !error ? <p className="rv-sub" role="status">Cargando el personal…</p> : null}
       {datos && datos.personas.length === 0 ? <div className="rv-vacio">No hay personas con permiso de Formularios de campo o del acta{buscar.trim() ? " que coincidan con la búsqueda" : ""}.</div> : null}
@@ -81,16 +100,16 @@ export function PersonalCampo({ soloLectura = false }: { soloLectura?: boolean }
               <dt>Permisos</dt><dd className="rv-tenue">{permisos(p)}</dd>
             </dl>
             <div className="rv-botones">
-              {edita && !p.propia ? <button type="button" className="rv-boton-sec" onClick={() => { setAviso(null); setDlg({ tipo: "editar", p }); }}>Editar</button> : null}
-              {edita && p.propia ? <span className="rv-tenue">Es su ficha: no la puede cambiar.</span> : null}
+              {editaAlgo(puedeSobre(puede, p)) ? <button type="button" className="rv-boton-sec" onClick={() => { setAviso(null); setRechazo(null); setDlg({ tipo: "editar", p }); }}>Editar</button> : null}
+              {porQueNo(puede, p) ? <span className="rv-tenue" data-testid="per-bloqueo">{porQueNo(puede, p)}</span> : null}
               <button type="button" className="rv-enlace" onClick={() => setHistDe(p.email)}>Ver su historial</button>
             </div>
           </li>
         ))}
       </ul>
-      <Historial personas={datos?.personas ?? []} persona={histDe} onPersona={setHistDe} version={versionHist} puedeRevertir={puede.formularios} onRevertir={(e) => { setAviso(null); setDlg({ tipo: "revertir", e }); }} />
-      {dlg?.tipo === "editar" && datos ? <DialogoEditar p={dlg.p} datos={datos} puede={puede} onHecho={hecho} onCancelar={() => setDlg(null)} /> : null}
-      {dlg?.tipo === "revertir" ? <DialogoRevertir e={dlg.e} onHecho={hecho} onCancelar={() => setDlg(null)} /> : null}
+      <Historial personas={datos?.personas ?? []} persona={histDe} onPersona={setHistDe} version={versionHist} puedeRevertir={puedeRevertir} onRevertir={(e) => { setAviso(null); setRechazo(null); setDlg({ tipo: "revertir", e }); }} />
+      {dlg?.tipo === "editar" && datos ? <DialogoEditar p={dlg.p} datos={datos} puede={puedeSobre(puede, dlg.p)} admin={datos.puede_editar} onHecho={hecho} onRechazo={rechazado} onCancelar={() => setDlg(null)} /> : null}
+      {dlg?.tipo === "revertir" ? <DialogoRevertir e={dlg.e} admin={!!datos?.puede_editar} onHecho={hecho} onRechazo={rechazado} onCancelar={() => setDlg(null)} /> : null}
     </section>
   );
 }
@@ -126,7 +145,9 @@ function QuienPuede({ actividades, version }: { actividades: { codigo: string; n
   );
 }
 
-function DialogoEditar({ p, datos, puede, onHecho, onCancelar }: { p: PersonaCampo; datos: PersonalResp; puede: PuedePersonal; onHecho: (t: string) => void; onCancelar: () => void }) {
+function DialogoEditar({ p, datos, puede, admin, onHecho, onRechazo, onCancelar }: {
+  p: PersonaCampo; datos: PersonalResp; puede: PuedePersonal; admin: boolean; onHecho: (t: string) => void; onRechazo: (t: string) => void; onCancelar: () => void;
+}) {
   const [cargo, setCargo] = useState(p.cargo ?? "");
   const [area, setArea] = useState(p.area?.codigo ?? "");
   const [cuadrilla, setCuadrilla] = useState<string>(p.cuadrilla ? String(p.cuadrilla.id) : "");
@@ -160,17 +181,21 @@ function DialogoEditar({ p, datos, puede, onHecho, onCancelar }: { p: PersonaCam
     if (enviando || nada || cargoMal || motivoMal) return;
     setEnviando(true); setError(null);
     let hechos = 0; const m = motivo.trim();
+    let paso: TipoCambioPersonal = "fijar_cargo";            // el cambio en curso, para explicar un 403
     try {
-      if (cambiaCargo) { await apiRev.personalCambiar({ persona: p.email, tipo: "fijar_cargo", cargo: cargo.trim() }); hechos++; }
-      if (cambiaArea) { await apiRev.personalCambiar({ persona: p.email, tipo: "fijar_area", area }); hechos++; }
-      if (cambiaCuad) { await apiRev.fijarCuadrilla(p.email, cuadrilla === "" ? null : Number(cuadrilla), sacaOCambia ? m : null); hechos++; }
-      for (const a of actAsignar) { await apiRev.personalCambiar({ persona: p.email, tipo: "asignar_actividad", actividad: a }); hechos++; }
-      for (const a of actQuitar) { await apiRev.personalCambiar({ persona: p.email, tipo: "quitar_actividad", actividad: a, motivo: m }); hechos++; }
-      for (const f of asignar) { await apiRev.personalCambiar({ persona: p.email, tipo: "asignar_formulario", formulario: f }); hechos++; }
-      for (const f of quitar) { await apiRev.personalCambiar({ persona: p.email, tipo: "quitar_formulario", formulario: f, motivo: m }); hechos++; }
+      if (cambiaCargo) { paso = "fijar_cargo"; await apiRev.personalCambiar({ persona: p.email, tipo: "fijar_cargo", cargo: cargo.trim() }); hechos++; }
+      if (cambiaArea) { paso = "fijar_area"; await apiRev.personalCambiar({ persona: p.email, tipo: "fijar_area", area }); hechos++; }
+      if (cambiaCuad) { paso = "fijar_cuadrilla"; await apiRev.fijarCuadrilla(p.email, cuadrilla === "" ? null : Number(cuadrilla), sacaOCambia ? m : null); hechos++; }
+      for (const a of actAsignar) { paso = "asignar_actividad"; await apiRev.personalCambiar({ persona: p.email, tipo: "asignar_actividad", actividad: a }); hechos++; }
+      for (const a of actQuitar) { paso = "quitar_actividad"; await apiRev.personalCambiar({ persona: p.email, tipo: "quitar_actividad", actividad: a, motivo: m }); hechos++; }
+      for (const f of asignar) { paso = "asignar_formulario"; await apiRev.personalCambiar({ persona: p.email, tipo: "asignar_formulario", formulario: f }); hechos++; }
+      for (const f of quitar) { paso = "quitar_formulario"; await apiRev.personalCambiar({ persona: p.email, tipo: "quitar_formulario", formulario: f, motivo: m }); hechos++; }
       onHecho(`Cambios guardados para ${quien(p)} (${hechos}). Quedaron en el historial.`);
     } catch (e) {
-      setError(`${textoError(e).texto}${hechos ? ` Se alcanzaron a guardar ${hechos} cambio(s); revise el historial.` : ""}`); setEnviando(false);
+      const t = textoAlGuardar(e, paso, admin);
+      const parcial = hechos ? ` Se alcanzaron a guardar ${hechos} cambio(s); revise el historial.` : "";
+      if (t.rechazo) { onRechazo(`${quien(p)}: ${t.texto}${parcial}`); return; }
+      setError(`${t.texto}${parcial}`); setEnviando(false);
     }
   }
   const que = [quitar.length ? (quitar.length === 1 ? "quitar el formulario" : `quitar ${quitar.length} formularios`) : null,
@@ -274,7 +299,7 @@ export function FilaEvento({ e, puedeRevertir, onRevertir }: { e: EventoPersonal
 }
 
 function Historial({ personas, persona, onPersona, version, puedeRevertir, onRevertir }: {
-  personas: PersonaCampo[]; persona: string; onPersona: (p: string) => void; version: number; puedeRevertir: boolean; onRevertir: (e: EventoPersonal) => void;
+  personas: PersonaCampo[]; persona: string; onPersona: (p: string) => void; version: number; puedeRevertir: (persona: string | null) => boolean; onRevertir: (e: EventoPersonal) => void;
 }) {
   const [eventos, setEventos] = useState<EventoPersonal[] | null>(null);
   const [siguiente, setSiguiente] = useState<number | null>(null);
@@ -298,14 +323,14 @@ function Historial({ personas, persona, onPersona, version, puedeRevertir, onRev
       {error ? <div className="rv-aviso rv-aviso-error" role="alert">{error}</div> : null}
       {eventos && eventos.length === 0 ? <div className="rv-vacio">Sin cambios registrados.</div> : null}
       <ol className="rv-per-eventos">
-        {(eventos ?? []).map((e) => <FilaEvento key={e.clave ?? e.id} e={e} puedeRevertir={puedeRevertir} onRevertir={onRevertir} />)}
+        {(eventos ?? []).map((e) => <FilaEvento key={e.clave ?? e.id} e={e} puedeRevertir={puedeRevertir(e.persona)} onRevertir={onRevertir} />)}
       </ol>
       {siguiente ? <button type="button" className="rv-boton-sec" onClick={() => void cargar(siguiente)}>Ver más</button> : null}
     </div>
   );
 }
 
-function DialogoRevertir({ e, onHecho, onCancelar }: { e: EventoPersonal; onHecho: (t: string) => void; onCancelar: () => void }) {
+function DialogoRevertir({ e, admin, onHecho, onRechazo, onCancelar }: { e: EventoPersonal; admin: boolean; onHecho: (t: string) => void; onRechazo: (t: string) => void; onCancelar: () => void }) {
   const quitar = e.tipo_evento === "asignar_formulario";      // revertir una asignación = quitarla (con motivo); revertir un retiro = volver a asignar
   const [motivo, setMotivo] = useState(`Reversión del cambio n.º ${e.id}`);
   const [enviando, setEnviando] = useState(false);
@@ -316,7 +341,11 @@ function DialogoRevertir({ e, onHecho, onCancelar }: { e: EventoPersonal; onHech
     try {
       await apiRev.personalCambiar({ persona: e.persona, tipo: quitar ? "quitar_formulario" : "asignar_formulario", formulario: e.formulario, motivo: quitar ? motivo.trim() : null });
       onHecho(`Cambio n.º ${e.id} revertido.`);
-    } catch (x) { setError(textoError(x).texto); setEnviando(false); }
+    } catch (x) {
+      const t = textoAlGuardar(x, quitar ? "quitar_formulario" : "asignar_formulario", admin);
+      if (t.rechazo) { onRechazo(`${quien(e)}: ${t.texto}`); return; }
+      setError(t.texto); setEnviando(false);
+    }
   }
   return (
     <div className="rv-modal-fondo" onMouseDown={(x) => { if (x.target === x.currentTarget && !enviando) onCancelar(); }}>
