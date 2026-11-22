@@ -1,5 +1,15 @@
 begin;
 -- =====================================================================
+-- TÉCNICA · PTAR (Code C) · PTAR-1 · 06 — FOTO DE LAS COLUMNAS. Va SOLO en el ensayo, ANTES de la guardia y del esquema (la migración no la lleva).
+-- Guarda, en una tabla temporal, las columnas de todas las tablas que ya existen en el esquema tecnica (nombre, tipo, nulo y valor por omisión).
+-- La prueba 09.06 compara contra esta foto: ninguna tabla existente cambia de columnas, sin números fijos sacados de una base local.
+-- =====================================================================
+create function pg_temp.columnas_tecnica() returns table (tabla text, columna text, tipo text, no_nulo boolean, por_omision text) language sql stable as $$
+  select c.relname::text, a.attname::text, format_type(a.atttypid, a.atttypmod), a.attnotnull, pg_get_expr(d.adbin, d.adrelid)
+    from pg_class c join pg_attribute a on a.attrelid = c.oid left join pg_attrdef d on d.adrelid = c.oid and d.adnum = a.attnum
+   where c.relnamespace = 'tecnica'::regnamespace and c.relkind in ('r', 'p') and a.attnum > 0 and not a.attisdropped $$;
+create temp table _ptar_columnas_antes as select * from pg_temp.columnas_tecnica();
+-- =====================================================================
 -- TÉCNICA · PTAR (Code C) · PTAR-1 · 10 — GUARDIA Y ESQUEMA. Va en la migración y en el ensayo.
 -- Decisiones de David (DECISIONES_DAVID_21nov.md, carpeta paquete_fase1/ptar_cascaron): D1 (la PTAR no entra en tecnica.plantas: tabla aparte de instalaciones),
 -- D6 (alcance PTAP / PTAR por persona, como evento, sin tocar _shared/auth.ts ni autorizar()), D9 (el dibujo no se edita: se desactiva con motivo y se crea la fila nueva),
@@ -645,9 +655,16 @@ begin
     (select bool_and(not has_table_privilege(r, c.oid, 'select') and not has_table_privilege(r, c.oid, 'insert') and not has_table_privilege(r, c.oid, 'update') and c.relrowsecurity)
        from pg_class c cross join (values ('anon'), ('authenticated'), ('service_role')) x(r)
       where c.oid in ('tecnica.instalaciones'::regclass, 'tecnica.elementos_planta'::regclass, 'tecnica.elemento_alias_eventos'::regclass, 'tecnica.alcance_eventos'::regclass)));
-  perform pg_temp.reg('09.06 ninguna tabla existente cambió de columnas (plantas, puntos, registros, referencias)',
-    (select count(*) from pg_attribute where attrelid in ('tecnica.plantas'::regclass, 'tecnica.puntos'::regclass, 'tecnica.registros'::regclass, 'tecnica.referencias'::regclass)
-       and attnum > 0 and not attisdropped) = 44);
+  -- 09.06 compara con la foto que el ensayo toma ANTES de aplicar (06_foto_columnas): sin números fijos, vale para cualquier base.
+  select count(distinct tabla), count(*), coalesce(string_agg(x.cambio, '; ' order by x.cambio), '') into v_n, v_aud, v_txt
+    from (select coalesce(a.tabla, d.tabla) as tabla,
+                 case when d.tabla is null then 'falta ' || a.tabla || '.' || a.columna when a.tabla is null then 'nueva ' || d.tabla || '.' || d.columna
+                      when (a.tipo, a.no_nulo, a.por_omision) is distinct from (d.tipo, d.no_nulo, d.por_omision) then 'cambió ' || a.tabla || '.' || a.columna end as cambio
+            from _ptar_columnas_antes a full join pg_temp.columnas_tecnica() d on d.tabla = a.tabla and d.columna = a.columna
+           where a.tabla is not null or d.tabla in (select tabla from _ptar_columnas_antes)) x;
+  perform pg_temp.reg('09.06 ninguna tabla existente de técnica cambió de columnas (contadas antes de aplicar, en esta misma transacción)',
+    v_txt = '' and v_n > 0 and v_n = (select count(distinct tabla) from _ptar_columnas_antes),
+    v_n || ' tablas, ' || v_aud || ' columnas' || case when v_txt <> '' then ': ' || v_txt else '' end);
   perform pg_temp.reg('09.07 f_autorizar_supervision conserva sus privilegios', not has_function_privilege('anon', 'tecnica.f_autorizar_supervision(text)'::regprocedure, 'execute'));
 
   select count(*), count(*) filter (where ok), coalesce(string_agg('  FALLA ' || nombre || ' → ' || coalesce(detalle, ''), E'\n' order by _r.n) filter (where not ok), '') into v_total, v_bien, v_fallas from _r;

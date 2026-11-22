@@ -66,10 +66,9 @@ assert puerto == '55452', f'no es el clúster del Code C (puerto {puerto})'
 assert q(HUELLA_REDES, BASE) == MD5_REDES, 'ptar_base no tiene la huella de redes de producción'
 md5_tec_local = q(HUELLA_TEC, BASE)
 md5_sup = q("select md5(pg_get_functiondef('tecnica.f_autorizar_supervision(text)'::regprocedure))", BASE)
-n_col = q("select count(*) from pg_attribute where attrelid in ('tecnica.plantas'::regclass, 'tecnica.puntos'::regclass, 'tecnica.registros'::regclass, 'tecnica.referencias'::regclass) and attnum > 0 and not attisdropped", BASE)
 assert q(f"select count(*) from pg_proc where proname = any (array{INTERNAS + RPC})", BASE) == '0', 'ya hay funciones con los nombres nuevos'
 
-comun = {'{{MD5_REDES}}': MD5_REDES, '{{MD5_AUT_SUP}}': md5_sup, '{{N_COLUMNAS}}': n_col}
+comun = {'{{MD5_REDES}}': MD5_REDES, '{{MD5_AUT_SUP}}': md5_sup}
 v_prod = dict(comun, **{'{{MD5_TECNICA}}': MD5_TECNICA_PROD})
 v_local = dict(comun, **{'{{MD5_TECNICA}}': md5_tec_local})
 sql = lambda n: leer(os.path.join(RAIZ, 'sql', n))
@@ -80,7 +79,7 @@ def armar(val, carpeta, sufijo):
     escribir(os.path.join(carpeta, '70_pruebas.sql'), plantilla('70_pruebas.sql', val))
     cuerpo = leer(os.path.join(carpeta, '10_esquema.sql')) + ''.join(sql(n) for n in MIG[1:])
     escribir(os.path.join(carpeta, f'migracion_{NOMBRE}{sufijo}.sql'), 'begin;\n' + cuerpo + 'commit;\n')
-    escribir(os.path.join(carpeta, f'ensayo_en_transaccion_{NOMBRE}{sufijo}.sql'), 'begin;\n' + cuerpo + leer(os.path.join(carpeta, '70_pruebas.sql')) + 'rollback;\n')
+    escribir(os.path.join(carpeta, f'ensayo_en_transaccion_{NOMBRE}{sufijo}.sql'), 'begin;\n' + leer(os.path.join(AQUI, 'plantillas', '06_foto_columnas.sql')) + cuerpo + leer(os.path.join(carpeta, '70_pruebas.sql')) + 'rollback;\n')
 
 
 armar(v_prod, os.path.join(RAIZ, 'sql'), '_editor')

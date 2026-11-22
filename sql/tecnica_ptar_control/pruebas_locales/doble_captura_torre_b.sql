@@ -3,7 +3,7 @@
 -- Copiado de los paquetes publicados (rutas en ~/geoportal-consultas/tecnica/):
 --   · tecnica.f_formularios: la publicada en el Corte 8 (campo_corte8/sql/25_reemplazos.sql, 9 claves); la base local traía un doble viejo de 7.
 --   · tecnica.f_fecha_muestra (corte1_paso_a/sql/20_funciones_internas.sql) y tecnica.f_resolver_fecha_muestra (corte2_paso_a/sql/10_tablas_y_reglas.sql).
---   · public.geoportal_tec_obtener_formulario y geoportal_tec_resumen_operador: las del Corte 3 (corte3_paso_a/sql/20_funciones.sql).
+--   · public.geoportal_tec_obtener_formulario: la VIGENTE del Corte 3b (corte3_paso_b/sql/10_migracion_c3b.sql, puntos por «orden»); geoportal_tec_resumen_operador: la del Corte 3 (corte3_paso_a/sql/20_funciones.sql).
 --   · public.geoportal_tec_registrar_medicion: la VIGENTE, de la hora de inicio (14/11), con sus dos columnas en tecnica.registros.
 -- =====================================================================
 
@@ -105,7 +105,7 @@ begin
     'plantas', coalesce((select jsonb_agg(jsonb_build_object('codigo', pl.codigo, 'nombre', pl.nombre) order by pl.id)
                            from tecnica.plantas pl where pl.activa), '[]'::jsonb),
     'puntos', coalesce((select jsonb_agg(jsonb_build_object('codigo', pu.codigo, 'nombre', pu.nombre, 'tipo', pu.tipo, 'planta', pl.codigo,
-                                                            'zona', pu.zona, 'numero_informe', pu.numero_informe) order by pu.codigo)
+                                                            'zona', pu.zona, 'numero_informe', pu.numero_informe, 'orden', pu.orden) order by pu.orden nulls last, pu.tipo, pu.codigo)
                           from tecnica.puntos pu left join tecnica.plantas pl on pl.id = pu.planta_id
                          where pu.activo and (v_tipos is null or pu.tipo = any (v_tipos))), '[]'::jsonb),
     'variables', coalesce((
@@ -115,7 +115,7 @@ begin
                'punto', case when pu.id is null then null else jsonb_build_object('codigo', pu.codigo, 'nombre', pu.nombre) end,
                'tipo_punto', case when fv.alcance = 'por_punto' then fv.tipo_punto end,
                'puntos', case when fv.alcance = 'por_punto' then coalesce((
-                   select jsonb_agg(pq.codigo order by pq.codigo) from tecnica.puntos pq
+                   select jsonb_agg(pq.codigo order by pq.orden nulls last, pq.codigo) from tecnica.puntos pq
                     where pq.activo and pq.tipo = fv.tipo_punto and (fv.punto_id is null or pq.id = fv.punto_id)), '[]'::jsonb) end)
              order by fv.orden, v.id)
         from tecnica.formulario_variables fv

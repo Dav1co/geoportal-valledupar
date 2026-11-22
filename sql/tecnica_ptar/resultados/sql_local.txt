@@ -15,8 +15,8 @@ k                                           |                                   
 == reversa con un elemento cargado: se detiene (esperado)
 == reversa en limpio: técnica vuelve a 4a10aa60971401954717fc3c74d3d869 y redes sigue en 1ba192724c2fddcf321104700829f3cc
 == ensayo (local)
-psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/pruebas_locales/local/ensayo_en_transaccion_tecnica_ptar_local.sql:657: NOTICE:  Self-intersection at or near point -74.495000000000005 4.5049999999999999
-psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/pruebas_locales/local/ensayo_en_transaccion_tecnica_ptar_local.sql:657: ERROR:  PRUEBAS DE TÉCNICA · PTAR-1 (esperado: este ERROR deshace todo lo de la prueba)
+psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/pruebas_locales/local/ensayo_en_transaccion_tecnica_ptar_local.sql:674: NOTICE:  Self-intersection at or near point -74.495000000000005 4.5049999999999999
+psql:/Users/ddiaz/geoportal-emdupar-tec-c1/sql/tecnica_ptar/pruebas_locales/local/ensayo_en_transaccion_tecnica_ptar_local.sql:674: ERROR:  PRUEBAS DE TÉCNICA · PTAR-1 (esperado: este ERROR deshace todo lo de la prueba)
 
 RESULTADO: 84 de 84 pruebas correctas — SIN FALLAS
-CONTEXTO:  PL/pgSQL function inline_code_block line 189 at RAISE
+CONTEXTO:  PL/pgSQL function inline_code_block line 196 at RAISE
