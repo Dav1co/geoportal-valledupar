@@ -5,7 +5,7 @@
   "HUELLA_CAMPO_A": "977a51297ee869930a64534aee4f5bfb"
  },
  "nuevas": {
-  "campo.f_autorizar_documento(text,text,uuid)": "e18f3a2ea0540f19664df4cf1d976925",
+  "campo.f_autorizar_documento(text,text,uuid)": "a54711241d29ff33a8930a948d011b3f",
   "campo.f_autorizar_registradas(text)": "63cf95ebacedebc2622171f7df9b2df2",
   "campo.f_derivada_estado(bigint)": "f612ec315fb7c6e90c373884a3104658",
   "campo.f_derivada_json(bigint)": "a4d359df6714b043ea112e393fe51289",

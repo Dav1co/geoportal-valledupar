@@ -79,6 +79,11 @@ declare v_email text := lower(btrim(coalesce(p_solicitante, ''))); v_autor text;
 begin
   if v_email = '' or position('@' in v_email) < 2 then raise exception 'Solicitante no identificado' using errcode = '28000'; end if;
   if public.geoportal_estado_acceso(v_email) <> 'ok' then raise exception 'Acceso no disponible' using errcode = '42501'; end if;
+  -- primero el permiso (403), después la existencia (404): quien no tiene campo ni acta no averigua si un registro existe
+  if not (public.geoportal_es_admin(v_email) or public.geoportal_puede(v_email, 'campo') or public.geoportal_puede(v_email, 'acta')
+          or public.geoportal_puede(v_email, 'dashboard_campo') or public.geoportal_puede(v_email, 'dashboard_acta')) then
+    raise exception 'Sin permiso para esta función' using errcode = '42501';
+  end if;
   if p_esquema = 'campo' then select r.autor into v_autor from campo.reportes r where r.id = p_id;
   elsif p_esquema = 'acta' then select a.autor into v_autor from acta.actas a where a.id = p_id;
   else perform campo.f_error('El tipo de registro no es válido'); end if;

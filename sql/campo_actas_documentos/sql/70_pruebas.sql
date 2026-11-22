@@ -215,6 +215,7 @@ begin
   perform pg_temp.ok('08.02 el PDF interno sí lleva el nombre de quien atendió (D7)', exists (select 1 from jsonb_array_elements(r -> 'firmas') x where x ->> 'nombre' = 'ZTB Persona Atiende'));
   r := pg_temp.rpc(format('public.geoportal_campo_pdf_datos(''ztb.rep2@emdupar.gov.co'', ''campo'', %L)', id1));
   perform pg_temp.ok('08.03 otro operario no ve los datos del PDF (42501)', pg_temp.err(r) = '42501', r::text);
+  perform pg_temp.ok('08.03b sin campo ni acta: 403 aunque el registro no exista (no averigua si existe)', pg_temp.err(pg_temp.rpc(format('public.geoportal_campo_pdf_datos(''ztb.nada@emdupar.gov.co'', ''campo'', %L)', gen_random_uuid()))) = '42501');
   r := pg_temp.rpc(format('public.geoportal_campo_pdf_obtener(%s, ''campo'', %L)', REP, id1));
   perform pg_temp.ok('08.04 antes de generarlo: 404 con texto', pg_temp.err(r) = 'P0002' and r ->> 'msg' = 'Ese registro todavía no tiene PDF', r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_pdf_registrar(%s, ''campo'', %L, %L, 52000)', REP, id1, repeat('a', 64)));

@@ -334,6 +334,11 @@ declare v_email text := lower(btrim(coalesce(p_solicitante, ''))); v_autor text;
 begin
   if v_email = '' or position('@' in v_email) < 2 then raise exception 'Solicitante no identificado' using errcode = '28000'; end if;
   if public.geoportal_estado_acceso(v_email) <> 'ok' then raise exception 'Acceso no disponible' using errcode = '42501'; end if;
+  -- primero el permiso (403), después la existencia (404): quien no tiene campo ni acta no averigua si un registro existe
+  if not (public.geoportal_es_admin(v_email) or public.geoportal_puede(v_email, 'campo') or public.geoportal_puede(v_email, 'acta')
+          or public.geoportal_puede(v_email, 'dashboard_campo') or public.geoportal_puede(v_email, 'dashboard_acta')) then
+    raise exception 'Sin permiso para esta función' using errcode = '42501';
+  end if;
   if p_esquema = 'campo' then select r.autor into v_autor from campo.reportes r where r.id = p_id;
   elsif p_esquema = 'acta' then select a.autor into v_autor from acta.actas a where a.id = p_id;
   else perform campo.f_error('El tipo de registro no es válido'); end if;
@@ -1015,6 +1020,7 @@ begin
   perform pg_temp.ok('08.02 el PDF interno sí lleva el nombre de quien atendió (D7)', exists (select 1 from jsonb_array_elements(r -> 'firmas') x where x ->> 'nombre' = 'ZTB Persona Atiende'));
   r := pg_temp.rpc(format('public.geoportal_campo_pdf_datos(''ztb.rep2@emdupar.gov.co'', ''campo'', %L)', id1));
   perform pg_temp.ok('08.03 otro operario no ve los datos del PDF (42501)', pg_temp.err(r) = '42501', r::text);
+  perform pg_temp.ok('08.03b sin campo ni acta: 403 aunque el registro no exista (no averigua si existe)', pg_temp.err(pg_temp.rpc(format('public.geoportal_campo_pdf_datos(''ztb.nada@emdupar.gov.co'', ''campo'', %L)', gen_random_uuid()))) = '42501');
   r := pg_temp.rpc(format('public.geoportal_campo_pdf_obtener(%s, ''campo'', %L)', REP, id1));
   perform pg_temp.ok('08.04 antes de generarlo: 404 con texto', pg_temp.err(r) = 'P0002' and r ->> 'msg' = 'Ese registro todavía no tiene PDF', r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_pdf_registrar(%s, ''campo'', %L, %L, 52000)', REP, id1, repeat('a', 64)));
