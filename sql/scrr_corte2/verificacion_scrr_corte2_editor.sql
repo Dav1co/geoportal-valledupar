@@ -1,0 +1,27 @@
+-- MOTOR SCRR · CORTE 2 (modo «Cartera») · VERIFICACIÓN (solo lectura; después de la migración: 8 de 8 OK) (versión para el editor SQL de Supabase; generado por pruebas_locales/generar.py, no editar a mano)
+select o, k, estado from (
+  select 1 as o, '1 el esquema scrr con sus 15 tablas y las 11 RPC con la huella del corte' as k, case when to_regnamespace('scrr') is not null and (select count(*) from pg_class where relnamespace = 'scrr'::regnamespace and relkind in ('r','p') and not relispartition) = 15 and (select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\_scrr\_%') = 11 and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = to_regnamespace('scrr') or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_scrr\_%')) = '0a659d6e68acfe9b14a40ca6ec74196e' then 'OK' else 'FALLA' end as estado
+  union all
+  select 2 as o, '2 la huella de campo no cambió (261bed3c…)' as k, case when (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) = '261bed3c9242f6261f845ec4e1374b3a' then 'OK' else 'FALLA' end as estado
+  union all
+  select 3 as o, '3 permisos: las RPC solo service_role; scrr, nadie' as k, case when (select bool_and(has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute')) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_scrr\_%') and not exists (select 1 from pg_proc p where p.pronamespace = 'scrr'::regnamespace and (has_function_privilege('service_role', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))) and not exists (select 1 from pg_class c where c.relnamespace = 'scrr'::regnamespace and c.relkind in ('r','p','v') and (has_table_privilege('service_role', c.oid, 'select') or has_table_privilege('authenticated', c.oid, 'select') or has_table_privilege('anon', c.oid, 'select'))) then 'OK' else 'FALLA' end as estado
+  union all
+  select 4 as o, '4 ninguna función de scrr con DELETE o UPDATE sin WHERE' as k, case when (with f as (
+    select p.oid::regprocedure::text as funcion, regexp_replace(regexp_replace(lower(p.prosrc), '--[^\n]*', '', 'g'), '\mdo\s+update\M', 'do_update', 'g') as src
+      from pg_proc p join pg_language l on l.oid = p.prolang
+     where l.lanname in ('plpgsql', 'sql') and p.prokind in ('f', 'p')
+       and (p.pronamespace = to_regnamespace('scrr') or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_scrr\_%'))),
+  s as (select f.funcion, btrim(regexp_replace(x, '\s+', ' ', 'g')) as st from f, regexp_split_to_table(f.src, ';') x)
+  select count(*) from s
+   where (s.st ~ '\mdelete\s+from\M' and substring(s.st from '\mdelete\s+from\M.*$') !~ '\m(where|using)\M')
+      or (s.st ~ '\mupdate\s+(only\s+)?[a-z_][a-z0-9_."]*(\s+(as\s+)?[a-z_][a-z0-9_]*)?\s+set\M'
+          and substring(s.st from '\mupdate\s+(?:only\s+)?[a-z_][a-z0-9_."]*(?:\s+(?:as\s+)?[a-z_][a-z0-9_]*)?\s+set\M.*$') !~ '\mwhere\M')) = 0 then 'OK' else 'FALLA' end as estado
+  union all
+  select 5 as o, '5 redes.f_funciones_sin_where() devuelve cero filas' as k, case when (select count(*) from redes.f_funciones_sin_where()) = 0 then 'OK' else 'FALLA' end as estado
+  union all
+  select 6 as o, '6 semilla: 11 parámetros, 6 tipos de actividad, 17 anomalías PROVISIONALES' as k, case when (select count(*) from scrr.v_parametros_vigentes) = 11 and (select count(*) from scrr.tipos_actividad) = 6 and (select count(*) from scrr.anomalias where provisional) = 17 then 'OK' else 'FALLA' end as estado
+  union all
+  select 7 as o, '7 particiones de hoy: historial del día y pagos del mes' as k, case when to_regclass('scrr.cartera_historial_' || to_char((now() at time zone 'America/Bogota')::date, 'YYYYMMDD')) is not null and to_regclass('scrr.pagos_contrato_' || to_char((now() at time zone 'America/Bogota')::date, 'YYYYMM')) is not null then 'OK' else 'FALLA' end as estado
+  union all
+  select 8 as o, '8 public.cartera_suscripcion con sus mismas 21 columnas' as k, case when (select string_agg(column_name || ':' || data_type, ',' order by ordinal_position) from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion') = 'contrato:text,estado:text,identificacion:text,nombre:text,correo:text,telefono:text,direccion:text,barrio:text,categoria:text,subcategoria:text,ciclo:text,facturas_pendientes:numeric,deuda_total:numeric,saldo_pendiente:numeric,saldo_a_favor:numeric,valor_reclamo:numeric,saldo_financiado:numeric,serial_medidor:text,codigo_reparto:text,ruta:text,periodo_carga:text' then 'OK' else 'FALLA' end as estado
+) t order by o;

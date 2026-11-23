@@ -35,6 +35,7 @@ import { PerfilNoDisponible } from "./areas/PerfilNoDisponible";
 // Carga diferida (Paso C): MapLibre pesa unos 217 KB comprimidos y solo lo necesitan el mapa comercial y el Dashboard comercial; quien solo usa Técnica o Formatos de campo no lo descarga.
 const MapView = lazyConRecarga(() => import("./components/MapView").then((m) => ({ default: m.MapView })));
 const Dashboard = lazyConRecarga(() => import("./dashboard/Dashboard").then((m) => ({ default: m.Dashboard })));
+const ModoCartera = lazyConRecarga(() => import("./scrr/ModoCartera").then((m) => ({ default: m.ModoCartera })));      // Motor SCRR, corte 2: modo «Cartera» (Supervisor comercial y administrador)
 import { TrazadorRuta, type EstadoTrazo } from "./components/TrazadorRuta";
 import type { Capturado, PuntoRuta as PuntoTrazo } from "./lib/trazado";
 import { supabase } from "./lib/supabase";
@@ -154,7 +155,7 @@ export default function App() {
   // Derivados del perfil que ya entrega useSession (una sola petición). Antes eran estado con un efecto propio: quedaba un render con los valores por defecto.
   const esAdmin = perfil?.es_admin ?? false;
   const permisos = perfil?.permisos ?? PERMISOS_BASE;
-  const [vista, setVista] = useState<"mapa" | "admin" | "campo">("mapa");       // «campo»: Formatos de campo dentro del área Comercial (los formatos viven en la Torre A)
+  const [vista, setVista] = useState<"mapa" | "admin" | "campo" | "cartera">("mapa");       // «campo»: Formatos de campo dentro del área Comercial (los formatos viven en la Torre A)
   const [modo, setModo] = useState<Modo>("explorar");
   const [dibujando, setDibujando] = useState(false);
   const [seleccionLazo, setSeleccionLazo] = useState<number[]>([]);
@@ -251,6 +252,10 @@ export default function App() {
   const puedeVerFocalizacion = esAdmin || permisos.focalizacion;
   const puedeVerComercial = esAdmin || permisos.comercial;
   const puedeVerDashboard = esAdmin || permisos.dashboard;
+  // Modo «Cartera» (Motor SCRR, decisión 3 del 22-nov): Supervisor comercial (dashboard_campo) y administrador, aunque no tengan modos del geovisor (P3). Solo experiencia de usuario:
+  // la Edge geoportal-scrr lo vuelve a decidir en cada llamada.
+  const puedeCartera = esAdmin || perfil?.permisos?.dashboard_campo === true;
+  useEffect(() => { if (vista === "cartera" && !puedeCartera) setVista("mapa"); }, [vista, puedeCartera]);
 
   // Salvaguarda: si un usuario no autorizado cae en modo rutas, devolverlo a explorar.
   useEffect(() => {
@@ -335,7 +340,21 @@ export default function App() {
         ) : pantalla === "tecnica" ? (
           <AreaTecnica uid={session.user.id} correo={email} />
         ) : pantalla === "campo" ? (
+          // Supervisor comercial sin modos del geovisor (P3 del 22-nov): entra a Formatos de campo y desde aquí también al modo «Cartera»
+          <div className={puedeCartera ? "cuerpo cuerpo-campo" : undefined} style={puedeCartera ? undefined : { display: "contents" }}>
+            {puedeCartera && (
+              <div className="modo-wrap modo-wrap-campo com-modulo">
+                <span className="modo-lbl">Modo de trabajo</span>
+                <SelectorModoTrabajo opciones={[{ valor: "campo", nombre: "Formatos de campo" }, { valor: "cartera", nombre: "Cartera" }]} valor={vista === "cartera" ? "cartera" : "campo"}
+                  onCambio={(v) => setVista(v === "cartera" ? "cartera" : "mapa")} />
+              </div>
+            )}
+            {puedeCartera && vista === "cartera"
+              ? <div className="campo-contenedor com-modulo"><Suspense fallback={<div className="pantalla-carga">Cargando Cartera…</div>}><ModoCartera /></Suspense></div>
+              : (<div className={puedeCartera ? "campo-contenedor com-modulo" : undefined} style={puedeCartera ? undefined : { display: "contents" }}>
           <AreaCampo correo={email} acta={perfil?.permisos?.acta === true} dashboardActa={perfil?.permisos?.dashboard_acta === true || esAdmin} campo={esAdmin || perfil?.permisos?.campo === true || perfil?.permisos?.dashboard_campo === true} analisis={esAdmin || perfil?.permisos?.analisis_contrato === true} />
+              </div>)}
+          </div>
         ) : pantalla === "aseo" ? (
           <Suspense fallback={<div className="pantalla-carga">Cargando Aseo…</div>}><AreaAseo correo={email} /></Suspense>
         ) : (
@@ -581,9 +600,9 @@ export default function App() {
   // Selector «Modo de trabajo»: una sola lista. «Formatos de campo» va al final y solo si la persona tiene campo; al elegirlo, el formulario reemplaza al mapa (vista «campo»).
   // Cualquier otro modo devuelve el mapa con un toque.
   function cambiarModoSelector(valor: string) {
-    if (valor === "campo") {
+    if (valor === "campo" || valor === "cartera") {
       setPanelMovilAbierto(false);
-      setVista("campo");
+      setVista(valor);
       return;
     }
     setVista("mapa");
@@ -596,6 +615,7 @@ export default function App() {
     ...(puedeVerComercial ? [{ valor: "comercial", nombre: "Comercial" }] : []),
     ...(puedeVerRutas ? [{ valor: "rutas", nombre: "Rutas de lectura" }] : []),
     ...(puedeVerDashboard ? [{ valor: "dashboard", nombre: "Dashboard" }] : []),
+    ...(puedeCartera ? [{ valor: "cartera", nombre: "Cartera" }] : []),
     ...(areas.campo ? [{ valor: "campo", nombre: "Formatos de campo" }] : []),
   ];
 
@@ -639,6 +659,14 @@ export default function App() {
       {vista === "admin" ? (
         <div className="cuerpo" style={{ overflow: "auto", padding: 16 }}>
           <Admin onVolver={() => setVista("mapa")} />
+        </div>
+      ) : vista === "cartera" ? (
+        <div className="cuerpo cuerpo-campo">
+          <div className="modo-wrap modo-wrap-campo com-modulo">
+            <span className="modo-lbl">Modo de trabajo</span>
+            <SelectorModoTrabajo opciones={opcionesModo} valor="cartera" onCambio={cambiarModoSelector} />
+          </div>
+          <div className="campo-contenedor com-modulo"><Suspense fallback={<div className="pantalla-carga">Cargando Cartera…</div>}><ModoCartera /></Suspense></div>
         </div>
       ) : vista === "campo" ? (
         <div className="cuerpo cuerpo-campo">

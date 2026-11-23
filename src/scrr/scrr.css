@@ -1,0 +1,34 @@
+/* Módulo SCRR: cargues y contratos con control. Sin dependencias del mapa. */
+.scrr-area { max-width: 1100px; width: 100%; min-width: 0; margin: 0 auto; padding: 16px; overflow: auto; height: 100%; box-sizing: border-box; color: var(--texto, #1d2733); }
+.scrr-area h1 { font-size: 1.35rem; margin: 0 0 4px; }
+.scrr-suave { color: #5b6773; font-size: .9rem; margin: 6px 0; }
+.scrr-tabs { display: flex; gap: 4px; border-bottom: 1px solid #cfd6de; margin: 12px 0; flex-wrap: wrap; }
+.scrr-tabs button { background: none; border: 0; padding: 10px 14px; cursor: pointer; font: inherit; border-bottom: 3px solid transparent; color: #44505c; }
+.scrr-tabs button.activa { border-bottom-color: #1f5fa8; color: #123e70; font-weight: 600; }
+.scrr-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.scrr-tarjeta, .scrr-resumen { min-width: 0; overflow-wrap: anywhere; }
+.scrr-tarjeta { background: #fff; border: 1px solid #d9dfe6; border-radius: 8px; padding: 14px 16px; }
+.scrr-tarjeta h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.scrr-fila { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px; }
+.scrr-fila label { display: grid; gap: 4px; font-size: .85rem; color: #44505c; min-width: 160px; }
+.scrr-fila label.scrr-ancha { flex: 1 1 280px; } .scrr-fila label.scrr-archivo { flex: 1 1 260px; }
+.scrr-fila input, .scrr-fila select, .scrr-reemplazo input[type=text], .scrr-reemplazo input:not([type]) { font: inherit; padding: 8px; border: 1px solid #b9c3ce; border-radius: 6px; background: #fff; min-height: 40px; box-sizing: border-box; }
+.scrr-btn { background: #1f5fa8; color: #fff; border: 0; border-radius: 6px; padding: 10px 16px; font: inherit; cursor: pointer; min-height: 40px; margin: 4px 8px 4px 0; }
+.scrr-btn:disabled { background: #a9b6c4; cursor: not-allowed; } .scrr-btn.scrr-sec { background: #eef2f6; color: #123e70; border: 1px solid #b9c3ce; }
+.scrr-link { background: none; border: 0; color: #1f5fa8; text-decoration: underline; cursor: pointer; font: inherit; padding: 4px 8px; }
+.scrr-hoy { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.scrr-hoy li { display: flex; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: 6px; border-left: 4px solid #2e8b57; background: #f2faf5; }
+.scrr-hoy li.falta { border-left-color: #c0392b; background: #fdf3f1; } .scrr-hoy li span { color: #44505c; font-size: .9rem; } .scrr-hoy li em { color: #8a5a00; font-size: .85rem; }
+.scrr-aviso { background: #fff6dd; border: 1px solid #ecd58a; padding: 8px 12px; border-radius: 6px; margin: 0; }
+.scrr-error { background: #fdf0ee; border: 1px solid #e4b1aa; color: #7d2118; padding: 8px 12px; border-radius: 6px; }
+.scrr-resumen { border: 1px solid #d9dfe6; border-radius: 6px; padding: 10px 12px; margin: 10px 0; background: #fafbfc; } .scrr-resumen.scrr-ok { background: #f2faf5; border-color: #b8dfc7; }
+.scrr-resumen h4 { margin: 0 0 6px; } .scrr-resumen dl { display: grid; grid-template-columns: minmax(180px, 260px) 1fr; gap: 4px 12px; margin: 0; } .scrr-resumen dt { color: #5b6773; } .scrr-resumen dd { margin: 0; }
+.scrr-causas { margin: 8px 0 0; padding-left: 18px; color: #7d2118; }
+.scrr-progreso { position: relative; height: 28px; background: #e6ebf0; border-radius: 6px; overflow: hidden; margin: 10px 0; } .scrr-progreso div { height: 100%; background: #6aa3dd; transition: width .2s; }
+.scrr-progreso span { position: absolute; inset: 0; display: grid; place-items: center; font-size: .85rem; }
+.scrr-reemplazo { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed #b9c3ce; border-radius: 6px; margin-top: 10px; }
+.scrr-confirma { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.scrr-tabla-wrap { overflow-x: auto; } .scrr-tabla { border-collapse: collapse; width: 100%; font-size: .9rem; } .scrr-tabla th, .scrr-tabla td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e3e8ed; white-space: nowrap; }
+.scrr-hist { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 8px; } .scrr-hist li span { color: #44505c; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+@media (max-width: 640px) { .scrr-resumen dl { grid-template-columns: 1fr; } .scrr-fila label { min-width: 100%; } }

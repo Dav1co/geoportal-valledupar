@@ -1,0 +1,17 @@
+{
+ "partida": {
+  "HUELLA_CAMPO": "261bed3c9242f6261f845ec4e1374b3a",
+  "MD5_AUTORIZAR_SUPERVISION": "5ac3368fa5f3a6347328285501894aec"
+ },
+ "permisos": {
+  "public.geoportal_puede(text,text)": "32f174a55b95788d3f8187b507303c2f",
+  "public.geoportal_mis_permisos(text)": "83166fe17be58da67bbdedaae429bedb",
+  "public.geoportal_admin_guardar(text,text,text,text,boolean,text,text)": "01fda69a9d912067b8b4dc153ac7957e",
+  "public.geoportal_admin_permisos(text,text,boolean,boolean,boolean,boolean,text,text,boolean,boolean,boolean,text,boolean,boolean,boolean,boolean,boolean,boolean,boolean,boolean)": "e5a90103b4a83440fd826f03266b7245"
+ },
+ "nuevas": {
+  "HUELLA_SCRR": "0a659d6e68acfe9b14a40ca6ec74196e",
+  "RPC": "11",
+  "TABLAS": "15"
+ }
+}

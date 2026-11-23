@@ -238,8 +238,8 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
     const lat = await pg.evaluate(() => { const s = document.querySelector(".lateral .modo-opcion[aria-checked='true']"); const p = document.querySelector(".lateral .leyenda .punto-normal");
       const sel = document.querySelector(".lateral select.modo-sel"); const b = [...document.querySelectorAll(".lateral .modo-opcion")];
       return { sel: s?.textContent, fondo: s && getComputedStyle(s).backgroundColor, leyenda: p && getComputedStyle(p).backgroundColor, campo: sel && getComputedStyle(sel).borderTopColor, opciones: b.map((e) => e.textContent), alto: Math.min(...b.map((e) => e.getBoundingClientRect().height)) }; });
-    ok(`${T} M1 panel lateral: cápsula de modos con las 6 opciones de antes y el modo elegido en el color de Comercial (toques de 44 px)`, lat.sel === "Explorar" && lat.fondo === VINO && lat.alto >= 44
-       && JSON.stringify(lat.opciones) === JSON.stringify(["Explorar", "Focalización", "Comercial", "Rutas de lectura", "Dashboard", "Formatos de campo"]), JSON.stringify(lat));
+    ok(`${T} M1 panel lateral: cápsula de modos con las 7 opciones (las 6 de antes y «Cartera» del Motor SCRR, 22-nov) y el modo elegido en el color de Comercial (toques de 44 px)`, lat.sel === "Explorar" && lat.fondo === VINO && lat.alto >= 44
+       && JSON.stringify(lat.opciones) === JSON.stringify(["Explorar", "Focalización", "Comercial", "Rutas de lectura", "Dashboard", "Cartera", "Formatos de campo"]), JSON.stringify(lat));
     ok(`${T} M2 el mapa queda neutro: la leyenda conserva el azul de su capa; los desplegables del panel, borde de campo neutro`, lat.leyenda === "rgb(30, 90, 168)" && lat.campo === "rgb(123, 139, 153)", JSON.stringify(lat));
   }
   await elegirModo(pg, "comercial"); await esp(900);
