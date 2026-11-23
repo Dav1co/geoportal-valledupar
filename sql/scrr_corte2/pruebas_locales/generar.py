@@ -12,7 +12,7 @@ DOBLE = H / "geoportal-consultas/campo/admin_perfiles_22nov/doble_admin_4a/doble
 PSQL = "/opt/homebrew/opt/postgresql@17/bin/psql"
 ENV = {**os.environ, "PGHOST": "localhost", "PGPORT": "55432", "PGUSER": "postgres", "PGOPTIONS": "-c client_min_messages=warning", "LC_ALL": "C"}
 FUENTES = ["05_guardia.sql", "10_esquema.sql", "20_cargas.sql", "25_control_calendario_corridas.sql", "30_rpc_cargas.sql", "35_rpc_control_calendario.sql",
-           "38_rpc_seleccion.sql", "50_refresco_mapa.sql", "55_permisos.sql", "60_semilla.sql"]
+           "38_rpc_seleccion.sql", "40_retorno.sql", "50_refresco_mapa.sql", "55_permisos.sql", "60_semilla.sql"]
 PERMISOS = ["public.geoportal_puede(text,text)", "public.geoportal_mis_permisos(text)", "public.geoportal_admin_guardar(text,text,text,text,boolean,text,text)",
             "public.geoportal_admin_permisos(text,text,boolean,boolean,boolean,boolean,text,text,boolean,boolean,boolean,text,boolean,boolean,boolean,boolean,boolean,boolean,boolean,boolean)"]
 CONJ_CAMPO = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p "

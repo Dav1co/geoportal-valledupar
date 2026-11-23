@@ -11,18 +11,48 @@ const textoPeriodo = (p: string) => { const m = ["enero","febrero","marzo","abri
 
 type Edicion = { ciclo: string; pago_oportuno: string; fecha_suspension: string; etapas: Record<string, string>; motivo: string; nuevo: boolean };
 
-export function PanelCalendario() {
+/** Una fecha corrida un mes (el 31 de enero pasa al último día de febrero). */
+export function mesSiguiente(f: string): string {
+  const [y, m, d] = f.split("-").map(Number); const ny = m === 12 ? y + 1 : y, nm = m === 12 ? 1 : m + 1;
+  const ultimo = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+  return `${ny}-${String(nm).padStart(2, "0")}-${String(Math.min(d, ultimo)).padStart(2, "0")}`;
+}
+const periodoAnterior = (p: string) => { const y = Number(p.slice(0, 4)), m = Number(p.slice(4)); return m === 1 ? `${y - 1}12` : `${y}${String(m - 1).padStart(2, "0")}`; };
+type Copia = { ciclo: number; pago_oportuno: string; fecha_suspension: string; etapas: Record<string, string> }[];
+
+export function PanelCalendario({ onCambio }: { onCambio?: () => void }) {
   const [periodo, setPeriodo] = useState(periodoDe(hoyBogota()));
   const [cal, setCal] = useState<Calendario | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [ed, setEd] = useState<Edicion | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [copia, setCopia] = useState<Copia | null>(null);
 
   const cargar = useCallback(async () => {
     try { setCal(await apiScrr.calendario(periodo)); setMensaje(null); } catch (e) { setMensaje(avisoDeError(e)); }
   }, [periodo]);
   useEffect(() => { void cargar(); }, [cargar]);
+
+  // «Copiar del mes anterior» (David, 22-nov 21:21): las fechas del mes anterior corridas un mes, editables; solo se crean los ciclos que faltan
+  async function copiarAnterior() {
+    setMensaje(null); setOk(null);
+    try {
+      const ant = await apiScrr.calendario(periodoAnterior(periodo));
+      const ya = new Set((cal?.ciclos ?? []).map((c) => c.ciclo));
+      const filas = ant.ciclos.filter((c) => !ya.has(c.ciclo)).map((c) => ({ ciclo: c.ciclo, pago_oportuno: mesSiguiente(c.pago_oportuno), fecha_suspension: mesSiguiente(c.fecha_suspension),
+        etapas: Object.fromEntries(Object.entries(c.etapas ?? {}).filter(([, v]) => /^\d{4}-\d{2}-\d{2}$/.test(v)).map(([k, v]) => [k, mesSiguiente(v)])) }));
+      if (!filas.length) { setMensaje(ant.ciclos.length ? "Este mes ya tiene todos los ciclos del mes anterior." : `El mes anterior (${textoPeriodo(periodoAnterior(periodo))}) no tiene calendario.`); return; }
+      setCopia(filas);
+    } catch (e) { setMensaje(avisoDeError(e)); }
+  }
+  async function guardarCopia() {
+    if (!copia) return;
+    setGuardando(true); setMensaje(null); setOk(null);
+    try { const r = await apiScrr.calendarioGuardarLote(periodo, copia); setOk(`${r.nuevos} ciclos guardados en ${textoPeriodo(periodo)}.`); setCopia(null); await cargar(); onCambio?.(); }
+    catch (e) { setMensaje(avisoDeError(e)); } finally { setGuardando(false); }
+  }
+  const copiaValida = copia?.every((c) => c.pago_oportuno && c.fecha_suspension && c.fecha_suspension >= c.pago_oportuno) ?? false;
 
   const editar = (c: CicloCalendario) => setEd({ ciclo: String(c.ciclo), pago_oportuno: c.pago_oportuno, fecha_suspension: c.fecha_suspension, etapas: { ...c.etapas }, motivo: "", nuevo: false });
   const nuevo = () => setEd({ ciclo: "", pago_oportuno: "", fecha_suspension: "", etapas: {}, motivo: "", nuevo: true });
@@ -33,7 +63,7 @@ export function PanelCalendario() {
     try {
       const etapas = Object.fromEntries(Object.entries(ed.etapas).filter(([, v]) => v));
       await apiScrr.calendarioGuardar({ periodo, ciclo: Number(ed.ciclo), pago_oportuno: ed.pago_oportuno, fecha_suspension: ed.fecha_suspension, etapas, motivo: ed.motivo.trim() || null });
-      setOk(`Ciclo ${ed.ciclo} guardado.`); setEd(null); await cargar();
+      setOk(`Ciclo ${ed.ciclo} guardado.`); setEd(null); await cargar(); onCambio?.();
     } catch (e) { setMensaje(avisoDeError(e)); } finally { setGuardando(false); }
   }
 
@@ -51,7 +81,21 @@ export function PanelCalendario() {
             <input type="month" value={`${periodo.slice(0, 4)}-${periodo.slice(4)}`} onChange={(e) => e.target.value && setPeriodo(e.target.value.replace("-", ""))} data-campo="periodo" />
           </label>
           <button className="scrr-btn scrr-sec" onClick={nuevo} data-accion="agregar-ciclo">Agregar un ciclo</button>
+          <button className="scrr-btn scrr-sec" onClick={() => void copiarAnterior()} data-accion="copiar-anterior">Copiar del mes anterior</button>
         </div>
+        {copia && (
+          <div className="scrr-reemplazo" data-bloque="copia">
+            <h4>{copia.length} ciclos de {textoPeriodo(periodoAnterior(periodo))}, corridos un mes. Corrija las fechas y guarde.</h4>
+            <div className="scrr-tabla-wrap"><table className="scrr-tabla" data-tabla="copia"><thead><tr><th>Ciclo</th><th>Pago oportuno</th><th>Suspensión</th></tr></thead>
+              <tbody>{copia.map((c, i) => (
+                <tr key={c.ciclo} data-ciclo={c.ciclo}><td>{String(c.ciclo).padStart(2, "0")}</td>
+                  <td><input type="date" value={c.pago_oportuno} onChange={(e) => setCopia(copia.map((x, j) => (j === i ? { ...x, pago_oportuno: e.target.value } : x)))} /></td>
+                  <td><input type="date" value={c.fecha_suspension} min={c.pago_oportuno} onChange={(e) => setCopia(copia.map((x, j) => (j === i ? { ...x, fecha_suspension: e.target.value } : x)))} /></td></tr>))}</tbody></table></div>
+            {!copiaValida && <p className="scrr-error">Revise las fechas: la suspensión no puede ser anterior al pago oportuno.</p>}
+            <div><button className="scrr-btn" disabled={guardando || !copiaValida} onClick={() => void guardarCopia()} data-accion="guardar-copia">{guardando ? "Guardando…" : `Guardar los ${copia.length} ciclos`}</button>
+              <button className="scrr-link" onClick={() => setCopia(null)}>Cancelar</button></div>
+          </div>
+        )}
         {mensaje && <p className="scrr-error" role="alert">{mensaje}</p>}
         {ok && <p className="scrr-suave" role="status">{ok}</p>}
         {ed && (

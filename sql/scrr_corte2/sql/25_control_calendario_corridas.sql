@@ -58,20 +58,24 @@ language sql immutable parallel safe set search_path = pg_catalog as $$
               else greatest(p_pendientes - 1, 0)::smallint end
 $$;
 
--- 4. Corridas de selección (P8 del 22-nov: se guarda SOLO la lista generada; de la vista previa, solo los conteos en la auditoría)
+-- 4. Corridas: listas generadas (P8 del 22-nov: se guarda SOLO la lista; de la vista previa, solo los conteos en la auditoría).
+--    tipo «seleccion»: un ciclo y la actividad que escogió el supervisor. tipo «retorno» (commit 3): la lista de reinstalación y reconexión, sin ciclo, con la
+--    actividad de cada contrato en su fila.
 create table scrr.corridas (
   id            uuid        primary key,
+  tipo          text        not null default 'seleccion' check (tipo in ('seleccion', 'retorno')),
   periodo       char(6)     not null,
-  ciclo         smallint    not null,
+  ciclo         smallint,
   fecha_dato    date        not null,                      -- foto de cartera usada
   carga_id      uuid        not null references scrr.cargas (id),
-  actividad_id  smallint    not null references scrr.tipos_actividad (id),
+  actividad_id  smallint    references scrr.tipos_actividad (id),
   filtros       jsonb       not null,
   embudo        jsonb       not null,
   contratos     integer     not null check (contratos >= 0),
   saldo_total   numeric(16,2) not null default 0,
   autor         text        not null check (autor = lower(autor) and position('@' in autor) > 1),
-  creado_en     timestamptz not null default clock_timestamp()
+  creado_en     timestamptz not null default clock_timestamp(),
+  constraint tipo_ck check ((tipo = 'seleccion') = (ciclo is not null and actividad_id is not null))
 );
 create index corridas_creado_idx on scrr.corridas (creado_en desc);
 create table scrr.corrida_contratos (
@@ -84,6 +88,9 @@ create table scrr.corrida_contratos (
   ruta                text,
   codigo_reparto      text,
   marca               text          check (marca is null or marca in ('abono', 'abono_desde_suspension')),
+  actividad_id        smallint      references scrr.tipos_actividad (id),     -- solo en el retorno: la actividad de cada contrato
+  origen              text          check (origen is null or origen in ('automatico', 'manual')),
+  aviso               text,
   primary key (corrida_id, contrato)
 );
 

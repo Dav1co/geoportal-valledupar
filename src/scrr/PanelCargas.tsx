@@ -44,6 +44,8 @@ export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
   const [salidas, setSalidas] = useState<{ mensaje: string; motivo: string } | null>(null);
   const [deshacer, setDeshacer] = useState<{ carga: CargaFila; motivo: string; avance: string | null } | null>(null);
   // Mapa comercial (predios_comercial): lo refresca el cargador al cerrar o revertir una cartera (David, 22-nov)
+  const [vaciando, setVaciando] = useState(false);
+  const [mensajeVaciado, setMensajeVaciado] = useState<string | null>(null);
   const [mapa, setMapa] = useState<{ carga: string; estado: "actualizando" | "ok" | "error"; texto: string } | null>(null);
   const worker = useRef<Worker | null>(null);
   const pausar = useRef(false);
@@ -292,6 +294,16 @@ export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
                 : <span className="scrr-suave">Vuelva a elegir el mismo archivo para seguir enviándolo, o anúlela.</span>}</p>) : null; })}
         </section>
       )}
+
+      <section className="scrr-tarjeta" data-bloque="vaciado">
+        <h3>Copia técnica</h3>
+        <p className="scrr-suave">Las filas de los archivos (con nombre y dirección de la cartera) y el respaldo para revertir se guardan 7 días; después se vacían
+          y queda solo el registro de cada carga con su huella. Pasado ese plazo, una cartera ya no se puede revertir. David lo corre cada semana; también se puede aquí.</p>
+        <button className="scrr-btn scrr-sec" disabled={vaciando} data-accion="vaciar"
+          onClick={() => { setVaciando(true); apiScrr.vaciarPaso().then((x) => setMensajeVaciado(x.cargas ? `Copia técnica vaciada: ${num(x.cargas)} cargas, ${num(x.filas)} filas.` : "No hay copias técnicas con más de 7 días."))
+            .catch((e) => setMensajeVaciado(avisoDeError(e))).finally(() => { setVaciando(false); void refrescar(); }); }}>Vaciar la copia técnica vencida</button>
+        {mensajeVaciado && <p className="scrr-suave" role="status" data-bloque="vaciado-ok">{mensajeVaciado}</p>}
+      </section>
 
       <section className="scrr-tarjeta">
         <h3>Últimas cargas</h3>

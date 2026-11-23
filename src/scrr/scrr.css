@@ -40,3 +40,4 @@
 .scrr-guia { margin: 8px 0; color: #44505c; font-size: .9rem; } .scrr-guia p { margin: 6px 0; }
 .scrr-tabla td button.scrr-link { white-space: nowrap; }
 .scrr-fila label { max-width: 100%; } .scrr-fila select, .scrr-fila input { max-width: 100%; width: 100%; text-overflow: ellipsis; }
+.scrr-aviso-celda { color: #8a3b00; font-size: .82rem; white-space: normal; max-width: 260px; }

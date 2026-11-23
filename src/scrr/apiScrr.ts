@@ -10,7 +10,12 @@ export type ContextoScrr = {
   tipos_actividad: { id: number; codigo: string; nombre: string; seleccionable: boolean; admite_drastico: boolean }[];
   anomalias: { codigo: number; nombre: string; provisional: boolean }[];
   causas_control: { codigo: string; nombre: string; grupo: "control" | "reclamo" | "excluido" }[];
+  calendario_actual: { periodo: string; ciclos: number };
 };
+export type FilaRetorno = { contrato: string; actividad: string; actividad_id: number; origen: "automatico" | "manual"; estado: string; desde: string | null; saldo: number | null;
+  ciclo: string | null; ruta: string | null; aviso: string | null; motivo: string | null; ya_en_lista: boolean };
+export type Retorno = { foto: string | null; proponer: FilaRetorno[]; pendientes: number;
+  por_confirmar: { contrato: string; actividad: string; estado: string; desde: string; saldo: number; pagado_desde_cartera: number }[] };
 export type ControlVigente = { contrato: number; causa: string; causa_nombre: string; desde: string; autor: string; origen: "manual" | "archivo" };
 export type ControlEvento = { causa: string; evento: "alta" | "baja"; motivo: string; origen: string; autor: string; fecha: string };
 export type ListaControl = { vigentes: ControlVigente[]; total: number; bajas_recientes: { contrato: number; causa_nombre: string; fecha: string; motivo: string }[] };
@@ -22,10 +27,10 @@ export type OpcionesSeleccion = { hoy: string; foto: string | null; facturacion_
   barrios: { id: number | null; nombre: string; contratos: number }[]; actividades: { id: number; codigo: string; nombre: string }[] };
 export type Previa = { foto: string; ciclo: number; filtros: Filtros; embudo: Record<string, { contratos: number; saldo: number }>; universo: number; candidatos: number;
   saldo_candidatos: number; marcados_abono: number; marcados_abono_desde_suspension: number; por_vencidas: Record<string, number>; segmentos_aproximados: boolean };
-export type Corrida = { corrida_id: string; ciclo: number; fecha_dato: string; actividad: string; actividad_codigo: string; contratos: number; saldo_total: number; filtros: Filtros; autor: string; creada_en: string };
-export type FilaLista = { orden: number; contrato: string; nombre: string | null; direccion: string | null; barrio: string | null; ciclo: number; ruta: string | null; codigo_reparto: string | null;
-  facturas_vencidas: number; saldo_pendiente: number; marca: string | null };
-export type Lista = { corrida_id: string; ciclo: number; fecha_dato: string; actividad: string; actividad_codigo: string; generada_en: string; autor: string; filas: FilaLista[] };
+export type Corrida = { corrida_id: string; tipo: "seleccion" | "retorno"; ciclo: number | null; fecha_dato: string; actividad: string; actividad_codigo: string; contratos: number; saldo_total: number; filtros: Filtros; autor: string; creada_en: string };
+export type FilaLista = { orden: number; contrato: string; nombre: string | null; direccion: string | null; barrio: string | null; ciclo: number | string | null; ruta: string | null;
+  codigo_reparto: string | null; facturas_vencidas: number; saldo_pendiente: number; marca: string | null; actividad?: string | null; origen?: string | null };
+export type Lista = { corrida_id: string; tipo?: string; ciclo: number | null; fecha_dato: string; actividad: string; actividad_codigo: string; generada_en: string; autor: string; filas: FilaLista[] };
 export type TipoHoy = { tipo: TipoCarga; ultima_fecha_dato: string | null; aplicada_en: string | null; requerida_desde: string; al_dia: boolean; abierta: string | null };
 export type CargasHoy = { hoy: string; tipos: TipoHoy[] };
 export type CargaFila = { carga_id: string; tipo: TipoCarga; fecha_dato: string; version: number; archivo: string; filas: number; estado: string; creada_en: string; autor: string };
@@ -113,6 +118,12 @@ export const apiScrr = {
   generar: (ciclo: number, filtros: Filtros, actividad: string) => pedir<{ corrida_id: string; contratos: number; saldo_total: number; actividad: string }>("seleccion_generar", { cuerpo: { ciclo, filtros, actividad }, timeoutMs: 60000 }),
   corridas: () => pedir<{ corridas: Corrida[] }>("corridas"),
   lista: (corrida_id: string, formato: "excel" | "impresion") => pedir<Lista>("lista", { cuerpo: { corrida_id, formato }, timeoutMs: 60000 }),
+  calendarioGuardarLote: (periodo: string, ciclos: { ciclo: number; pago_oportuno: string; fecha_suspension: string; etapas?: Record<string, string> }[]) =>
+    pedir<{ nuevos: number; ya_estaban: number }>("calendario_guardar_lote", { cuerpo: { periodo, ciclos } }),
+  retorno: () => pedir<Retorno>("retorno", { timeoutMs: 60000 }),
+  retornoAgregar: (contrato: string, actividad: string, motivo: string) => pedir<{ ok: boolean }>("retorno_agregar", { cuerpo: { contrato, actividad, motivo } }),
+  retornoQuitar: (contrato: string, motivo: string) => pedir<{ ok: boolean }>("retorno_quitar", { cuerpo: { contrato, motivo } }),
+  retornoGenerar: () => pedir<{ corrida_id: string; contratos: number }>("retorno_generar", { cuerpo: {}, timeoutMs: 60000 }),
 };
 
 /** Texto para la persona según el tipo de error. */

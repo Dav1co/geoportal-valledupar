@@ -325,7 +325,7 @@ try {
     const { leerXlsx: lx } = await import(pathToFileURL(join(T2, "x.mjs")).href); await lx(new Uint8Array(readFileSync(join(DESC, fx))), { alFila: (c, h) => { if (h === 0) filasX.push(c); } }); }
   prueba("M.05 «Descargar Excel»: la lista lleva nombre, dirección y saldo; NO lleva teléfono, correo ni identificación",
     filasX.length === candSql + 1 && filasX[0].includes("Nombre") && filasX[0].includes("Dirección") && filasX[0].includes("Saldo pendiente")
-    && !filasX[0].some((x) => /Tel[eé]fono|Correo|Identificaci/.test(x)) && /SUSCRIPTOR SINTÉTICO/.test(filasX[1][2] ?? ""), JSON.stringify(filasX.slice(0, 2)));
+    && !filasX[0].some((x) => /Tel[eé]fono|Correo|Identificaci/.test(x)) && /SUSCRIPTOR SINTÉTICO/.test(filasX[1][3] ?? ""), JSON.stringify(filasX.slice(0, 2)));
   const nueva = new Promise((r) => nav.once("targetcreated", async (tg) => r(await tg.page())));
   await pg.evaluate((id) => document.querySelector(`[data-corrida="${id}"] [data-accion="imprimir"]`)?.click(), corrida);
   const pImp = await Promise.race([nueva, esp(8000).then(() => null)]); let txtImp = "";
@@ -339,6 +339,59 @@ try {
   prueba("M.09 a 390 px la selección con su vista previa y la lista de corridas no desborda", await sinDesborde(pg));
   await pg.screenshot({ path: join(CAP, "seleccion_previa_390.png"), fullPage: true });
   await pg.setViewport({ width: 1280, height: 900 }); await esp(500);
+
+  // ===== R. Retorno =====
+  // «por confirmar»: el 930000000006 quedó cortado (efectiva) y sigue con saldo; paga hoy
+  sqlq("insert into scrr.pagos_contrato (contrato, fecha_pago, monto, ordinal, carga_id) select 930000000006, (now() at time zone 'America/Bogota')::date, 1000, 1, id from scrr.cargas where tipo = 'pagos' limit 1");
+  await pg.click('[data-pestana="retorno"]'); await esperarTexto(pg, /A reinstalar o reconectar/);
+  await pg.waitForSelector('[data-tabla="retorno"] tbody tr');
+  const autoSql = Number(sqlq("select count(*) from scrr.f_retorno() where situacion = 'proponer' and origen = 'automatico'"));
+  const drasSql = Number(sqlq("select count(*) from scrr.f_retorno() where situacion = 'proponer' and actividad_id = 6"));
+  prueba(`R.01 el retorno propone ${autoSql} contratos a paz y salvo que estaban sin agua (${drasSql} reconexiones drásticas con su aviso); la pantalla coincide con la base`,
+    autoSql > 0 && drasSql > 0 && (await pg.$$eval('[data-tabla="retorno"] tr[data-origen="automatico"]', (l) => l.length)) === autoSql
+    && (await pg.$$eval('[data-tabla="retorno"] .scrr-aviso-celda', (l) => l.length)) === drasSql);
+  prueba("R.02 «por confirmar»: el 930000000006 pagó hoy pero la cartera muestra saldo; no se propone",
+    (await pg.$$eval('[data-tabla="por-confirmar"] tr[data-contrato="930000000006"]', (l) => l.length)) === 1
+    && (await pg.$$eval('[data-tabla="retorno"] tr[data-contrato="930000000006"]', (l) => l.length)) === 0);
+  await pg.type('[data-campo="retorno-contrato"]', "930000000002"); await pg.select('[data-campo="retorno-actividad"]', "reconexion");
+  await pg.type('[data-campo="retorno-motivo"]', "Reclamo de prueba no registrado"); await clicAccion(pg, "retorno-agregar");
+  await esperarTexto(pg, /Contrato 930000000002 agregado al retorno/);
+  prueba("R.03 se agrega a mano (con motivo) un contrato que sigue en deuda: sale como «Manual»",
+    (await pg.$$eval('[data-tabla="retorno"] tr[data-contrato="930000000002"][data-origen="manual"]', (l) => l.length)) === 1);
+  await clicAccion(pg, "generar-retorno"); await esperarTexto(pg, /Lista de retorno generada/, 60000);
+  const corrRet = sqlq("select id from scrr.corridas where tipo = 'retorno' order by creado_en desc limit 1");
+  prueba(`R.04 generar la lista de retorno: ${autoSql + 1} contratos y la lista viva queda vacía (no vuelven a salir)`,
+    sqlq(`select count(*) from scrr.corrida_contratos where corrida_id = '${corrRet}'`) === String(autoSql + 1)
+    && (await pg.$$eval('[data-tabla="retorno"] tr[data-origen]', (l) => l.length)) === 0);
+  await pg.evaluate((id) => document.querySelector(`[data-corrida="${id}"] [data-accion="excel"]`)?.click(), corrRet);
+  let fr = null; for (let i = 0; i < 60 && !fr; i++) { await esp(250); fr = readdirSync(DESC).find((x) => x.startsWith("lista_retorno_")); }
+  let filasR = []; if (fr) { const { build } = createRequire(join(raiz, "package.json"))("esbuild"); const T3 = mkdtempSync(join(tmpdir(), "lx3_"));
+    await build({ entryPoints: [join(raiz, "src/scrr/lectorXlsx.ts")], bundle: true, format: "esm", platform: "node", outfile: join(T3, "x.mjs"), logLevel: "error" });
+    const { leerXlsx: lx } = await import(pathToFileURL(join(T3, "x.mjs")).href); await lx(new Uint8Array(readFileSync(join(DESC, fr))), { alFila: (c, h) => { if (h === 0) filasR.push(c); } }); }
+  prueba("R.05 la lista de retorno en Excel lleva la actividad de cada fila y el aviso de la reconexión drástica",
+    filasR.length === autoSql + 2 && filasR[0][2] === "Actividad" && filasR.some((f) => f[2] === "Reconexión drástica" && /DRÁSTICA/.test(f[11] ?? "")) && filasR.some((f) => f[2] === "Reinstalación"),
+    JSON.stringify(filasR.slice(0, 3)));
+  prueba("R.06 a 1280 px el retorno no desborda", await sinDesborde(pg));
+
+  // ===== K2. Calendario de diciembre: copiar del mes anterior con fechas editables =====
+  await pg.click('[data-pestana="calendario"]'); await esperarTexto(pg, /Calendario de ciclos/);
+  await pg.$eval('[data-campo="periodo"]', (e) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; s.call(e, "2026-12"); e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true })); });
+  await esperarTexto(pg, /No hay ciclos cargados para diciembre de 2026/);
+  await clicAccion(pg, "copiar-anterior"); await pg.waitForSelector('[data-tabla="copia"] tr[data-ciclo]');
+  const filasCopia = await pg.$$eval('[data-tabla="copia"] tr[data-ciclo]', (l) => l.map((r) => [r.getAttribute("data-ciclo"), ...[...r.querySelectorAll("input")].map((i) => i.value)]));
+  prueba("K2.01 «Copiar del mes anterior» propone los 25 ciclos de noviembre corridos un mes (15: 12/11 → 12/12)",
+    filasCopia.length === 25 && JSON.stringify(filasCopia.find((f) => f[0] === "15")) === JSON.stringify(["15", "2026-12-12", "2026-12-13"]), JSON.stringify(filasCopia.slice(0, 3)));
+  await pg.$eval('[data-tabla="copia"] tr[data-ciclo="15"] input', (e) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; s.call(e, "2026-12-11"); e.dispatchEvent(new Event("input", { bubbles: true })); });
+  await clicAccion(pg, "guardar-copia"); await esperarTexto(pg, /25 ciclos guardados en diciembre de 2026/);
+  prueba("K2.02 con una fecha corregida a mano: diciembre queda con 25 ciclos y el 15 con pago oportuno 11/12",
+    sqlq("select count(*) || '|' || max(pago_oportuno) filter (where ciclo = 15) from scrr.v_calendario_vigente where periodo = '202612'") === "25|2026-12-11");
+  await pg.screenshot({ path: join(CAP, "calendario_diciembre_1280.png"), fullPage: true });
+
+  // ===== V. Vaciado de la copia técnica =====
+  await pg.click('[data-pestana="carga"]'); await esperarTexto(pg, /Copia técnica/);
+  await clicAccion(pg, "vaciar"); await esperarTexto(pg, /No hay copias técnicas con más de 7 días|Copia técnica vaciada/);
+  prueba("V.01 el botón «Vaciar la copia técnica vencida» corre (hoy no hay nada con más de 7 días) y queda en la auditoría",
+    /No hay copias técnicas con más de 7 días/.test(await texto(pg)) && sqlq("select count(*) from public.geoportal_auditoria where accion = 'scrr_paso_vaciar'") === "1");
 
   // ===== E. Revertir y anular la cartera (desde la lista) =====
   await pg.click('[data-pestana="carga"]'); await esperarTexto(pg, /Últimas cargas/); await esp(500);
@@ -371,6 +424,19 @@ try {
   await pg.screenshot({ path: join(CAP, "cartera_390.png"), fullPage: true });
   await ctx.close();
 
+  // ===== K3. Aviso visible cuando el mes en curso no tiene calendario (se simula la respuesta del contexto) =====
+  ({ pg, ctx } = await entrar(SUP, 1280));
+  await pg.setRequestInterception(true);
+  pg.on("request", async (q) => {
+    if (!q.url().includes("accion=contexto") || q.method() !== "GET") return q.continue();
+    const r = await fetch(q.url(), { headers: q.headers() }); const j = await r.json(); j.calendario_actual = { periodo: "202612", ciclos: 0 };
+    q.respond({ status: 200, contentType: "application/json", headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info" }, body: JSON.stringify(j) });
+  });
+  await pg.click('.modo-capsula [data-modo="cartera"]'); await esperarTexto(pg, /El calendario de diciembre de 2026 no está cargado/);
+  await clicAccion(pg, "ir-calendario"); await esperarTexto(pg, /Calendario de ciclos/);
+  prueba("K3.01 sin calendario del mes en curso, el modo lo avisa arriba y lleva al Calendario", (await pg.$$eval('[data-bloque="sin-calendario"]', (l) => l.length)) === 1);
+  await ctx.close();
+
   // ===== G. Quién NO entra =====
   ({ pg, ctx } = await entrar(OP, 1280));
   const opOp = await pg.evaluate(() => [...document.querySelectorAll(".modo-capsula [data-modo]")].map((b) => b.getAttribute("data-modo")));
@@ -398,7 +464,7 @@ try {
   await ctx.close();
 
   // ===== S. Las sondas propuestas (sondas_propuestas_scrr.json) contra la Edge local, con un usuario por perfil del manifiesto =====
-  const SONDAS = join(process.env.HOME, "geoportal-consultas/campo/paquete_scrr_1/corte2_commit2/sondas_propuestas_scrr.json");
+  const SONDAS = join(process.env.HOME, "geoportal-consultas/campo/paquete_scrr_1/corte2_commit3/sondas_propuestas_scrr.json");
   if (existsSync(SONDAS)) {
     const PERF = { A: "rol = 'admin'", D: "ver_comercial, ver_registro_tecnico", S: "ver_registro_tecnico, ver_dashboard_tecnico", O: "ver_registro_tecnico", C: "ver_explorar", N: "", R: "ver_campo",
       V: "ver_dashboard_campo", T: "ver_acta", U: "ver_dashboard_acta", W: "ver_aseo", X: "ver_dashboard_aseo", Y: "ver_registro_tecnico, ver_dashboard_redes" };

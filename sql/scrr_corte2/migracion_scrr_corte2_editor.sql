@@ -540,20 +540,24 @@ language sql immutable parallel safe set search_path = pg_catalog as $$
               else greatest(p_pendientes - 1, 0)::smallint end
 $$;
 
--- 4. Corridas de selección (P8 del 22-nov: se guarda SOLO la lista generada; de la vista previa, solo los conteos en la auditoría)
+-- 4. Corridas: listas generadas (P8 del 22-nov: se guarda SOLO la lista; de la vista previa, solo los conteos en la auditoría).
+--    tipo «seleccion»: un ciclo y la actividad que escogió el supervisor. tipo «retorno» (commit 3): la lista de reinstalación y reconexión, sin ciclo, con la
+--    actividad de cada contrato en su fila.
 create table scrr.corridas (
   id            uuid        primary key,
+  tipo          text        not null default 'seleccion' check (tipo in ('seleccion', 'retorno')),
   periodo       char(6)     not null,
-  ciclo         smallint    not null,
+  ciclo         smallint,
   fecha_dato    date        not null,                      -- foto de cartera usada
   carga_id      uuid        not null references scrr.cargas (id),
-  actividad_id  smallint    not null references scrr.tipos_actividad (id),
+  actividad_id  smallint    references scrr.tipos_actividad (id),
   filtros       jsonb       not null,
   embudo        jsonb       not null,
   contratos     integer     not null check (contratos >= 0),
   saldo_total   numeric(16,2) not null default 0,
   autor         text        not null check (autor = lower(autor) and position('@' in autor) > 1),
-  creado_en     timestamptz not null default clock_timestamp()
+  creado_en     timestamptz not null default clock_timestamp(),
+  constraint tipo_ck check ((tipo = 'seleccion') = (ciclo is not null and actividad_id is not null))
 );
 create index corridas_creado_idx on scrr.corridas (creado_en desc);
 create table scrr.corrida_contratos (
@@ -566,6 +570,9 @@ create table scrr.corrida_contratos (
   ruta                text,
   codigo_reparto      text,
   marca               text          check (marca is null or marca in ('abono', 'abono_desde_suspension')),
+  actividad_id        smallint      references scrr.tipos_actividad (id),     -- solo en el retorno: la actividad de cada contrato
+  origen              text          check (origen is null or origen in ('automatico', 'manual')),
+  aviso               text,
   primary key (corrida_id, contrato)
 );
 
@@ -635,7 +642,10 @@ begin
     'tipos_actividad', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'codigo', codigo, 'nombre', nombre, 'seleccionable', seleccionable, 'admite_drastico', admite_drastico) order by orden), '[]'::jsonb)
                           from scrr.tipos_actividad where activo),
     'anomalias', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'provisional', provisional) order by orden), '[]'::jsonb) from scrr.anomalias where activo),
-    'causas_control', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'grupo', grupo) order by id), '[]'::jsonb) from scrr.causas_control where activo));
+    'causas_control', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'grupo', grupo) order by id), '[]'::jsonb) from scrr.causas_control where activo),
+    -- aviso visible (David, 22-nov 21:21): ¿el período en curso ya tiene calendario?
+    'calendario_actual', jsonb_build_object('periodo', to_char((now() at time zone 'America/Bogota')::date, 'YYYYMM'),
+                           'ciclos', (select count(*) from scrr.v_calendario_vigente k where k.periodo = to_char((now() at time zone 'America/Bogota')::date, 'YYYYMM'))));
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -932,7 +942,7 @@ begin
           select gen_random_uuid(), s.contrato, s.tipo_actividad_id, s.drastico, s.fecha_ejecucion, 1, case s.estado_original when 3 then 'efectiva' else 'inefectiva' end,
                  s.anomalia, s.acta, s.observacion, s.hora_inicio, s.hora_fin, s.lectura, s.medidor, s.marca, s.operario, 'archivo', s.estado_original, p_carga, c.autor,
                  (select k.corrida_id from scrr.corrida_contratos k join scrr.corridas r on r.id = k.corrida_id
-                   where k.contrato = s.contrato and r.actividad_id = s.tipo_actividad_id
+                   where k.contrato = s.contrato and coalesce(k.actividad_id, r.actividad_id) = s.tipo_actividad_id
                      and (r.creado_en at time zone 'America/Bogota')::date between s.fecha_ejecucion - 60 and s.fecha_ejecucion
                    order by r.creado_en desc limit 1)
             from (select distinct on (contrato, tipo_actividad_id, fecha_ejecucion) * from scrr.paso_actividades
@@ -1257,6 +1267,30 @@ begin
   return jsonb_build_object('ok', true, 'nuevo', v_ant.ciclo is null);
 end $$;
 
+-- «Copiar del mes anterior» (David, 22-nov 21:21): la pantalla propone las fechas del mes anterior corridas un mes, la persona las corrige y guarda todas de una vez.
+-- Solo crea los ciclos que el período destino todavía no tiene (los que ya están no se tocan: cambiarlos exige motivo, uno por uno). Auditado una vez.
+create function public.geoportal_scrr_calendario_guardar_lote(p_solicitante text, p_periodo text, p_ciclos jsonb, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_ini date; r record; v_nuevos int := 0; v_ya int := 0;
+begin
+  if coalesce(p_periodo, '') !~ '^20[0-9]{2}(0[1-9]|1[0-2])$' then perform scrr.f_err('El período debe ser aaaamm'); end if;
+  if p_ciclos is null or jsonb_typeof(p_ciclos) <> 'array' or jsonb_array_length(p_ciclos) not between 1 and 99 then perform scrr.f_err('La lista de ciclos no es válida'); end if;
+  v_ini := to_date(p_periodo || '01', 'YYYYMMDD');
+  perform pg_advisory_xact_lock(hashtextextended('scrr_calendario_lote:' || p_periodo, 0));
+  for r in select (e->>'ciclo')::int as ciclo, scrr.f_fecha(e->>'pago_oportuno') as po, scrr.f_fecha(e->>'fecha_suspension') as fs,
+                  coalesce(e->'etapas', '{}'::jsonb) as etapas from jsonb_array_elements(p_ciclos) e loop
+    if r.ciclo is null or r.ciclo not between 1 and 99 then perform scrr.f_err('Un ciclo no es válido (1 a 99)'); end if;
+    if r.po is null or r.fs is null or r.fs < r.po then perform scrr.f_err(format('Ciclo %s: revise el pago oportuno y la fecha de suspensión', r.ciclo)); end if;
+    if r.po < v_ini - 31 or r.po > (v_ini + interval '2 months')::date then perform scrr.f_err(format('Ciclo %s: el pago oportuno no corresponde a ese período', r.ciclo)); end if;
+    if jsonb_typeof(r.etapas) <> 'object' then perform scrr.f_err('Las etapas no son válidas'); end if;
+    if exists (select 1 from scrr.v_calendario_vigente k where k.periodo = p_periodo and k.ciclo = r.ciclo) then v_ya := v_ya + 1; continue; end if;
+    insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, autor) values (p_periodo, r.ciclo, r.po, r.fs, r.etapas, v_email);
+    v_nuevos := v_nuevos + 1;
+  end loop;
+  perform scrr.f_auditar(v_email, 'scrr_calendario_lote', p_periodo, jsonb_build_object('nuevos', v_nuevos, 'ya_estaban', v_ya), p_ip);
+  return jsonb_build_object('nuevos', v_nuevos, 'ya_estaban', v_ya);
+end $$;
+
 -- =====================================================================
 -- SCRR · CORTE 2 · 38 — SELECCIÓN: embudo, vista previa, corrida y lista descargable o imprimible
 -- Universo: la foto de cartera VIGENTE más reciente (contratos con saldo pendiente), un ciclo a la vez. El motor no clasifica: el supervisor escoge la actividad
@@ -1410,9 +1444,10 @@ create function public.geoportal_scrr_corridas(p_solicitante text, p_limite inte
 language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
 declare v_email text := scrr.f_autorizar(p_solicitante);
 begin
-  return jsonb_build_object('corridas', (select coalesce(jsonb_agg(jsonb_build_object('corrida_id', c.id, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato, 'actividad', t.nombre, 'actividad_codigo', t.codigo,
+  return jsonb_build_object('corridas', (select coalesce(jsonb_agg(jsonb_build_object('corrida_id', c.id, 'tipo', c.tipo, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato,
+           'actividad', coalesce(t.nombre, 'Retorno (reinstalación y reconexión)'), 'actividad_codigo', coalesce(t.codigo, 'retorno'),
            'contratos', c.contratos, 'saldo_total', c.saldo_total, 'filtros', c.filtros, 'autor', c.autor, 'creada_en', c.creado_en) order by c.creado_en desc), '[]'::jsonb)
-      from (select * from scrr.corridas order by creado_en desc limit greatest(1, least(coalesce(p_limite, 30), 100))) c join scrr.tipos_actividad t on t.id = c.actividad_id));
+      from (select * from scrr.corridas order by creado_en desc limit greatest(1, least(coalesce(p_limite, 30), 100))) c left join scrr.tipos_actividad t on t.id = c.actividad_id));
 end $$;
 
 -- Lista de una corrida para descargar (Excel) o imprimir. EXCEPCIÓN ESCRITA a la regla de descargas (P2 del 22-nov): solo para las listas de campo del SCRR,
@@ -1427,17 +1462,146 @@ begin
   if not found then perform scrr.f_err('La corrida no existe', 'P0002'); end if;
   select * into v_act from scrr.tipos_actividad where id = c.actividad_id;
   select coalesce(jsonb_agg(jsonb_build_object('orden', k.orden, 'contrato', k.contrato::text, 'nombre', s.nombre, 'direccion', s.direccion, 'barrio', coalesce(s.barrio, br.nombre_norm),
-                    'ciclo', c.ciclo, 'ruta', k.ruta, 'codigo_reparto', k.codigo_reparto, 'facturas_vencidas', k.facturas_vencidas, 'saldo_pendiente', k.saldo_pendiente,
-                    'marca', case k.marca when 'abono' then 'Abonó desde la fecha del archivo' when 'abono_desde_suspension' then 'Abonó desde la fecha de suspensión' end)
+                    'ciclo', coalesce(c.ciclo::text, s.ciclo), 'ruta', k.ruta, 'codigo_reparto', k.codigo_reparto, 'facturas_vencidas', k.facturas_vencidas, 'saldo_pendiente', k.saldo_pendiente,
+                    'actividad', ta.nombre, 'origen', k.origen,
+                    'marca', coalesce(k.aviso, case k.marca when 'abono' then 'Abonó desde la fecha del archivo' when 'abono_desde_suspension' then 'Abonó desde la fecha de suspensión' end))
                   order by k.orden), '[]'::jsonb)
     into v_filas
     from scrr.corrida_contratos k
-    left join lateral (select x.nombre, x.direccion, x.barrio from public.cartera_suscripcion x where x.contrato = k.contrato::text limit 1) s on true
+    left join lateral (select x.nombre, x.direccion, x.barrio, x.ciclo from public.cartera_suscripcion x where x.contrato = k.contrato::text limit 1) s on true
     left join scrr.barrios br on br.id = k.barrio_id
+    left join scrr.tipos_actividad ta on ta.id = coalesce(k.actividad_id, c.actividad_id)
    where k.corrida_id = p_corrida;
-  perform scrr.f_auditar(v_email, 'scrr_lista_' || p_formato, p_corrida::text, jsonb_build_object('filas', jsonb_array_length(v_filas), 'ciclo', c.ciclo, 'actividad', v_act.codigo), p_ip);
-  return jsonb_build_object('corrida_id', c.id, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato, 'actividad', v_act.nombre, 'actividad_codigo', v_act.codigo,
+  perform scrr.f_auditar(v_email, 'scrr_lista_' || p_formato, p_corrida::text, jsonb_build_object('filas', jsonb_array_length(v_filas), 'ciclo', c.ciclo, 'actividad', coalesce(v_act.codigo, 'retorno')), p_ip);
+  return jsonb_build_object('corrida_id', c.id, 'tipo', c.tipo, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato, 'actividad', coalesce(v_act.nombre, 'Retorno (reinstalación y reconexión)'),
+                            'actividad_codigo', coalesce(v_act.codigo, 'retorno'),
                             'generada_en', c.creado_en, 'autor', c.autor, 'filas', v_filas);
+end $$;
+
+-- =====================================================================
+-- SCRR · CORTE 2 · 40 — RETORNO AUTOMÁTICO (decisiones 8, 11 y 12 del 20-nov; sección 4.4 del encargo del 20-nov)
+-- La única decisión del sistema: cuando un contrato que quedó SIN AGUA por una actividad efectiva (suspendido, cortado o cortado drástico, según
+-- scrr.v_estado_servicio) queda con SALDO PENDIENTE EN CERO en la cartera del día, se propone la actividad subsanadora:
+--   suspendido → reinstalación · cortado → reconexión · cortado drástico → reconexión drástica (con su aviso).
+-- «Por confirmar»: sigue sin agua, la cartera aún muestra saldo y hay pagos desde la fecha de la cartera. No genera la actividad hasta que la cartera lo
+--   confirme en cero (un pago no es paz y salvo: pudo pagar una sola factura; decisión 11).
+-- Adición manual (decisión 12): el supervisor suma un contrato que sigue en deuda (p. ej. un reclamo que no está en el sistema), con motivo y auditado.
+-- La lista distingue el origen (automático o manual). Generarla crea una corrida de tipo «retorno»; un contrato ya listado no vuelve a salir.
+-- El saldo y los datos de ruta salen de public.cartera_suscripcion (la que actualiza la carga del día); un contrato que no está en ella no se propone.
+-- =====================================================================
+create table scrr.retorno_manual_eventos (
+  id            bigint generated always as identity primary key,
+  contrato      bigint      not null check (contrato > 0),
+  tipo_evento   text        not null check (tipo_evento in ('alta', 'baja')),
+  actividad_id  smallint    not null references scrr.tipos_actividad (id) check (actividad_id in (4, 5, 6)),
+  motivo        text        not null check (length(btrim(motivo)) between 10 and 200),
+  autor         text        not null check (autor = lower(autor) and position('@' in autor) > 1),
+  creado_en     timestamptz not null default clock_timestamp()
+);
+create index retorno_manual_contrato_idx on scrr.retorno_manual_eventos (contrato, id desc);
+alter table scrr.retorno_manual_eventos enable row level security;
+create trigger retorno_manual_eventos_solo_insercion before update or delete on scrr.retorno_manual_eventos for each row execute function scrr.f_solo_insercion();
+
+-- La lista viva del retorno (función interna; sin datos personales)
+create function scrr.f_retorno()
+returns table (contrato bigint, situacion text, origen text, actividad_id smallint, estado text, desde date, saldo numeric, pagado_desde_cartera numeric,
+               ya_en_lista boolean, ciclo text, ruta text, codigo_reparto text, barrio text, aviso text, motivo text)
+language plpgsql stable security definer set search_path = pg_catalog, scrr, public as $$
+declare v_foto scrr.cargas := scrr.f_foto_vigente();
+begin
+  return query
+  with est as (select e.contrato, e.estado, e.desde from scrr.v_estado_servicio e where e.estado in ('suspendido', 'cortado', 'cortado_drastico')),
+       man as (select m.contrato, m.actividad_id, m.motivo, m.creado_en from (select distinct on (x.contrato) x.* from scrr.retorno_manual_eventos x order by x.contrato, x.id desc) m
+                where m.tipo_evento = 'alta'),
+       uni as (select est.contrato from est union select man.contrato from man),
+       cs as (select s.contrato::bigint as contrato, max(s.saldo_pendiente) as saldo, min(s.ciclo) as ciclo, min(s.ruta) as ruta, min(s.codigo_reparto) as rep, min(s.barrio) as barrio
+                from public.cartera_suscripcion s where s.contrato in (select uni.contrato::text from uni) group by s.contrato),
+       pag as (select q.contrato, sum(q.monto) as monto from scrr.pagos_contrato q
+                where v_foto.id is not null and q.fecha_pago >= v_foto.fecha_dato and q.contrato in (select uni.contrato from uni) group by q.contrato),
+       todo as (
+         -- automáticos (paz y salvo) y por confirmar
+         select e.contrato, case when cs.saldo <= 0 then 'proponer' else 'por_confirmar' end as situacion, 'automatico'::text as origen,
+                (case e.estado when 'suspendido' then 4 when 'cortado' then 5 else 6 end)::smallint as actividad_id, e.estado, e.desde, cs.saldo,
+                coalesce(p.monto, 0) as pagado, e.desde::timestamptz as desde_ts, null::text as motivo, cs.ciclo, cs.ruta, cs.rep, cs.barrio
+           from est e join cs on cs.contrato = e.contrato left join pag p on p.contrato = e.contrato
+          where cs.saldo <= 0 or coalesce(p.monto, 0) > 0
+         union all
+         -- manuales (siguen en deuda o no figuran sin agua)
+         select m.contrato, 'proponer', 'manual', m.actividad_id, coalesce(e.estado, 'sin_dato'), e.desde, cs.saldo, coalesce(p.monto, 0), m.creado_en, m.motivo,
+                cs.ciclo, cs.ruta, cs.rep, cs.barrio
+           from man m left join est e on e.contrato = m.contrato left join cs on cs.contrato = m.contrato left join pag p on p.contrato = m.contrato),
+       uno as (select distinct on (t.contrato) t.* from todo t order by t.contrato, (t.situacion = 'proponer') desc, (t.origen = 'automatico') desc)
+  select u.contrato, u.situacion, u.origen, u.actividad_id, u.estado, u.desde, u.saldo, u.pagado,
+         exists (select 1 from scrr.corrida_contratos k join scrr.corridas r on r.id = k.corrida_id
+                  where r.tipo = 'retorno' and k.contrato = u.contrato and r.creado_en >= coalesce(u.desde_ts, '-infinity'::timestamptz)),
+         u.ciclo, u.ruta, u.rep, u.barrio,
+         case when u.actividad_id = 6 then 'Reconexión DRÁSTICA: el corte fue drástico; revise la acometida antes de reconectar' end,
+         u.motivo
+    from uno u;
+end $$;
+
+create function public.geoportal_scrr_retorno(p_solicitante text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_foto scrr.cargas := scrr.f_foto_vigente();
+begin
+  return (with r as (select x.*, t.nombre as actividad from scrr.f_retorno() x join scrr.tipos_actividad t on t.id = x.actividad_id)
+    select jsonb_build_object('foto', v_foto.fecha_dato,
+      'proponer', coalesce((select jsonb_agg(jsonb_build_object('contrato', r.contrato::text, 'actividad', r.actividad, 'actividad_id', r.actividad_id, 'origen', r.origen,
+                     'estado', r.estado, 'desde', r.desde, 'saldo', r.saldo, 'ciclo', r.ciclo, 'ruta', r.ruta, 'aviso', r.aviso, 'motivo', r.motivo, 'ya_en_lista', r.ya_en_lista)
+                     order by r.ya_en_lista, r.actividad_id, r.ruta nulls last, r.contrato) from r where r.situacion = 'proponer'), '[]'::jsonb),
+      'por_confirmar', coalesce((select jsonb_agg(jsonb_build_object('contrato', r.contrato::text, 'actividad', r.actividad, 'estado', r.estado, 'desde', r.desde, 'saldo', r.saldo,
+                     'pagado_desde_cartera', r.pagado_desde_cartera) order by r.contrato) from r where r.situacion = 'por_confirmar'), '[]'::jsonb),
+      'pendientes', (select count(*) from r where r.situacion = 'proponer' and not r.ya_en_lista)));
+end $$;
+
+create function public.geoportal_scrr_retorno_agregar(p_solicitante text, p_contrato text, p_actividad text, p_motivo text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_c bigint := scrr.f_contrato(p_contrato); v_act scrr.tipos_actividad;
+begin
+  select * into v_act from scrr.tipos_actividad where codigo = p_actividad and id in (4, 5, 6);
+  if not found then perform scrr.f_err('Escoja reinstalación, reconexión o reconexión drástica'); end if;
+  if length(btrim(coalesce(p_motivo, ''))) not between 10 and 200 then perform scrr.f_err('Escriba un motivo de 10 a 200 caracteres (sin nombres, cédulas ni teléfonos)'); end if;
+  perform pg_advisory_xact_lock(hashtextextended('scrr_retorno:' || v_c, 0));
+  if exists (select 1 from (select distinct on (contrato) * from scrr.retorno_manual_eventos where contrato = v_c order by contrato, id desc) m where m.tipo_evento = 'alta') then
+    perform scrr.f_err('Ese contrato ya está agregado a mano en el retorno', '55000'); end if;
+  insert into scrr.retorno_manual_eventos (contrato, tipo_evento, actividad_id, motivo, autor) values (v_c, 'alta', v_act.id, btrim(p_motivo), v_email);
+  perform scrr.f_auditar(v_email, 'scrr_retorno_agregar', v_c::text, jsonb_build_object('actividad', p_actividad), p_ip);
+  return jsonb_build_object('ok', true);
+end $$;
+
+create function public.geoportal_scrr_retorno_quitar(p_solicitante text, p_contrato text, p_motivo text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_c bigint := scrr.f_contrato(p_contrato); v_m scrr.retorno_manual_eventos;
+begin
+  if length(btrim(coalesce(p_motivo, ''))) not between 10 and 200 then perform scrr.f_err('Escriba un motivo de 10 a 200 caracteres'); end if;
+  perform pg_advisory_xact_lock(hashtextextended('scrr_retorno:' || v_c, 0));
+  select * into v_m from scrr.retorno_manual_eventos where contrato = v_c order by id desc limit 1;
+  if not found or v_m.tipo_evento <> 'alta' then perform scrr.f_err('Ese contrato no está agregado a mano en el retorno', '55000'); end if;
+  insert into scrr.retorno_manual_eventos (contrato, tipo_evento, actividad_id, motivo, autor) values (v_c, 'baja', v_m.actividad_id, btrim(p_motivo), v_email);
+  perform scrr.f_auditar(v_email, 'scrr_retorno_quitar', v_c::text, '{}'::jsonb, p_ip);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Generar la lista de retorno: todos los «proponer» que todavía no están en una lista de retorno, con su actividad, su origen y su aviso. Auditada.
+create function public.geoportal_scrr_retorno_generar(p_solicitante text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_foto scrr.cargas := scrr.f_foto_vigente(); v_id uuid := gen_random_uuid(); v_lista jsonb; v_n int;
+begin
+  if v_foto.id is null then perform scrr.f_err('Todavía no hay una cartera aplicada', '55000'); end if;
+  perform pg_advisory_xact_lock(hashtextextended('scrr_corrida', 0));
+  select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) into v_lista from scrr.f_retorno() x where x.situacion = 'proponer' and not x.ya_en_lista;
+  v_n := jsonb_array_length(v_lista);
+  if v_n = 0 then perform scrr.f_err('No hay contratos pendientes de reinstalar o reconectar', '55000'); end if;
+  insert into scrr.corridas (id, tipo, periodo, fecha_dato, carga_id, filtros, embudo, contratos, saldo_total, autor)
+    values (v_id, 'retorno', to_char(v_foto.fecha_dato, 'YYYYMM'), v_foto.fecha_dato, v_foto.id, '{}'::jsonb,
+            (select jsonb_object_agg(z.o, z.n) from (select e->>'origen' as o, count(*) as n from jsonb_array_elements(v_lista) e group by 1) z), v_n,
+            coalesce((select sum(greatest((e->>'saldo')::numeric, 0)) from jsonb_array_elements(v_lista) e), 0), v_email);
+  insert into scrr.corrida_contratos (corrida_id, orden, contrato, saldo_pendiente, facturas_vencidas, ruta, codigo_reparto, actividad_id, origen, aviso)
+    select v_id, row_number() over (order by t.actividad_id, t.ruta nulls last, t.codigo_reparto nulls last, t.contrato), t.contrato, greatest(coalesce(t.saldo, 0), 0), 0,
+           t.ruta, t.codigo_reparto, t.actividad_id, t.origen, t.aviso
+      from jsonb_to_recordset(v_lista) as t(contrato bigint, saldo numeric, ruta text, codigo_reparto text, actividad_id smallint, origen text, aviso text);
+  perform scrr.f_auditar(v_email, 'scrr_corrida', v_id::text, jsonb_build_object('tipo', 'retorno', 'contratos', v_n), p_ip);
+  return jsonb_build_object('corrida_id', v_id, 'contratos', v_n);
 end $$;
 
 -- =====================================================================

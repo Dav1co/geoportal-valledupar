@@ -45,7 +45,10 @@ begin
     'tipos_actividad', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'codigo', codigo, 'nombre', nombre, 'seleccionable', seleccionable, 'admite_drastico', admite_drastico) order by orden), '[]'::jsonb)
                           from scrr.tipos_actividad where activo),
     'anomalias', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'provisional', provisional) order by orden), '[]'::jsonb) from scrr.anomalias where activo),
-    'causas_control', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'grupo', grupo) order by id), '[]'::jsonb) from scrr.causas_control where activo));
+    'causas_control', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'grupo', grupo) order by id), '[]'::jsonb) from scrr.causas_control where activo),
+    -- aviso visible (David, 22-nov 21:21): ¿el período en curso ya tiene calendario?
+    'calendario_actual', jsonb_build_object('periodo', to_char((now() at time zone 'America/Bogota')::date, 'YYYYMM'),
+                           'ciclos', (select count(*) from scrr.v_calendario_vigente k where k.periodo = to_char((now() at time zone 'America/Bogota')::date, 'YYYYMM'))));
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -342,7 +345,7 @@ begin
           select gen_random_uuid(), s.contrato, s.tipo_actividad_id, s.drastico, s.fecha_ejecucion, 1, case s.estado_original when 3 then 'efectiva' else 'inefectiva' end,
                  s.anomalia, s.acta, s.observacion, s.hora_inicio, s.hora_fin, s.lectura, s.medidor, s.marca, s.operario, 'archivo', s.estado_original, p_carga, c.autor,
                  (select k.corrida_id from scrr.corrida_contratos k join scrr.corridas r on r.id = k.corrida_id
-                   where k.contrato = s.contrato and r.actividad_id = s.tipo_actividad_id
+                   where k.contrato = s.contrato and coalesce(k.actividad_id, r.actividad_id) = s.tipo_actividad_id
                      and (r.creado_en at time zone 'America/Bogota')::date between s.fecha_ejecucion - 60 and s.fecha_ejecucion
                    order by r.creado_en desc limit 1)
             from (select distinct on (contrato, tipo_actividad_id, fecha_ejecucion) * from scrr.paso_actividades

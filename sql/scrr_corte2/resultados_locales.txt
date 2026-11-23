@@ -1,4 +1,4 @@
-ensayo: RESULTADO: 106 de 106 pruebas correctas — SIN FALLAS
+ensayo: RESULTADO: 119 de 119 pruebas correctas — SIN FALLAS
 huellas ANTES:
 1|1 funciones de campo (conjunto)|261bed3c9242f6261f845ec4e1374b3a|PUBLICADA (22-nov 13:46): lista para este corte
 2|2 funciones de scrr y public.geoportal_scrr_* (conjunto)||NO EXISTE (sin aplicar)
@@ -8,7 +8,7 @@ huellas ANTES:
 6|6 public.geoportal_admin_permisos (no se toca)|e5a90103b4a83440fd826f03266b7245|anote: debe ser igual antes y después
 migración: aplicada
 verificación:
-1|1 el esquema scrr con sus 20 tablas y las 24 RPC con la huella del corte|OK
+1|1 el esquema scrr con sus 21 tablas y las 29 RPC con la huella del corte|OK
 2|2 la huella de campo no cambió (261bed3c…)|OK
 3|3 permisos: las RPC solo service_role; scrr, nadie|OK
 4|4 ninguna función de scrr con DELETE o UPDATE sin WHERE|OK
@@ -19,7 +19,7 @@ verificación:
 9|9 rol scrr_refresco: solo MAINTAIN sobre predios_comercial (sin superusuario; el login lo da David aparte)|OK
 huellas DESPUÉS:
 1|1 funciones de campo (conjunto)|261bed3c9242f6261f845ec4e1374b3a|PUBLICADA (22-nov 13:46): lista para este corte
-2|2 funciones de scrr y public.geoportal_scrr_* (conjunto)|9489c37205ece7ff51787156cc7beda5|CON ESTE CORTE
+2|2 funciones de scrr y public.geoportal_scrr_* (conjunto)|c76eae0184c1a389264436663a3f7e7d|CON ESTE CORTE
 3|3 public.geoportal_puede (no se toca)|32f174a55b95788d3f8187b507303c2f|anote: debe ser igual antes y después
 4|4 public.geoportal_mis_permisos (no se toca)|83166fe17be58da67bbdedaae429bedb|anote: debe ser igual antes y después
 5|5 public.geoportal_admin_guardar (no se toca)|01fda69a9d912067b8b4dc153ac7957e|anote: debe ser igual antes y después

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { apiScrr, avisoDeError, type Corrida, type Filtros, type Lista, type OpcionesSeleccion, type Previa } from "./apiScrr";
+import { apiScrr, avisoDeError, type Corrida, type Filtros, type OpcionesSeleccion, type Previa } from "./apiScrr";
 import { fecha, fechaHora, num, pesos } from "./formato";
+import { descargarExcel, imprimir } from "./listas";
 
 // Selección (sección 4 del encargo del 20-nov): un ciclo a la vez, embudo de exclusiones con conteos (la vista previa no muestra contratos ni datos personales),
 // filtros del supervisor y la actividad que él escoge (Suspensión, Corte o Gestión de cobro). El motor no clasifica: la guía es referencia, no regla.
@@ -14,33 +15,6 @@ const PASOS: [string, string][] = [
   ["f_fuera_del_segmento", "Fuera del segmento (aproximado)"], ["candidato", "Candidatos a la lista"],
 ];
 const RANGOS: [string, number, number | null][] = [["1 a 6", 1, 6], ["7 a 25", 7, 25], ["26 o más", 26, null]];
-const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-async function descargarExcel(l: Lista) {
-  const { LibroXlsx } = await import("../tecnica/xlsx");
-  const libro = new LibroXlsx({ hoja: "Lista", anchos: [7, 13, 30, 34, 22, 6, 12, 12, 10, 14, 28],
-    encabezados: ["Orden", "Contrato", "Nombre", "Dirección", "Barrio", "Ciclo", "Ruta", "Reparto", "Facturas vencidas", "Saldo pendiente", "Observación del sistema"],
-    leame: [["Lista", `${l.actividad} · ciclo ${l.ciclo} · cartera del ${fecha(l.fecha_dato)}`], ["Generada", `${fechaHora(l.generada_en)} por ${l.autor}`],
-            ["Datos personales", "Lleva nombre y dirección del suscriptor solo para la visita de campo (excepción escrita de David, 22-nov). No se reenvía ni se publica; la descarga quedó registrada."],
-            ["Deuda", "Saldo pendiente y facturas vencidas del día de la cartera usada."]] });
-  await libro.agregarFilas(l.filas.map((f) => [f.orden, f.contrato, f.nombre, f.direccion, f.barrio, f.ciclo, f.ruta, f.codigo_reparto, f.facturas_vencidas, Number(f.saldo_pendiente), f.marca]));
-  const url = URL.createObjectURL(await libro.finalizar());
-  const a = document.createElement("a"); a.href = url; a.download = `lista_${l.actividad_codigo}_ciclo${l.ciclo}_${l.fecha_dato}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-}
-function imprimir(l: Lista, w: Window) {
-  w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(l.actividad)} · ciclo ${l.ciclo}</title>
-<style>body{font-family:Arial,Helvetica,sans-serif;font-size:11px;margin:12mm}h1{font-size:15px;margin:0 0 4px}p{margin:0 0 8px;color:#333}
-table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:3px 4px;text-align:left;vertical-align:top}th{background:#eee}td.n{text-align:right}
-@page{size:landscape;margin:10mm}</style></head><body>
-<h1>${esc(l.actividad)} · ciclo ${l.ciclo} · cartera del ${esc(fecha(l.fecha_dato))}</h1>
-<p>Generada ${esc(fechaHora(l.generada_en))} por ${esc(l.autor)} · ${l.filas.length} contratos · Uso exclusivo de la visita de campo (impresión registrada).</p>
-<table><thead><tr><th>#</th><th>Contrato</th><th>Nombre</th><th>Dirección</th><th>Barrio</th><th>Ruta</th><th>Reparto</th><th>Vencidas</th><th>Saldo</th><th>Observación</th><th>Resultado</th></tr></thead><tbody>
-${l.filas.map((f) => `<tr><td>${f.orden}</td><td>${esc(f.contrato)}</td><td>${esc(f.nombre)}</td><td>${esc(f.direccion)}</td><td>${esc(f.barrio)}</td><td>${esc(f.ruta)}</td><td>${esc(f.codigo_reparto)}</td><td class="n">${f.facturas_vencidas}</td><td class="n">${esc(pesos(f.saldo_pendiente))}</td><td>${esc(f.marca)}</td><td></td></tr>`).join("")}
-</tbody></table><script>window.onload=function(){window.print()}</script></body></html>`);
-  w.document.close();
-}
-
 export function PanelSeleccion() {
   const [op, setOp] = useState<OpcionesSeleccion | null>(null);
   const [ciclo, setCiclo] = useState<number | null>(null);
@@ -52,7 +26,7 @@ export function PanelSeleccion() {
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
-  const cargarCorridas = useCallback(async () => { try { setCorridas((await apiScrr.corridas()).corridas); } catch (e) { setMensaje(avisoDeError(e)); } }, []);
+  const cargarCorridas = useCallback(async () => { try { setCorridas((await apiScrr.corridas()).corridas.filter((c) => c.tipo !== "retorno")); } catch (e) { setMensaje(avisoDeError(e)); } }, []);
   useEffect(() => {
     apiScrr.opciones().then((o) => { setOp(o); const v = o.ciclos.find((c) => c.en_ventana) ?? o.ciclos[0]; if (v) setCiclo(v.ciclo); }).catch((e) => setMensaje(avisoDeError(e)));
     void cargarCorridas();

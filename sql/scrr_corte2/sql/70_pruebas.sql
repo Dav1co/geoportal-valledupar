@@ -444,6 +444,70 @@ begin
   perform pg_temp.ok('15.03 ajuste inicial: un corte drástico de 2025 fuera de las listas actualiza igual el estado del servicio; la suspensión de hoy también',
     (select estado from scrr.v_estado_servicio where contrato = B + 151) = 'cortado_drastico' and (select estado from scrr.v_estado_servicio where contrato = B + 150) = 'suspendido');
 
+  -- ===== 16. Retorno automático =====
+  -- en la cartera de suscripción: B+150 (suspendido) y B+151 (cortado drástico) quedaron a paz y salvo; B+111 (cortado hoy, de la lista) sigue con saldo y pagó 1.000 hoy
+  insert into public.cartera_suscripcion (contrato, nombre, direccion, saldo_pendiente, ciclo, ruta, codigo_reparto) values
+    ((B + 150)::text, 'ZTSCRR NOMBRE 150', 'ZTSCRR CALLE 150', 0, '98', 'ZTR1', 'P150'), ((B + 151)::text, 'ZTSCRR NOMBRE 151', 'ZTSCRR CALLE 151', 0, '98', 'ZTR0', 'P151'),
+    ((B + 111)::text, 'ZTSCRR NOMBRE 111', 'ZTSCRR CALLE 111', 20000, '98', 'ZTR0', 'P111');
+  r := pg_temp.rpc(format('public.geoportal_scrr_retorno_agregar(%L, %L, %L, %L)', S, (B + 113)::text, 'reconexion', 'ZTSCRR reclamo no registrado en el sistema'));
+  perform pg_temp.ok('16.01 adición manual al retorno con motivo (decisión 12)', pg_temp.err(r) = 'OK', r::text);
+  perform pg_temp.ok('16.02 la misma otra vez: 55000; una actividad que no es de retorno: 22023; el operario: 42501',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_retorno_agregar(%L, %L, %L, %L)', S, (B + 113)::text, 'reconexion', 'ZTSCRR reclamo no registrado en el sistema'))) = '55000'
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_retorno_agregar(%L, %L, %L, %L)', S, (B + 114)::text, 'corte', 'ZTSCRR esto no es un retorno válido'))) = '22023'
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_retorno_agregar(%L, %L, %L, %L)', 'ztscrr.op@emdupar.gov.co', (B + 114)::text, 'reconexion', 'ZTSCRR el operario no puede'))) = '42501');
+  r := pg_temp.rpc(format('public.geoportal_scrr_retorno(%L)', S));
+  perform pg_temp.ok('16.03 retorno: suspendido a paz y salvo → reinstalación; cortado drástico → reconexión drástica con su aviso; el manual con su origen y motivo',
+    pg_temp.err(r) = 'OK' and (r ->> 'pendientes')::int = 3
+    and (select x ->> 'actividad' = 'Reinstalación' and x ->> 'origen' = 'automatico' from jsonb_array_elements(r -> 'proponer') x where (x ->> 'contrato')::bigint = B + 150)
+    and (select x ->> 'actividad' = 'Reconexión drástica' and x ->> 'aviso' like 'Reconexión DRÁSTICA%' from jsonb_array_elements(r -> 'proponer') x where (x ->> 'contrato')::bigint = B + 151)
+    and (select x ->> 'actividad' = 'Reconexión' and x ->> 'origen' = 'manual' and x ->> 'motivo' like 'ZTSCRR reclamo%' from jsonb_array_elements(r -> 'proponer') x where (x ->> 'contrato')::bigint = B + 113), r::text);
+  perform pg_temp.ok('16.04 «por confirmar»: B+111 pagó hoy pero la cartera aún muestra saldo; no se propone',
+    exists (select 1 from jsonb_array_elements(r -> 'por_confirmar') x where (x ->> 'contrato')::bigint = B + 111 and (x ->> 'pagado_desde_cartera')::numeric = 1000)
+    and not exists (select 1 from jsonb_array_elements(r -> 'proponer') x where (x ->> 'contrato')::bigint = B + 111), r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_retorno_generar(%L)', S));
+  c2 := r ->> 'corrida_id';
+  perform pg_temp.ok('16.05 generar la lista de retorno: una corrida «retorno» con los 3, cada uno con su actividad y su origen',
+    pg_temp.err(r) = 'OK' and (r ->> 'contratos')::int = 3 and (select tipo from scrr.corridas where id = c2::uuid) = 'retorno'
+    and (select string_agg(k.actividad_id::text || k.origen, ',' order by k.orden) from scrr.corrida_contratos k where k.corrida_id = c2::uuid) = '4automatico,5manual,6automatico', r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_retorno(%L)', S));
+  perform pg_temp.ok('16.06 ya listados no vuelven a salir: pendientes 0 y generar otra vez da 55000',
+    (r ->> 'pendientes')::int = 0 and pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_retorno_generar(%L)', S))) = '55000', r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_lista(%L, %L::uuid, %L)', S, c2, 'excel'));
+  perform pg_temp.ok('16.07 la lista de retorno lleva la actividad de cada fila y el aviso del drástico; nombre y dirección para la visita',
+    (select x ->> 'actividad' = 'Reconexión drástica' and x ->> 'marca' like 'Reconexión DRÁSTICA%' and x ->> 'nombre' = 'ZTSCRR NOMBRE 151' from jsonb_array_elements(r -> 'filas') x where (x ->> 'contrato')::bigint = B + 151)
+    and r ->> 'actividad' like 'Retorno%', r::text);
+  -- la reinstalación de B+150 se hace (archivo de actividades): sale del retorno y su acta queda enlazada a la lista de retorno
+  r := pg_temp.iniciar('actividades', v_hoy - 3, pg_temp.sha('act4'), 1);
+  ca := r ->> 'carga_id';
+  perform pg_temp.lote(ca, 1, jsonb_build_array(jsonb_build_object('contrato', (B + 150)::text, 'actividad', 'Reinstalación', 'drastico', 'NO', 'estado', '3', 'fecha', v_hoy::text)));
+  perform pg_temp.rpc(format('public.geoportal_scrr_carga_validar(%L, %L::uuid)', S, ca));
+  perform pg_temp.rpc(format('public.geoportal_scrr_carga_aplicar(%L, %L::uuid, 1)', S, ca));
+  perform pg_temp.rpc(format('public.geoportal_scrr_carga_aplicar(%L, %L::uuid)', S, ca));
+  perform pg_temp.ok('16.08 hecha la reinstalación: B+150 queda activo, sale del retorno y su acta se enlaza a la lista de retorno',
+    (select estado from scrr.v_estado_servicio where contrato = B + 150) = 'activo'
+    and not exists (select 1 from scrr.f_retorno() x where x.contrato = B + 150)
+    and (select corrida_id = c2::uuid from scrr.actas where contrato = B + 150 and tipo_actividad_id = 4));
+  r := pg_temp.rpc(format('public.geoportal_scrr_retorno_quitar(%L, %L, %L)', S, (B + 113)::text, 'ZTSCRR ya no corresponde'));
+  perform pg_temp.ok('16.09 quitar el manual con motivo: deja de proponerse (queda el historial)',
+    pg_temp.err(r) = 'OK' and not exists (select 1 from scrr.f_retorno() x where x.contrato = B + 113) and (select count(*) from scrr.retorno_manual_eventos where contrato = B + 113) = 2, r::text);
+
+  -- ===== 17. Calendario: copiar del mes anterior (lote) y aviso del mes en curso =====
+  r := pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar_lote(%L, %L, %L::jsonb)', S, to_char(v_hoy + interval '1 month', 'YYYYMM'),
+         jsonb_build_array(jsonb_build_object('ciclo', 97, 'pago_oportuno', (v_hoy + interval '1 month')::date, 'fecha_suspension', (v_hoy + interval '1 month')::date + 1),
+                           jsonb_build_object('ciclo', 98, 'pago_oportuno', (v_hoy + interval '1 month')::date, 'fecha_suspension', (v_hoy + interval '1 month')::date + 1))));
+  perform pg_temp.ok('17.01 copiar del mes anterior: crea los ciclos que faltan en el mes siguiente', pg_temp.err(r) = 'OK' and (r ->> 'nuevos')::int = 2, r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar_lote(%L, %L, %L::jsonb)', S, to_char(v_hoy + interval '1 month', 'YYYYMM'),
+         jsonb_build_array(jsonb_build_object('ciclo', 97, 'pago_oportuno', (v_hoy + interval '1 month')::date, 'fecha_suspension', (v_hoy + interval '1 month')::date + 5))));
+  perform pg_temp.ok('17.02 los que ya están no se tocan (cambiarlos exige motivo, uno por uno)', (r ->> 'nuevos')::int = 0 and (r ->> 'ya_estaban')::int = 1
+    and (select fecha_suspension from scrr.v_calendario_vigente where periodo = to_char(v_hoy + interval '1 month', 'YYYYMM') and ciclo = 97) = (v_hoy + interval '1 month')::date + 1, r::text);
+  perform pg_temp.ok('17.03 suspensión antes del pago oportuno en el lote: 22023',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar_lote(%L, %L, %L::jsonb)', S, to_char(v_hoy + interval '1 month', 'YYYYMM'),
+      jsonb_build_array(jsonb_build_object('ciclo', 96, 'pago_oportuno', (v_hoy + interval '1 month')::date, 'fecha_suspension', (v_hoy + interval '1 month')::date - 1))))) = '22023');
+  r := pg_temp.rpc(format('public.geoportal_scrr_contexto(%L)', S));
+  perform pg_temp.ok('17.04 el contexto dice cuántos ciclos tiene el mes en curso (para el aviso visible)',
+    (r -> 'calendario_actual' ->> 'periodo') = to_char(v_hoy, 'YYYYMM')
+    and (r -> 'calendario_actual' ->> 'ciclos')::int = (select count(*) from scrr.v_calendario_vigente where periodo = to_char(v_hoy, 'YYYYMM')), r::text);
+
   -- ===== 10. Estructura, permisos y reglas de producción =====
   perform pg_temp.ok('10.01 historial en particiones diarias (hoy existe) y pagos en mensuales',
     to_regclass('scrr.cartera_historial_' || to_char(v_hoy, 'YYYYMMDD')) is not null and to_regclass('scrr.pagos_contrato_' || to_char(v_hoy, 'YYYYMM')) is not null);

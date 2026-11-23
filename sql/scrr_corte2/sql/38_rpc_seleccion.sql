@@ -151,9 +151,10 @@ create function public.geoportal_scrr_corridas(p_solicitante text, p_limite inte
 language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
 declare v_email text := scrr.f_autorizar(p_solicitante);
 begin
-  return jsonb_build_object('corridas', (select coalesce(jsonb_agg(jsonb_build_object('corrida_id', c.id, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato, 'actividad', t.nombre, 'actividad_codigo', t.codigo,
+  return jsonb_build_object('corridas', (select coalesce(jsonb_agg(jsonb_build_object('corrida_id', c.id, 'tipo', c.tipo, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato,
+           'actividad', coalesce(t.nombre, 'Retorno (reinstalación y reconexión)'), 'actividad_codigo', coalesce(t.codigo, 'retorno'),
            'contratos', c.contratos, 'saldo_total', c.saldo_total, 'filtros', c.filtros, 'autor', c.autor, 'creada_en', c.creado_en) order by c.creado_en desc), '[]'::jsonb)
-      from (select * from scrr.corridas order by creado_en desc limit greatest(1, least(coalesce(p_limite, 30), 100))) c join scrr.tipos_actividad t on t.id = c.actividad_id));
+      from (select * from scrr.corridas order by creado_en desc limit greatest(1, least(coalesce(p_limite, 30), 100))) c left join scrr.tipos_actividad t on t.id = c.actividad_id));
 end $$;
 
 -- Lista de una corrida para descargar (Excel) o imprimir. EXCEPCIÓN ESCRITA a la regla de descargas (P2 del 22-nov): solo para las listas de campo del SCRR,
@@ -168,15 +169,18 @@ begin
   if not found then perform scrr.f_err('La corrida no existe', 'P0002'); end if;
   select * into v_act from scrr.tipos_actividad where id = c.actividad_id;
   select coalesce(jsonb_agg(jsonb_build_object('orden', k.orden, 'contrato', k.contrato::text, 'nombre', s.nombre, 'direccion', s.direccion, 'barrio', coalesce(s.barrio, br.nombre_norm),
-                    'ciclo', c.ciclo, 'ruta', k.ruta, 'codigo_reparto', k.codigo_reparto, 'facturas_vencidas', k.facturas_vencidas, 'saldo_pendiente', k.saldo_pendiente,
-                    'marca', case k.marca when 'abono' then 'Abonó desde la fecha del archivo' when 'abono_desde_suspension' then 'Abonó desde la fecha de suspensión' end)
+                    'ciclo', coalesce(c.ciclo::text, s.ciclo), 'ruta', k.ruta, 'codigo_reparto', k.codigo_reparto, 'facturas_vencidas', k.facturas_vencidas, 'saldo_pendiente', k.saldo_pendiente,
+                    'actividad', ta.nombre, 'origen', k.origen,
+                    'marca', coalesce(k.aviso, case k.marca when 'abono' then 'Abonó desde la fecha del archivo' when 'abono_desde_suspension' then 'Abonó desde la fecha de suspensión' end))
                   order by k.orden), '[]'::jsonb)
     into v_filas
     from scrr.corrida_contratos k
-    left join lateral (select x.nombre, x.direccion, x.barrio from public.cartera_suscripcion x where x.contrato = k.contrato::text limit 1) s on true
+    left join lateral (select x.nombre, x.direccion, x.barrio, x.ciclo from public.cartera_suscripcion x where x.contrato = k.contrato::text limit 1) s on true
     left join scrr.barrios br on br.id = k.barrio_id
+    left join scrr.tipos_actividad ta on ta.id = coalesce(k.actividad_id, c.actividad_id)
    where k.corrida_id = p_corrida;
-  perform scrr.f_auditar(v_email, 'scrr_lista_' || p_formato, p_corrida::text, jsonb_build_object('filas', jsonb_array_length(v_filas), 'ciclo', c.ciclo, 'actividad', v_act.codigo), p_ip);
-  return jsonb_build_object('corrida_id', c.id, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato, 'actividad', v_act.nombre, 'actividad_codigo', v_act.codigo,
+  perform scrr.f_auditar(v_email, 'scrr_lista_' || p_formato, p_corrida::text, jsonb_build_object('filas', jsonb_array_length(v_filas), 'ciclo', c.ciclo, 'actividad', coalesce(v_act.codigo, 'retorno')), p_ip);
+  return jsonb_build_object('corrida_id', c.id, 'tipo', c.tipo, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato, 'actividad', coalesce(v_act.nombre, 'Retorno (reinstalación y reconexión)'),
+                            'actividad_codigo', coalesce(v_act.codigo, 'retorno'),
                             'generada_en', c.creado_en, 'autor', c.autor, 'filas', v_filas);
 end $$;

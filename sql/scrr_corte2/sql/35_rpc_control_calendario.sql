@@ -127,3 +127,27 @@ begin
     jsonb_build_object('pago_oportuno', p_pago_oportuno, 'fecha_suspension', p_fecha_suspension, 'nuevo', v_ant.ciclo is null), p_ip);
   return jsonb_build_object('ok', true, 'nuevo', v_ant.ciclo is null);
 end $$;
+
+-- «Copiar del mes anterior» (David, 22-nov 21:21): la pantalla propone las fechas del mes anterior corridas un mes, la persona las corrige y guarda todas de una vez.
+-- Solo crea los ciclos que el período destino todavía no tiene (los que ya están no se tocan: cambiarlos exige motivo, uno por uno). Auditado una vez.
+create function public.geoportal_scrr_calendario_guardar_lote(p_solicitante text, p_periodo text, p_ciclos jsonb, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_ini date; r record; v_nuevos int := 0; v_ya int := 0;
+begin
+  if coalesce(p_periodo, '') !~ '^20[0-9]{2}(0[1-9]|1[0-2])$' then perform scrr.f_err('El período debe ser aaaamm'); end if;
+  if p_ciclos is null or jsonb_typeof(p_ciclos) <> 'array' or jsonb_array_length(p_ciclos) not between 1 and 99 then perform scrr.f_err('La lista de ciclos no es válida'); end if;
+  v_ini := to_date(p_periodo || '01', 'YYYYMMDD');
+  perform pg_advisory_xact_lock(hashtextextended('scrr_calendario_lote:' || p_periodo, 0));
+  for r in select (e->>'ciclo')::int as ciclo, scrr.f_fecha(e->>'pago_oportuno') as po, scrr.f_fecha(e->>'fecha_suspension') as fs,
+                  coalesce(e->'etapas', '{}'::jsonb) as etapas from jsonb_array_elements(p_ciclos) e loop
+    if r.ciclo is null or r.ciclo not between 1 and 99 then perform scrr.f_err('Un ciclo no es válido (1 a 99)'); end if;
+    if r.po is null or r.fs is null or r.fs < r.po then perform scrr.f_err(format('Ciclo %s: revise el pago oportuno y la fecha de suspensión', r.ciclo)); end if;
+    if r.po < v_ini - 31 or r.po > (v_ini + interval '2 months')::date then perform scrr.f_err(format('Ciclo %s: el pago oportuno no corresponde a ese período', r.ciclo)); end if;
+    if jsonb_typeof(r.etapas) <> 'object' then perform scrr.f_err('Las etapas no son válidas'); end if;
+    if exists (select 1 from scrr.v_calendario_vigente k where k.periodo = p_periodo and k.ciclo = r.ciclo) then v_ya := v_ya + 1; continue; end if;
+    insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, autor) values (p_periodo, r.ciclo, r.po, r.fs, r.etapas, v_email);
+    v_nuevos := v_nuevos + 1;
+  end loop;
+  perform scrr.f_auditar(v_email, 'scrr_calendario_lote', p_periodo, jsonb_build_object('nuevos', v_nuevos, 'ya_estaban', v_ya), p_ip);
+  return jsonb_build_object('nuevos', v_nuevos, 'ya_estaban', v_ya);
+end $$;
