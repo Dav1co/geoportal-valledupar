@@ -24,3 +24,25 @@ create or replace function redes.f_eventos_abiertos() returns setof redes.zz_dob
 language sql stable security definer set search_path = redes, pg_temp as $$ select distinct d.evento_id from redes.zz_doble_eventos_contrato d $$;
 comment on function redes.f_eventos_abiertos() is 'DOBLE LOCAL (Code A, SCRR corte 2): en producción devuelve los eventos de suspensión abiertos.';
 revoke all on function redes.f_eventos_abiertos() from public;
+
+-- public.cartera_suscripcion con la estructura EXACTA de producción (David, 22-nov, tras la guardia del ensayo): 23 columnas, id bigint PRIMARY KEY
+-- default nextval('cartera_suscripcion_id_seq') al principio y cargado_en timestamptz default now() al final; índices cartera_suscripcion_pkey (id),
+-- idx_cartera_contrato (btree contrato) y gin con trigramas sobre upper(direccion), upper(nombre) y serial_medidor. Sin más restricciones.
+-- El doble traía 21 columnas (vacía): no se borra, se RENOMBRA (queda aparte, sin uso) y se crea la tabla con el orden de columnas de producción.
+create extension if not exists pg_trgm;
+alter table public.cartera_suscripcion rename to zz_cartera_suscripcion_21col_doble_viejo;
+alter index public.idx_cartera_contrato rename to zz_idx_cartera_contrato_doble_viejo;
+create sequence public.cartera_suscripcion_id_seq;
+create table public.cartera_suscripcion (
+  id bigint not null default nextval('cartera_suscripcion_id_seq'::regclass),
+  contrato text, estado text, identificacion text, nombre text, correo text, telefono text, direccion text, barrio text, categoria text, subcategoria text, ciclo text,
+  facturas_pendientes numeric, deuda_total numeric, saldo_pendiente numeric, saldo_a_favor numeric, valor_reclamo numeric, saldo_financiado numeric,
+  serial_medidor text, codigo_reparto text, ruta text, periodo_carga text,
+  cargado_en timestamp with time zone default now(),
+  constraint cartera_suscripcion_pkey primary key (id));
+alter sequence public.cartera_suscripcion_id_seq owned by public.cartera_suscripcion.id;
+create index idx_cartera_contrato on public.cartera_suscripcion using btree (contrato);
+create index idx_cartera_direccion_trgm on public.cartera_suscripcion using gin (upper(direccion) gin_trgm_ops);
+create index idx_cartera_nombre_trgm on public.cartera_suscripcion using gin (upper(nombre) gin_trgm_ops);
+create index idx_cartera_serial_trgm on public.cartera_suscripcion using gin (serial_medidor gin_trgm_ops);
+comment on table public.cartera_suscripcion is 'DOBLE LOCAL (Code A, SCRR corte 2): misma estructura e índices que producción (23 columnas).';

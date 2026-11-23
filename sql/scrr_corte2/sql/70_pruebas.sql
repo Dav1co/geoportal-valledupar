@@ -52,7 +52,7 @@ insert into public.geoportal_lista_blanca (email, nombre, rol, activo, horario, 
 do $$
 declare
   A text := 'ztscrr.adm@emdupar.gov.co'; S text := 'ztscrr.sup@emdupar.gov.co'; SC text := 'ztscrr.supcampo@emdupar.gov.co';
-  r jsonb; c1 text; c2 text; cp text; ca text; v_hoy date := (now() at time zone 'America/Bogota')::date; f jsonb; t0 timestamptz; v_lote int;
+  r jsonb; c1 text; c2 text; cp text; ca text; v_hoy date := (now() at time zone 'America/Bogota')::date; f jsonb; t0 timestamptz; v_lote int; v_id2 bigint; v_id4 bigint;
   B bigint := 910000000000;   -- base de los contratos de prueba
   v_reales bigint; v_tope numeric; v_esperado_bloqueo boolean;
 begin
@@ -137,15 +137,21 @@ begin
 
   -- ===== 04. Aplicar por lotes (cartera) =====
   -- Antes: una fila «vieja» de un contrato de prueba que viene en el archivo, y otra de un contrato de prueba cuyo renglón del archivo tiene error
-  insert into public.cartera_suscripcion (contrato, estado, nombre, direccion, saldo_pendiente, periodo_carga) values
-    ((B + 2)::text, 'ZTVIEJO', 'ZTSCRR VIEJO', 'ZTSCRR DIR VIEJA', 777, '20261101'),
-    ((B + 2002)::text, 'ZTVIEJO', 'ZTSCRR NO SE TOCA', 'ZTSCRR DIR', 555, '20261101');
+  insert into public.cartera_suscripcion (contrato, estado, nombre, direccion, saldo_pendiente, periodo_carga, cargado_en) values
+    ((B + 2)::text, 'ZTVIEJO', 'ZTSCRR VIEJO', 'ZTSCRR DIR VIEJA', 777, '20261101', '2026-11-01 07:00:00-05'),
+    ((B + 4)::text, 'ZTVIEJO', 'ZTSCRR VIEJO 4', 'ZTSCRR DIR VIEJA 4', 444, '20261101', '2026-11-01 07:00:00-05'),
+    ((B + 2002)::text, 'ZTVIEJO', 'ZTSCRR NO SE TOCA', 'ZTSCRR DIR', 555, '20261101', '2026-11-01 07:00:00-05');
+  select id into v_id2 from public.cartera_suscripcion where contrato = (B + 2)::text;
+  select id into v_id4 from public.cartera_suscripcion where contrato = (B + 4)::text;
   perform pg_temp.ok('04.01 el operario no aplica: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_carga_aplicar(%L, %L::uuid, 1)', 'ztscrr.op@emdupar.gov.co', c1))) = '42501');
   perform pg_temp.ok('04.02 cerrar antes de aplicar los lotes: 55000', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_carga_aplicar(%L, %L::uuid)', S, c1))) = '55000');
   t0 := clock_timestamp();
   r := pg_temp.rpc(format('public.geoportal_scrr_carga_aplicar(%L, %L::uuid, 1)', S, c1));
   perform pg_temp.ok('04.03 lote 1 aplicado: 1.000 al historial y 2.000 filas nuevas en cartera_suscripcion (' || round(extract(epoch from clock_timestamp() - t0) * 1000) || ' ms)',
-    pg_temp.err(r) = 'OK' and (r ->> 'historial')::int = 1000 and (r ->> 'suscripcion_filas_nuevas')::int = 2000 and (r ->> 'suscripcion_filas_retiradas')::int = 1, r::text);
+    pg_temp.err(r) = 'OK' and (r ->> 'historial')::int = 1000 and (r ->> 'suscripcion_filas_nuevas')::int = 2000 and (r ->> 'suscripcion_filas_retiradas')::int = 2, r::text);
+  perform pg_temp.ok('04.03b las filas del archivo toman id de la secuencia (todas distintas, mayores que las viejas) y cargado_en de ahora; el respaldo guarda el id y el cargado_en viejos',
+    (select count(distinct id) = 2000 and min(id) > greatest(v_id2, v_id4) and bool_and(cargado_en = now()) from public.cartera_suscripcion where contrato::bigint between B + 1 and B + 2000)
+    and (select (filas -> 0 ->> 'id')::bigint = v_id2 and (filas -> 0 ->> 'cargado_en')::timestamptz = '2026-11-01 07:00:00-05' from scrr.suscripcion_respaldo where carga_id = c1::uuid and contrato = (B + 2)::text));
   perform pg_temp.ok('04.04 el historial guarda vencidas DERIVADAS: ciclo 99 (aún no pasa el pago oportuno) 8 pendientes → 7; ciclo 98 (ya pasó) 2 → 2; ciclo 97 (sin calendario) 6 → 5',
     (select facturas_vencidas = 7 and facturas_pendientes = 8 from scrr.cartera_historial where carga_id = c1::uuid and contrato = B + 1)
     and (select facturas_vencidas = 2 and facturas_pendientes = 2 from scrr.cartera_historial where carga_id = c1::uuid and contrato = B + 3)
@@ -183,10 +189,19 @@ begin
   -- ===== 06. Revertir cartera_suscripcion y anular =====
   perform pg_temp.ok('06.01 anular sin revertir la tabla: 55000', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_carga_anular(%L, %L::uuid, %L)', S, c1, 'ZTSCRR prueba de anulación'))) = '55000');
   perform pg_temp.ok('06.02 revertir sin motivo: 22023', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_suscripcion_revertir(%L, %L::uuid, %L)', S, c1, 'corto'))) = '22023');
+  -- otra fila ocupa el id viejo de B+2 (como si alguien hubiera reiniciado la secuencia por fuera): al revertir, B+2 debe tomar un id nuevo sin chocar
+  insert into public.cartera_suscripcion (id, contrato, nombre) values (v_id2, (B + 2009)::text, 'ZTSCRR OCUPA EL ID VIEJO');
   r := pg_temp.rpc(format('public.geoportal_scrr_suscripcion_revertir(%L, %L::uuid, %L)', S, c1, 'ZTSCRR revierto la carga de prueba'));
-  perform pg_temp.ok('06.03 revertir: quita las 2.001 filas del archivo y restaura la vieja; no quedan pendientes',
-    pg_temp.err(r) = 'OK' and (r ->> 'pendientes')::int = 0 and (r ->> 'filas_restauradas')::int = 1
-    and (select count(*) from public.cartera_suscripcion where contrato like '91000000%' and contrato::bigint <= B + 2003) = 2
+  perform pg_temp.ok('06.03b revertir restaura id y cargado_en ORIGINALES (B+4); si el id viejo ya lo tiene otra fila (B+2), toma uno nuevo de la secuencia y conserva su cargado_en',
+    (select id = v_id4 and cargado_en = '2026-11-01 07:00:00-05' from public.cartera_suscripcion where contrato = (B + 4)::text)
+    and (select id <> v_id2 and cargado_en = '2026-11-01 07:00:00-05' from public.cartera_suscripcion where contrato = (B + 2)::text)
+    and (select id = v_id2 and nombre = 'ZTSCRR OCUPA EL ID VIEJO' from public.cartera_suscripcion where contrato = (B + 2009)::text));
+  insert into public.cartera_suscripcion (contrato, nombre) values ((B + 2010)::text, 'ZTSCRR DESPUES DE REVERTIR');
+  perform pg_temp.ok('06.03c después de revertir, la secuencia sigue sin choques (una fila nueva toma un id libre)',
+    (select count(*) from public.cartera_suscripcion where contrato = (B + 2010)::text) = 1);
+  perform pg_temp.ok('06.03 revertir: quita las 2.000 filas del archivo y restaura las 2 viejas; no quedan pendientes',
+    pg_temp.err(r) = 'OK' and (r ->> 'pendientes')::int = 0 and (r ->> 'filas_restauradas')::int = 2
+    and (select count(*) from public.cartera_suscripcion where contrato like '91000000%' and contrato::bigint <= B + 2003) = 3
     and (select nombre from public.cartera_suscripcion where contrato = (B + 2)::text) = 'ZTSCRR VIEJO'
     and (select nombre from public.cartera_suscripcion where contrato = (B + 2002)::text) = 'ZTSCRR NO SE TOCA', r::text);
   r := pg_temp.rpc(format('public.geoportal_scrr_carga_anular(%L, %L::uuid, %L)', S, c1, 'ZTSCRR prueba de anulación'));

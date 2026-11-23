@@ -6,7 +6,8 @@ begin;
 --   · el esquema scrr ya existe (el paquete no se reaplica: para rehacerlo, primero la reversa);
 --   · la huella de campo no es la publicada el 22-nov 13:46 (261bed3c9242f6261f845ec4e1374b3a): el modo «Cartera» autoriza con campo.f_autorizar_supervision;
 --   · campo.f_autorizar_supervision(text) no tiene su md5 publicada (5ac3368fa5f3a6347328285501894aec);
---   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 21 columnas de hoy (el cargador la actualiza: decisión 4 del 20-nov y P4 del 22-nov);
+--   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 23 columnas de producción (id … cargado_en) y su id llave primaria con
+--     default nextval('cartera_suscripcion_id_seq') (el cargador la actualiza: decisión 4 del 20-nov y P4 del 22-nov);
 --   · faltan public.geoportal_auditoria o public.predios_comercial (vista materializada con índice único), PostgreSQL 17, hechos.facturacion_sspd o
 --     redes.f_eventos_del_contrato(text); o ya existe el rol scrr_refresco.
 -- No toca las 4 funciones de permisos (geoportal_admin_permisos, geoportal_mis_permisos, geoportal_puede, geoportal_admin_guardar): la verificación comprueba
@@ -32,8 +33,16 @@ begin
   end if;
   select string_agg(column_name || ':' || data_type, ',' order by ordinal_position) into v
     from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion';
-  if v is distinct from 'contrato:text,estado:text,identificacion:text,nombre:text,correo:text,telefono:text,direccion:text,barrio:text,categoria:text,subcategoria:text,ciclo:text,facturas_pendientes:numeric,deuda_total:numeric,saldo_pendiente:numeric,saldo_a_favor:numeric,valor_reclamo:numeric,saldo_financiado:numeric,serial_medidor:text,codigo_reparto:text,ruta:text,periodo_carga:text' then
+  if v is distinct from 'id:bigint,contrato:text,estado:text,identificacion:text,nombre:text,correo:text,telefono:text,direccion:text,barrio:text,categoria:text,subcategoria:text,ciclo:text,facturas_pendientes:numeric,deuda_total:numeric,saldo_pendiente:numeric,saldo_a_favor:numeric,valor_reclamo:numeric,saldo_financiado:numeric,serial_medidor:text,codigo_reparto:text,ruta:text,periodo_carga:text,cargado_en:timestamp with time zone' then
     raise exception 'GUARDIA SCRR: las columnas de public.cartera_suscripcion no son las esperadas: %', v;
+  end if;
+  -- id con su secuencia y llave primaria (el respaldo y la reversión de una carga de cartera restauran el id y el cargado_en originales)
+  if to_regclass('public.cartera_suscripcion_id_seq') is null
+     or (select pg_get_expr(d.adbin, d.adrelid) from pg_attrdef d join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+          where d.adrelid = 'public.cartera_suscripcion'::regclass and a.attname = 'id') is distinct from 'nextval(''cartera_suscripcion_id_seq''::regclass)'
+     or not exists (select 1 from pg_index i join pg_attribute a on a.attrelid = i.indrelid and a.attnum = i.indkey[0]
+                     where i.indrelid = 'public.cartera_suscripcion'::regclass and i.indisprimary and a.attname = 'id' and i.indnatts = 1) then
+    raise exception 'GUARDIA SCRR: public.cartera_suscripcion.id no es la llave primaria con default nextval(cartera_suscripcion_id_seq).';
   end if;
   if to_regclass('public.geoportal_auditoria') is null or to_regclass('public.predios_comercial') is null then
     raise exception 'GUARDIA SCRR: falta public.geoportal_auditoria o public.predios_comercial.';
@@ -1042,8 +1051,18 @@ begin
   with lote as (select r.contrato, r.filas from scrr.suscripcion_respaldo r where r.carga_id = p_carga and r.revertido_en is null order by r.contrato limit 5000),
        quitar as (delete from public.cartera_suscripcion s using lote where s.contrato = lote.contrato returning 1)
   select count(*) into n1 from quitar;
-  insert into public.cartera_suscripcion
-    select x.* from scrr.suscripcion_respaldo r
+  -- Se restauran las filas tal como estaban, con su id y su cargado_en ORIGINALES. El id original ya no lo usa nadie (sus filas se quitaron arriba y la secuencia
+  -- solo avanza), pero si otra fila lo tuviera (p. ej. un truncate con restart identity hecho fuera del motor), esa fila restaurada toma un id nuevo de la
+  -- secuencia en vez de chocar. cargado_en se conserva; si el respaldo no lo trae, queda el de ahora.
+  insert into public.cartera_suscripcion (id, contrato, estado, identificacion, nombre, correo, telefono, direccion, barrio, categoria, subcategoria, ciclo,
+                                          facturas_pendientes, deuda_total, saldo_pendiente, saldo_a_favor, valor_reclamo, saldo_financiado,
+                                          serial_medidor, codigo_reparto, ruta, periodo_carga, cargado_en)
+    select case when x.id is null or exists (select 1 from public.cartera_suscripcion ocupa where ocupa.id = x.id)
+                then nextval('public.cartera_suscripcion_id_seq'::regclass) else x.id end,
+           x.contrato, x.estado, x.identificacion, x.nombre, x.correo, x.telefono, x.direccion, x.barrio, x.categoria, x.subcategoria, x.ciclo,
+           x.facturas_pendientes, x.deuda_total, x.saldo_pendiente, x.saldo_a_favor, x.valor_reclamo, x.saldo_financiado,
+           x.serial_medidor, x.codigo_reparto, x.ruta, x.periodo_carga, coalesce(x.cargado_en, now())
+      from scrr.suscripcion_respaldo r
       cross join lateral jsonb_populate_recordset(null::public.cartera_suscripcion, r.filas) x
      where r.carga_id = p_carga and r.revertido_en is null
        and r.contrato in (select r2.contrato from scrr.suscripcion_respaldo r2 where r2.carga_id = p_carga and r2.revertido_en is null order by r2.contrato limit 5000);

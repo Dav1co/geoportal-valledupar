@@ -42,23 +42,25 @@ def psql(base, sql=None, archivo=None, at=True, ok=True):
 def sin_restos():
     """Regla de David (22-nov): ningún guion borra bases que no haya creado esa misma corrida. Si quedaron restos de otra corrida (bases de prueba o el rol
     scrr_refresco, que es del CLÚSTER), se niega y pide borrarlos a mano con permiso; no los toca."""
-    restos = psql("postgres", "select string_agg(datname, ', ' order by datname) from pg_database where datname in ('scrr_gen', 'scrr_local', 'scrr_chrome', 'scrr_mut', 'scrr_rev')").stdout.strip()
+    # Lo que de verdad choca es el rol (del clúster) y las bases que lo tienen (la del servidor de revisión y la de Chrome). Las bases de prueba de esta corrida
+    # llevan un nombre propio (con el número de proceso), así que un resto de otra corrida no estorba: se reporta y se borra solo con permiso.
+    restos = psql("postgres", "select string_agg(datname, ', ' order by datname) from pg_database where datname in ('scrr_chrome', 'scrr_rev')").stdout.strip()
     rol = psql("postgres", "select count(*) from pg_roles where rolname = 'scrr_refresco'").stdout.strip() != "0"
     if restos or rol:
         raise SystemExit(f"Quedaron restos de otra corrida (bases: {restos or 'ninguna'}; rol scrr_refresco: {'sí' if rol else 'no'}). "
                          "Este guion no borra lo que no creó: pida permiso y bórrelos a mano (con su porqué y su alcance), y vuelva a correrlo.")
 
 def base_nueva(nombre):
-    """Copia limpia del doble: la plantilla «scrr_plantilla» se arma una vez desde el archivo del doble. La base nueva la crea ESTA corrida (si ya existe, se niega)."""
-    if psql("postgres", "select 1 from pg_database where datname = 'scrr_plantilla'").stdout.strip() != "1":
-        psql("postgres", "create database scrr_plantilla")
-        psql("scrr_plantilla", archivo=DOBLE, at=False)
-        psql("scrr_plantilla", archivo=AQUI / "doble_base_local.sql", at=False)
-    elif psql("scrr_plantilla", "select (to_regclass('hechos.facturacion_sspd') is not null)::text").stdout.strip() != "true":
-        raise SystemExit("La plantilla scrr_plantilla es vieja (sin los dobles locales). Este guion no la borra: pida permiso y bórrela a mano.")
+    """Copia limpia del doble: la plantilla «scrr_plantilla_v2» se arma una vez desde el archivo del doble. La base nueva la crea ESTA corrida (si ya existe, se niega)."""
+    if psql("postgres", "select 1 from pg_database where datname = 'scrr_plantilla_v2'").stdout.strip() != "1":
+        psql("postgres", "create database scrr_plantilla_v2")
+        psql("scrr_plantilla_v2", archivo=DOBLE, at=False)
+        psql("scrr_plantilla_v2", archivo=AQUI / "doble_base_local.sql", at=False)
+    elif psql("scrr_plantilla_v2", "select (to_regclass('hechos.facturacion_sspd') is not null and (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion') = 23)::text").stdout.strip() != "true":
+        raise SystemExit("La plantilla scrr_plantilla_v2 es vieja (sin los dobles locales). Este guion no la borra: pida permiso y bórrela a mano.")
     if psql("postgres", f"select 1 from pg_database where datname = '{nombre}'").stdout.strip() == "1":
         raise SystemExit(f"La base {nombre} ya existe (resto de otra corrida). Este guion no la borra: pida permiso y bórrela a mano.")
-    psql("postgres", f"create database {nombre} template scrr_plantilla")
+    psql("postgres", f"create database {nombre} template scrr_plantilla_v2")
     return nombre
 
 def valor(base, q): return psql(base, q).stdout.strip()
@@ -69,7 +71,7 @@ def poner(t, v):
 
 def main():
     sin_restos()
-    b = base_nueva("scrr_gen")
+    b = base_nueva(f"scrr_gen_{os.getpid()}")
     md5p = lambda f: f"md5(pg_get_functiondef(to_regprocedure('{f}')))"
     PROD = {"HUELLA_CAMPO": valor(b, CONJ_CAMPO), "MD5_AUTORIZAR_SUPERVISION": valor(b, f"select {md5p('campo.f_autorizar_supervision(text)')}"),
             "COLUMNAS_SUSCRIPCION": valor(b, "select string_agg(column_name || ':' || data_type, ',' order by ordinal_position) from information_schema.columns "
@@ -77,6 +79,10 @@ def main():
             "SIN_WHERE_SCRR": SIN_WHERE_SCRR}
     assert PROD["HUELLA_CAMPO"] == "261bed3c9242f6261f845ec4e1374b3a", PROD
     assert PROD["MD5_AUTORIZAR_SUPERVISION"] == "5ac3368fa5f3a6347328285501894aec", PROD
+    # las 23 columnas de producción (David, 22-nov: id al principio, cargado_en al final)
+    assert PROD["COLUMNAS_SUSCRIPCION"] == ("id:bigint,contrato:text,estado:text,identificacion:text,nombre:text,correo:text,telefono:text,direccion:text,barrio:text,"
+        "categoria:text,subcategoria:text,ciclo:text,facturas_pendientes:numeric,deuda_total:numeric,saldo_pendiente:numeric,saldo_a_favor:numeric,valor_reclamo:numeric,"
+        "saldo_financiado:numeric,serial_medidor:text,codigo_reparto:text,ruta:text,periodo_carga:text,cargado_en:timestamp with time zone"), PROD["COLUMNAS_SUSCRIPCION"]
     permisos_antes = {f: valor(b, f"select {md5p(f)}") for f in PERMISOS}
     # en el ensayo, las md5 de las 4 funciones de permisos se toman ANTES de la migración y se comparan al final (sirve en local y en producción)
     captura = ("create temp table ztscrr_permisos as select f, md5(pg_get_functiondef(to_regprocedure(f))) as md5 from unnest(array["
@@ -123,7 +129,7 @@ select o, k, v, estado from (
         fila(7, "7 particiones de hoy: historial del día y pagos del mes",
              "to_regclass('scrr.cartera_historial_' || to_char((now() at time zone 'America/Bogota')::date, 'YYYYMMDD')) is not null "
              "and to_regclass('scrr.pagos_contrato_' || to_char((now() at time zone 'America/Bogota')::date, 'YYYYMM')) is not null"),
-        fila(8, "8 public.cartera_suscripcion con sus mismas 21 columnas",
+        fila(8, "8 public.cartera_suscripcion con sus mismas 23 columnas (id … cargado_en)",
              f"(select string_agg(column_name || ':' || data_type, ',' order by ordinal_position) from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion') = '{PROD['COLUMNAS_SUSCRIPCION']}'"),
         fila(9, "9 rol scrr_refresco: solo MAINTAIN sobre predios_comercial (sin superusuario; el login lo da David aparte)",
              "exists (select 1 from pg_roles where rolname = 'scrr_refresco' and not rolsuper and not rolcreaterole and not rolinherit) "

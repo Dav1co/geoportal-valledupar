@@ -445,8 +445,18 @@ begin
   with lote as (select r.contrato, r.filas from scrr.suscripcion_respaldo r where r.carga_id = p_carga and r.revertido_en is null order by r.contrato limit 5000),
        quitar as (delete from public.cartera_suscripcion s using lote where s.contrato = lote.contrato returning 1)
   select count(*) into n1 from quitar;
-  insert into public.cartera_suscripcion
-    select x.* from scrr.suscripcion_respaldo r
+  -- Se restauran las filas tal como estaban, con su id y su cargado_en ORIGINALES. El id original ya no lo usa nadie (sus filas se quitaron arriba y la secuencia
+  -- solo avanza), pero si otra fila lo tuviera (p. ej. un truncate con restart identity hecho fuera del motor), esa fila restaurada toma un id nuevo de la
+  -- secuencia en vez de chocar. cargado_en se conserva; si el respaldo no lo trae, queda el de ahora.
+  insert into public.cartera_suscripcion (id, contrato, estado, identificacion, nombre, correo, telefono, direccion, barrio, categoria, subcategoria, ciclo,
+                                          facturas_pendientes, deuda_total, saldo_pendiente, saldo_a_favor, valor_reclamo, saldo_financiado,
+                                          serial_medidor, codigo_reparto, ruta, periodo_carga, cargado_en)
+    select case when x.id is null or exists (select 1 from public.cartera_suscripcion ocupa where ocupa.id = x.id)
+                then nextval('public.cartera_suscripcion_id_seq'::regclass) else x.id end,
+           x.contrato, x.estado, x.identificacion, x.nombre, x.correo, x.telefono, x.direccion, x.barrio, x.categoria, x.subcategoria, x.ciclo,
+           x.facturas_pendientes, x.deuda_total, x.saldo_pendiente, x.saldo_a_favor, x.valor_reclamo, x.saldo_financiado,
+           x.serial_medidor, x.codigo_reparto, x.ruta, x.periodo_carga, coalesce(x.cargado_en, now())
+      from scrr.suscripcion_respaldo r
       cross join lateral jsonb_populate_recordset(null::public.cartera_suscripcion, r.filas) x
      where r.carga_id = p_carga and r.revertido_en is null
        and r.contrato in (select r2.contrato from scrr.suscripcion_respaldo r2 where r2.carga_id = p_carga and r2.revertido_en is null order by r2.contrato limit 5000);

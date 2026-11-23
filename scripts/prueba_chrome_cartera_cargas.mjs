@@ -1,7 +1,7 @@
 // Motor SCRR · corte 2 · commit 1: «Carga del día» del modo «Cartera», de punta a punta en CHROME REAL y SIN Supabase (Code A, 22-nov):
 //   la APP COMPLETA compilada con Vite (supabase-js real contra un Auth simulado) → la Edge REAL geoportal-scrr en Deno → un PostgREST mínimo en Node que llama las RPC
 //   REALES de la base local del Code A (clúster 55432) como service_role con 30 s y 8 s (topes de producción).
-//   Base: copia de la plantilla «scrr_plantilla» (el doble de Administración con el cargo del supervisor: campo 261bed3c…) + la migración del paquete scrr_corte2 +
+//   Base: copia de la plantilla «scrr_plantilla_v2» (el doble de Administración con el cargo del supervisor: campo 261bed3c…) + la migración del paquete scrr_corte2 +
 //   112.000 contratos SINTÉTICOS en cartera_suscripcion (los mismos 93xxxxxxxxxx del archivo, con valores «viejos»). Ningún dato real.
 //   Mide la lectura del Excel de 112.000 filas en el navegador (tiempo y memoria del Worker) y el tiempo de cada RPC con ese volumen.
 // Uso: node scripts/prueba_chrome_cartera_cargas.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> <psql> [capturas]   ·   -h ayuda
@@ -40,7 +40,7 @@ if (psqlIn("show port", "postgres") !== "55432") { console.error("No es el clús
 { const restos = psqlIn(`select coalesce(string_agg(datname, ', '), '') from pg_database where datname in ('${DB}', 'scrr_rev')`, "postgres");
   const rol = psqlIn("select count(*) from pg_roles where rolname = 'scrr_refresco'", "postgres") !== "0";
   if (restos || rol) { console.error(`Quedaron restos de otra corrida (bases: ${restos || "ninguna"}; rol scrr_refresco: ${rol ? "sí" : "no"}). Esta prueba no los borra: pida permiso y bórrelos a mano.`); process.exit(2); } }
-psqlIn(`create database ${DB} template scrr_plantilla;`, "postgres");
+psqlIn(`create database ${DB} template scrr_plantilla_v2;`, "postgres");
 const MIG = join(raiz, "sql/scrr_corte2/migracion_scrr_corte2_editor.sql");
 execFileSync(PSQL, ["-qX", "-v", "ON_ERROR_STOP=1", "-d", DB, "-f", MIG], { env: PGENV, stdio: ["ignore", "pipe", "pipe"] });
 // Refresco del mapa: SOLO LOCAL, el rol mínimo recibe login con una clave de prueba (en producción la pone David y va en el secreto de la Edge)
@@ -174,8 +174,11 @@ try {
   prueba("A.01b en «Formatos de campo» sus pantallas quedan dentro de un contenedor con desplazamiento (no se recortan)", campoSup?.overflow === "auto" && campoSup.alto > 300 && campoSup.texto > 20, JSON.stringify(campoSup));
   await pg.click('.modo-capsula [data-modo="cartera"]');
   await esperarTexto(pg, /¿Falta cargar hoy\?/);
+  // la lista de «¿Falta cargar hoy?» llega con su propia consulta: se espera a que esté (antes se leía apenas aparecía el título)
+  await pg.waitForFunction(() => document.querySelectorAll(".scrr-hoy li").length >= 3, { timeout: 15000 }).catch(() => {});
+  const faltan = await pg.$$eval(".scrr-hoy li", (l) => l.map((x) => `${x.className}:${x.innerText.slice(0, 40)}`));
   prueba("A.02 el modo «Cartera» abre «Carga del día» con las tres cargas por hacer",
-    (await pg.$$eval(".scrr-hoy li.falta", (l) => l.length)) === 3 && /Cartera del día/.test(await texto(pg)));
+    faltan.filter((x) => x.startsWith("falta")).length === 3 && /Cartera del día/.test(await texto(pg)), faltan.join(" | "));
   // Plantilla
   const cdp = await pg.createCDPSession(); const DESC = join(CAP, "descargas"); mkdirSync(DESC, { recursive: true });
   await cdp.send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: DESC });

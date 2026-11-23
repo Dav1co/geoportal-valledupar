@@ -49,11 +49,13 @@ insert into public.geoportal_lista_blanca (email, nombre, rol, activo, horario, 
   values ('ztscrr.sup@emdupar.gov.co', 'ZTSCRR Supervisor', 'consulta', true, 'sin_restriccion', 'todos', true, true);
 
 do $$
-declare S text := 'ztscrr.sup@emdupar.gov.co'; B bigint := 920000000000; v_hoy date := (now() at time zone 'America/Bogota')::date;
+declare S text := 'ztscrr.sup@emdupar.gov.co'; B bigint := 920000000000; v_hoy date := (now() at time zone 'America/Bogota')::date; v_ids numeric;
         r jsonb; c1 text; c2 text; c3 text; f jsonb; v_nom text;
 begin
   -- estado «viejo» (como lo dejó el script): 300 contratos
-  insert into public.cartera_suscripcion (contrato, estado, nombre, saldo_pendiente, periodo_carga) select (B + g)::text, 'ZTVIEJO', 'ZTSCRR VIEJO', 1, '20261101' from generate_series(1, 300) g;
+  insert into public.cartera_suscripcion (contrato, estado, nombre, saldo_pendiente, periodo_carga, cargado_en)
+    select (B + g)::text, 'ZTVIEJO', 'ZTSCRR VIEJO', 1, '20261101', '2026-11-01 07:00:00-05' from generate_series(1, 300) g;
+  select sum(id) into v_ids from public.cartera_suscripcion;
   -- 1. Carga de AYER: vienen 1..200 (con saldo los pares) y 301..400 nuevos; NO vienen 201..300 (100 de 300 = 33 %)
   select jsonb_agg(pg_temp.fc(B + g, case when g % 2 = 0 then 10000 else 0 end, 2) order by g) into f from generate_series(1, 200) g;
   select f || jsonb_agg(pg_temp.fc(B + g, 5000, 1) order by g) into f from generate_series(301, 400) g;
@@ -104,6 +106,8 @@ begin
   r := pg_temp.rpc(format('public.geoportal_scrr_suscripcion_revertir(%L, %L::uuid, %L)', S, c1, 'ZTSCRR revierto la de ayer'));
   perform pg_temp.ok('L13 revertir en orden hasta la primera deja la tabla como la dejó el script (300 «viejos»)',
     pg_temp.err(r) = 'OK' and (select count(*) from public.cartera_suscripcion where estado = 'ZTVIEJO') = 300 and (select count(*) from public.cartera_suscripcion) = 300, r::text);
+  perform pg_temp.ok('L13b los 300 vuelven con sus MISMOS id (también los 100 que habían salido) y su cargado_en original',
+    (select sum(id) from public.cartera_suscripcion) = v_ids and (select bool_and(cargado_en = '2026-11-01 07:00:00-05') from public.cartera_suscripcion));
   -- 6. Retiro del historial (P7): una partición de hace 15 días con una fila se retira; la de hoy no
   perform scrr.f_preparar_historial(v_hoy - 15, v_hoy - 15);
   v_nom := 'cartera_historial_' || to_char(v_hoy - 15, 'YYYYMMDD');

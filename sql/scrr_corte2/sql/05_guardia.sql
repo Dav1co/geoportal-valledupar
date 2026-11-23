@@ -4,7 +4,8 @@
 --   · el esquema scrr ya existe (el paquete no se reaplica: para rehacerlo, primero la reversa);
 --   · la huella de campo no es la publicada el 22-nov 13:46 ({{HUELLA_CAMPO}}): el modo «Cartera» autoriza con campo.f_autorizar_supervision;
 --   · campo.f_autorizar_supervision(text) no tiene su md5 publicada ({{MD5_AUTORIZAR_SUPERVISION}});
---   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 21 columnas de hoy (el cargador la actualiza: decisión 4 del 20-nov y P4 del 22-nov);
+--   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 23 columnas de producción (id … cargado_en) y su id llave primaria con
+--     default nextval('cartera_suscripcion_id_seq') (el cargador la actualiza: decisión 4 del 20-nov y P4 del 22-nov);
 --   · faltan public.geoportal_auditoria o public.predios_comercial (vista materializada con índice único), PostgreSQL 17, hechos.facturacion_sspd o
 --     redes.f_eventos_del_contrato(text); o ya existe el rol scrr_refresco.
 -- No toca las 4 funciones de permisos (geoportal_admin_permisos, geoportal_mis_permisos, geoportal_puede, geoportal_admin_guardar): la verificación comprueba
@@ -32,6 +33,14 @@ begin
     from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion';
   if v is distinct from '{{COLUMNAS_SUSCRIPCION}}' then
     raise exception 'GUARDIA SCRR: las columnas de public.cartera_suscripcion no son las esperadas: %', v;
+  end if;
+  -- id con su secuencia y llave primaria (el respaldo y la reversión de una carga de cartera restauran el id y el cargado_en originales)
+  if to_regclass('public.cartera_suscripcion_id_seq') is null
+     or (select pg_get_expr(d.adbin, d.adrelid) from pg_attrdef d join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+          where d.adrelid = 'public.cartera_suscripcion'::regclass and a.attname = 'id') is distinct from 'nextval(''cartera_suscripcion_id_seq''::regclass)'
+     or not exists (select 1 from pg_index i join pg_attribute a on a.attrelid = i.indrelid and a.attnum = i.indkey[0]
+                     where i.indrelid = 'public.cartera_suscripcion'::regclass and i.indisprimary and a.attname = 'id' and i.indnatts = 1) then
+    raise exception 'GUARDIA SCRR: public.cartera_suscripcion.id no es la llave primaria con default nextval(cartera_suscripcion_id_seq).';
   end if;
   if to_regclass('public.geoportal_auditoria') is null or to_regclass('public.predios_comercial') is null then
     raise exception 'GUARDIA SCRR: falta public.geoportal_auditoria o public.predios_comercial.';

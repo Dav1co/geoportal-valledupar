@@ -1,7 +1,7 @@
 // Servidor de REVISIÓN LOCAL del modo «Cartera» (Motor SCRR, corte 2; Code A, 22-nov; regla del encargo: revisión en local obligatoria antes de publicar). NUNCA toca Supabase:
 //   la APP COMPLETA compilada con Vite (supabase-js real contra un Auth simulado) → las Edges REALES geoportal-scrr, geoportal-admin, geoportal-campo y geoportal-acta en Deno
 //   → un PostgREST mínimo en Node que llama las RPC REALES de la base local del Code A (clúster 55432) como service_role con 30 s y 8 s (topes de producción).
-//   Base «scrr_rev»: copia de la plantilla «scrr_plantilla» (el doble con campo 261bed3c…) + la migración del paquete sql/scrr_corte2 + datos SINTÉTICOS (ningún dato real).
+//   Base «scrr_rev»: copia de la plantilla «scrr_plantilla_v2» (el doble con campo 261bed3c…) + la migración del paquete sql/scrr_corte2 + datos SINTÉTICOS (ningún dato real).
 //   Siembra, POR LA EDGE REAL y como el Supervisor comercial: la cartera del día (5.000 contratos), los pagos (300) y las actividades (400, con suspensiones y cortes, para que
 //   haya retorno), y refresca el mapa con el rol mínimo scrr_refresco (con una clave SOLO LOCAL). Noviembre trae su calendario; diciembre queda vacío (para «copiar del mes anterior»).
 //   Cinco usuarios (cualquier clave): prueba.sup.comercial (Supervisor comercial, sin modos del geovisor) · prueba.op.comercial (operario) · prueba.gestor.cobro (gestor de cobro:
@@ -56,7 +56,7 @@ for (const puerto of [P_WEB, P_BASE, P_EDGE]) {
 { const restos = psqlIn(`select coalesce(string_agg(datname, ', '), '') from pg_database where datname in ('${DB}', 'scrr_chrome')`, "postgres");
   const rol = psqlIn("select count(*) from pg_roles where rolname = 'scrr_refresco'", "postgres") !== "0";
   if (restos || rol) { console.error(`Quedaron restos de otra corrida (bases: ${restos || "ninguna"}; rol scrr_refresco: ${rol ? "sí" : "no"}). Este guion no los borra: pida permiso y bórrelos a mano.`); process.exit(2); } }
-psqlIn(`create database ${DB} template scrr_plantilla;`, "postgres");
+psqlIn(`create database ${DB} template scrr_plantilla_v2;`, "postgres");
 const limpiarLoCreado = () => { try { psqlIn(`drop database ${DB}`, "postgres"); psqlIn("drop role scrr_refresco", "postgres"); } catch (e) { console.error("No se pudo limpiar lo creado:", String(e.message).slice(0, 200)); } };
 execFileSync(PSQL, ["-qX", "-v", "ON_ERROR_STOP=1", "-d", DB, "-f", join(raiz, "sql/scrr_corte2/migracion_scrr_corte2_editor.sql")], { env: PGENV, stdio: ["ignore", "pipe", "pipe"] });
 const CLAVE_LOCAL = "solo-local-revision-scrr";
