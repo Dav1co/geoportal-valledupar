@@ -108,6 +108,12 @@ begin
     pg_temp.err(r) = 'OK' and (select count(*) from public.cartera_suscripcion where estado = 'ZTVIEJO') = 300 and (select count(*) from public.cartera_suscripcion) = 300, r::text);
   perform pg_temp.ok('L13b los 300 vuelven con sus MISMOS id (también los 100 que habían salido) y su cargado_en original',
     (select sum(id) from public.cartera_suscripcion) = v_ids and (select bool_and(cargado_en = '2026-11-01 07:00:00-05') from public.cartera_suscripcion));
+  refresh materialized view public.zz_doble_depende_cartera_mv;
+  perform pg_temp.ok('L13c tras aplicar, retirar salidas y revertir, las dependientes siguen: la vista lee las 300 filas y la materializada se refresca con 300',
+    (select count(*) from public.zz_doble_depende_cartera) = 300 and (select count(*) from public.zz_doble_depende_cartera_mv) = 300);
+  perform pg_temp.ok('L13d la tabla sigue como en producción: RLS activado y periodo_carga NOT NULL (una fila sin él se rechaza con 23502)',
+    (select relrowsecurity from pg_class where oid = 'public.cartera_suscripcion'::regclass)
+    and (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion' and column_name = 'periodo_carga' and is_nullable = 'NO') = 1);
   -- 6. Retiro del historial (P7): una partición de hace 15 días con una fila se retira; la de hoy no
   perform scrr.f_preparar_historial(v_hoy - 15, v_hoy - 15);
   v_nom := 'cartera_historial_' || to_char(v_hoy - 15, 'YYYYMMDD');

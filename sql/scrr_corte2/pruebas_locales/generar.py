@@ -51,16 +51,16 @@ def sin_restos():
                          "Este guion no borra lo que no creó: pida permiso y bórrelos a mano (con su porqué y su alcance), y vuelva a correrlo.")
 
 def base_nueva(nombre):
-    """Copia limpia del doble: la plantilla «scrr_plantilla_v2» se arma una vez desde el archivo del doble. La base nueva la crea ESTA corrida (si ya existe, se niega)."""
-    if psql("postgres", "select 1 from pg_database where datname = 'scrr_plantilla_v2'").stdout.strip() != "1":
-        psql("postgres", "create database scrr_plantilla_v2")
-        psql("scrr_plantilla_v2", archivo=DOBLE, at=False)
-        psql("scrr_plantilla_v2", archivo=AQUI / "doble_base_local.sql", at=False)
-    elif psql("scrr_plantilla_v2", "select (to_regclass('hechos.facturacion_sspd') is not null and (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion') = 23)::text").stdout.strip() != "true":
-        raise SystemExit("La plantilla scrr_plantilla_v2 es vieja (sin los dobles locales). Este guion no la borra: pida permiso y bórrela a mano.")
+    """Copia limpia del doble: la plantilla «scrr_plantilla_v3» se arma una vez desde el archivo del doble. La base nueva la crea ESTA corrida (si ya existe, se niega)."""
+    if psql("postgres", "select 1 from pg_database where datname = 'scrr_plantilla_v3'").stdout.strip() != "1":
+        psql("postgres", "create database scrr_plantilla_v3")
+        psql("scrr_plantilla_v3", archivo=DOBLE, at=False)
+        psql("scrr_plantilla_v3", archivo=AQUI / "doble_base_local.sql", at=False)
+    elif psql("scrr_plantilla_v3", "select (to_regclass('hechos.facturacion_sspd') is not null and (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion' and is_nullable = 'NO') = 4)::text").stdout.strip() != "true":
+        raise SystemExit("La plantilla scrr_plantilla_v3 es vieja (sin los dobles locales). Este guion no la borra: pida permiso y bórrela a mano.")
     if psql("postgres", f"select 1 from pg_database where datname = '{nombre}'").stdout.strip() == "1":
         raise SystemExit(f"La base {nombre} ya existe (resto de otra corrida). Este guion no la borra: pida permiso y bórrela a mano.")
-    psql("postgres", f"create database {nombre} template scrr_plantilla_v2")
+    psql("postgres", f"create database {nombre} template scrr_plantilla_v3")
     return nombre
 
 def valor(base, q): return psql(base, q).stdout.strip()
@@ -72,28 +72,35 @@ def poner(t, v):
 def main():
     sin_restos()
     b = base_nueva(f"scrr_gen_{os.getpid()}")
-    md5p = lambda f: f"md5(pg_get_functiondef(to_regprocedure('{f}')))"
-    PROD = {"HUELLA_CAMPO": valor(b, CONJ_CAMPO), "MD5_AUTORIZAR_SUPERVISION": valor(b, f"select {md5p('campo.f_autorizar_supervision(text)')}"),
-            "COLUMNAS_SUSCRIPCION": valor(b, "select string_agg(column_name || ':' || data_type, ',' order by ordinal_position) from information_schema.columns "
-                                              "where table_schema = 'public' and table_name = 'cartera_suscripcion'"),
-            "SIN_WHERE_SCRR": SIN_WHERE_SCRR}
-    assert PROD["HUELLA_CAMPO"] == "261bed3c9242f6261f845ec4e1374b3a", PROD
-    assert PROD["MD5_AUTORIZAR_SUPERVISION"] == "5ac3368fa5f3a6347328285501894aec", PROD
-    # las 23 columnas de producción (David, 22-nov: id al principio, cargado_en al final)
-    assert PROD["COLUMNAS_SUSCRIPCION"] == ("id:bigint,contrato:text,estado:text,identificacion:text,nombre:text,correo:text,telefono:text,direccion:text,barrio:text,"
-        "categoria:text,subcategoria:text,ciclo:text,facturas_pendientes:numeric,deuda_total:numeric,saldo_pendiente:numeric,saldo_a_favor:numeric,valor_reclamo:numeric,"
-        "saldo_financiado:numeric,serial_medidor:text,codigo_reparto:text,ruta:text,periodo_carga:text,cargado_en:timestamp with time zone"), PROD["COLUMNAS_SUSCRIPCION"]
-    permisos_antes = {f: valor(b, f"select {md5p(f)}") for f in PERMISOS}
-    # en el ensayo, las md5 de las 4 funciones de permisos se toman ANTES de la migración y se comparan al final (sirve en local y en producción)
-    captura = ("create temp table ztscrr_permisos as select f, md5(pg_get_functiondef(to_regprocedure(f))) as md5 from unnest(array["
-               + ", ".join(f"'{f}'" for f in PERMISOS) + "]) f;\n")
-    PROD["PERMISOS_SIN_CAMPO"] = ""
-    PROD["PERMISOS_SIN_CAMBIO"] = "not exists (select 1 from ztscrr_permisos z where md5(pg_get_functiondef(to_regprocedure(z.f))) is distinct from z.md5)"
-    psql(b, "begin;\n" + poner(cuerpo(), PROD) + "\ncommit;\n", at=False)
-    nuevas = {"HUELLA_SCRR": valor(b, CONJ_SCRR), "RPC": valor(b, "select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\\_scrr\\_%'"),
-              "TABLAS": valor(b, "select count(*) from pg_class where relnamespace = 'scrr'::regnamespace and relkind in ('r','p') and not relispartition")}
-    assert valor(b, CONJ_CAMPO) == PROD["HUELLA_CAMPO"]
-    psql("postgres", f"drop database {b}"); psql("postgres", "drop role if exists scrr_refresco")
+    try:
+        md5p = lambda f: f"md5(pg_get_functiondef(to_regprocedure('{f}')))"
+        PROD = {"HUELLA_CAMPO": valor(b, CONJ_CAMPO), "MD5_AUTORIZAR_SUPERVISION": valor(b, f"select {md5p('campo.f_autorizar_supervision(text)')}"),
+                "COLUMNAS_SUSCRIPCION": valor(b, "select string_agg(column_name || ':' || data_type || ':' || is_nullable || ':' || coalesce(column_default, ''), ',' order by ordinal_position) from information_schema.columns "
+                                                  "where table_schema = 'public' and table_name = 'cartera_suscripcion'"),
+                "SIN_WHERE_SCRR": SIN_WHERE_SCRR}
+        assert PROD["HUELLA_CAMPO"] == "261bed3c9242f6261f845ec4e1374b3a", PROD
+        assert PROD["MD5_AUTORIZAR_SUPERVISION"] == "5ac3368fa5f3a6347328285501894aec", PROD
+        # las 23 columnas de producción (David, 22-nov: id al principio, cargado_en al final)
+        assert PROD["COLUMNAS_SUSCRIPCION"] == ("id:bigint:NO:nextval('cartera_suscripcion_id_seq'::regclass),contrato:text:NO:,"
+            + ",".join(f"{c}:text:YES:" for c in "estado identificacion nombre correo telefono direccion barrio categoria subcategoria ciclo".split()) + ","
+            + ",".join(f"{c}:numeric:YES:" for c in "facturas_pendientes deuda_total saldo_pendiente saldo_a_favor valor_reclamo saldo_financiado".split()) + ","
+            + ",".join(f"{c}:text:YES:" for c in "serial_medidor codigo_reparto ruta".split()) + ",periodo_carga:text:NO:,cargado_en:timestamp with time zone:NO:now()"), PROD["COLUMNAS_SUSCRIPCION"]
+        PROD["COLUMNAS_SUSCRIPCION"] = PROD["COLUMNAS_SUSCRIPCION"].replace("'", "''")   # va dentro de un literal SQL (el default de id lleva comillas)
+        permisos_antes = {f: valor(b, f"select {md5p(f)}") for f in PERMISOS}
+        # en el ensayo, las md5 de las 4 funciones de permisos se toman ANTES de la migración y se comparan al final (sirve en local y en producción)
+        captura = ("create temp table ztscrr_permisos as select f, md5(pg_get_functiondef(to_regprocedure(f))) as md5 from unnest(array["
+                   + ", ".join(f"'{f}'" for f in PERMISOS) + "]) f;\n")
+        PROD["PERMISOS_SIN_CAMPO"] = ""
+        PROD["PERMISOS_SIN_CAMBIO"] = "not exists (select 1 from ztscrr_permisos z where md5(pg_get_functiondef(to_regprocedure(z.f))) is distinct from z.md5)"
+        psql(b, "begin;\n" + poner(cuerpo(), PROD) + "\ncommit;\n", at=False)
+        nuevas = {"HUELLA_SCRR": valor(b, CONJ_SCRR), "RPC": valor(b, "select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\\_scrr\\_%'"),
+                  "TABLAS": valor(b, "select count(*) from pg_class where relnamespace = 'scrr'::regnamespace and relkind in ('r','p') and not relispartition")}
+        assert valor(b, CONJ_CAMPO) == PROD["HUELLA_CAMPO"]
+    finally:
+        # lo que creó ESTA corrida, también si algo falló: su base y, si su migración lo dejó y nadie más lo usa, el rol
+        psql("postgres", f"drop database if exists {b}", ok=False)
+        if psql("postgres", "select count(*) from pg_database where datname in ('scrr_chrome', 'scrr_rev')").stdout.strip() == "0":
+            psql("postgres", "drop role if exists scrr_refresco", ok=False)
     v = {**PROD, **nuevas}
 
     huellas = f"""-- Solo lectura. ANTES: 1 «PUBLICADA (22-nov 13:46)», 2 «NO EXISTE», 3 a 6 con su md5 (anótelas). DESPUÉS: 1 igual, 2 «CON ESTE CORTE», 3 a 6 IGUALES a las de antes.
@@ -129,8 +136,8 @@ select o, k, v, estado from (
         fila(7, "7 particiones de hoy: historial del día y pagos del mes",
              "to_regclass('scrr.cartera_historial_' || to_char((now() at time zone 'America/Bogota')::date, 'YYYYMMDD')) is not null "
              "and to_regclass('scrr.pagos_contrato_' || to_char((now() at time zone 'America/Bogota')::date, 'YYYYMM')) is not null"),
-        fila(8, "8 public.cartera_suscripcion con sus mismas 23 columnas (id … cargado_en)",
-             f"(select string_agg(column_name || ':' || data_type, ',' order by ordinal_position) from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion') = '{PROD['COLUMNAS_SUSCRIPCION']}'"),
+        fila(8, "8 public.cartera_suscripcion con sus mismas 23 columnas (nombre, tipo, NOT NULL y default)",
+             f"(select string_agg(column_name || ':' || data_type || ':' || is_nullable || ':' || coalesce(column_default, ''), ',' order by ordinal_position) from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion') = '{PROD['COLUMNAS_SUSCRIPCION']}'"),
         fila(9, "9 rol scrr_refresco: solo MAINTAIN sobre predios_comercial (sin superusuario; el login lo da David aparte)",
              "exists (select 1 from pg_roles where rolname = 'scrr_refresco' and not rolsuper and not rolcreaterole and not rolinherit) "
              "and has_table_privilege('scrr_refresco', 'public.predios_comercial', 'MAINTAIN') and not has_table_privilege('scrr_refresco', 'public.predios_comercial', 'SELECT')"),

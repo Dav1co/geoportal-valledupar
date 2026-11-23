@@ -35,10 +35,10 @@ alter index public.idx_cartera_contrato rename to zz_idx_cartera_contrato_doble_
 create sequence public.cartera_suscripcion_id_seq;
 create table public.cartera_suscripcion (
   id bigint not null default nextval('cartera_suscripcion_id_seq'::regclass),
-  contrato text, estado text, identificacion text, nombre text, correo text, telefono text, direccion text, barrio text, categoria text, subcategoria text, ciclo text,
+  contrato text not null, estado text, identificacion text, nombre text, correo text, telefono text, direccion text, barrio text, categoria text, subcategoria text, ciclo text,
   facturas_pendientes numeric, deuda_total numeric, saldo_pendiente numeric, saldo_a_favor numeric, valor_reclamo numeric, saldo_financiado numeric,
-  serial_medidor text, codigo_reparto text, ruta text, periodo_carga text,
-  cargado_en timestamp with time zone default now(),
+  serial_medidor text, codigo_reparto text, ruta text, periodo_carga text not null,
+  cargado_en timestamp with time zone not null default now(),
   constraint cartera_suscripcion_pkey primary key (id));
 alter sequence public.cartera_suscripcion_id_seq owned by public.cartera_suscripcion.id;
 create index idx_cartera_contrato on public.cartera_suscripcion using btree (contrato);
@@ -46,3 +46,11 @@ create index idx_cartera_direccion_trgm on public.cartera_suscripcion using gin 
 create index idx_cartera_nombre_trgm on public.cartera_suscripcion using gin (upper(nombre) gin_trgm_ops);
 create index idx_cartera_serial_trgm on public.cartera_suscripcion using gin (serial_medidor gin_trgm_ops);
 comment on table public.cartera_suscripcion is 'DOBLE LOCAL (Code A, SCRR corte 2): misma estructura e índices que producción (23 columnas).';
+
+-- (David, 22-nov 22:43) NOT NULL de producción: contrato, periodo_carga (sin default), cargado_en (default now()) e id. RLS activado SIN políticas; sin disparadores.
+-- En producción dependen de la tabla predios_comercial, predios_comercial_anterior y dos «previa_20261113». Aquí, para que pase lo mismo (una vista que
+-- amarra TODAS las columnas y una vista materializada), dos objetos del doble que no se tocan en las pruebas salvo para leerlos y refrescar la materializada.
+alter table public.cartera_suscripcion enable row level security;
+create view public.zz_doble_depende_cartera as select * from public.cartera_suscripcion;
+create materialized view public.zz_doble_depende_cartera_mv as select contrato, saldo_pendiente, periodo_carga, cargado_en from public.cartera_suscripcion;
+comment on view public.zz_doble_depende_cartera is 'DOBLE LOCAL: depende de cartera_suscripcion como predios_comercial y sus copias en producción.';

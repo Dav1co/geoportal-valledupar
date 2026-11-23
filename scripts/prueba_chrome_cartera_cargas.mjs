@@ -40,7 +40,7 @@ if (psqlIn("show port", "postgres") !== "55432") { console.error("No es el clús
 { const restos = psqlIn(`select coalesce(string_agg(datname, ', '), '') from pg_database where datname in ('${DB}', 'scrr_rev')`, "postgres");
   const rol = psqlIn("select count(*) from pg_roles where rolname = 'scrr_refresco'", "postgres") !== "0";
   if (restos || rol) { console.error(`Quedaron restos de otra corrida (bases: ${restos || "ninguna"}; rol scrr_refresco: ${rol ? "sí" : "no"}). Esta prueba no los borra: pida permiso y bórrelos a mano.`); process.exit(2); } }
-psqlIn(`create database ${DB} template scrr_plantilla_v2;`, "postgres");
+psqlIn(`create database ${DB} template scrr_plantilla_v3;`, "postgres");
 const MIG = join(raiz, "sql/scrr_corte2/migracion_scrr_corte2_editor.sql");
 execFileSync(PSQL, ["-qX", "-v", "ON_ERROR_STOP=1", "-d", DB, "-f", MIG], { env: PGENV, stdio: ["ignore", "pipe", "pipe"] });
 // Refresco del mapa: SOLO LOCAL, el rol mínimo recibe login con una clave de prueba (en producción la pone David y va en el secreto de la Edge)

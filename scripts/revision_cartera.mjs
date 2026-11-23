@@ -56,7 +56,7 @@ for (const puerto of [P_WEB, P_BASE, P_EDGE]) {
 { const restos = psqlIn(`select coalesce(string_agg(datname, ', '), '') from pg_database where datname in ('${DB}', 'scrr_chrome')`, "postgres");
   const rol = psqlIn("select count(*) from pg_roles where rolname = 'scrr_refresco'", "postgres") !== "0";
   if (restos || rol) { console.error(`Quedaron restos de otra corrida (bases: ${restos || "ninguna"}; rol scrr_refresco: ${rol ? "sí" : "no"}). Este guion no los borra: pida permiso y bórrelos a mano.`); process.exit(2); } }
-psqlIn(`create database ${DB} template scrr_plantilla_v2;`, "postgres");
+psqlIn(`create database ${DB} template scrr_plantilla_v3;`, "postgres");
 const limpiarLoCreado = () => { try { psqlIn(`drop database ${DB}`, "postgres"); psqlIn("drop role scrr_refresco", "postgres"); } catch (e) { console.error("No se pudo limpiar lo creado:", String(e.message).slice(0, 200)); } };
 execFileSync(PSQL, ["-qX", "-v", "ON_ERROR_STOP=1", "-d", DB, "-f", join(raiz, "sql/scrr_corte2/migracion_scrr_corte2_editor.sql")], { env: PGENV, stdio: ["ignore", "pipe", "pipe"] });
 const CLAVE_LOCAL = "solo-local-revision-scrr";

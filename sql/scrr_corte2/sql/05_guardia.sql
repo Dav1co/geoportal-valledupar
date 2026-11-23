@@ -4,7 +4,7 @@
 --   · el esquema scrr ya existe (el paquete no se reaplica: para rehacerlo, primero la reversa);
 --   · la huella de campo no es la publicada el 22-nov 13:46 ({{HUELLA_CAMPO}}): el modo «Cartera» autoriza con campo.f_autorizar_supervision;
 --   · campo.f_autorizar_supervision(text) no tiene su md5 publicada ({{MD5_AUTORIZAR_SUPERVISION}});
---   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 23 columnas de producción (id … cargado_en) y su id llave primaria con
+--   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 23 columnas de producción (id … cargado_en: nombre, tipo, NOT NULL y default) y su id llave primaria con
 --     default nextval('cartera_suscripcion_id_seq') (el cargador la actualiza: decisión 4 del 20-nov y P4 del 22-nov);
 --   · faltan public.geoportal_auditoria o public.predios_comercial (vista materializada con índice único), PostgreSQL 17, hechos.facturacion_sspd o
 --     redes.f_eventos_del_contrato(text); o ya existe el rol scrr_refresco.
@@ -29,10 +29,11 @@ begin
   if (select relkind from pg_class where oid = to_regclass('public.cartera_suscripcion')) is distinct from 'r' then
     raise exception 'GUARDIA SCRR: public.cartera_suscripcion no existe o no es una tabla.';
   end if;
-  select string_agg(column_name || ':' || data_type, ',' order by ordinal_position) into v
+  -- nombre, tipo, NOT NULL y default de cada columna, en orden (David, 22-nov: el ensayo falló por un NOT NULL que el doble no tenía)
+  select string_agg(column_name || ':' || data_type || ':' || is_nullable || ':' || coalesce(column_default, ''), ',' order by ordinal_position) into v
     from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion';
   if v is distinct from '{{COLUMNAS_SUSCRIPCION}}' then
-    raise exception 'GUARDIA SCRR: las columnas de public.cartera_suscripcion no son las esperadas: %', v;
+    raise exception 'GUARDIA SCRR: las columnas de public.cartera_suscripcion (nombre:tipo:nulable:default) no son las esperadas: %', v;
   end if;
   -- id con su secuencia y llave primaria (el respaldo y la reversión de una carga de cartera restauran el id y el cargado_en originales)
   if to_regclass('public.cartera_suscripcion_id_seq') is null

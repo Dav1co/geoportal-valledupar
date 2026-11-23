@@ -52,7 +52,7 @@ insert into public.geoportal_lista_blanca (email, nombre, rol, activo, horario, 
 do $$
 declare
   A text := 'ztscrr.adm@emdupar.gov.co'; S text := 'ztscrr.sup@emdupar.gov.co'; SC text := 'ztscrr.supcampo@emdupar.gov.co';
-  r jsonb; c1 text; c2 text; cp text; ca text; v_hoy date := (now() at time zone 'America/Bogota')::date; f jsonb; t0 timestamptz; v_lote int; v_id2 bigint; v_id4 bigint;
+  r jsonb; c1 text; c2 text; cp text; ca text; v_hoy date := (now() at time zone 'America/Bogota')::date; f jsonb; t0 timestamptz; v_lote int; v_id2 bigint; v_id4 bigint; v_dep text;
   B bigint := 910000000000;   -- base de los contratos de prueba
   v_reales bigint; v_tope numeric; v_esperado_bloqueo boolean;
 begin
@@ -141,6 +141,8 @@ begin
     ((B + 2)::text, 'ZTVIEJO', 'ZTSCRR VIEJO', 'ZTSCRR DIR VIEJA', 777, '20261101', '2026-11-01 07:00:00-05'),
     ((B + 4)::text, 'ZTVIEJO', 'ZTSCRR VIEJO 4', 'ZTSCRR DIR VIEJA 4', 444, '20261101', '2026-11-01 07:00:00-05'),
     ((B + 2002)::text, 'ZTVIEJO', 'ZTSCRR NO SE TOCA', 'ZTSCRR DIR', 555, '20261101', '2026-11-01 07:00:00-05');
+  -- las vistas que dependen de la tabla (en producción predios_comercial, predios_comercial_anterior y dos «previa»): el motor no las toca
+  v_dep := (select string_agg(distinct c.oid::regclass::text, ',') from pg_depend d join pg_rewrite w on w.oid = d.objid join pg_class c on c.oid = w.ev_class where d.refobjid = 'public.cartera_suscripcion'::regclass and c.oid <> 'public.cartera_suscripcion'::regclass);
   select id into v_id2 from public.cartera_suscripcion where contrato = (B + 2)::text;
   select id into v_id4 from public.cartera_suscripcion where contrato = (B + 4)::text;
   perform pg_temp.ok('04.01 el operario no aplica: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_carga_aplicar(%L, %L::uuid, 1)', 'ztscrr.op@emdupar.gov.co', c1))) = '42501');
@@ -190,13 +192,15 @@ begin
   perform pg_temp.ok('06.01 anular sin revertir la tabla: 55000', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_carga_anular(%L, %L::uuid, %L)', S, c1, 'ZTSCRR prueba de anulación'))) = '55000');
   perform pg_temp.ok('06.02 revertir sin motivo: 22023', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_suscripcion_revertir(%L, %L::uuid, %L)', S, c1, 'corto'))) = '22023');
   -- otra fila ocupa el id viejo de B+2 (como si alguien hubiera reiniciado la secuencia por fuera): al revertir, B+2 debe tomar un id nuevo sin chocar
-  insert into public.cartera_suscripcion (id, contrato, nombre) values (v_id2, (B + 2009)::text, 'ZTSCRR OCUPA EL ID VIEJO');
+  insert into public.cartera_suscripcion (id, contrato, nombre, periodo_carga) values (v_id2, (B + 2009)::text, 'ZTSCRR OCUPA EL ID VIEJO', '20261101');
   r := pg_temp.rpc(format('public.geoportal_scrr_suscripcion_revertir(%L, %L::uuid, %L)', S, c1, 'ZTSCRR revierto la carga de prueba'));
   perform pg_temp.ok('06.03b revertir restaura id y cargado_en ORIGINALES (B+4); si el id viejo ya lo tiene otra fila (B+2), toma uno nuevo de la secuencia y conserva su cargado_en',
     (select id = v_id4 and cargado_en = '2026-11-01 07:00:00-05' from public.cartera_suscripcion where contrato = (B + 4)::text)
     and (select id <> v_id2 and cargado_en = '2026-11-01 07:00:00-05' from public.cartera_suscripcion where contrato = (B + 2)::text)
     and (select id = v_id2 and nombre = 'ZTSCRR OCUPA EL ID VIEJO' from public.cartera_suscripcion where contrato = (B + 2009)::text));
-  insert into public.cartera_suscripcion (contrato, nombre) values ((B + 2010)::text, 'ZTSCRR DESPUES DE REVERTIR');
+  insert into public.cartera_suscripcion (contrato, nombre, periodo_carga) values ((B + 2010)::text, 'ZTSCRR DESPUES DE REVERTIR', '20261101');
+  perform pg_temp.ok('06.03d aplicar, retirar y revertir no tocan las vistas que dependen de la tabla (siguen las mismas)',
+    v_dep is not distinct from (select string_agg(distinct c.oid::regclass::text, ',') from pg_depend d join pg_rewrite w on w.oid = d.objid join pg_class c on c.oid = w.ev_class where d.refobjid = 'public.cartera_suscripcion'::regclass and c.oid <> 'public.cartera_suscripcion'::regclass), coalesce(v_dep, 'ninguna'));
   perform pg_temp.ok('06.03c después de revertir, la secuencia sigue sin choques (una fila nueva toma un id libre)',
     (select count(*) from public.cartera_suscripcion where contrato = (B + 2010)::text) = 1);
   perform pg_temp.ok('06.03 revertir: quita las 2.000 filas del archivo y restaura las 2 viejas; no quedan pendientes',
@@ -406,8 +410,8 @@ begin
     and (select string_agg(ruta, ',' order by orden) from scrr.corrida_contratos where corrida_id = cp::uuid) ~ '^(ZTR0,)*(ZTR1,?)*(ZTR2,?)*$'
     and (select t.codigo from scrr.corridas c join scrr.tipos_actividad t on t.id = c.actividad_id where c.id = cp::uuid) = 'corte', r::text);
   -- nombre y dirección para la lista (los resuelve la RPC de la cartera de suscripción; teléfono y correo NO salen)
-  insert into public.cartera_suscripcion (contrato, nombre, direccion, telefono, correo, identificacion, barrio)
-    select (B + n)::text, 'ZTSCRR NOMBRE ' || n, 'ZTSCRR CALLE ' || n, '3000000000', 'zt@ejemplo.invalid', 'ZTID' || n, 'ZTSCRR NORTE' from generate_series(111, 115) n;
+  insert into public.cartera_suscripcion (contrato, nombre, direccion, telefono, correo, identificacion, barrio, periodo_carga)
+    select (B + n)::text, 'ZTSCRR NOMBRE ' || n, 'ZTSCRR CALLE ' || n, '3000000000', 'zt@ejemplo.invalid', 'ZTID' || n, 'ZTSCRR NORTE', '20261101' from generate_series(111, 115) n;
   r := pg_temp.rpc(format('public.geoportal_scrr_lista(%L, %L::uuid, %L)', S, cp, 'excel'));
   perform pg_temp.ok('13.12 la lista lleva nombre y dirección (excepción P2), la deuda (P9) y la marca del abono; nunca teléfono, correo ni identificación',
     pg_temp.err(r) = 'OK' and (select x ->> 'nombre' = 'ZTSCRR NOMBRE 111' and x ->> 'direccion' = 'ZTSCRR CALLE 111' and (x ->> 'saldo_pendiente')::numeric = 20000
@@ -461,9 +465,9 @@ begin
 
   -- ===== 16. Retorno automático =====
   -- en la cartera de suscripción: B+150 (suspendido) y B+151 (cortado drástico) quedaron a paz y salvo; B+111 (cortado hoy, de la lista) sigue con saldo y pagó 1.000 hoy
-  insert into public.cartera_suscripcion (contrato, nombre, direccion, saldo_pendiente, ciclo, ruta, codigo_reparto) values
-    ((B + 150)::text, 'ZTSCRR NOMBRE 150', 'ZTSCRR CALLE 150', 0, '98', 'ZTR1', 'P150'), ((B + 151)::text, 'ZTSCRR NOMBRE 151', 'ZTSCRR CALLE 151', 0, '98', 'ZTR0', 'P151'),
-    ((B + 111)::text, 'ZTSCRR NOMBRE 111', 'ZTSCRR CALLE 111', 20000, '98', 'ZTR0', 'P111');
+  insert into public.cartera_suscripcion (contrato, nombre, direccion, saldo_pendiente, ciclo, ruta, codigo_reparto, periodo_carga) values
+    ((B + 150)::text, 'ZTSCRR NOMBRE 150', 'ZTSCRR CALLE 150', 0, '98', 'ZTR1', 'P150', '20261101'), ((B + 151)::text, 'ZTSCRR NOMBRE 151', 'ZTSCRR CALLE 151', 0, '98', 'ZTR0', 'P151', '20261101'),
+    ((B + 111)::text, 'ZTSCRR NOMBRE 111', 'ZTSCRR CALLE 111', 20000, '98', 'ZTR0', 'P111', '20261101');
   r := pg_temp.rpc(format('public.geoportal_scrr_retorno_agregar(%L, %L, %L, %L)', S, (B + 113)::text, 'reconexion', 'ZTSCRR reclamo no registrado en el sistema'));
   perform pg_temp.ok('16.01 adición manual al retorno con motivo (decisión 12)', pg_temp.err(r) = 'OK', r::text);
   perform pg_temp.ok('16.02 la misma otra vez: 55000; una actividad que no es de retorno: 22023; el operario: 42501',

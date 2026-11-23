@@ -6,7 +6,7 @@ begin;
 --   · el esquema scrr ya existe (el paquete no se reaplica: para rehacerlo, primero la reversa);
 --   · la huella de campo no es la publicada el 22-nov 13:46 (261bed3c9242f6261f845ec4e1374b3a): el modo «Cartera» autoriza con campo.f_autorizar_supervision;
 --   · campo.f_autorizar_supervision(text) no tiene su md5 publicada (5ac3368fa5f3a6347328285501894aec);
---   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 23 columnas de producción (id … cargado_en) y su id llave primaria con
+--   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 23 columnas de producción (id … cargado_en: nombre, tipo, NOT NULL y default) y su id llave primaria con
 --     default nextval('cartera_suscripcion_id_seq') (el cargador la actualiza: decisión 4 del 20-nov y P4 del 22-nov);
 --   · faltan public.geoportal_auditoria o public.predios_comercial (vista materializada con índice único), PostgreSQL 17, hechos.facturacion_sspd o
 --     redes.f_eventos_del_contrato(text); o ya existe el rol scrr_refresco.
@@ -31,10 +31,11 @@ begin
   if (select relkind from pg_class where oid = to_regclass('public.cartera_suscripcion')) is distinct from 'r' then
     raise exception 'GUARDIA SCRR: public.cartera_suscripcion no existe o no es una tabla.';
   end if;
-  select string_agg(column_name || ':' || data_type, ',' order by ordinal_position) into v
+  -- nombre, tipo, NOT NULL y default de cada columna, en orden (David, 22-nov: el ensayo falló por un NOT NULL que el doble no tenía)
+  select string_agg(column_name || ':' || data_type || ':' || is_nullable || ':' || coalesce(column_default, ''), ',' order by ordinal_position) into v
     from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion';
-  if v is distinct from 'id:bigint,contrato:text,estado:text,identificacion:text,nombre:text,correo:text,telefono:text,direccion:text,barrio:text,categoria:text,subcategoria:text,ciclo:text,facturas_pendientes:numeric,deuda_total:numeric,saldo_pendiente:numeric,saldo_a_favor:numeric,valor_reclamo:numeric,saldo_financiado:numeric,serial_medidor:text,codigo_reparto:text,ruta:text,periodo_carga:text,cargado_en:timestamp with time zone' then
-    raise exception 'GUARDIA SCRR: las columnas de public.cartera_suscripcion no son las esperadas: %', v;
+  if v is distinct from 'id:bigint:NO:nextval(''cartera_suscripcion_id_seq''::regclass),contrato:text:NO:,estado:text:YES:,identificacion:text:YES:,nombre:text:YES:,correo:text:YES:,telefono:text:YES:,direccion:text:YES:,barrio:text:YES:,categoria:text:YES:,subcategoria:text:YES:,ciclo:text:YES:,facturas_pendientes:numeric:YES:,deuda_total:numeric:YES:,saldo_pendiente:numeric:YES:,saldo_a_favor:numeric:YES:,valor_reclamo:numeric:YES:,saldo_financiado:numeric:YES:,serial_medidor:text:YES:,codigo_reparto:text:YES:,ruta:text:YES:,periodo_carga:text:NO:,cargado_en:timestamp with time zone:NO:now()' then
+    raise exception 'GUARDIA SCRR: las columnas de public.cartera_suscripcion (nombre:tipo:nulable:default) no son las esperadas: %', v;
   end if;
   -- id con su secuencia y llave primaria (el respaldo y la reversión de una carga de cartera restauran el id y el cargado_en originales)
   if to_regclass('public.cartera_suscripcion_id_seq') is null
