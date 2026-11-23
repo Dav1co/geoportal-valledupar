@@ -32,3 +32,11 @@
 .scrr-hist { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 8px; } .scrr-hist li span { color: #44505c; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
 @media (max-width: 640px) { .scrr-resumen dl { grid-template-columns: 1fr; } .scrr-fila label { min-width: 100%; } }
+.scrr-tarjeta h4 { margin: 14px 0 6px; font-size: .95rem; }
+.scrr-rangos { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-end; } .scrr-rangos .scrr-btn { margin: 0; }
+.scrr-actividad { border: 1px solid #d9dfe6; border-radius: 6px; padding: 8px 12px; margin: 10px 0; display: flex; gap: 16px; flex-wrap: wrap; }
+.scrr-actividad label { display: flex; gap: 6px; align-items: center; min-height: 40px; }
+.scrr-tabla tr.scrr-cand td { font-weight: 700; background: #f2faf5; }
+.scrr-guia { margin: 8px 0; color: #44505c; font-size: .9rem; } .scrr-guia p { margin: 6px 0; }
+.scrr-tabla td button.scrr-link { white-space: nowrap; }
+.scrr-fila label { max-width: 100%; } .scrr-fila select, .scrr-fila input { max-width: 100%; width: 100%; text-overflow: ellipsis; }

@@ -43,7 +43,7 @@ const fc = join(tmp, "cartera.xlsx"); console.log("   " + gen(["cartera", "11200
 let x = await medir(fc, "cartera");
 prueba(`2.01 cartera de 112.000 (textos compartidos): 112.000 filas, 0 rechazadas, 56.000 con saldo — ${Math.round(x.ms)} ms, +${x.mb.toFixed(0)} MB en Node`,
   x.r.resumen?.filas === 112000 && x.r.resumen.rechazadas === 0 && x.r.resumen.extra.con_saldo_pendiente === 56000 && x.r.resumen.contratosDistintos === 112000, JSON.stringify(x.r.resumen ?? x.r).slice(0, 400));
-prueba("2.02 la fila 1 sale normalizada: contrato, ciclo «02» como viene, vencidas y saldo", (() => { const o = L.filaComoObjeto("cartera", x.r.acumulador.filas[1]); return o.contrato === "930000000002" && o.ciclo === "03" && o.facturas_vencidas === "2" && o.saldo_pendiente === "22000" && o.nombre === "SUSCRIPTOR SINTÉTICO 2"; })(),
+prueba("2.02 la fila 1 sale normalizada: contrato, ciclo «03» como viene, pendientes y saldo; sin «facturas vencidas» (la calcula el motor)", (() => { const o = L.filaComoObjeto("cartera", x.r.acumulador.filas[1]); return o.contrato === "930000000002" && o.ciclo === "03" && o.facturas_pendientes === "3" && o.saldo_pendiente === "22000" && o.nombre === "SUSCRIPTOR SINTÉTICO 2" && !("facturas_vencidas" in o); })(),
   JSON.stringify(L.filaComoObjeto("cartera", x.r.acumulador.filas[1])));
 const fl = join(tmp, "cartera_linea.xlsx"); console.log("   " + gen(["cartera", "112000", fl, "--en-linea"]));
 x = await medir(fl, "cartera");
@@ -55,13 +55,21 @@ const fe = join(tmp, "cartera_extra.xlsx"); gen(["cartera", "100", fe, "--column
 x = await leer(fe, "cartera");
 prueba("2.05 con una columna que no es de la plantilla se rechaza el archivo completo con mensaje claro", x.error?.includes("sobra la columna «Columna que sobra»"), x.error);
 x = await leer(fc, "pagos");
-prueba("2.06 la cartera cargada como «pagos» se rechaza (faltan y sobran columnas)", x.error?.includes("le faltan las columnas «Fecha de pago», «Monto»") && x.error.includes("sobran las columnas") && x.error.includes(" y 14 más."), x.error);
+prueba("2.06 la cartera cargada como «pagos» se rechaza (faltan y sobran columnas)", x.error?.includes("le faltan las columnas «Fecha de pago», «Monto»") && x.error.includes("sobran las columnas") && x.error.includes(" y 13 más."), x.error);
 x = await W.leerArchivo(new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, ...new Array(600).fill(0)]), "cartera", "99999999", 250000).catch((e) => ({ error: e.message }));
 prueba("2.07 un .xls viejo: «guárdelo como Libro de Excel (.xlsx)»", x.error?.includes("Excel viejo (.xls)"), x.error);
 x = await W.leerArchivo(new TextEncoder().encode("Contrato;Monto\n1;2\n"), "pagos", "99999999", 250000).catch((e) => ({ error: e.message }));
 prueba("2.08 un CSV o texto no es un .xlsx", x.error?.includes("no es un libro de Excel"), x.error);
 x = await W.leerArchivo(new Uint8Array(readFileSync(fc)), "cartera", "99999999", 100000).catch((e) => ({ error: e.message }));
 prueba("2.09 más filas que el tope: se detiene con mensaje", x.error?.includes("más de 100.000 filas"), x.error);
+
+prueba("2.10 cifras vacías valen cero (la fila 13 trae «Saldo a favor» vacío) y un texto en una cifra se rechaza",
+  (() => { const m = L.mapearEncabezados("cartera", L.PLANTILLAS.cartera.map((c) => c.encabezado)); const base = L.PLANTILLAS.cartera.map(() => "");
+    base[0] = "123"; const ok = L.procesarFila("cartera", m, base); const mal = L.procesarFila("cartera", m, base.map((v, i) => (i === L.CLAVES.cartera.indexOf("deuda_total") ? "mil" : v)));
+    return ok.error === null && L.filaComoObjeto("cartera", ok.valores).saldo_pendiente === "0" && L.filaComoObjeto("cartera", ok.valores).facturas_pendientes === "0"
+      && mal.error === "Cifra con formato no válido (vacío vale cero)"; })()
+  && L.filaComoObjeto("cartera", (await leer(fc, "cartera")).acumulador.filas[12]).saldo_a_favor === "0");
+prueba("2.11 la plantilla de cartera tiene 20 columnas, sin «Facturas vencidas»", L.PLANTILLAS.cartera.length === 20 && !L.PLANTILLAS.cartera.some((c) => /vencidas/i.test(c.encabezado)));
 
 // 3. Pagos y actividades
 const fp = join(tmp, "pagos.xlsx"); gen(["pagos", "5000", fp]);

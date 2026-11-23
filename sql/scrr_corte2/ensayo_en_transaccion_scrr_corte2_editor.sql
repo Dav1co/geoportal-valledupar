@@ -8,7 +8,8 @@ create temp table ztscrr_permisos as select f, md5(pg_get_functiondef(to_regproc
 --   · la huella de campo no es la publicada el 22-nov 13:46 (261bed3c9242f6261f845ec4e1374b3a): el modo «Cartera» autoriza con campo.f_autorizar_supervision;
 --   · campo.f_autorizar_supervision(text) no tiene su md5 publicada (5ac3368fa5f3a6347328285501894aec);
 --   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 21 columnas de hoy (el cargador la actualiza: decisión 4 del 20-nov y P4 del 22-nov);
---   · faltan public.geoportal_auditoria o public.predios_comercial.
+--   · faltan public.geoportal_auditoria o public.predios_comercial (vista materializada con índice único), PostgreSQL 17, hechos.facturacion_sspd o
+--     redes.f_eventos_del_contrato(text); o ya existe el rol scrr_refresco.
 -- No toca las 4 funciones de permisos (geoportal_admin_permisos, geoportal_mis_permisos, geoportal_puede, geoportal_admin_guardar): la verificación comprueba
 -- que siguen con su md5.
 -- =====================================================================
@@ -37,6 +38,21 @@ begin
   end if;
   if to_regclass('public.geoportal_auditoria') is null or to_regclass('public.predios_comercial') is null then
     raise exception 'GUARDIA SCRR: falta public.geoportal_auditoria o public.predios_comercial.';
+  end if;
+  -- Refresco del mapa comercial por el cargador (David, 22-nov): REFRESH … CONCURRENTLY exige el índice único de la vista; el rol mínimo usa MAINTAIN (PostgreSQL 17)
+  if (select relkind from pg_class where oid = 'public.predios_comercial'::regclass) <> 'm'
+     or not exists (select 1 from pg_index i where i.indrelid = 'public.predios_comercial'::regclass and i.indisunique and i.indpred is null) then
+    raise exception 'GUARDIA SCRR: public.predios_comercial no es una vista materializada con índice único (no se podría refrescar sin bloquear el mapa).';
+  end if;
+  if current_setting('server_version_num')::int < 170000 then raise exception 'GUARDIA SCRR: hace falta PostgreSQL 17 (privilegio MAINTAIN).'; end if;
+  if exists (select 1 from pg_roles where rolname = 'scrr_refresco') then raise exception 'GUARDIA SCRR: el rol scrr_refresco ya existe.'; end if;
+  -- Selección: «facturado» = figura en hechos.facturacion_sspd (último período cargado); evento de suspensión de agua por redes.f_eventos_del_contrato
+  if to_regclass('hechos.facturacion_sspd') is null
+     or (select count(*) from information_schema.columns where table_schema = 'hechos' and table_name = 'facturacion_sspd' and column_name in ('periodo', 'contrato')) <> 2 then
+    raise exception 'GUARDIA SCRR: falta hechos.facturacion_sspd con sus columnas periodo y contrato.';
+  end if;
+  if to_regprocedure('redes.f_eventos_del_contrato(text)') is null or to_regprocedure('redes.f_eventos_abiertos()') is null then
+    raise exception 'GUARDIA SCRR: falta redes.f_eventos_del_contrato(text) o redes.f_eventos_abiertos() (aviso de evento por contrato, Corte 15).';
   end if;
 end $guardia$;
 
@@ -67,6 +83,11 @@ $$;
 create function scrr.f_num(p text) returns numeric
 language sql immutable parallel safe set search_path = pg_catalog as $$
   select case when btrim(p) ~ '^-?[0-9]{1,12}(\.[0-9]{1,4})?$' then btrim(p)::numeric else null end
+$$;
+-- Cifra de la cartera (David, 22-nov: un vacío vale CERO, como el script viejo): vacío o ausente → 0; número → el número; texto que no es número → nulo (rechazo)
+create function scrr.f_num0(p text) returns numeric
+language sql immutable parallel safe set search_path = pg_catalog as $$
+  select case when nullif(btrim(coalesce(p, '')), '') is null then 0 else scrr.f_num(p) end
 $$;
 -- Fecha segura: solo aaaa-mm-dd válida entre 2020 y 2100
 create function scrr.f_fecha(p text) returns date
@@ -118,11 +139,11 @@ create table scrr.tipos_actividad (
   activo             boolean  not null default true
 );
 
--- 3. Anomalías de campo (decisión 9 del 20-nov): catálogo 1–17. PROVISIONAL hasta que llegue el archivo modelo de David (ENCARGO §7).
+-- 3. Anomalías de campo (decisión 9 del 20-nov): catálogo 1–17, DEFINITIVO (David, 22-nov).
 create table scrr.anomalias (
   codigo       smallint primary key check (codigo between 1 and 99),
   nombre       text     not null unique check (nombre = upper(nombre) and length(nombre) between 3 and 60),
-  provisional  boolean  not null default true,
+  provisional  boolean  not null default false,
   fuente       text     not null,
   orden        smallint not null,
   activo       boolean  not null default true
@@ -224,7 +245,7 @@ create view scrr.v_cargas_vigentes as
 create table scrr.paso_cartera (
   carga_id uuid not null references scrr.cargas (id), lote integer not null, fila integer not null,
   contrato text, estado text, identificacion text, nombre text, correo text, telefono text, direccion text, barrio text, categoria text, subcategoria text,
-  ciclo text, facturas_pendientes smallint, facturas_vencidas smallint, deuda_total numeric(14,2), saldo_pendiente numeric(14,2), saldo_a_favor numeric(14,2),
+  ciclo text, facturas_pendientes smallint, deuda_total numeric(14,2), saldo_pendiente numeric(14,2), saldo_a_favor numeric(14,2),
   valor_reclamo numeric(14,2), saldo_financiado numeric(14,2), serial_medidor text, codigo_reparto text, ruta text,
   error text,
   primary key (carga_id, lote, fila)
@@ -263,7 +284,7 @@ create table scrr.cartera_historial (
   codigo_reparto      text,
   barrio_id           smallint,
   facturas_pendientes smallint      not null default 0,
-  facturas_vencidas   smallint      not null default 0,       -- decisión 2 del 20-nov: los rangos de la selección van sobre vencidas
+  facturas_vencidas   smallint      not null default 0,       -- decisión 2 del 20-nov; las DERIVA el motor al aplicar (scrr.f_vencidas, 22-nov)
   deuda_total         numeric(14,2) not null default 0,
   saldo_pendiente     numeric(14,2) not null default 0,
   saldo_a_favor       numeric(14,2) not null default 0,
@@ -461,6 +482,114 @@ begin
 end $$;
 
 -- =====================================================================
+-- SCRR · CORTE 2 · 25 — contratos con control y excluidos manuales, calendario de ciclos, corridas de selección y facturas vencidas
+-- Todo de solo inserción; lo vigente se deriva (vistas). Sin datos personales.
+-- =====================================================================
+
+-- 1. Contratos con control y EXCLUIDOS MANUALES en la misma tabla de eventos (P6 del 22-nov): la causa dice cuál es.
+--    reclamo_manual cuenta en el paso «reclamo» del embudo; excluido_manual en «excluidos manuales»; las demás, en «control vigente».
+create table scrr.causas_control (
+  id      smallint primary key,
+  codigo  text     not null unique check (codigo ~ '^[a-z][a-z0-9_]{1,39}$'),
+  nombre  text     not null,
+  grupo   text     not null check (grupo in ('control','reclamo','excluido')),
+  activo  boolean  not null default true
+);
+create table scrr.control_eventos (
+  id          bigint generated always as identity primary key,
+  contrato    bigint      not null check (contrato > 0),
+  causa_id    smallint    not null references scrr.causas_control (id),
+  tipo_evento text        not null check (tipo_evento in ('alta','baja')),
+  motivo      text        not null check (length(btrim(motivo)) between 10 and 200),
+  origen      text        not null default 'manual' check (origen in ('manual','archivo')),   -- P10: por archivo con un motivo común
+  autor       text        not null check (autor = lower(autor) and position('@' in autor) > 1),
+  creado_en   timestamptz not null default clock_timestamp()
+);
+create index control_eventos_contrato_idx on scrr.control_eventos (contrato, causa_id, id desc);
+create view scrr.v_control_vigente as
+  select u.contrato, u.causa_id, k.grupo, u.creado_en as desde, u.autor, u.origen
+    from (select distinct on (contrato, causa_id) * from scrr.control_eventos order by contrato, causa_id, id desc) u
+    join scrr.causas_control k on k.id = u.causa_id
+   where u.tipo_evento = 'alta';
+
+-- 2. Calendario de ciclos (decisión 7 del 20-nov; 22-nov: el calendario no es fijo y se pueden agregar ciclos). Mandan «pago oportuno» y «fecha de suspensión»;
+--    las demás etapas (lectura, crítica, facturación, reparto…) van en «etapas» para contexto. Una fila nueva por cambio; cambiar una fecha ya guardada exige motivo.
+create table scrr.calendario_ciclos (
+  periodo           char(6)     not null check (periodo ~ '^20[0-9]{2}(0[1-9]|1[0-2])$'),
+  ciclo             smallint    not null check (ciclo between 1 and 99),
+  pago_oportuno     date        not null,
+  fecha_suspension  date        not null,
+  etapas            jsonb       not null default '{}'::jsonb check (jsonb_typeof(etapas) = 'object'),
+  motivo            text        check (motivo is null or length(btrim(motivo)) between 5 and 300),
+  autor             text        not null check (autor = lower(autor) and position('@' in autor) > 1),
+  vigente_desde     timestamptz not null default clock_timestamp(),
+  primary key (periodo, ciclo, vigente_desde),
+  constraint fechas_ck check (fecha_suspension >= pago_oportuno)
+);
+create view scrr.v_calendario_vigente as
+  select distinct on (periodo, ciclo) periodo, ciclo, pago_oportuno, fecha_suspension, etapas, motivo, autor, vigente_desde
+    from scrr.calendario_ciclos order by periodo, ciclo, vigente_desde desc;
+
+-- 3. Facturas VENCIDAS (David, 22-nov: no vienen en el archivo; las deriva el motor al aplicar la cartera):
+--    vencidas = pendientes − 1 si la fecha del archivo todavía no pasó el «pago oportuno» del ciclo del contrato en el período de esa fecha; si ya pasó, = pendientes;
+--    nunca menor que 0. El ciclo sale de la cartera del día (un contrato puede cambiar de ciclo). Si el ciclo no tiene calendario en ese período, se toma la
+--    regla prudente (pendientes − 1: la factura del mes aún no se cuenta vencida) y la validación lo avisa.
+create function scrr.f_vencidas(p_pendientes smallint, p_pago_oportuno date, p_fecha date) returns smallint
+language sql immutable parallel safe set search_path = pg_catalog as $$
+  select case when p_pendientes is null then 0::smallint
+              when p_pago_oportuno is not null and p_fecha > p_pago_oportuno then p_pendientes
+              else greatest(p_pendientes - 1, 0)::smallint end
+$$;
+
+-- 4. Corridas de selección (P8 del 22-nov: se guarda SOLO la lista generada; de la vista previa, solo los conteos en la auditoría)
+create table scrr.corridas (
+  id            uuid        primary key,
+  periodo       char(6)     not null,
+  ciclo         smallint    not null,
+  fecha_dato    date        not null,                      -- foto de cartera usada
+  carga_id      uuid        not null references scrr.cargas (id),
+  actividad_id  smallint    not null references scrr.tipos_actividad (id),
+  filtros       jsonb       not null,
+  embudo        jsonb       not null,
+  contratos     integer     not null check (contratos >= 0),
+  saldo_total   numeric(16,2) not null default 0,
+  autor         text        not null check (autor = lower(autor) and position('@' in autor) > 1),
+  creado_en     timestamptz not null default clock_timestamp()
+);
+create index corridas_creado_idx on scrr.corridas (creado_en desc);
+create table scrr.corrida_contratos (
+  corrida_id          uuid          not null references scrr.corridas (id),
+  orden               integer       not null,
+  contrato            bigint        not null,
+  saldo_pendiente     numeric(14,2) not null,
+  facturas_vencidas   smallint      not null,
+  barrio_id           smallint,
+  ruta                text,
+  codigo_reparto      text,
+  marca               text          check (marca is null or marca in ('abono', 'abono_desde_suspension')),
+  primary key (corrida_id, contrato)
+);
+
+create index corrida_contratos_contrato_idx on scrr.corrida_contratos (contrato);
+
+-- 5. Origen de cada acta (David, 22-nov 20:45): las actas del archivo de actividades se cargan estén o no en una lista programada. corrida_id = la lista de la
+--    que salió la visita (la última corrida de la MISMA actividad que traía el contrato, generada hasta el día de la visita y no más de 60 días antes); nulo =
+--    actividad hecha FUERA de las listas (o del ajuste inicial: lo ya realizado antes de arrancar el motor). Las dos actualizan igual el estado del servicio.
+alter table scrr.actas add column corrida_id uuid references scrr.corridas (id);
+comment on column scrr.actas.corrida_id is 'Lista programada de la que salió la visita; nulo = fuera de las listas o ajuste inicial (David, 22-nov 20:45).';
+
+do $$
+declare t text;
+begin
+  foreach t in array array['causas_control','control_eventos','calendario_ciclos','corridas','corrida_contratos'] loop
+    execute format('alter table scrr.%I enable row level security', t);
+  end loop;
+  foreach t in array array['control_eventos','calendario_ciclos','corridas','corrida_contratos'] loop
+    execute format('create trigger %I before update or delete on scrr.%I for each row execute function scrr.f_solo_insercion()', t || '_solo_insercion', t);
+  end loop;
+end $$;
+
+-- =====================================================================
 -- SCRR · CORTE 2 · 30 — RPC de la carga del día (cartera, pagos, actividades) y de la reversión de cartera_suscripcion
 -- Convención del proyecto: SECURITY DEFINER, p_solicitante PRIMERO y p_ip AL FINAL, respuesta jsonb, mensajes para la persona con HINT = 'msg_usuario',
 -- ejecutables solo por service_role. El solicitante lo pone la Edge con el correo del token. Auditoría en public.geoportal_auditoria.
@@ -506,7 +635,8 @@ begin
                                      'tope_rechazo_pct', scrr.f_param('tope_rechazo_pct'), 'tope_salidas_suscripcion_pct', scrr.f_param('tope_salidas_suscripcion_pct')),
     'tipos_actividad', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'codigo', codigo, 'nombre', nombre, 'seleccionable', seleccionable, 'admite_drastico', admite_drastico) order by orden), '[]'::jsonb)
                           from scrr.tipos_actividad where activo),
-    'anomalias', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'provisional', provisional) order by orden), '[]'::jsonb) from scrr.anomalias where activo));
+    'anomalias', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'provisional', provisional) order by orden), '[]'::jsonb) from scrr.anomalias where activo),
+    'causas_control', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'grupo', grupo) order by id), '[]'::jsonb) from scrr.causas_control where activo));
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -577,24 +707,21 @@ begin
 
   if c.tipo = 'cartera' then
     insert into scrr.paso_cartera (carga_id, lote, fila, contrato, estado, identificacion, nombre, correo, telefono, direccion, barrio, categoria, subcategoria, ciclo,
-                                   facturas_pendientes, facturas_vencidas, deuda_total, saldo_pendiente, saldo_a_favor, valor_reclamo, saldo_financiado,
+                                   facturas_pendientes, deuda_total, saldo_pendiente, saldo_a_favor, valor_reclamo, saldo_financiado,
                                    serial_medidor, codigo_reparto, ruta, error)
     select p_carga, p_lote, e.o::int,
            case when btrim(e.v->>'contrato') ~ '^[0-9]{1,12}$' then btrim(e.v->>'contrato') end,
            scrr.f_txt(e.v->>'estado', 60), scrr.f_txt(e.v->>'identificacion', 40), scrr.f_txt(e.v->>'nombre', 200), scrr.f_txt(e.v->>'correo', 200),
            scrr.f_txt(e.v->>'telefono', 60), scrr.f_txt(e.v->>'direccion', 200), scrr.f_txt(e.v->>'barrio', 80), scrr.f_txt(e.v->>'categoria', 80),
            scrr.f_txt(e.v->>'subcategoria', 80), scrr.f_txt(e.v->>'ciclo', 10),
-           case when scrr.f_num(e.v->>'facturas_pendientes') between 0 and 999 and scrr.f_num(e.v->>'facturas_pendientes') = trunc(scrr.f_num(e.v->>'facturas_pendientes')) then scrr.f_num(e.v->>'facturas_pendientes')::smallint end,
-           case when scrr.f_num(e.v->>'facturas_vencidas') between 0 and 999 and scrr.f_num(e.v->>'facturas_vencidas') = trunc(scrr.f_num(e.v->>'facturas_vencidas')) then scrr.f_num(e.v->>'facturas_vencidas')::smallint end,
-           scrr.f_num(e.v->>'deuda_total'), scrr.f_num(e.v->>'saldo_pendiente'), scrr.f_num(e.v->>'saldo_a_favor'), scrr.f_num(e.v->>'valor_reclamo'), scrr.f_num(e.v->>'saldo_financiado'),
+           case when scrr.f_num0(e.v->>'facturas_pendientes') between 0 and 999 and scrr.f_num0(e.v->>'facturas_pendientes') = trunc(scrr.f_num0(e.v->>'facturas_pendientes')) then scrr.f_num0(e.v->>'facturas_pendientes')::smallint end,
+           scrr.f_num0(e.v->>'deuda_total'), scrr.f_num0(e.v->>'saldo_pendiente'), scrr.f_num0(e.v->>'saldo_a_favor'), scrr.f_num0(e.v->>'valor_reclamo'), scrr.f_num0(e.v->>'saldo_financiado'),
            scrr.f_txt(e.v->>'serial_medidor', 60), scrr.f_txt(e.v->>'codigo_reparto', 40), scrr.f_txt(e.v->>'ruta', 80),
            case when btrim(coalesce(e.v->>'contrato','')) !~ '^[0-9]{1,12}$' then 'Contrato ausente o no numérico'
-                when scrr.f_num(e.v->>'facturas_pendientes') is null or scrr.f_num(e.v->>'facturas_pendientes') not between 0 and 999
-                     or scrr.f_num(e.v->>'facturas_pendientes') <> trunc(scrr.f_num(e.v->>'facturas_pendientes')) then 'Facturas pendientes ausentes o no válidas'
-                when scrr.f_num(e.v->>'facturas_vencidas') is null or scrr.f_num(e.v->>'facturas_vencidas') not between 0 and 999
-                     or scrr.f_num(e.v->>'facturas_vencidas') <> trunc(scrr.f_num(e.v->>'facturas_vencidas')) then 'Facturas vencidas ausentes o no válidas'
-                when scrr.f_num(e.v->>'deuda_total') is null or scrr.f_num(e.v->>'saldo_pendiente') is null or scrr.f_num(e.v->>'saldo_a_favor') is null
-                     or scrr.f_num(e.v->>'valor_reclamo') is null or scrr.f_num(e.v->>'saldo_financiado') is null then 'Cifra obligatoria ausente o con formato no válido'
+                when scrr.f_num0(e.v->>'facturas_pendientes') is null or scrr.f_num0(e.v->>'facturas_pendientes') not between 0 and 999
+                     or scrr.f_num0(e.v->>'facturas_pendientes') <> trunc(scrr.f_num0(e.v->>'facturas_pendientes')) then 'Facturas pendientes no válidas'
+                when scrr.f_num0(e.v->>'deuda_total') is null or scrr.f_num0(e.v->>'saldo_pendiente') is null or scrr.f_num0(e.v->>'saldo_a_favor') is null
+                     or scrr.f_num0(e.v->>'valor_reclamo') is null or scrr.f_num0(e.v->>'saldo_financiado') is null then 'Cifra con formato no válido (vacío vale cero)'
                 when nullif(btrim(coalesce(e.v->>'ciclo', '')), '') is not null and scrr.f_num(e.v->>'ciclo') is null then 'Ciclo no válido' end
       from jsonb_array_elements(p_filas) with ordinality as e(v, o);
   elsif c.tipo = 'pagos' then
@@ -657,16 +784,22 @@ begin
 
   if c.tipo = 'cartera' then
     select count(*), count(*) filter (where error is not null) into v_tot, v_mal from scrr.paso_cartera where carga_id = p_carga;
+    -- un solo recorrido del paso, cruzado con el calendario del período de la fecha del archivo (para las vencidas derivadas y los ciclos sin calendario)
+    with cal as (select ciclo, pago_oportuno from scrr.v_calendario_vigente where periodo = to_char(c.fecha_dato, 'YYYYMM')),
+         q as (select p.*, k.ciclo is not null as con_cal, scrr.f_vencidas(p.facturas_pendientes, k.pago_oportuno, c.fecha_dato) as venc, scrr.f_num(p.ciclo) as ciclo_n
+                 from scrr.paso_cartera p left join cal k on k.ciclo::numeric = scrr.f_num(p.ciclo) where p.carga_id = p_carga)
     select jsonb_build_object('contratos_distintos', count(distinct contrato) filter (where error is null),
              'contratos_repetidos', count(*) filter (where error is null) - count(distinct contrato) filter (where error is null),
              'con_saldo_pendiente', count(distinct contrato) filter (where error is null and saldo_pendiente > 0),
-             'con_facturas_vencidas', count(distinct contrato) filter (where error is null and facturas_vencidas > 0),
+             'con_facturas_vencidas', count(distinct contrato) filter (where error is null and saldo_pendiente > 0 and venc > 0),
+             'con_saldo_sin_calendario', count(distinct contrato) filter (where error is null and saldo_pendiente > 0 and not con_cal),
+             'ciclos_sin_calendario', coalesce(jsonb_agg(distinct ciclo_n::int) filter (where error is null and saldo_pendiente > 0 and not con_cal and ciclo_n between 1 and 99), '[]'::jsonb),
              'saldo_pendiente_total', coalesce(sum(saldo_pendiente) filter (where error is null and saldo_pendiente > 0), 0),
              'con_valor_reclamo', count(*) filter (where error is null and valor_reclamo > 0),
              'comodin_o_categoria_menos_1', count(*) filter (where error is null and (contrato = v_com or categoria ~ '^-1')),
-             'sin_ciclo_o_sin_ruta', count(*) filter (where error is null and saldo_pendiente > 0 and (scrr.f_num(ciclo) is null or scrr.f_num(ciclo) in (0, 9999) or ruta is null)),
+             'sin_ciclo_o_sin_ruta', count(*) filter (where error is null and saldo_pendiente > 0 and (ciclo_n is null or ciclo_n in (0, 9999) or ruta is null)),
              'sin_barrio', count(*) filter (where error is null and saldo_pendiente > 0 and barrio is null)) into v_res
-      from scrr.paso_cartera where carga_id = p_carga;
+      from q;
     select v.fecha_dato, v.id into v_prev from scrr.v_cargas_vigentes v where v.tipo = 'cartera' and v.fecha_dato < c.fecha_dato order by v.fecha_dato desc limit 1;
     if found then
       v_res := v_res || jsonb_build_object('foto_anterior', v_prev.fecha_dato,
@@ -749,10 +882,11 @@ begin
         select c.fecha_dato, c.version, s.contrato::bigint, true,
                case when s.contrato = v_com or s.categoria ~ '^-1' then 1 else 0 end, s.estado, s.categoria,
                case when scrr.f_num(s.ciclo) between 0 and 9999 then scrr.f_num(s.ciclo)::smallint end, s.ruta, s.codigo_reparto, b.id,
-               s.facturas_pendientes, s.facturas_vencidas, s.deuda_total, s.saldo_pendiente, s.saldo_a_favor, s.saldo_financiado, s.valor_reclamo, p_carga
+               s.facturas_pendientes, scrr.f_vencidas(s.facturas_pendientes, k.pago_oportuno, c.fecha_dato), s.deuda_total, s.saldo_pendiente, s.saldo_a_favor, s.saldo_financiado, s.valor_reclamo, p_carga
           from (select distinct on (contrato) * from scrr.paso_cartera where carga_id = p_carga and lote = p_lote and error is null and saldo_pendiente > 0
                  order by contrato, saldo_pendiente desc, fila) s
           left join scrr.barrios b on b.nombre_norm = scrr.f_barrio_norm(s.barrio)
+          left join scrr.v_calendario_vigente k on k.periodo = to_char(c.fecha_dato, 'YYYYMM') and k.ciclo::numeric = scrr.f_num(s.ciclo)
         on conflict (fecha_dato, version, contrato) do nothing;
       get diagnostics n1 = row_count;
       -- cartera_suscripcion: respaldo de lo que había (solo la primera vez que la carga toca el contrato), retiro de esas filas e inserción de las del archivo
@@ -792,16 +926,23 @@ begin
       select count(*) into v_tot from scrr.paso_pagos where carga_id = p_carga and lote = p_lote and error is null;
       v_res := jsonb_build_object('lote', p_lote, 'pagos_nuevos', n1, 'pagos_ya_existentes', v_tot - n1);
     else
-      insert into scrr.actas (id, contrato, tipo_actividad_id, drastico, fecha_ejecucion, version, resultado, anomalia, acta_numero, observacion, hora_inicio, hora_fin,
-                              lectura, medidor, marca_medidor, operario, origen, estado_original, carga_id, creado_por)
-        select gen_random_uuid(), s.contrato, s.tipo_actividad_id, s.drastico, s.fecha_ejecucion, 1, case s.estado_original when 3 then 'efectiva' else 'inefectiva' end,
-               s.anomalia, s.acta, s.observacion, s.hora_inicio, s.hora_fin, s.lectura, s.medidor, s.marca, s.operario, 'archivo', s.estado_original, p_carga, c.autor
-          from (select distinct on (contrato, tipo_actividad_id, fecha_ejecucion) * from scrr.paso_actividades
-                 where carga_id = p_carga and lote = p_lote and error is null order by contrato, tipo_actividad_id, fecha_ejecucion, fila) s
-        on conflict do nothing;
-      get diagnostics n1 = row_count;
+      -- la lista de la que salió cada visita, si la hay (fuera de las listas = nulo: ajuste inicial o actividad no programada; David, 22-nov 20:45)
+      with nuevas as (
+        insert into scrr.actas (id, contrato, tipo_actividad_id, drastico, fecha_ejecucion, version, resultado, anomalia, acta_numero, observacion, hora_inicio, hora_fin,
+                                lectura, medidor, marca_medidor, operario, origen, estado_original, carga_id, creado_por, corrida_id)
+          select gen_random_uuid(), s.contrato, s.tipo_actividad_id, s.drastico, s.fecha_ejecucion, 1, case s.estado_original when 3 then 'efectiva' else 'inefectiva' end,
+                 s.anomalia, s.acta, s.observacion, s.hora_inicio, s.hora_fin, s.lectura, s.medidor, s.marca, s.operario, 'archivo', s.estado_original, p_carga, c.autor,
+                 (select k.corrida_id from scrr.corrida_contratos k join scrr.corridas r on r.id = k.corrida_id
+                   where k.contrato = s.contrato and r.actividad_id = s.tipo_actividad_id
+                     and (r.creado_en at time zone 'America/Bogota')::date between s.fecha_ejecucion - 60 and s.fecha_ejecucion
+                   order by r.creado_en desc limit 1)
+            from (select distinct on (contrato, tipo_actividad_id, fecha_ejecucion) * from scrr.paso_actividades
+                   where carga_id = p_carga and lote = p_lote and error is null order by contrato, tipo_actividad_id, fecha_ejecucion, fila) s
+          on conflict do nothing
+          returning corrida_id)
+      select count(*), count(*) filter (where corrida_id is null) into n1, n2 from nuevas;
       select count(*) into v_tot from scrr.paso_actividades where carga_id = p_carga and lote = p_lote and error is null;
-      v_res := jsonb_build_object('lote', p_lote, 'actas_nuevas', n1, 'actas_ya_existentes', v_tot - n1);
+      v_res := jsonb_build_object('lote', p_lote, 'actas_nuevas', n1, 'actas_ya_existentes', v_tot - n1, 'actas_de_una_lista', n1 - n2, 'actas_fuera_de_las_listas', n2);
     end if;
     insert into scrr.carga_eventos (carga_id, evento, lote, resumen, autor) values (p_carga, 'lote_aplicado', p_lote, v_res, v_email);
     return v_res || jsonb_build_object('repetido', false);
@@ -819,7 +960,7 @@ begin
                                           facturas_pendientes, facturas_vencidas, deuda_total, saldo_pendiente, saldo_a_favor, saldo_financiado, valor_reclamo, carga_id)
         select c.fecha_dato, c.version, h.contrato, false, h.marca, coalesce(s.estado, h.estado), coalesce(s.categoria, h.categoria), h.ciclo, coalesce(s.ruta, h.ruta),
                coalesce(s.codigo_reparto, h.codigo_reparto), h.barrio_id,
-               coalesce(s.facturas_pendientes, 0), coalesce(s.facturas_vencidas, 0), coalesce(s.deuda_total, 0), coalesce(s.saldo_pendiente, 0), coalesce(s.saldo_a_favor, 0),
+               coalesce(s.facturas_pendientes, 0), 0, coalesce(s.deuda_total, 0), coalesce(s.saldo_pendiente, 0), coalesce(s.saldo_a_favor, 0),
                coalesce(s.saldo_financiado, 0), coalesce(s.valor_reclamo, 0), p_carga
           from scrr.cartera_historial h
           left join lateral (select * from scrr.paso_cartera p where p.carga_id = p_carga and p.contrato = h.contrato::text and p.error is null order by p.saldo_pendiente desc limit 1) s on true
@@ -859,7 +1000,9 @@ begin
                                 'pagos_ya_existentes', (select coalesce(sum((e.resumen->>'pagos_ya_existentes')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'));
   else
     v_res := jsonb_build_object('actas_nuevas', (select coalesce(sum((e.resumen->>'actas_nuevas')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'),
-                                'actas_ya_existentes', (select coalesce(sum((e.resumen->>'actas_ya_existentes')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'));
+                                'actas_ya_existentes', (select coalesce(sum((e.resumen->>'actas_ya_existentes')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'),
+                                'actas_de_una_lista', (select coalesce(sum((e.resumen->>'actas_de_una_lista')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'),
+                                'actas_fuera_de_las_listas', (select coalesce(sum((e.resumen->>'actas_fuera_de_las_listas')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'));
   end if;
   v_res := v_res || jsonb_build_object('rechazadas', v_val->'filas_rechazadas');
   if c.reemplaza_id is not null then
@@ -986,6 +1129,358 @@ begin
 end $$;
 
 -- =====================================================================
+-- SCRR · CORTE 2 · 35 — RPC de contratos con control, excluidos manuales (P6) y calendario de ciclos
+-- Alta y baja siempre con motivo; nada se borra (la baja es un evento). Carga por archivo con un motivo común (P10), sin perder el alta de uno en uno.
+-- =====================================================================
+
+create function scrr.f_contrato(p text) returns bigint
+language plpgsql immutable set search_path = pg_catalog as $$
+begin
+  if btrim(coalesce(p, '')) !~ '^[0-9]{1,12}$' then perform scrr.f_err('El contrato debe ser un número de hasta 12 dígitos'); end if;
+  return btrim(p)::bigint;
+end $$;
+
+-- Alta de uno (control o excluido manual, según la causa)
+create function public.geoportal_scrr_control_agregar(p_solicitante text, p_contrato text, p_causa text, p_motivo text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_causa scrr.causas_control; v_c bigint := scrr.f_contrato(p_contrato);
+begin
+  if v_c::text = scrr.f_param('comodin_contrato') #>> '{}' then perform scrr.f_err('Ese número es el comodín del sistema comercial, no un contrato'); end if;
+  select * into v_causa from scrr.causas_control where codigo = p_causa and activo;
+  if not found then perform scrr.f_err('Causa no válida'); end if;
+  if length(btrim(coalesce(p_motivo, ''))) not between 10 and 200 then perform scrr.f_err('Escriba un motivo de 10 a 200 caracteres (sin nombres, cédulas ni teléfonos)'); end if;
+  perform pg_advisory_xact_lock(hashtextextended('scrr_control:' || v_c, 0));
+  if exists (select 1 from scrr.v_control_vigente where contrato = v_c and causa_id = v_causa.id) then perform scrr.f_err('Ese contrato ya está en la lista por esa causa', '55000'); end if;
+  insert into scrr.control_eventos (contrato, causa_id, tipo_evento, motivo, autor) values (v_c, v_causa.id, 'alta', btrim(p_motivo), v_email);
+  perform scrr.f_auditar(v_email, 'scrr_control_alta', v_c::text, jsonb_build_object('causa', p_causa, 'grupo', v_causa.grupo), p_ip);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Alta por archivo (P10): hasta 5.000 contratos por llamada, un motivo común. Los que ya están por esa causa se cuentan, no se duplican.
+create function public.geoportal_scrr_control_lote(p_solicitante text, p_contratos jsonb, p_causa text, p_motivo text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_causa scrr.causas_control; v_n int; v_validos int; v_filas_validas int; v_nuevos int;
+        v_com text := scrr.f_param('comodin_contrato') #>> '{}';
+begin
+  select * into v_causa from scrr.causas_control where codigo = p_causa and activo;
+  if not found then perform scrr.f_err('Causa no válida'); end if;
+  if length(btrim(coalesce(p_motivo, ''))) not between 10 and 200 then perform scrr.f_err('Escriba un motivo común de 10 a 200 caracteres'); end if;
+  if p_contratos is null or jsonb_typeof(p_contratos) <> 'array' then perform scrr.f_err('La lista de contratos no es válida'); end if;
+  v_n := jsonb_array_length(p_contratos);
+  if v_n < 1 or v_n > 5000 then perform scrr.f_err('Se cargan de 1 a 5.000 contratos por vez'); end if;
+  perform pg_advisory_xact_lock(hashtextextended('scrr_control_lote', 0));
+  select count(*) into v_filas_validas from jsonb_array_elements(p_contratos) x
+   where btrim(x #>> '{}') ~ '^[0-9]{1,12}$' and btrim(x #>> '{}') <> v_com and btrim(x #>> '{}')::bigint > 0;
+  with lista as (select distinct btrim(x #>> '{}')::bigint as contrato from jsonb_array_elements(p_contratos) x
+                  where btrim(x #>> '{}') ~ '^[0-9]{1,12}$' and btrim(x #>> '{}') <> v_com and btrim(x #>> '{}')::bigint > 0),
+       nuevos as (insert into scrr.control_eventos (contrato, causa_id, tipo_evento, motivo, origen, autor)
+                    select l.contrato, v_causa.id, 'alta', btrim(p_motivo), 'archivo', v_email from lista l
+                     where not exists (select 1 from scrr.v_control_vigente v where v.contrato = l.contrato and v.causa_id = v_causa.id)
+                  returning 1)
+  select (select count(*) from lista), (select count(*) from nuevos) into v_validos, v_nuevos;
+  perform scrr.f_auditar(v_email, 'scrr_control_lote', p_causa, jsonb_build_object('recibidos', v_n, 'validos', v_validos, 'nuevos', v_nuevos), p_ip);
+  return jsonb_build_object('recibidos', v_n, 'no_validos', v_n - v_filas_validas, 'repetidos_en_el_archivo', v_filas_validas - v_validos, 'nuevos', v_nuevos, 'ya_estaban', v_validos - v_nuevos);
+end $$;
+
+create function public.geoportal_scrr_control_baja(p_solicitante text, p_contrato text, p_causa text, p_motivo text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_causa scrr.causas_control; v_c bigint := scrr.f_contrato(p_contrato);
+begin
+  select * into v_causa from scrr.causas_control where codigo = p_causa;
+  if not found then perform scrr.f_err('Causa no válida'); end if;
+  if length(btrim(coalesce(p_motivo, ''))) not between 10 and 200 then perform scrr.f_err('Escriba un motivo de 10 a 200 caracteres'); end if;
+  perform pg_advisory_xact_lock(hashtextextended('scrr_control:' || v_c, 0));
+  if not exists (select 1 from scrr.v_control_vigente where contrato = v_c and causa_id = v_causa.id) then perform scrr.f_err('Ese contrato no está en la lista por esa causa', '55000'); end if;
+  insert into scrr.control_eventos (contrato, causa_id, tipo_evento, motivo, autor) values (v_c, v_causa.id, 'baja', btrim(p_motivo), v_email);
+  perform scrr.f_auditar(v_email, 'scrr_control_baja', v_c::text, jsonb_build_object('causa', p_causa), p_ip);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Lista: p_grupo 'control' (control y reclamo manual) o 'excluido'. Sin contrato = vigentes paginados; con contrato = su historial completo (todas las causas).
+create function public.geoportal_scrr_control_lista(p_solicitante text, p_grupo text default 'control', p_contrato text default null, p_despues bigint default null,
+                                                    p_limite integer default 200, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_lim integer := greatest(1, least(coalesce(p_limite, 200), 500)); v_grupos text[];
+begin
+  v_grupos := case p_grupo when 'excluido' then array['excluido'] when 'control' then array['control','reclamo'] else null end;
+  if v_grupos is null then perform scrr.f_err('Grupo no válido'); end if;
+  if p_contrato is not null then
+    return jsonb_build_object('historial', (select coalesce(jsonb_agg(jsonb_build_object('causa', k.nombre, 'evento', e.tipo_evento, 'motivo', e.motivo, 'origen', e.origen, 'autor', e.autor, 'fecha', e.creado_en) order by e.id desc), '[]'::jsonb)
+                                              from scrr.control_eventos e join scrr.causas_control k on k.id = e.causa_id where e.contrato = scrr.f_contrato(p_contrato)));
+  end if;
+  return jsonb_build_object(
+    'vigentes', (select coalesce(jsonb_agg(jsonb_build_object('contrato', q.contrato, 'causa', q.codigo, 'causa_nombre', q.nombre, 'desde', q.desde, 'autor', q.autor, 'origen', q.origen) order by q.contrato, q.codigo), '[]'::jsonb)
+                   from (select v.contrato, k.codigo, k.nombre, v.desde, v.autor, v.origen from scrr.v_control_vigente v join scrr.causas_control k on k.id = v.causa_id
+                          where v.grupo = any (v_grupos) and (p_despues is null or v.contrato > p_despues) order by v.contrato limit v_lim) q),
+    'total', (select count(*) from scrr.v_control_vigente where grupo = any (v_grupos)),
+    'bajas_recientes', (select coalesce(jsonb_agg(jsonb_build_object('contrato', b.contrato, 'causa_nombre', k.nombre, 'fecha', b.creado_en, 'motivo', b.motivo) order by b.id desc), '[]'::jsonb)
+                          from (select * from scrr.control_eventos e where e.tipo_evento = 'baja' and e.causa_id in (select id from scrr.causas_control where grupo = any (v_grupos))
+                                 order by e.id desc limit 20) b join scrr.causas_control k on k.id = b.causa_id));
+end $$;
+
+-- Calendario: los ciclos de un período (con su última versión) y guardar uno (nuevo, o cambio con motivo). Se pueden agregar ciclos (1 a 99).
+create function public.geoportal_scrr_calendario_lista(p_solicitante text, p_periodo text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_hoy date := (now() at time zone 'America/Bogota')::date;
+begin
+  if coalesce(p_periodo, '') !~ '^20[0-9]{2}(0[1-9]|1[0-2])$' then perform scrr.f_err('El período debe ser aaaamm'); end if;
+  return jsonb_build_object('periodo', p_periodo, 'hoy', v_hoy,
+    'ciclos', (select coalesce(jsonb_agg(jsonb_build_object('ciclo', v.ciclo, 'pago_oportuno', v.pago_oportuno, 'fecha_suspension', v.fecha_suspension, 'etapas', v.etapas,
+                        'en_ventana', v.fecha_suspension <= v_hoy, 'versiones', (select count(*) from scrr.calendario_ciclos c where c.periodo = v.periodo and c.ciclo = v.ciclo),
+                        'ultimo_cambio', v.vigente_desde, 'motivo', v.motivo) order by v.pago_oportuno, v.ciclo), '[]'::jsonb)
+                 from scrr.v_calendario_vigente v where v.periodo = p_periodo),
+    'periodos', (select coalesce(jsonb_agg(distinct periodo order by periodo desc), '[]'::jsonb) from scrr.calendario_ciclos));
+end $$;
+
+create function public.geoportal_scrr_calendario_guardar(p_solicitante text, p_periodo text, p_ciclo integer, p_pago_oportuno date, p_fecha_suspension date,
+                                                         p_etapas jsonb default '{}'::jsonb, p_motivo text default null, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_ant scrr.v_calendario_vigente; v_ini date;
+begin
+  if coalesce(p_periodo, '') !~ '^20[0-9]{2}(0[1-9]|1[0-2])$' then perform scrr.f_err('El período debe ser aaaamm'); end if;
+  if p_ciclo is null or p_ciclo not between 1 and 99 then perform scrr.f_err('El ciclo va de 1 a 99'); end if;
+  if p_pago_oportuno is null or p_fecha_suspension is null then perform scrr.f_err('Pago oportuno y fecha de suspensión son obligatorios'); end if;
+  if p_fecha_suspension < p_pago_oportuno then perform scrr.f_err('La fecha de suspensión no puede ser anterior al pago oportuno'); end if;
+  v_ini := to_date(p_periodo || '01', 'YYYYMMDD');
+  if p_pago_oportuno < v_ini - 31 or p_pago_oportuno > (v_ini + interval '2 months')::date then perform scrr.f_err('El pago oportuno no corresponde a ese período'); end if;
+  if p_etapas is null or jsonb_typeof(p_etapas) <> 'object' or length(p_etapas::text) > 4000 then perform scrr.f_err('Las etapas no son válidas'); end if;
+  perform pg_advisory_xact_lock(hashtextextended('scrr_calendario:' || p_periodo || ':' || p_ciclo, 0));
+  select * into v_ant from scrr.v_calendario_vigente where periodo = p_periodo and ciclo = p_ciclo;
+  if found then
+    if v_ant.pago_oportuno = p_pago_oportuno and v_ant.fecha_suspension = p_fecha_suspension and v_ant.etapas = p_etapas then
+      perform scrr.f_err('No hay cambios', '55000'); end if;
+    if length(btrim(coalesce(p_motivo, ''))) not between 5 and 300 then perform scrr.f_err('Cambiar un ciclo ya guardado exige un motivo de 5 a 300 caracteres'); end if;
+  end if;
+  insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, motivo, autor)
+    values (p_periodo, p_ciclo, p_pago_oportuno, p_fecha_suspension, p_etapas, nullif(btrim(coalesce(p_motivo, '')), ''), v_email);
+  perform scrr.f_auditar(v_email, 'scrr_calendario', p_periodo || '/' || p_ciclo,
+    jsonb_build_object('pago_oportuno', p_pago_oportuno, 'fecha_suspension', p_fecha_suspension, 'nuevo', v_ant.ciclo is null), p_ip);
+  return jsonb_build_object('ok', true, 'nuevo', v_ant.ciclo is null);
+end $$;
+
+-- =====================================================================
+-- SCRR · CORTE 2 · 38 — SELECCIÓN: embudo, vista previa, corrida y lista descargable o imprimible
+-- Universo: la foto de cartera VIGENTE más reciente (contratos con saldo pendiente), un ciclo a la vez. El motor no clasifica: el supervisor escoge la actividad
+-- (Suspensión, Corte o Gestión de cobro) al generar (decisión 8 del 20-nov; decisión 4 del 22-nov).
+-- Embudo (sección 4 del encargo del 20-nov; cada contrato sale en el PRIMER paso que lo excluye):
+--   p0 comodín (99999999 o categoría «-1») · p1 no facturado (no figura en el último período de hechos.facturacion_sspd) o sin ruta · p2 control vigente ·
+--   p3 reclamo (valor reclamo > 0 o reclamo manual) · p4 pago sin reflejar (lo pagado desde la fecha del archivo cubre el saldo; un abono menor solo MARCA) ·
+--   p5 evento de suspensión de agua activo (regla de David: si Técnica quitó el agua allí, no se corta; se SACA de la lista) · p6 excluido manual ·
+--   p7 saldo menor al monto mínimo. Después, los filtros del supervisor: rango (facturas VENCIDAS o monto), barrio y segmento (aproximado).
+-- Paz y salvo (saldo pendiente en cero) no entra al universo; se cuenta aparte con las filas de salida del historial.
+-- =====================================================================
+
+-- Foto vigente más reciente (carga de cartera aplicada)
+create function scrr.f_foto_vigente() returns scrr.cargas
+language sql stable security definer set search_path = pg_catalog, scrr as $$
+  select c.* from scrr.v_cargas_vigentes c where c.tipo = 'cartera' order by c.fecha_dato desc, c.version desc limit 1
+$$;
+
+-- Filtros normalizados (lo que no venga toma su valor por omisión; lo que venga mal es un error para la persona)
+create function scrr.f_filtros(p jsonb) returns jsonb
+language plpgsql stable set search_path = pg_catalog, scrr as $$
+declare m text := coalesce(p->>'modo', 'meses'); s text := coalesce(p->>'segmento', 'todos'); d numeric; h numeric; mm numeric; b int;
+begin
+  if p is null or jsonb_typeof(p) <> 'object' then perform scrr.f_err('Filtros no válidos'); end if;
+  if m not in ('meses','monto') then perform scrr.f_err('Modo de selección no válido'); end if;
+  if s not in ('todos','pagaron_mes_pasado_no_este','cero_a_un_mes','menos_de_n') then perform scrr.f_err('Segmento no válido'); end if;
+  d := coalesce(scrr.f_num(p->>'desde'), case m when 'meses' then 1 else 0 end);
+  h := scrr.f_num(p->>'hasta');
+  mm := coalesce(scrr.f_num(p->>'monto_minimo'), (scrr.f_param('monto_minimo_defecto') #>> '{}')::numeric);
+  if d < 0 or (h is not null and h < d) or mm < 0 then perform scrr.f_err('El rango no es válido'); end if;
+  b := case when nullif(p->>'barrio_id', '') is null then null else (p->>'barrio_id')::int end;
+  return jsonb_build_object('modo', m, 'desde', d, 'hasta', h, 'monto_minimo', mm, 'barrio_id', b, 'segmento', s, 'n', coalesce(scrr.f_num(p->>'n'), 8));
+end $$;
+
+-- Clasificación de cada contrato del ciclo (función interna; no la ejecuta la API). Sin datos personales.
+create function scrr.f_seleccion(p_ciclo smallint, p_filtros jsonb)
+returns table (contrato bigint, paso text, saldo_pendiente numeric, facturas_vencidas smallint, barrio_id smallint, ruta text, codigo_reparto text, marca text)
+language plpgsql stable security definer set search_path = pg_catalog, scrr, public as $$
+declare f jsonb := scrr.f_filtros(p_filtros); v_foto scrr.cargas := scrr.f_foto_vigente(); v_fact text; v_susp date; v_mes date; v_mes_ant date; v_eventos boolean;
+begin
+  if v_foto.id is null then perform scrr.f_err('Todavía no hay una cartera aplicada', '55000'); end if;
+  select max(periodo) into v_fact from hechos.facturacion_sspd;
+  select k.fecha_suspension into v_susp from scrr.v_calendario_vigente k where k.periodo = to_char(v_foto.fecha_dato, 'YYYYMM') and k.ciclo = p_ciclo;
+  v_mes := date_trunc('month', v_foto.fecha_dato)::date; v_mes_ant := (v_mes - interval '1 month')::date;
+  v_eventos := exists (select 1 from redes.f_eventos_abiertos());
+  return query
+  with h as (select * from scrr.cartera_historial x where x.fecha_dato = v_foto.fecha_dato and x.version = v_foto.version and x.carga_id = v_foto.id and x.en_cartera and x.ciclo = p_ciclo),
+       fact as (select distinct btrim(s.contrato) as c from hechos.facturacion_sspd s where s.periodo = v_fact),
+       ctl as (select v.contrato, bool_or(v.grupo = 'control') as ctl, bool_or(v.grupo = 'reclamo') as rec, bool_or(v.grupo = 'excluido') as exc
+                 from scrr.v_control_vigente v where v.contrato in (select h.contrato from h) group by v.contrato),
+       pag as (select q.contrato, coalesce(sum(q.monto) filter (where q.fecha_pago >= v_foto.fecha_dato), 0) as desde_archivo,
+                      bool_or(v_susp is not null and q.fecha_pago >= v_susp and q.fecha_pago < v_foto.fecha_dato) as desde_susp,
+                      bool_or(q.fecha_pago >= v_mes_ant and q.fecha_pago < v_mes) as mes_pasado, bool_or(q.fecha_pago >= v_mes) as este_mes
+                 from scrr.pagos_contrato q where q.fecha_pago >= least(v_mes_ant, coalesce(v_susp, v_mes_ant)) and q.contrato in (select h.contrato from h) group by q.contrato),
+       b as (select h.*, (fa.c is not null) as facturado, coalesce(k.ctl, false) as ctl, coalesce(k.rec, false) as rec, coalesce(k.exc, false) as exc,
+                    coalesce(g.desde_archivo, 0) as pagado, coalesce(g.desde_susp, false) as desde_susp,
+                    coalesce(g.mes_pasado and not g.este_mes, false) as mp_no_este
+               from h left join fact fa on fa.c = h.contrato::text left join ctl k on k.contrato = h.contrato left join pag g on g.contrato = h.contrato)
+  select b.contrato,
+         case when b.marca = 1 then 'p0_comodin'
+              when not b.facturado or b.ruta is null or btrim(b.ruta) = '' then 'p1_no_facturado_o_sin_ruta'
+              when b.ctl then 'p2_control_vigente'
+              when b.valor_reclamo > 0 or b.rec then 'p3_reclamo'
+              when b.pagado > 0 and b.pagado >= b.saldo_pendiente then 'p4_pago_sin_reflejar'
+              when v_eventos and exists (select 1 from redes.f_eventos_del_contrato(b.contrato::text)) then 'p5_evento_suspension_agua'
+              when b.exc then 'p6_excluido_manual'
+              when b.saldo_pendiente < (f->>'monto_minimo')::numeric then 'p7_saldo_menor_al_minimo'
+              when f->>'modo' = 'meses' and (b.facturas_vencidas < (f->>'desde')::numeric or (f->>'hasta' is not null and b.facturas_vencidas > (f->>'hasta')::numeric)) then 'f_fuera_del_rango'
+              when f->>'modo' = 'monto' and (b.saldo_pendiente < (f->>'desde')::numeric or (f->>'hasta' is not null and b.saldo_pendiente > (f->>'hasta')::numeric)) then 'f_fuera_del_rango'
+              when f->>'barrio_id' is not null and b.barrio_id is distinct from (f->>'barrio_id')::smallint then 'f_otro_barrio'
+              when f->>'segmento' = 'pagaron_mes_pasado_no_este' and not b.mp_no_este then 'f_fuera_del_segmento'
+              when f->>'segmento' = 'cero_a_un_mes' and b.facturas_vencidas > 1 then 'f_fuera_del_segmento'
+              when f->>'segmento' = 'menos_de_n' and b.facturas_vencidas >= (f->>'n')::numeric then 'f_fuera_del_segmento'
+              else 'candidato' end,
+         b.saldo_pendiente, b.facturas_vencidas, b.barrio_id, b.ruta, b.codigo_reparto,
+         case when b.pagado > 0 then 'abono' when b.desde_susp then 'abono_desde_suspension' end
+    from b;
+end $$;
+
+-- Opciones de la pantalla: la foto vigente, los ciclos del período (con su ventana de suspensión) y, si se pide un ciclo, sus barrios con cuántos contratos con saldo
+create function public.geoportal_scrr_seleccion_opciones(p_solicitante text, p_ciclo integer default null, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_foto scrr.cargas := scrr.f_foto_vigente(); v_hoy date := (now() at time zone 'America/Bogota')::date;
+begin
+  return jsonb_build_object('hoy', v_hoy, 'foto', v_foto.fecha_dato, 'facturacion_periodo', (select max(periodo) from hechos.facturacion_sspd),
+    'ciclos', (select coalesce(jsonb_agg(jsonb_build_object('ciclo', k.ciclo, 'pago_oportuno', k.pago_oportuno, 'fecha_suspension', k.fecha_suspension,
+                         'en_ventana', k.fecha_suspension <= v_hoy, 'con_saldo', (select count(*) from scrr.cartera_historial h where v_foto.id is not null and h.fecha_dato = v_foto.fecha_dato
+                            and h.version = v_foto.version and h.carga_id = v_foto.id and h.en_cartera and h.ciclo = k.ciclo)) order by k.fecha_suspension, k.ciclo), '[]'::jsonb)
+                 from scrr.v_calendario_vigente k where k.periodo = to_char(coalesce(v_foto.fecha_dato, v_hoy), 'YYYYMM')),
+    'barrios', case when p_ciclo is null or v_foto.id is null then '[]'::jsonb else
+                 (select coalesce(jsonb_agg(jsonb_build_object('id', x.barrio_id, 'nombre', coalesce(br.nombre_norm, 'SIN BARRIO'), 'contratos', x.n) order by br.nombre_norm nulls last), '[]'::jsonb)
+                    from (select h.barrio_id, count(*) as n from scrr.cartera_historial h where h.fecha_dato = v_foto.fecha_dato and h.version = v_foto.version and h.carga_id = v_foto.id
+                            and h.en_cartera and h.ciclo = p_ciclo group by h.barrio_id) x left join scrr.barrios br on br.id = x.barrio_id) end,
+    'actividades', (select jsonb_agg(jsonb_build_object('id', id, 'codigo', codigo, 'nombre', nombre) order by orden) from scrr.tipos_actividad where seleccionable and activo));
+end $$;
+
+-- Vista previa: SOLO conteos (embudo, candidatos, saldo, marcas, segmentos). Se audita con los conteos (P8). Sin datos personales y sin la lista.
+create function public.geoportal_scrr_seleccion_previa(p_solicitante text, p_ciclo integer, p_filtros jsonb, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_foto scrr.cargas := scrr.f_foto_vigente(); v_res jsonb; v_paz bigint;
+begin
+  if p_ciclo is null or p_ciclo not between 1 and 99 then perform scrr.f_err('Escoja un ciclo'); end if;
+  select count(*) into v_paz from scrr.cartera_historial h where v_foto.id is not null and h.fecha_dato = v_foto.fecha_dato and h.version = v_foto.version and h.carga_id = v_foto.id
+     and not h.en_cartera and h.ciclo = p_ciclo;
+  with x as (select * from scrr.f_seleccion(p_ciclo::smallint, p_filtros))
+  select jsonb_build_object('foto', v_foto.fecha_dato, 'ciclo', p_ciclo, 'filtros', scrr.f_filtros(p_filtros),
+           'embudo', coalesce((select jsonb_object_agg(paso, jsonb_build_object('contratos', n, 'saldo', s)) from (select paso, count(*) as n, round(sum(saldo_pendiente)) as s from x group by paso) z), '{}'::jsonb)
+                     || jsonb_build_object('p4_paz_y_salvo_hoy', jsonb_build_object('contratos', v_paz, 'saldo', 0)),
+           'universo', (select count(*) from x), 'candidatos', count(*) filter (where paso = 'candidato'),
+           'saldo_candidatos', coalesce(round(sum(saldo_pendiente) filter (where paso = 'candidato')), 0),
+           'marcados_abono', count(*) filter (where paso = 'candidato' and marca = 'abono'),
+           'marcados_abono_desde_suspension', count(*) filter (where paso = 'candidato' and marca = 'abono_desde_suspension'),
+           'por_vencidas', coalesce((select jsonb_object_agg(t, n) from (select case when facturas_vencidas between 1 and 6 then '1-6' when facturas_vencidas between 7 and 25 then '7-25'
+                                       when facturas_vencidas > 25 then '26+' else '0' end as t, count(*) as n from x where paso = 'candidato' group by 1) w), '{}'::jsonb),
+           'segmentos_aproximados', true)
+    into v_res
+    from x;
+  perform scrr.f_auditar(v_email, 'scrr_seleccion_previa', p_ciclo::text, jsonb_build_object('filtros', v_res->'filtros', 'candidatos', v_res->'candidatos', 'embudo', v_res->'embudo'), p_ip);
+  return v_res;
+end $$;
+
+-- Generar la corrida: se guarda SOLO la lista (contratos en orden de ruta y reparto) con la actividad escogida. Auditada.
+create function public.geoportal_scrr_seleccion_generar(p_solicitante text, p_ciclo integer, p_filtros jsonb, p_actividad text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); v_foto scrr.cargas := scrr.f_foto_vigente(); v_act scrr.tipos_actividad; v_id uuid := gen_random_uuid();
+        v_n int; v_s numeric; v_emb jsonb; v_per text; v_lista jsonb; v_todo jsonb;
+begin
+  if p_ciclo is null or p_ciclo not between 1 and 99 then perform scrr.f_err('Escoja un ciclo'); end if;
+  select * into v_act from scrr.tipos_actividad where codigo = p_actividad and seleccionable and activo;
+  if not found then perform scrr.f_err('Escoja la actividad: Suspensión, Corte o Gestión de cobro'); end if;
+  if v_foto.id is null then perform scrr.f_err('Todavía no hay una cartera aplicada', '55000'); end if;
+  perform pg_advisory_xact_lock(hashtextextended('scrr_corrida', 0));
+  -- una sola evaluación del embudo; las filas quedan en una variable (sin tablas temporales)
+  select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) into v_todo from scrr.f_seleccion(p_ciclo::smallint, p_filtros) x;
+  select coalesce(jsonb_agg(e), '[]'::jsonb) into v_lista from jsonb_array_elements(v_todo) e where e->>'paso' = 'candidato';
+  select coalesce(jsonb_object_agg(z.paso, z.n), '{}'::jsonb) into v_emb from (select e->>'paso' as paso, count(*) as n from jsonb_array_elements(v_todo) e group by 1) z;
+  v_n := jsonb_array_length(v_lista);
+  v_s := coalesce((select sum((e->>'saldo_pendiente')::numeric) from jsonb_array_elements(v_lista) e), 0);
+  if v_n = 0 then perform scrr.f_err('Con esos filtros no hay contratos para la lista', '55000'); end if;
+  v_per := to_char(v_foto.fecha_dato, 'YYYYMM');
+  insert into scrr.corridas (id, periodo, ciclo, fecha_dato, carga_id, actividad_id, filtros, embudo, contratos, saldo_total, autor)
+    values (v_id, v_per, p_ciclo, v_foto.fecha_dato, v_foto.id, v_act.id, scrr.f_filtros(p_filtros), v_emb, v_n, v_s, v_email);
+  insert into scrr.corrida_contratos (corrida_id, orden, contrato, saldo_pendiente, facturas_vencidas, barrio_id, ruta, codigo_reparto, marca)
+    select v_id, row_number() over (order by t.ruta nulls last, t.codigo_reparto nulls last, t.contrato), t.contrato, t.saldo_pendiente, t.facturas_vencidas, t.barrio_id, t.ruta, t.codigo_reparto, t.marca
+      from jsonb_to_recordset(v_lista) as t(contrato bigint, saldo_pendiente numeric, facturas_vencidas smallint, barrio_id smallint, ruta text, codigo_reparto text, marca text);
+  perform scrr.f_auditar(v_email, 'scrr_corrida', v_id::text, jsonb_build_object('ciclo', p_ciclo, 'actividad', p_actividad, 'contratos', v_n, 'saldo', v_s, 'filtros', scrr.f_filtros(p_filtros), 'embudo', v_emb), p_ip);
+  return jsonb_build_object('corrida_id', v_id, 'contratos', v_n, 'saldo_total', v_s, 'actividad', v_act.nombre);
+end $$;
+
+create function public.geoportal_scrr_corridas(p_solicitante text, p_limite integer default 30, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante);
+begin
+  return jsonb_build_object('corridas', (select coalesce(jsonb_agg(jsonb_build_object('corrida_id', c.id, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato, 'actividad', t.nombre, 'actividad_codigo', t.codigo,
+           'contratos', c.contratos, 'saldo_total', c.saldo_total, 'filtros', c.filtros, 'autor', c.autor, 'creada_en', c.creado_en) order by c.creado_en desc), '[]'::jsonb)
+      from (select * from scrr.corridas order by creado_en desc limit greatest(1, least(coalesce(p_limite, 30), 100))) c join scrr.tipos_actividad t on t.id = c.actividad_id));
+end $$;
+
+-- Lista de una corrida para descargar (Excel) o imprimir. EXCEPCIÓN ESCRITA a la regla de descargas (P2 del 22-nov): solo para las listas de campo del SCRR,
+-- llevan NOMBRE y DIRECCIÓN del suscriptor (nunca teléfono, correo ni identificación), resueltos de public.cartera_suscripcion al momento de pedirla (no se copian),
+-- y cada descarga o impresión queda en la auditoría. Las dos versiones (operario y gestor de cobro) llevan la deuda (P9).
+create function public.geoportal_scrr_lista(p_solicitante text, p_corrida uuid, p_formato text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); c scrr.corridas; v_act scrr.tipos_actividad; v_filas jsonb;
+begin
+  if p_formato is null or p_formato not in ('excel','impresion') then perform scrr.f_err('Formato no válido'); end if;
+  select * into c from scrr.corridas where id = p_corrida;
+  if not found then perform scrr.f_err('La corrida no existe', 'P0002'); end if;
+  select * into v_act from scrr.tipos_actividad where id = c.actividad_id;
+  select coalesce(jsonb_agg(jsonb_build_object('orden', k.orden, 'contrato', k.contrato::text, 'nombre', s.nombre, 'direccion', s.direccion, 'barrio', coalesce(s.barrio, br.nombre_norm),
+                    'ciclo', c.ciclo, 'ruta', k.ruta, 'codigo_reparto', k.codigo_reparto, 'facturas_vencidas', k.facturas_vencidas, 'saldo_pendiente', k.saldo_pendiente,
+                    'marca', case k.marca when 'abono' then 'Abonó desde la fecha del archivo' when 'abono_desde_suspension' then 'Abonó desde la fecha de suspensión' end)
+                  order by k.orden), '[]'::jsonb)
+    into v_filas
+    from scrr.corrida_contratos k
+    left join lateral (select x.nombre, x.direccion, x.barrio from public.cartera_suscripcion x where x.contrato = k.contrato::text limit 1) s on true
+    left join scrr.barrios br on br.id = k.barrio_id
+   where k.corrida_id = p_corrida;
+  perform scrr.f_auditar(v_email, 'scrr_lista_' || p_formato, p_corrida::text, jsonb_build_object('filas', jsonb_array_length(v_filas), 'ciclo', c.ciclo, 'actividad', v_act.codigo), p_ip);
+  return jsonb_build_object('corrida_id', c.id, 'ciclo', c.ciclo, 'fecha_dato', c.fecha_dato, 'actividad', v_act.nombre, 'actividad_codigo', v_act.codigo,
+                            'generada_en', c.creado_en, 'autor', c.autor, 'filas', v_filas);
+end $$;
+
+-- =====================================================================
+-- SCRR · CORTE 2 · 50 — REFRESCO DEL MAPA COMERCIAL POR EL CARGADOR (David, 22-nov: lo hacía cargar_diario.py; el script se retira)
+-- Después de cerrar (o de revertir) una carga de cartera, la Edge geoportal-scrr corre, con una conexión PROPIA a la base y como sentencia suelta:
+--     refresh materialized view concurrently public.predios_comercial;
+-- Por qué no lo hace una RPC: las RPC corren como service_role con statement_timeout de 30 s (un SET dentro de la función no lo amplía; probado en local) y el
+-- refresco real tarda decenas de segundos. La conexión propia pone su tope (120 s) y un candado de sesión para que no corran dos refrescos a la vez.
+-- CONCURRENTLY: el mapa se sigue leyendo durante el refresco (probado en local con 123.000 predios: lecturas de 13 ms como máximo).
+-- Rol MÍNIMO scrr_refresco (PostgreSQL 17, privilegio MAINTAIN): solo puede refrescar esa vista; no puede leerla ni leer ninguna tabla (probado en local).
+-- Nace SIN login: la clave la pone David en el editor (alter role scrr_refresco login password '…') y la cadena de conexión va en el secreto de la Edge
+-- SCRR_REFRESCO_DB_URL. Ninguna clave queda en este archivo ni en el repositorio. Sin el secreto, la Edge responde «falta configurar» y la carga sigue aplicada.
+-- =====================================================================
+create role scrr_refresco nologin noinherit nosuperuser nocreatedb nocreaterole noreplication;
+comment on role scrr_refresco is 'SCRR corte 2: solo refresca public.predios_comercial (MAINTAIN). Lo usa la Edge geoportal-scrr con el secreto SCRR_REFRESCO_DB_URL.';
+do $$ begin execute format('grant connect on database %I to scrr_refresco', current_database()); end $$;
+grant usage on schema public to scrr_refresco;
+grant maintain on public.predios_comercial to scrr_refresco;
+
+-- Antes del refresco: quién lo pide (Supervisor comercial o administrador) y sobre qué carga de cartera; queda en la auditoría
+create function public.geoportal_scrr_refresco_iniciar(p_solicitante text, p_carga uuid, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante); c scrr.cargas;
+begin
+  select * into c from scrr.cargas where id = p_carga;
+  if not found or c.tipo <> 'cartera' then perform scrr.f_err('La carga de cartera no existe', 'P0002'); end if;
+  if scrr.f_estado_carga(p_carga) not in ('aplicada', 'anulada', 'reemplazada') then perform scrr.f_err('El mapa se actualiza al cerrar o revertir una carga de cartera', '55000'); end if;
+  perform scrr.f_auditar(v_email, 'scrr_refresco_mapa_inicio', p_carga::text, jsonb_build_object('estado_carga', scrr.f_estado_carga(p_carga)), p_ip);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Después: el resultado (ok, ocupado, error o sin_configurar) y cuánto tardó
+create function public.geoportal_scrr_refresco_cerrar(p_solicitante text, p_carga uuid, p_resultado text, p_ms integer, p_detalle text default null, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, scrr as $$
+declare v_email text := scrr.f_autorizar(p_solicitante);
+begin
+  if p_resultado is null or p_resultado not in ('ok', 'ocupado', 'error', 'sin_configurar') then perform scrr.f_err('Resultado no válido'); end if;
+  perform scrr.f_auditar(v_email, 'scrr_refresco_mapa', p_carga::text, jsonb_build_object('resultado', p_resultado, 'ms', p_ms, 'detalle', left(p_detalle, 300)), p_ip);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- =====================================================================
 -- SCRR · CORTE 2 · 40 — PERMISOS. Todo objeto nuevo: revoke all … from public, anon, authenticated, service_role ANTES de dar permisos.
 -- Solo service_role ejecuta las RPC public.geoportal_scrr_* (la Edge geoportal-scrr). Nadie más toca el esquema scrr: las RPC son SECURITY DEFINER.
 -- scrr.f_retirar_historial no se da a nadie: solo la corre el dueño desde el editor (P7 del 22-nov).
@@ -1029,12 +1524,46 @@ insert into scrr.tipos_actividad (id, codigo, nombre, actividad_campo, seleccion
   (5, 'reconexion',          'Reconexión',          'reconexion', false, false, 'activo',     5),
   (6, 'reconexion_drastica', 'Reconexión drástica', 'reconexion', false, false, 'activo',     6);
 
--- Decisión 9 del 20-nov (los 16 de Acuo, 00040_anomalias_actividad_resultado.sql, más 17 OTRO MEDIDOR). PROVISIONAL hasta el archivo modelo de David.
-insert into scrr.anomalias (codigo, nombre, fuente, orden)
-select n, x, case when n = 17 then 'decisión 9 del 20-nov' else 'Acuo 00040 y decisión 9 del 20-nov' end, n
+-- Decisión 9 del 20-nov (los 16 de Acuo, 00040_anomalias_actividad_resultado.sql, más 17 OTRO MEDIDOR). DEFINITIVO (David, 22-nov).
+insert into scrr.anomalias (codigo, nombre, provisional, fuente, orden)
+select n, x, false, case when n = 17 then 'decisión 9 del 20-nov' else 'Acuo 00040 y decisión 9 del 20-nov' end, n
   from unnest(array['PAGO EFECTUADO','CLIENTE NO PERMITE','USUARIO AGRESIVO','USUARIO ABONO','ACOMETIDA NO VISIBLE','ADULTO MAYOR','MENOR DE EDAD','PREDIO SOLO',
                     'FIRMA','SIGUE SUSPENDIDO','PREDIO ENREJADO','RECLAMO EN TRAMITE','VIGILANTE NO PERMITE','DIRECCION ERRADA','OTROS','SE GESTIONA PAGO','OTRO MEDIDOR'])
        with ordinality as a(x, n);
+
+-- Causas de los contratos con control y de los excluidos manuales (P6 del 22-nov: la misma tabla de eventos, con su causa)
+insert into scrr.causas_control (id, codigo, nombre, grupo) values
+  (1, 'reclamo_manual', 'Reclamo manual', 'reclamo'),
+  (2, 'insolvencia', 'Proceso de insolvencia', 'control'),
+  (3, 'minimo_vital', 'Mínimo vital', 'control'),
+  (4, 'excluido_manual', 'Excluido manual por el supervisor', 'excluido');
+
+-- Calendario de noviembre de 2026 (sección 3 del encargo del 20-nov): 24 ciclos con pago oportuno y fecha de suspensión. Se pueden agregar más ciclos desde la pantalla.
+insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, autor) values
+  ('202611', 15, '2026-11-12', '2026-11-13', 'sistema@emdupar.gov.co'),
+  ('202611', 19, '2026-11-12', '2026-11-13', 'sistema@emdupar.gov.co'),
+  ('202611', 21, '2026-11-12', '2026-11-13', 'sistema@emdupar.gov.co'),
+  ('202611', 1, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 20, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 2, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 16, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 23, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 22, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 4, '2026-11-17', '2026-11-18', 'sistema@emdupar.gov.co'),
+  ('202611', 3, '2026-11-17', '2026-11-18', 'sistema@emdupar.gov.co'),
+  ('202611', 5, '2026-11-17', '2026-11-18', 'sistema@emdupar.gov.co'),
+  ('202611', 12, '2026-11-18', '2026-11-19', 'sistema@emdupar.gov.co'),
+  ('202611', 24, '2026-11-18', '2026-11-19', 'sistema@emdupar.gov.co'),
+  ('202611', 6, '2026-11-18', '2026-11-19', 'sistema@emdupar.gov.co'),
+  ('202611', 9, '2026-11-18', '2026-11-19', 'sistema@emdupar.gov.co'),
+  ('202611', 17, '2026-11-19', '2026-11-20', 'sistema@emdupar.gov.co'),
+  ('202611', 18, '2026-11-19', '2026-11-20', 'sistema@emdupar.gov.co'),
+  ('202611', 8, '2026-11-19', '2026-11-20', 'sistema@emdupar.gov.co'),
+  ('202611', 11, '2026-11-20', '2026-11-21', 'sistema@emdupar.gov.co'),
+  ('202611', 7, '2026-11-20', '2026-11-21', 'sistema@emdupar.gov.co'),
+  ('202611', 14, '2026-11-23', '2026-11-24', 'sistema@emdupar.gov.co'),
+  ('202611', 10, '2026-11-23', '2026-11-24', 'sistema@emdupar.gov.co'),
+  ('202611', 13, '2026-11-23', '2026-11-24', 'sistema@emdupar.gov.co');
 
 insert into scrr.codigos_heredados (campo, codigo, significado) values ('estado', 3, 'efectiva'), ('estado', 4, 'inefectiva');
 
@@ -1072,11 +1601,12 @@ begin
 end $f$;
 create function pg_temp.err(r jsonb) returns text language sql as $f$ select coalesce(r ->> 'error', 'OK') $f$;
 -- una fila de cartera de prueba (todas las columnas de la plantilla)
-create function pg_temp.fc(p_contrato bigint, p_saldo numeric, p_vencidas int, p_extra jsonb default '{}'::jsonb) returns jsonb language sql as $f$
+-- p_pend = facturas pendientes; el ciclo de prueba sale del contrato: 97 (sin calendario), 98 (pago oportuno ya pasó) o 99 (aún no pasa)
+create function pg_temp.fc(p_contrato bigint, p_saldo numeric, p_pend int, p_extra jsonb default '{}'::jsonb) returns jsonb language sql as $f$
   select jsonb_build_object('contrato', p_contrato::text, 'estado', 'ACTIVO', 'identificacion', 'ZT' || p_contrato, 'nombre', 'ZTSCRR SUSCRIPTOR ' || p_contrato,
          'correo', 'zt' || p_contrato || '@ejemplo.invalid', 'telefono', '3000000000', 'direccion', 'ZTSCRR CALLE ' || (p_contrato % 1000), 'barrio', 'ztscrr barrio ' || (p_contrato % 3),
-         'categoria', '1 - RESIDENCIAL', 'subcategoria', '2 - ESTRATO 2', 'ciclo', ((p_contrato % 24) + 1)::text, 'facturas_pendientes', (p_vencidas + 1)::text,
-         'facturas_vencidas', p_vencidas::text, 'deuda_total', (p_saldo + 1000)::text, 'saldo_pendiente', p_saldo::text, 'saldo_a_favor', '0', 'valor_reclamo', '0',
+         'categoria', '1 - RESIDENCIAL', 'subcategoria', '2 - ESTRATO 2', 'ciclo', (97 + (p_contrato % 3))::text, 'facturas_pendientes', p_pend::text,
+         'deuda_total', (p_saldo + 1000)::text, 'saldo_pendiente', p_saldo::text, 'saldo_a_favor', '0', 'valor_reclamo', '0',
          'saldo_financiado', '1000', 'serial_medidor', 'ZTM' || p_contrato, 'codigo_reparto', 'R1', 'ruta', 'ZTRUTA') || p_extra $f$;
 create function pg_temp.lote(p_carga text, p_lote int, p_filas jsonb, p_sol text default 'ztscrr.sup@emdupar.gov.co') returns jsonb language sql as $f$
   select pg_temp.rpc(format('public.geoportal_scrr_carga_lote(%L, %L::uuid, %s, %L::jsonb)', p_sol, p_carga, p_lote, p_filas)) $f$;
@@ -1096,7 +1626,7 @@ insert into public.geoportal_lista_blanca (email, nombre, rol, activo, horario, 
 do $$
 declare
   A text := 'ztscrr.adm@emdupar.gov.co'; S text := 'ztscrr.sup@emdupar.gov.co'; SC text := 'ztscrr.supcampo@emdupar.gov.co';
-  r jsonb; c1 text; c2 text; cp text; ca text; v_hoy date := (now() at time zone 'America/Bogota')::date; f jsonb; t0 timestamptz; n bigint; v_lote int;
+  r jsonb; c1 text; c2 text; cp text; ca text; v_hoy date := (now() at time zone 'America/Bogota')::date; f jsonb; t0 timestamptz; v_lote int;
   B bigint := 910000000000;   -- base de los contratos de prueba
   v_reales bigint; v_tope numeric; v_esperado_bloqueo boolean;
 begin
@@ -1113,8 +1643,8 @@ begin
   perform pg_temp.ok('00.07 una persona inactiva con las casillas: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_contexto(%L)', 'ztscrr.inactivo@emdupar.gov.co'))) = '42501');
   perform pg_temp.ok('00.08 sin correo: 28000', pg_temp.err(pg_temp.rpc('public.geoportal_scrr_contexto(null)')) = '28000');
   r := pg_temp.rpc(format('public.geoportal_scrr_contexto(%L)', S));
-  perform pg_temp.ok('00.09 contexto: 17 anomalías PROVISIONALES en el orden de la decisión 9 (1 PAGO EFECTUADO … 17 OTRO MEDIDOR)',
-    jsonb_array_length(r -> 'anomalias') = 17 and (select bool_and((x ->> 'provisional')::boolean) from jsonb_array_elements(r -> 'anomalias') x)
+  perform pg_temp.ok('00.09 contexto: las 17 anomalías DEFINITIVAS en el orden de la decisión 9 (1 PAGO EFECTUADO … 17 OTRO MEDIDOR)',
+    jsonb_array_length(r -> 'anomalias') = 17 and not (select bool_or((x ->> 'provisional')::boolean) from jsonb_array_elements(r -> 'anomalias') x)
     and r -> 'anomalias' -> 0 ->> 'nombre' = 'PAGO EFECTUADO' and r -> 'anomalias' -> 16 ->> 'nombre' = 'OTRO MEDIDOR' and r -> 'anomalias' -> 7 ->> 'nombre' = 'PREDIO SOLO');
   perform pg_temp.ok('00.10 contexto: se escogen Suspensión, Corte y Gestión de cobro; solo Corte admite drástico',
     (select string_agg(x ->> 'codigo', ',' order by (x ->> 'id')::int) from jsonb_array_elements(r -> 'tipos_actividad') x where (x ->> 'seleccionable')::boolean) = 'suspension,corte,gestion_cobro'
@@ -1128,6 +1658,11 @@ begin
   perform pg_temp.ok('01.03 huella no válida: 22023', pg_temp.err(pg_temp.iniciar('cartera', v_hoy, 'abc', 10)) = '22023');
   perform pg_temp.ok('01.04 más filas que el tope (250.000): 22023', pg_temp.err(pg_temp.iniciar('cartera', v_hoy, pg_temp.sha('a'), 250001)) = '22023');
   perform pg_temp.ok('01.05 el operario no inicia cargas: 42501', pg_temp.err(pg_temp.iniciar('cartera', v_hoy, pg_temp.sha('a'), 10, 'ztscrr.op@emdupar.gov.co')) = '42501');
+  -- calendario de prueba del período de hoy para los ciclos 98 (pago oportuno ayer: ya pasó) y 99 (mañana: no ha pasado); el 97 queda sin calendario
+  r := pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar(%L, %L, 98, %L::date, %L::date)', S, to_char(v_hoy, 'YYYYMM'), v_hoy - 1, v_hoy - 1));
+  perform pg_temp.ok('01.09 calendario: el supervisor agrega el ciclo 98 (nuevo, sin motivo)', pg_temp.err(r) = 'OK' and (r ->> 'nuevo')::boolean, r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar(%L, %L, 99, %L::date, %L::date)', S, to_char(v_hoy, 'YYYYMM'), v_hoy + 1, v_hoy + 2));
+  perform pg_temp.ok('01.10 calendario: y el ciclo 99', pg_temp.err(r) = 'OK', r::text);
   -- cartera de prueba: 2.003 filas (2 lotes: 2.000 + 3)
   r := pg_temp.iniciar('cartera', v_hoy, pg_temp.sha('cartera1'), 2003);
   c1 := r ->> 'carga_id';
@@ -1138,9 +1673,11 @@ begin
 
   -- ===== 02. Lotes =====
   -- lote 1: 2.000 contratos B+1..B+2000; con saldo los impares; el B+1 con 7 vencidas y reclamo; B+3 con categoría «-1»
-  select jsonb_agg(case when g = 1 then pg_temp.fc(B + g, 150000, 7, '{"valor_reclamo": "25000"}')
-                        when g = 3 then pg_temp.fc(B + g, 9000, 1, '{"categoria": "-1 - ------"}')
-                        when g % 2 = 1 then pg_temp.fc(B + g, 20000 + g, (g % 30)::int)
+  -- con saldo los impares; B+1 (ciclo 99) con 8 pendientes y reclamo; B+3 (ciclo 98) con categoría «-1»; B+2 con cifras VACÍAS (valen cero). Ciclo = 97 + (contrato mod 3)
+  select jsonb_agg(case when g = 1 then pg_temp.fc(B + g, 150000, 8, '{"valor_reclamo": "25000"}')
+                        when g = 2 then pg_temp.fc(B + g, 0, 0, '{"deuda_total": "", "saldo_financiado": " "}') - 'saldo_a_favor'
+                        when g = 3 then pg_temp.fc(B + g, 9000, 2, '{"categoria": "-1 - ------"}')
+                        when g % 2 = 1 then pg_temp.fc(B + g, 20000 + g, (g % 30)::int + 1)
                         else pg_temp.fc(B + g, 0, 0) end order by g) into f
     from generate_series(1, 2000) g;
   perform pg_temp.ok('02.01 un lote con menos filas de las que le tocan: 22023', pg_temp.err(pg_temp.lote(c1, 1, f - 0)) = '22023');
@@ -1153,11 +1690,13 @@ begin
   -- lote 2: tres filas con errores distintos (todas son rechazos del servidor)
   r := pg_temp.lote(c1, 2, jsonb_build_array(
          pg_temp.fc(B + 2001, 1000, 1, '{"contrato": "12A"}'),
-         pg_temp.fc(B + 2002, 1000, 1) - 'facturas_vencidas',
+         pg_temp.fc(B + 2002, 1000, 1, '{"deuda_total": "mil pesos"}'),
          pg_temp.fc(B + 2003, 1000, 1, '{"ciclo": "X9"}')));
   perform pg_temp.ok('02.05 lote 2 con 3 filas con error queda en el paso con su causa',
     pg_temp.err(r) = 'OK' and (select string_agg(error, ' | ' order by fila) from scrr.paso_cartera where carga_id = c1::uuid and lote = 2)
-      = 'Contrato ausente o no numérico | Facturas vencidas ausentes o no válidas | Ciclo no válido', r::text);
+      = 'Contrato ausente o no numérico | Cifra con formato no válido (vacío vale cero) | Ciclo no válido', r::text);
+  perform pg_temp.ok('02.07 cifras vacías o ausentes valen CERO (David, 22-nov): la fila de B+2 se acepta con deuda total y saldos en 0',
+    (select error is null and deuda_total = 0 and saldo_a_favor = 0 and saldo_financiado = 0 from scrr.paso_cartera where carga_id = c1::uuid and contrato = (B + 2)::text));
   perform pg_temp.ok('02.06 el paso guarda la cartera COMPLETA (P4): nombre, dirección y teléfono del archivo',
     (select nombre is not null and direccion is not null and telefono is not null from scrr.paso_cartera where carga_id = c1::uuid and contrato = (B + 1)::text));
 
@@ -1166,7 +1705,8 @@ begin
   perform pg_temp.ok('03.01 validar: 3 rechazadas de 2.003 (0,15 %), puede aplicar', pg_temp.err(r) = 'OK' and (r ->> 'filas_rechazadas')::int = 3 and (r ->> 'puede_aplicar')::boolean, r::text);
   perform pg_temp.ok('03.02 validar: 1.000 con saldo pendiente, con reclamo 1, comodín o «-1» 1',
     (r ->> 'con_saldo_pendiente')::int = 1000 and (r ->> 'con_valor_reclamo')::int = 1 and (r ->> 'comodin_o_categoria_menos_1')::int = 1, r::text);
-  perform pg_temp.ok('03.03 validar: cuenta las facturas vencidas aparte de las pendientes (decisión 2 del 20-nov)', (r ->> 'con_facturas_vencidas')::int = 1000, r::text);
+  perform pg_temp.ok('03.03 validar: vencidas derivadas (todas las de saldo tienen al menos una) y 333 con saldo en un ciclo sin calendario (el 97)',
+    (r ->> 'con_facturas_vencidas')::int = 1000 and (r ->> 'con_saldo_sin_calendario')::int = 333 and r -> 'ciclos_sin_calendario' = '[97]'::jsonb, r::text);
   perform pg_temp.ok('03.04 el lote ya no entra después de validar si la carga se aplica (ver 04.06)', true);
 
   -- ===== 04. Aplicar por lotes (cartera) =====
@@ -1180,8 +1720,12 @@ begin
   r := pg_temp.rpc(format('public.geoportal_scrr_carga_aplicar(%L, %L::uuid, 1)', S, c1));
   perform pg_temp.ok('04.03 lote 1 aplicado: 1.000 al historial y 2.000 filas nuevas en cartera_suscripcion (' || round(extract(epoch from clock_timestamp() - t0) * 1000) || ' ms)',
     pg_temp.err(r) = 'OK' and (r ->> 'historial')::int = 1000 and (r ->> 'suscripcion_filas_nuevas')::int = 2000 and (r ->> 'suscripcion_filas_retiradas')::int = 1, r::text);
-  perform pg_temp.ok('04.04 el historial guarda vencidas, reclamo y la marca del «-1»; sin nombre ni dirección',
-    (select facturas_vencidas = 7 and valor_reclamo = 25000 from scrr.cartera_historial where carga_id = c1::uuid and contrato = B + 1)
+  perform pg_temp.ok('04.04 el historial guarda vencidas DERIVADAS: ciclo 99 (aún no pasa el pago oportuno) 8 pendientes → 7; ciclo 98 (ya pasó) 2 → 2; ciclo 97 (sin calendario) 6 → 5',
+    (select facturas_vencidas = 7 and facturas_pendientes = 8 from scrr.cartera_historial where carga_id = c1::uuid and contrato = B + 1)
+    and (select facturas_vencidas = 2 and facturas_pendientes = 2 from scrr.cartera_historial where carga_id = c1::uuid and contrato = B + 3)
+    and (select facturas_vencidas = 5 and facturas_pendientes = 6 from scrr.cartera_historial where carga_id = c1::uuid and contrato = B + 5));
+  perform pg_temp.ok('04.04b el historial guarda reclamo y la marca del «-1»; sin nombre ni dirección',
+    (select valor_reclamo = 25000 from scrr.cartera_historial where carga_id = c1::uuid and contrato = B + 1)
     and (select marca = 1 from scrr.cartera_historial where carga_id = c1::uuid and contrato = B + 3)
     and not exists (select 1 from information_schema.columns where table_schema = 'scrr' and table_name = 'cartera_historial' and column_name in ('nombre','direccion','telefono','identificacion','correo')));
   perform pg_temp.ok('04.05 cartera_suscripcion: el contrato viejo quedó con lo del archivo y su fila anterior en el respaldo',
@@ -1326,6 +1870,153 @@ begin
   r := pg_temp.rpc(format('public.geoportal_scrr_vaciar_paso(%L)', S));
   perform pg_temp.ok('09.03 vaciar el paso hoy no vacía nada de prueba (tienen menos de 7 días)',
     pg_temp.err(r) = 'OK' and (select count(*) from scrr.paso_cartera where carga_id = c1::uuid) = 2003, r::text);
+
+  -- ===== 11. Calendario =====
+  r := pg_temp.rpc(format('public.geoportal_scrr_calendario_lista(%L, %L)', S, '202611'));
+  perform pg_temp.ok('11.01 calendario de noviembre sembrado: 24 ciclos; el 15 con pago oportuno 12/11 y suspensión 13/11',
+    (select count(*) from jsonb_array_elements(r -> 'ciclos') x where (x ->> 'ciclo')::int between 1 and 24) = 24 and (select x ->> 'pago_oportuno' = '2026-11-12' and x ->> 'fecha_suspension' = '2026-11-13' from jsonb_array_elements(r -> 'ciclos') x where (x ->> 'ciclo')::int = 15), r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar(%L, %L, 98, %L::date, %L::date)', S, to_char(v_hoy, 'YYYYMM'), v_hoy - 1, v_hoy - 1));
+  perform pg_temp.ok('11.02 guardar el mismo ciclo sin cambios: 55000', pg_temp.err(r) = '55000', r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar(%L, %L, 98, %L::date, %L::date)', S, to_char(v_hoy, 'YYYYMM'), v_hoy - 1, v_hoy));
+  perform pg_temp.ok('11.03 cambiar un ciclo ya guardado sin motivo: 22023', pg_temp.err(r) = '22023', r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar(%L, %L, 98, %L::date, %L::date, %L::jsonb, %L)', S, to_char(v_hoy, 'YYYYMM'), v_hoy - 1, v_hoy, '{"reparto": "2026-11-05"}', 'ZTSCRR se corre la suspensión'));
+  perform pg_temp.ok('11.04 con motivo se guarda una versión nueva (la anterior queda en el historial) y las etapas de contexto',
+    pg_temp.err(r) = 'OK' and (select count(*) from scrr.calendario_ciclos where periodo = to_char(v_hoy, 'YYYYMM') and ciclo = 98) = 2
+    and (select etapas ->> 'reparto' from scrr.v_calendario_vigente where periodo = to_char(v_hoy, 'YYYYMM') and ciclo = 98) = '2026-11-05', r::text);
+  perform pg_temp.ok('11.05 suspensión antes del pago oportuno: 22023',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar(%L, %L, 96, %L::date, %L::date)', S, to_char(v_hoy, 'YYYYMM'), v_hoy, v_hoy - 1))) = '22023');
+  perform pg_temp.ok('11.06 ciclo 100: 22023; el operario no toca el calendario: 42501',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar(%L, %L, 100, %L::date, %L::date)', S, to_char(v_hoy, 'YYYYMM'), v_hoy, v_hoy))) = '22023'
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_calendario_guardar(%L, %L, 96, %L::date, %L::date)', 'ztscrr.op@emdupar.gov.co', to_char(v_hoy, 'YYYYMM'), v_hoy, v_hoy))) = '42501');
+
+  -- ===== 12. Contratos con control y excluidos manuales =====
+  r := pg_temp.rpc(format('public.geoportal_scrr_control_agregar(%L, %L, %L, %L)', S, (B + 103)::text, 'insolvencia', 'ZTSCRR proceso de insolvencia'));
+  perform pg_temp.ok('12.01 alta de control (insolvencia) con motivo', pg_temp.err(r) = 'OK', r::text);
+  perform pg_temp.ok('12.02 la misma alta otra vez: 55000; sin motivo: 22023; el comodín: 22023',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_control_agregar(%L, %L, %L, %L)', S, (B + 103)::text, 'insolvencia', 'ZTSCRR proceso de insolvencia'))) = '55000'
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_control_agregar(%L, %L, %L, %L)', S, (B + 104)::text, 'insolvencia', 'corto'))) = '22023'
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_control_agregar(%L, %L, %L, %L)', S, '99999999', 'insolvencia', 'ZTSCRR el comodín no es un contrato'))) = '22023');
+  r := pg_temp.rpc(format('public.geoportal_scrr_control_agregar(%L, %L, %L, %L)', S, (B + 105)::text, 'reclamo_manual', 'ZTSCRR reclamo que no está en el sistema'));
+  r := pg_temp.rpc(format('public.geoportal_scrr_control_lote(%L, %L::jsonb, %L, %L)', S, jsonb_build_array((B + 108)::text, (B + 108)::text, 'x12', '99999999', (B + 130)::text), 'excluido_manual', 'ZTSCRR excluidos por decisión del supervisor'));
+  perform pg_temp.ok('12.03 excluidos por archivo con un motivo común (P10): 5 recibidos, 2 no válidos (texto y comodín), 2 nuevos (el repetido cuenta una vez)',
+    pg_temp.err(r) = 'OK' and (r ->> 'recibidos')::int = 5 and (r ->> 'no_validos')::int = 2 and (r ->> 'repetidos_en_el_archivo')::int = 1 and (r ->> 'nuevos')::int = 2 and (r ->> 'ya_estaban')::int = 0
+    and (select count(*) from scrr.control_eventos where contrato in (B + 108, B + 130) and origen = 'archivo') = 2, r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_control_baja(%L, %L, %L, %L)', S, (B + 130)::text, 'excluido_manual', 'ZTSCRR vuelve a ser elegible'));
+  perform pg_temp.ok('12.04 baja con motivo: el contrato sale de la lista y queda el historial (alta y baja)',
+    pg_temp.err(r) = 'OK' and not exists (select 1 from scrr.v_control_vigente where contrato = B + 130) and (select count(*) from scrr.control_eventos where contrato = B + 130) = 2, r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_control_lista(%L, %L)', S, 'excluido'));
+  perform pg_temp.ok('12.05 la lista de excluidos trae a B+108 y no a los de control; la de control trae insolvencia y reclamo manual',
+    exists (select 1 from jsonb_array_elements(r -> 'vigentes') x where (x ->> 'contrato')::bigint = B + 108)
+    and not exists (select 1 from jsonb_array_elements(r -> 'vigentes') x where (x ->> 'contrato')::bigint = B + 103)
+    and (select count(*) from jsonb_array_elements(pg_temp.rpc(format('public.geoportal_scrr_control_lista(%L, %L)', S, 'control')) -> 'vigentes') x where (x ->> 'contrato')::bigint in (B + 103, B + 105)) = 2, r::text);
+
+  -- ===== 13. Selección: una foto de cartera VIGENTE de prueba (sin tocar cartera_suscripcion), ciclo 98 =====
+  ca := gen_random_uuid()::text;
+  insert into scrr.cargas (id, tipo, fecha_dato, version, archivo_nombre, archivo_sha256, filas_leidas, autor)
+    values (ca::uuid, 'cartera', v_hoy, (select max(version) + 1 from scrr.cargas where tipo = 'cartera' and fecha_dato = v_hoy), 'ztscrr_foto.xlsx', pg_temp.sha('foto'), 20, S);
+  insert into scrr.carga_eventos (carga_id, evento, autor) values (ca::uuid, 'iniciada', S), (ca::uuid, 'aplicada', S);
+  insert into scrr.barrios (nombre_norm) values ('ZTSCRR NORTE'), ('ZTSCRR SUR') on conflict do nothing;
+  insert into scrr.cartera_historial (fecha_dato, version, contrato, en_cartera, marca, ciclo, ruta, codigo_reparto, barrio_id, facturas_pendientes, facturas_vencidas, deuda_total, saldo_pendiente, valor_reclamo, carga_id)
+  select v_hoy, (select version from scrr.cargas where id = ca::uuid), B + n, n <> 120, case when n = 101 then 1 else 0 end, 98,
+         case when n = 102 then 'ZTR1' else 'ZTR' || (n % 3) end, 'P' || n, (select id from scrr.barrios where nombre_norm = case when n = 112 then 'ZTSCRR SUR' else 'ZTSCRR NORTE' end),
+         venc + 1, venc, sal + 1000, case when n = 120 then 0 else sal end, case when n = 104 then 5000 else 0 end, ca::uuid
+    from (values (101, 3, 30000), (102, 3, 30000), (103, 3, 30000), (104, 3, 30000), (105, 3, 30000), (106, 3, 30000), (107, 3, 30000), (108, 3, 30000),
+                 (109, 3, 3000), (110, 30, 30000), (111, 1, 20000), (112, 2, 21000), (113, 3, 22000), (114, 4, 23000), (115, 5, 24000), (120, 0, 0)) z(n, venc, sal);
+  insert into scrr.cartera_historial (fecha_dato, version, contrato, ciclo, ruta, facturas_pendientes, facturas_vencidas, deuda_total, saldo_pendiente, carga_id)
+    values (v_hoy, (select version from scrr.cargas where id = ca::uuid), B + 201, 99, 'ZTR', 4, 3, 40000, 40000, ca::uuid);
+  -- facturados: todos menos B+102 (en el último período de hechos.facturacion_sspd)
+  insert into hechos.facturacion_sspd (periodo, contrato)
+    select coalesce((select max(periodo) from hechos.facturacion_sspd), to_char(v_hoy, 'YYYYMM')), (B + n)::text from generate_series(101, 201) n where n <> 102;
+  -- pagos: B+106 pagó hoy todo su saldo (pago sin reflejar); B+111 abonó 1.000 hoy
+  insert into scrr.pagos_contrato (contrato, fecha_pago, monto, ordinal, carga_id) values (B + 106, v_hoy, 30000, 1, ca::uuid), (B + 111, v_hoy, 1000, 1, ca::uuid);
+  -- evento de suspensión de agua sobre B+107 (solo donde existe el doble local de Técnica; en producción no se toca)
+  if to_regclass('redes.zz_doble_eventos_contrato') is not null then insert into redes.zz_doble_eventos_contrato values ((B + 107)::text, 1); end if;
+  r := pg_temp.rpc(format('public.geoportal_scrr_seleccion_previa(%L, 98, %L::jsonb)', S, '{"modo": "meses", "desde": 1, "hasta": 25}'));
+  perform pg_temp.ok('13.01 embudo en su orden: comodín 1, no facturado 1, control 1, reclamo 2 (valor y manual), pago sin reflejar 1, excluido manual 1, saldo menor al mínimo 1, fuera del rango 1',
+    pg_temp.err(r) = 'OK' and (r -> 'embudo' -> 'p0_comodin' ->> 'contratos')::int = 1 and (r -> 'embudo' -> 'p1_no_facturado_o_sin_ruta' ->> 'contratos')::int = 1
+    and (r -> 'embudo' -> 'p2_control_vigente' ->> 'contratos')::int = 1 and (r -> 'embudo' -> 'p3_reclamo' ->> 'contratos')::int = 2
+    and (r -> 'embudo' -> 'p4_pago_sin_reflejar' ->> 'contratos')::int = 1 and (r -> 'embudo' -> 'p6_excluido_manual' ->> 'contratos')::int = 1
+    and (r -> 'embudo' -> 'p7_saldo_menor_al_minimo' ->> 'contratos')::int = 1 and (r -> 'embudo' -> 'f_fuera_del_rango' ->> 'contratos')::int = 1, r::text);
+  v_esperado_bloqueo := to_regclass('redes.zz_doble_eventos_contrato') is not null;   -- aquí: ¿hay evento de prueba?
+  perform pg_temp.ok('13.02 evento de suspensión de agua: el contrato dentro del evento SALE de la lista (o es candidato donde no hay evento)',
+    coalesce((r -> 'embudo' -> 'p5_evento_suspension_agua' ->> 'contratos')::int, 0) = case when v_esperado_bloqueo then 1 else 0 end
+    and (r ->> 'candidatos')::int = case when v_esperado_bloqueo then 5 else 6 end, r::text);
+  perform pg_temp.ok('13.03 paz y salvo hoy se cuenta aparte (1); el abono de 1.000 MARCA y no excluye; el otro ciclo no se mezcla',
+    (r -> 'embudo' -> 'p4_paz_y_salvo_hoy' ->> 'contratos')::int = 1 and (r ->> 'marcados_abono')::int = 1 and (r ->> 'universo')::int = 15, r::text);
+  perform pg_temp.ok('13.04 la vista previa queda en la auditoría solo con conteos (sin contratos)',
+    exists (select 1 from public.geoportal_auditoria where email = S and accion = 'scrr_seleccion_previa' and referencia = '98' and not (detalle::text ~ '9100000001'))
+  );
+  r := pg_temp.rpc(format('public.geoportal_scrr_seleccion_previa(%L, 98, %L::jsonb)', S, jsonb_build_object('modo', 'meses', 'desde', 1, 'hasta', 25, 'barrio_id', (select id from scrr.barrios where nombre_norm = 'ZTSCRR SUR'))));
+  perform pg_temp.ok('13.05 filtro de barrio: solo B+112', (r ->> 'candidatos')::int = 1, r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_seleccion_previa(%L, 98, %L::jsonb)', S, '{"modo": "monto", "desde": 22000, "hasta": 23500}'));
+  perform pg_temp.ok('13.06 rango por monto: 22.000 a 23.500 → 2', (r ->> 'candidatos')::int = 2, r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_seleccion_previa(%L, 98, %L::jsonb)', S, '{"modo": "meses", "desde": 1, "hasta": 25, "segmento": "menos_de_n", "n": 3}'));
+  perform pg_temp.ok('13.07 segmento «menos de 3 vencidas» (aproximado): 2', (r ->> 'candidatos')::int = 2 and (r ->> 'segmentos_aproximados')::boolean, r::text);
+  perform pg_temp.ok('13.08 el operario no ve la selección: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_seleccion_previa(%L, 98, %L::jsonb)', 'ztscrr.op@emdupar.gov.co', '{}'))) = '42501');
+  perform pg_temp.ok('13.09 generar con una actividad que no se escoge (reinstalación): 22023',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_seleccion_generar(%L, 98, %L::jsonb, %L)', S, '{"modo": "meses", "desde": 1, "hasta": 25}', 'reinstalacion'))) = '22023');
+  perform pg_temp.ok('13.10 generar sin candidatos: 55000',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_seleccion_generar(%L, 98, %L::jsonb, %L)', S, '{"modo": "meses", "desde": 20, "hasta": 25}', 'corte'))) = '55000');
+  r := pg_temp.rpc(format('public.geoportal_scrr_seleccion_generar(%L, 98, %L::jsonb, %L)', S, '{"modo": "meses", "desde": 1, "hasta": 25}', 'corte'));
+  cp := r ->> 'corrida_id';
+  perform pg_temp.ok('13.11 generar la corrida de Corte: guarda solo la lista (los candidatos), en orden de ruta y reparto, con la actividad',
+    pg_temp.err(r) = 'OK' and (r ->> 'contratos')::int = case when v_esperado_bloqueo then 5 else 6 end
+    and (select count(*) from scrr.corrida_contratos where corrida_id = cp::uuid) = (r ->> 'contratos')::int
+    and (select string_agg(ruta, ',' order by orden) from scrr.corrida_contratos where corrida_id = cp::uuid) ~ '^(ZTR0,)*(ZTR1,?)*(ZTR2,?)*$'
+    and (select t.codigo from scrr.corridas c join scrr.tipos_actividad t on t.id = c.actividad_id where c.id = cp::uuid) = 'corte', r::text);
+  -- nombre y dirección para la lista (los resuelve la RPC de la cartera de suscripción; teléfono y correo NO salen)
+  insert into public.cartera_suscripcion (contrato, nombre, direccion, telefono, correo, identificacion, barrio)
+    select (B + n)::text, 'ZTSCRR NOMBRE ' || n, 'ZTSCRR CALLE ' || n, '3000000000', 'zt@ejemplo.invalid', 'ZTID' || n, 'ZTSCRR NORTE' from generate_series(111, 115) n;
+  r := pg_temp.rpc(format('public.geoportal_scrr_lista(%L, %L::uuid, %L)', S, cp, 'excel'));
+  perform pg_temp.ok('13.12 la lista lleva nombre y dirección (excepción P2), la deuda (P9) y la marca del abono; nunca teléfono, correo ni identificación',
+    pg_temp.err(r) = 'OK' and (select x ->> 'nombre' = 'ZTSCRR NOMBRE 111' and x ->> 'direccion' = 'ZTSCRR CALLE 111' and (x ->> 'saldo_pendiente')::numeric = 20000
+                                and x ->> 'marca' like 'Abonó%' from jsonb_array_elements(r -> 'filas') x where (x ->> 'contrato')::bigint = B + 111)
+    and not (r::text ~ '3000000000|ejemplo\.invalid|ZTID'), r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_lista(%L, %L::uuid, %L)', S, cp, 'impresion'));
+  perform pg_temp.ok('13.13 cada descarga e impresión queda en la auditoría con sus filas',
+    (select count(*) from public.geoportal_auditoria where referencia = cp and accion in ('scrr_lista_excel', 'scrr_lista_impresion')) = 2
+    and exists (select 1 from public.geoportal_auditoria where referencia = cp and accion = 'scrr_corrida'));
+  perform pg_temp.ok('13.14 el operario no descarga listas: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_lista(%L, %L::uuid, %L)', 'ztscrr.op@emdupar.gov.co', cp, 'excel'))) = '42501');
+  r := pg_temp.rpc(format('public.geoportal_scrr_corridas(%L)', S));
+  perform pg_temp.ok('13.15 la corrida aparece en la lista de corridas con su actividad', exists (select 1 from jsonb_array_elements(r -> 'corridas') x where x ->> 'corrida_id' = cp and x ->> 'actividad' = 'Corte'), r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_seleccion_opciones(%L, 98)', S));
+  perform pg_temp.ok('13.16 opciones: los ciclos del período con su ventana y los barrios del ciclo (dependen del ciclo)',
+    (select count(*) from jsonb_array_elements(r -> 'barrios') x where x ->> 'nombre' like 'ZTSCRR%') = 2
+    and exists (select 1 from jsonb_array_elements(r -> 'ciclos') x where (x ->> 'ciclo')::int = 98 and (x ->> 'en_ventana')::boolean), r::text);
+
+  -- ===== 14. Refresco del mapa comercial (las RPC que lo rodean; el REFRESH lo corre la Edge con el rol scrr_refresco) =====
+  perform pg_temp.ok('14.01 iniciar el refresco con una carga de pagos: P0002',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_refresco_iniciar(%L, %L::uuid)', S, (select id from scrr.cargas where tipo = 'pagos' and autor = S limit 1)))) = 'P0002');
+  r := pg_temp.rpc(format('public.geoportal_scrr_refresco_iniciar(%L, %L::uuid)', S, ca));
+  perform pg_temp.ok('14.02 con una carga de cartera aplicada: autoriza y lo deja en la auditoría', pg_temp.err(r) = 'OK'
+    and exists (select 1 from public.geoportal_auditoria where accion = 'scrr_refresco_mapa_inicio' and referencia = ca), r::text);
+  r := pg_temp.rpc(format('public.geoportal_scrr_refresco_cerrar(%L, %L::uuid, %L, 650)', S, ca, 'ok'));
+  perform pg_temp.ok('14.03 cerrar con el resultado y el tiempo; un resultado desconocido: 22023', pg_temp.err(r) = 'OK'
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_refresco_cerrar(%L, %L::uuid, %L, 1)', S, ca, 'quizas'))) = '22023', r::text);
+  perform pg_temp.ok('14.04 el operario no pide el refresco: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_scrr_refresco_iniciar(%L, %L::uuid)', 'ztscrr.op@emdupar.gov.co', ca))) = '42501');
+  perform pg_temp.ok('14.05 el rol scrr_refresco: sin login, sin superusuario, solo MAINTAIN sobre predios_comercial (no la lee ni lee la cartera)',
+    (select not rolcanlogin and not rolsuper and not rolcreaterole and not rolinherit from pg_roles where rolname = 'scrr_refresco')
+    and has_table_privilege('scrr_refresco', 'public.predios_comercial', 'MAINTAIN') and not has_table_privilege('scrr_refresco', 'public.predios_comercial', 'SELECT')
+    and not has_table_privilege('scrr_refresco', 'public.cartera_suscripcion', 'SELECT'));
+
+  -- ===== 15. Actividades fuera de las listas y ajuste inicial (David, 22-nov 20:45) =====
+  r := pg_temp.iniciar('actividades', v_hoy - 2, pg_temp.sha('act3'), 3);
+  ca := r ->> 'carga_id';
+  perform pg_temp.lote(ca, 1, jsonb_build_array(
+    jsonb_build_object('contrato', (B + 111)::text, 'actividad', 'Corte', 'drastico', 'NO', 'estado', '3', 'fecha', v_hoy::text),
+    jsonb_build_object('contrato', (B + 150)::text, 'actividad', 'Suspensión', 'drastico', 'NO', 'estado', '3', 'fecha', v_hoy::text),
+    jsonb_build_object('contrato', (B + 151)::text, 'actividad', 'Corte', 'drastico', 'SÍ', 'estado', '3', 'fecha', '2025-12-01')));
+  perform pg_temp.rpc(format('public.geoportal_scrr_carga_validar(%L, %L::uuid)', S, ca));
+  perform pg_temp.rpc(format('public.geoportal_scrr_carga_aplicar(%L, %L::uuid, 1)', S, ca));
+  r := pg_temp.rpc(format('public.geoportal_scrr_carga_aplicar(%L, %L::uuid)', S, ca));
+  perform pg_temp.ok('15.01 la carga de actividades no exige lista: 3 actas, 1 de la lista de Corte y 2 fuera de las listas',
+    pg_temp.err(r) = 'OK' and (r -> 'resultado' ->> 'actas_nuevas')::int = 3 and (r -> 'resultado' ->> 'actas_de_una_lista')::int = 1
+    and (r -> 'resultado' ->> 'actas_fuera_de_las_listas')::int = 2, r::text);
+  perform pg_temp.ok('15.02 el acta de B+111 queda enlazada a su corrida; las otras, sin corrida (marcadas fuera de las listas)',
+    (select corrida_id = cp::uuid from scrr.actas where contrato = B + 111 and carga_id = ca::uuid)
+    and (select count(*) from scrr.actas where contrato in (B + 150, B + 151) and carga_id = ca::uuid and corrida_id is null) = 2);
+  perform pg_temp.ok('15.03 ajuste inicial: un corte drástico de 2025 fuera de las listas actualiza igual el estado del servicio; la suspensión de hoy también',
+    (select estado from scrr.v_estado_servicio where contrato = B + 151) = 'cortado_drastico' and (select estado from scrr.v_estado_servicio where contrato = B + 150) = 'suspendido');
 
   -- ===== 10. Estructura, permisos y reglas de producción =====
   perform pg_temp.ok('10.01 historial en particiones diarias (hoy existe) y pagos en mensuales',

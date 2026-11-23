@@ -25,12 +25,46 @@ insert into scrr.tipos_actividad (id, codigo, nombre, actividad_campo, seleccion
   (5, 'reconexion',          'Reconexión',          'reconexion', false, false, 'activo',     5),
   (6, 'reconexion_drastica', 'Reconexión drástica', 'reconexion', false, false, 'activo',     6);
 
--- Decisión 9 del 20-nov (los 16 de Acuo, 00040_anomalias_actividad_resultado.sql, más 17 OTRO MEDIDOR). PROVISIONAL hasta el archivo modelo de David.
-insert into scrr.anomalias (codigo, nombre, fuente, orden)
-select n, x, case when n = 17 then 'decisión 9 del 20-nov' else 'Acuo 00040 y decisión 9 del 20-nov' end, n
+-- Decisión 9 del 20-nov (los 16 de Acuo, 00040_anomalias_actividad_resultado.sql, más 17 OTRO MEDIDOR). DEFINITIVO (David, 22-nov).
+insert into scrr.anomalias (codigo, nombre, provisional, fuente, orden)
+select n, x, false, case when n = 17 then 'decisión 9 del 20-nov' else 'Acuo 00040 y decisión 9 del 20-nov' end, n
   from unnest(array['PAGO EFECTUADO','CLIENTE NO PERMITE','USUARIO AGRESIVO','USUARIO ABONO','ACOMETIDA NO VISIBLE','ADULTO MAYOR','MENOR DE EDAD','PREDIO SOLO',
                     'FIRMA','SIGUE SUSPENDIDO','PREDIO ENREJADO','RECLAMO EN TRAMITE','VIGILANTE NO PERMITE','DIRECCION ERRADA','OTROS','SE GESTIONA PAGO','OTRO MEDIDOR'])
        with ordinality as a(x, n);
+
+-- Causas de los contratos con control y de los excluidos manuales (P6 del 22-nov: la misma tabla de eventos, con su causa)
+insert into scrr.causas_control (id, codigo, nombre, grupo) values
+  (1, 'reclamo_manual', 'Reclamo manual', 'reclamo'),
+  (2, 'insolvencia', 'Proceso de insolvencia', 'control'),
+  (3, 'minimo_vital', 'Mínimo vital', 'control'),
+  (4, 'excluido_manual', 'Excluido manual por el supervisor', 'excluido');
+
+-- Calendario de noviembre de 2026 (sección 3 del encargo del 20-nov): 24 ciclos con pago oportuno y fecha de suspensión. Se pueden agregar más ciclos desde la pantalla.
+insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, autor) values
+  ('202611', 15, '2026-11-12', '2026-11-13', 'sistema@emdupar.gov.co'),
+  ('202611', 19, '2026-11-12', '2026-11-13', 'sistema@emdupar.gov.co'),
+  ('202611', 21, '2026-11-12', '2026-11-13', 'sistema@emdupar.gov.co'),
+  ('202611', 1, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 20, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 2, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 16, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 23, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 22, '2026-11-13', '2026-11-14', 'sistema@emdupar.gov.co'),
+  ('202611', 4, '2026-11-17', '2026-11-18', 'sistema@emdupar.gov.co'),
+  ('202611', 3, '2026-11-17', '2026-11-18', 'sistema@emdupar.gov.co'),
+  ('202611', 5, '2026-11-17', '2026-11-18', 'sistema@emdupar.gov.co'),
+  ('202611', 12, '2026-11-18', '2026-11-19', 'sistema@emdupar.gov.co'),
+  ('202611', 24, '2026-11-18', '2026-11-19', 'sistema@emdupar.gov.co'),
+  ('202611', 6, '2026-11-18', '2026-11-19', 'sistema@emdupar.gov.co'),
+  ('202611', 9, '2026-11-18', '2026-11-19', 'sistema@emdupar.gov.co'),
+  ('202611', 17, '2026-11-19', '2026-11-20', 'sistema@emdupar.gov.co'),
+  ('202611', 18, '2026-11-19', '2026-11-20', 'sistema@emdupar.gov.co'),
+  ('202611', 8, '2026-11-19', '2026-11-20', 'sistema@emdupar.gov.co'),
+  ('202611', 11, '2026-11-20', '2026-11-21', 'sistema@emdupar.gov.co'),
+  ('202611', 7, '2026-11-20', '2026-11-21', 'sistema@emdupar.gov.co'),
+  ('202611', 14, '2026-11-23', '2026-11-24', 'sistema@emdupar.gov.co'),
+  ('202611', 10, '2026-11-23', '2026-11-24', 'sistema@emdupar.gov.co'),
+  ('202611', 13, '2026-11-23', '2026-11-24', 'sistema@emdupar.gov.co');
 
 insert into scrr.codigos_heredados (campo, codigo, significado) values ('estado', 3, 'efectiva'), ('estado', 4, 'inefectiva');
 

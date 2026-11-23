@@ -5,7 +5,8 @@
 --   · la huella de campo no es la publicada el 22-nov 13:46 ({{HUELLA_CAMPO}}): el modo «Cartera» autoriza con campo.f_autorizar_supervision;
 --   · campo.f_autorizar_supervision(text) no tiene su md5 publicada ({{MD5_AUTORIZAR_SUPERVISION}});
 --   · public.cartera_suscripcion no es una tabla (relkind 'r') con exactamente sus 21 columnas de hoy (el cargador la actualiza: decisión 4 del 20-nov y P4 del 22-nov);
---   · faltan public.geoportal_auditoria o public.predios_comercial.
+--   · faltan public.geoportal_auditoria o public.predios_comercial (vista materializada con índice único), PostgreSQL 17, hechos.facturacion_sspd o
+--     redes.f_eventos_del_contrato(text); o ya existe el rol scrr_refresco.
 -- No toca las 4 funciones de permisos (geoportal_admin_permisos, geoportal_mis_permisos, geoportal_puede, geoportal_admin_guardar): la verificación comprueba
 -- que siguen con su md5.
 -- =====================================================================
@@ -34,5 +35,20 @@ begin
   end if;
   if to_regclass('public.geoportal_auditoria') is null or to_regclass('public.predios_comercial') is null then
     raise exception 'GUARDIA SCRR: falta public.geoportal_auditoria o public.predios_comercial.';
+  end if;
+  -- Refresco del mapa comercial por el cargador (David, 22-nov): REFRESH … CONCURRENTLY exige el índice único de la vista; el rol mínimo usa MAINTAIN (PostgreSQL 17)
+  if (select relkind from pg_class where oid = 'public.predios_comercial'::regclass) <> 'm'
+     or not exists (select 1 from pg_index i where i.indrelid = 'public.predios_comercial'::regclass and i.indisunique and i.indpred is null) then
+    raise exception 'GUARDIA SCRR: public.predios_comercial no es una vista materializada con índice único (no se podría refrescar sin bloquear el mapa).';
+  end if;
+  if current_setting('server_version_num')::int < 170000 then raise exception 'GUARDIA SCRR: hace falta PostgreSQL 17 (privilegio MAINTAIN).'; end if;
+  if exists (select 1 from pg_roles where rolname = 'scrr_refresco') then raise exception 'GUARDIA SCRR: el rol scrr_refresco ya existe.'; end if;
+  -- Selección: «facturado» = figura en hechos.facturacion_sspd (último período cargado); evento de suspensión de agua por redes.f_eventos_del_contrato
+  if to_regclass('hechos.facturacion_sspd') is null
+     or (select count(*) from information_schema.columns where table_schema = 'hechos' and table_name = 'facturacion_sspd' and column_name in ('periodo', 'contrato')) <> 2 then
+    raise exception 'GUARDIA SCRR: falta hechos.facturacion_sspd con sus columnas periodo y contrato.';
+  end if;
+  if to_regprocedure('redes.f_eventos_del_contrato(text)') is null or to_regprocedure('redes.f_eventos_abiertos()') is null then
+    raise exception 'GUARDIA SCRR: falta redes.f_eventos_del_contrato(text) o redes.f_eventos_abiertos() (aviso de evento por contrato, Corte 15).';
   end if;
 end $guardia$;

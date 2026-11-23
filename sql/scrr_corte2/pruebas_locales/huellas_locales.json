@@ -10,8 +10,8 @@
   "public.geoportal_admin_permisos(text,text,boolean,boolean,boolean,boolean,text,text,boolean,boolean,boolean,text,boolean,boolean,boolean,boolean,boolean,boolean,boolean,boolean)": "e5a90103b4a83440fd826f03266b7245"
  },
  "nuevas": {
-  "HUELLA_SCRR": "0a659d6e68acfe9b14a40ca6ec74196e",
-  "RPC": "11",
-  "TABLAS": "15"
+  "HUELLA_SCRR": "9489c37205ece7ff51787156cc7beda5",
+  "RPC": "24",
+  "TABLAS": "20"
  }
 }

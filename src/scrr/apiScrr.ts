@@ -9,7 +9,23 @@ export type ContextoScrr = {
                 retencion_meses_pagos: number; tope_rechazo_pct: number; tope_salidas_suscripcion_pct: number };
   tipos_actividad: { id: number; codigo: string; nombre: string; seleccionable: boolean; admite_drastico: boolean }[];
   anomalias: { codigo: number; nombre: string; provisional: boolean }[];
+  causas_control: { codigo: string; nombre: string; grupo: "control" | "reclamo" | "excluido" }[];
 };
+export type ControlVigente = { contrato: number; causa: string; causa_nombre: string; desde: string; autor: string; origen: "manual" | "archivo" };
+export type ControlEvento = { causa: string; evento: "alta" | "baja"; motivo: string; origen: string; autor: string; fecha: string };
+export type ListaControl = { vigentes: ControlVigente[]; total: number; bajas_recientes: { contrato: number; causa_nombre: string; fecha: string; motivo: string }[] };
+export type CicloCalendario = { ciclo: number; pago_oportuno: string; fecha_suspension: string; etapas: Record<string, string>; en_ventana: boolean; versiones: number; ultimo_cambio: string; motivo: string | null };
+export type Calendario = { periodo: string; hoy: string; ciclos: CicloCalendario[]; periodos: string[] };
+export type Filtros = { modo: "meses" | "monto"; desde?: number | null; hasta?: number | null; monto_minimo?: number; barrio_id?: number | null; segmento?: string; n?: number };
+export type OpcionesSeleccion = { hoy: string; foto: string | null; facturacion_periodo: string | null;
+  ciclos: { ciclo: number; pago_oportuno: string; fecha_suspension: string; en_ventana: boolean; con_saldo: number }[];
+  barrios: { id: number | null; nombre: string; contratos: number }[]; actividades: { id: number; codigo: string; nombre: string }[] };
+export type Previa = { foto: string; ciclo: number; filtros: Filtros; embudo: Record<string, { contratos: number; saldo: number }>; universo: number; candidatos: number;
+  saldo_candidatos: number; marcados_abono: number; marcados_abono_desde_suspension: number; por_vencidas: Record<string, number>; segmentos_aproximados: boolean };
+export type Corrida = { corrida_id: string; ciclo: number; fecha_dato: string; actividad: string; actividad_codigo: string; contratos: number; saldo_total: number; filtros: Filtros; autor: string; creada_en: string };
+export type FilaLista = { orden: number; contrato: string; nombre: string | null; direccion: string | null; barrio: string | null; ciclo: number; ruta: string | null; codigo_reparto: string | null;
+  facturas_vencidas: number; saldo_pendiente: number; marca: string | null };
+export type Lista = { corrida_id: string; ciclo: number; fecha_dato: string; actividad: string; actividad_codigo: string; generada_en: string; autor: string; filas: FilaLista[] };
 export type TipoHoy = { tipo: TipoCarga; ultima_fecha_dato: string | null; aplicada_en: string | null; requerida_desde: string; al_dia: boolean; abierta: string | null };
 export type CargasHoy = { hoy: string; tipos: TipoHoy[] };
 export type CargaFila = { carga_id: string; tipo: TipoCarga; fecha_dato: string; version: number; archivo: string; filas: number; estado: string; creada_en: string; autor: string };
@@ -81,6 +97,22 @@ export const apiScrr = {
   anular: (id: string, motivo: string) => pedir<{ ok: boolean }>("carga_anular", { cuerpo: { carga_id: id, motivo } }),
   revertir: (id: string, motivo: string) => pedir<{ filas_quitadas: number; filas_restauradas: number; pendientes: number }>("suscripcion_revertir", { cuerpo: { carga_id: id, motivo }, timeoutMs: 60000 }),
   vaciarPaso: () => pedir<{ cargas: number; filas: number }>("vaciar_paso", { cuerpo: {} }),
+  // El refresco del mapa comercial puede tardar decenas de segundos en producción (la Edge le da 120 s)
+  refrescarMapa: (carga_id: string) => pedir<{ resultado: "ok"; ms: number }>("refrescar_mapa", { cuerpo: { carga_id }, timeoutMs: 150000 }),
+  controlLista: (grupo: "control" | "excluido") => pedir<ListaControl>("control_lista", { qs: { grupo } }),
+  controlHistorial: (contrato: string) => pedir<{ historial: ControlEvento[] }>("control_lista", { qs: { contrato } }),
+  controlAgregar: (contrato: string, causa: string, motivo: string) => pedir<{ ok: boolean }>("control_agregar", { cuerpo: { contrato, causa, motivo } }),
+  controlBaja: (contrato: string, causa: string, motivo: string) => pedir<{ ok: boolean }>("control_baja", { cuerpo: { contrato, causa, motivo } }),
+  controlLote: (contratos: string[], causa: string, motivo: string) =>
+    pedir<{ recibidos: number; no_validos: number; repetidos_en_el_archivo: number; nuevos: number; ya_estaban: number }>("control_lote", { cuerpo: { contratos, causa, motivo }, timeoutMs: 60000 }),
+  calendario: (periodo: string) => pedir<Calendario>("calendario", { qs: { periodo } }),
+  calendarioGuardar: (c: { periodo: string; ciclo: number; pago_oportuno: string; fecha_suspension: string; etapas?: Record<string, string>; motivo?: string | null }) =>
+    pedir<{ ok: boolean; nuevo: boolean }>("calendario_guardar", { cuerpo: c }),
+  opciones: (ciclo?: number) => pedir<OpcionesSeleccion>("seleccion_opciones", { qs: ciclo ? { ciclo: String(ciclo) } : {} }),
+  previa: (ciclo: number, filtros: Filtros) => pedir<Previa>("seleccion_previa", { cuerpo: { ciclo, filtros }, timeoutMs: 60000 }),
+  generar: (ciclo: number, filtros: Filtros, actividad: string) => pedir<{ corrida_id: string; contratos: number; saldo_total: number; actividad: string }>("seleccion_generar", { cuerpo: { ciclo, filtros, actividad }, timeoutMs: 60000 }),
+  corridas: () => pedir<{ corridas: Corrida[] }>("corridas"),
+  lista: (corrida_id: string, formato: "excel" | "impresion") => pedir<Lista>("lista", { cuerpo: { corrida_id, formato }, timeoutMs: 60000 }),
 };
 
 /** Texto para la persona según el tipo de error. */

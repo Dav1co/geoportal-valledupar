@@ -26,6 +26,11 @@ create function scrr.f_num(p text) returns numeric
 language sql immutable parallel safe set search_path = pg_catalog as $$
   select case when btrim(p) ~ '^-?[0-9]{1,12}(\.[0-9]{1,4})?$' then btrim(p)::numeric else null end
 $$;
+-- Cifra de la cartera (David, 22-nov: un vacío vale CERO, como el script viejo): vacío o ausente → 0; número → el número; texto que no es número → nulo (rechazo)
+create function scrr.f_num0(p text) returns numeric
+language sql immutable parallel safe set search_path = pg_catalog as $$
+  select case when nullif(btrim(coalesce(p, '')), '') is null then 0 else scrr.f_num(p) end
+$$;
 -- Fecha segura: solo aaaa-mm-dd válida entre 2020 y 2100
 create function scrr.f_fecha(p text) returns date
 language plpgsql immutable set search_path = pg_catalog as $$
@@ -76,11 +81,11 @@ create table scrr.tipos_actividad (
   activo             boolean  not null default true
 );
 
--- 3. Anomalías de campo (decisión 9 del 20-nov): catálogo 1–17. PROVISIONAL hasta que llegue el archivo modelo de David (ENCARGO §7).
+-- 3. Anomalías de campo (decisión 9 del 20-nov): catálogo 1–17, DEFINITIVO (David, 22-nov).
 create table scrr.anomalias (
   codigo       smallint primary key check (codigo between 1 and 99),
   nombre       text     not null unique check (nombre = upper(nombre) and length(nombre) between 3 and 60),
-  provisional  boolean  not null default true,
+  provisional  boolean  not null default false,
   fuente       text     not null,
   orden        smallint not null,
   activo       boolean  not null default true

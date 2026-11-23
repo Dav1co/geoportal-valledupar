@@ -57,7 +57,7 @@ create view scrr.v_cargas_vigentes as
 create table scrr.paso_cartera (
   carga_id uuid not null references scrr.cargas (id), lote integer not null, fila integer not null,
   contrato text, estado text, identificacion text, nombre text, correo text, telefono text, direccion text, barrio text, categoria text, subcategoria text,
-  ciclo text, facturas_pendientes smallint, facturas_vencidas smallint, deuda_total numeric(14,2), saldo_pendiente numeric(14,2), saldo_a_favor numeric(14,2),
+  ciclo text, facturas_pendientes smallint, deuda_total numeric(14,2), saldo_pendiente numeric(14,2), saldo_a_favor numeric(14,2),
   valor_reclamo numeric(14,2), saldo_financiado numeric(14,2), serial_medidor text, codigo_reparto text, ruta text,
   error text,
   primary key (carga_id, lote, fila)
@@ -96,7 +96,7 @@ create table scrr.cartera_historial (
   codigo_reparto      text,
   barrio_id           smallint,
   facturas_pendientes smallint      not null default 0,
-  facturas_vencidas   smallint      not null default 0,       -- decisión 2 del 20-nov: los rangos de la selección van sobre vencidas
+  facturas_vencidas   smallint      not null default 0,       -- decisión 2 del 20-nov; las DERIVA el motor al aplicar (scrr.f_vencidas, 22-nov)
   deuda_total         numeric(14,2) not null default 0,
   saldo_pendiente     numeric(14,2) not null default 0,
   saldo_a_favor       numeric(14,2) not null default 0,

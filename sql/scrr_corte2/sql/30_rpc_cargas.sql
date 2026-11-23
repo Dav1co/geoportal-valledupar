@@ -44,7 +44,8 @@ begin
                                      'tope_rechazo_pct', scrr.f_param('tope_rechazo_pct'), 'tope_salidas_suscripcion_pct', scrr.f_param('tope_salidas_suscripcion_pct')),
     'tipos_actividad', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'codigo', codigo, 'nombre', nombre, 'seleccionable', seleccionable, 'admite_drastico', admite_drastico) order by orden), '[]'::jsonb)
                           from scrr.tipos_actividad where activo),
-    'anomalias', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'provisional', provisional) order by orden), '[]'::jsonb) from scrr.anomalias where activo));
+    'anomalias', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'provisional', provisional) order by orden), '[]'::jsonb) from scrr.anomalias where activo),
+    'causas_control', (select coalesce(jsonb_agg(jsonb_build_object('codigo', codigo, 'nombre', nombre, 'grupo', grupo) order by id), '[]'::jsonb) from scrr.causas_control where activo));
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -115,24 +116,21 @@ begin
 
   if c.tipo = 'cartera' then
     insert into scrr.paso_cartera (carga_id, lote, fila, contrato, estado, identificacion, nombre, correo, telefono, direccion, barrio, categoria, subcategoria, ciclo,
-                                   facturas_pendientes, facturas_vencidas, deuda_total, saldo_pendiente, saldo_a_favor, valor_reclamo, saldo_financiado,
+                                   facturas_pendientes, deuda_total, saldo_pendiente, saldo_a_favor, valor_reclamo, saldo_financiado,
                                    serial_medidor, codigo_reparto, ruta, error)
     select p_carga, p_lote, e.o::int,
            case when btrim(e.v->>'contrato') ~ '^[0-9]{1,12}$' then btrim(e.v->>'contrato') end,
            scrr.f_txt(e.v->>'estado', 60), scrr.f_txt(e.v->>'identificacion', 40), scrr.f_txt(e.v->>'nombre', 200), scrr.f_txt(e.v->>'correo', 200),
            scrr.f_txt(e.v->>'telefono', 60), scrr.f_txt(e.v->>'direccion', 200), scrr.f_txt(e.v->>'barrio', 80), scrr.f_txt(e.v->>'categoria', 80),
            scrr.f_txt(e.v->>'subcategoria', 80), scrr.f_txt(e.v->>'ciclo', 10),
-           case when scrr.f_num(e.v->>'facturas_pendientes') between 0 and 999 and scrr.f_num(e.v->>'facturas_pendientes') = trunc(scrr.f_num(e.v->>'facturas_pendientes')) then scrr.f_num(e.v->>'facturas_pendientes')::smallint end,
-           case when scrr.f_num(e.v->>'facturas_vencidas') between 0 and 999 and scrr.f_num(e.v->>'facturas_vencidas') = trunc(scrr.f_num(e.v->>'facturas_vencidas')) then scrr.f_num(e.v->>'facturas_vencidas')::smallint end,
-           scrr.f_num(e.v->>'deuda_total'), scrr.f_num(e.v->>'saldo_pendiente'), scrr.f_num(e.v->>'saldo_a_favor'), scrr.f_num(e.v->>'valor_reclamo'), scrr.f_num(e.v->>'saldo_financiado'),
+           case when scrr.f_num0(e.v->>'facturas_pendientes') between 0 and 999 and scrr.f_num0(e.v->>'facturas_pendientes') = trunc(scrr.f_num0(e.v->>'facturas_pendientes')) then scrr.f_num0(e.v->>'facturas_pendientes')::smallint end,
+           scrr.f_num0(e.v->>'deuda_total'), scrr.f_num0(e.v->>'saldo_pendiente'), scrr.f_num0(e.v->>'saldo_a_favor'), scrr.f_num0(e.v->>'valor_reclamo'), scrr.f_num0(e.v->>'saldo_financiado'),
            scrr.f_txt(e.v->>'serial_medidor', 60), scrr.f_txt(e.v->>'codigo_reparto', 40), scrr.f_txt(e.v->>'ruta', 80),
            case when btrim(coalesce(e.v->>'contrato','')) !~ '^[0-9]{1,12}$' then 'Contrato ausente o no numérico'
-                when scrr.f_num(e.v->>'facturas_pendientes') is null or scrr.f_num(e.v->>'facturas_pendientes') not between 0 and 999
-                     or scrr.f_num(e.v->>'facturas_pendientes') <> trunc(scrr.f_num(e.v->>'facturas_pendientes')) then 'Facturas pendientes ausentes o no válidas'
-                when scrr.f_num(e.v->>'facturas_vencidas') is null or scrr.f_num(e.v->>'facturas_vencidas') not between 0 and 999
-                     or scrr.f_num(e.v->>'facturas_vencidas') <> trunc(scrr.f_num(e.v->>'facturas_vencidas')) then 'Facturas vencidas ausentes o no válidas'
-                when scrr.f_num(e.v->>'deuda_total') is null or scrr.f_num(e.v->>'saldo_pendiente') is null or scrr.f_num(e.v->>'saldo_a_favor') is null
-                     or scrr.f_num(e.v->>'valor_reclamo') is null or scrr.f_num(e.v->>'saldo_financiado') is null then 'Cifra obligatoria ausente o con formato no válido'
+                when scrr.f_num0(e.v->>'facturas_pendientes') is null or scrr.f_num0(e.v->>'facturas_pendientes') not between 0 and 999
+                     or scrr.f_num0(e.v->>'facturas_pendientes') <> trunc(scrr.f_num0(e.v->>'facturas_pendientes')) then 'Facturas pendientes no válidas'
+                when scrr.f_num0(e.v->>'deuda_total') is null or scrr.f_num0(e.v->>'saldo_pendiente') is null or scrr.f_num0(e.v->>'saldo_a_favor') is null
+                     or scrr.f_num0(e.v->>'valor_reclamo') is null or scrr.f_num0(e.v->>'saldo_financiado') is null then 'Cifra con formato no válido (vacío vale cero)'
                 when nullif(btrim(coalesce(e.v->>'ciclo', '')), '') is not null and scrr.f_num(e.v->>'ciclo') is null then 'Ciclo no válido' end
       from jsonb_array_elements(p_filas) with ordinality as e(v, o);
   elsif c.tipo = 'pagos' then
@@ -195,16 +193,22 @@ begin
 
   if c.tipo = 'cartera' then
     select count(*), count(*) filter (where error is not null) into v_tot, v_mal from scrr.paso_cartera where carga_id = p_carga;
+    -- un solo recorrido del paso, cruzado con el calendario del período de la fecha del archivo (para las vencidas derivadas y los ciclos sin calendario)
+    with cal as (select ciclo, pago_oportuno from scrr.v_calendario_vigente where periodo = to_char(c.fecha_dato, 'YYYYMM')),
+         q as (select p.*, k.ciclo is not null as con_cal, scrr.f_vencidas(p.facturas_pendientes, k.pago_oportuno, c.fecha_dato) as venc, scrr.f_num(p.ciclo) as ciclo_n
+                 from scrr.paso_cartera p left join cal k on k.ciclo::numeric = scrr.f_num(p.ciclo) where p.carga_id = p_carga)
     select jsonb_build_object('contratos_distintos', count(distinct contrato) filter (where error is null),
              'contratos_repetidos', count(*) filter (where error is null) - count(distinct contrato) filter (where error is null),
              'con_saldo_pendiente', count(distinct contrato) filter (where error is null and saldo_pendiente > 0),
-             'con_facturas_vencidas', count(distinct contrato) filter (where error is null and facturas_vencidas > 0),
+             'con_facturas_vencidas', count(distinct contrato) filter (where error is null and saldo_pendiente > 0 and venc > 0),
+             'con_saldo_sin_calendario', count(distinct contrato) filter (where error is null and saldo_pendiente > 0 and not con_cal),
+             'ciclos_sin_calendario', coalesce(jsonb_agg(distinct ciclo_n::int) filter (where error is null and saldo_pendiente > 0 and not con_cal and ciclo_n between 1 and 99), '[]'::jsonb),
              'saldo_pendiente_total', coalesce(sum(saldo_pendiente) filter (where error is null and saldo_pendiente > 0), 0),
              'con_valor_reclamo', count(*) filter (where error is null and valor_reclamo > 0),
              'comodin_o_categoria_menos_1', count(*) filter (where error is null and (contrato = v_com or categoria ~ '^-1')),
-             'sin_ciclo_o_sin_ruta', count(*) filter (where error is null and saldo_pendiente > 0 and (scrr.f_num(ciclo) is null or scrr.f_num(ciclo) in (0, 9999) or ruta is null)),
+             'sin_ciclo_o_sin_ruta', count(*) filter (where error is null and saldo_pendiente > 0 and (ciclo_n is null or ciclo_n in (0, 9999) or ruta is null)),
              'sin_barrio', count(*) filter (where error is null and saldo_pendiente > 0 and barrio is null)) into v_res
-      from scrr.paso_cartera where carga_id = p_carga;
+      from q;
     select v.fecha_dato, v.id into v_prev from scrr.v_cargas_vigentes v where v.tipo = 'cartera' and v.fecha_dato < c.fecha_dato order by v.fecha_dato desc limit 1;
     if found then
       v_res := v_res || jsonb_build_object('foto_anterior', v_prev.fecha_dato,
@@ -287,10 +291,11 @@ begin
         select c.fecha_dato, c.version, s.contrato::bigint, true,
                case when s.contrato = v_com or s.categoria ~ '^-1' then 1 else 0 end, s.estado, s.categoria,
                case when scrr.f_num(s.ciclo) between 0 and 9999 then scrr.f_num(s.ciclo)::smallint end, s.ruta, s.codigo_reparto, b.id,
-               s.facturas_pendientes, s.facturas_vencidas, s.deuda_total, s.saldo_pendiente, s.saldo_a_favor, s.saldo_financiado, s.valor_reclamo, p_carga
+               s.facturas_pendientes, scrr.f_vencidas(s.facturas_pendientes, k.pago_oportuno, c.fecha_dato), s.deuda_total, s.saldo_pendiente, s.saldo_a_favor, s.saldo_financiado, s.valor_reclamo, p_carga
           from (select distinct on (contrato) * from scrr.paso_cartera where carga_id = p_carga and lote = p_lote and error is null and saldo_pendiente > 0
                  order by contrato, saldo_pendiente desc, fila) s
           left join scrr.barrios b on b.nombre_norm = scrr.f_barrio_norm(s.barrio)
+          left join scrr.v_calendario_vigente k on k.periodo = to_char(c.fecha_dato, 'YYYYMM') and k.ciclo::numeric = scrr.f_num(s.ciclo)
         on conflict (fecha_dato, version, contrato) do nothing;
       get diagnostics n1 = row_count;
       -- cartera_suscripcion: respaldo de lo que había (solo la primera vez que la carga toca el contrato), retiro de esas filas e inserción de las del archivo
@@ -330,16 +335,23 @@ begin
       select count(*) into v_tot from scrr.paso_pagos where carga_id = p_carga and lote = p_lote and error is null;
       v_res := jsonb_build_object('lote', p_lote, 'pagos_nuevos', n1, 'pagos_ya_existentes', v_tot - n1);
     else
-      insert into scrr.actas (id, contrato, tipo_actividad_id, drastico, fecha_ejecucion, version, resultado, anomalia, acta_numero, observacion, hora_inicio, hora_fin,
-                              lectura, medidor, marca_medidor, operario, origen, estado_original, carga_id, creado_por)
-        select gen_random_uuid(), s.contrato, s.tipo_actividad_id, s.drastico, s.fecha_ejecucion, 1, case s.estado_original when 3 then 'efectiva' else 'inefectiva' end,
-               s.anomalia, s.acta, s.observacion, s.hora_inicio, s.hora_fin, s.lectura, s.medidor, s.marca, s.operario, 'archivo', s.estado_original, p_carga, c.autor
-          from (select distinct on (contrato, tipo_actividad_id, fecha_ejecucion) * from scrr.paso_actividades
-                 where carga_id = p_carga and lote = p_lote and error is null order by contrato, tipo_actividad_id, fecha_ejecucion, fila) s
-        on conflict do nothing;
-      get diagnostics n1 = row_count;
+      -- la lista de la que salió cada visita, si la hay (fuera de las listas = nulo: ajuste inicial o actividad no programada; David, 22-nov 20:45)
+      with nuevas as (
+        insert into scrr.actas (id, contrato, tipo_actividad_id, drastico, fecha_ejecucion, version, resultado, anomalia, acta_numero, observacion, hora_inicio, hora_fin,
+                                lectura, medidor, marca_medidor, operario, origen, estado_original, carga_id, creado_por, corrida_id)
+          select gen_random_uuid(), s.contrato, s.tipo_actividad_id, s.drastico, s.fecha_ejecucion, 1, case s.estado_original when 3 then 'efectiva' else 'inefectiva' end,
+                 s.anomalia, s.acta, s.observacion, s.hora_inicio, s.hora_fin, s.lectura, s.medidor, s.marca, s.operario, 'archivo', s.estado_original, p_carga, c.autor,
+                 (select k.corrida_id from scrr.corrida_contratos k join scrr.corridas r on r.id = k.corrida_id
+                   where k.contrato = s.contrato and r.actividad_id = s.tipo_actividad_id
+                     and (r.creado_en at time zone 'America/Bogota')::date between s.fecha_ejecucion - 60 and s.fecha_ejecucion
+                   order by r.creado_en desc limit 1)
+            from (select distinct on (contrato, tipo_actividad_id, fecha_ejecucion) * from scrr.paso_actividades
+                   where carga_id = p_carga and lote = p_lote and error is null order by contrato, tipo_actividad_id, fecha_ejecucion, fila) s
+          on conflict do nothing
+          returning corrida_id)
+      select count(*), count(*) filter (where corrida_id is null) into n1, n2 from nuevas;
       select count(*) into v_tot from scrr.paso_actividades where carga_id = p_carga and lote = p_lote and error is null;
-      v_res := jsonb_build_object('lote', p_lote, 'actas_nuevas', n1, 'actas_ya_existentes', v_tot - n1);
+      v_res := jsonb_build_object('lote', p_lote, 'actas_nuevas', n1, 'actas_ya_existentes', v_tot - n1, 'actas_de_una_lista', n1 - n2, 'actas_fuera_de_las_listas', n2);
     end if;
     insert into scrr.carga_eventos (carga_id, evento, lote, resumen, autor) values (p_carga, 'lote_aplicado', p_lote, v_res, v_email);
     return v_res || jsonb_build_object('repetido', false);
@@ -357,7 +369,7 @@ begin
                                           facturas_pendientes, facturas_vencidas, deuda_total, saldo_pendiente, saldo_a_favor, saldo_financiado, valor_reclamo, carga_id)
         select c.fecha_dato, c.version, h.contrato, false, h.marca, coalesce(s.estado, h.estado), coalesce(s.categoria, h.categoria), h.ciclo, coalesce(s.ruta, h.ruta),
                coalesce(s.codigo_reparto, h.codigo_reparto), h.barrio_id,
-               coalesce(s.facturas_pendientes, 0), coalesce(s.facturas_vencidas, 0), coalesce(s.deuda_total, 0), coalesce(s.saldo_pendiente, 0), coalesce(s.saldo_a_favor, 0),
+               coalesce(s.facturas_pendientes, 0), 0, coalesce(s.deuda_total, 0), coalesce(s.saldo_pendiente, 0), coalesce(s.saldo_a_favor, 0),
                coalesce(s.saldo_financiado, 0), coalesce(s.valor_reclamo, 0), p_carga
           from scrr.cartera_historial h
           left join lateral (select * from scrr.paso_cartera p where p.carga_id = p_carga and p.contrato = h.contrato::text and p.error is null order by p.saldo_pendiente desc limit 1) s on true
@@ -397,7 +409,9 @@ begin
                                 'pagos_ya_existentes', (select coalesce(sum((e.resumen->>'pagos_ya_existentes')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'));
   else
     v_res := jsonb_build_object('actas_nuevas', (select coalesce(sum((e.resumen->>'actas_nuevas')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'),
-                                'actas_ya_existentes', (select coalesce(sum((e.resumen->>'actas_ya_existentes')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'));
+                                'actas_ya_existentes', (select coalesce(sum((e.resumen->>'actas_ya_existentes')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'),
+                                'actas_de_una_lista', (select coalesce(sum((e.resumen->>'actas_de_una_lista')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'),
+                                'actas_fuera_de_las_listas', (select coalesce(sum((e.resumen->>'actas_fuera_de_las_listas')::bigint), 0) from scrr.carga_eventos e where e.carga_id = p_carga and e.evento = 'lote_aplicado'));
   end if;
   v_res := v_res || jsonb_build_object('rechazadas', v_val->'filas_rechazadas');
   if c.reemplaza_id is not null then

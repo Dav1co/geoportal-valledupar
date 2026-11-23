@@ -1,5 +1,5 @@
 """Recorrido local completo del Motor SCRR, corte 2 (clúster 55432 del Code A; NUNCA Supabase):
-generar → ensayo (N de N SIN FALLAS) → huellas ANTES → migración → verificación (8 de 8) → huellas DESPUÉS → pruebas locales del cierre (75)
+generar → ensayo (N de N SIN FALLAS) → huellas ANTES → migración → verificación (9 de 9) → huellas DESPUÉS → pruebas locales del cierre (75)
 → la reversa se niega si hay cartera sin revertir → reversa → la base queda como antes (huella de campo y sin scrr).
 Escribe resultados_locales.txt junto al paquete.
 Uso: python3 -I correr_local.py [-h]"""
@@ -27,7 +27,7 @@ def main():
     _, out, _ = corre(b, PAQ / f"huellas_solo_lectura_{N}_editor.sql", at=True); log("huellas ANTES:\n" + out.strip())
     rc, _, err = corre(b, PAQ / f"migracion_{N}_editor.sql"); assert rc == 0 and "ERROR" not in err, err[-1500:]; log("migración: aplicada")
     _, out, _ = corre(b, PAQ / f"verificacion_{N}_editor.sql", at=True); log("verificación:\n" + out.strip())
-    assert out.count("|OK") == 8 and "FALLA" not in out
+    assert out.count("|OK") == 9 and "FALLA" not in out
     _, out, _ = corre(b, PAQ / f"huellas_solo_lectura_{N}_editor.sql", at=True); log("huellas DESPUÉS:\n" + out.strip())
     _, _, err = corre(b, AQUI / "75_pruebas_cierre_local.sql")
     m = re.search(r"RESULTADO LOCAL: (\d+) de (\d+) pruebas correctas — (SIN FALLAS|FALLAS:.*)", err, re.S)
@@ -41,9 +41,9 @@ def main():
     assert "hay cargas de cartera" in err
     g.psql(b, "update scrr.suscripcion_respaldo set revertido_en = now() where carga_id = '00000000-0000-0000-0000-0000000000aa'")
     rc, _, err = corre(b, PAQ / f"reversa_{N}_editor.sql"); assert rc == 0 and "ERROR" not in err, err[-800:]
-    quedan = g.valor(b, "select (to_regnamespace('scrr') is null)::text || '|' || (select count(*) from pg_proc where proname like 'geoportal\\_scrr\\_%')::text || '|' || (" + g.CONJ_CAMPO + ")")
-    log("reversa: " + quedan + "  (esperado: true|0|261bed3c9242f6261f845ec4e1374b3a)")
-    assert quedan == "true|0|261bed3c9242f6261f845ec4e1374b3a"
+    quedan = g.valor(b, "select (to_regnamespace('scrr') is null)::text || '|' || (select count(*) from pg_proc where proname like 'geoportal\\_scrr\\_%')::text || '|' || (" + g.CONJ_CAMPO + ") || '|' || (select count(*) from pg_roles where rolname = 'scrr_refresco')")
+    log("reversa: " + quedan + "  (esperado: true|0|261bed3c9242f6261f845ec4e1374b3a|0: sin scrr, sin RPC, campo igual y sin el rol)")
+    assert quedan == "true|0|261bed3c9242f6261f845ec4e1374b3a|0"
     g.psql("postgres", f"drop database {b}")
     log(f"RECORRIDO LOCAL COMPLETO SIN FALLAS ({time.time() - t0:.0f} s)")
     (PAQ / "resultados_locales.txt").write_text("\n".join(salida) + "\n")

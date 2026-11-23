@@ -22,6 +22,7 @@ const ETIQUETA: Record<string, string> = {
   historial: "Contratos con saldo al historial", suscripcion_filas_nuevas: "Filas nuevas en la cartera de suscripción", suscripcion_contratos_salientes: "Contratos que salieron de la cartera",
   suscripcion_filas_retiradas: "Filas retiradas (con respaldo)", filas_de_salida_historial: "Contratos que dejaron de tener saldo", pagos_nuevos: "Pagos nuevos",
   pagos_ya_existentes: "Pagos que ya estaban (no se duplican)", actas_nuevas: "Actas nuevas", actas_ya_existentes: "Actas que ya estaban", rechazadas: "Filas rechazadas",
+  actas_de_una_lista: "Actas de una lista generada", actas_fuera_de_las_listas: "Actas fuera de las listas (o del ajuste inicial)",
 };
 
 export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
@@ -42,6 +43,8 @@ export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
   const [confirmo, setConfirmo] = useState(false);
   const [salidas, setSalidas] = useState<{ mensaje: string; motivo: string } | null>(null);
   const [deshacer, setDeshacer] = useState<{ carga: CargaFila; motivo: string; avance: string | null } | null>(null);
+  // Mapa comercial (predios_comercial): lo refresca el cargador al cerrar o revertir una cartera (David, 22-nov)
+  const [mapa, setMapa] = useState<{ carga: string; estado: "actualizando" | "ok" | "error"; texto: string } | null>(null);
   const worker = useRef<Worker | null>(null);
   const pausar = useRef(false);
   const esperaLote = useRef<((f: Record<string, string>[]) => void) | null>(null);
@@ -52,6 +55,12 @@ export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
   }, []);
   useEffect(() => { void refrescar(); return () => { worker.current?.terminate(); }; }, [refrescar]);
   useEffect(() => { setFechaDato(tipo === "cartera" ? hoyBogota() : ayerBogota()); }, [tipo]);
+
+  async function refrescarMapa(id: string) {
+    setMapa({ carga: id, estado: "actualizando", texto: "Actualizando el mapa comercial… (puede tardar un minuto)" });
+    try { const r = await apiScrr.refrescarMapa(id); setMapa({ carga: id, estado: "ok", texto: `Mapa comercial actualizado (${num(Math.round(r.ms / 100) / 10)} s).` }); }
+    catch (e) { setMapa({ carga: id, estado: "error", texto: e instanceof ErrorScrr ? e.message : avisoDeError(e) }); }
+  }
 
   function reiniciar() {
     worker.current?.terminate(); worker.current = null; setFase("inicio"); setArchivo(null); setLocal(null); setServidor(null); setCargaId(null); setPct(0); setLotes({ hechos: 0, total: 0 });
@@ -119,6 +128,7 @@ export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
       }
       const r = await apiScrr.cerrar(id, confirmarSalidas !== undefined, confirmarSalidas ?? null);
       setResultado(r.resultado); setSalidas(null); setFase("aplicada"); void refrescar();
+      if (r.tipo === "cartera") void refrescarMapa(id);
     } catch (e) {
       if (e instanceof ErrorScrr && e.tipo === "conflicto" && /no vienen en el archivo/.test(e.message)) { setSalidas({ mensaje: e.message, motivo: "" }); setFase("confirmar_salidas"); return; }
       setMensaje(avisoDeError(e)); setFase("aplicacion_pausada"); void refrescar();
@@ -139,7 +149,9 @@ export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
         }
       }
       await apiScrr.anular(carga.carga_id, motivo);
+      const revertida = carga.tipo === "cartera" && ["aplicada", "aplicando"].includes(carga.estado);
       setDeshacer(null); if (carga.carga_id === cargaId) reiniciar(); void refrescar();
+      if (revertida) void refrescarMapa(carga.carga_id);
     } catch (e) { setMensaje(avisoDeError(e)); setDeshacer((d) => d && { ...d, avance: null }); }
   }
 
@@ -187,6 +199,7 @@ export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
           Use la plantilla: el archivo debe traer <strong>exactamente</strong> sus columnas. <button className="scrr-link" onClick={() => void descargarPlantilla(tipo)} data-accion="plantilla">Descargar la plantilla de {NOMBRE_TIPO[tipo].toLowerCase()}</button>
           {tipo === "cartera" && <> La cartera también actualiza la cartera de suscripción (con nombre y dirección), que reemplaza al cargue por script.</>}
           {tipo === "pagos" && <> Plantilla provisional (contrato, fecha de pago y monto) mientras llega el archivo real.</>}
+          {tipo === "actividades" && <> Se cargan también las actividades hechas fuera de las listas y, para arrancar, lo ya realizado antes del motor (ajuste inicial): todas actualizan el estado del servicio.</>}
         </p>
 
         {fase === "inicio" && <button className="scrr-btn" disabled={!archivo} onClick={leerArchivo} data-accion="leer">Leer y validar archivo</button>}
@@ -205,8 +218,7 @@ export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
               <dt>Filas leídas</dt><dd data-dato="filas">{num(r.filas)}</dd>
               <dt>Rechazadas</dt><dd>{num(r.rechazadas)} ({num(r.pctRechazadas)} %)</dd>
               <dt>Contratos distintos válidos</dt><dd>{num(r.contratosDistintos)}</dd>
-              {r.tipo === "cartera" && <><dt>Con saldo pendiente</dt><dd>{num(r.extra.con_saldo_pendiente)}</dd><dt>Con facturas vencidas</dt><dd>{num(r.extra.con_facturas_vencidas)}</dd>
-                <dt>Con valor en reclamo</dt><dd>{num(r.extra.con_reclamo)}</dd><dt>Comodín o categoría «-1»</dt><dd>{num(r.extra.comodin_o_categoria_menos_1)}</dd></>}
+              {r.tipo === "cartera" && <><dt>Con saldo pendiente</dt><dd>{num(r.extra.con_saldo_pendiente)}</dd><dt>Con valor en reclamo</dt><dd>{num(r.extra.con_reclamo)}</dd><dt>Comodín o categoría «-1»</dt><dd>{num(r.extra.comodin_o_categoria_menos_1)}</dd></>}
               {r.tipo === "pagos" && <><dt>Pagos de</dt><dd>{fecha(String(r.extra.primera_fecha ?? ""))} a {fecha(String(r.extra.ultima_fecha ?? ""))}</dd><dt>Monto total</dt><dd>{pesos(r.extra.monto_total)}</dd></>}
               {r.tipo === "actividades" && <><dt>Efectivas / inefectivas</dt><dd>{num(r.extra.efectivas)} / {num(r.extra.inefectivas)}</dd><dt>Cortes drásticos</dt><dd>{num(r.extra.cortes_drasticos)}</dd></>}
               <dt>Hojas leídas</dt><dd>{r.hojas.join(", ")}{local && local.hojasOmitidas.length > 0 ? ` (sin la columna Contrato, se omiten: ${local.hojasOmitidas.join(", ")})` : ""}</dd>
@@ -262,6 +274,10 @@ export function PanelCargas({ ctx }: { ctx: ContextoScrr }) {
           <div className="scrr-resumen scrr-ok" data-bloque="aplicada"><h4>Carga aplicada</h4>
             <ul>{Object.entries(resultado).filter(([, v]) => typeof v === "number").map(([k, v]) => <li key={k}>{ETIQUETA[k] ?? k.replace(/_/g, " ")}: {num(v as number)}</li>)}</ul>
             <button className="scrr-btn" onClick={reiniciar}>Cargar otro archivo</button></div>
+        )}
+        {mapa && (
+          <p className={mapa.estado === "error" ? "scrr-aviso" : "scrr-suave"} data-bloque="mapa" role="status">{mapa.texto}{" "}
+            {mapa.estado === "error" && <button className="scrr-link" onClick={() => void refrescarMapa(mapa.carga)} data-accion="reintentar-mapa">Reintentar actualizar el mapa</button>}</p>
         )}
         {mensaje && <p className="scrr-error" role="alert">{mensaje}</p>}
         {fase !== "inicio" && !bloqueado && !["aplicada", "aplicacion_pausada", "confirmar_salidas"].includes(fase) && <button className="scrr-link" onClick={reiniciar}>Empezar de nuevo con otro archivo</button>}

@@ -6,10 +6,12 @@ begin;
 -- Primero se revierten esas cargas desde la pantalla (o con public.geoportal_scrr_suscripcion_revertir) y después se corre esta reversa.
 --
 -- DROP 1 — POR QUÉ: las RPC public.geoportal_scrr_* son nuevas de este corte y no existían antes. ALCANCE EXACTO: solo las funciones de public cuyo
---          nombre empieza por «geoportal_scrr_» (las lista la consulta de abajo; hoy son 11). Ninguna otra función de public.
+--          nombre empieza por «geoportal_scrr_» (las lista la consulta de abajo). Ninguna otra función de public.
 -- DROP 2 — POR QUÉ: el esquema scrr es nuevo de este corte. ALCANCE EXACTO: el esquema scrr con todo lo suyo (tablas, particiones, vistas, funciones,
 --          disparadores y datos del motor: cargas, historial, pagos, actas y respaldos). «cascade» solo alcanza objetos DENTRO de scrr: nada fuera de scrr
 --          depende de él (ninguna función ni vista de public, campo, acta o técnica lo usa; las RPC de public se quitan antes en el DROP 1).
+-- DROP 3 — POR QUÉ: el rol scrr_refresco es nuevo de este corte (refresca el mapa comercial). ALCANCE EXACTO: solo ese rol; antes se le quitan sus tres permisos
+--          (connect a esta base, usage en public y maintain sobre public.predios_comercial). No es dueño de nada. Si se le había dado login, también se va.
 -- No toca public.cartera_suscripcion, public.geoportal_auditoria (la auditoría del SCRR se queda como registro) ni las funciones de permisos.
 -- =====================================================================
 do $reversa$
@@ -27,6 +29,12 @@ begin
     execute format('drop function %s', f.firma);                 -- DROP 1 (ver arriba)
   end loop;
   drop schema scrr cascade;                                       -- DROP 2 (ver arriba)
+  if exists (select 1 from pg_roles where rolname = 'scrr_refresco') then
+    revoke maintain on public.predios_comercial from scrr_refresco;
+    revoke usage on schema public from scrr_refresco;
+    execute format('revoke connect on database %I from scrr_refresco', current_database());
+    drop role scrr_refresco;                                      -- DROP 3 (ver arriba)
+  end if;
 end $reversa$;
 
 commit;

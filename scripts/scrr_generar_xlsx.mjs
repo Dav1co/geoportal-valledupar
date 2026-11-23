@@ -23,7 +23,7 @@ const S_HOY = serial(hoy);
 
 const ENC = {
   cartera: ["Contrato", "Estado", "No. Identificación", "Nombre", "Correo Electrónico", "Teléfono", "Dirección", "Barrio", "Categoria", "Subcategoria", "Ciclo",
-            "Facturas pendientes", "Facturas vencidas", "Deuda total", "Saldo Pendiente", "Saldo a favor", "Valor reclamo", "Saldo financiado", "Elemento medición", "Código reparto", "Ruta"],
+            "Facturas pendientes", "Deuda total", "Saldo Pendiente", "Saldo a favor", "Valor reclamo", "Saldo financiado", "Elemento medición", "Código reparto", "Ruta"],
   pagos: ["Contrato", "Fecha de pago", "Monto"],
   actividades: ["CONTRATO", "ACTA", "ACTIVIDAD", "DRASTICO", "ESTADO", "ANOMALIA", "OBSERVACION", "FECHA", "HORA INICIAL", "HORA FINAL", "LECTURA", "MEDIDOR", "MARCA", "OPERARIO"],
 }[tipo];
@@ -33,7 +33,7 @@ function fila(i) {
   if (tipo === "cartera") {
     const saldo = i % 2 ? 0 : 20000 + (i % 977) * 1000, venc = i % 2 ? 0 : (i % 30);
     return [c, "ACTIVO", 1000000 + i, `SUSCRIPTOR SINTÉTICO ${i}`, `s${i}@ejemplo.invalid`, "3000000000", `CALLE ${i % 400} # ${i % 90}-${i % 70}`, BARRIOS[i % 571],
-            "1 - RESIDENCIAL", `${(i % 6) + 1} - ESTRATO ${(i % 6) + 1}`, String((i % 24) + 1).padStart(2, "0"), venc + 1, venc, saldo + 5000, saldo, 0, i % 97 === 0 ? 15000 : 0, 5000,
+            "1 - RESIDENCIAL", `${(i % 6) + 1} - ESTRATO ${(i % 6) + 1}`, String((i % 24) + 1).padStart(2, "0"), venc + 1, saldo + 5000, saldo, i % 13 === 0 ? "" : 0, i % 97 === 0 ? 15000 : 0, 5000,
             `M${i}`, `R${i % 50}`, `RUTA ${i % 300}`];
   }
   if (tipo === "pagos") return [c, S_HOY - (i % 10), 10000 + (i % 500) * 100];

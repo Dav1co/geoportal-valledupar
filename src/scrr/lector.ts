@@ -7,7 +7,7 @@ export type TipoCarga = "cartera" | "pagos" | "actividades";
 export type Columna = { clave: string; encabezado: string; ancho: number; nota: string };
 
 /** Las plantillas: encabezado que ve la persona → clave que viaja al servidor. Cartera: los encabezados del archivo «Cartera Detallada Por Suscripción» que
- *  ya carga el script (cargar_diario.py) más «Facturas vencidas» (decisión 2 del 20-nov). Pagos: PROVISIONAL de 3 columnas (decisión 7 del 22-nov).
+ *  ya carga el script (cargar_diario.py); «Facturas vencidas» NO va: la deriva el motor (David, 22-nov). Pagos: PROVISIONAL de 3 columnas (decisión 7 del 22-nov).
  *  Actividades: decisión 10 del 20-nov, con DRASTICO (decisión 4 del 22-nov). */
 export const PLANTILLAS: Record<TipoCarga, Columna[]> = {
   cartera: [
@@ -22,8 +22,7 @@ export const PLANTILLAS: Record<TipoCarga, Columna[]> = {
     { clave: "categoria", encabezado: "Categoria", ancho: 18, nota: "" },
     { clave: "subcategoria", encabezado: "Subcategoria", ancho: 18, nota: "" },
     { clave: "ciclo", encabezado: "Ciclo", ancho: 8, nota: "Número de ciclo." },
-    { clave: "facturas_pendientes", encabezado: "Facturas pendientes", ancho: 12, nota: "Número entero de 0 a 999." },
-    { clave: "facturas_vencidas", encabezado: "Facturas vencidas", ancho: 12, nota: "Las que ya están en rango de suspensión o corte (los rangos de la selección van sobre esta)." },
+    { clave: "facturas_pendientes", encabezado: "Facturas pendientes", ancho: 12, nota: "Número entero de 0 a 999 (vacío = 0). Las vencidas las calcula el motor con el calendario de ciclos." },
     { clave: "deuda_total", encabezado: "Deuda total", ancho: 14, nota: "Pesos, sin signo $." },
     { clave: "saldo_pendiente", encabezado: "Saldo Pendiente", ancho: 14, nota: "Paz y salvo = saldo pendiente en cero (decisión 11)." },
     { clave: "saldo_a_favor", encabezado: "Saldo a favor", ancho: 12, nota: "" },
@@ -176,11 +175,11 @@ export function procesarFila(tipo: TipoCarga, mapeo: Mapeo, cruda: string[]): Fi
                             ["subcategoria", 80], ["serial_medidor", 60], ["codigo_reparto", 40], ["ruta", 80]] as const) v[c] = texto(g(c), max);
     const ci = g("ciclo"); v.ciclo = texto(ci, 10);
     if (v.ciclo !== null && numeroCanonico(v.ciclo) === null) rechazar("Ciclo no válido");   // se guarda tal como viene («05» sigue siendo «05», como lo deja hoy el script)
-    for (const c of ["facturas_pendientes", "facturas_vencidas"]) {
-      const n = numeroCanonico(g(c)); v[c] = n;
-      if (n === null || !Number.isInteger(Number(n)) || Number(n) < 0 || Number(n) > 999) rechazar(c === "facturas_pendientes" ? "Facturas pendientes ausentes o no válidas" : "Facturas vencidas ausentes o no válidas");
-    }
-    for (const c of ["deuda_total", "saldo_pendiente", "saldo_a_favor", "valor_reclamo", "saldo_financiado"]) { v[c] = numeroCanonico(g(c)); if (v[c] === null) rechazar("Cifra obligatoria ausente o con formato no válido"); }
+    // Cifras: un vacío vale CERO, como lo hacía el script (David, 22-nov); solo se rechaza un valor que no es número
+    const cifra = (c: string): string | null => { const t = texto(g(c), 40); return t === null ? "0" : numeroCanonico(t); };
+    v.facturas_pendientes = cifra("facturas_pendientes");
+    if (v.facturas_pendientes === null || !Number.isInteger(Number(v.facturas_pendientes)) || Number(v.facturas_pendientes) < 0 || Number(v.facturas_pendientes) > 999) rechazar("Facturas pendientes no válidas");
+    for (const c of ["deuda_total", "saldo_pendiente", "saldo_a_favor", "valor_reclamo", "saldo_financiado"]) { v[c] = cifra(c); if (v[c] === null) rechazar("Cifra con formato no válido (vacío vale cero)"); }
   } else if (tipo === "pagos") {
     v.fecha_pago = fechaCanonica(g("fecha_pago")); if (v.fecha_pago === null) rechazar("Fecha de pago ausente o no válida");
     v.monto = numeroCanonico(g("monto")); if (v.monto === null || Number(v.monto) === 0) rechazar("Monto ausente, en cero o no válido");
@@ -215,7 +214,7 @@ export type Resumen = {
 export class Acumulador {
   readonly filas: (string | null)[][] = [];   // TODAS las filas (también las rechazadas: el servidor las vuelve a validar y registra su causa)
   rechazadas = 0; private causas: Record<string, number> = {}; private contratos = new Set<string>();
-  private extra: Record<string, number> = { con_saldo_pendiente: 0, con_facturas_vencidas: 0, con_reclamo: 0, comodin_o_categoria_menos_1: 0, monto_total: 0, efectivas: 0, inefectivas: 0, cortes_drasticos: 0 };
+  private extra: Record<string, number> = { con_saldo_pendiente: 0, con_reclamo: 0, comodin_o_categoria_menos_1: 0, monto_total: 0, efectivas: 0, inefectivas: 0, cortes_drasticos: 0 };
   private minFecha: string | null = null; private maxFecha: string | null = null;
   constructor(readonly tipo: TipoCarga, readonly mapeo: Mapeo, private comodin = "99999999") {}
   agregar(cruda: string[]): void {
@@ -228,7 +227,6 @@ export class Acumulador {
     const fecha = (f: string | null) => { if (f) { if (!this.minFecha || f < this.minFecha) this.minFecha = f; if (!this.maxFecha || f > this.maxFecha) this.maxFecha = f; } };
     if (this.tipo === "cartera") {
       if (Number(val("saldo_pendiente")) > 0) this.extra.con_saldo_pendiente++;
-      if (Number(val("facturas_vencidas")) > 0) this.extra.con_facturas_vencidas++;
       if (Number(val("valor_reclamo")) > 0) this.extra.con_reclamo++;
       if (con === this.comodin || (val("categoria") ?? "").startsWith("-1")) this.extra.comodin_o_categoria_menos_1++;
     } else if (this.tipo === "pagos") { this.extra.monto_total += Number(val("monto")); fecha(val("fecha_pago")); }

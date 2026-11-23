@@ -11,7 +11,8 @@ NOMBRE = "scrr_corte2"
 DOBLE = H / "geoportal-consultas/campo/admin_perfiles_22nov/doble_admin_4a/doble_admin_permisos_4a_con_cargo_supervisor.sql"
 PSQL = "/opt/homebrew/opt/postgresql@17/bin/psql"
 ENV = {**os.environ, "PGHOST": "localhost", "PGPORT": "55432", "PGUSER": "postgres", "PGOPTIONS": "-c client_min_messages=warning", "LC_ALL": "C"}
-FUENTES = ["05_guardia.sql", "10_esquema.sql", "20_cargas.sql", "30_rpc_cargas.sql", "40_permisos.sql", "60_semilla.sql"]
+FUENTES = ["05_guardia.sql", "10_esquema.sql", "20_cargas.sql", "25_control_calendario_corridas.sql", "30_rpc_cargas.sql", "35_rpc_control_calendario.sql",
+           "38_rpc_seleccion.sql", "50_refresco_mapa.sql", "55_permisos.sql", "60_semilla.sql"]
 PERMISOS = ["public.geoportal_puede(text,text)", "public.geoportal_mis_permisos(text)", "public.geoportal_admin_guardar(text,text,text,text,boolean,text,text)",
             "public.geoportal_admin_permisos(text,text,boolean,boolean,boolean,boolean,text,text,boolean,boolean,boolean,text,boolean,boolean,boolean,boolean,boolean,boolean,boolean,boolean)"]
 CONJ_CAMPO = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p "
@@ -38,11 +39,20 @@ def psql(base, sql=None, archivo=None, at=True, ok=True):
     if ok and r.returncode: raise SystemExit(f"psql falló en {base}: {r.stderr[-1500:]}")
     return r
 
+def limpiar_rol():
+    """El rol scrr_refresco es del CLÚSTER (no de una base): las bases locales de prueba que tenían la migración lo dejan vivo. Se quitan esas bases y el rol."""
+    for db in ("scrr_gen", "scrr_local", "scrr_chrome", "scrr_mut"):
+        psql("postgres", f"drop database if exists {db}")
+    psql("postgres", "drop role if exists scrr_refresco")
+
 def base_nueva(nombre):
     """Copia limpia del doble (plantilla scrr_plantilla, que se arma una vez desde el archivo del doble)."""
-    if psql("postgres", "select 1 from pg_database where datname = 'scrr_plantilla'").stdout.strip() != "1":
+    if psql("postgres", "select 1 from pg_database where datname = 'scrr_plantilla'").stdout.strip() != "1" or \
+       psql("scrr_plantilla", "select (to_regclass('hechos.facturacion_sspd') is not null)::text").stdout.strip() != "true":
+        psql("postgres", "drop database if exists scrr_plantilla")
         psql("postgres", "create database scrr_plantilla")
         psql("scrr_plantilla", archivo=DOBLE, at=False)
+        psql("scrr_plantilla", archivo=AQUI / "doble_base_local.sql", at=False)
     psql("postgres", f"drop database if exists {nombre}"); psql("postgres", f"create database {nombre} template scrr_plantilla")
     return nombre
 
@@ -53,6 +63,7 @@ def poner(t, v):
     assert "{{" not in t, re.findall(r"\{\{[A-Z_]+\}\}", t); return t
 
 def main():
+    limpiar_rol()
     b = base_nueva("scrr_gen")
     md5p = lambda f: f"md5(pg_get_functiondef(to_regprocedure('{f}')))"
     PROD = {"HUELLA_CAMPO": valor(b, CONJ_CAMPO), "MD5_AUTORIZAR_SUPERVISION": valor(b, f"select {md5p('campo.f_autorizar_supervision(text)')}"),
@@ -71,7 +82,7 @@ def main():
     nuevas = {"HUELLA_SCRR": valor(b, CONJ_SCRR), "RPC": valor(b, "select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\\_scrr\\_%'"),
               "TABLAS": valor(b, "select count(*) from pg_class where relnamespace = 'scrr'::regnamespace and relkind in ('r','p') and not relispartition")}
     assert valor(b, CONJ_CAMPO) == PROD["HUELLA_CAMPO"]
-    psql("postgres", f"drop database {b}")
+    psql("postgres", f"drop database {b}"); psql("postgres", "drop role if exists scrr_refresco")
     v = {**PROD, **nuevas}
 
     huellas = f"""-- Solo lectura. ANTES: 1 «PUBLICADA (22-nov 13:46)», 2 «NO EXISTE», 3 a 6 con su md5 (anótelas). DESPUÉS: 1 igual, 2 «CON ESTE CORTE», 3 a 6 IGUALES a las de antes.
@@ -100,14 +111,18 @@ select o, k, v, estado from (
              "or has_table_privilege('authenticated', c.oid, 'select') or has_table_privilege('anon', c.oid, 'select')))"),
         fila(4, "4 ninguna función de scrr con DELETE o UPDATE sin WHERE", SIN_WHERE_SCRR + " = 0"),
         fila(5, "5 redes.f_funciones_sin_where() devuelve cero filas", "(select count(*) from redes.f_funciones_sin_where()) = 0"),
-        fila(6, "6 semilla: 11 parámetros, 6 tipos de actividad, 17 anomalías PROVISIONALES",
+        fila(6, "6 semilla: 11 parámetros, 6 tipos de actividad, 17 anomalías DEFINITIVAS, 4 causas de control y el calendario de noviembre (24 ciclos)",
              "(select count(*) from scrr.v_parametros_vigentes) = 11 and (select count(*) from scrr.tipos_actividad) = 6 "
-             "and (select count(*) from scrr.anomalias where provisional) = 17"),
+             "and (select count(*) from scrr.anomalias where not provisional) = 17 and (select count(*) from scrr.causas_control) = 4 "
+             "and (select count(*) from scrr.v_calendario_vigente where periodo = '202611') >= 24"),
         fila(7, "7 particiones de hoy: historial del día y pagos del mes",
              "to_regclass('scrr.cartera_historial_' || to_char((now() at time zone 'America/Bogota')::date, 'YYYYMMDD')) is not null "
              "and to_regclass('scrr.pagos_contrato_' || to_char((now() at time zone 'America/Bogota')::date, 'YYYYMM')) is not null"),
         fila(8, "8 public.cartera_suscripcion con sus mismas 21 columnas",
              f"(select string_agg(column_name || ':' || data_type, ',' order by ordinal_position) from information_schema.columns where table_schema = 'public' and table_name = 'cartera_suscripcion') = '{PROD['COLUMNAS_SUSCRIPCION']}'"),
+        fila(9, "9 rol scrr_refresco: solo MAINTAIN sobre predios_comercial (sin superusuario; el login lo da David aparte)",
+             "exists (select 1 from pg_roles where rolname = 'scrr_refresco' and not rolsuper and not rolcreaterole and not rolinherit) "
+             "and has_table_privilege('scrr_refresco', 'public.predios_comercial', 'MAINTAIN') and not has_table_privilege('scrr_refresco', 'public.predios_comercial', 'SELECT')"),
     ]) + "\n) t order by o;\n"
 
     reversa = lee("90_reversa.sql")
@@ -117,7 +132,7 @@ select o, k, v, estado from (
         + poner(lee("70_pruebas.sql"), v) + "\nrollback;\n")
     esc(f"reversa_{NOMBRE}_editor.sql", CAB.format(que="REVERSA") + "begin;\n" + reversa + "\ncommit;\n")
     esc(f"huellas_solo_lectura_{NOMBRE}_editor.sql", CAB.format(que="HUELLAS (solo lectura; ANTES y DESPUÉS)") + huellas)
-    esc(f"verificacion_{NOMBRE}_editor.sql", CAB.format(que="VERIFICACIÓN (solo lectura; después de la migración: 8 de 8 OK)") + ver)
+    esc(f"verificacion_{NOMBRE}_editor.sql", CAB.format(que="VERIFICACIÓN (solo lectura; después de la migración: 9 de 9 OK)") + ver)
     (AQUI / "huellas_locales.json").write_text(json.dumps({"partida": {k: PROD[k] for k in ("HUELLA_CAMPO", "MD5_AUTORIZAR_SUPERVISION")}, "permisos": permisos_antes, "nuevas": nuevas}, indent=1))
     for n in sorted(PAQ.glob("*_editor.sql")):
         t = n.read_text(); assert "on commit drop" not in t.lower(), n

@@ -36,8 +36,14 @@ const esp = (ms) => new Promise((r) => setTimeout(r, ms));
 // ---------- 0. Base: copia de la plantilla + migración + 112.000 contratos sintéticos ----------
 if (psqlIn("show port", "postgres") !== "55432") { console.error("No es el clúster del Code A (55432)"); process.exit(2); }
 psqlIn(`drop database if exists ${DB}; create database ${DB} template scrr_plantilla;`, "postgres");
+psqlIn("drop role if exists scrr_refresco", "postgres");      // el rol es del clúster: lo deja vivo una corrida anterior (su base ya se quitó)
 const MIG = join(raiz, "sql/scrr_corte2/migracion_scrr_corte2_editor.sql");
 execFileSync(PSQL, ["-qX", "-v", "ON_ERROR_STOP=1", "-d", DB, "-f", MIG], { env: PGENV, stdio: ["ignore", "pipe", "pipe"] });
+// Refresco del mapa: SOLO LOCAL, el rol mínimo recibe login con una clave de prueba (en producción la pone David y va en el secreto de la Edge)
+const CLAVE_LOCAL = "solo-local-prueba-scrr";
+sqlq(`alter role scrr_refresco login password '${CLAVE_LOCAL}'`);
+// Facturación sintética del último período (la selección exige «facturado»): todos los contratos del archivo menos 1 de cada 50
+sqlq(`insert into hechos.facturacion_sspd (periodo, contrato) select '202610', (930000000000 + g)::text from generate_series(1, 112000) g where g % 50 <> 0; analyze hechos.facturacion_sspd;`);
 sqlq(`insert into public.cartera_suscripcion (contrato, estado, nombre, direccion, saldo_pendiente, ciclo, periodo_carga)
       select (930000000000 + g)::text, 'VIEJO', 'SINTÉTICO VIEJO ' || g, 'CALLE VIEJA', 1, '01', '20261121' from generate_series(1, 112000) g; analyze public.cartera_suscripcion;`);
 prueba("0.01 base lista: scrr migrado, 112.000 contratos sintéticos «viejos» en cartera_suscripcion",
@@ -50,6 +56,7 @@ console.log("   " + gen(["cartera", "112000", join(ARCH, "cartera_del_dia.xlsx")
 gen(["cartera", "100", join(ARCH, "cartera_con_columna_de_mas.xlsx"), "--columna-extra"]);
 gen(["pagos", "5000", join(ARCH, "pagos_del_dia.xlsx")]);
 gen(["actividades", "1000", join(ARCH, "actividades.xlsx")]);
+gen(["pagos", "40", join(ARCH, "excluidos.xlsx")]);
 
 // ---------- 2. App completa (Vite), Auth simulado y PostgREST mínimo ----------
 const DIST = mkdtempSync(join(tmpdir(), "cartera_app_"));
@@ -112,7 +119,8 @@ real({ port: ${P_EDGE}, hostname: "127.0.0.1", onListen() { console.log("edges l
   if (r.method === "OPTIONS") return new Response("ok", { headers: cors });
   return new Response(JSON.stringify({ error: "Esta función no está en la prueba local." }), { status: 503, headers: { ...cors, "Content-Type": "application/json" } });
 });`);
-const edge = spawn(DENO, ["run", "--allow-net", "--allow-env", "--allow-read", "--no-check", servirTs], { env: { ...process.env, SUPABASE_URL: BASE, SERVICE_ROLE_KEY: "clave-de-revision", SUPABASE_SERVICE_ROLE_KEY: "clave-de-revision", DENO_NO_UPDATE_CHECK: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+const edge = spawn(DENO, ["run", "--node-modules-dir=none", "--allow-net", "--allow-env", "--allow-read", "--allow-sys", "--no-check", servirTs], { cwd: SEM, env: { ...process.env, SUPABASE_URL: BASE,
+  SCRR_REFRESCO_DB_URL: `postgres://scrr_refresco:${CLAVE_LOCAL}@127.0.0.1:55432/${DB}`, SERVICE_ROLE_KEY: "clave-de-revision", SUPABASE_SERVICE_ROLE_KEY: "clave-de-revision", DENO_NO_UPDATE_CHECK: "1" }, stdio: ["ignore", "pipe", "pipe"] });
 let edgeLog = ""; edge.stderr.on("data", (d) => (edgeLog += d));
 await new Promise((a, m) => { edge.stdout.on("data", (d) => { if (String(d).includes("edges listas")) a(); }); edge.on("exit", () => m(new Error("Deno terminó: " + edgeLog.slice(-600)))); setTimeout(() => m(new Error("Deno no arrancó: " + edgeLog.slice(-600))), 60000); });
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json", ".webmanifest": "application/manifest+json", ".ico": "image/x-icon" };
@@ -173,7 +181,7 @@ try {
     const { leerXlsx } = await import(pathToFileURL(join(T, "x.mjs")).href);
     await leerXlsx(new Uint8Array(readFileSync(join(DESC, f))), { alFila: (c, h, n) => { if (h === 0 && n === 1) encab = c; } });
   }
-  prueba("A.03 «Descargar la plantilla» baja un .xlsx con las 21 columnas (con «Facturas vencidas») y su Léame", encab?.length === 21 && encab.includes("Facturas vencidas") && encab[0] === "Contrato", JSON.stringify(encab));
+  prueba("A.03 «Descargar la plantilla» baja un .xlsx con las 20 columnas (sin «Facturas vencidas»: la calcula el motor)", encab?.length === 20 && !encab.some((x) => /vencidas/i.test(x)) && encab[0] === "Contrato", JSON.stringify(encab));
   // Archivo con una columna de más
   await subir(pg, join(ARCH, "cartera_con_columna_de_mas.xlsx")); await clicAccion(pg, "leer");
   await esperarTexto(pg, /sobra la columna «Columna que sobra»/);
@@ -207,6 +215,8 @@ try {
     lotesRpc.length === 56 && lotesRpc.every((x) => !x.error), JSON.stringify(lotesRpc.filter((x) => x.error)).slice(0, 300));
   prueba("C.02 la validación del servidor coincide: 112.000 recibidas, 0 rechazadas, 56.000 con saldo, 112.000 en la cartera de suscripción hoy",
     /112\.000 \/ 112\.000/.test(await texto(pg)) && /Con saldo pendiente\s*56\.000/.test(await texto(pg)) && /112\.000 filas/.test(await texto(pg)));
+  const mapaAntes = Number(sqlq("select count(*) from public.predios_comercial"));
+  sqlq("insert into public.predios_comercial_fuente_local select (select max(id) + 1000 from public.predios_comercial_fuente_local), cod_usuario, deuda_total, barrio, estado_predio, tramo_mora from public.predios_comercial_fuente_local limit 1");
   await pg.click('[data-campo="confirmo"]'); const r1 = registro.length; const t2 = Date.now();
   await clicAccion(pg, "aplicar");
   await esperarTexto(pg, /Carga aplicada/, 600000); const msAplicar = Date.now() - t2;
@@ -218,6 +228,19 @@ try {
     || '|' || (select count(*) from scrr.v_cartera_vigente) || '|' || (select count(*) from scrr.suscripcion_respaldo) || '|' || (select count(*) from public.cartera_suscripcion)`);
   prueba("C.04 en la base: 112.000 filas nuevas en cartera_suscripcion, 56.000 en el historial, 112.000 contratos con respaldo", db1 === "112000|56000|112000|112000", db1);
   prueba("C.05 la pantalla muestra el resultado («Contratos con saldo al historial: 56.000»)", /Contratos con saldo al historial: 56\.000/.test(await texto(pg)));
+  await esperarTexto(pg, /Mapa comercial actualizado/, 60000);
+  prueba("C.07 al cerrar la cartera el cargador refresca el mapa comercial (REFRESH CONCURRENTLY con el rol mínimo): la vista ve la fila nueva y queda auditado",
+    Number(sqlq("select count(*) from public.predios_comercial")) === mapaAntes + 1
+    && sqlq("select detalle->>'resultado' from public.geoportal_auditoria where accion = 'scrr_refresco_mapa' order by id desc limit 1") === "ok");
+  // Otro refresco en curso (candado de sesión tomado por otra conexión): la Edge responde 409 sin esperar
+  const cId0 = sqlq("select id from scrr.cargas where tipo = 'cartera'");
+  const candado = spawn(PSQL, ["-AtqX", "-d", DB, "-c", "select pg_advisory_lock(hashtextextended('scrr_refresco_predios', 0)), pg_sleep(6)"], { env: PGENV });
+  await esp(1200);
+  let rm = await edgeDirecta(SUP, "refrescar_mapa", { carga_id: cId0 });
+  prueba("C.08 si ya hay un refresco en curso: 409 «ya se está actualizando» (no se encolan dos)", rm.status === 409 && /ya se está actualizando/.test(rm.cuerpo?.error ?? ""), JSON.stringify(rm));
+  await new Promise((r) => candado.on("exit", r));
+  rm = await edgeDirecta(OP, "refrescar_mapa", { carga_id: cId0 });
+  prueba("C.09 el operario no puede pedir el refresco: 403", rm.status === 403, JSON.stringify(rm));
   await pg.screenshot({ path: join(CAP, "cartera_aplicada_1280.png"), fullPage: true });
   prueba("C.06 a 1280 px no desborda", await sinDesborde(pg));
   writeFileSync(join(CAP, "tiempos_rpc.txt"), `Tiempos de las RPC en la base local (55432) con 112.000 contratos (en producción ~6 veces más lento):\n`
@@ -239,11 +262,86 @@ try {
   await esperarTexto(pg, /Carga aplicada/, 60000);
   prueba("D.02 actividades (1.000) aplicadas: 1.000 actas, 100 cortes drásticos y 250 inefectivas con anomalía",
     sqlq("select count(*) || '|' || count(*) filter (where drastico) || '|' || count(*) filter (where resultado = 'inefectiva' and anomalia is not null) from scrr.actas") === "1000|100|250");
+  prueba("D.02b sin listas generadas todavía, las 1.000 quedan «fuera de las listas» (ajuste inicial) y la pantalla lo dice",
+    sqlq("select count(*) from scrr.actas where corrida_id is null") === "1000" && /Actas fuera de las listas \(o del ajuste inicial\): 1\.000/.test(await texto(pg)));
   await pg.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Cargar otro archivo")?.click()); await esp(500);
   await esperarTexto(pg, /Al día/);
   prueba("D.03 «¿Falta cargar hoy?»: las tres al día", (await pg.$$eval(".scrr-hoy li.ok", (l) => l.length)) === 3);
 
+  // ===== K. Calendario: los 24 ciclos de noviembre y agregar uno =====
+  await pg.click('[data-pestana="calendario"]'); await esperarTexto(pg, /Calendario de ciclos/);
+  await pg.waitForSelector('[data-tabla="calendario"] tr[data-ciclo]');
+  prueba("K.01 el calendario de noviembre trae los 24 ciclos precargados", (await pg.$$eval('[data-tabla="calendario"] tr[data-ciclo]', (l) => l.length)) === 24);
+  await clicAccion(pg, "agregar-ciclo"); await esp(200);
+  await pg.type('[data-campo="ciclo"]', "25");
+  await pg.$eval('[data-campo="pago-oportuno"]', (e) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; s.call(e, "2026-11-25"); e.dispatchEvent(new Event("input", { bubbles: true })); });
+  await pg.$eval('[data-campo="fecha-suspension"]', (e) => { const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; s.call(e, "2026-11-26"); e.dispatchEvent(new Event("input", { bubbles: true })); });
+  await clicAccion(pg, "guardar-ciclo"); await esperarTexto(pg, /Ciclo 25 guardado/);
+  prueba("K.02 se agrega el ciclo 25 (el calendario no es fijo): 25 ciclos y la fila en la base",
+    (await pg.$$eval('[data-tabla="calendario"] tr[data-ciclo]', (l) => l.length)) === 25 && sqlq("select pago_oportuno from scrr.v_calendario_vigente where periodo = '202611' and ciclo = 25") === "2026-11-25");
+  prueba("K.03 a 1280 px el calendario no desborda", await sinDesborde(pg));
+
+  // ===== L. Contratos con control y excluidos =====
+  await pg.click('[data-pestana="control"]'); await esperarTexto(pg, /Reclamo manual, proceso de insolvencia/);
+  await pg.type('[data-campo="alta-contrato"]', "930000000030"); await pg.select('[data-campo="alta-causa"]', "insolvencia");
+  await pg.type('[data-campo="alta-motivo"]', "Proceso de insolvencia de prueba");
+  await clicAccion(pg, "alta"); await esperarTexto(pg, /Contrato 930000000030 agregado/);
+  prueba("L.01 alta de un contrato con control (insolvencia) con motivo", (await pg.$$eval('[data-tabla="control"] tr[data-contrato="930000000030"]', (l) => l.length)) === 1);
+  await pg.click('[data-pestana="excluidos"]'); await esperarTexto(pg, /Contratos puntuales que el supervisor saca/);
+  const inpEx = await pg.$('[data-campo="archivo-control"]'); await inpEx.uploadFile(join(ARCH, "excluidos.xlsx")); await esperarTexto(pg, /excluidos\.xlsx: 40 contratos/);
+  await pg.type('[data-campo="lote-motivo"]', "Excluidos de prueba por archivo"); await clicAccion(pg, "lote");
+  await esperarTexto(pg, /Archivo cargado: 40 nuevos/);
+  prueba("L.02 excluidos por archivo (columna «Contrato» de un Excel) con un motivo común: 40 nuevos, por archivo",
+    sqlq("select count(*) from scrr.control_eventos where origen = 'archivo' and causa_id = (select id from scrr.causas_control where codigo = 'excluido_manual')") === "40");
+  await pg.evaluate(() => document.querySelector('[data-tabla="excluido"] tr[data-contrato="930000000001"] [data-accion="baja"]')?.click()); await esp(200);
+  await pg.type('[data-campo="baja-motivo"]', "Vuelve a ser elegible (prueba)"); await clicAccion(pg, "confirmar-baja");
+  await esperarTexto(pg, /Contrato 930000000001 dado de baja/);
+  prueba("L.03 baja con motivo: sale de la lista y queda en el historial", sqlq("select count(*) from scrr.control_eventos where contrato = 930000000001") === "2"
+    && (await pg.$$eval('[data-tabla="excluido"] tr[data-contrato="930000000001"]', (l) => l.length)) === 0);
+
+  // ===== M. Selección y lista =====
+  await pg.click('[data-pestana="seleccion"]'); await esperarTexto(pg, /Cartera del/);
+  await pg.waitForSelector('[data-campo="ciclo"] option');
+  const cicloSel = Number(await pg.$eval('[data-campo="ciclo"]', (e) => e.value));
+  prueba("M.01 abre en un ciclo en ventana de suspensión según el calendario", /en ventana/.test(await pg.$eval('[data-campo="ciclo"]', (e) => e.selectedOptions[0].textContent)), String(cicloSel));
+  await pg.waitForSelector('[data-campo="barrio"] option:nth-child(2)', { timeout: 30000 });    // el ciclo y sus barrios ya cargaron
+  for (let i = 0; i < 20 && !(await pg.$('[data-bloque="previa"]')); i++) { await clicAccion(pg, "previa"); await esp(1500); }
+  await pg.waitForSelector('[data-bloque="previa"]', { timeout: 60000 });
+  const fil = { modo: "meses", desde: 1, hasta: 6, monto_minimo: 5000, barrio_id: null, segmento: "todos", n: 8 };
+  const candSql = Number(sqlq(`select count(*) from scrr.f_seleccion(${cicloSel}::smallint, '${JSON.stringify(fil)}'::jsonb) where paso = 'candidato'`));
+  const candUi = await pg.$eval('[data-dato="candidatos"]', (e) => e.innerText);
+  prueba(`M.02 la vista previa muestra el embudo y ${candSql} candidatos (lo mismo que calcula la base); sin contratos ni nombres en pantalla`,
+    candSql > 0 && candUi.startsWith(candSql.toLocaleString("es-CO")) && !/930000|SUSCRIPTOR/.test(await pg.$eval('[data-bloque="previa"]', (e) => e.innerText))
+    && (await pg.$$eval('[data-tabla="embudo"] tr[data-paso]', (l) => l.length)) >= 3, candUi);
+  prueba("M.03 los no facturados y los excluidos salen en su paso", (await pg.$$eval('[data-tabla="embudo"] tr[data-paso="p1_no_facturado_o_sin_ruta"]', (l) => l.length)) === 1);
+  await pg.click('[data-actividad="corte"]'); await clicAccion(pg, "generar");
+  await esperarTexto(pg, /Lista de Corte generada/, 60000);
+  const corrida = sqlq("select id from scrr.corridas order by creado_en desc limit 1");
+  prueba(`M.04 la lista de Corte queda guardada con sus ${candSql} contratos`, sqlq(`select count(*) from scrr.corrida_contratos where corrida_id = '${corrida}'`) === String(candSql));
+  await pg.evaluate((id) => document.querySelector(`[data-corrida="${id}"] [data-accion="excel"]`)?.click(), corrida);
+  let fx = null; for (let i = 0; i < 60 && !fx; i++) { await esp(250); fx = readdirSync(DESC).find((x) => x.startsWith("lista_corte_")); }
+  let filasX = []; if (fx) { const { build } = createRequire(join(raiz, "package.json"))("esbuild"); const T2 = mkdtempSync(join(tmpdir(), "lx2_"));
+    await build({ entryPoints: [join(raiz, "src/scrr/lectorXlsx.ts")], bundle: true, format: "esm", platform: "node", outfile: join(T2, "x.mjs"), logLevel: "error" });
+    const { leerXlsx: lx } = await import(pathToFileURL(join(T2, "x.mjs")).href); await lx(new Uint8Array(readFileSync(join(DESC, fx))), { alFila: (c, h) => { if (h === 0) filasX.push(c); } }); }
+  prueba("M.05 «Descargar Excel»: la lista lleva nombre, dirección y saldo; NO lleva teléfono, correo ni identificación",
+    filasX.length === candSql + 1 && filasX[0].includes("Nombre") && filasX[0].includes("Dirección") && filasX[0].includes("Saldo pendiente")
+    && !filasX[0].some((x) => /Tel[eé]fono|Correo|Identificaci/.test(x)) && /SUSCRIPTOR SINTÉTICO/.test(filasX[1][2] ?? ""), JSON.stringify(filasX.slice(0, 2)));
+  const nueva = new Promise((r) => nav.once("targetcreated", async (tg) => r(await tg.page())));
+  await pg.evaluate((id) => document.querySelector(`[data-corrida="${id}"] [data-accion="imprimir"]`)?.click(), corrida);
+  const pImp = await Promise.race([nueva, esp(8000).then(() => null)]); let txtImp = "";
+  if (pImp) { await pImp.evaluate(() => { window.print = () => {}; }).catch(() => {}); for (let i = 0; i < 40 && !/Contrato/.test(txtImp); i++) { await esp(200); txtImp = await pImp.evaluate(() => document.body?.innerText ?? "").catch(() => ""); } await pImp.close().catch(() => {}); }
+  prueba("M.06 «Imprimir» abre la lista imprimible (con nombre y dirección)", /Corte · ciclo/.test(txtImp) && /SUSCRIPTOR SINTÉTICO/.test(txtImp), txtImp.slice(0, 200));
+  prueba("M.07 cada salida quedó en la auditoría (Excel e impresión) y la corrida también",
+    sqlq(`select count(*) from public.geoportal_auditoria where referencia = '${corrida}' and accion in ('scrr_lista_excel', 'scrr_lista_impresion', 'scrr_corrida')`) === "3");
+  prueba("M.08 a 1280 px la selección no desborda", await sinDesborde(pg));
+  for (let i = 0; i < 20 && !(await pg.$('[data-bloque="previa"]')); i++) { await clicAccion(pg, "previa"); await esp(1500); }
+  await pg.setViewport({ width: 390, height: 844 }); await esp(800);      // solo el ancho: cambiar isMobile recarga la página
+  prueba("M.09 a 390 px la selección con su vista previa y la lista de corridas no desborda", await sinDesborde(pg));
+  await pg.screenshot({ path: join(CAP, "seleccion_previa_390.png"), fullPage: true });
+  await pg.setViewport({ width: 1280, height: 900 }); await esp(500);
+
   // ===== E. Revertir y anular la cartera (desde la lista) =====
+  await pg.click('[data-pestana="carga"]'); await esperarTexto(pg, /Últimas cargas/); await esp(500);
   const cId = sqlq("select id from scrr.cargas where tipo = 'cartera'");
   await pg.evaluate((id) => document.querySelector(`[data-carga="${id}"] [data-accion="deshacer"]`)?.click(), cId); await esp(300);
   await pg.type('[data-campo="motivo-deshacer"]', "Prueba local: el archivo era de otro día");
@@ -253,6 +351,9 @@ try {
   const db2 = sqlq("select (select count(*) from public.cartera_suscripcion where estado = 'VIEJO') || '|' || (select count(*) from public.cartera_suscripcion) || '|' || scrr.f_estado_carga((select id from scrr.cargas where tipo = 'cartera'))");
   prueba(`E.01 «Revertir y anular»: la cartera de suscripción vuelve a los 112.000 «viejos» en ${rev.length} tandas (la más lenta ${Math.max(...rev.map((x) => x.ms))} ms) y la carga queda anulada`,
     db2 === "112000|112000|anulada" && rev.every((x) => !x.error), db2);
+  await esperarTexto(pg, /Mapa comercial actualizado/, 60000);
+  prueba("E.02 después de revertir la cartera, el mapa comercial se vuelve a refrescar (auditado)",
+    sqlq("select count(*) from public.geoportal_auditoria where accion = 'scrr_refresco_mapa' and detalle->>'resultado' = 'ok'") === "2");
   await ctx.close();
 
   // ===== F. 390 px =====
@@ -262,6 +363,11 @@ try {
   await pg.click('.modo-capsula [data-modo="cartera"]'); await esperarTexto(pg, /¿Falta cargar hoy\?/);
   await subir(pg, join(ARCH, "pagos_del_dia.xlsx")); await elegirTipo(pg, "pagos").catch(() => {}); await esp(300);
   prueba("F.01 a 390 px el modo Cartera no desborda", await sinDesborde(pg));
+  for (const [tab, re] of [["seleccion", /Selección/], ["control", /Contratos con control/], ["excluidos", /Excluidos manuales/], ["calendario", /Calendario de ciclos/]]) {
+    await pg.click(`[data-pestana="${tab}"]`); await esperarTexto(pg, re); await esp(600);
+    prueba(`F.02 a 390 px la pestaña «${tab}» no desborda`, await sinDesborde(pg));
+    await pg.screenshot({ path: join(CAP, `cartera_${tab}_390.png`), fullPage: true });
+  }
   await pg.screenshot({ path: join(CAP, "cartera_390.png"), fullPage: true });
   await ctx.close();
 
@@ -292,7 +398,7 @@ try {
   await ctx.close();
 
   // ===== S. Las sondas propuestas (sondas_propuestas_scrr.json) contra la Edge local, con un usuario por perfil del manifiesto =====
-  const SONDAS = join(process.env.HOME, "geoportal-consultas/campo/paquete_scrr_1/corte2_commit1/sondas_propuestas_scrr.json");
+  const SONDAS = join(process.env.HOME, "geoportal-consultas/campo/paquete_scrr_1/corte2_commit2/sondas_propuestas_scrr.json");
   if (existsSync(SONDAS)) {
     const PERF = { A: "rol = 'admin'", D: "ver_comercial, ver_registro_tecnico", S: "ver_registro_tecnico, ver_dashboard_tecnico", O: "ver_registro_tecnico", C: "ver_explorar", N: "", R: "ver_campo",
       V: "ver_dashboard_campo", T: "ver_acta", U: "ver_dashboard_acta", W: "ver_aseo", X: "ver_dashboard_aseo", Y: "ver_registro_tecnico, ver_dashboard_redes" };
@@ -309,7 +415,7 @@ try {
       const obtenido = r.status === 403 ? "403" : r.status === 401 ? "401" : "permite"; n++;
       if (obtenido !== esperado) malas.push(`${s.nombre} ${k}: ${r.status}`);
     }
-    prueba(`S.01 las 11 sondas propuestas dan lo esperado contra la Edge local (${n} llamadas; A y V permiten, los demás 403)`, malas.length === 0 && n > 100, malas.join(" | "));
+    prueba(`S.01 las ${sondas.length} sondas propuestas dan lo esperado contra la Edge local (${n} llamadas; A y V permiten, los demás 403)`, malas.length === 0 && n > 100, malas.join(" | "));
   }
 
   prueba("Z.01 sin errores de JavaScript en las páginas", errores.length === 0, errores.join(" | "));

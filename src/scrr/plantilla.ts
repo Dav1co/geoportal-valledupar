@@ -14,7 +14,8 @@ export async function descargarPlantilla(tipo: TipoCarga): Promise<void> {
   const libro = new LibroXlsx({ hoja: NOMBRE_ARCHIVO[tipo], encabezados: cols.map((c) => c.encabezado), anchos: cols.map((c) => c.ancho),
     leame: [["Plantilla", `${NOMBRE_ARCHIVO[tipo]} — Motor SCRR, modo «Cartera»`], ...LEAME_COMUN, ...cols.map((c) => [c.encabezado, c.nota || "—"]),
             ...(tipo === "pagos" ? [["Provisional", "Plantilla de 3 columnas mientras llega el archivo real de pagos del día (decisión de David del 22-nov)."]] : []),
-            ...(tipo === "actividades" ? [["Anomalías", "Catálogo PROVISIONAL de 17 códigos (1 PAGO EFECTUADO … 17 OTRO MEDIDOR) hasta que llegue el archivo modelo."]] : [])] });
+            ...(tipo === "actividades" ? [["Anomalías", "Catálogo de 17 códigos: 1 PAGO EFECTUADO … 17 OTRO MEDIDOR (obligatoria si la visita es inefectiva)."],
+                                      ["Fuera de las listas", "Se cargan también las visitas que no salieron de una lista y lo ya realizado antes de arrancar el motor (ajuste inicial)."]] : [])] });
   const blob = await libro.finalizar();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = `plantilla_${tipo}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
