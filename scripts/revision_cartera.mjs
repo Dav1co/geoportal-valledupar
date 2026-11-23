@@ -46,9 +46,18 @@ const USUARIOS = [
 
 // ---------- 0. Base ----------
 if (psqlIn("show port", "postgres") !== "55432") { console.error("No es el clúster del Code A (55432)"); process.exit(2); }
-psqlIn(`drop database if exists ${DB}; drop database if exists scrr_chrome;`, "postgres");
-psqlIn("drop role if exists scrr_refresco", "postgres");
+// Antes de tocar la base: si ya hay un servidor de revisión corriendo (puertos ocupados), no se borra nada
+for (const puerto of [P_WEB, P_BASE, P_EDGE]) {
+  const libre = await new Promise((r) => { const s = http.createServer(); s.once("error", () => r(false)); s.listen(puerto, "127.0.0.1", () => s.close(() => r(true))); });
+  if (!libre) { console.error(`El puerto ${puerto} está ocupado: ya hay un servidor de revisión corriendo. Deténgalo (Ctrl+C en su terminal) antes de arrancar otro; no se tocó la base.`); process.exit(2); }
+}
+// Regla de David (22-nov): este guion no borra bases que no haya creado esta misma corrida. Con restos de otra (scrr_rev, la base de Chrome o el rol scrr_refresco,
+// que es del clúster) se niega. Al terminar (--comprobar, o Ctrl+C en --servir) borra solo lo que creó: su base y el rol.
+{ const restos = psqlIn(`select coalesce(string_agg(datname, ', '), '') from pg_database where datname in ('${DB}', 'scrr_chrome')`, "postgres");
+  const rol = psqlIn("select count(*) from pg_roles where rolname = 'scrr_refresco'", "postgres") !== "0";
+  if (restos || rol) { console.error(`Quedaron restos de otra corrida (bases: ${restos || "ninguna"}; rol scrr_refresco: ${rol ? "sí" : "no"}). Este guion no los borra: pida permiso y bórrelos a mano.`); process.exit(2); } }
 psqlIn(`create database ${DB} template scrr_plantilla;`, "postgres");
+const limpiarLoCreado = () => { try { psqlIn(`drop database ${DB}`, "postgres"); psqlIn("drop role scrr_refresco", "postgres"); } catch (e) { console.error("No se pudo limpiar lo creado:", String(e.message).slice(0, 200)); } };
 execFileSync(PSQL, ["-qX", "-v", "ON_ERROR_STOP=1", "-d", DB, "-f", join(raiz, "sql/scrr_corte2/migracion_scrr_corte2_editor.sql")], { env: PGENV, stdio: ["ignore", "pipe", "pipe"] });
 const CLAVE_LOCAL = "solo-local-revision-scrr";
 sqlq(`alter role scrr_refresco login password '${CLAVE_LOCAL}'`);
@@ -170,13 +179,13 @@ if (MODO === "--comprobar") {
   const pagina = await fetch(`http://127.0.0.1:${P_WEB}/`);
   prueba("la app compilada responde", pagina.status === 200 && /<div id="root">/.test(await pagina.text()));
   console.log(`\nRESULTADO: ${ok} de ${tot} comprobaciones correctas — ${fallas.length ? "FALLAS: " + fallas.join(" | ") : "SIN FALLAS"}`);
-  edge.kill(); base.close(); web.close(); psqlIn(`drop database ${DB}`, "postgres"); psqlIn("drop role if exists scrr_refresco", "postgres");
+  edge.kill(); base.close(); web.close(); await new Promise((r) => setTimeout(r, 500)); limpiarLoCreado();
   process.exit(fallas.length ? 1 : 0);
 }
 console.log(`
 Revisión local del modo «Cartera» lista (base ${DB} en 55432; Edges reales geoportal-scrr, geoportal-admin, geoportal-campo y geoportal-acta; nada va a Supabase).
   Abra  http://127.0.0.1:${P_WEB}/  y entre con cualquiera de estos correos y cualquier clave:
 ${USUARIOS.map(([e, p]) => `    ${e.split("@")[0].padEnd(24)} ${p}`).join("\n")}
-  Casos para revisar: ~/geoportal-consultas/campo/paquete_scrr_1/corte2_commit3/CASOS_REVISION.md   ·   Ctrl+C para terminar.`);
-const fin = () => { try { edge.kill(); } catch { /* ya terminó */ } process.exit(0); };
+  Casos para revisar: ~/geoportal-consultas/campo/paquete_scrr_1/corte2_commit3/CASOS_REVISION.md   ·   Ctrl+C para terminar (borra la base y el rol que creó).`);
+const fin = () => { try { edge.kill(); } catch { /* ya terminó */ } base.close(); web.close(); setTimeout(() => { limpiarLoCreado(); console.log("Servidor detenido; se borró lo que creó esta corrida (su base y el rol)."); process.exit(0); }, 500); };
 process.on("SIGINT", fin); process.on("SIGTERM", fin);

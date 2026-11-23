@@ -9,9 +9,9 @@ import "./scrr.css";
 
 // Modo de trabajo «Cartera» del Geoportal Comercial (Motor SCRR; decisión 1 del 22-nov). Lo abren el Supervisor comercial (dashboard_campo) y el administrador
 // (decisión 3). La cápsula solo lo muestra a ellos; el servidor lo vuelve a decidir en cada llamada.
-// Corte 2: «Carga del día» (commit 1); Selección, Contratos con control, Excluidos y Calendario (commit 2); Retorno (commit 3).
+// Corte 2: «Carga del día» (commit 1); Selección, Contratos con control, Excluidos y Calendario (commit 2); Restablecer (commit 3; internamente «retorno»).
 type Pestana = "carga" | "seleccion" | "retorno" | "control" | "excluidos" | "calendario";
-const PESTANAS: [Pestana, string][] = [["carga", "Carga del día"], ["seleccion", "Selección"], ["retorno", "Retorno"], ["control", "Contratos con control"], ["excluidos", "Excluidos"], ["calendario", "Calendario"]];
+const PESTANAS: [Pestana, string][] = [["carga", "Carga del día"], ["seleccion", "Selección"], ["retorno", "Restablecer"], ["control", "Contratos con control"], ["excluidos", "Excluidos"], ["calendario", "Calendario"]];
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 
 export function ModoCartera() {
@@ -25,7 +25,7 @@ export function ModoCartera() {
   return (
     <div className="scrr-area" data-pantalla="cartera">
       <h1>Cartera</h1>
-      <p className="scrr-suave">Motor de suspensiones, cortes y reconexiones: la carga del día alimenta la selección y la lista de retorno.</p>
+      <p className="scrr-suave">Motor de suspensiones, cortes y reconexiones: la carga del día alimenta la selección y la lista para restablecer el servicio.</p>
       {ctx.calendario_actual.ciclos === 0 && (
         // Aviso visible (David, 22-nov 21:21): sin calendario del mes, las vencidas usan la regla prudente y la selección no tiene ciclos
         <p className="scrr-aviso" role="alert" data-bloque="sin-calendario">El calendario de {MESES[Number(ctx.calendario_actual.periodo.slice(4)) - 1]} de {ctx.calendario_actual.periodo.slice(0, 4)} no está cargado:

@@ -35,12 +35,18 @@ const esp = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- 0. Base: copia de la plantilla + migración + 112.000 contratos sintéticos ----------
 if (psqlIn("show port", "postgres") !== "55432") { console.error("No es el clúster del Code A (55432)"); process.exit(2); }
-psqlIn(`drop database if exists ${DB}; create database ${DB} template scrr_plantilla;`, "postgres");
-psqlIn("drop role if exists scrr_refresco", "postgres");      // el rol es del clúster: lo deja vivo una corrida anterior (su base ya se quitó)
+// Regla de David (22-nov): esta prueba no borra bases que no haya creado esta misma corrida. Con restos de otra corrida (su base, la del servidor de revisión
+// o el rol scrr_refresco, que es del clúster) se niega; al terminar borra solo lo que creó.
+{ const restos = psqlIn(`select coalesce(string_agg(datname, ', '), '') from pg_database where datname in ('${DB}', 'scrr_rev')`, "postgres");
+  const rol = psqlIn("select count(*) from pg_roles where rolname = 'scrr_refresco'", "postgres") !== "0";
+  if (restos || rol) { console.error(`Quedaron restos de otra corrida (bases: ${restos || "ninguna"}; rol scrr_refresco: ${rol ? "sí" : "no"}). Esta prueba no los borra: pida permiso y bórrelos a mano.`); process.exit(2); } }
+psqlIn(`create database ${DB} template scrr_plantilla;`, "postgres");
 const MIG = join(raiz, "sql/scrr_corte2/migracion_scrr_corte2_editor.sql");
 execFileSync(PSQL, ["-qX", "-v", "ON_ERROR_STOP=1", "-d", DB, "-f", MIG], { env: PGENV, stdio: ["ignore", "pipe", "pipe"] });
 // Refresco del mapa: SOLO LOCAL, el rol mínimo recibe login con una clave de prueba (en producción la pone David y va en el secreto de la Edge)
 const CLAVE_LOCAL = "solo-local-prueba-scrr";
+// prueba.caso.todo tiene horario «extendido» en el doble: después de las 10 p. m. el geoportal lo rechaza (con razón). En la copia de ESTA prueba, sin restricción.
+sqlq("update public.geoportal_lista_blanca set horario = 'sin_restriccion' where email = 'prueba.caso.todo@emdupar.gov.co'");
 sqlq(`alter role scrr_refresco login password '${CLAVE_LOCAL}'`);
 // Facturación sintética del último período (la selección exige «facturado»): todos los contratos del archivo menos 1 de cada 50
 sqlq(`insert into hechos.facturacion_sspd (periodo, contrato) select '202610', (930000000000 + g)::text from generate_series(1, 112000) g where g % 50 <> 0; analyze hechos.facturacion_sspd;`);
@@ -144,7 +150,8 @@ async function entrar(email, ancho) {
   pg.on("pageerror", (e) => errores.push(`${email} ${ancho}: ${e.message}`));
   await pg.goto(`http://127.0.0.1:${P_WEB}/`); await pg.waitForSelector("input[type=password]", { timeout: 20000 });
   const [usr] = await pg.$$("input:not([type=password])"); await usr.type(email.split("@")[0]); await pg.type("input[type=password]", "cualquiera"); await pg.keyboard.press("Enter");
-  await pg.waitForFunction(() => !document.querySelector("input[type=password]") && !/Cargando/.test(document.body.innerText) && document.body.innerText.trim().length > 40, { timeout: 30000 });
+  await pg.waitForFunction(() => !document.querySelector("input[type=password]") && !/Cargando/.test(document.body.innerText) && document.body.innerText.trim().length > 40, { timeout: 30000 })
+    .catch(async (e) => { await pg.screenshot({ path: join(CAP, `fallo_entrar_${email.split("@")[0]}.png`) }).catch(() => {}); throw new Error(`no terminó de entrar ${email}: ${(await pg.evaluate(() => document.body.innerText).catch(() => "")).slice(0, 400)}`); });
   await esp(800);
   return { pg, ctx };
 }
@@ -343,7 +350,9 @@ try {
   // ===== R. Retorno =====
   // «por confirmar»: el 930000000006 quedó cortado (efectiva) y sigue con saldo; paga hoy
   sqlq("insert into scrr.pagos_contrato (contrato, fecha_pago, monto, ordinal, carga_id) select 930000000006, (now() at time zone 'America/Bogota')::date, 1000, 1, id from scrr.cargas where tipo = 'pagos' limit 1");
-  await pg.click('[data-pestana="retorno"]'); await esperarTexto(pg, /A reinstalar o reconectar/);
+  await pg.click('[data-pestana="retorno"]'); await esperarTexto(pg, /Restablecer el servicio: a reinstalar o reconectar/);
+  prueba("R.00 la pestaña se llama «Restablecer» (David, 22-nov) y en la interfaz no queda la palabra «retorno»",
+    (await pg.$eval('[data-pestana="retorno"]', (e) => e.innerText)) === "Restablecer" && !/retorno/i.test(await pg.$eval('[data-pantalla="cartera"]', (e) => e.innerText)));
   await pg.waitForSelector('[data-tabla="retorno"] tbody tr');
   const autoSql = Number(sqlq("select count(*) from scrr.f_retorno() where situacion = 'proponer' and origen = 'automatico'"));
   const drasSql = Number(sqlq("select count(*) from scrr.f_retorno() where situacion = 'proponer' and actividad_id = 6"));
@@ -355,16 +364,16 @@ try {
     && (await pg.$$eval('[data-tabla="retorno"] tr[data-contrato="930000000006"]', (l) => l.length)) === 0);
   await pg.type('[data-campo="retorno-contrato"]', "930000000002"); await pg.select('[data-campo="retorno-actividad"]', "reconexion");
   await pg.type('[data-campo="retorno-motivo"]', "Reclamo de prueba no registrado"); await clicAccion(pg, "retorno-agregar");
-  await esperarTexto(pg, /Contrato 930000000002 agregado al retorno/);
+  await esperarTexto(pg, /Contrato 930000000002 agregado a «Restablecer»/);
   prueba("R.03 se agrega a mano (con motivo) un contrato que sigue en deuda: sale como «Manual»",
     (await pg.$$eval('[data-tabla="retorno"] tr[data-contrato="930000000002"][data-origen="manual"]', (l) => l.length)) === 1);
-  await clicAccion(pg, "generar-retorno"); await esperarTexto(pg, /Lista de retorno generada/, 60000);
+  await clicAccion(pg, "generar-retorno"); await esperarTexto(pg, /Lista de «Restablecer» generada/, 60000);
   const corrRet = sqlq("select id from scrr.corridas where tipo = 'retorno' order by creado_en desc limit 1");
   prueba(`R.04 generar la lista de retorno: ${autoSql + 1} contratos y la lista viva queda vacía (no vuelven a salir)`,
     sqlq(`select count(*) from scrr.corrida_contratos where corrida_id = '${corrRet}'`) === String(autoSql + 1)
     && (await pg.$$eval('[data-tabla="retorno"] tr[data-origen]', (l) => l.length)) === 0);
   await pg.evaluate((id) => document.querySelector(`[data-corrida="${id}"] [data-accion="excel"]`)?.click(), corrRet);
-  let fr = null; for (let i = 0; i < 60 && !fr; i++) { await esp(250); fr = readdirSync(DESC).find((x) => x.startsWith("lista_retorno_")); }
+  let fr = null; for (let i = 0; i < 60 && !fr; i++) { await esp(250); fr = readdirSync(DESC).find((x) => x.startsWith("lista_restablecer_")); }
   let filasR = []; if (fr) { const { build } = createRequire(join(raiz, "package.json"))("esbuild"); const T3 = mkdtempSync(join(tmpdir(), "lx3_"));
     await build({ entryPoints: [join(raiz, "src/scrr/lectorXlsx.ts")], bundle: true, format: "esm", platform: "node", outfile: join(T3, "x.mjs"), logLevel: "error" });
     const { leerXlsx: lx } = await import(pathToFileURL(join(T3, "x.mjs")).href); await lx(new Uint8Array(readFileSync(join(DESC, fr))), { alFila: (c, h) => { if (h === 0) filasR.push(c); } }); }
@@ -490,6 +499,9 @@ try {
   fallas.push("excepción: " + e.message); console.log("FALLA (excepción)", e.message.slice(0, 1500));
 } finally {
   await nav.close(); edge.kill(); base.close(); web.close();
+  await esp(500);
+  // lo que creó ESTA corrida: su base y el rol (lo creó la migración aplicada en ella)
+  try { psqlIn(`drop database ${DB}`, "postgres"); psqlIn("drop role scrr_refresco", "postgres"); } catch (e) { console.log("No se pudo limpiar lo creado:", String(e.message).slice(0, 200)); }
 }
 console.log(`\nRESULTADO: ${ok} de ${tot + (fallas.some((x) => x.startsWith("excepción")) ? 1 : 0)} pruebas correctas — ${fallas.length ? "FALLAS: " + fallas.join(" | ") : "SIN FALLAS"}`);
 console.log(`Capturas y mediciones: ${CAP}`);

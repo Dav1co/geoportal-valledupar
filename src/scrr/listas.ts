@@ -1,4 +1,4 @@
-// Salidas de una lista de campo (selección o retorno): Excel e impresión. EXCEPCIÓN ESCRITA (P2 del 22-nov): llevan nombre y dirección para la visita,
+// Salidas de una lista de campo (selección o «Restablecer», internamente «retorno»): Excel e impresión. EXCEPCIÓN ESCRITA (P2 del 22-nov): llevan nombre y dirección para la visita,
 // nunca teléfono, correo ni identificación; el servidor registra cada salida antes de entregar las filas.
 import type { Lista } from "./apiScrr";
 import { fecha, fechaHora, pesos } from "./formato";
@@ -16,7 +16,7 @@ export async function descargarExcel(l: Lista) {
   await libro.agregarFilas(l.filas.map((f) => [f.orden, f.contrato, f.actividad ?? l.actividad, f.nombre, f.direccion, f.barrio, f.ciclo === null ? null : String(f.ciclo), f.ruta, f.codigo_reparto,
                                                 f.facturas_vencidas, Number(f.saldo_pendiente), f.marca]));
   const url = URL.createObjectURL(await libro.finalizar());
-  const a = document.createElement("a"); a.href = url; a.download = `lista_${l.actividad_codigo}${l.ciclo ? `_ciclo${l.ciclo}` : ""}_${l.fecha_dato}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
+  const a = document.createElement("a"); a.href = url; a.download = `lista_${l.actividad_codigo === "retorno" ? "restablecer" : l.actividad_codigo}${l.ciclo ? `_ciclo${l.ciclo}` : ""}_${l.fecha_dato}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 

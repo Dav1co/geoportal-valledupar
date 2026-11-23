@@ -39,21 +39,26 @@ def psql(base, sql=None, archivo=None, at=True, ok=True):
     if ok and r.returncode: raise SystemExit(f"psql falló en {base}: {r.stderr[-1500:]}")
     return r
 
-def limpiar_rol():
-    """El rol scrr_refresco es del CLÚSTER (no de una base): las bases locales de prueba que tenían la migración lo dejan vivo. Se quitan esas bases y el rol."""
-    for db in ("scrr_gen", "scrr_local", "scrr_chrome", "scrr_mut"):
-        psql("postgres", f"drop database if exists {db}")
-    psql("postgres", "drop role if exists scrr_refresco")
+def sin_restos():
+    """Regla de David (22-nov): ningún guion borra bases que no haya creado esa misma corrida. Si quedaron restos de otra corrida (bases de prueba o el rol
+    scrr_refresco, que es del CLÚSTER), se niega y pide borrarlos a mano con permiso; no los toca."""
+    restos = psql("postgres", "select string_agg(datname, ', ' order by datname) from pg_database where datname in ('scrr_gen', 'scrr_local', 'scrr_chrome', 'scrr_mut', 'scrr_rev')").stdout.strip()
+    rol = psql("postgres", "select count(*) from pg_roles where rolname = 'scrr_refresco'").stdout.strip() != "0"
+    if restos or rol:
+        raise SystemExit(f"Quedaron restos de otra corrida (bases: {restos or 'ninguna'}; rol scrr_refresco: {'sí' if rol else 'no'}). "
+                         "Este guion no borra lo que no creó: pida permiso y bórrelos a mano (con su porqué y su alcance), y vuelva a correrlo.")
 
 def base_nueva(nombre):
-    """Copia limpia del doble (plantilla scrr_plantilla, que se arma una vez desde el archivo del doble)."""
-    if psql("postgres", "select 1 from pg_database where datname = 'scrr_plantilla'").stdout.strip() != "1" or \
-       psql("scrr_plantilla", "select (to_regclass('hechos.facturacion_sspd') is not null)::text").stdout.strip() != "true":
-        psql("postgres", "drop database if exists scrr_plantilla")
+    """Copia limpia del doble: la plantilla «scrr_plantilla» se arma una vez desde el archivo del doble. La base nueva la crea ESTA corrida (si ya existe, se niega)."""
+    if psql("postgres", "select 1 from pg_database where datname = 'scrr_plantilla'").stdout.strip() != "1":
         psql("postgres", "create database scrr_plantilla")
         psql("scrr_plantilla", archivo=DOBLE, at=False)
         psql("scrr_plantilla", archivo=AQUI / "doble_base_local.sql", at=False)
-    psql("postgres", f"drop database if exists {nombre}"); psql("postgres", f"create database {nombre} template scrr_plantilla")
+    elif psql("scrr_plantilla", "select (to_regclass('hechos.facturacion_sspd') is not null)::text").stdout.strip() != "true":
+        raise SystemExit("La plantilla scrr_plantilla es vieja (sin los dobles locales). Este guion no la borra: pida permiso y bórrela a mano.")
+    if psql("postgres", f"select 1 from pg_database where datname = '{nombre}'").stdout.strip() == "1":
+        raise SystemExit(f"La base {nombre} ya existe (resto de otra corrida). Este guion no la borra: pida permiso y bórrela a mano.")
+    psql("postgres", f"create database {nombre} template scrr_plantilla")
     return nombre
 
 def valor(base, q): return psql(base, q).stdout.strip()
@@ -63,7 +68,7 @@ def poner(t, v):
     assert "{{" not in t, re.findall(r"\{\{[A-Z_]+\}\}", t); return t
 
 def main():
-    limpiar_rol()
+    sin_restos()
     b = base_nueva("scrr_gen")
     md5p = lambda f: f"md5(pg_get_functiondef(to_regprocedure('{f}')))"
     PROD = {"HUELLA_CAMPO": valor(b, CONJ_CAMPO), "MD5_AUTORIZAR_SUPERVISION": valor(b, f"select {md5p('campo.f_autorizar_supervision(text)')}"),

@@ -1,5 +1,5 @@
 -- =====================================================================
--- SCRR · CORTE 2 · 40 — RETORNO AUTOMÁTICO (decisiones 8, 11 y 12 del 20-nov; sección 4.4 del encargo del 20-nov)
+-- SCRR · CORTE 2 · 40 — RETORNO AUTOMÁTICO (en la interfaz: «Restablecer», David 22-nov; los nombres internos siguen «retorno») (decisiones 8, 11 y 12 del 20-nov; sección 4.4 del encargo del 20-nov)
 -- La única decisión del sistema: cuando un contrato que quedó SIN AGUA por una actividad efectiva (suspendido, cortado o cortado drástico, según
 -- scrr.v_estado_servicio) queda con SALDO PENDIENTE EN CERO en la cartera del día, se propone la actividad subsanadora:
 --   suspendido → reinstalación · cortado → reconexión · cortado drástico → reconexión drástica (con su aviso).
@@ -83,7 +83,7 @@ begin
   if length(btrim(coalesce(p_motivo, ''))) not between 10 and 200 then perform scrr.f_err('Escriba un motivo de 10 a 200 caracteres (sin nombres, cédulas ni teléfonos)'); end if;
   perform pg_advisory_xact_lock(hashtextextended('scrr_retorno:' || v_c, 0));
   if exists (select 1 from (select distinct on (contrato) * from scrr.retorno_manual_eventos where contrato = v_c order by contrato, id desc) m where m.tipo_evento = 'alta') then
-    perform scrr.f_err('Ese contrato ya está agregado a mano en el retorno', '55000'); end if;
+    perform scrr.f_err('Ese contrato ya está agregado a mano en «Restablecer»', '55000'); end if;
   insert into scrr.retorno_manual_eventos (contrato, tipo_evento, actividad_id, motivo, autor) values (v_c, 'alta', v_act.id, btrim(p_motivo), v_email);
   perform scrr.f_auditar(v_email, 'scrr_retorno_agregar', v_c::text, jsonb_build_object('actividad', p_actividad), p_ip);
   return jsonb_build_object('ok', true);
@@ -96,7 +96,7 @@ begin
   if length(btrim(coalesce(p_motivo, ''))) not between 10 and 200 then perform scrr.f_err('Escriba un motivo de 10 a 200 caracteres'); end if;
   perform pg_advisory_xact_lock(hashtextextended('scrr_retorno:' || v_c, 0));
   select * into v_m from scrr.retorno_manual_eventos where contrato = v_c order by id desc limit 1;
-  if not found or v_m.tipo_evento <> 'alta' then perform scrr.f_err('Ese contrato no está agregado a mano en el retorno', '55000'); end if;
+  if not found or v_m.tipo_evento <> 'alta' then perform scrr.f_err('Ese contrato no está agregado a mano en «Restablecer»', '55000'); end if;
   insert into scrr.retorno_manual_eventos (contrato, tipo_evento, actividad_id, motivo, autor) values (v_c, 'baja', v_m.actividad_id, btrim(p_motivo), v_email);
   perform scrr.f_auditar(v_email, 'scrr_retorno_quitar', v_c::text, '{}'::jsonb, p_ip);
   return jsonb_build_object('ok', true);

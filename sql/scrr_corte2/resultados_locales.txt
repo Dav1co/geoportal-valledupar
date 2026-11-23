@@ -19,7 +19,7 @@ verificación:
 9|9 rol scrr_refresco: solo MAINTAIN sobre predios_comercial (sin superusuario; el login lo da David aparte)|OK
 huellas DESPUÉS:
 1|1 funciones de campo (conjunto)|261bed3c9242f6261f845ec4e1374b3a|PUBLICADA (22-nov 13:46): lista para este corte
-2|2 funciones de scrr y public.geoportal_scrr_* (conjunto)|c76eae0184c1a389264436663a3f7e7d|CON ESTE CORTE
+2|2 funciones de scrr y public.geoportal_scrr_* (conjunto)|a72d61a3bc4caf422c3004ccb6cb2423|CON ESTE CORTE
 3|3 public.geoportal_puede (no se toca)|32f174a55b95788d3f8187b507303c2f|anote: debe ser igual antes y después
 4|4 public.geoportal_mis_permisos (no se toca)|83166fe17be58da67bbdedaae429bedb|anote: debe ser igual antes y después
 5|5 public.geoportal_admin_guardar (no se toca)|01fda69a9d912067b8b4dc153ac7957e|anote: debe ser igual antes y después

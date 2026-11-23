@@ -475,7 +475,7 @@ begin
   r := pg_temp.rpc(format('public.geoportal_scrr_lista(%L, %L::uuid, %L)', S, c2, 'excel'));
   perform pg_temp.ok('16.07 la lista de retorno lleva la actividad de cada fila y el aviso del drástico; nombre y dirección para la visita',
     (select x ->> 'actividad' = 'Reconexión drástica' and x ->> 'marca' like 'Reconexión DRÁSTICA%' and x ->> 'nombre' = 'ZTSCRR NOMBRE 151' from jsonb_array_elements(r -> 'filas') x where (x ->> 'contrato')::bigint = B + 151)
-    and r ->> 'actividad' like 'Retorno%', r::text);
+    and r ->> 'actividad' like 'Restablecer%', r::text);
   -- la reinstalación de B+150 se hace (archivo de actividades): sale del retorno y su acta queda enlazada a la lista de retorno
   r := pg_temp.iniciar('actividades', v_hoy - 3, pg_temp.sha('act4'), 1);
   ca := r ->> 'carga_id';

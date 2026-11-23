@@ -39,7 +39,7 @@ export function PanelRetorno() {
   return (
     <div className="scrr-panel">
       <section className="scrr-tarjeta">
-        <h3>A reinstalar o reconectar</h3>
+        <h3>Restablecer el servicio: a reinstalar o reconectar</h3>
         <p className="scrr-suave">Contratos que quedaron sin agua y hoy están a paz y salvo (saldo pendiente en cero en la cartera {r?.foto ? `del ${fecha(r.foto)}` : "del día"}). Un pago no basta: tiene que reflejarse en la cartera.</p>
         {mensaje && <p className="scrr-error" role="alert">{mensaje}</p>}
         {ok && <p className="scrr-suave" role="status" data-bloque="ok">{ok}</p>}
@@ -54,14 +54,14 @@ export function PanelRetorno() {
                 {pendientes.length === 0 && <tr><td colSpan={7} className="scrr-suave">No hay contratos pendientes de reinstalar o reconectar.</td></tr>}</tbody></table>
           </div>
           {pendientes.length > 0 && <button className="scrr-btn" disabled={ocupado} data-accion="generar-retorno"
-            onClick={() => void correr(async () => { const g = await apiScrr.retornoGenerar(); return `Lista de retorno generada: ${num(g.contratos)} contratos.`; })}>Generar la lista de retorno ({num(pendientes.length)})</button>}
-          {listados.length > 0 && <p className="scrr-suave">{num(listados.length)} ya están en una lista de retorno generada (no vuelven a salir).</p>}
+            onClick={() => void correr(async () => { const g = await apiScrr.retornoGenerar(); return `Lista de «Restablecer» generada: ${num(g.contratos)} contratos.`; })}>Generar la lista de «Restablecer» ({num(pendientes.length)})</button>}
+          {listados.length > 0 && <p className="scrr-suave">{num(listados.length)} ya están en una lista de «Restablecer» generada (no vuelven a salir).</p>}
           {quitar && (
             <div className="scrr-reemplazo" data-bloque="quitar">
               <p>Contrato {quitar.contrato}: deja de proponerse. Queda el historial con el motivo.</p>
               <input type="text" maxLength={200} placeholder="Motivo (10 a 200 caracteres)" value={quitar.motivo} onChange={(e) => setQuitar({ ...quitar, motivo: e.target.value })} data-campo="quitar-motivo" />
               <div><button className="scrr-btn" disabled={ocupado || quitar.motivo.trim().length < 10} data-accion="confirmar-quitar"
-                onClick={() => void correr(async () => { await apiScrr.retornoQuitar(quitar.contrato, quitar.motivo.trim()); const c = quitar.contrato; setQuitar(null); return `Contrato ${c} quitado del retorno.`; })}>Confirmar</button>
+                onClick={() => void correr(async () => { await apiScrr.retornoQuitar(quitar.contrato, quitar.motivo.trim()); const c = quitar.contrato; setQuitar(null); return `Contrato ${c} quitado de «Restablecer».`; })}>Confirmar</button>
                 <button className="scrr-link" onClick={() => setQuitar(null)}>Cancelar</button></div>
             </div>
           )}
@@ -87,18 +87,18 @@ export function PanelRetorno() {
           <label className="scrr-ancha">Motivo<input type="text" maxLength={200} value={alta.motivo} onChange={(e) => setAlta({ ...alta, motivo: e.target.value })} placeholder="10 a 200 caracteres" data-campo="retorno-motivo" /></label>
         </div>
         <button className="scrr-btn" disabled={ocupado || !alta.contrato || alta.motivo.trim().length < 10} data-accion="retorno-agregar"
-          onClick={() => void correr(async () => { await apiScrr.retornoAgregar(alta.contrato, alta.actividad, alta.motivo.trim()); const c = alta.contrato; setAlta({ ...alta, contrato: "", motivo: "" }); return `Contrato ${c} agregado al retorno.`; })}>Agregar</button>
+          onClick={() => void correr(async () => { await apiScrr.retornoAgregar(alta.contrato, alta.actividad, alta.motivo.trim()); const c = alta.contrato; setAlta({ ...alta, contrato: "", motivo: "" }); return `Contrato ${c} agregado a «Restablecer».`; })}>Agregar</button>
       </section>
 
       <section className="scrr-tarjeta">
-        <h3>Listas de retorno generadas</h3>
+        <h3>Listas de «Restablecer» generadas</h3>
         <div className="scrr-tabla-wrap">
           <table className="scrr-tabla" data-tabla="corridas-retorno"><thead><tr><th>Generada</th><th>Contratos</th><th>Por</th><th></th></tr></thead>
             <tbody>{corridas.map((c) => (
               <tr key={c.corrida_id} data-corrida={c.corrida_id}><td>{fechaHora(c.creada_en)}</td><td>{num(c.contratos)}</td><td>{c.autor.split("@")[0]}</td>
                 <td><button className="scrr-link" onClick={() => void salida(c, "excel")} data-accion="excel">Descargar Excel</button>
                     <button className="scrr-link" onClick={() => void salida(c, "impresion")} data-accion="imprimir">Imprimir</button></td></tr>))}
-              {corridas.length === 0 && <tr><td colSpan={4} className="scrr-suave">Todavía no hay listas de retorno.</td></tr>}</tbody></table>
+              {corridas.length === 0 && <tr><td colSpan={4} className="scrr-suave">Todavía no hay listas de «Restablecer».</td></tr>}</tbody></table>
         </div>
       </section>
     </div>
