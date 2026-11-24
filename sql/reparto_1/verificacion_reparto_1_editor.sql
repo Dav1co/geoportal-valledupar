@@ -1,0 +1,25 @@
+-- REPARTO DE FACTURAS · COMMIT 1 (SQL) · VERIFICACIÓN (solo lectura; después de la migración: 7 de 7 OK) (versión para el editor SQL de Supabase; generado por pruebas_locales/generar.py, no editar a mano)
+select o, k, estado from (
+  select 1 as o, '1 el esquema reparto con sus 8 tablas, 3 vistas y las 11 RPC con la huella del corte' as k, case when to_regnamespace('reparto') is not null and (select count(*) from pg_class where relnamespace = 'reparto'::regnamespace and relkind = 'r') = 8 and (select count(*) from pg_class where relnamespace = 'reparto'::regnamespace and relkind = 'v') = 3 and (select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\_reparto\_%') = 11 and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = to_regnamespace('reparto') or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%')) = '7030a2a06a3483138adb8df01b1c4bca' then 'OK' else 'FALLA' end as estado
+  union all
+  select 2 as o, '2 las 5 funciones de campo que llama el reparto siguen con su md5 de producción' as k, case when (select bool_and(md5(pg_get_functiondef(to_regprocedure(x.f))) = x.m) from (values ('campo.f_verificar(text,text)', '6133b5c36189e31743270064c8398b8a'), ('campo.f_autorizar_supervision(text)', '5ac3368fa5f3a6347328285501894aec'), ('campo.f_actividades_persona(text)', '69bc9bd73d5797b826b3e504c1d92070'), ('campo.f_persona_comercial(text)', '99af03344249f7260357528096e92829'), ('campo.f_quien_puede(text)', '5a381a87f432b8d2a6c88ad98a13fe3c')) x(f, m)) then 'OK' else 'FALLA' end as estado
+  union all
+  select 3 as o, '3 permisos: las RPC solo service_role; reparto, nadie' as k, case when (select bool_and(has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute')) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%') and not exists (select 1 from pg_proc p where p.pronamespace = 'reparto'::regnamespace and (has_function_privilege('service_role', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))) and not exists (select 1 from pg_class c where c.relnamespace = 'reparto'::regnamespace and c.relkind in ('r','p','v') and (has_table_privilege('service_role', c.oid, 'select') or has_table_privilege('authenticated', c.oid, 'select') or has_table_privilege('anon', c.oid, 'select'))) then 'OK' else 'FALLA' end as estado
+  union all
+  select 4 as o, '4 ninguna función de reparto con DELETE o UPDATE sin WHERE' as k, case when (with f as (
+    select p.oid::regprocedure::text as funcion, regexp_replace(regexp_replace(lower(p.prosrc), '--[^\n]*', '', 'g'), '\mdo\s+update\M', 'do_update', 'g') as src
+      from pg_proc p join pg_language l on l.oid = p.prolang
+     where l.lanname in ('plpgsql', 'sql') and p.prokind in ('f', 'p')
+       and (p.pronamespace = to_regnamespace('reparto') or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%'))),
+  s as (select f.funcion, btrim(regexp_replace(x, '\s+', ' ', 'g')) as st from f, regexp_split_to_table(f.src, ';') x)
+  select count(*) from s
+   where (s.st ~ '\mdelete\s+from\M' and substring(s.st from '\mdelete\s+from\M.*$') !~ '\m(where|using)\M')
+      or (s.st ~ '\mupdate\s+(only\s+)?[a-z_][a-z0-9_."]*(\s+(as\s+)?[a-z_][a-z0-9_]*)?\s+set\M'
+          and substring(s.st from '\mupdate\s+(?:only\s+)?[a-z_][a-z0-9_."]*(?:\s+(?:as\s+)?[a-z_][a-z0-9_]*)?\s+set\M.*$') !~ '\mwhere\M')) = 0 then 'OK' else 'FALLA' end as estado
+  union all
+  select 5 as o, '5 redes.f_funciones_sin_where() devuelve cero filas' as k, case when (select count(*) from redes.f_funciones_sin_where()) = 0 then 'OK' else 'FALLA' end as estado
+  union all
+  select 6 as o, '6 semilla: 4 parámetros (ventana 5 días, vigencia de archivos 45, tope 10000 filas, precisión mala 30 m) y ningún dato' as k, case when (select jsonb_object_agg(clave, valor) from reparto.v_parametros_vigentes) = '{"ventana_dias": 5, "lote_vigencia_dias": 45, "tope_filas_lote": 10000, "precision_mala_m": 30}'::jsonb and not exists (select 1 from reparto.jornadas) and not exists (select 1 from reparto.entregas) and not exists (select 1 from reparto.lotes) then 'OK' else 'FALLA' end as estado
+  union all
+  select 7 as o, '7 las 8 tablas son de solo inserción (16 disparadores)' as k, case when (select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid where c.relnamespace = 'reparto'::regnamespace and not t.tgisinternal and t.tgfoid = 'reparto.f_solo_insercion()'::regprocedure) = 16 then 'OK' else 'FALLA' end as estado
+) t order by o;
