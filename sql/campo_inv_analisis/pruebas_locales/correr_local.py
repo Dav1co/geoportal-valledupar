@@ -1,0 +1,143 @@
+"""[Code B] Pruebas locales del paquete «Investigación de ubicación recortada y avisos del Análisis de contrato» (23-nov).
+Clúster del Code B (55442), bases emdupar_b_inv_prueba*, cada una rehecha como copia exacta de producción (rehacer_doble.py). NUNCA Supabase.
+Recorre: huellas ANTES → ensayo (ERROR esperado, N de N) → migración → verificación → huellas DESPUÉS → repetir (rechazo) → registros reales
+→ reversa → huellas de vuelta → los registros quedan → repetir reversa (rechazo) → volver a aplicar → verificación.
+Guardias (cada una en una base nueva): función de campo distinta, estructura distinta, Investigación distinta, con registros.
+Mutación: el ensayo debe FALLAR si preparar_subida se escribe mal. Escribe ../resultados_locales.txt.
+Uso: python3 -I correr_local.py [-h]"""
+import sys, re, time, json, pathlib, importlib.util
+if __name__ == "__main__":
+    for a in sys.argv[1:]:
+        if a in ("-h", "--help"): print(__doc__); sys.exit(0)
+        print(f"Opción desconocida: {a}\n{__doc__}", file=sys.stderr); sys.exit(2)
+AQUI = pathlib.Path(__file__).resolve().parent; PAQ = AQUI.parent
+s = importlib.util.spec_from_file_location("gn", AQUI / "generar.py"); gn = importlib.util.module_from_spec(s); s.loader.exec_module(gn)
+N = gn.NOMBRE; HL = json.loads((AQUI / "huellas_locales.json").read_text())
+LOG = []; TOT = [0, 0]
+def out(t=""): print(t); LOG.append(t)
+def ok(n, c, d=""):
+    TOT[0] += 1; TOT[1] += bool(c); out(f"{'OK   ' if c else 'FALLA'} {n}" + (f"  → {d}" if d and not c else ""))
+leer = lambda n: (PAQ / n).read_text()
+def correr(con, t):
+    try: con.execute(t); return None
+    except Exception as e:
+        try: con.execute("rollback")
+        except Exception: pass
+        return "\n".join(l for l in str(e).splitlines() if not l.startswith("CONTEXT"))
+def huella(con, k): return con.execute(gn.CONJ[k]).fetchone()[0]
+def ver(con): return con.execute(leer(f"verificacion_{N}_editor.sql")).fetchall()
+def hl(con): return con.execute(leer(f"huellas_solo_lectura_{N}_editor.sql")).fetchall()
+def ensayo(con, texto=None):
+    t0 = time.time(); e = correr(con, texto or leer(f"ensayo_en_transaccion_{N}_editor.sql")); dt = time.time() - t0
+    m = re.search(r"RESULTADO: (\d+) de (\d+) pruebas correctas( — SIN FALLAS)?", e or ""); return e, m, dt
+def inv(con, quien, datos):
+    """Registra una Investigación real (sin fotos) en la base, como service_role."""
+    con.execute("insert into public.geoportal_lista_blanca (email, nombre, rol, activo, horario, dias, ver_explorar, ver_campo, ver_dashboard_campo) "
+                "values (%s, 'C', 'consulta', true, 'sin_restriccion', 'todos', false, true, false) on conflict do nothing", (quien,))
+    with con.transaction():
+        con.execute("set local role service_role")
+        p = con.execute("select public.geoportal_campo_preparar_subida(%s, 0, 'campo', null, 'investigacion_ubicacion')", (quien,)).fetchone()[0]
+        return con.execute("select public.geoportal_campo_crear_reporte(%s, %s::uuid, 'investigacion_ubicacion', null, '[PRUEBA ZTINV] ciclo', '123456', 10.46, -73.25, 5, false, 'campo', '[]'::jsonb, null, %s::jsonb, null, null, null)",
+                           (quien, p["reporte_id"], json.dumps(datos))).fetchone()[0]
+
+def inv_produccion(con, quien):
+    """Registra una Investigación como la pide HOY producción (3 fotos con su etiqueta, resultado efectivo y hallazgo)."""
+    con.execute("insert into public.geoportal_lista_blanca (email, nombre, rol, activo, horario, dias, ver_explorar, ver_campo, ver_dashboard_campo) "
+                "values (%s, 'C', 'consulta', true, 'sin_restriccion', 'todos', false, true, false) on conflict do nothing", (quien,))
+    with con.transaction():
+        con.execute("set local role service_role")
+        p = con.execute("select public.geoportal_campo_preparar_subida(%s, 3, 'campo', null, 'investigacion_ubicacion')", (quien,)).fetchone()[0]
+        con.execute("reset role")
+        fotos = []
+        for i, (f, etq) in enumerate(zip(p["fotos"], ["fachada_nomenclatura", "predio_lote", "vecino_referencia"]), 1):
+            con.execute("insert into storage.objects (bucket_id, name, metadata) values ('campo-fotos', %s, '{\"size\": 300000, \"mimetype\": \"image/jpeg\"}')", (f["ruta"],))
+            fotos.append({"orden": i, "ruta": f["ruta"], "etiqueta": etq})
+        con.execute("set local role service_role")
+        return con.execute("select public.geoportal_campo_crear_reporte(%s, %s::uuid, 'investigacion_ubicacion', null, '[PRUEBA ZTINV] guardia', '123456', 10.46, -73.25, 5, false, 'campo', %s::jsonb, null, '{\"hallazgo\": \"ubicado\"}'::jsonb, 'efectivo', null, null)",
+                           (quien, p["reporte_id"], json.dumps(fotos))).fetchone()[0]
+
+def main():
+    out("PRUEBAS LOCALES · [Code B] Investigación de ubicación recortada y avisos del Análisis de contrato (23-nov) · clúster 55442"); out("")
+    con = gn.rehacer("emdupar_b_inv_prueba")
+    ok("B.01 la base local es copia exacta de producción (163 de 163) y trae sus huellas (campo 261bed3c…, acta 111506c6…)",
+       huella(con, "campo") == gn.PUBLICADA["campo"] and huella(con, "acta") == gn.PUBLICADA["acta"])
+    h = hl(con); ok("B.02 huellas de solo lectura ANTES: PUBLICADA", h[0][3].startswith("PUBLICADA") and h[1][3].startswith("PUBLICADA") and h[2][3] == "PUBLICADA", str(h))
+    e, m, dt = ensayo(con); out(e or "[sin error: MAL]")
+    ok(f"E.01 el ensayo termina en el ERROR esperado con «N de N … SIN FALLAS» ({dt:.1f} s)", m is not None and m.group(1) == m.group(2) and m.group(3) is not None, (e or "")[:400])
+    if m: TOT[0] += int(m.group(2)); TOT[1] += int(m.group(1))
+    ok("E.02 el ensayo no dejó nada (huella igual, catálogo igual, sin filas ZTINV ni auditoría)", huella(con, "campo") == gn.PUBLICADA["campo"]
+       and con.execute(gn.INV_CAMPOS_Q).fetchone()[0] == HL["inv"]["partida_campos"]
+       and con.execute("select not exists (select 1 from public.geoportal_lista_blanca where email like 'ztinv.%%') and not exists (select 1 from public.geoportal_auditoria where detalle ->> 'paquete' = 'campo_inv_analisis')"
+                       " and not exists (select 1 from campo.reportes where descripcion like '[PRUEBA ZTINV]%%')").fetchone()[0])
+    e = correr(con, leer(f"migracion_{N}_editor.sql")); ok("C.01 migración", e is None, e)
+    v = ver(con); ok(f"C.02 verificación {sum(1 for x in v if x[2] == 'OK')} de {len(v)} OK", len(v) == HL["verificacion"] and all(x[2] == "OK" for x in v), str([x for x in v if x[2] != "OK"]))
+    h = hl(con); ok("C.03 huellas DESPUÉS: CON ESTE CAMBIO; acta igual", h[0][3] == "CON ESTE CAMBIO" and h[1][3].startswith("PUBLICADA") and h[2][3] == "CON ESTE CAMBIO", str(h))
+    e = correr(con, leer(f"migracion_{N}_editor.sql")); ok("C.04 repetir la migración se rechaza", e is not None and "ya parece aplicado" in e, (e or "")[:200])
+    e = correr(con, leer(f"ensayo_en_transaccion_{N}_editor.sql")); ok("C.05 el ensayo sobre una base ya migrada se detiene en la guardia", e is not None and "ya parece aplicado" in e, (e or "")[:200])
+    r1 = inv(con, "ciclo.op1@emdupar.gov.co", {"direccion_encontrada": "[PRUEBA ZTINV] CRA 1", "barrio": "[PRUEBA ZTINV] Centro", "tipo_predio": "casa"})
+    ok("C.06 con la migración aplicada se registra una Investigación sin fotos con barrio y tipo de predio", r1.get("id") is not None, str(r1))
+    e = correr(con, leer(f"reversa_{N}_editor.sql")); ok("C.07 reversa", e is None, e)
+    ok("C.08 tras la reversa: huella de campo 261bed3c…, preparar_subida publicada, Investigación como en producción (los 4 nuevos desactivados)",
+       huella(con, "campo") == gn.PUBLICADA["campo"] and gn.md5f(con, gn.PREPARAR) == HL["partida"]["MD5_PREPARAR"]
+       and con.execute(gn.INV_CAMPOS_Q).fetchone()[0] == HL["inv"]["tras_reversa_campos"] and con.execute(gn.INV_FOTOS_Q).fetchone()[0] == HL["inv"]["partida_fotos"]
+       and con.execute("select genera_resultado and fotos_min = 3 from campo.tipos_reporte where codigo = 'investigacion_ubicacion'").fetchone()[0])
+    ok("C.09 el registro hecho con los campos nuevos se conserva con sus datos (nada se borra)",
+       con.execute("select datos ->> 'barrio' = '[PRUEBA ZTINV] Centro' and datos ->> 'tipo_predio' = 'casa' from campo.reportes where id = %s", (r1["id"],)).fetchone()[0])
+    e = correr(con, leer(f"reversa_{N}_editor.sql")); ok("C.10 repetir la reversa se rechaza", e is not None and "no es la de este paquete" in e, (e or "")[:200])
+    e = correr(con, leer(f"migracion_{N}_editor.sql")); v = ver(con)
+    ok("C.11 volver a aplicar después de la reversa, con el registro hecho en medio, funciona y verifica todo OK", e is None and all(x[2] == "OK" for x in v), f"{e} {v}")
+    con.close()
+
+    # Volver a aplicar sobre una reversa SIN registros (los 4 campos nuevos desactivados se reactivan, no se duplican)
+    con = gn.rehacer("emdupar_b_inv_prueba")
+    e1 = correr(con, leer(f"migracion_{N}_editor.sql")); e2 = correr(con, leer(f"reversa_{N}_editor.sql")); e3 = correr(con, leer(f"migracion_{N}_editor.sql"))
+    v = ver(con)
+    ok("C.12 migrar → revertir → migrar sin registros: los 4 campos se reactivan sin duplicarse y la verificación da todo OK",
+       e1 is None and e2 is None and e3 is None and all(x[2] == "OK" for x in v)
+       and con.execute("select count(*) from campo.tipo_campos c join campo.tipos_reporte t on t.id = c.tipo_id where t.codigo = 'investigacion_ubicacion'").fetchone()[0] == 11, f"{e1} {e2} {e3} {v}")
+    ok("C.13 la auditoría guarda las tres pasadas (migración, reversa, migración)",
+       con.execute("select count(*) from public.geoportal_auditoria where accion = 'campo_catalogo' and detalle ->> 'paquete' = 'campo_inv_analisis'").fetchone()[0] == 3)
+    con.close()
+
+    # Guardias: cada una en una base nueva, con un cambio que imita una producción distinta
+    casos = [
+        ("G.01 una función de campo distinta (comentario en f_validar_datos)",
+         "create or replace function campo.f_validar_datos_zt() returns int language sql as $$ select 1 $$", "Las funciones de campo no son las publicadas"),
+        ("G.02 una columna de más en campo.tipo_fotos", "alter table campo.tipo_fotos add column zt_extra text", "La estructura de campo.tipo_fotos no es la de producción"),
+        ("G.03 un permiso de más en campo.derivadas", "grant select on campo.derivadas to anon", "La estructura de campo.derivadas no es la de producción"),
+        ("G.04 la Investigación con otro mínimo de fotos", "update campo.tipos_reporte set fotos_min = 4 where codigo = 'investigacion_ubicacion'", "La Investigación de ubicación no está como en producción"),
+        ("G.05 la Investigación con una foto ya opcional", "update campo.tipo_fotos set obligatoria = false where codigo = 'vecino_referencia' and tipo_id = 35", "Las fotos de la Investigación no son las de producción"),
+        ("G.06 la Investigación sin su actividad", "update campo.actividades set activa = false where codigo = 'investigacion_ubicacion'", "La actividad investigacion_ubicacion no está activa"),
+    ]
+    for nombre, cambio, esperado in casos:
+        con = gn.rehacer("emdupar_b_inv_prueba"); con.execute(cambio)
+        e = correr(con, leer(f"migracion_{N}_editor.sql"))
+        ok(f"{nombre}: la migración se detiene sin cambiar nada", e is not None and esperado in e
+           and gn.md5f(con, gn.PREPARAR) == HL["partida"]["MD5_PREPARAR"], (e or "[aplicó]")[:250])
+        con.close()
+    con = gn.rehacer("emdupar_b_inv_prueba"); r0 = inv_produccion(con, "guardia.op@emdupar.gov.co")
+    e = correr(con, leer(f"migracion_{N}_editor.sql"))
+    ok("G.07 la Investigación con un registro de hoy (3 fotos, efectivo): la migración se detiene", r0.get("id") is not None and e is not None and "ya tiene registros" in e, (e or "[aplicó]")[:250] + str(r0))
+    con.close()
+
+    # Mutación: el ensayo tiene que fallar si preparar_subida queda mal escrita
+    mutaciones = [("M.01 preparar_subida acepta 0 fotos con CUALQUIER formato", "v_tmin is distinct from 0 then 1", "false then 1", ["03.02", "03.03", "03.04"]),
+                  ("M.02 preparar_subida nunca acepta 0 fotos", "v_tmin is distinct from 0 then 1", "true then 1", ["03.01", "04.01"]),
+                  ("M.03 la migración no desactiva cita_acordada", "set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada');",
+                   "set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada');", ["01.04"]),
+                  ("M.04 la migración deja la dirección opcional", "set obligatorio = true where tipo_id = v_t and codigo = 'direccion_encontrada'", "set obligatorio = false where tipo_id = v_t and codigo = 'direccion_encontrada'", ["01.03", "04.04"])]
+    base = leer(f"ensayo_en_transaccion_{N}_editor.sql")
+    for nombre, a, b, deben in mutaciones:
+        if a not in base: ok(f"{nombre}: el texto a mutar existe", False, a); continue
+        con = gn.rehacer("emdupar_b_inv_prueba")
+        e, m, _ = ensayo(con, base.replace(a, b, 1))
+        fallas = re.findall(r"FALLA (\d\d\.\d\d)", e or "")
+        ok(f"{nombre}: el ensayo lo detecta (fallan {', '.join(fallas) or 'ninguna'})", m is not None and m.group(3) is None and all(x in fallas for x in deben), (e or "")[:300])
+        con.close()
+
+    out(""); out(f"RESULTADO: {TOT[1]} de {TOT[0]} pruebas correctas" + (" — SIN FALLAS" if TOT[0] == TOT[1] else ""))
+    (PAQ / "resultados_locales.txt").write_text("\n".join(LOG) + "\n")
+    sys.exit(0 if TOT[0] == TOT[1] else 1)
+
+if __name__ == "__main__":
+    main()

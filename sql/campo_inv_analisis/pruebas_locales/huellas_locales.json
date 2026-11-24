@@ -1,0 +1,26 @@
+{
+ "partida": {
+  "HUELLA_CAMPO": "261bed3c9242f6261f845ec4e1374b3a",
+  "HUELLA_ACTA": "111506c690249ad3b56ebf572566434c",
+  "MD5_PREPARAR": "6a2ef927316ed4aa2936eadfb9b0a0cd",
+  "MD5_CREAR": "51ecb98ca2e7f940c66b9a1f3e828222"
+ },
+ "permisos": {
+  "public.geoportal_puede(text,text)": "32f174a55b95788d3f8187b507303c2f",
+  "public.geoportal_mis_permisos(text)": "83166fe17be58da67bbdedaae429bedb",
+  "public.geoportal_admin_guardar(text,text,text,text,boolean,text,text)": "01fda69a9d912067b8b4dc153ac7957e",
+  "public.geoportal_admin_permisos(text,text,boolean,boolean,boolean,boolean,text,text,boolean,boolean,boolean,text,boolean,boolean,boolean,boolean,boolean,boolean,boolean,boolean)": "e5a90103b4a83440fd826f03266b7245"
+ },
+ "inv": {
+  "partida_campos": "cita_acordada:dia_hora:false:true,despeje_caja:si_no:false:true,despeje_observacion:texto:false:true,direccion_encontrada:texto:false:true,hallazgo:opcion:true:true,observacion:texto:false:true,visita_concertada:si_no:false:true",
+  "partida_fotos": "fachada_nomenclatura:true:true:true,predio_lote:true:true:true,vecino_referencia:true:false:true",
+  "nueva_campos": "barrio:texto:false:true,cita_acordada:dia_hora:false:false,despeje_caja:si_no:false:false,despeje_observacion:texto:false:false,direccion_encontrada:texto:true:true,habitado:si_no:false:true,hallazgo:opcion:false:true,medidor:texto:false:true,observacion:texto:false:true,tipo_predio:opcion:false:true,visita_concertada:si_no:false:false",
+  "nueva_fotos": "fachada_nomenclatura:false:false:true,predio_lote:false:false:true,vecino_referencia:false:false:true",
+  "tras_reversa_campos": "barrio:texto:false:false,cita_acordada:dia_hora:false:true,despeje_caja:si_no:false:true,despeje_observacion:texto:false:true,direccion_encontrada:texto:false:true,habitado:si_no:false:false,hallazgo:opcion:true:true,medidor:texto:false:false,observacion:texto:false:true,tipo_predio:opcion:false:false,visita_concertada:si_no:false:true"
+ },
+ "nuevas": {
+  "HUELLA_CAMPO_NUEVA": "d4c76af821deee9ecbee4ac451d943ff",
+  "MD5_PREPARAR_NUEVA": "a00d66705d7a0c88a38ab5d882153669"
+ },
+ "verificacion": 10
+}

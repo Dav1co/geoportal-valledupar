@@ -1,0 +1,33 @@
+PRUEBAS LOCALES · [Code B] Investigación de ubicación recortada y avisos del Análisis de contrato (23-nov) · clúster 55442
+
+OK    B.01 la base local es copia exacta de producción (163 de 163) y trae sus huellas (campo 261bed3c…, acta 111506c6…)
+OK    B.02 huellas de solo lectura ANTES: PUBLICADA
+ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 40 de 40 pruebas correctas — SIN FALLAS
+OK    E.01 el ensayo termina en el ERROR esperado con «N de N … SIN FALLAS» (0.1 s)
+OK    E.02 el ensayo no dejó nada (huella igual, catálogo igual, sin filas ZTINV ni auditoría)
+OK    C.01 migración
+OK    C.02 verificación 10 de 10 OK
+OK    C.03 huellas DESPUÉS: CON ESTE CAMBIO; acta igual
+OK    C.04 repetir la migración se rechaza
+OK    C.05 el ensayo sobre una base ya migrada se detiene en la guardia
+OK    C.06 con la migración aplicada se registra una Investigación sin fotos con barrio y tipo de predio
+OK    C.07 reversa
+OK    C.08 tras la reversa: huella de campo 261bed3c…, preparar_subida publicada, Investigación como en producción (los 4 nuevos desactivados)
+OK    C.09 el registro hecho con los campos nuevos se conserva con sus datos (nada se borra)
+OK    C.10 repetir la reversa se rechaza
+OK    C.11 volver a aplicar después de la reversa, con el registro hecho en medio, funciona y verifica todo OK
+OK    C.12 migrar → revertir → migrar sin registros: los 4 campos se reactivan sin duplicarse y la verificación da todo OK
+OK    C.13 la auditoría guarda las tres pasadas (migración, reversa, migración)
+OK    G.01 una función de campo distinta (comentario en f_validar_datos): la migración se detiene sin cambiar nada
+OK    G.02 una columna de más en campo.tipo_fotos: la migración se detiene sin cambiar nada
+OK    G.03 un permiso de más en campo.derivadas: la migración se detiene sin cambiar nada
+OK    G.04 la Investigación con otro mínimo de fotos: la migración se detiene sin cambiar nada
+OK    G.05 la Investigación con una foto ya opcional: la migración se detiene sin cambiar nada
+OK    G.06 la Investigación sin su actividad: la migración se detiene sin cambiar nada
+OK    G.07 la Investigación con un registro de hoy (3 fotos, efectivo): la migración se detiene
+OK    M.01 preparar_subida acepta 0 fotos con CUALQUIER formato: el ensayo lo detecta (fallan 03.02, 03.03, 03.04)
+OK    M.02 preparar_subida nunca acepta 0 fotos: el ensayo lo detecta (fallan 03.01, 03.05, 04.01, 04.02, 04.04, 04.05, 04.06, 04.07, 04.08)
+OK    M.03 la migración no desactiva cita_acordada: el ensayo lo detecta (fallan 01.03, 01.04, 02.02)
+OK    M.04 la migración deja la dirección opcional: el ensayo lo detecta (fallan 01.03, 04.04)
+
+RESULTADO: 68 de 68 pruebas correctas — SIN FALLAS
