@@ -132,15 +132,34 @@ begin
     'pendientes', (select count(*) from reparto.f_estado_lista(p_jornada) s where not s.entregada));
 end $$;
 
--- Mapa: los XY de un día (o de una jornada), numerados por el orden real
-create function public.geoportal_reparto_mapa(p_solicitante text, p_fecha date default null, p_jornada bigint default null, p_ip text default null) returns jsonb
+-- Mapa EN VIVO (David, 23-nov): los XY de un día (o de una jornada), numerados por el orden real. La pantalla lo consulta cada pocos segundos:
+-- con p_despues (el último id que ya tiene) solo vienen los puntos nuevos, más la lista de ids anulados del día (pocos) para tacharlos.
+create function public.geoportal_reparto_mapa(p_solicitante text, p_fecha date default null, p_jornada bigint default null, p_despues bigint default null,
+                                              p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public, reparto as $$
 declare v_email text := reparto.f_autorizar_supervisor(p_solicitante); v_fecha date := coalesce(p_fecha, reparto.f_hoy());
 begin
   if v_fecha < date '2026-01-01' or v_fecha > reparto.f_hoy() then perform reparto.f_err('Fecha no válida'); end if;
-  return jsonb_build_object('fecha', v_fecha, 'puntos', (select coalesce(jsonb_agg(jsonb_build_object(
-      'id', e.id, 'jornada_id', e.jornada_id, 'repartidor', j.repartidor, 'contrato', e.contrato, 'consecutivo', e.consecutivo, 'hora', e.registrado_en,
-      'lon', e.lon, 'lat', e.lat, 'precision_m', e.precision_m, 'anulada', e.anulada) order by e.jornada_id, e.consecutivo), '[]'::jsonb)
-    from reparto.v_entregas e join reparto.jornadas j on j.id = e.jornada_id
-   where j.fecha = v_fecha and (p_jornada is null or e.jornada_id = p_jornada)));
+  if p_despues is not null and p_despues < 0 then perform reparto.f_err('Cursor no válido'); end if;
+  return (with j as (select jo.id, jo.repartidor from reparto.jornadas jo where jo.fecha = v_fecha and (p_jornada is null or jo.id = p_jornada)),
+               e as (select e.*, j.repartidor from reparto.v_entregas e join j on j.id = e.jornada_id)
+    select jsonb_build_object('fecha', v_fecha,
+      'puntos', (select coalesce(jsonb_agg(jsonb_build_object('id', e.id, 'jornada_id', e.jornada_id, 'repartidor', e.repartidor, 'contrato', e.contrato, 'consecutivo', e.consecutivo,
+                   'hora', e.registrado_en, 'lon', e.lon, 'lat', e.lat, 'precision_m', e.precision_m, 'anulada', e.anulada) order by e.jornada_id, e.consecutivo), '[]'::jsonb)
+                   from e where p_despues is null or e.id > p_despues),
+      'anuladas', (select coalesce(jsonb_agg(e.id order by e.id), '[]'::jsonb) from e where e.anulada),
+      'ultimo_id', (select max(e.id) from e)));
+end $$;
+
+-- Calendario de reparto en SOLO LECTURA para el supervisor de reparto (David, 23-nov): lo llena quien tiene dashboard_campo en Cartera → Calendario.
+-- Por ciclo: la fecha de reparto del período pedido (o nula: falta) y el período que se reparte hoy. «puede_cambiar» decide si se muestra el enlace.
+create function public.geoportal_reparto_calendario(p_solicitante text, p_periodo text default null, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, reparto, scrr as $$
+declare v_email text := reparto.f_autorizar_supervisor(p_solicitante); v_per text := coalesce(nullif(btrim(coalesce(p_periodo, '')), ''), to_char(reparto.f_hoy(), 'YYYYMM'));
+begin
+  if v_per !~ '^20[0-9]{2}(0[1-9]|1[0-2])$' then perform reparto.f_err('Período no válido (aaaamm)'); end if;
+  return jsonb_build_object('periodo', v_per, 'hoy', reparto.f_hoy(), 'puede_cambiar', reparto.f_puede_calendario(v_email),
+    'ciclos', (select coalesce(jsonb_agg(jsonb_build_object('ciclo', v.ciclo, 'reparto', reparto.f_fecha(v.etapas ->> 'reparto'),
+                 'en_reparto_hoy', (select jsonb_build_object('periodo', p.periodo, 'desde', p.desde) from reparto.f_periodo_reparto(v.ciclo::text) p)) order by v.ciclo), '[]'::jsonb)
+                 from scrr.v_calendario_vigente v where v.periodo = v_per));
 end $$;

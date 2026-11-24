@@ -177,6 +177,8 @@ select o, k, v, estado from (
              "and t.tgfoid = 'reparto.f_solo_insercion()'::regprocedure) = 16"),
         fila(8, "8 el Dell (homelab_lectura): USAGE sobre reparto y SELECT sobre las 8 tablas, nada más (ni vistas, ni escritura, ni funciones)",
              HOMELAB),
+        fila(9, "9 la actividad «Supervisión de reparto» (supervision_reparto) está activa en campo.actividades",
+             "exists (select 1 from campo.actividades where codigo = 'supervision_reparto' and activa and nombre = 'Supervisión de reparto')"),
     ]) + "\n) t order by o;\n"
 
     esc = lambda n, t: (PAQ / n).write_text(t)
@@ -185,7 +187,7 @@ select o, k, v, estado from (
         + poner(lee("70_pruebas.sql"), v) + "\nrollback;\n")
     esc(f"reversa_{NOMBRE}_editor.sql", CAB.format(que="REVERSA") + "begin;\n" + lee("90_reversa.sql") + "\ncommit;\n")
     esc(f"huellas_solo_lectura_{NOMBRE}_editor.sql", CAB.format(que="HUELLAS (solo lectura; ANTES y DESPUÉS)") + huellas)
-    esc(f"verificacion_{NOMBRE}_editor.sql", CAB.format(que="VERIFICACIÓN (solo lectura; después de la migración: 8 de 8 OK)") + ver)
+    esc(f"verificacion_{NOMBRE}_editor.sql", CAB.format(que="VERIFICACIÓN (solo lectura; después de la migración: 9 de 9 OK)") + ver)
     (AQUI / "huellas_locales.json").write_text(json.dumps({"campo_llamadas": CAMPO_LLAMADAS, "permisos": permisos_antes, "nuevas": nuevas}, indent=1))
     for n in sorted(PAQ.glob("*_editor.sql")):
         t = n.read_text(); assert "on commit drop" not in t.lower(), n

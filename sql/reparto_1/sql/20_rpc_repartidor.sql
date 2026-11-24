@@ -48,6 +48,7 @@ begin
     into v_periodo, v_rutas from c;
   return jsonb_build_object(
     'correo', v_email, 'es_repartidor', v_rep, 'es_supervisor', v_sup, 'es_admin', public.geoportal_es_admin(v_email), 'hoy', reparto.f_hoy(),
+    'puede_calendario', v_sup and reparto.f_puede_calendario(v_email),
     'periodo', v_periodo, 'anterior', v_rutas,
     'nuevas', (select coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'nombre_archivo', l.nombre_archivo, 'tipo', l.tipo, 'ciclo', l.ciclo, 'ruta', l.ruta,
                                                             'filas', l.filas, 'cargado_en', l.creado_en,

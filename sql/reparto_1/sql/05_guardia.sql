@@ -6,7 +6,8 @@
 --     campo.f_actividades_persona, campo.f_persona_comercial y campo.f_quien_puede.
 --     NO se exige la huella del conjunto de campo: el paquete de Investigación y Análisis (Code B) se publica antes y la cambia (§6 del encargo); el reparto
 --     no crea ni reemplaza nada en campo, y la verificación comprueba que la huella de campo quedó igual que antes de la migración;
---   · la actividad «reparto» no existe o no está activa en campo.actividades;
+--   · la actividad «reparto» no existe o no está activa en campo.actividades, u otra actividad ya se llama «Supervisión de reparto» (este paquete la crea:
+--     supervision_reparto, decisión de David del 23-nov);
 --   · bi.v_rutas_geoportal no es una vista con exactamente sus 6 columnas de texto (contrato, periodo_carga, ciclo, ruta, consecutivo_ruta, consecutivo_predio)
 --     y con su definición de producción («el último período»: md5 {{MD5_V_RUTAS}}, consulta A del 23-nov);
 --   · hechos.rutas_consecutivos (la lee la vista; las pruebas escriben en ella dentro del ensayo) no es una tabla con sus 9 columnas de texto, sin NOT NULL ni
@@ -35,6 +36,9 @@ begin
   end loop;
   if not exists (select 1 from campo.actividades a where a.codigo = 'reparto' and a.activa) then
     raise exception 'GUARDIA REPARTO: la actividad «reparto» no existe o no está activa en campo.actividades.';
+  end if;
+  if exists (select 1 from campo.actividades a where lower(a.nombre) = 'supervisión de reparto' and a.codigo <> 'supervision_reparto') then
+    raise exception 'GUARDIA REPARTO: ya hay otra actividad llamada «Supervisión de reparto» en campo.actividades. Deténgase y avise.';
   end if;
   if (select relkind from pg_class where oid = to_regclass('bi.v_rutas_geoportal')) is distinct from 'v' then
     raise exception 'GUARDIA REPARTO: bi.v_rutas_geoportal no existe o no es una vista.';

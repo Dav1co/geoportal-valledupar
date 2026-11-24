@@ -56,6 +56,11 @@ CODIGO = [
    "  if v_j.lote_id is not null and exists (select 1 from reparto.lotes_anulados a where a.lote_id = v_j.lote_id) then", "  if false then", "06.11"),
   ("se entrega sin GPS",
    "  if p_lon is null or p_lat is null or p_precision_m is null then perform", "  if false then perform", "03.08"),
+  ("el supervisor sin exigir la actividad supervision_reparto",
+   "  if not (campo.f_persona_comercial(v_email) and exists (select 1 from campo.f_actividades_persona(v_email) a where a.codigo = 'supervision_reparto')) then",
+   "  if not campo.f_persona_comercial(v_email) then", "00.11"),
+  ("el mapa en vivo devuelve todo aunque traiga el cursor", "                   from e where p_despues is null or e.id > p_despues),", "                   from e),", "07.11"),
+  ("el enlace del calendario para cualquier supervisor", "    'puede_calendario', v_sup and reparto.f_puede_calendario(v_email),", "    'puede_calendario', v_sup,", "00.02"),
   ("una RPC ejecutable por authenticated",
    "    execute format('grant execute on function %s to service_role', f.firma);", "    execute format('grant execute on function %s to service_role, authenticated', f.firma);", "10.01"),
 ]

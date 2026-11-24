@@ -8,7 +8,8 @@
 -- Antes de los DROP se quitan los permisos de homelab_lectura (el Dell) sobre reparto.
 -- DROP 2 — POR QUÉ: el esquema reparto es nuevo de este corte. ALCANCE EXACTO: el esquema reparto con lo suyo (tablas, vistas, funciones, disparadores y los
 --          parámetros de la semilla). «cascade» solo alcanza objetos DENTRO de reparto: nada fuera de reparto depende de él (las RPC de public se quitan antes).
--- No toca campo, bi, hechos, public.cartera_suscripcion, public.geoportal_auditoria (lo auditado se queda) ni las funciones de permisos.
+-- La actividad «supervision_reparto» de campo.actividades NO se borra (el catálogo no se borra): se desactiva (update con where).
+-- No toca más de campo, ni bi, hechos, public.cartera_suscripcion, public.geoportal_auditoria (lo auditado se queda) ni las funciones de permisos.
 -- =====================================================================
 do $reversa$
 declare f record;
@@ -29,4 +30,5 @@ begin
     execute format('drop function %s', f.firma);                 -- DROP 1 (ver arriba)
   end loop;
   drop schema reparto cascade;                                    -- DROP 2 (ver arriba)
+  update campo.actividades set activa = false where codigo = 'supervision_reparto';
 end $reversa$;

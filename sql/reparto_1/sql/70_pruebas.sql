@@ -36,7 +36,10 @@ create function pg_temp.salt(r jsonb) returns text language sql as $f$
 -- Personas de prueba
 insert into public.geoportal_lista_blanca (email, nombre, rol, activo, horario, dias, ver_explorar, ver_campo, ver_dashboard_campo, ver_acta, ver_dashboard_acta, ver_registro_tecnico) values
   ('ztrep.adm@emdupar.gov.co', 'ZTREP Admin', 'admin', true, 'sin_restriccion', 'todos', false, false, false, false, false, false),
-  ('ztrep.sup@emdupar.gov.co', 'ZTREP Supervisor', 'consulta', true, 'sin_restriccion', 'todos', false, true, true, false, false, false),
+  ('ztrep.sup@emdupar.gov.co', 'ZTREP Supervisor de reparto', 'consulta', true, 'sin_restriccion', 'todos', false, true, false, false, false, false),
+  ('ztrep.supcal@emdupar.gov.co', 'ZTREP Supervisor de reparto y de campo', 'consulta', true, 'sin_restriccion', 'todos', false, true, true, false, false, false),
+  ('ztrep.supcampo@emdupar.gov.co', 'ZTREP Supervisor de campo (SCRR)', 'consulta', true, 'sin_restriccion', 'todos', false, true, true, false, false, false),
+  ('ztrep.supquitada@emdupar.gov.co', 'ZTREP Supervisión de reparto quitada', 'consulta', true, 'sin_restriccion', 'todos', false, true, false, false, false, false),
   ('ztrep.rep1@emdupar.gov.co', 'ZTREP Repartidor uno', 'consulta', true, 'sin_restriccion', 'todos', false, true, false, false, false, false),
   ('ztrep.rep2@emdupar.gov.co', 'ZTREP Repartidor dos', 'consulta', true, 'sin_restriccion', 'todos', false, true, false, false, false, false),
   ('ztrep.sinact@emdupar.gov.co', 'ZTREP Campo sin reparto', 'consulta', true, 'sin_restriccion', 'todos', false, true, false, false, false, false),
@@ -48,7 +51,11 @@ insert into campo.personal_eventos (persona, tipo_evento, valor, motivo, autor) 
   ('ztrep.rep2@emdupar.gov.co', 'asignar_actividad', 'reparto', null, 'ztrep.adm@emdupar.gov.co'),
   ('ztrep.quitada@emdupar.gov.co', 'asignar_actividad', 'reparto', null, 'ztrep.adm@emdupar.gov.co'),
   ('ztrep.quitada@emdupar.gov.co', 'quitar_actividad', 'reparto', 'ZTREP ya no reparte facturas', 'ztrep.adm@emdupar.gov.co'),
-  ('ztrep.inactivo@emdupar.gov.co', 'asignar_actividad', 'reparto', null, 'ztrep.adm@emdupar.gov.co');
+  ('ztrep.inactivo@emdupar.gov.co', 'asignar_actividad', 'reparto', null, 'ztrep.adm@emdupar.gov.co'),
+  ('ztrep.sup@emdupar.gov.co', 'asignar_actividad', 'supervision_reparto', null, 'ztrep.adm@emdupar.gov.co'),
+  ('ztrep.supcal@emdupar.gov.co', 'asignar_actividad', 'supervision_reparto', null, 'ztrep.adm@emdupar.gov.co'),
+  ('ztrep.supquitada@emdupar.gov.co', 'asignar_actividad', 'supervision_reparto', null, 'ztrep.adm@emdupar.gov.co'),
+  ('ztrep.supquitada@emdupar.gov.co', 'quitar_actividad', 'supervision_reparto', 'ZTREP ya no supervisa el reparto', 'ztrep.adm@emdupar.gov.co');
 
 -- Rutas de prueba en el período más reciente. Ruta 880101: 12 contratos; orden esperado por consecutivo_ruta y, en el empate, consecutivo_predio.
 -- 880000000105 aparece DOS veces en el período (cuenta una vez, en su primer lugar). 880000000199 está solo en un período viejo (no debe salir).
@@ -105,7 +112,20 @@ begin
   perform pg_temp.ok('00.01 el repartidor (campo + actividad reparto) entra: es repartidor y no supervisor',
     (r ->> 'es_repartidor')::boolean and not (r ->> 'es_supervisor')::boolean, r::text);
   r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', S));
-  perform pg_temp.ok('00.02 el supervisor (dashboard_campo) entra: es supervisor y no repartidor', (r ->> 'es_supervisor')::boolean and not (r ->> 'es_repartidor')::boolean, r::text);
+  perform pg_temp.ok('00.02 el supervisor de reparto (actividad supervision_reparto) entra: es supervisor y no repartidor; sin dashboard_campo no cambia el calendario',
+    (r ->> 'es_supervisor')::boolean and not (r ->> 'es_repartidor')::boolean and not (r ->> 'puede_calendario')::boolean, r::text);
+  perform pg_temp.ok('00.11 con dashboard_campo pero SIN supervision_reparto (supervisor del SCRR): 42501 en el contexto y en lo del supervisor',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', 'ztrep.supcampo@emdupar.gov.co'))) = '42501'
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', 'ztrep.supcampo@emdupar.gov.co'))) = '42501');
+  perform pg_temp.ok('00.12 con supervision_reparto QUITADA: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', 'ztrep.supquitada@emdupar.gov.co'))) = '42501');
+  r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', 'ztrep.supcal@emdupar.gov.co'));
+  perform pg_temp.ok('00.13 el supervisor de reparto que también tiene dashboard_campo ve el enlace «Cambiar en Calendario» (puede_calendario); el administrador también',
+    (r ->> 'es_supervisor')::boolean and (r ->> 'puede_calendario')::boolean
+    and (pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', A)) ->> 'puede_calendario')::boolean, r::text);
+  perform pg_temp.ok('00.14 la actividad «Supervisión de reparto» está en el catálogo de Personal, activa, y el supervisor sale en f_quien_puede',
+    exists (select 1 from campo.actividades where codigo = 'supervision_reparto' and activa and nombre = 'Supervisión de reparto')
+    and exists (select 1 from campo.f_quien_puede('supervision_reparto') q where q.persona = S)
+    and not exists (select 1 from campo.f_quien_puede('supervision_reparto') q where q.persona = R1));
   r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', A));
   perform pg_temp.ok('00.03 el administrador es las dos cosas', (r ->> 'es_supervisor')::boolean and (r ->> 'es_repartidor')::boolean and (r ->> 'es_admin')::boolean, r::text);
   perform pg_temp.ok('00.04 con campo pero SIN la actividad reparto: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', 'ztrep.sinact@emdupar.gov.co'))) = '42501');
@@ -316,6 +336,12 @@ begin
   r := pg_temp.rpc(format('public.geoportal_reparto_mapa(%L, null, %s)', S, j1));
   perform pg_temp.ok('07.07 mapa de una jornada: sus 5 puntos en el orden real', jsonb_array_length(r -> 'puntos') = 5
     and (select string_agg(x ->> 'consecutivo', ',' order by o) from jsonb_array_elements(r -> 'puntos') with ordinality t(x, o)) = '1,2,3,4,5', r::text);
+  r := pg_temp.rpc(format('public.geoportal_reparto_mapa(%L, null, %s, %s)', S, j1, (select max(id) from reparto.entregas where jornada_id = j1 and consecutivo = 3)));
+  perform pg_temp.ok('07.11 mapa en vivo: con el último id que ya tiene, solo vienen los puntos nuevos (4 y 5), la lista de anuladas y el último id',
+    (select string_agg(x ->> 'consecutivo', ',' order by o) from jsonb_array_elements(r -> 'puntos') with ordinality t(x, o)) = '4,5'
+    and r -> 'anuladas' = jsonb_build_array(e4) and (r ->> 'ultimo_id')::bigint = (select max(id) from reparto.entregas where jornada_id = j1), r::text);
+  r := pg_temp.rpc(format('public.geoportal_reparto_mapa(%L, null, %s, %s)', S, j1, (select max(id) from reparto.entregas where jornada_id = j1)));
+  perform pg_temp.ok('07.12 mapa en vivo sin nada nuevo: cero puntos (respuesta pequeña)', r -> 'puntos' = '[]'::jsonb and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_mapa(%L, null, null, -1)', S))) = '22023', r::text);
   perform pg_temp.ok('07.08 fecha futura: 22023', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_avance(%L, %L::date)', S, reparto.f_hoy() + 1))) = '22023');
   perform pg_temp.ok('07.09 el administrador también ve el avance', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', A))) = 'OK');
   perform pg_temp.ok('07.10 nada de lo que ve el repartidor ni el supervisor trae nombre, dirección ni teléfono del suscriptor',
@@ -359,8 +385,8 @@ begin
   end;
 
   -- ===== 10. Seguridad y lo que no se toca =====
-  perform pg_temp.ok('10.01 service_role ejecuta las 11 RPC; anon y authenticated no',
-    (select count(*) = 11 and bool_and(has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute'))
+  perform pg_temp.ok('10.01 service_role ejecuta las 12 RPC; anon y authenticated no',
+    (select count(*) = 12 and bool_and(has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute'))
        from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%'));
   perform pg_temp.ok('10.02 nadie más que el dueño ejecuta funciones de reparto',
     not exists (select 1 from pg_proc p where p.pronamespace = 'reparto'::regnamespace
@@ -424,6 +450,19 @@ begin
   perform pg_temp.ok('12.06 el supervisor llena la fecha de reparto en el día: al volver a abrir la ruta es otra jornada, ya con el período y sin aviso',
     j97b <> j97 and r -> 'jornada' ->> 'periodo_reparto' = v_mes and not (r -> 'jornada' ->> 'respaldo')::boolean and r -> 'jornada' -> 'aviso' = 'null'::jsonb, (r -> 'jornada')::text);
   perform pg_temp.ok('12.07 con la fecha nueva (hoy): la entrega de respaldo de hoy cuenta; la de hace 10 días ya no', pg_temp.pend(r) = '880000000502', pg_temp.pend(r));
+  r := pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', S));
+  r := pg_temp.rpc(format('public.geoportal_reparto_calendario(%L)', S));
+  perform pg_temp.ok('12.09 calendario en solo lectura: el ciclo 98 con su fecha de reparto de este mes; el 97 con la que se llenó hoy; sin enlace para quien no tiene dashboard_campo',
+    (select x ->> 'reparto' from jsonb_array_elements(r -> 'ciclos') x where (x ->> 'ciclo')::int = 98) = (v_hoy - 2)::text
+    and (select x ->> 'reparto' from jsonb_array_elements(r -> 'ciclos') x where (x ->> 'ciclo')::int = 97) = v_hoy::text
+    and (select x -> 'en_reparto_hoy' ->> 'periodo' from jsonb_array_elements(r -> 'ciclos') x where (x ->> 'ciclo')::int = 98) = v_mes
+    and not (r ->> 'puede_cambiar')::boolean and (pg_temp.rpc(format('public.geoportal_reparto_calendario(%L)', 'ztrep.supcal@emdupar.gov.co')) ->> 'puede_cambiar')::boolean, r::text);
+  r := pg_temp.rpc(format('public.geoportal_reparto_calendario(%L, %L)', S, to_char(date_trunc('month', v_hoy) + interval '1 month', 'YYYYMM')));
+  perform pg_temp.ok('12.10 el calendario del mes siguiente: la fecha que aún no llega, y el período que se reparte hoy sigue siendo este mes',
+    (select x ->> 'reparto' from jsonb_array_elements(r -> 'ciclos') x where (x ->> 'ciclo')::int = 98) = (v_hoy + 3)::text
+    and (select x -> 'en_reparto_hoy' ->> 'periodo' from jsonb_array_elements(r -> 'ciclos') x where (x ->> 'ciclo')::int = 98) = v_mes, r::text);
+  perform pg_temp.ok('12.11 el repartidor no ve el calendario (42501); un período mal escrito: 22023',
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_calendario(%L)', R1))) = '42501' and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_calendario(%L, %L)', S, '2026-11'))) = '22023');
   r := pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', S));
   perform pg_temp.ok('12.08 el avance del supervisor muestra el período de reparto y el respaldo de cada jornada',
     (select y ->> 'respaldo' from jsonb_array_elements(r -> 'filas') y where (y ->> 'jornada_id')::bigint = j97) = 'true'

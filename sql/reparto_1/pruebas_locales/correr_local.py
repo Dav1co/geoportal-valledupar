@@ -1,5 +1,5 @@
 """Recorrido local completo del Reparto de facturas, commit 1 (clúster 55432 del Code A; NUNCA Supabase):
-generar → ensayo (N de N SIN FALLAS, con el volumen de producción) → huellas ANTES → migración → verificación (8 de 8) → huellas DESPUÉS
+generar → ensayo (N de N SIN FALLAS, con el volumen de producción) → huellas ANTES → migración → verificación (9 de 9) → huellas DESPUÉS
 → concurrencia real en DOS sesiones (el mismo toque a la vez; la misma factura con dos toques a la vez) → la reversa se niega con datos
 → reversa en una base sin datos → la base queda como antes (sin reparto y campo igual).
 Escribe resultados_locales.txt junto al paquete.
@@ -57,7 +57,7 @@ def main():
         log("migración otra vez: " + ("LA GUARDIA SE NIEGA (correcto)" if "GUARDIA REPARTO: el esquema reparto ya existe" in err else "NO SE NEGÓ: " + err[-500:]))
         assert "GUARDIA REPARTO: el esquema reparto ya existe" in err
         _, out, _ = corre(b, PAQ / f"verificacion_{N}_editor.sql", at=True); log("verificación:\n" + out.strip())
-        assert out.count("|OK") == 8 and "FALLA" not in out
+        assert out.count("|OK") == 9 and "FALLA" not in out
         _, out, _ = corre(b, PAQ / f"huellas_solo_lectura_{N}_editor.sql", at=True); log("huellas DESPUÉS:\n" + out.strip())
         # --- concurrencia real (dos sesiones) ---
         g.psql(b, PREPARA)
@@ -80,6 +80,8 @@ def main():
         rc, _, err = corre(b2, PAQ / f"migracion_{N}_editor.sql"); assert rc == 0 and "ERROR" not in err, err[-800:]
         rc, _, err = corre(b2, PAQ / f"reversa_{N}_editor.sql"); assert rc == 0 and "ERROR" not in err, err[-800:]
         quedan = g.valor(b2, "select (to_regnamespace('reparto') is null)::text || '|' || (select count(*) from pg_proc where proname like 'geoportal\\_reparto\\_%')::text || '|' || (" + g.CONJ_CAMPO + ")")
+        inactiva = g.valor(b2, "select (not activa)::text from campo.actividades where codigo = 'supervision_reparto'")
+        log("reversa: la actividad supervision_reparto queda DESACTIVADA (no se borra): " + inactiva); assert inactiva == "true"
         log("reversa: " + quedan + f"  (esperado: true|0|{antes}: sin reparto, sin RPC y campo igual)")
         assert quedan == f"true|0|{antes}"
         rc, _, err = corre(b2, PAQ / f"reversa_{N}_editor.sql")

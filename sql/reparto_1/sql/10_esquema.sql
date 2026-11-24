@@ -259,9 +259,21 @@ begin
   return v_email;
 end $$;
 
--- Supervisor: el de campo (dashboard_campo) o el administrador, como el SCRR
+-- Supervisor de reparto (David, 23-nov, opción B «ahora»): quien tiene la actividad «supervision_reparto» en Personal de Comercial (modo campo), o el
+-- administrador. dashboard_campo solo NO basta: son personas distintas a las del SCRR. No se tocan las 4 funciones de permisos ni scrr.
 create function reparto.f_autorizar_supervisor(p_solicitante text) returns text
 language plpgsql security definer set search_path = pg_catalog, public, campo, reparto as $$
+declare v_email text := campo.f_verificar(p_solicitante, 'campo');
 begin
-  return campo.f_autorizar_supervision(p_solicitante);
+  if public.geoportal_es_admin(v_email) then return v_email; end if;
+  if not (campo.f_persona_comercial(v_email) and exists (select 1 from campo.f_actividades_persona(v_email) a where a.codigo = 'supervision_reparto')) then
+    raise exception 'Sin permiso para esta función' using errcode = '42501';
+  end if;
+  return v_email;
 end $$;
+
+-- ¿Puede cambiar el calendario? (Cartera → Calendario exige dashboard_campo; el enlace «Cambiar en Calendario» solo aparece si es así). Solo informa.
+create function reparto.f_puede_calendario(p_email text) returns boolean
+language sql stable security definer set search_path = pg_catalog, public as $$
+  select coalesce(public.geoportal_puede(lower(p_email), 'dashboard_campo'), false)
+$$;
