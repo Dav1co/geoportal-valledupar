@@ -5,13 +5,17 @@ import { ErrorCampo } from "../apiCampo";
 import { AperturasSinRegistrar } from "../acta/AperturasSinRegistrar";
 import { PersonalCampo } from "../dashboard/PersonalCampo";
 import { Cuadrillas } from "../dashboard/Cuadrillas";
-import { apiDocumentos, type Esquema, type FilaActa, type FilaDerivada, type FiltrosActas } from "./apiDocumentos";
+import { apiDocumentos, type DatosAviso, type Esquema, type FilaActa, type FilaDerivada, type FiltrosActas } from "./apiDocumentos";
+import { apiCampo } from "../apiCampo";
+import type { TipoFormato } from "../formatos/tipos";
+import "../analisis/analisis.css";
 import { PdfRegistro } from "./Registro";
 
 // «Actas registradas» (Comercial 21-nov; decisiones B2 y D11 de David): la entrada del supervisor de actas (y del supervisor de campo y el administrador). Pestañas:
 // - Actas registradas: las del acta de posible pérdida y los 8 formatos con valor probatorio, con un selector de tipo y filtros; estado del PDF (descargar o generar) y descarga CSV
 //   SIN nombres de quien atendió ni del testigo, sin firmas, sin texto libre ni teléfono (la ruta ya los excluye; aquí no se agrega nada).
 // - Actividades derivadas (solo el supervisor de campo y el administrador: la ruta vive en geoportal-campo): lo que dejaron las revisiones, pendientes o atendidas; se cierran con motivo.
+//   Desde el 23-nov también los AVISOS del Análisis de contrato (filtro Origen): «Crear actividad», «Ver datos de contacto» (Ley 1581, lectura auditada) y cerrarlos.
 // - Aperturas sin registrar (la pantalla de siempre, solo con el permiso del acta) y Personal y Cuadrillas en solo lectura.
 type Seccion = "actas" | "derivadas" | "aperturas" | "personal";
 const texto = (e: unknown) => (e instanceof ErrorCampo ? e.message : "No se pudo completar la operación.");
@@ -145,24 +149,30 @@ function FilaRegistro({ r, nombreTipo }: { r: FilaActa; nombreTipo: string }) {
 function Derivadas({ puedeCerrar }: { puedeCerrar: boolean }) {
   const [estado, setEstado] = useState("pendiente");
   const [contrato, setContrato] = useState("");
+  const [origen, setOrigen] = useState<"" | "registro" | "analisis">("");
   const [filas, setFilas] = useState<FilaDerivada[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [cerrar, setCerrar] = useState<FilaDerivada | null>(null);
+  const [crear, setCrear] = useState<FilaDerivada | null>(null);
+  const [verDatos, setVerDatos] = useState<FilaDerivada | null>(null);
   const [vez, setVez] = useState(0);
   useEffect(() => {
     let vivo = true; setFilas(null); setError(null);
-    const t = window.setTimeout(() => apiDocumentos.derivadas({ estado: estado || undefined, contrato: contrato || undefined, limite: 100 })
+    const t = window.setTimeout(() => apiDocumentos.derivadas({ estado: estado || undefined, contrato: contrato || undefined, origen: origen || undefined, limite: 100 })
       .then((r) => { if (vivo) setFilas(r.filas); }).catch((e) => { if (vivo) setError(texto(e)); }), 250);
     return () => { vivo = false; window.clearTimeout(t); };
-  }, [estado, contrato, vez]);
+  }, [estado, contrato, origen, vez]);
   const cuando = useMemo(() => (f: string) => new Date(f).toLocaleDateString("es-CO", { timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric" }), []);
+  const hecho = (t: string) => { setCerrar(null); setCrear(null); setAviso(t); setVez((x) => x + 1); };
   return (
     <section className="rv-seccion" aria-labelledby="doc-der-tit" data-testid="derivadas">
       <div><h2 id="doc-der-tit">Actividades derivadas</h2>
-        <p className="rv-sub">Lo que dejaron las revisiones en «¿Da lugar a otras actividades?». Se marcan atendidas solas cuando el formulario que las atiende se registra sobre el mismo contrato.{puedeCerrar ? " Si se hicieron sin formulario, o no proceden, ciérrelas con motivo." : ""}</p></div>
+        <p className="rv-sub">Lo que dejaron las revisiones en «¿Da lugar a otras actividades?» y los avisos del Análisis de contrato. Las actividades se marcan atendidas solas cuando el formulario que las atiende se registra sobre el mismo contrato.{puedeCerrar ? " Desde un aviso puede crear la actividad; si se hizo sin formulario, o no procede, ciérrelo con motivo." : ""}</p></div>
       <div className="doc-filtros">
         <label className="rv-campo">Estado<select value={estado} onChange={(e) => setEstado(e.target.value)} data-filtro="estado"><option value="pendiente">Pendientes</option><option value="atendida">Atendidas</option><option value="">Todas</option></select></label>
+        <label className="rv-campo">Origen<select value={origen} onChange={(e) => setOrigen(e.target.value as "" | "registro" | "analisis")} data-filtro="origen">
+          <option value="">Todos</option><option value="registro">Revisiones</option><option value="analisis">Análisis de contrato</option></select></label>
         <label className="rv-campo">Contrato<input type="text" inputMode="numeric" value={contrato} maxLength={12} onChange={(e) => setContrato(e.target.value.replace(/\D/g, ""))} /></label>
       </div>
       {aviso ? <div className="rv-aviso rv-aviso-ok" role="status">{aviso}</div> : null}
@@ -170,21 +180,98 @@ function Derivadas({ puedeCerrar }: { puedeCerrar: boolean }) {
       {!filas && !error ? <p className="rv-sub" role="status">Cargando…</p> : null}
       {filas && filas.length === 0 ? <div className="rv-vacio">{estado === "pendiente" ? "No hay actividades derivadas pendientes." : "No hay actividades derivadas con ese filtro."}</div> : null}
       <ul className="rv-per-lista">
-        {(filas ?? []).map((d) => (
-          <li key={d.id} className="rv-per-tarjeta" data-derivada={d.id}>
-            <div className="rv-per-cab"><div><strong>{d.actividad_nombre}</strong><div className="rv-tenue">Contrato {d.contrato ?? "—"}</div></div>
+        {(filas ?? []).map((d) => {
+          const o = d.origen, esAviso = d.actividad.startsWith("aviso_"), deAnalisis = o.clase === "analisis";
+          return (
+          <li key={d.id} className="rv-per-tarjeta" data-derivada={d.id} data-origen={deAnalisis ? "analisis" : "registro"}>
+            <div className="rv-per-cab"><div><strong>{d.actividad === "actividad_supervisor" && d.destino_nombre ? `Actividad: ${d.destino_nombre}` : d.actividad_nombre}</strong><div className="rv-tenue">Contrato {d.contrato ?? "—"}</div></div>
               <span className={`rv-marca ${d.estado === "pendiente" ? "rv-marca-amar" : "rv-marca-gris"}`}>{d.estado === "pendiente" ? "Pendiente" : d.estado === "atendida" ? "Atendida" : d.estado === "atendida_fuera" ? "Atendida sin formulario" : d.estado === "anulada" ? "Anulada" : d.estado}</span></div>
             <dl className="rv-per-dl">
-              <dt>Viene de</dt><dd>{d.origen.consecutivo ?? d.origen.tipo} · {cuando(d.origen.fecha)}</dd>
+              <dt>Viene de</dt><dd>{deAnalisis ? `Análisis de contrato · ${o.observacion_nombre ?? ""} · ${o.operario ?? ""} · ${cuando(o.fecha)}` : `${o.consecutivo ?? o.tipo} · ${cuando(o.fecha)}`}</dd>
+              {o.direccion_correcta ? <><dt>Dirección correcta</dt><dd>{o.direccion_correcta}</dd></> : null}
+              {o.texto ? <><dt>Observación</dt><dd>{o.texto}</dd></> : null}
+              {esAviso && o.trae_datos ? <><dt>Datos de contacto</dt><dd>{o.datos_anulados ? "Anulados" : "Sí (se ven al abrirlos)"}</dd></> : null}
               {d.cierre?.tipo === "atendida" ? <><dt>La atendió</dt><dd>{d.cierre.consecutivo ?? "un registro"} · {cuando(d.cierre.en)}</dd></> : null}
               {d.cierre && d.cierre.tipo !== "atendida" ? <><dt>{d.cierre.tipo === "anulada" ? "Anulada" : "Cerrada sin formulario"}</dt><dd>{cuando(d.cierre.en)} · por {d.cierre.autor}</dd></> : null}
               {d.cierre?.motivo ? <><dt>Motivo</dt><dd>{d.cierre.motivo}</dd></> : null}
             </dl>
-            {puedeCerrar && d.estado === "pendiente" ? <div className="rv-botones"><button type="button" className="rv-boton-sec" onClick={() => { setAviso(null); setCerrar(d); }}>Cerrar sin formulario</button></div> : null}
-          </li>))}
+            {puedeCerrar ? <div className="rv-botones">
+              {esAviso && d.estado === "pendiente" ? <button type="button" className="rv-boton" data-accion="crear" onClick={() => { setAviso(null); setCrear(d); }}>Crear actividad</button> : null}
+              {esAviso && o.trae_datos ? <button type="button" className="rv-boton-sec" data-accion="datos" onClick={() => { setAviso(null); setVerDatos(d); }}>Ver datos de contacto</button> : null}
+              {d.estado === "pendiente" ? <button type="button" className="rv-boton-sec" data-accion="cerrar" onClick={() => { setAviso(null); setCerrar(d); }}>Cerrar sin formulario</button> : null}
+            </div> : null}
+          </li>); })}
       </ul>
-      {cerrar ? <CerrarDerivada d={cerrar} onCancelar={() => setCerrar(null)} onHecho={(t) => { setCerrar(null); setAviso(t); setVez((x) => x + 1); }} /> : null}
+      {cerrar ? <CerrarDerivada d={cerrar} onCancelar={() => setCerrar(null)} onHecho={hecho} /> : null}
+      {crear ? <CrearActividad d={crear} onCancelar={() => setCrear(null)} onHecho={hecho} /> : null}
+      {verDatos ? <DatosContacto d={verDatos} onCerrar={(cambio) => { setVerDatos(null); if (cambio) setVez((x) => x + 1); }} /> : null}
     </section>
+  );
+}
+
+/** «Crear actividad» desde un aviso (Q1): el supervisor elige un formulario activo que pida el contrato; el aviso se cierra solo y la actividad queda pendiente
+ *  hasta que el operario registre ese formulario con «¿Viene de…?». Una sola por aviso. */
+function CrearActividad({ d, onCancelar, onHecho }: { d: FilaDerivada; onCancelar: () => void; onHecho: (t: string) => void }) {
+  const [formularios, setFormularios] = useState<{ codigo: string; nombre: string }[] | null>(null);
+  const [form, setForm] = useState(""); const [enviando, setEnviando] = useState(false); const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    apiCampo.formulario().then((f) => {
+      if (!vivo) return;
+      const l = f.grupos.filter((g) => g.activo).flatMap((g) => g.tipos as TipoFormato[]).filter((t) => t.activo && t.requiere_contrato === "si").map((t) => ({ codigo: t.codigo, nombre: t.nombre }));
+      setFormularios(l); if (d.origen.observacion === "direccion_errada" && l.some((t) => t.codigo === "investigacion_ubicacion")) setForm("investigacion_ubicacion");
+    }).catch((e) => { if (vivo) setError(texto(e)); });
+    return () => { vivo = false; };
+  }, [d]);
+  return (
+    <div className="rv-modal-fondo"><div className="rv-modal" role="dialog" aria-modal="true" aria-label={`Crear actividad desde ${d.actividad_nombre}`} data-testid="crear-actividad">
+      <h3>Crear actividad · contrato {d.contrato}</h3>
+      <p className="rv-sub">El aviso «{d.actividad_nombre}» queda cerrado como atendido sin formulario, y la actividad le aparece al operario que abra ese formulario con este contrato.</p>
+      {formularios === null && !error ? <p className="rv-sub" role="status">Cargando los formularios…</p> : null}
+      {formularios ? <label className="rv-campo">Formulario<select value={form} onChange={(e) => setForm(e.target.value)} data-campo="formulario">
+        <option value="">Elija el formulario</option>{formularios.map((t) => <option key={t.codigo} value={t.codigo}>{t.nombre}</option>)}</select></label> : null}
+      {error ? <p className="rv-error" role="alert">{error}</p> : null}
+      <div className="rv-botones">
+        <button type="button" className="rv-boton" disabled={enviando || !form} onClick={() => { setEnviando(true); setError(null);
+          apiDocumentos.avisoCrearActividad(d.id, `tipo:${form}`).then((r) => onHecho(`Se creó «${r.actividad.destino_nombre ?? form}» para el contrato ${d.contrato}. El aviso quedó cerrado.`))
+            .catch((e) => { setError(texto(e)); setEnviando(false); }); }}>{enviando ? "Creando…" : "Crear"}</button>
+        <button type="button" className="rv-boton-sec" disabled={enviando} onClick={onCancelar}>Cancelar</button>
+      </div>
+    </div></div>
+  );
+}
+
+const RELACION: Record<string, string> = { propietario: "Propietario", arrendatario: "Arrendatario", familiar: "Familiar", encargado: "Encargado", otro: "Otro" };
+/** Datos de contacto de un aviso (Ley 1581): se piden al abrir (lectura auditada), no se guardan en el navegador y se olvidan al cerrar. Anulados: solo el motivo. */
+function DatosContacto({ d, onCerrar }: { d: FilaDerivada; onCerrar: (cambio: boolean) => void }) {
+  const [r, setR] = useState<DatosAviso | null>(null); const [error, setError] = useState<string | null>(null);
+  const [anular, setAnular] = useState(false); const [m, setM] = useState(""); const [enviando, setEnviando] = useState(false); const [cambio, setCambio] = useState(false);
+  const cargar = useCallback(() => { setError(null); apiDocumentos.avisoDatos(d.id).then(setR).catch((e) => setError(texto(e))); }, [d.id]);
+  useEffect(() => { cargar(); return () => setR(null); }, [cargar]);
+  const malo = m.trim().length < 10 || m.trim().length > 300;
+  const x = r?.datos;
+  return (
+    <div className="rv-modal-fondo"><div className="rv-modal" role="dialog" aria-modal="true" aria-label="Datos de contacto" data-testid="datos-contacto">
+      <h3>Datos de contacto · contrato {d.contrato}</h3>
+      <p className="rv-sub"><span className="ac-tag-personal">dato personal</span> Úselos solo para actualizar los datos del suscriptor. No los copie a listas ni descargas.</p>
+      {!r && !error ? <p className="rv-sub" role="status">Cargando…</p> : null}
+      {r?.anulados ? <div className="rv-aviso" role="status" data-datos="anulados"><strong>Anulados</strong>{r.motivo ? ` · ${r.motivo}` : ""}</div> : null}
+      {x ? <dl className="rv-per-dl" data-datos="vigentes">
+        {x.nombre ? <><dt>Nombre</dt><dd>{x.nombre}</dd></> : null}
+        {x.cedula ? <><dt>Cédula</dt><dd>{x.cedula}</dd></> : null}
+        {x.telefono ? <><dt>Teléfono</dt><dd>{x.telefono}</dd></> : null}
+        {x.correo ? <><dt>Correo</dt><dd>{x.correo}</dd></> : null}
+        {x.relacion ? <><dt>Relación con el predio</dt><dd>{RELACION[x.relacion] ?? x.relacion}</dd></> : null}
+      </dl> : null}
+      {anular && x ? <label className="rv-campo">Por qué se anulan (de 10 a 300 caracteres)<textarea rows={2} maxLength={300} value={m} onChange={(e) => setM(e.target.value)} /></label> : null}
+      {error ? <p className="rv-error" role="alert">{error}</p> : null}
+      <div className="rv-botones">
+        {x && !anular ? <button type="button" className="rv-boton-sec" data-accion="anular" onClick={() => setAnular(true)}>Anular estos datos</button> : null}
+        {x && anular ? <button type="button" className="rv-boton" disabled={enviando || malo} onClick={() => { setEnviando(true); setError(null);
+          apiDocumentos.avisoDatosAnular(d.id, m.trim()).then(() => { setAnular(false); setM(""); setCambio(true); setR(null); cargar(); }).catch((e) => setError(texto(e))).finally(() => setEnviando(false)); }}>{enviando ? "Anulando…" : "Anular"}</button> : null}
+        <button type="button" className="rv-boton-sec" onClick={() => { setR(null); onCerrar(cambio); }}>Cerrar</button>
+      </div>
+    </div></div>
   );
 }
 

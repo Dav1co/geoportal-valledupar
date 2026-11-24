@@ -19,7 +19,14 @@ export type FilaActa = {
   firmas: { operario: boolean; usuario: EstadoUsuario | null; testigo: boolean };
 };
 export type PaginaActas = { filas: FilaActa[]; siguiente: string | number | null };
-export type Derivada = { id: number; actividad: string; actividad_nombre: string; origen: { registro_id: string; tipo: string; consecutivo: string | null; fecha: string } };
+/** Origen de una derivada: un registro (revisión, PQR, instalación) o, desde el 23-nov, una observación del Análisis de contrato (aviso al supervisor). */
+export type OrigenDerivada = { clase?: "registro" | "analisis"; registro_id?: string; tipo: string; tipo_nombre?: string; consecutivo?: string | null; fecha: string; operario?: string;
+  observacion?: string; observacion_nombre?: string; texto?: string | null; direccion_correcta?: string | null; trae_datos?: boolean; datos_anulados?: boolean;
+  aviso_id?: number | null; actividad_creada_id?: number | null };
+export type Derivada = { id: number; actividad: string; actividad_nombre: string; destinos?: string[]; destino_nombre?: string | null; origen: OrigenDerivada };
+/** Datos de contacto de un aviso (Ley 1581): solo el supervisor de campo y el administrador; anulados, solo el motivo. No se guardan en el navegador. */
+export type DatosAviso = { derivada_id: number; anulados: boolean; datos?: { nombre?: string; cedula?: string; telefono?: string; correo?: string; relacion?: string };
+  motivo?: string; anulados_en?: string; anulados_por?: string };
 /** Una fila de «derivadas» (forma de la Edge real 2a249ef): el cierre dice si la atendió un registro (esquema y consecutivo) o se cerró a mano (atendida_fuera o anulada), quién y cuándo. */
 export type FilaDerivada = Derivada & { contrato: string | null; estado: string; creada_en?: string;
   cierre: { en: string; tipo: string; autor: string; esquema: Esquema | null; consecutivo: string | null; registro_id: string | null; motivo?: string | null } | null };
@@ -42,9 +49,13 @@ export const apiDocumentos = {
   derivadasAbiertas: (contrato: string, formulario: string) => pedir<{ derivadas: Derivada[] }>("campo", "derivadas_abiertas", { contrato, formulario }),
   derivadaAtender: (derivada_id: number, registro_id: string) => pedir<{ cambio?: boolean }>("campo", "derivada_atender", { derivada_id, registro_id }),
   derivadaCerrar: (derivada_id: number, tipo: "atendida_fuera" | "anulada", motivo: string) => pedir<{ cambio?: boolean }>("campo", "derivada_cerrar", { derivada_id, tipo, motivo }),
-  derivadas: (filtros: { estado?: string; contrato?: string; actividad?: string; desde?: string; hasta?: string; antes?: string | number; limite?: number }) =>
+  derivadas: (filtros: { estado?: string; contrato?: string; actividad?: string; desde?: string; hasta?: string; antes?: string | number; limite?: number; origen?: "registro" | "analisis" }) =>
     pedir<{ filas: FilaDerivada[]; siguiente: string | number | null }>("campo", "derivadas", sinVacios(filtros), 60000),       // los filtros van en el cuerpo, planos
   actasAbiertas: (contrato: string) => pedir<{ actas: ActaAbierta[] }>("campo", "actas_abiertas", { contrato }),
+  // Investigación y Análisis (23-nov): avisos del Análisis de contrato (solo geoportal-campo; supervisor de campo y administrador)
+  avisoCrearActividad: (derivada_id: number, formulario: string) => pedir<{ aviso: FilaDerivada; actividad: FilaDerivada }>("campo", "aviso_crear_actividad", { derivada_id, formulario }),
+  avisoDatos: (derivada_id: number) => pedir<DatosAviso>("campo", "aviso_datos", { derivada_id }),
+  avisoDatosAnular: (derivada_id: number, motivo: string) => pedir<{ anulados: boolean }>("campo", "aviso_datos_anular", { derivada_id, motivo }),
   origenVincular: (registro_id: string, acta_id: string) => pedir<{ cambio?: boolean }>("campo", "origen_vincular", { registro_id, acta_id }),
 };
 

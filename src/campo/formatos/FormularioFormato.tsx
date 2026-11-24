@@ -329,7 +329,10 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
         <div className="tec-campo">
           <span className="campo-etiqueta">Fotos <small>(máximo {megas(def.limites.max_bytes_foto)} cada una)</small></span>
           <span className={`campo-contador-fotos${contadorOk ? " campo-contador-ok" : ""}`} aria-live="polite">Fotos: {contador}</span>
-          {!camaraDisponible() && <p className="campo-error" role="alert">Este navegador no permite usar la cámara desde la página, y sin las fotos no se puede enviar. Use Safari en iPhone o Chrome en Android, actualizado, y abra el geoportal desde su dirección oficial (https).</p>}
+          {/* Investigación y Análisis (23-nov): con un mínimo de 0 fotos (Investigación de ubicación) el formulario se envía sin cámara; el aviso solo bloquea si hay mínimo */}
+          {!camaraDisponible() && (minimo > 0
+            ? <p className="campo-error" role="alert">Este navegador no permite usar la cámara desde la página, y sin las fotos no se puede enviar. Use Safari en iPhone o Chrome en Android, actualizado, y abra el geoportal desde su dirección oficial (https).</p>
+            : <p className="campo-sub" role="status">Este navegador no permite usar la cámara desde la página. Las fotos de este formato son opcionales: puede enviarlo sin ellas.</p>)}
           <div className="campo-fotos">
             {etiquetas.map((e) => {
               const f = porEtiqueta[e.codigo] ?? null;

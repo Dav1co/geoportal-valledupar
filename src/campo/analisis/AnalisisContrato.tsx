@@ -1,3 +1,4 @@
+import { ObservarContrato } from "./ObservarContrato";
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AvisoSinAgua } from "../AvisoSinAgua";
 import { lazyConRecarga } from "../../lib/recarga";
@@ -311,6 +312,8 @@ function Ficha({ r, destinos, onIrA, puedeCambioMedidor, onCambioMedidor }: { r:
             <p className="campo-sub">{plural(r.fotos.length, "foto", "fotos")} del catastro.</p>
           </details>
         ) : null}
+
+        <ObservarContrato contrato={r.contrato} />
 
         {atajos.length > 0 ? (
           <section className="ac-atajos" aria-label="Atajos con este contrato">

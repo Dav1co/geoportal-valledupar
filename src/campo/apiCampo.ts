@@ -1,5 +1,6 @@
 import { supabase, FUNCTIONS_URL } from "../lib/supabase";
 import { areaCampo } from "./area";
+import type { CuerpoObservacion, RespuestaObservacion } from "./analisis/observacion";
 import type { CuerpoCercanos, RespuestaAnalisis, RespuestaCercanos } from "./analisis/tipos";
 
 // Cliente de la Edge Function geoportal-campo (contrato: edge_contrato.md del Paso A + límite de ritmo del Paso B). Aquí NO hay etiquetas de tipos ni de grupos: todo llega del catálogo del servidor.
@@ -123,6 +124,8 @@ export const apiCampo = {
   crear: (cuerpo: CuerpoCrear) => pedir<Confirmacion>("crear", { cuerpo, timeoutMs: 30000 }),
   /** Análisis de contrato (solo lectura). Trae nombre y teléfono (dato personal): la respuesta NO se guarda ni se reutiliza; cada consulta va al servidor (Cache-Control: no-store). */
   analisisContrato: (contrato: string) => pedir<RespuestaAnalisis>("analisis_contrato", { qs: { contrato } }),
+  /** Investigación y Análisis (23-nov): marca una observación sobre el contrato analizado; llega como AVISO al supervisor. La respuesta no devuelve los datos de contacto. */
+  analisisObservar: (cuerpo: CuerpoObservacion) => pedir<RespuestaObservacion>("analisis_observar", { cuerpo }),
   /** «Contratos cerca de mí»: la posición va en el cuerpo (POST), solo para esta búsqueda. La lista NO trae nombre ni teléfono. */
   analisisCercanos: (lat: number, lon: number, precision_m?: number) => {
     const cuerpo: CuerpoCercanos = { lat, lon, ...(precision_m !== undefined && Number.isFinite(precision_m) ? { precision_m: Math.round(precision_m) } : {}) };

@@ -53,6 +53,9 @@ export function PdfRegistro({ esquema, registroId, soloLeer = false }: { esquema
   );
 }
 
+/** De dónde viene una actividad pendiente: el consecutivo del registro, o «Análisis de contrato (Dirección errada)» si la creó el supervisor desde un aviso. */
+export const origenCorto = (d: Derivada) => d.origen.clase === "analisis" ? `de ${d.origen.tipo_nombre ?? "Análisis de contrato"}${d.origen.observacion_nombre ? ` (${d.origen.observacion_nombre})` : ""}`
+  : `de ${d.origen.consecutivo ?? d.origen.tipo}`;
 export type Origen = { derivada: number | null; acta: string | null };
 export const SIN_ORIGEN: Origen = { derivada: null, acta: null };
 /** «¿Viene de…?»: con el contrato escrito, las actividades derivadas pendientes que este formulario atiende (derivadas_abiertas) y, en las revisiones, las actas de posible pérdida
@@ -81,7 +84,8 @@ export function VieneDe({ contrato, formulario, conActas, valor, onCambio, desha
         <p className="campo-sub">Este contrato tiene actividades pendientes que este formulario atiende. Si esta visita atiende una, márquela: quedará como atendida.</p>
         <div className="doc-opciones" role="radiogroup" aria-label="Actividad pendiente que atiende">
           {der.map((d) => <label key={d.id} className={`doc-opcion${valor.derivada === d.id ? " doc-opcion-on" : ""}`}><input type="radio" name="doc-derivada" data-derivada={d.id} checked={valor.derivada === d.id} onChange={() => onCambio({ ...valor, derivada: d.id })} />
-            {d.actividad_nombre} <small className="campo-sub">· de {d.origen.consecutivo ?? d.origen.tipo} del {fecha(d.origen.fecha)}</small></label>)}
+            {d.destino_nombre ?? d.actividad_nombre} <small className="campo-sub">· {origenCorto(d)} del {fecha(d.origen.fecha)}</small>
+            {d.origen.direccion_correcta ? <small className="campo-sub doc-dir-correcta"> · dirección correcta: {d.origen.direccion_correcta}</small> : null}</label>)}
           <label className={`doc-opcion${valor.derivada === null ? " doc-opcion-on" : ""}`}><input type="radio" name="doc-derivada" data-derivada="ninguna" checked={valor.derivada === null} onChange={() => onCambio({ ...valor, derivada: null })} />Ninguna</label>
         </div></> : null}
       {actas.length ? <>

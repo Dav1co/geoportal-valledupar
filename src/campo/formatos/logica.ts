@@ -130,7 +130,7 @@ export const minimoFotos = (t: TipoFormato, resultado: Resultado | ""): number =
 export const maximoFotos = (t: TipoFormato, tope: number): number => t.fotos_max ?? tope;
 
 /** Contador de fotos para la pantalla: «3 de 6 (mínimo 3)». */
-export const contadorFotos = (n: number, minimo: number, maximo: number): string => `${n} de ${maximo} (mínimo ${minimo})`;
+export const contadorFotos = (n: number, minimo: number, maximo: number): string => `${n} de ${maximo} (${minimo > 0 ? `mínimo ${minimo}` : "opcionales"})`;
 
 export type EstadoFormato = {
   resultado: Resultado | ""; causal: string; subtipo: string; descripcion: string; contrato: string; valores: ValoresCampos;
