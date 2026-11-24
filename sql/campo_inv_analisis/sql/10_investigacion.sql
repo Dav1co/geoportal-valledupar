@@ -1,9 +1,9 @@
 -- =====================================================================
 -- INVESTIGACIÓN Y ANÁLISIS · 10 — Investigación de ubicación del predio (INV), decisiones de David del 23-nov
 -- Obligatorios: contrato (ya), dirección encontrada en terreno (pasa a obligatoria) y XY (ya lo exigen la RPC y la pantalla).
--- Opcionales: hallazgo (deja de ser obligatorio), barrio (texto), ¿habitado? (sí o no), tipo de predio (opción), medidor (texto), observación.
+-- Opcionales: hallazgo (deja de ser obligatorio), barrio (texto), ¿habitado? (sí o no), tipo de predio (opción), medidor (texto); y la descripción general «Observaciones».
 -- Sin resultado (efectiva / inefectiva) ni causal; las 3 fotos opcionales y sin marca de soporte; de 0 a 6 fotos.
--- Se DESACTIVAN (no se borran): despeje_caja, despeje_observacion, visita_concertada y cita_acordada.
+-- Se DESACTIVAN (no se borran): despeje_caja, despeje_observacion, visita_concertada, cita_acordada y observacion (queda una sola caja de texto: «Observaciones»).
 -- Las causales enlazadas quedan como están (Q4): sin resultado, ni la RPC ni la pantalla las piden.
 -- Todo queda auditado (campo_catalogo) con el antes y el después.
 -- =====================================================================
@@ -21,6 +21,8 @@ begin
   update campo.tipo_campos set obligatorio = true where tipo_id = v_t and codigo = 'direccion_encontrada';
   update campo.tipo_campos set obligatorio = false where tipo_id = v_t and codigo = 'hallazgo';
   update campo.tipo_campos set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada');
+  -- David (23-nov, revisión del commit 5): una sola caja de texto; se desactiva «observacion» y su aviso pasa a «Observaciones» (descripción general) en la pantalla
+  update campo.tipo_campos set activo = false where tipo_id = v_t and codigo = 'observacion';
   -- Los 4 campos nuevos: se crean; si una reversa anterior los dejó desactivados, se reactivan (nada se borra ni se duplica)
   for v_n in select * from jsonb_to_recordset('[
       {"codigo": "barrio", "nombre": "Barrio", "tipo_dato": "texto", "opciones": null, "maximo": 80, "ayuda": null, "orden": 3},

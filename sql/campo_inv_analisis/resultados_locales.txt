@@ -2,7 +2,7 @@ PRUEBAS LOCALES · [Code B] Investigación de ubicación recortada y avisos del 
 
 OK    B.01 la base local es copia exacta de producción (163 de 163) y trae sus huellas (campo 261bed3c…, acta 111506c6…)
 OK    B.02 huellas de solo lectura ANTES: PUBLICADA
-ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 129 de 129 pruebas correctas — SIN FALLAS
+ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 130 de 130 pruebas correctas — SIN FALLAS
 OK    E.01 el ensayo termina en el ERROR esperado con «N de N … SIN FALLAS» (0.2 s)
 OK    E.02 el ensayo no dejó nada (huella igual, catálogo igual, sin filas ZTINV ni auditoría)
 OK    C.01 migración
@@ -35,6 +35,7 @@ OK    G.07 la Investigación con un registro de hoy (3 fotos, efectivo): la migr
 OK    M.01 preparar_subida acepta 0 fotos con CUALQUIER formato: el ensayo lo detecta (fallan 03.02, 03.03, 03.04)
 OK    M.02 preparar_subida nunca acepta 0 fotos: el ensayo lo detecta (fallan 03.01, 03.05, 04.01, 04.02, 04.04, 04.05, 04.06, 04.07, 04.08, 19.03, 19.04, 19.05, 21.00, 21.01, 21.02, 21.05)
 OK    M.03 la migración no desactiva cita_acordada: el ensayo lo detecta (fallan 01.03, 01.04, 02.02)
+OK    M.12 la migración no desactiva «observacion» (quedarían dos cajas de texto): el ensayo lo detecta (fallan 01.03, 01.04, 02.02, 04.09)
 OK    M.04 la migración deja la dirección opcional: el ensayo lo detecta (fallan 01.03, 04.04)
 OK    M.05 el teléfono acepta cualquier número de 10 cifras: el ensayo lo detecta (fallan 13.02, 13.05, 14.03, 16.04, 16.05, 16.06, 17.05)
 OK    M.06 los datos de contacto los lee quien ve la lista (supervisor de actas): el ensayo lo detecta (fallan 16.02, 16.06)
@@ -44,4 +45,4 @@ OK    M.09 la lista de derivadas trae los datos de contacto: el ensayo lo detect
 OK    M.10 «Crear actividad» no cierra el aviso: el ensayo lo detecta (fallan 18.07, 18.08)
 OK    M.11 un aviso se puede atender con cualquier formulario: el ensayo lo detecta (fallan 19.03, 20.01)
 
-RESULTADO: 171 de 171 pruebas correctas — SIN FALLAS
+RESULTADO: 173 de 173 pruebas correctas — SIN FALLAS

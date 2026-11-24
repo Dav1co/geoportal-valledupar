@@ -12,7 +12,7 @@ import { apiFormatos } from "./apiFormatos";
 import { SeccionConstancia } from "../constancia/SeccionConstancia";
 import { useConstancia } from "../constancia/useConstancia";
 import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "../inicio";
-import { aplicarValoresIniciales, prellenarHoraInicio, agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, validarFormato, type ValoresCampos } from "./logica";
+import { aplicarValoresIniciales, prellenarHoraInicio, agruparSecciones, aplanarDatos, avanceSeccion, camposVisibles, contadorFotos, fotosParaCrear, marcoIrregularidad, maximoFotos, minimoFotos, ordenarFotos, rotuloObservaciones, validarFormato, type ValoresCampos } from "./logica";
 import { etiquetasActivas, type CampoDef, type ConfirmacionFormato, type Resultado, type TipoFormato } from "./tipos";
 import { FirmasRegistro } from "../documentos/FirmasRegistro";
 import { estadoDeFirmaAtendio, faltasFirmas, FIRMAS_VACIAS, guardarFirmas, SIN_FUENTE, type FirmasLocal, type FuenteFormulario } from "../documentos/firmasLogica";
@@ -320,7 +320,7 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
         {marcoIrr && <p className="campo-nota" role="note">{puedeActa && tipo.requiere_contrato !== "no" ? "Marcó una irregularidad: al guardar el reporte podrá abrir el acta de inspección técnica sobre el mismo contrato (este formato no la reemplaza)." : "Marcó una irregularidad: avise a su supervisor para que se levante el acta de inspección técnica (este formato no la reemplaza)."}</p>}
 
         <div className="tec-campo">
-          <label htmlFor="fp-desc">Observaciones{tipo.exige_texto ? " (obligatorio)" : " (opcional)"}</label>
+          <label htmlFor="fp-desc">{rotuloObservaciones(tipo.codigo, tipo.exige_texto)}</label>
           <textarea id="fp-desc" className="campo-texto" rows={3} maxLength={maxDesc} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={bloqueado} />
           <span className="campo-contador">{descripcion.length.toLocaleString("es-CO")} de {maxDesc.toLocaleString("es-CO")}</span>
         </div>

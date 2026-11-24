@@ -130,6 +130,11 @@ export const minimoFotos = (t: TipoFormato, resultado: Resultado | ""): number =
 export const maximoFotos = (t: TipoFormato, tope: number): number => t.fotos_max ?? tope;
 
 /** Contador de fotos para la pantalla: «3 de 6 (mínimo 3)». */
+/** Formatos cuya «Observaciones» (descripción general) lleva el aviso de datos personales. Decisión de David (23-nov): la Investigación de ubicación deja una sola
+ *  caja de texto (se desactivó su campo de catálogo «observacion», que traía ese aviso en el nombre) y el aviso pasa a la descripción general. */
+export const AVISO_DATOS_EN_OBSERVACIONES: ReadonlySet<string> = new Set(["investigacion_ubicacion"]);
+export const rotuloObservaciones = (codigo: string, obligatorio: boolean): string =>
+  `Observaciones${AVISO_DATOS_EN_OBSERVACIONES.has(codigo) ? " (no escriba nombres, cédulas ni teléfonos)" : ""}${obligatorio ? " (obligatorio)" : " (opcional)"}`;
 export const contadorFotos = (n: number, minimo: number, maximo: number): string => `${n} de ${maximo} (${minimo > 0 ? `mínimo ${minimo}` : "opcionales"})`;
 
 export type EstadoFormato = {

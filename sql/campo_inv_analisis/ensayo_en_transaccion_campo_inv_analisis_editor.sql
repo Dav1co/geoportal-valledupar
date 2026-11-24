@@ -89,9 +89,9 @@ end $guardia$;
 -- =====================================================================
 -- INVESTIGACIÓN Y ANÁLISIS · 10 — Investigación de ubicación del predio (INV), decisiones de David del 23-nov
 -- Obligatorios: contrato (ya), dirección encontrada en terreno (pasa a obligatoria) y XY (ya lo exigen la RPC y la pantalla).
--- Opcionales: hallazgo (deja de ser obligatorio), barrio (texto), ¿habitado? (sí o no), tipo de predio (opción), medidor (texto), observación.
+-- Opcionales: hallazgo (deja de ser obligatorio), barrio (texto), ¿habitado? (sí o no), tipo de predio (opción), medidor (texto); y la descripción general «Observaciones».
 -- Sin resultado (efectiva / inefectiva) ni causal; las 3 fotos opcionales y sin marca de soporte; de 0 a 6 fotos.
--- Se DESACTIVAN (no se borran): despeje_caja, despeje_observacion, visita_concertada y cita_acordada.
+-- Se DESACTIVAN (no se borran): despeje_caja, despeje_observacion, visita_concertada, cita_acordada y observacion (queda una sola caja de texto: «Observaciones»).
 -- Las causales enlazadas quedan como están (Q4): sin resultado, ni la RPC ni la pantalla las piden.
 -- Todo queda auditado (campo_catalogo) con el antes y el después.
 -- =====================================================================
@@ -109,6 +109,8 @@ begin
   update campo.tipo_campos set obligatorio = true where tipo_id = v_t and codigo = 'direccion_encontrada';
   update campo.tipo_campos set obligatorio = false where tipo_id = v_t and codigo = 'hallazgo';
   update campo.tipo_campos set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada');
+  -- David (23-nov, revisión del commit 5): una sola caja de texto; se desactiva «observacion» y su aviso pasa a «Observaciones» (descripción general) en la pantalla
+  update campo.tipo_campos set activo = false where tipo_id = v_t and codigo = 'observacion';
   -- Los 4 campos nuevos: se crean; si una reversa anterior los dejó desactivados, se reactivan (nada se borra ni se duplica)
   for v_n in select * from jsonb_to_recordset('[
       {"codigo": "barrio", "nombre": "Barrio", "tipo_dato": "texto", "opciones": null, "maximo": 80, "ayuda": null, "orden": 3},
@@ -586,12 +588,12 @@ begin
     (select not genera_resultado and fotos_min = 0 and fotos_max = 6 and requiere_contrato = 'si' and activo and id = 35 from campo.tipos_reporte where codigo = 'investigacion_ubicacion'));
   perform pg_temp.ok('01.02 las 3 fotos quedan opcionales y sin marca de soporte (siguen activas)',
     (select count(*) = 3 and bool_and(not f.obligatoria and not f.soporte_inefectiva and f.activo) from campo.tipo_fotos f join campo.tipos_reporte t on t.id = f.tipo_id where t.codigo = 'investigacion_ubicacion'));
-  perform pg_temp.ok('01.03 campos activos: solo la dirección es obligatoria; hallazgo, barrio, habitado, tipo de predio, medidor y observación opcionales',
+  perform pg_temp.ok('01.03 campos activos: solo la dirección es obligatoria; hallazgo, barrio, habitado, tipo de predio y medidor opcionales',
     (select string_agg(c.codigo || ':' || c.obligatorio, ',' order by c.orden) from campo.tipo_campos c join campo.tipos_reporte t on t.id = c.tipo_id
-      where t.codigo = 'investigacion_ubicacion' and c.activo) = 'hallazgo:false,direccion_encontrada:true,barrio:false,habitado:false,tipo_predio:false,medidor:false,observacion:false');
-  perform pg_temp.ok('01.04 los 4 campos de despeje y visita están desactivados, no borrados',
-    (select count(*) = 4 and bool_and(not c.activo) from campo.tipo_campos c join campo.tipos_reporte t on t.id = c.tipo_id
-      where t.codigo = 'investigacion_ubicacion' and c.codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada')));
+      where t.codigo = 'investigacion_ubicacion' and c.activo) = 'hallazgo:false,direccion_encontrada:true,barrio:false,habitado:false,tipo_predio:false,medidor:false');
+  perform pg_temp.ok('01.04 los 4 campos de despeje y visita y «observacion» están desactivados, no borrados',
+    (select count(*) = 5 and bool_and(not c.activo) from campo.tipo_campos c join campo.tipos_reporte t on t.id = c.tipo_id
+      where t.codigo = 'investigacion_ubicacion' and c.codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada', 'observacion')));
   perform pg_temp.ok('01.05 los campos nuevos tienen su tipo y su tope (barrio texto 80, habitado sí o no, tipo de predio 6 opciones, medidor texto 20)',
     (select string_agg(c.codigo || ':' || c.tipo_dato || ':' || coalesce(c.maximo::int::text, '-') || ':' || coalesce(jsonb_array_length(c.opciones)::text, '-'), ',' order by c.orden)
        from campo.tipo_campos c join campo.tipos_reporte t on t.id = c.tipo_id where t.codigo = 'investigacion_ubicacion' and c.codigo in ('barrio', 'habitado', 'tipo_predio', 'medidor'))
@@ -606,8 +608,8 @@ begin
   r := pg_temp.rpc(format('public.geoportal_campo_obtener_formulario(%L)', S)); t := pg_temp.tipo_inv(r);
   perform pg_temp.ok('02.01 obtener_formulario entrega la Investigación con fotos_min 0, sin resultado y sin causales',
     pg_temp.err(r) = 'OK' and (t ->> 'fotos_min')::int = 0 and (t ->> 'fotos_max')::int = 6 and t -> 'genera_resultado' = 'false'::jsonb and t -> 'causales' = '[]'::jsonb, left(coalesce(t::text, r::text), 300));
-  perform pg_temp.ok('02.02 y con los 7 campos activos (los 4 desactivados no viajan)',
-    jsonb_array_length(t -> 'campos') = 7 and not exists (select 1 from jsonb_array_elements(t -> 'campos') c where c ->> 'codigo' in ('despeje_caja', 'cita_acordada')), left(coalesce(t::text, ''), 300));
+  perform pg_temp.ok('02.02 y con los 6 campos activos (los 5 desactivados no viajan: una sola caja de texto)',
+    jsonb_array_length(t -> 'campos') = 6 and not exists (select 1 from jsonb_array_elements(t -> 'campos') c where c ->> 'codigo' in ('despeje_caja', 'cita_acordada', 'observacion')), left(coalesce(t::text, ''), 300));
 
   -- 03: preparar_subida
   r := pg_temp.prep(S, 0, 'investigacion_ubicacion');
@@ -633,7 +635,7 @@ begin
   perform pg_temp.ok('04.01 se registra SIN fotos y SIN los campos opcionales (contrato, dirección y XY)', pg_temp.err(r) = 'OK' and r ->> 'consecutivo' like '%INV%', r::text);
   perform pg_temp.ok('04.02 queda sin resultado ni causal y sin fotos',
     (select resultado is null and causal_id is null from campo.reportes where id = (r ->> 'id')::uuid) and not exists (select 1 from campo.reporte_fotos where reporte_id = (r ->> 'id')::uuid), r::text);
-  r := pg_temp.inv(S2, D || '{"hallazgo": "ubicado", "barrio": "[PRUEBA ZTINV] Centro", "habitado": true, "tipo_predio": "lote_desocupado", "medidor": "ZT-12345", "observacion": "[PRUEBA ZTINV] reja verde"}',
+  r := pg_temp.inv(S2, D || '{"hallazgo": "ubicado", "barrio": "[PRUEBA ZTINV] Centro", "habitado": true, "tipo_predio": "lote_desocupado", "medidor": "ZT-12345"}',
                    array['fachada_nomenclatura', 'vecino_referencia']);
   perform pg_temp.ok('04.03 se registra con todos los opcionales y 2 fotos', pg_temp.err(r) = 'OK'
     and (select datos ->> 'tipo_predio' = 'lote_desocupado' and datos -> 'habitado' = 'true'::jsonb and datos ->> 'barrio' = '[PRUEBA ZTINV] Centro' from campo.reportes where id = (r ->> 'id')::uuid), r::text);
@@ -647,6 +649,8 @@ begin
   perform pg_temp.ok('04.07 con resultado (efectivo) se rechaza: ya no lleva resultado', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) = 'Este tipo de reporte no lleva resultado ni causal', r::text);
   r := pg_temp.inv(S3, D, '{}', '123456', 'investigacion_ubicacion', 'inefectivo', 'no_ubicado');
   perform pg_temp.ok('04.08 con resultado inefectivo y causal se rechaza', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) = 'Este tipo de reporte no lleva resultado ni causal', r::text);
+  r := pg_temp.inv(S3, D || '{"observacion": "[PRUEBA ZTINV] reja verde"}');
+  perform pg_temp.ok('04.09b el campo «observacion» desactivado se rechaza (la observación va en la descripción general)', pg_temp.err(r) <> 'OK', r::text);
   r := pg_temp.inv(S3, D || '{"despeje_caja": true}');
   perform pg_temp.ok('04.09 un campo desactivado (despeje_caja) se rechaza', pg_temp.err(r) <> 'OK', r::text);
   r := pg_temp.inv(S3, D || '{"tipo_predio": "bodega"}');

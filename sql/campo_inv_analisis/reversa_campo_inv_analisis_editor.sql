@@ -5,7 +5,7 @@ begin;
 -- Vuelve preparar_subida y las 4 funciones de las derivadas a su texto publicado, quita las 6 funciones nuevas, desactiva los 5 códigos del
 -- catálogo de derivadas (las tablas nuevas y las columnas de campo.derivadas se conservan: nada se borra) y deja la Investigación de ubicación como estaba en producción el 23-nov:
 -- con resultado, fotos 3 a 6, las 3 fotos obligatorias (fachada y predio como soporte de la inefectiva), dirección opcional, hallazgo
--- obligatorio y los 4 campos de despeje y visita activos. Nada se borra: los 4 campos nuevos quedan DESACTIVADOS (activo = false), y los
+-- obligatorio y los 4 campos de despeje y visita y la observación activos. Nada se borra: los 4 campos nuevos quedan DESACTIVADOS (activo = false), y los
 -- registros que se hayan hecho con ellos conservan sus datos.
 -- =====================================================================
 do $rev$
@@ -161,7 +161,7 @@ begin
   update campo.tipo_fotos set soporte_inefectiva = true where tipo_id = v_t and codigo in ('fachada_nomenclatura', 'predio_lote');
   update campo.tipo_campos set obligatorio = false where tipo_id = v_t and codigo = 'direccion_encontrada';
   update campo.tipo_campos set obligatorio = true where tipo_id = v_t and codigo = 'hallazgo';
-  update campo.tipo_campos set activo = true where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada');
+  update campo.tipo_campos set activo = true where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada', 'observacion');
   update campo.tipo_campos set activo = false where tipo_id = v_t and codigo in ('barrio', 'habitado', 'tipo_predio', 'medidor');
   select jsonb_build_object('tipo', (select to_jsonb(t) from campo.tipos_reporte t where t.id = v_t),
                             'campos', (select jsonb_agg(to_jsonb(c) order by c.orden, c.id) from campo.tipo_campos c where c.tipo_id = v_t),

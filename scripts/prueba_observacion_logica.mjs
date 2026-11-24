@@ -51,6 +51,9 @@ ok("19 relación: las 5 de la lista", igual(O.RELACIONES.map((r) => r.codigo), [
 const INV = { codigo: "investigacion_ubicacion", fotos_min: 0, fotos_max: 6, genera_resultado: false };
 ok("20 la Investigación: mínimo 0 fotos y el contador dice «(opcionales)»", F.minimoFotos(INV, "") === 0 && F.contadorFotos(0, 0, 6) === "0 de 6 (opcionales)");
 ok("21 los demás formatos siguen con su mínimo", F.minimoFotos({ fotos_min: 3 }, "") === 3 && F.contadorFotos(1, 3, 6) === "1 de 6 (mínimo 3)" && F.minimoFotos({}, "") === 1);
+ok("22 «Observaciones» de la Investigación lleva el aviso de datos personales; la de los demás formatos no cambia",
+  F.rotuloObservaciones("investigacion_ubicacion", false) === "Observaciones (no escriba nombres, cédulas ni teléfonos) (opcional)"
+  && F.rotuloObservaciones("suspension", false) === "Observaciones (opcional)" && F.rotuloObservaciones("fraude", true) === "Observaciones (obligatorio)");
 
 console.log(`\nRESULTADO: ${n - malas} de ${n} pruebas correctas${malas ? "" : " — SIN FALLAS"}`);
 process.exit(malas ? 1 : 0);

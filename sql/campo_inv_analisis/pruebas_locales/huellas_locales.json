@@ -14,7 +14,7 @@
  "inv": {
   "partida_campos": "cita_acordada:dia_hora:false:true,despeje_caja:si_no:false:true,despeje_observacion:texto:false:true,direccion_encontrada:texto:false:true,hallazgo:opcion:true:true,observacion:texto:false:true,visita_concertada:si_no:false:true",
   "partida_fotos": "fachada_nomenclatura:true:true:true,predio_lote:true:true:true,vecino_referencia:true:false:true",
-  "nueva_campos": "barrio:texto:false:true,cita_acordada:dia_hora:false:false,despeje_caja:si_no:false:false,despeje_observacion:texto:false:false,direccion_encontrada:texto:true:true,habitado:si_no:false:true,hallazgo:opcion:false:true,medidor:texto:false:true,observacion:texto:false:true,tipo_predio:opcion:false:true,visita_concertada:si_no:false:false",
+  "nueva_campos": "barrio:texto:false:true,cita_acordada:dia_hora:false:false,despeje_caja:si_no:false:false,despeje_observacion:texto:false:false,direccion_encontrada:texto:true:true,habitado:si_no:false:true,hallazgo:opcion:false:true,medidor:texto:false:true,observacion:texto:false:false,tipo_predio:opcion:false:true,visita_concertada:si_no:false:false",
   "nueva_fotos": "fachada_nomenclatura:false:false:true,predio_lote:false:false:true,vecino_referencia:false:false:true",
   "tras_reversa_campos": "barrio:texto:false:false,cita_acordada:dia_hora:false:true,despeje_caja:si_no:false:true,despeje_observacion:texto:false:true,direccion_encontrada:texto:false:true,habitado:si_no:false:false,hallazgo:opcion:true:true,medidor:texto:false:false,observacion:texto:false:true,tipo_predio:opcion:false:false,visita_concertada:si_no:false:true"
  },

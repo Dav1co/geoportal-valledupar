@@ -148,6 +148,8 @@ def main():
                   ("M.02 preparar_subida nunca acepta 0 fotos", "v_tmin is distinct from 0 then 1", "true then 1", ["03.01", "04.01"]),
                   ("M.03 la migración no desactiva cita_acordada", "set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada');",
                    "set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada');", ["01.04"]),
+                  ("M.12 la migración no desactiva «observacion» (quedarían dos cajas de texto)", "set activo = false where tipo_id = v_t and codigo = 'observacion';",
+                   "set activo = true where tipo_id = v_t and codigo = 'observacion';", ["01.04", "02.02"]),
                   ("M.04 la migración deja la dirección opcional", "set obligatorio = true where tipo_id = v_t and codigo = 'direccion_encontrada'", "set obligatorio = false where tipo_id = v_t and codigo = 'direccion_encontrada'", ["01.03", "04.04"]),
                   ("M.05 el teléfono acepta cualquier número de 10 cifras", "x !~ '^(\\d{7}|3\\d{9}|60\\d{8})$'", "x !~ '^(\\d{7}|\\d{10})$'", ["13.02"]),
                   ("M.06 los datos de contacto los lee quien ve la lista (supervisor de actas)",

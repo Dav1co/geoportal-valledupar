@@ -256,6 +256,8 @@ try {
   ok("C02 campos: dirección obligatoria; hallazgo, barrio, habitado, tipo de predio, medidor y observación opcionales; sin despeje ni cita",
     /Dirección encontrada en terreno \(obligatorio\)/.test(t) && /Hallazgo \(opcional\)/.test(t) && /Barrio \(opcional\)/.test(t) && /¿El predio está habitado\? \(opcional\)/.test(t)
     && /Tipo de predio \(opcional\)/.test(t) && /Número del medidor \(si se ve\) \(opcional\)/.test(t) && !/despeje/i.test(t) && !/Día y hora acordados/.test(t), t.slice(0, 1500));
+  ok("C02b una sola caja de texto: «Observaciones (no escriba nombres, cédulas ni teléfonos)», sin el campo «Observación» del catálogo",
+    /Observaciones \(no escriba nombres, cédulas ni teléfonos\) \(opcional\)/.test(t) && !(await hay(pg, "#fp-observacion")) && (await pg.$$("textarea")).length === 1, t.slice(0, 1500));
   ok("C03 las fotos son opcionales («0 de 6 (opcionales)») y sin cámara no bloquea", /0 de 6 \(opcionales\)/.test(t) && !/sin las fotos no se puede enviar/.test(t), t.slice(0, 1500));
   await escribir(pg, "#fp-contrato", "123456");
   ok("C04 «¿Viene de…?» ofrece la actividad que creó el supervisor, con la dirección correcta", await esperar(pg, () => /Investigación de ubicación del predio\s*· de Análisis de contrato \(Dirección errada\)/.test(document.body.innerText))
