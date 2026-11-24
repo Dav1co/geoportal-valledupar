@@ -68,7 +68,9 @@ def main():
     ok("E.02 el ensayo no dejó nada (huella igual, catálogo igual, sin filas ZTINV ni auditoría)", huella(con, "campo") == gn.PUBLICADA["campo"]
        and con.execute(gn.INV_CAMPOS_Q).fetchone()[0] == HL["inv"]["partida_campos"]
        and con.execute("select not exists (select 1 from public.geoportal_lista_blanca where email like 'ztinv.%%') and not exists (select 1 from public.geoportal_auditoria where detalle ->> 'paquete' = 'campo_inv_analisis')"
-                       " and not exists (select 1 from campo.reportes where descripcion like '[PRUEBA ZTINV]%%')").fetchone()[0])
+                       " and not exists (select 1 from campo.reportes where descripcion like '[PRUEBA ZTINV]%%')"
+                       " and to_regclass('campo.analisis_observaciones') is null and not exists (select 1 from campo.derivadas_catalogo where codigo like 'aviso\\_%%')"
+                       " and not exists (select 1 from information_schema.columns where table_schema = 'campo' and table_name = 'derivadas' and column_name = 'observacion_id')").fetchone()[0])
     e = correr(con, leer(f"migracion_{N}_editor.sql")); ok("C.01 migración", e is None, e)
     v = ver(con); ok(f"C.02 verificación {sum(1 for x in v if x[2] == 'OK')} de {len(v)} OK", len(v) == HL["verificacion"] and all(x[2] == "OK" for x in v), str([x for x in v if x[2] != "OK"]))
     h = hl(con); ok("C.03 huellas DESPUÉS: CON ESTE CAMBIO; acta igual", h[0][3] == "CON ESTE CAMBIO" and h[1][3].startswith("PUBLICADA") and h[2][3] == "CON ESTE CAMBIO", str(h))
@@ -80,7 +82,12 @@ def main():
     ok("C.08 tras la reversa: huella de campo 261bed3c…, preparar_subida publicada, Investigación como en producción (los 4 nuevos desactivados)",
        huella(con, "campo") == gn.PUBLICADA["campo"] and gn.md5f(con, gn.PREPARAR) == HL["partida"]["MD5_PREPARAR"]
        and con.execute(gn.INV_CAMPOS_Q).fetchone()[0] == HL["inv"]["tras_reversa_campos"] and con.execute(gn.INV_FOTOS_Q).fetchone()[0] == HL["inv"]["partida_fotos"]
-       and con.execute("select genera_resultado and fotos_min = 3 from campo.tipos_reporte where codigo = 'investigacion_ubicacion'").fetchone()[0])
+       and con.execute("select genera_resultado and fotos_min = 3 from campo.tipos_reporte where codigo = 'investigacion_ubicacion'").fetchone()[0]
+       and all(gn.md5f(con, f) == HL["partida"]["MD5_" + k] for k, f in gn.CAMBIAN.items() if "MD5_" + k in HL["partida"]))
+    ok("C.08b tras la reversa: las 6 funciones nuevas ya no están; las tablas y las columnas se conservan; los 5 códigos quedan desactivados",
+       con.execute("select bool_and(to_regprocedure(f) is null) from unnest(%s::text[]) f", (gn.NUEVAS_F,)).fetchone()[0]
+       and con.execute("select to_regclass('campo.analisis_observacion_datos') is not null and exists (select 1 from information_schema.columns where table_schema = 'campo' and table_name = 'derivadas' and column_name = 'observacion_id')"
+                       " and (select count(*) from campo.derivadas_catalogo where codigo in ('aviso_desocupado', 'aviso_direccion_errada', 'aviso_actualizacion_datos', 'aviso_otra', 'actividad_supervisor') and not activa) = 5").fetchone()[0])
     ok("C.09 el registro hecho con los campos nuevos se conserva con sus datos (nada se borra)",
        con.execute("select datos ->> 'barrio' = '[PRUEBA ZTINV] Centro' and datos ->> 'tipo_predio' = 'casa' from campo.reportes where id = %s", (r1["id"],)).fetchone()[0])
     e = correr(con, leer(f"reversa_{N}_editor.sql")); ok("C.10 repetir la reversa se rechaza", e is not None and "no es la de este paquete" in e, (e or "")[:200])
@@ -99,6 +106,18 @@ def main():
        con.execute("select count(*) from public.geoportal_auditoria where accion = 'campo_catalogo' and detalle ->> 'paquete' = 'campo_inv_analisis'").fetchone()[0] == 3)
     con.close()
 
+    # Con un aviso guardado, la reversa se detiene sin cambiar nada (las funciones publicadas dejarían filas vacías en la lista)
+    con = gn.rehacer("emdupar_b_inv_prueba"); e = correr(con, leer(f"migracion_{N}_editor.sql"))
+    con.execute("insert into public.geoportal_lista_blanca (email, nombre, rol, activo, horario, dias, ver_explorar, ver_analisis_contrato) values ('ciclo.ana@emdupar.gov.co', 'C', 'consulta', true, 'sin_restriccion', 'todos', false, true)")
+    con.execute("insert into campo.consultas_analisis (autor, contrato, existe) values ('ciclo.ana@emdupar.gov.co', '880001', true)")
+    with con.transaction():
+        con.execute("set local role service_role")
+        ra = con.execute("select public.geoportal_campo_analisis_observar('ciclo.ana@emdupar.gov.co', '880001', 'actualizacion_datos', null, null, '{\"cedula\": \"12345678\"}'::jsonb)").fetchone()[0]
+    h0 = huella(con, "campo"); e2 = correr(con, leer(f"reversa_{N}_editor.sql"))
+    ok("R.01 con un aviso guardado, la reversa se detiene y no cambia nada", e is None and ra.get("derivada_id") and e2 is not None and "Hay 1 avisos" in e2 and huella(con, "campo") == h0 == HL["nuevas"]["HUELLA_CAMPO_NUEVA"], (e2 or "")[:250])
+    ok("R.02 la verificación sigue 100 % OK después de la reversa rechazada", all(x[2] == "OK" for x in ver(con)))
+    con.close()
+
     # Guardias: cada una en una base nueva, con un cambio que imita una producción distinta
     casos = [
         ("G.01 una función de campo distinta (comentario en f_validar_datos)",
@@ -108,13 +127,17 @@ def main():
         ("G.04 la Investigación con otro mínimo de fotos", "update campo.tipos_reporte set fotos_min = 4 where codigo = 'investigacion_ubicacion'", "La Investigación de ubicación no está como en producción"),
         ("G.05 la Investigación con una foto ya opcional", "update campo.tipo_fotos set obligatoria = false where codigo = 'vecino_referencia' and tipo_id = 35", "Las fotos de la Investigación no son las de producción"),
         ("G.06 la Investigación sin su actividad", "update campo.actividades set activa = false where codigo = 'investigacion_ubicacion'", "La actividad investigacion_ubicacion no está activa"),
+        ("G.08 una política RLS en campo", "create policy zt on campo.parametros for select to homelab_lectura using (true)", "Hay políticas RLS en campo o acta"),
+        ("G.09 homelab_lectura sin BYPASSRLS", "alter role homelab_lectura nobypassrls", "No existe el rol homelab_lectura con BYPASSRLS"),
+        ("G.10 una tabla campo.analisis_observaciones que no es la del paquete", "create table campo.analisis_observaciones (id uuid primary key)", "La tabla campo.analisis_observaciones ya existe y no es la de este paquete"),
+        ("G.11 una columna observacion_id ajena en campo.derivadas", "alter table campo.derivadas add column observacion_id uuid", "La estructura de campo.derivadas no es la de producción"),
     ]
     for nombre, cambio, esperado in casos:
         con = gn.rehacer("emdupar_b_inv_prueba"); con.execute(cambio)
         e = correr(con, leer(f"migracion_{N}_editor.sql"))
         ok(f"{nombre}: la migración se detiene sin cambiar nada", e is not None and esperado in e
            and gn.md5f(con, gn.PREPARAR) == HL["partida"]["MD5_PREPARAR"], (e or "[aplicó]")[:250])
-        con.close()
+        con.execute("alter role homelab_lectura bypassrls"); con.close()
     con = gn.rehacer("emdupar_b_inv_prueba"); r0 = inv_produccion(con, "guardia.op@emdupar.gov.co")
     e = correr(con, leer(f"migracion_{N}_editor.sql"))
     ok("G.07 la Investigación con un registro de hoy (3 fotos, efectivo): la migración se detiene", r0.get("id") is not None and e is not None and "ya tiene registros" in e, (e or "[aplicó]")[:250] + str(r0))
@@ -125,7 +148,22 @@ def main():
                   ("M.02 preparar_subida nunca acepta 0 fotos", "v_tmin is distinct from 0 then 1", "true then 1", ["03.01", "04.01"]),
                   ("M.03 la migración no desactiva cita_acordada", "set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada');",
                    "set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada');", ["01.04"]),
-                  ("M.04 la migración deja la dirección opcional", "set obligatorio = true where tipo_id = v_t and codigo = 'direccion_encontrada'", "set obligatorio = false where tipo_id = v_t and codigo = 'direccion_encontrada'", ["01.03", "04.04"])]
+                  ("M.04 la migración deja la dirección opcional", "set obligatorio = true where tipo_id = v_t and codigo = 'direccion_encontrada'", "set obligatorio = false where tipo_id = v_t and codigo = 'direccion_encontrada'", ["01.03", "04.04"]),
+                  ("M.05 el teléfono acepta cualquier número de 10 cifras", "x !~ '^(\\d{7}|3\\d{9}|60\\d{8})$'", "x !~ '^(\\d{7}|\\d{10})$'", ["13.02"]),
+                  ("M.06 los datos de contacto los lee quien ve la lista (supervisor de actas)",
+                   "declare v_email text; v_obs uuid; v_datos jsonb; v_an campo.analisis_observacion_anulaciones;\nbegin\n  v_email := campo.f_autorizar_supervision(p_solicitante);",
+                   "declare v_email text; v_obs uuid; v_datos jsonb; v_an campo.analisis_observacion_anulaciones;\nbegin\n  v_email := campo.f_autorizar_registradas(p_solicitante);", ["16.02"]),
+                  ("M.07 marcar sin haber consultado el contrato", "and q.consultado_en > clock_timestamp() - interval '12 hours'", "", ["11.04"]),
+                  ("M.08 la tabla sensible sin SELECT para homelab_lectura",
+                   "grant select on campo.analisis_observaciones, campo.analisis_observacion_datos, campo.analisis_observacion_anulaciones to homelab_lectura;",
+                   "grant select on campo.analisis_observaciones, campo.analisis_observacion_anulaciones to homelab_lectura;", ["10.02"]),
+                  ("M.09 la lista de derivadas trae los datos de contacto",
+                   "'trae_datos', exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = o.id),",
+                   "'trae_datos', exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = o.id), 'datos', (select x.datos from campo.analisis_observacion_datos x where x.observacion_id = o.id),", ["15.02"]),
+                  ("M.10 «Crear actividad» no cierra el aviso", "  insert into campo.derivada_eventos (derivada_id, tipo_evento, motivo, autor) values (v_d.id, 'atendida_fuera'",
+                   "  perform 1; -- insert into campo.derivada_eventos (derivada_id, tipo_evento, motivo, autor) values (v_d.id, 'atendida_fuera'", ["18.07"]),
+                  ("M.11 un aviso se puede atender con cualquier formulario", "if not (v_form = any (case when v_d.destino is not null then array[v_d.destino] else v_c.destinos end))",
+                   "if v_c.destinos <> '{}' and not (v_form = any (case when v_d.destino is not null then array[v_d.destino] else v_c.destinos end))", ["19.03"])]
     base = leer(f"ensayo_en_transaccion_{N}_editor.sql")
     for nombre, a, b, deben in mutaciones:
         if a not in base: ok(f"{nombre}: el texto a mutar existe", False, a); continue

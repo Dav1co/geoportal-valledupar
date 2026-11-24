@@ -9,6 +9,9 @@
 do $guardia$
 declare v text; r record; v_t campo.tipos_reporte%rowtype; v_campos text; v_fotos text;
 begin
+  if to_regprocedure('public.geoportal_campo_analisis_observar(text,text,text,text,text,jsonb,text)') is not null then
+    raise exception 'Este paquete ya parece aplicado (existe geoportal_campo_analisis_observar): use la reversa antes de repetir';
+  end if;
   if to_regprocedure('public.geoportal_campo_preparar_subida(text,integer,text,text,text)') is not null
      and md5(pg_get_functiondef('public.geoportal_campo_preparar_subida(text,integer,text,text,text)'::regprocedure)) = '{{MD5_PREPARAR_NUEVA}}' then
     raise exception 'Este paquete ya parece aplicado (preparar_subida ya es la de este cambio): use la reversa antes de repetir';
@@ -29,13 +32,28 @@ begin
     end if;
   end loop;
   -- Estructura exacta de las tablas vivas (la misma expresión que calcula generar.py en el doble, que es copia exacta de producción)
-  for r in select * from (values {{EST_LISTA}}) x(t, m) loop
+  -- (m2: el estado que deja la reversa de este paquete, que conserva la estructura; nada se borra)
+  for r in select * from (values {{EST_LISTA}}) x(t, m, m2) loop
     if to_regclass(r.t) is null then raise exception 'No existe la tabla %: deténgase y avise', r.t; end if;
     select {{EST_EXPR}} into v from (select to_regclass(r.t) as rel) z;
-    if v is distinct from r.m then
+    if v is distinct from r.m and v is distinct from coalesce(r.m2, r.m) then
       raise exception 'La estructura de % no es la de producción (columnas, restricciones, índices, disparadores, RLS o permisos): deténgase y avise', r.t;
     end if;
   end loop;
+  -- Las tablas nuevas: no existen, o existen exactamente como las crea este paquete (las conservó una reversa)
+  for r in select * from (values {{EST_NUEVAS}}) x(t, m) loop
+    if to_regclass(r.t) is not null then
+      select {{EST_EXPR}} into v from (select to_regclass(r.t) as rel) z;
+      if v is distinct from r.m then raise exception 'La tabla % ya existe y no es la de este paquete: deténgase y avise', r.t; end if;
+    end if;
+  end loop;
+  -- Sin políticas RLS en campo ni acta (David, 23-nov): el Dell lee porque homelab_lectura tiene BYPASSRLS; basta el GRANT SELECT explícito
+  if exists (select 1 from pg_policies where schemaname in ('campo', 'acta')) then
+    raise exception 'Hay políticas RLS en campo o acta: este paquete se preparó para ninguna; deténgase y avise';
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'homelab_lectura' and rolbypassrls) then
+    raise exception 'No existe el rol homelab_lectura con BYPASSRLS: deténgase y avise';
+  end if;
   -- Estado de partida de la Investigación de ubicación
   select * into v_t from campo.tipos_reporte where codigo = 'investigacion_ubicacion';
   if not found then raise exception 'No existe la Investigación de ubicación: deténgase y avise'; end if;

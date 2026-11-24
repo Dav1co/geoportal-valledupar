@@ -158,6 +158,287 @@ begin
   perform pg_temp.ok('06.06 redes.f_funciones_sin_where() devuelve cero filas', (select count(*) from redes.f_funciones_sin_where()) = 0);
 end $p1$;
 
+-- ===================== PARTE 2: avisos del Análisis de contrato =====================
+create function pg_temp.obs(p_quien text, p_contrato text, p_tipo text, p_texto text default null, p_dir text default null, p_contacto jsonb default null) returns jsonb language sql as $f$
+  select pg_temp.rpc(format('public.geoportal_campo_analisis_observar(%L, %L, %L, %L, %L, %L::jsonb)', p_quien, p_contrato, p_tipo, p_texto, p_dir, p_contacto)) $f$;
+create function pg_temp.lista(p_quien text, p_filtros jsonb) returns jsonb language sql as $f$
+  select pg_temp.rpc(format('public.geoportal_campo_derivadas(%L, %L::jsonb)', p_quien, p_filtros)) $f$;
+create function pg_temp.fila(r jsonb, p_id bigint) returns jsonb language sql as $f$
+  select x from jsonb_array_elements(r -> 'filas') x where (x ->> 'id')::bigint = p_id $f$;
+
+insert into public.geoportal_lista_blanca (email, nombre, rol, activo, horario, dias, ver_explorar, ver_campo, ver_dashboard_campo, ver_acta, ver_dashboard_acta, ver_analisis_contrato) values
+  ('ztinv.ana@emdupar.gov.co', 'ZTINV Analista', 'consulta', true, 'sin_restriccion', 'todos', false, false, false, false, false, true),
+  ('ztinv.ana2@emdupar.gov.co', 'ZTINV Analista 2', 'consulta', true, 'sin_restriccion', 'todos', false, false, false, false, false, true),
+  ('ztinv.supacta@emdupar.gov.co', 'ZTINV Supervisor de actas', 'consulta', true, 'sin_restriccion', 'todos', false, false, false, true, true, false),
+  ('ztinv.adm@emdupar.gov.co', 'ZTINV Administrador', 'admin', true, 'sin_restriccion', 'todos', false, false, false, false, false, false);
+-- La bitácora del Análisis: los contratos que consultó cada analista (datos de prueba)
+insert into campo.consultas_analisis (autor, contrato, existe, consultado_en) values
+  ('ztinv.ana@emdupar.gov.co', '990001', true, clock_timestamp()), ('ztinv.ana@emdupar.gov.co', '990002', true, clock_timestamp()),
+  ('ztinv.ana@emdupar.gov.co', '990003', true, clock_timestamp()), ('ztinv.ana@emdupar.gov.co', '990004', false, clock_timestamp()),
+  ('ztinv.ana@emdupar.gov.co', '990005', true, clock_timestamp() - interval '13 hours'), ('ztinv.ana@emdupar.gov.co', '99999999', true, clock_timestamp()),
+  ('ztinv.ana2@emdupar.gov.co', '990001', true, clock_timestamp());
+
+do $p2$
+declare r jsonb; jx jsonb; A text := 'ztinv.ana@emdupar.gov.co'; A2 text := 'ztinv.ana2@emdupar.gov.co'; SUP text := 'ztinv.sup@emdupar.gov.co'; SA text := 'ztinv.supacta@emdupar.gov.co';
+  ADM text := 'ztinv.adm@emdupar.gov.co'; OP text := 'ztinv.op1@emdupar.gov.co'; t0 timestamptz;
+  d_des bigint; d_dir bigint; d_act bigint; d_otra bigint; d_nueva bigint; n0 bigint; n1 bigint; v_inv jsonb;
+  C jsonb := '{"nombre": "ZTINV Persona Prueba", "cedula": "1065123456", "telefono": "300 123 4567", "correo": "ZTINV.Persona@Ejemplo.com", "relacion": "arrendatario"}';
+begin
+  -- 10: estructura y permisos
+  perform pg_temp.ok('10.01 las 3 tablas nuevas existen con RLS activa y sin políticas (campo y acta siguen sin políticas)',
+    (select count(*) = 3 and bool_and(relrowsecurity) from pg_class where oid in ('campo.analisis_observaciones'::regclass, 'campo.analisis_observacion_datos'::regclass, 'campo.analisis_observacion_anulaciones'::regclass))
+    and not exists (select 1 from pg_policies where schemaname in ('campo', 'acta')));
+  perform pg_temp.ok('10.02 sin permisos para anon, authenticated ni service_role; SELECT (y nada más) para homelab_lectura',
+    (select bool_and(not has_table_privilege(rl, t, 'select') and not has_table_privilege(rl, t, 'insert'))
+       from unnest(array['anon', 'authenticated', 'service_role']) rl, unnest(array['campo.analisis_observaciones', 'campo.analisis_observacion_datos', 'campo.analisis_observacion_anulaciones']) t)
+    and (select bool_and(has_table_privilege('homelab_lectura', t, 'select') and not has_table_privilege('homelab_lectura', t, 'insert') and not has_table_privilege('homelab_lectura', t, 'update'))
+       from unnest(array['campo.analisis_observaciones', 'campo.analisis_observacion_datos', 'campo.analisis_observacion_anulaciones']) t));
+  perform pg_temp.ok('10.03 la tabla de datos de contacto está marcada SENSIBLE en su comentario',
+    obj_description('campo.analisis_observacion_datos'::regclass, 'pg_class') like 'SENSIBLE (Ley 1581)%');
+  perform pg_temp.ok('10.04 campo.derivadas: origen_id nulo solo con observación (exactamente uno de los dos)', exists (select 1 from pg_constraint where conname = 'derivadas_origen_ck'));
+
+  -- 11: quién puede marcar y sobre qué contrato
+  r := pg_temp.obs(OP, '990001', 'desocupado');
+  perform pg_temp.ok('11.01 un operario sin Análisis de contrato no marca (42501)', pg_temp.err(r) = '42501', r::text);
+  r := pg_temp.obs(SA, '990001', 'desocupado');
+  perform pg_temp.ok('11.02 el supervisor de actas sin Análisis no marca (42501)', pg_temp.err(r) = '42501', r::text);
+  r := pg_temp.obs(A, '990009', 'desocupado');
+  perform pg_temp.ok('11.03 un contrato que el analista no consultó se rechaza', pg_temp.err(r) = '55000' and pg_temp.msg(r) like 'Primero consulte el contrato%', r::text);
+  r := pg_temp.obs(A, '990005', 'desocupado');
+  perform pg_temp.ok('11.04 un contrato consultado hace 13 horas se rechaza (12 h)', pg_temp.err(r) = '55000', r::text);
+  r := pg_temp.obs(A, '990004', 'desocupado');
+  perform pg_temp.ok('11.05 un contrato que no existe (la consulta dio «no encontrado») se rechaza', pg_temp.err(r) = '55000', r::text);
+  r := pg_temp.obs(A, '99999999', 'desocupado');
+  perform pg_temp.ok('11.06 el contrato comodín se rechaza', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) = 'El contrato comodín no admite observaciones', r::text);
+  r := pg_temp.obs(A2, '990002', 'desocupado');
+  perform pg_temp.ok('11.07 otro analista no marca un contrato que consultó el primero', pg_temp.err(r) = '55000', r::text);
+  r := pg_temp.obs(A, '99 0001', 'desocupado');
+  perform pg_temp.ok('11.08 un contrato con algo distinto de números se rechaza', pg_temp.err(r) <> 'OK', r::text);
+  r := pg_temp.obs(A, '990001', 'vendido');
+  perform pg_temp.ok('11.09 una observación fuera de la lista se rechaza', pg_temp.err(r) <> 'OK', r::text);
+
+  -- 12: los textos y los datos van solo donde corresponden
+  r := pg_temp.obs(A, '990001', 'otra');
+  perform pg_temp.ok('12.01 «Otra» sin texto se rechaza', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) like 'Escriba la observación%', r::text);
+  r := pg_temp.obs(A, '990001', 'otra', 'ab');
+  perform pg_temp.ok('12.02 «Otra» con menos de 3 caracteres se rechaza', pg_temp.err(r) <> 'OK', r::text);
+  r := pg_temp.obs(A, '990001', 'otra', repeat('x', 121));
+  perform pg_temp.ok('12.03 «Otra» con más de 120 caracteres se rechaza', pg_temp.err(r) <> 'OK', r::text);
+  r := pg_temp.obs(A, '990001', 'otra', 'llamar al 300 123 4567');
+  perform pg_temp.ok('12.04 «Otra» con un teléfono se rechaza', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) like '%no puede llevar teléfonos ni cédulas%', r::text);
+  r := pg_temp.obs(A, '990001', 'otra', 'cédula 1065123456 del dueño');
+  perform pg_temp.ok('12.05 «Otra» con una cédula (6 o más números seguidos) se rechaza', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) like '%no puede llevar teléfonos ni cédulas%', r::text);
+  r := pg_temp.obs(A, '990001', 'desocupado', 'texto de más');
+  perform pg_temp.ok('12.06 un texto en «Desocupado» se rechaza', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) = 'El texto corto solo va en «Otra»', r::text);
+  r := pg_temp.obs(A, '990001', 'desocupado', null, 'CRA 9 # 12-30');
+  perform pg_temp.ok('12.07 una dirección en «Desocupado» se rechaza', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) = 'La dirección correcta solo va en «Dirección errada»', r::text);
+  r := pg_temp.obs(A, '990001', 'otra', '[PRUEBA ZTINV] reja', null, '{"nombre": "Ana"}');
+  perform pg_temp.ok('12.08 datos de contacto en «Otra» se rechazan', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) = 'Los datos de contacto solo van en «Actualización de datos»', r::text);
+  r := pg_temp.obs(A, '990001', 'direccion_errada', null, 'CRA 9 tel 3001234567');
+  perform pg_temp.ok('12.09 una dirección correcta con un teléfono se rechaza', pg_temp.err(r) <> 'OK', r::text);
+
+  -- 13: formato de los datos de contacto (Q3)
+  perform pg_temp.ok('13.01 cédula: letras, 4 números u 11 números se rechazan', pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"cedula": "12a45"}')) <> 'OK'
+    and pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"cedula": "1234"}')) <> 'OK'
+    and pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"cedula": "12345678901"}')) <> 'OK');
+  perform pg_temp.ok('13.02 teléfono: 6 u 8 números, o 10 que no empiezan por 3 ni 60, se rechazan', pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"telefono": "123456"}')) <> 'OK'
+    and pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"telefono": "12345678"}')) <> 'OK'
+    and pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"telefono": "2123456789"}')) <> 'OK'
+    and pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"telefono": "6123456789"}')) <> 'OK'
+    and pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"telefono": "300123456a"}')) <> 'OK');
+  perform pg_temp.ok('13.03 correo sin @ o sin dominio se rechaza', pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"correo": "ana.ejemplo.com"}')) <> 'OK'
+    and pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"correo": "ana@ejemplo"}')) <> 'OK');
+  perform pg_temp.ok('13.04 relación fuera de la lista, nombre con números y una casilla desconocida se rechazan',
+    pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"relacion": "vecino"}')) <> 'OK'
+    and pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"nombre": "Ana 2"}')) <> 'OK'
+    and pg_temp.err(pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, '{"direccion": "CRA 1"}')) <> 'OK');
+  perform pg_temp.ok('13.05 ningún intento rechazado dejó filas', not exists (select 1 from campo.analisis_observaciones where autor = A));
+  perform pg_temp.ok('13.06 los formatos válidos: fijo de 7, celular de 10 con 3, fijo de 10 con 60, cédula de 5 y de 10, nombre con tildes',
+    campo.f_contacto('{"telefono": "5701234"}') ->> 'telefono' = '5701234' and campo.f_contacto('{"telefono": "(300) 123-4567"}') ->> 'telefono' = '3001234567'
+    and campo.f_contacto('{"telefono": "6055701234"}') ->> 'telefono' = '6055701234' and campo.f_contacto('{"cedula": "12345"}') ->> 'cedula' = '12345'
+    and campo.f_contacto('{"cedula": "1065123456"}') ->> 'cedula' = '1065123456' and campo.f_contacto('{"nombre": "  María  José Núñez "}') ->> 'nombre' = 'María José Núñez'
+    and campo.f_contacto('{"correo": " Ana.P@Ejemplo.COM.co "}') ->> 'correo' = 'ana.p@ejemplo.com.co' and campo.f_contacto('{"nombre": "", "cedula": ""}') is null);
+
+  -- 14: marcar las 4 observaciones
+  r := pg_temp.obs(A, '990001', 'desocupado'); d_des := (r ->> 'derivada_id')::bigint;
+  perform pg_temp.ok('14.01 «Desocupado» crea su aviso pendiente', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb
+    and exists (select 1 from campo.derivadas where id = d_des and actividad = 'aviso_desocupado' and origen_id is null and contrato = '990001') and campo.f_derivada_estado(d_des) = 'pendiente', r::text);
+  r := pg_temp.obs(A, '990001', 'direccion_errada', null, '[PRUEBA ZTINV] CRA 9 # 12-30 Barrio Centro'); d_dir := (r ->> 'derivada_id')::bigint;
+  perform pg_temp.ok('14.02 «Dirección errada» con la dirección correcta crea su aviso', pg_temp.err(r) = 'OK'
+    and (select o.direccion_correcta = '[PRUEBA ZTINV] CRA 9 # 12-30 Barrio Centro' from campo.derivadas d join campo.analisis_observaciones o on o.id = d.observacion_id where d.id = d_dir), r::text);
+  r := pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, C); d_act := (r ->> 'derivada_id')::bigint;
+  perform pg_temp.ok('14.03 «Actualización de datos» con los 5 datos crea su aviso y guarda los datos aparte, normalizados', pg_temp.err(r) = 'OK' and r -> 'trae_datos' = 'true'::jsonb
+    and (select x.datos = '{"nombre": "ZTINV Persona Prueba", "cedula": "1065123456", "telefono": "3001234567", "correo": "ztinv.persona@ejemplo.com", "relacion": "arrendatario"}'::jsonb
+           from campo.derivadas d join campo.analisis_observacion_datos x on x.observacion_id = d.observacion_id where d.id = d_act), r::text);
+  perform pg_temp.ok('14.04 la respuesta al analista NO devuelve los datos de contacto', r::text !~* 'ztinv persona|1065123456|3001234567|ztinv\.persona' and not (r ? 'datos'), r::text);
+  r := pg_temp.obs(A, '990001', 'otra', '[PRUEBA ZTINV] tiene perro bravo'); d_otra := (r ->> 'derivada_id')::bigint;
+  perform pg_temp.ok('14.05 «Otra» con texto corto crea su aviso', pg_temp.err(r) = 'OK' and d_otra is not null, r::text);
+  select count(*) into n0 from campo.analisis_observaciones where autor = A;
+  r := pg_temp.obs(A, '990001', 'desocupado');
+  perform pg_temp.ok('14.06 repetir «Desocupado» con el aviso pendiente devuelve el mismo y no guarda nada', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb
+    and (r ->> 'derivada_id')::bigint = d_des and (select count(*) from campo.analisis_observaciones where autor = A) = n0, r::text);
+  r := pg_temp.obs(A, '990002', 'actualizacion_datos');
+  perform pg_temp.ok('14.07 «Actualización de datos» sin ninguna casilla guarda solo el aviso (sin fila de datos)', pg_temp.err(r) = 'OK' and r -> 'trae_datos' = 'false'::jsonb
+    and not exists (select 1 from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = (r ->> 'derivada_id')::bigint), r::text);
+  perform pg_temp.ok('14.08 la auditoría de las marcas no guarda el contrato, los textos ni los datos de contacto',
+    (select count(*) = 5 and bool_and(detalle::text !~* '990001|ztinv persona|1065123456|3001234567|perro|cra 9') from public.geoportal_auditoria where accion = 'campo_analisis_observar' and email = A));
+  t0 := clock_timestamp(); r := pg_temp.obs(A, '990003', 'desocupado');
+  perform pg_temp.ok('14.09 marcar tarda menos de 1 s', pg_temp.err(r) = 'OK' and clock_timestamp() - t0 < interval '1 s', (clock_timestamp() - t0)::text);
+
+  -- 15: «Actividades derivadas» con el filtro de origen
+  r := pg_temp.lista(SUP, '{"origen": "analisis", "contrato": "990001"}');
+  perform pg_temp.ok('15.01 el supervisor de campo ve los 4 avisos del contrato con el filtro Origen = Análisis de contrato',
+    pg_temp.err(r) = 'OK' and jsonb_array_length(r -> 'filas') = 4 and (select bool_and(x -> 'origen' ->> 'clase' = 'analisis' and x -> 'origen' ->> 'tipo_nombre' = 'Análisis de contrato') from jsonb_array_elements(r -> 'filas') x), left(r::text, 400));
+  jx := pg_temp.fila(r, d_act);
+  perform pg_temp.ok('15.02 el aviso de actualización dice «trae datos», pero la lista NO trae los datos de contacto',
+    jx -> 'origen' -> 'trae_datos' = 'true'::jsonb and r::text !~* 'ztinv persona|1065123456|3001234567|ztinv\.persona|arrendatario', left(coalesce(jx::text, r::text), 400));
+  perform pg_temp.ok('15.03 el aviso trae la dirección correcta y el texto de «Otra», el operario y la fecha',
+    pg_temp.fila(r, d_dir) -> 'origen' ->> 'direccion_correcta' = '[PRUEBA ZTINV] CRA 9 # 12-30 Barrio Centro' and pg_temp.fila(r, d_otra) -> 'origen' ->> 'texto' = '[PRUEBA ZTINV] tiene perro bravo'
+    and pg_temp.fila(r, d_des) -> 'origen' ->> 'operario' = A and pg_temp.fila(r, d_des) -> 'destinos' = '[]'::jsonb);
+  r := pg_temp.lista(SUP, '{"origen": "registro", "contrato": "990001"}');
+  perform pg_temp.ok('15.04 con Origen = Revisiones no aparecen los avisos', pg_temp.err(r) = 'OK' and jsonb_array_length(r -> 'filas') = 0, left(r::text, 300));
+  r := pg_temp.lista(SUP, '{"origen": "mapa"}');
+  perform pg_temp.ok('15.05 un origen fuera de la lista se rechaza', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) = 'El origen no es válido', r::text);
+  r := pg_temp.lista(SA, '{"origen": "analisis", "contrato": "990001"}');
+  perform pg_temp.ok('15.06 el supervisor de actas ve la lista (como hoy), también sin los datos', pg_temp.err(r) = 'OK' and jsonb_array_length(r -> 'filas') = 4 and r::text !~* '1065123456|3001234567', left(r::text, 200));
+  r := pg_temp.lista(A, '{"origen": "analisis"}');
+  perform pg_temp.ok('15.07 el analista no ve «Actividades derivadas» (42501)', pg_temp.err(r) = '42501', r::text);
+  t0 := clock_timestamp(); r := pg_temp.lista(SUP, '{"origen": "analisis", "limite": 200}');
+  perform pg_temp.ok('15.08 la lista tarda menos de 2 s', pg_temp.err(r) = 'OK' and clock_timestamp() - t0 < interval '2 s', (clock_timestamp() - t0)::text);
+
+  -- 16: ver los datos de contacto (solo supervisor de campo y administrador, auditado)
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', A, d_act));
+  perform pg_temp.ok('16.01 el analista que los guardó NO los vuelve a leer (42501)', pg_temp.err(r) = '42501', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SA, d_act));
+  perform pg_temp.ok('16.02 el supervisor de actas no los lee (42501)', pg_temp.err(r) = '42501', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', OP, d_act));
+  perform pg_temp.ok('16.03 un operario no los lee (42501)', pg_temp.err(r) = '42501', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d_act));
+  perform pg_temp.ok('16.04 el supervisor de campo los lee al abrir el aviso', pg_temp.err(r) = 'OK' and r -> 'anulados' = 'false'::jsonb and r -> 'datos' ->> 'cedula' = '1065123456' and r -> 'datos' ->> 'telefono' = '3001234567', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', ADM, d_act));
+  perform pg_temp.ok('16.05 el administrador también', pg_temp.err(r) = 'OK' and r -> 'datos' ->> 'nombre' = 'ZTINV Persona Prueba', r::text);
+  perform pg_temp.ok('16.06 cada lectura queda auditada, con los nombres de las casillas y sin los valores',
+    (select count(*) = 2 and bool_and(detalle -> 'campos' = '["cedula", "correo", "nombre", "relacion", "telefono"]'::jsonb and detalle::text !~* '1065123456|3001234567|ztinv persona')
+       from public.geoportal_auditoria where accion = 'campo_ver_datos_contacto' and referencia = d_act::text));
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d_des));
+  perform pg_temp.ok('16.07 un aviso sin datos de contacto lo dice', pg_temp.err(r) = 'P0002', r::text);
+
+  -- 17: anular los datos de contacto (Q2)
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', A, d_act, 'el nombre estaba mal escrito'));
+  perform pg_temp.ok('17.01 el analista no anula (42501)', pg_temp.err(r) = '42501', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d_act, 'mal'));
+  perform pg_temp.ok('17.02 sin un motivo de 10 caracteres o más se rechaza', pg_temp.err(r) <> 'OK', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d_act, '[PRUEBA ZTINV] la cédula no corresponde'));
+  perform pg_temp.ok('17.03 el supervisor anula con motivo', pg_temp.err(r) = 'OK' and r -> 'anulados' = 'true'::jsonb, r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d_act));
+  perform pg_temp.ok('17.04 anulados: se ve «Anulados» y el motivo, sin los valores', pg_temp.err(r) = 'OK' and r -> 'anulados' = 'true'::jsonb
+    and r ->> 'motivo' = '[PRUEBA ZTINV] la cédula no corresponde' and not (r ? 'datos') and r::text !~* '1065123456|3001234567', r::text);
+  perform pg_temp.ok('17.05 los datos siguen guardados (nada se borra)', exists (select 1 from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = d_act and x.datos ->> 'cedula' = '1065123456'));
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d_act, '[PRUEBA ZTINV] otra vez la anulo'));
+  perform pg_temp.ok('17.06 anular dos veces se rechaza', pg_temp.err(r) = '55000', r::text);
+  perform pg_temp.ok('17.07 la lista marca «datos anulados»', (pg_temp.fila(pg_temp.lista(SUP, '{"origen": "analisis", "contrato": "990001"}'), d_act) -> 'origen' -> 'datos_anulados') = 'true'::jsonb);
+
+  -- 18: «Crear actividad» desde el aviso (Q1)
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_crear_actividad(%L, %s, %L)', A, d_dir, 'tipo:investigacion_ubicacion'));
+  perform pg_temp.ok('18.01 el analista no crea actividades (42501)', pg_temp.err(r) = '42501', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_crear_actividad(%L, %s, %L)', SA, d_dir, 'tipo:investigacion_ubicacion'));
+  perform pg_temp.ok('18.02 el supervisor de actas tampoco (42501)', pg_temp.err(r) = '42501', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_crear_actividad(%L, %s, %L)', SUP, d_dir, 'acta'));
+  perform pg_temp.ok('18.03 el acta no se elige', pg_temp.err(r) <> 'OK' and pg_temp.msg(r) = 'Elija un formulario activo que pida el contrato', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_crear_actividad(%L, %s, %L)', SUP, d_dir, 'tipo:cambio_medidor'));
+  perform pg_temp.ok('18.04 un formulario desactivado (cambio de medidor) no se elige', pg_temp.err(r) <> 'OK', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_crear_actividad(%L, %s, %L)', SUP, d_dir, 'tipo:fraude'));
+  perform pg_temp.ok('18.05 un reporte general (contrato opcional) no se elige', pg_temp.err(r) <> 'OK', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_crear_actividad(%L, %s, %L)', SUP, d_dir, 'tipo:investigacion_ubicacion'));
+  d_nueva := (r -> 'actividad' ->> 'id')::bigint;
+  perform pg_temp.ok('18.06 el supervisor crea la Investigación de ubicación desde «Dirección errada»', pg_temp.err(r) = 'OK'
+    and r -> 'actividad' ->> 'estado' = 'pendiente' and r -> 'actividad' -> 'destinos' = '["tipo:investigacion_ubicacion"]'::jsonb
+    and r -> 'actividad' ->> 'destino_nombre' = 'Investigación de ubicación del predio' and r -> 'actividad' -> 'origen' ->> 'direccion_correcta' = '[PRUEBA ZTINV] CRA 9 # 12-30 Barrio Centro', left(r::text, 500));
+  perform pg_temp.ok('18.07 el aviso se cerró solo: atendida fuera, con el motivo automático', r -> 'aviso' ->> 'estado' = 'atendida_fuera'
+    and r -> 'aviso' -> 'cierre' ->> 'motivo' = 'Se creó la actividad: Investigación de ubicación del predio' and (r -> 'aviso' -> 'origen' ->> 'actividad_creada_id')::bigint = d_nueva, left(r::text, 500));
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_crear_actividad(%L, %s, %L)', SUP, d_dir, 'tipo:suspension'));
+  perform pg_temp.ok('18.08 una segunda actividad desde el mismo aviso se rechaza (ya está cerrado)', pg_temp.err(r) = '55000', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_crear_actividad(%L, %s, %L)', SUP, d_nueva, 'tipo:suspension'));
+  perform pg_temp.ok('18.09 desde la actividad creada no se crea otra (no es un aviso)', pg_temp.err(r) <> 'OK', r::text);
+  perform pg_temp.ok('18.10 quedó auditado', exists (select 1 from public.geoportal_auditoria where accion = 'campo_aviso_crear_actividad' and referencia = d_dir::text and email = SUP));
+
+  -- 19: el operario la atiende con «¿Viene de…?»
+  r := pg_temp.rpc(format('public.geoportal_campo_derivadas_abiertas(%L, %L, %L)', OP, '990001', 'tipo:investigacion_ubicacion'));
+  perform pg_temp.ok('19.01 al operario que abre la Investigación con ese contrato le aparece la actividad (y no los avisos)',
+    pg_temp.err(r) = 'OK' and jsonb_array_length(r -> 'derivadas') = 1 and (r -> 'derivadas' -> 0 ->> 'id')::bigint = d_nueva, left(r::text, 300));
+  r := pg_temp.rpc(format('public.geoportal_campo_derivadas_abiertas(%L, %L, %L)', OP, '990001', 'tipo:suspension'));
+  perform pg_temp.ok('19.02 con otro formulario no aparece', pg_temp.err(r) = 'OK' and jsonb_array_length(r -> 'derivadas') = 0, r::text);
+  v_inv := pg_temp.inv(OP, '{"direccion_encontrada": "[PRUEBA ZTINV] CRA 9 # 12-30"}', '{}', '990001');
+  r := pg_temp.rpc(format('public.geoportal_campo_derivada_atender(%L, %s, ''campo'', %L::uuid)', OP, d_des, v_inv ->> 'id'));
+  perform pg_temp.ok('19.03 un aviso (sin destino) no se atiende con un registro', pg_temp.err(v_inv) = 'OK' and pg_temp.err(r) <> 'OK' and pg_temp.msg(r) = 'Ese formulario no atiende esa actividad derivada', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_derivada_atender(%L, %s, ''campo'', %L::uuid)', OP, d_nueva, v_inv ->> 'id'));
+  perform pg_temp.ok('19.04 la Investigación registrada atiende la actividad: queda «atendida» con su consecutivo', pg_temp.err(r) = 'OK' and r ->> 'estado' = 'atendida'
+    and r -> 'cierre' ->> 'consecutivo' = v_inv ->> 'consecutivo', left(r::text, 400));
+  v_inv := pg_temp.inv(OP, '{"direccion_encontrada": "[PRUEBA ZTINV] otra"}', '{}', '990002');
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_crear_actividad(%L, %s, %L)', SUP, (select id from campo.derivadas where contrato = '990002' and actividad = 'aviso_actualizacion_datos'), 'tipo:investigacion_ubicacion'));
+  jx := pg_temp.rpc(format('public.geoportal_campo_derivada_atender(%L, %s, ''campo'', %L::uuid)', OP, (r -> 'actividad' ->> 'id')::bigint, (pg_temp.inv(OP, '{"direccion_encontrada": "[PRUEBA ZTINV] tercera"}', '{}', '990001')) ->> 'id'));
+  perform pg_temp.ok('19.05 un registro de otro contrato no atiende la actividad', pg_temp.err(r) = 'OK' and pg_temp.err(jx) <> 'OK' and pg_temp.msg(jx) = 'El registro es de otro contrato', jx::text);
+
+  -- 20: cerrar avisos como hoy
+  r := pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%L, %s, ''atendida_fuera'', %L)', SUP, d_des, '[PRUEBA ZTINV] se confirmó por teléfono'));
+  perform pg_temp.ok('20.01 «Desocupado» se cierra como atendida fuera con motivo', pg_temp.err(r) = 'OK' and r ->> 'estado' = 'atendida_fuera', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%L, %s, ''anulada'', %L)', SUP, d_otra, '[PRUEBA ZTINV] marcada por error'));
+  perform pg_temp.ok('20.02 «Otra» se anula con motivo', pg_temp.err(r) = 'OK' and r ->> 'estado' = 'anulada', r::text);
+  r := pg_temp.obs(A, '990001', 'desocupado');
+  perform pg_temp.ok('20.03 con el aviso cerrado, «Desocupado» se puede volver a marcar (aviso nuevo)', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb and (r ->> 'derivada_id')::bigint <> d_des, r::text);
+
+  -- 21: las derivadas de las revisiones no cambian
+  begin
+    insert into campo.derivadas (origen_id, contrato, actividad) values ((v_inv ->> 'id')::uuid, '990002', 'otra') returning id into n1;
+  exception when others then
+    perform pg_temp.ok('21.00 se puede crear una derivada de prueba desde un registro', false, sqlerrm || ' · ' || coalesce(v_inv::text, ''));
+  end;
+  jx := campo.f_derivada_json(n1);
+  perform pg_temp.ok('21.01 una derivada de un registro conserva sus claves de siempre (más «clase»: registro)',
+    jx -> 'origen' ->> 'clase' = 'registro' and jx -> 'origen' ?& array['registro_id', 'tipo', 'tipo_nombre', 'consecutivo', 'fecha', 'operario'] and jx -> 'destinos' = '[]'::jsonb
+    and jx ?& array['id', 'actividad', 'actividad_nombre', 'contrato', 'estado', 'creada_en', 'destinos', 'destino_omision', 'origen', 'cierre'], jx::text);
+  perform pg_temp.ok('21.02 y aparece con el filtro Origen = Revisiones', pg_temp.fila(pg_temp.lista(SUP, '{"origen": "registro", "contrato": "990002"}'), n1) is not null);
+  r := pg_temp.rpc(format('public.geoportal_campo_derivada_atender(%L, %s, ''campo'', %L::uuid)', OP, n1, v_inv ->> 'id'));
+  perform pg_temp.ok('21.03 la regla de siempre: un registro no atiende sus propias derivadas', pg_temp.err(r) <> 'OK', r::text);
+  begin
+    insert into campo.derivadas (contrato, actividad) values ('990002', 'otra');
+    perform pg_temp.ok('21.04 una derivada sin origen ni observación se rechaza', false);
+  exception when check_violation then perform pg_temp.ok('21.04 una derivada sin origen ni observación se rechaza', true);
+  end;
+  begin
+    insert into campo.derivadas (origen_id, observacion_id, contrato, actividad) values ((v_inv ->> 'id')::uuid, (select observacion_id from campo.derivadas where id = d_des), '990002', 'aviso_otra');
+    perform pg_temp.ok('21.05 una derivada con origen Y observación se rechaza', false);
+  exception when check_violation then perform pg_temp.ok('21.05 una derivada con origen Y observación se rechaza', true);
+  end;
+  begin
+    insert into campo.derivadas (origen_id, contrato, actividad, destino) values ((v_inv ->> 'id')::uuid, '990002', 'accesorios', 'tipo:suspension');
+    perform pg_temp.ok('21.06 un destino propio en una derivada de revisión se rechaza', false);
+  exception when check_violation then perform pg_temp.ok('21.06 un destino propio en una derivada de revisión se rechaza', true);
+  end;
+  perform pg_temp.ok('21.07 los 5 códigos nuevos no se cuelan en «¿Da lugar a otras actividades?» de las revisiones',
+    not exists (select 1 from campo.tipo_campos c, jsonb_array_elements(coalesce(c.opciones, '[]')) o where o ->> 'codigo' in ('aviso_desocupado', 'aviso_direccion_errada', 'aviso_actualizacion_datos', 'aviso_otra', 'actividad_supervisor')));
+
+  -- 22: solo inserción y nada se borra
+  begin
+    update campo.analisis_observaciones set texto = 'x' where autor = A;
+    perform pg_temp.ok('22.01 las observaciones no se modifican', false);
+  exception when others then perform pg_temp.ok('22.01 las observaciones no se modifican', true);
+  end;
+  begin
+    delete from campo.analisis_observacion_datos where true;
+    perform pg_temp.ok('22.02 los datos de contacto no se borran', false);
+  exception when others then perform pg_temp.ok('22.02 los datos de contacto no se borran', true);
+  end;
+  perform pg_temp.ok('22.03 ninguna función nueva lleva DELETE ni UPDATE', (select bool_and(pg_get_functiondef(p.oid) !~* '\m(delete|update)\M\s') from pg_proc p
+     where p.oid in ('campo.f_contacto(jsonb)'::regprocedure, 'campo.f_texto_sin_datos(text,text,integer,integer)'::regprocedure,
+                     'public.geoportal_campo_analisis_observar(text,text,text,text,text,jsonb,text)'::regprocedure, 'public.geoportal_campo_aviso_crear_actividad(text,bigint,text,text)'::regprocedure,
+                     'public.geoportal_campo_aviso_datos(text,bigint,text)'::regprocedure, 'public.geoportal_campo_aviso_datos_anular(text,bigint,text,text)'::regprocedure)));
+  perform pg_temp.ok('22.04 solo aviso_datos devuelve los datos de contacto: ninguna otra función de campo, exportación o mapa lee esa tabla',
+    (select array_agg(p.proname::text order by p.proname) from pg_proc p where pg_get_functiondef(p.oid) ~ 'analisis_observacion_datos' and p.prokind = 'f')
+     = array['f_derivada_json', 'geoportal_campo_analisis_observar', 'geoportal_campo_aviso_datos', 'geoportal_campo_aviso_datos_anular']::text[]);
+  perform pg_temp.ok('22.05 ninguna función de campo con DELETE o UPDATE sin WHERE (con la parte 2)', {{SIN_WHERE_CAMPO}} = 0);
+end $p2$;
+
 do $fin$
 declare v_b integer; v_t integer; v_fallas text;
 begin

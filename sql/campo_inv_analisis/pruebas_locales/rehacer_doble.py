@@ -261,7 +261,9 @@ def main():
         sys.exit('El doble base no cargó limpio:\n' + '\n'.join(errores[:10]))
 
     # Roles que producción usa en los permisos y que el doble base no trae (los roles son del clúster 55442 del Code B)
-    psql(a.db, '-qc', "do $$ begin if not exists (select 1 from pg_roles where rolname = 'homelab_lectura') then create role homelab_lectura nologin; end if; end $$")
+    psql(a.db, '-qc', "do $$ begin if not exists (select 1 from pg_roles where rolname = 'homelab_lectura') then create role homelab_lectura nologin bypassrls; end if; end $$")
+    # En producción homelab_lectura lee las tablas de campo y acta (RLS sin políticas) porque tiene BYPASSRLS (David, 23-nov)
+    psql(a.db, '-qc', "alter role homelab_lectura bypassrls")
     ruta = os.path.abspath(a.csv)
     if "'" in ruta:
         sys.exit('La ruta del CSV no puede llevar comillas.')
