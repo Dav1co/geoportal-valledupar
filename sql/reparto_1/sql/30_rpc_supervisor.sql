@@ -12,7 +12,8 @@ language sql immutable set search_path = pg_catalog as $$
   -- validaciones EN LÍNEA (sin llamar a f_num ni f_contrato por fila: con 10.000 filas serían decenas de miles de llamadas)
   select y.fila,
          case when y.c ~ '^[0-9]{1,12}$' then y.c end,
-         case when y.ci ~ '^[0-9]{1,4}(\.0+)?$' then ((split_part(y.ci, '.', 1))::integer)::text end,
+         -- CICLO: 1 o 2 cifras, o el 9999 («sin ciclo», se carga como una ruta más; David, 24-nov)
+         case when y.ci ~ '^([0-9]{1,2}|9999)(\.0+)?$' then ((split_part(y.ci, '.', 1))::integer)::text end,
          case when y.r ~ '^[A-Za-z0-9 _.-]{1,20}$' then y.r end,
          case when y.cr ~ '^[0-9]{1,15}(\.0+)?$' then (split_part(y.cr, '.', 1))::numeric end,
          case when y.cp ~ '^[0-9]{1,15}(\.0+)?$' then (split_part(y.cp, '.', 1))::numeric end,
@@ -47,7 +48,7 @@ begin
   -- 1. la forma de cada fila y los contratos repetidos
   with f as materialized (select * from reparto.f_filas_lote(p_filas)),
        e as (select fila, 'Fila ' || fila || ': el contrato «' || left(coalesce(bruto_c, ''), 20) || '» no es válido (solo números, de 1 a 12)' as m from f where contrato is null
-             union all select fila, 'Fila ' || fila || ': el CICLO «' || left(coalesce(bruto_ci, ''), 12) || '» no es válido (número de hasta 4 cifras)' from f where ciclo is null
+             union all select fila, 'Fila ' || fila || ': el CICLO «' || left(coalesce(bruto_ci, ''), 12) || '» no es válido (1 o 2 cifras, o 9999)' from f where ciclo is null
              union all select fila, 'Fila ' || fila || ': la RUTA «' || left(coalesce(bruto_r, ''), 24) || '» no es válida (hasta 20 letras o números)' from f where ruta is null
              union all select fila, 'Fila ' || fila || ': el CONSECUTIVO_EN_LA_RUTA «' || left(coalesce(bruto_cr, ''), 20) || '» no es un número' from f where cr is null
              union all select fila, 'Fila ' || fila || ': el NÚMERO_CONSECUTIVO_DE_PREDIO «' || left(bruto_cp, 20) || '» no es un número' from f where bruto_cp is not null and cp is null)

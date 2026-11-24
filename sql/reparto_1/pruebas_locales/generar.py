@@ -9,7 +9,11 @@ if __name__ == "__main__":
         print(f"Opción desconocida: {a}\n{__doc__}", file=sys.stderr); sys.exit(2)
 AQUI = pathlib.Path(__file__).resolve().parent; PAQ = AQUI.parent; SQL = PAQ / "sql"; H = pathlib.Path.home()
 NOMBRE = "reparto_1"
-PLANTILLA = "reparto_plantilla_v2"   # v2 (23-nov): con el calendario del SCRR y homelab_lectura; la v1 la dejó una corrida anterior y no se borra
+PLANTILLA = "reparto_plantilla_v3"   # v3 (24-nov): producción DESPUÉS del paquete del Code B (Investigación y Análisis); la v2 queda y no se borra
+# Base de B en este clúster: el doble con el catálogo de PRODUCCIÓN (rehacer_doble.py del Code B, 163 de 163 filas iguales) ANTES de su migración.
+BASE_B = "emdupar_b_inv_para_reparto"
+MIGRACION_B = PAQ.parent / "campo_inv_analisis" / "migracion_campo_inv_analisis_editor.sql"
+HUELLA_CAMPO = "cce593806f59d3d27c34d7f2070cc5c1"   # campo en producción después del paquete del Code B (24-nov)
 DOBLE = H / "geoportal-consultas/campo/admin_perfiles_22nov/doble_admin_4a/doble_admin_permisos_4a_con_cargo_supervisor.sql"
 DOBLE_SCRR = H / "geoportal-emdupar/sql/scrr_corte2/pruebas_locales/doble_base_local.sql"
 PSQL = "/opt/homebrew/opt/postgresql@17/bin/psql"
@@ -72,9 +76,13 @@ def valor(base, q): return psql(base, q).stdout.strip()
 def plantilla():
     """La plantilla se arma UNA vez (si no existe) y no se borra: las bases de cada corrida son copias. Si existe pero no es la de este paquete, se niega."""
     if valor("postgres", f"select count(*) from pg_database where datname = '{PLANTILLA}'") == "0":
-        psql("postgres", f"create database {PLANTILLA}")
-        for f in (DOBLE, DOBLE_SCRR, AQUI / "doble_rutas_local.sql", AQUI / "doble_calendario_local.sql", AQUI / "volumen_local.sql"):
+        if valor("postgres", f"select count(*) from pg_database where datname = '{BASE_B}'") == "0":
+            raise SystemExit(f"Falta {BASE_B}: PGPORT_B=55432 python3 -I sql/campo_inv_analisis/pruebas_locales/rehacer_doble.py --csv ~/geoportal-consultas/campo/paquete_inv_analisis_1/produccion_doble.csv --db {BASE_B}")
+        psql("postgres", f"create database {PLANTILLA} template {BASE_B}")
+        psql(PLANTILLA, archivo=MIGRACION_B, at=False)                 # producción de hoy: el paquete de B ya publicado
+        for f in (DOBLE_SCRR, AQUI / "doble_rutas_local.sql", AQUI / "doble_calendario_local.sql", AQUI / "volumen_local.sql"):
             psql(PLANTILLA, archivo=f, at=False)
+        assert valor(PLANTILLA, CONJ_CAMPO) == HUELLA_CAMPO, ("la plantilla no tiene la huella de campo de producción", valor(PLANTILLA, CONJ_CAMPO))
     elif valor(PLANTILLA, "select (to_regclass('bi.v_rutas_geoportal') is not null and to_regclass('scrr.v_calendario_vigente') is not null and (select count(*) from hechos.rutas_consecutivos) > 600000)::text") != "true":
         raise SystemExit(f"La plantilla {PLANTILLA} no tiene los dobles de rutas o el volumen. Este guion no la borra: pida permiso y bórrela a mano.")
 
@@ -102,7 +110,7 @@ def main():
     try:
         loc = {f: valor(b, f"select {md5p(f)}") for f in CAMPO_LLAMADAS}
         assert loc == CAMPO_LLAMADAS, ("el doble de campo no es el de producción", loc)
-        assert valor(b, CONJ_CAMPO) == "261bed3c9242f6261f845ec4e1374b3a"
+        assert valor(b, CONJ_CAMPO) == HUELLA_CAMPO
         assert valor(b, "select string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod), ',' order by a.attnum) from pg_attribute a "
                         "where a.attrelid = 'bi.v_rutas_geoportal'::regclass and a.attnum > 0 and not a.attisdropped") == COLUMNAS_V_RUTAS
         assert valor(b, "select md5(pg_get_viewdef('bi.v_rutas_geoportal'::regclass, true))") == MD5_V_RUTAS
@@ -127,7 +135,7 @@ def main():
                   "RPC": valor(b, "select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\\_reparto\\_%'"),
                   "TABLAS": valor(b, "select count(*) from pg_class where relnamespace = 'reparto'::regnamespace and relkind = 'r'"),
                   "VISTAS": valor(b, "select count(*) from pg_class where relnamespace = 'reparto'::regnamespace and relkind = 'v'")}
-        assert valor(b, CONJ_CAMPO) == "261bed3c9242f6261f845ec4e1374b3a"
+        assert valor(b, CONJ_CAMPO) == HUELLA_CAMPO
     finally:
         borrar_mia(b)
     v = {**PROD, **nuevas}
@@ -138,7 +146,7 @@ select o, k, v, estado from (
   select 1 as o, '1 funciones de reparto y public.geoportal_reparto_* (conjunto)' as k, ({CONJ_REPARTO}) as v,
          case when to_regnamespace('reparto') is null then 'NO EXISTE (sin aplicar)' when ({CONJ_REPARTO}) = '{nuevas["HUELLA_REPARTO"]}' then 'CON ESTE CORTE' else 'OTRA: deténgase y avise' end as estado
   union all
-  select 2, '2 funciones de campo (conjunto)', ({CONJ_CAMPO}), 'anote: debe ser igual antes y después (hoy 261bed3c…; cambia con el paquete del Code B, que va antes)'
+  select 2, '2 funciones de campo (conjunto)', ({CONJ_CAMPO}), case ({CONJ_CAMPO}) when '{HUELLA_CAMPO}' then 'LA DE PRODUCCIÓN (después del paquete del Code B): igual antes y después' else 'OTRA: deténgase y avise' end
   union all
   select 3, '3 funciones de scrr (conjunto)', ({CONJ_SCRR}), 'anote: debe ser igual antes y después (722fc84b… el 23-nov)'
 """ + "".join(f"""  union all

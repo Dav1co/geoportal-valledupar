@@ -656,7 +656,8 @@ language sql immutable set search_path = pg_catalog as $$
   -- validaciones EN LÍNEA (sin llamar a f_num ni f_contrato por fila: con 10.000 filas serían decenas de miles de llamadas)
   select y.fila,
          case when y.c ~ '^[0-9]{1,12}$' then y.c end,
-         case when y.ci ~ '^[0-9]{1,4}(\.0+)?$' then ((split_part(y.ci, '.', 1))::integer)::text end,
+         -- CICLO: 1 o 2 cifras, o el 9999 («sin ciclo», se carga como una ruta más; David, 24-nov)
+         case when y.ci ~ '^([0-9]{1,2}|9999)(\.0+)?$' then ((split_part(y.ci, '.', 1))::integer)::text end,
          case when y.r ~ '^[A-Za-z0-9 _.-]{1,20}$' then y.r end,
          case when y.cr ~ '^[0-9]{1,15}(\.0+)?$' then (split_part(y.cr, '.', 1))::numeric end,
          case when y.cp ~ '^[0-9]{1,15}(\.0+)?$' then (split_part(y.cp, '.', 1))::numeric end,
@@ -691,7 +692,7 @@ begin
   -- 1. la forma de cada fila y los contratos repetidos
   with f as materialized (select * from reparto.f_filas_lote(p_filas)),
        e as (select fila, 'Fila ' || fila || ': el contrato «' || left(coalesce(bruto_c, ''), 20) || '» no es válido (solo números, de 1 a 12)' as m from f where contrato is null
-             union all select fila, 'Fila ' || fila || ': el CICLO «' || left(coalesce(bruto_ci, ''), 12) || '» no es válido (número de hasta 4 cifras)' from f where ciclo is null
+             union all select fila, 'Fila ' || fila || ': el CICLO «' || left(coalesce(bruto_ci, ''), 12) || '» no es válido (1 o 2 cifras, o 9999)' from f where ciclo is null
              union all select fila, 'Fila ' || fila || ': la RUTA «' || left(coalesce(bruto_r, ''), 24) || '» no es válida (hasta 20 letras o números)' from f where ruta is null
              union all select fila, 'Fila ' || fila || ': el CONSECUTIVO_EN_LA_RUTA «' || left(coalesce(bruto_cr, ''), 20) || '» no es un número' from f where cr is null
              union all select fila, 'Fila ' || fila || ': el NÚMERO_CONSECUTIVO_DE_PREDIO «' || left(bruto_cp, 20) || '» no es un número' from f where bruto_cp is not null and cp is null)
@@ -1150,7 +1151,7 @@ begin
   r := pg_temp.lote(S, 'ztrep_rutas.xlsx', v_sha, jsonb_build_array(
          pg_temp.fil('880000000203', '98', 'ZT-NUEVA', '30', '1'), pg_temp.fil('880000000201', '98', 'ZT-NUEVA', '10', '1'), pg_temp.fil('880000000202', '98', 'ZT-NUEVA', '20', '1'),
          pg_temp.fil('880000000401', '98', 'ZT-NUEVA', '40', '2'), pg_temp.fil('880000000402', '98', 'ZT-NUEVA', '40', '1'),
-         pg_temp.fil('880000000110', '097', 'ZT-OTRA', '1000000', null)));   -- el 110 es del ciclo 98 en las rutas: el archivo dice 97 (manda el archivo, con aviso)
+         pg_temp.fil('880000000110', '97', 'ZT-OTRA', '1000000', null)));   -- el 110 es del ciclo 98 en las rutas: el archivo dice 97 (manda el archivo, con aviso)
   v_lote := (r ->> 'lote_id')::uuid;
   perform pg_temp.ok('06.01 el supervisor carga un archivo de rutas: 6 filas, 2 rutas (98 ZT-NUEVA y 97 ZT-OTRA), 2 sin registro y 1 de otro ciclo (110: archivo 97, rutas 98)',
     (r ->> 'ok')::boolean and (r ->> 'filas')::int = 6 and not (r ->> 'repetido')::boolean
@@ -1171,7 +1172,7 @@ begin
          pg_temp.fil('880000000203', '98', 'R1', 'x', null), pg_temp.fil('880000000204', '98', 'R1', '5', 'y')));
   perform pg_temp.ok('06.04 un archivo con errores no escribe nada y dice cada error con su fila de Excel',
     not (r ->> 'ok')::boolean and (select count(*) from reparto.lotes) = v_n
-    and r -> 'errores' = '["Fila 2: el contrato «88A» no es válido (solo números, de 1 a 12)", "Fila 3: el CICLO «C1» no es válido (número de hasta 4 cifras)", "Fila 4: la RUTA «» no es válida (hasta 20 letras o números)", "Fila 5: el CONSECUTIVO_EN_LA_RUTA «x» no es un número", "Fila 6: el NÚMERO_CONSECUTIVO_DE_PREDIO «y» no es un número"]'::jsonb,
+    and r -> 'errores' = '["Fila 2: el contrato «88A» no es válido (solo números, de 1 a 12)", "Fila 3: el CICLO «C1» no es válido (1 o 2 cifras, o 9999)", "Fila 4: la RUTA «» no es válida (hasta 20 letras o números)", "Fila 5: el CONSECUTIVO_EN_LA_RUTA «x» no es un número", "Fila 6: el NÚMERO_CONSECUTIVO_DE_PREDIO «y» no es un número"]'::jsonb,
     (r -> 'errores')::text);
   r := pg_temp.lote(S, 'repetidos.xlsx', md5('r') || md5('s'), jsonb_build_array(
          pg_temp.fil('880000000201', '98', 'R1', '1', null), pg_temp.fil('880000000202', '98', 'R1', '2', null), pg_temp.fil('880000000201', '98', 'R2', '3', null)));
@@ -1408,8 +1409,13 @@ begin
   r := pg_temp.lote(S, 'previa.xlsx', md5('p1') || md5('p2'), jsonb_build_array(pg_temp.fil('880000000201', '98', '880101', '1', '1'), pg_temp.fil('880000000202', '98', '880102', '1', '1')), false);
   perform pg_temp.ok('14.01 vista previa (confirmar = false): devuelve las rutas y los avisos y NO escribe nada',
     (r ->> 'ok')::boolean and (r ->> 'previa')::boolean and jsonb_array_length(r -> 'rutas') = 2 and (select count(*) from reparto.lotes) = v_n, r::text);
-  r := pg_temp.lote(S, 'ceros.xlsx', md5('c1') || md5('c2'), jsonb_build_array(pg_temp.fil('880000000202', '098', 'ZT-CEROS', '1.0', null)));
-  perform pg_temp.ok('14.02 el CICLO se guarda como número («098» → 98, «1.0» → 1) y coincide con las rutas (sin aviso)',
+  r := pg_temp.lote(S, 'ceros.xlsx', md5('c1') || md5('c2'), jsonb_build_array(pg_temp.fil('880000000202', '098', 'ZT-CEROS', '1', null), pg_temp.fil('880000000203', '00098', 'ZT-CEROS', '2', null)));
+  perform pg_temp.ok('14.02a CICLO de más de 2 cifras (salvo el 9999) no es válido: «098» y «00098» (David, 24-nov)',
+    not (r ->> 'ok')::boolean and r -> 'errores' = '["Fila 2: el CICLO «098» no es válido (1 o 2 cifras, o 9999)", "Fila 3: el CICLO «00098» no es válido (1 o 2 cifras, o 9999)"]'::jsonb, r::text);
+  r := pg_temp.lote(S, 'nueves.xlsx', md5('n1') || md5('n2'), jsonb_build_array(pg_temp.fil('880000000977', '9999', 'ZT-9999', '1', null)));
+  perform pg_temp.ok('14.02b el 9999 se carga como una ruta más (manda el archivo)', (r ->> 'ok')::boolean and r -> 'rutas' = '[{"ruta": "ZT-9999", "ciclo": "9999", "filas": 1}]'::jsonb, r::text);
+  r := pg_temp.lote(S, 'ceros.xlsx', md5('c3') || md5('c4'), jsonb_build_array(pg_temp.fil('880000000202', '98.0', 'ZT-CEROS', '1.0', null)));
+  perform pg_temp.ok('14.02 el CICLO y el consecutivo se guardan como número («98.0» → 98, «1.0» → 1) y coinciden con las rutas (sin aviso)',
     (r ->> 'ok')::boolean and (r ->> 'otro_ciclo')::int = 0 and (select ciclo || '|' || consecutivo_ruta from reparto.lote_filas where lote_id = (r ->> 'lote_id')::uuid) = '98|1', r::text);
   t0 := clock_timestamp();
   r := pg_temp.lote(S, 'grande.xlsx', md5('g1') || md5('g2'),

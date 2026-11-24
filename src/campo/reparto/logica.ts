@@ -105,10 +105,11 @@ export function procesarArchivoRuta(filas: string[][], tope: number): { filas: F
     const f = filas[k];
     if (!f || f.every((c) => !String(c ?? "").trim())) continue;
     const fila = k + 1, crudo = String(f[ic] ?? "").trim(), c = contratoDeCelda(crudo);
-    const cicloTxt = enteroDeCelda(f[ici], 4), ciclo = cicloTxt === null ? null : String(Number(cicloTxt)), ruta = String(f[ir] ?? "").trim(), cr = enteroDeCelda(f[icr]), cpTxt = String(f[icp] ?? "").trim(), cp = cpTxt ? enteroDeCelda(cpTxt) : null;
+    // CICLO: 1 o 2 cifras, o el 9999 (David, 24-nov)
+    const cicloTxt = enteroDeCelda(f[ici], 4), ciclo = cicloTxt !== null && /^(\d{1,2}|9999)$/.test(cicloTxt) ? String(Number(cicloTxt)) : null, ruta = String(f[ir] ?? "").trim(), cr = enteroDeCelda(f[icr]), cpTxt = String(f[icp] ?? "").trim(), cp = cpTxt ? enteroDeCelda(cpTxt) : null;
     if (!c) errores.push(`Fila ${fila}: el contrato «${crudo.slice(0, 20)}» no es válido (solo números, de 1 a 12).`);
     else vistos.set(c, [...(vistos.get(c) ?? []), fila]);
-    if (!ciclo) errores.push(`Fila ${fila}: el CICLO «${String(f[ici] ?? "").slice(0, 12)}» no es válido (número de hasta 4 cifras).`);
+    if (!ciclo) errores.push(`Fila ${fila}: el CICLO «${String(f[ici] ?? "").slice(0, 12)}» no es válido (1 o 2 cifras, o 9999).`);
     if (!/^[A-Za-z0-9 _.-]{1,20}$/.test(ruta)) errores.push(`Fila ${fila}: la RUTA «${ruta.slice(0, 24)}» no es válida (hasta 20 letras o números).`);
     if (!cr) errores.push(`Fila ${fila}: el CONSECUTIVO_EN_LA_RUTA «${String(f[icr] ?? "").slice(0, 20)}» no es un número.`);
     if (cpTxt && !cp) errores.push(`Fila ${fila}: el NÚMERO_CONSECUTIVO_DE_PREDIO «${cpTxt.slice(0, 20)}» no es un número.`);

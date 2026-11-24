@@ -53,7 +53,7 @@ mem.set("reparto.lista", "{roto"); ok("4.3 una lista dañada no rompe la pantall
 
 // 5. Archivo de rutas: la estructura del archivo de facturación (encabezados exactos; la DIRECCIÓN se exige pero no viaja)
 const ENC = ["CÓDIGO_DEL_CONTRATO", "CICLO", "DIRECCIÓN", "RUTA", "CONSECUTIVO_EN_LA_RUTA", "NÚMERO_CONSECUTIVO_DE_PREDIO"];
-let r = L.procesarArchivoRuta([ENC, ["1001", "98", "CALLE 1", "131013", "2000000", "5"], ["1.002E+3", "098", "CALLE 2", "131013", "1000000.0", ""], ["", "", "", "", "", ""]], 10);
+let r = L.procesarArchivoRuta([ENC, ["1001", "98", "CALLE 1", "131013", "2000000", "5"], ["1.002E+3", "98", "CALLE 2", "131013", "1000000.0", ""], ["", "", "", "", "", ""]], 10);
 ok("5.1 la plantilla de facturación: cada fila con su ciclo y su ruta, consecutivos enteros, SIN la dirección", r.errores.length === 0
    && igual(r.filas, [{ contrato: "1001", ciclo: "98", ruta: "131013", consecutivo_ruta: "2000000", consecutivo_predio: "5" }, { contrato: "1002", ciclo: "98", ruta: "131013", consecutivo_ruta: "1000000" }])
    && !JSON.stringify(r.filas).includes("CALLE"), JSON.stringify(r));
@@ -68,6 +68,9 @@ ok("5.5 errores por fila: contrato, ciclo, ruta y consecutivos", r.errores.lengt
 ok("5.6 encabezados sin tildes, en otro orden y con filas antes del encabezado; más filas que el tope",
    L.procesarArchivoRuta([["Rutas de noviembre"], ["RUTA", "codigo_del_contrato", "ciclo", "direccion", "consecutivo en la ruta", "numero consecutivo de predio"], ["R1", "7", "5", "x", "9", ""]], 10).filas[0]?.contrato === "7"
    && L.procesarArchivoRuta([ENC, ["1", "1", "x", "R", "1", ""], ["2", "1", "x", "R", "2", ""], ["3", "1", "x", "R", "3", ""]], 2).errores.includes("El archivo trae 3 filas y el tope es 2."));
+
+r = L.procesarArchivoRuta([ENC, ["1", "098", "x", "R", "1", ""], ["2", "00098", "x", "R", "2", ""], ["3", "9999", "x", "R", "3", ""], ["4", "7", "x", "R", "4", ""]], 10);
+ok("5.7 CICLO de 1 o 2 cifras, o 9999 (David, 24-nov): «098» y «00098» no; 9999 y 7 sí", r.errores.length === 2 && r.errores.every((e) => /no es válido \(1 o 2 cifras, o 9999\)/.test(e)) && r.filas[2].ciclo === "9999" && r.filas[3].ciclo === "7", JSON.stringify(r.errores));
 
 // 6. Mapa en vivo
 const p = (id, an = false) => ({ id, anulada: an });

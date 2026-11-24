@@ -41,7 +41,11 @@ if (psqlIn(`select count(*) from pg_database where datname = '${DB}'`, "postgres
 if (psqlIn("select count(*) from pg_roles where rolname = 'scrr_refresco'", "postgres") !== "0") {
   console.error("El rol scrr_refresco ya existe en el clúster (lo usa otra base o quedó de otra corrida): esta prueba no lo toca. Pida permiso para quitarlo."); process.exit(2);
 }
-psqlIn(`create database ${DB}`, "postgres");
+// Producción de HOY (24-nov): el doble con el catálogo de producción del Code B (rehacer_doble.py, 163 de 163 iguales) + su migración publicada
+if (psqlIn("select count(*) from pg_database where datname = 'emdupar_b_inv_para_reparto'", "postgres") === "0") {
+  console.error("Falta la base emdupar_b_inv_para_reparto: PGPORT_B=55432 python3 -I sql/campo_inv_analisis/pruebas_locales/rehacer_doble.py --csv ~/geoportal-consultas/campo/paquete_inv_analisis_1/produccion_doble.csv --db emdupar_b_inv_para_reparto"); process.exit(2);
+}
+psqlIn(`create database ${DB} template emdupar_b_inv_para_reparto`, "postgres");
 let rolCreado = false, limpio = false;
 // SIEMPRE al salir (también si algo falla a mitad de camino): solo la base de ESTA corrida y el rol que ESTA corrida creó (antes no existía: se comprobó arriba)
 function limpiar() {
@@ -54,10 +58,10 @@ process.on("uncaughtException", (e) => { console.error("Error: " + String(e?.sta
 process.on("unhandledRejection", (e) => { console.error("Error: " + String(e?.stack ?? e).slice(0, 800)); process.exit(1); });
 const H = homedir();
 try {
-  archivoSql(join(H, "geoportal-consultas/campo/admin_perfiles_22nov/doble_admin_4a/doble_admin_permisos_4a_con_cargo_supervisor.sql"));
   archivoSql(join(H, "geoportal-emdupar/sql/scrr_corte2/pruebas_locales/doble_base_local.sql"));
   rolCreado = true;   // la migración del SCRR lo crea (si falla a mitad, la transacción no lo deja; «drop role if exists» no hace daño)
   archivoSql(join(H, "geoportal-emdupar/sql/scrr_corte2/migracion_scrr_corte2_editor.sql"));
+  archivoSql(join(raiz, "sql/campo_inv_analisis/migracion_campo_inv_analisis_editor.sql"));   // el paquete de B, publicado DESPUÉS del SCRR (como en producción)
   archivoSql(join(raiz, "sql/reparto_1/pruebas_locales/doble_rutas_local.sql"));
   psqlIn("do $$ begin if not exists (select 1 from pg_roles where rolname = 'homelab_lectura') then create role homelab_lectura nologin; end if; end $$;");
   archivoSql(join(raiz, "sql/reparto_1/migracion_reparto_1_editor.sql"));
@@ -80,7 +84,9 @@ sqlq(`insert into hechos.rutas_consecutivos (ciclo, consecutivo_ruta, ruta, cont
       insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, autor)
         select to_char(h, 'YYYYMM'), 98, h + 10, h + 15, jsonb_build_object('reparto', (h - 1)::text), 'prueba.admin@emdupar.gov.co' from (select (now() at time zone 'America/Bogota')::date as h) x;
       analyze hechos.rutas_consecutivos;`);
-prueba("0.01 base lista: reparto y scrr migrados, rutas de prueba, calendario del ciclo 98", sqlq("select (to_regnamespace('reparto') is not null and to_regnamespace('scrr') is not null)::text || '|' || (select count(*) from bi.v_rutas_geoportal)") === "true|28");
+prueba("0.01 base lista (producción de hoy: campo cce59380… con el paquete de B, scrr y reparto migrados), rutas de prueba, calendario del ciclo 98",
+  sqlq("select (to_regnamespace('reparto') is not null and to_regnamespace('scrr') is not null)::text || '|' || (select count(*) from bi.v_rutas_geoportal)") === "true|28"
+  && sqlq("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_campo\\_%')") === "cce593806f59d3d27c34d7f2070cc5c1");
 
 // ---------- 1. App, Auth y PostgREST simulados ----------
 const DIST = mkdtempSync(join(tmpdir(), "reparto_app_"));

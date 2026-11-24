@@ -59,7 +59,11 @@ for (const puerto of [P_WEB, P_BASE, P_EDGE]) {
 { const resto = psqlIn(`select count(*) from pg_database where datname = '${DB}'`, "postgres") !== "0";
   const rol = psqlIn("select count(*) from pg_roles where rolname = 'scrr_refresco'", "postgres") !== "0";
   if (resto || rol) { console.error(`Quedaron restos de otra corrida (base ${DB}: ${resto ? "sí" : "no"}; rol scrr_refresco: ${rol ? "sí" : "no"}). Este guion no los borra: pida permiso y bórrelos a mano.`); process.exit(2); } }
-psqlIn(`create database ${DB}`, "postgres");
+// Producción de HOY (24-nov): el doble con el catálogo de producción del Code B (rehacer_doble.py, 163 de 163 iguales) + su migración publicada
+if (psqlIn("select count(*) from pg_database where datname = 'emdupar_b_inv_para_reparto'", "postgres") === "0") {
+  console.error("Falta la base emdupar_b_inv_para_reparto: PGPORT_B=55432 python3 -I sql/campo_inv_analisis/pruebas_locales/rehacer_doble.py --csv ~/geoportal-consultas/campo/paquete_inv_analisis_1/produccion_doble.csv --db emdupar_b_inv_para_reparto"); process.exit(2);
+}
+psqlIn(`create database ${DB} template emdupar_b_inv_para_reparto`, "postgres");
 let rolCreado = false, limpio = false;
 const limpiarLoCreado = () => {
   if (limpio) return; limpio = true;
@@ -69,10 +73,10 @@ const limpiarLoCreado = () => {
 process.on("exit", limpiarLoCreado);
 process.on("uncaughtException", (e) => { console.error("Error: " + String(e?.stack ?? e).slice(0, 800)); process.exit(1); });
 process.on("unhandledRejection", (e) => { console.error("Error: " + String(e?.stack ?? e).slice(0, 800)); process.exit(1); });
-archivoSql(join(H, "geoportal-consultas/campo/admin_perfiles_22nov/doble_admin_4a/doble_admin_permisos_4a_con_cargo_supervisor.sql"));
 archivoSql(join(H, "geoportal-emdupar/sql/scrr_corte2/pruebas_locales/doble_base_local.sql"));
 rolCreado = true;
 archivoSql(join(H, "geoportal-emdupar/sql/scrr_corte2/migracion_scrr_corte2_editor.sql"));
+archivoSql(join(raiz, "sql/campo_inv_analisis/migracion_campo_inv_analisis_editor.sql"));   // el paquete de B, publicado DESPUÉS del SCRR (como en producción)
 archivoSql(join(raiz, "sql/reparto_1/pruebas_locales/doble_rutas_local.sql"));
 psqlIn("do $$ begin if not exists (select 1 from pg_roles where rolname = 'homelab_lectura') then create role homelab_lectura nologin; end if; end $$;");
 archivoSql(join(raiz, "sql/reparto_1/migracion_reparto_1_editor.sql"));
