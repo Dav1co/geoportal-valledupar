@@ -1,7 +1,7 @@
 // Entradas del área «Formatos de campo» (Torre A). Cada pantalla es UNA entrada de esta lista; agregar una nueva pantalla = agregar una entrada aquí y un caso en AreaCampo.
 // Lógica pura (sin React): se prueba sola en scripts/prueba_integracion.mjs.
 
-export type EntradaId = "reporte_general" | "formatos" | "acta" | "analisis_contrato" | "acta_supervision" | "revision" | "activo_campo";
+export type EntradaId = "reporte_general" | "formatos" | "acta" | "analisis_contrato" | "acta_supervision" | "revision" | "activo_campo" | "reparto" | "reparto_supervision";
 
 export type EntradaCampo = {
   id: EntradaId;
@@ -37,6 +37,10 @@ export type CondicionesEntradas = {
   puedeAnalisis?: boolean;
   /** Corte 14 de Técnica: muestra «Encontrar o reportar activo» (quien tiene Formularios de campo). Por omisión no (como antes). */
   puedeActivoCampo?: boolean;
+  /** Reparto de facturas (24-nov): actividad «Reparto» en Personal de Comercial (lo dice el servidor: geoportal-reparto, ruta perfil). Por omisión no. */
+  puedeRepartir?: boolean;
+  /** Reparto de facturas: actividad «Supervisión de reparto» (o administrador). Por omisión no. */
+  puedeSupervisarReparto?: boolean;
 };
 
 /** Entradas visibles, en orden (14/11/2026): «Reportar anomalía» · «Formatos de actividad» (solo si hay formatos activos) · «Reportar posible pérdida» (SOLO con el permiso de acta)
@@ -62,6 +66,11 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
     id: "activo_campo", titulo: "Encontrar o reportar activo", seccion: 2,
     descripcion: "Vea los activos de la red que tiene cerca o reporte uno que no está.", habilitada: true,
   });
+  // Reparto de facturas (24-nov): quien tiene la actividad «Reparto» en Personal de Comercial
+  if (campo && c.puedeRepartir === true) e.push({
+    id: "reparto", titulo: "Reparto de facturas", seccion: 2, habilitada: true,
+    descripcion: "Escoja su ruta y marque cada factura entregada, con su ubicación, en el orden en que reparte.",
+  });
   if (c.puedeActa) e.push({
     id: "acta", titulo: "Reportar posible pérdida", seccion: 3,
     descripcion: "Registro digital que acompaña al acta física firmada.", habilitada: true,
@@ -75,5 +84,7 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
   if (veActasRegistradas(c)) e.push({ id: "acta_supervision", titulo: "Actas registradas", seccion: 4, gestion: true, descripcion: "", habilitada: true });
   // Paso C: «Supervisión y dashboard» (antes «Revisión de reportes»: lista, mapa, indicadores; y catálogo y parámetros para el administrador) solo con el permiso de supervisión
   if (c.puedeSupervisar) e.push({ id: "revision", titulo: "Supervisión y dashboard", seccion: 4, gestion: true, descripcion: "", habilitada: true });
+  // Reparto de facturas: el supervisor de reparto (actividad «Supervisión de reparto»; dashboard_campo solo no basta)
+  if (campo && c.puedeSupervisarReparto === true) e.push({ id: "reparto_supervision", titulo: "Reparto de facturas · Supervisión", seccion: 4, gestion: true, descripcion: "", habilitada: true });
   return e;
 }

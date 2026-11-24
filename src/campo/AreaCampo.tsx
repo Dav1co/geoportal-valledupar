@@ -13,6 +13,7 @@ import { PantallaActa } from "./acta/PantallaActa";
 import { ActasRegistradas } from "./documentos/ActasRegistradas";
 import type { Destino } from "../components/ConfirmarCancelar";
 import { supabase } from "../lib/supabase";
+import { apiReparto, type Perfil } from "./reparto/apiReparto";
 
 // «Supervisión y dashboard» (antes «Revisión de reportes», Paso C): carga diferida. Quien no tiene el permiso de supervisión no descarga este código (ni MapLibre, que viene dentro del mapa).
 const Revision = lazyConRecarga(() => import("./dashboard/Revision"));
@@ -20,6 +21,9 @@ const Revision = lazyConRecarga(() => import("./dashboard/Revision"));
 const AnalisisContrato = lazyConRecarga(() => import("./analisis/AnalisisContrato"));
 // «Encontrar o reportar activo» (Corte 14 de Técnica): la misma pantalla de Técnica, también diferida (trae MapLibre).
 const EncontrarActivo = lazyConRecarga(() => import("../tecnica/EncontrarActivo").then((m) => ({ default: m.EncontrarActivo })));
+// «Reparto de facturas» (24-nov): diferidas; solo las descarga quien tiene la actividad (la supervisión trae MapLibre).
+const PantallaRepartidor = lazyConRecarga(() => import("./reparto/PantallaRepartidor").then((m) => ({ default: m.PantallaRepartidor })));
+const PantallaSupervisorReparto = lazyConRecarga(() => import("./reparto/PantallaSupervisor").then((m) => ({ default: m.PantallaSupervisor })));
 /** Formato al que lleva el atajo de posible submedición, y lo que llega marcado («Cambio de medidor»). */
 const FORMATO_CAMBIO = "instalacion_medidor";
 const VALORES_CAMBIO = { inst_modalidad: "cambio" };
@@ -50,8 +54,16 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
   const [formatoInicial, setFormatoInicial] = useState<string | undefined>(undefined);                    // atajo de submedición: formato que se abre de una vez…
   const [valoresIniciales, setValoresIniciales] = useState<Record<string, unknown> | undefined>(undefined); // …y lo que trae marcado («Cambio»)
   const [version, setVersion] = useState(0);        // sube con cada «Hacer otro reporte»: el formulario nace limpio y se vuelve a leer la definición
+  const [reparto, setReparto] = useState<Perfil>({ es_repartidor: false, es_supervisor: false });   // lo decide el servidor (perfil liviano de geoportal-reparto)
 
   useEffect(() => { fijarAreaCampo(null); }, []);      // Comercial: sin área (por si antes se abrió un reporte compartido desde Técnica)
+  // Reparto de facturas: ¿repartidor o supervisor de reparto? Una consulta liviana (no lee rutas). Si falla, simplemente no aparecen las entradas.
+  useEffect(() => {
+    if (!campo) return;
+    let vivo = true;
+    apiReparto.perfil().then((p) => { if (vivo) setReparto(p); }).catch(() => { /* sin la Edge o sin permiso: sin entradas de reparto */ });
+    return () => { vivo = false; };
+  }, [campo]);
   useEffect(() => {
     if (!campo) return;                  // solo acta: no hay formulario de campo que pedir
     let vivo = true;
@@ -122,6 +134,13 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
     );
   }
 
+  if (abierta === "reparto" && campo && reparto.es_repartidor) {
+    return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando Reparto de facturas…</p></section></div>}><PantallaRepartidor onVolver={() => setAbierta(null)} /></Suspense>;
+  }
+  if (abierta === "reparto_supervision" && campo && reparto.es_supervisor) {
+    return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando la supervisión del reparto…</p></section></div>}><PantallaSupervisorReparto onVolver={() => setAbierta(null)} /></Suspense>;
+  }
+
   if (abierta === "revision" && def?.puede.supervisar) {
     return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando Supervisión y dashboard…</p></section></div>}><Revision correo={correo} onVolver={() => setAbierta(null)} /></Suspense>;
   }
@@ -129,6 +148,7 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
   const entradas = entradasDeCampo({
     puedeReportar: def?.puede.reportar ?? false, hayFormatos: def ? formatosDisponibles(def.grupos).length > 0 : false,
     puedeActa: acta, puedeCampo: campo, puedeSupervisarActas: dashboardActa, puedeSupervisar: def?.puede.supervisar ?? false, puedeAnalisis: analisis, puedeActivoCampo: campo,
+    puedeRepartir: reparto.es_repartidor, puedeSupervisarReparto: reparto.es_supervisor,
   });
 
   return (

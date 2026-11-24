@@ -122,6 +122,13 @@ begin
   perform pg_temp.ok('00.13 el supervisor de reparto que también tiene dashboard_campo ve el enlace «Cambiar en Calendario» (puede_calendario); el administrador también',
     (r ->> 'es_supervisor')::boolean and (r ->> 'puede_calendario')::boolean
     and (pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', A)) ->> 'puede_calendario')::boolean, r::text);
+  perform pg_temp.ok('00.15 perfil liviano: repartidor, supervisor, administrador, campo sin actividades (falso y falso, sin error) y sin campo (42501)',
+    pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', R1)) = '{"es_repartidor": true, "es_supervisor": false}'::jsonb
+    and pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', S)) = '{"es_repartidor": false, "es_supervisor": true}'::jsonb
+    and pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', A)) = '{"es_repartidor": true, "es_supervisor": true}'::jsonb
+    and pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', 'ztrep.sinact@emdupar.gov.co')) = '{"es_repartidor": false, "es_supervisor": false}'::jsonb
+    and pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', 'ztrep.supcampo@emdupar.gov.co')) = '{"es_repartidor": false, "es_supervisor": false}'::jsonb
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', 'ztrep.tec@emdupar.gov.co'))) = '42501');
   perform pg_temp.ok('00.14 la actividad «Supervisión de reparto» está en el catálogo de Personal, activa, y el supervisor sale en f_quien_puede',
     exists (select 1 from campo.actividades where codigo = 'supervision_reparto' and activa and nombre = 'Supervisión de reparto')
     and exists (select 1 from campo.f_quien_puede('supervision_reparto') q where q.persona = S)
@@ -385,8 +392,8 @@ begin
   end;
 
   -- ===== 10. Seguridad y lo que no se toca =====
-  perform pg_temp.ok('10.01 service_role ejecuta las 12 RPC; anon y authenticated no',
-    (select count(*) = 12 and bool_and(has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute'))
+  perform pg_temp.ok('10.01 service_role ejecuta las 13 RPC; anon y authenticated no',
+    (select count(*) = 13 and bool_and(has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute'))
        from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%'));
   perform pg_temp.ok('10.02 nadie más que el dueño ejecuta funciones de reparto',
     not exists (select 1 from pg_proc p where p.pronamespace = 'reparto'::regnamespace

@@ -421,6 +421,17 @@ language sql stable security definer set search_path = reparto, public, pg_temp 
                          order by e.consecutivo desc limit 5) u))
 $$;
 
+-- Perfil LIVIANO (commit 3): ¿es repartidor y/o supervisor de reparto? No lee rutas. Lo pide Formatos de campo al abrirse, para mostrar o no las entradas
+-- «Reparto de facturas»: quien tiene el modo campo sin ninguna de las dos actividades recibe falso y falso (200); sin el modo campo, 42501.
+create function public.geoportal_reparto_perfil(p_solicitante text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, reparto as $$
+declare v_email text := campo.f_verificar(p_solicitante, 'campo'); v_rep boolean := false; v_sup boolean := false;
+begin
+  begin perform reparto.f_autorizar_repartidor(v_email); v_rep := true; exception when sqlstate '42501' then null; end;
+  begin perform reparto.f_autorizar_supervisor(v_email); v_sup := true; exception when sqlstate '42501' then null; end;
+  return jsonb_build_object('es_repartidor', v_rep, 'es_supervisor', v_sup);
+end $$;
+
 -- Contexto: quién es (repartidor, supervisor o ambos), las rutas del último período por ciclo, los archivos vigentes y sus jornadas de hoy
 create function public.geoportal_reparto_contexto(p_solicitante text, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public, reparto as $$
@@ -943,6 +954,13 @@ begin
   perform pg_temp.ok('00.13 el supervisor de reparto que también tiene dashboard_campo ve el enlace «Cambiar en Calendario» (puede_calendario); el administrador también',
     (r ->> 'es_supervisor')::boolean and (r ->> 'puede_calendario')::boolean
     and (pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', A)) ->> 'puede_calendario')::boolean, r::text);
+  perform pg_temp.ok('00.15 perfil liviano: repartidor, supervisor, administrador, campo sin actividades (falso y falso, sin error) y sin campo (42501)',
+    pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', R1)) = '{"es_repartidor": true, "es_supervisor": false}'::jsonb
+    and pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', S)) = '{"es_repartidor": false, "es_supervisor": true}'::jsonb
+    and pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', A)) = '{"es_repartidor": true, "es_supervisor": true}'::jsonb
+    and pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', 'ztrep.sinact@emdupar.gov.co')) = '{"es_repartidor": false, "es_supervisor": false}'::jsonb
+    and pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', 'ztrep.supcampo@emdupar.gov.co')) = '{"es_repartidor": false, "es_supervisor": false}'::jsonb
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_perfil(%L)', 'ztrep.tec@emdupar.gov.co'))) = '42501');
   perform pg_temp.ok('00.14 la actividad «Supervisión de reparto» está en el catálogo de Personal, activa, y el supervisor sale en f_quien_puede',
     exists (select 1 from campo.actividades where codigo = 'supervision_reparto' and activa and nombre = 'Supervisión de reparto')
     and exists (select 1 from campo.f_quien_puede('supervision_reparto') q where q.persona = S)
@@ -1206,8 +1224,8 @@ begin
   end;
 
   -- ===== 10. Seguridad y lo que no se toca =====
-  perform pg_temp.ok('10.01 service_role ejecuta las 12 RPC; anon y authenticated no',
-    (select count(*) = 12 and bool_and(has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute'))
+  perform pg_temp.ok('10.01 service_role ejecuta las 13 RPC; anon y authenticated no',
+    (select count(*) = 13 and bool_and(has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute'))
        from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%'));
   perform pg_temp.ok('10.02 nadie más que el dueño ejecuta funciones de reparto',
     not exists (select 1 from pg_proc p where p.pronamespace = 'reparto'::regnamespace

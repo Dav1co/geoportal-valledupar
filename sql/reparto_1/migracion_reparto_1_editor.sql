@@ -419,6 +419,17 @@ language sql stable security definer set search_path = reparto, public, pg_temp 
                          order by e.consecutivo desc limit 5) u))
 $$;
 
+-- Perfil LIVIANO (commit 3): ¿es repartidor y/o supervisor de reparto? No lee rutas. Lo pide Formatos de campo al abrirse, para mostrar o no las entradas
+-- «Reparto de facturas»: quien tiene el modo campo sin ninguna de las dos actividades recibe falso y falso (200); sin el modo campo, 42501.
+create function public.geoportal_reparto_perfil(p_solicitante text, p_ip text default null) returns jsonb
+language plpgsql security definer set search_path = pg_catalog, public, reparto as $$
+declare v_email text := campo.f_verificar(p_solicitante, 'campo'); v_rep boolean := false; v_sup boolean := false;
+begin
+  begin perform reparto.f_autorizar_repartidor(v_email); v_rep := true; exception when sqlstate '42501' then null; end;
+  begin perform reparto.f_autorizar_supervisor(v_email); v_sup := true; exception when sqlstate '42501' then null; end;
+  return jsonb_build_object('es_repartidor', v_rep, 'es_supervisor', v_sup);
+end $$;
+
 -- Contexto: quién es (repartidor, supervisor o ambos), las rutas del último período por ciclo, los archivos vigentes y sus jornadas de hoy
 create function public.geoportal_reparto_contexto(p_solicitante text, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public, reparto as $$

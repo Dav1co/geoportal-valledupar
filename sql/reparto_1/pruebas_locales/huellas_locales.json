@@ -13,8 +13,8 @@
   "public.geoportal_admin_permisos(text,text,boolean,boolean,boolean,boolean,text,text,boolean,boolean,boolean,text,boolean,boolean,boolean,boolean,boolean,boolean,boolean,boolean)": "e5a90103b4a83440fd826f03266b7245"
  },
  "nuevas": {
-  "HUELLA_REPARTO": "d8b679d2e07e1e9d79543153d5a0994e",
-  "RPC": "12",
+  "HUELLA_REPARTO": "bcbd3662c29149d7cde8952afb541b04",
+  "RPC": "13",
   "TABLAS": "8",
   "VISTAS": "3"
  }

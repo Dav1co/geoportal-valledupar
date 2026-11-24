@@ -1,0 +1,79 @@
+/* Reparto de facturas (repartidor a 390 px y supervisor en escritorio). Tokens del modelo visual de Comercial (tokens.css, clase «com-modulo»): color del
+   módulo #782a27 en var(--t-modo). Casillas grandes para el dedo (mínimo 64-76 px de alto). */
+.rep-pagina { display: flex; flex-direction: column; gap: var(--t-esp-3, 12px); padding-bottom: 32px; }
+/* la página de Técnica limita sus hijos a 520 px con márgenes automáticos; en columna flexible eso los encogería: aquí ocupan todo el ancho (menos 16 px a cada lado) */
+.rep-pagina > * { width: calc(100% - 32px); box-sizing: border-box; margin-left: auto !important; margin-right: auto !important; }
+.rep-pagina > .rep-cab { width: 100%; }
+.rep-sup > * { max-width: 1200px; }
+.rep-estado { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; background: #fff; border: 1px solid var(--t-borde, #d5dde6);
+  border-left: 4px solid var(--t-modo, #782a27); border-radius: 8px; padding: 8px 12px; font-size: 15px; }
+.rep-estado strong { font-size: 16px; color: var(--t-modo, #782a27); }
+.rep-cab { display: flex; align-items: center; gap: 12px; }
+.rep-cab > div { min-width: 0; flex: 1; }
+.rep-bloque { display: flex; flex-direction: column; gap: 10px; }
+.rep-bloque > h2, .rep-fila-tit h2 { margin: 0; font-size: 18px; color: var(--t-titulo, #0a2540); }
+.rep-fila-tit { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rep-suave { margin: 0; color: var(--t-texto-2, #52626f); font-size: 14px; line-height: 1.45; }
+.rep-rotulo { margin: 6px 0 0; font-size: 14px; color: var(--t-texto-2, #52626f); }
+.rep-aviso { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff4e5; border: 1px solid #f0c48a; color: #5a3200; font-size: 14px; line-height: 1.45; }
+.rep-aviso-error { background: #fdf0ee; border-color: #e4b1aa; color: #7d2118; }
+.rep-aviso-ok { background: #e7f4ec; border-color: #b8dfc7; color: #1b5e34; }
+.rep-aviso ul { margin: 6px 0 0; padding-left: 18px; }
+.rep-link { background: none; border: 0; color: var(--t-modo, #782a27); text-decoration: underline; cursor: pointer; font: inherit; padding: 6px 4px; min-height: 36px; }
+.rep-link:disabled { color: #9aa5b1; cursor: default; }
+.rep-campo { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--t-texto-2, #52626f); }
+.rep-campo input, .rep-campo select, .rep-campo textarea { min-height: 48px; font-size: 17px; border: 1px solid var(--t-borde-campo, #7b8b99); border-radius: 8px; padding: 0 12px; background: #fff; color: var(--t-texto, #22313f); box-sizing: border-box; width: 100%; }
+.rep-campo textarea { padding: 10px 12px; min-height: 80px; }
+.rep-campo input[type="file"] { padding: 10px; font-size: 14px; }
+.rep-campo-linea { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.rep-campo-linea select { min-height: 40px; }
+.rep-campos { display: flex; gap: 10px; flex-wrap: wrap; } .rep-campos .rep-campo { flex: 1 1 140px; }
+.rep-grande { min-height: 56px !important; font-size: 17px; font-weight: 700; width: 100%; }
+.rep-medio { min-height: 48px !important; width: 100%; }
+.rep-opciones { display: flex; flex-direction: column; gap: 8px; } .rep-opciones.rep-horizontal { flex-direction: row; } .rep-horizontal .rep-opcion { flex: 1; min-height: 52px; }
+.rep-opcion { text-align: left; min-height: 64px; border: 1px solid var(--t-borde, #d5dde6); border-radius: 12px; background: #fff; color: var(--t-texto, #22313f); padding: 10px 14px;
+  display: flex; flex-direction: column; gap: 3px; cursor: pointer; font: inherit; }
+.rep-opcion strong { font-size: 16px; } .rep-opcion span { font-size: 13px; color: var(--t-texto-2, #52626f); }
+.rep-opcion[aria-checked="true"], .rep-opcion[aria-pressed="true"] { border: 2px solid var(--t-modo, #782a27); background: #f6e8e7; }
+.rep-gps { margin: 0; font-size: 13px; color: #1b5e34; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rep-gps-mal { color: #8a4300; }
+.rep-rejilla { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.rep-casilla { min-height: 64px; border: 1px solid var(--t-borde, #d5dde6); border-radius: 12px; background: #fff; color: #0a2540; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px; padding: 8px; box-shadow: 0 1px 2px rgba(0, 0, 0, .06); cursor: pointer; font: inherit; }
+.rep-casilla-grande { min-height: 76px; }
+.rep-casilla:disabled { opacity: .55; cursor: default; }
+.rep-casilla.rep-saltado { border: 2px solid #c25e00; }
+.rep-codigo { font-size: 22px; font-weight: 700; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.rep-insignia { font-size: 12px; font-weight: 700; color: #8a4300; background: #fff4e5; border-radius: 999px; padding: 2px 8px; }
+.rep-separa { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; color: var(--t-texto-2, #52626f); font-size: 13px; }
+.rep-separa::before, .rep-separa::after { content: ""; flex: 1; height: 1px; background: var(--t-borde, #d5dde6); }
+.rep-ultimas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rep-ultimas li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; background: #f7f9fb; font-size: 14px; }
+.rep-pie { display: flex; gap: 8px; flex-wrap: wrap; } .rep-pie > * { flex: 1; }
+.rep-velo { position: fixed; inset: 0; background: rgba(10, 37, 64, .55); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+.rep-hoja { background: #fff; width: 100%; max-width: 520px; border-radius: 16px 16px 0 0; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+.rep-codigo-gigante { font-size: 34px; font-weight: 800; color: #0a2540; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+/* supervisor */
+.rep-tabs { display: flex; gap: 4px; align-items: center; border-bottom: 1px solid var(--t-borde, #d5dde6); flex-wrap: wrap; }
+.rep-tabs > button { background: none; border: 0; padding: 10px 14px; min-height: 44px; cursor: pointer; font: inherit; border-bottom: 3px solid transparent; color: var(--t-texto-2, #44505c); }
+.rep-tabs > button.activa { border-bottom-color: var(--t-modo, #782a27); color: var(--t-modo, #782a27); font-weight: 700; }
+.rep-fecha { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; } .rep-fecha input { min-height: 40px; font: inherit; }
+.rep-tabla-caja { overflow-x: auto; border: 1px solid var(--t-borde, #d5dde6); border-radius: 8px; background: #fff; }
+.rep-tabla { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rep-tabla th { background: #eef2f5; text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--t-borde, #d5dde6); white-space: nowrap; }
+.rep-tabla td { padding: 8px 10px; border-bottom: 1px solid #eef2f5; vertical-align: top; }
+.rep-tabla .n { text-align: right; font-variant-numeric: tabular-nums; }
+.rep-tabla tr.rep-sel td { background: #f6e8e7; } .rep-tabla tr.rep-anulada td { color: #7b8b99; text-decoration: line-through; } .rep-tabla tr.rep-anulada td:nth-last-child(2) { text-decoration: none; }
+.rep-tabla tr.rep-desorden td:first-child { font-weight: 700; color: #8a4300; }
+.rep-saltadas { color: #8a4300; }
+.rep-chip-aviso { display: inline-block; font-size: 12px; font-weight: 700; color: #8a4300; background: #fff4e5; border-radius: 999px; padding: 2px 8px; }
+.rep-detalle { border-top: 3px solid var(--t-modo, #782a27); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.rep-detalle h3 { margin: 0; font-size: 16px; }
+.rep-anular { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; } .rep-anular .rep-campo { flex: 1 1 280px; }
+.rep-dos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 1000px) { .rep-dos { grid-template-columns: 420px minmax(0, 1fr); } }
+.rep-tarjeta { background: #fff; border: 1px solid var(--t-borde, #d5dde6); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.rep-tarjeta h2 { margin: 0; font-size: 17px; }
+.rep-mapa-ctl { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.rep-mapa { width: 100%; height: min(70vh, 620px); border-radius: 12px; border: 1px solid var(--t-borde, #d5dde6); }
+.rep-calendario-cartera { border: 1px solid var(--t-borde, #d5dde6); border-radius: 12px; padding: 12px; background: #fafbfc; }

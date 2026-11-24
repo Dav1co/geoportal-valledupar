@@ -131,6 +131,11 @@ try {
      (await E("rep1", "avance")).s === 403 && (await E("rep1", "mapa")).s === 403 && (await E("rep1", "lotes")).s === 403 && (await E("rep1", "calendario")).s === 403
      && (await E("sup", "empezar", { cuerpo: { origen: "inventada" } })).s === 403);
 
+  const pf = await Promise.all(["rep1", "sup", "adm", "campo", "scrr", "nada"].map((x) => E(x, "perfil")));
+  ok("A8 perfil liviano: repartidor, supervisor, administrador; campo sin actividad y el del SCRR con falso y falso (200); sin campo, 403",
+     pf[0].s === 200 && pf[0].c.es_repartidor && !pf[0].c.es_supervisor && pf[1].c.es_supervisor && !pf[1].c.es_repartidor && pf[2].c.es_repartidor && pf[2].c.es_supervisor
+     && pf[3].s === 200 && !pf[3].c.es_repartidor && !pf[3].c.es_supervisor && pf[4].s === 200 && !pf[4].c.es_supervisor && pf[5].s === 403, pf.map((x) => x.s + " " + x.txt).join(" | "));
+
   // ===== B. Forma de las peticiones =====
   r = await E("rep1", "lista", { qs: { jornada_id: "1", otra: "x" } });
   ok("B1 un parámetro que no conoce: 400 y dice cuál", r.s === 400 && /«otra»/.test(r.c?.error ?? ""), r.txt);
