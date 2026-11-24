@@ -11,6 +11,8 @@ const CENTRO = CENTRO_VALLEDUPAR;
 // que viajan en las teselas: genera URLs nuevas y evita que la cache
 // (1 h + stale 24 h) siga sirviendo la version anterior.
 const TESELA_V = 7;
+// «Compartir vista»: la marca del punto del enlace dura 15 s (David, 24-nov)
+const MARCA_ENLACE_MS = 15000;
 
 export type PredioApilado = {
   id: number;
@@ -61,6 +63,9 @@ export type HeatMetrica =
 type Props = {
   accessToken: string;
   inicial?: { lng: number; lat: number; zoom: number } | null;
+  /** «Compartir vista» (24-nov): el mapa abre desde un enlace → marca temporal en el centro de la vista. Se lee solo al crear el mapa. */
+  marcarInicial?: boolean;
+  onMarcaInicial?: () => void;
   filtro: FiltroContrato;
   estado: FiltroEstado;
   mostrarTerrenos: boolean;
@@ -136,9 +141,27 @@ export function MapView({
   onTrazoVertice,
   onTrazoCerrar,
   getVisiblesRef,
+  marcarInicial = false,
+  onMarcaInicial,
 }: Props) {
   const contenedor = useRef<HTMLDivElement>(null);
   const mapa = useRef<maplibregl.Map | null>(null);
+  // «Compartir vista» (24-nov): marca temporal del punto de un enlace. Solo en pantalla (no se guarda ni va al enlace); se quita sola a los 15 s,
+  // al tocarla o cuando llega otro enlace (se reemplaza).
+  const marca = useRef<{ m: maplibregl.Marker; t: number } | null>(null);
+  const quitarMarca = () => { if (marca.current) { window.clearTimeout(marca.current.t); marca.current.m.remove(); marca.current = null; } };
+  const ponerMarca = (map: maplibregl.Map, lng: number, lat: number) => {
+    quitarMarca();
+    const el = document.createElement("div");
+    el.className = "marca-enlace";
+    el.setAttribute("data-marca-enlace", "");
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", "Punto del enlace compartido. Toque para quitar la marca");
+    el.title = "Punto del enlace compartido (toque para quitarla)";
+    for (const ev of ["mousedown", "touchstart", "click"] as const) el.addEventListener(ev, (e) => { e.stopPropagation(); if (ev === "click") quitarMarca(); });
+    const m = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+    marca.current = { m, t: window.setTimeout(quitarMarca, MARCA_ENLACE_MS) };
+  };
   const listo = useRef(false);
   const heatRef = useRef<string | null>(heatMetrica);
   const colorSemRef = useRef(colorSemaforo);
@@ -781,7 +804,8 @@ export function MapView({
     }
 
     mapa.current = map;
-    return () => { map.remove(); mapa.current = null; listo.current = false; };
+    if (marcarInicial && inicial) { ponerMarca(map, inicial.lng, inicial.lat); onMarcaInicial?.(); }
+    return () => { quitarMarca(); map.remove(); mapa.current = null; listo.current = false; };
   }, []);
 
   useEffect(() => {
@@ -871,6 +895,14 @@ export function MapView({
     w.__geoZoomMin = (z) => {
       const m = mapa.current;
       if (m && m.getZoom() < z) m.easeTo({ zoom: z, duration: 600 });
+    };
+    // «Compartir vista»: un enlace que llega con la página abierta. Devuelve false si el mapa no está montado (App lo monta de nuevo en el punto).
+    (w as unknown as { __geoIrVista?: (v: { lng: number; lat: number; zoom: number }, marcar: boolean) => boolean }).__geoIrVista = (v, marcar) => {
+      const m = mapa.current;
+      if (!m) return false;
+      m.flyTo({ center: [v.lng, v.lat], zoom: v.zoom });
+      if (marcar) ponerMarca(m, v.lng, v.lat);
+      return true;
     };
     w.__geoVista = () => {
       const m = mapa.current;

@@ -40,3 +40,10 @@ header.barra.barra-areas .barra-usuario { margin-left: auto; min-width: 0; }
 /* Formatos de campo en la ventana de entrada (Paso B4). */
 .area-tarjeta-campo:hover, .area-tarjeta-campo:focus-visible { border-color: #c77700; box-shadow: 0 8px 24px rgba(199, 119, 0, 0.2); }
 .area-tarjeta-campo .area-titulo { color: #8a4b00; }
+
+/* «Compartir vista» (24-nov): aviso cerrable cuando el enlace es del mapa Comercial y el usuario no tiene ese acceso */
+.aviso-enlace { display: flex; align-items: flex-start; gap: 10px; margin: 10px 16px 0; padding: 10px 12px; border: 1px solid #d9a441; border-radius: 10px;
+  background: #fff6e0; color: #5c3d00; font-size: 15px; line-height: 1.35; }
+.aviso-enlace span { flex: 1; min-width: 0; }
+.aviso-enlace-cerrar { flex: none; min-width: 36px; min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: inherit; font-size: 22px; line-height: 1; cursor: pointer; }
+.aviso-enlace-cerrar:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }

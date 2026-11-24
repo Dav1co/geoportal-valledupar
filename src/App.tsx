@@ -21,7 +21,8 @@ import { Buscador } from "./components/Buscador";
 import { PredioPanel } from "./components/PredioPanel";
 import { Watermark } from "./components/Watermark";
 import { Admin } from "./components/Admin";
-import { areasDisponibles, esDual as esDualAreas, pantallaInicial, pantallaValida, type Area, type Pantalla } from "./areas/areas";
+import { areasDisponibles, esDual as esDualAreas, pantallaValida, type Area, type Pantalla } from "./areas/areas";
+import { leerHash, pantallaConEnlace, type VistaMapa } from "./areas/enlaceVista";
 import { CabeceraApp } from "./areas/CabeceraApp";
 import { VentanaEntrada } from "./areas/VentanaEntrada";
 import { AreaTecnica } from "./tecnica/AreaTecnica";
@@ -107,30 +108,9 @@ const DESC_MODO: Record<Modo, string> = {
   dashboard: "Tablero Comercial: indicadores de facturación, recaudo y cartera.",
 };
 
-// Lee el estado de la vista desde el hash de la URL
+// Lee el estado de la vista desde el hash de la URL («Compartir vista»; lógica pura en areas/enlaceVista.ts)
 function leerURL() {
-  const h = window.location.hash.replace(/^#/, "");
-  if (!h) return null;
-  const p = new URLSearchParams(h);
-  const v = p.get("v");
-  let inicial: { lng: number; lat: number; zoom: number } | null = null;
-  if (v) {
-    const [lng, lat, zoom] = v.split(",").map(Number);
-    if ([lng, lat, zoom].every(Number.isFinite)) inicial = { lng, lat, zoom };
-  }
-  const c = p.get("c");
-  const e = p.get("e");
-  const b = p.get("b");
-  const t = p.get("t");
-  return {
-    inicial,
-    filtro: (c === "con" || c === "sin" ? c : "todos") as FiltroContrato,
-    estado: (["DEMOLIDO", "EN CONSTRUCCION", "DESOCUPADO"].includes(e ?? "")
-      ? e
-      : "") as FiltroEstado,
-    base: (b === "satelital" ? "satelital" : "calles") as BaseMapa,
-    terrenos: t !== "0",
-  };
+  return leerHash(window.location.hash);
 }
 
 const URL0 = leerURL();
@@ -222,13 +202,43 @@ export default function App() {
   const esDual = esDualAreas(areas);
   const [pantalla, setPantalla] = useState<Pantalla | null>(null);
   const perfilListo = perfil !== null;
+  // «Compartir vista» (24-nov): un enlace con vista (#v=…) abre el mapa comercial directo, como ENLACE_GEOVISOR abre Técnica; sin Comercial, la pantalla de siempre con un aviso.
+  const [avisoEnlace, setAvisoEnlace] = useState<string | null>(null);
+  const [inicialMapa, setInicialMapa] = useState<VistaMapa | null>(URL0?.inicial ?? null);   // dónde arranca el mapa la próxima vez que se monte
+  const [marcaInicial, setMarcaInicial] = useState<boolean>(URL0?.inicial != null);          // el mapa que se monte desde un enlace pone la marca temporal del punto
+  const ignorarHash = useRef(false);                                                           // el hash que escribe la propia app (compartirVista sin portapapeles)
   useEffect(() => {
     setPantalla((actual) => {
       if (!perfilListo) return null;
       if (actual && pantallaValida(actual, areas)) return actual;
-      return ENLACE_GEOVISOR && pantallaValida("tecnica", areas) ? "tecnica" : pantallaInicial(areas);
+      return pantallaConEnlace(areas, { vista: URL0?.inicial != null, geovisor: ENLACE_GEOVISOR }).pantalla;
     });
   }, [perfilListo, areas]);
+  // El aviso del enlace se decide UNA vez, al llegar el perfil (como la pantalla inicial)
+  const avisoDecidido = useRef(false);
+  useEffect(() => {
+    if (!perfilListo || avisoDecidido.current) return;
+    avisoDecidido.current = true;
+    setAvisoEnlace(pantallaConEnlace(areas, { vista: URL0?.inicial != null, geovisor: ENLACE_GEOVISOR }).aviso);
+  }, [perfilListo, areas]);
+  // Un enlace pegado con la página ya abierta: el mapa vuela al punto y aplica base, filtro, estado y terrenos; desde otra pantalla, lleva al mapa comercial (o avisa).
+  useEffect(() => {
+    if (!perfilListo) return;
+    const alCambiar = () => {
+      if (ignorarHash.current) { ignorarHash.current = false; return; }
+      const h = leerHash(window.location.hash);
+      if (!h?.inicial) return;                                  // otros hash (p. ej. el del geovisor técnico) siguen su camino
+      if (!pantallaValida("comercial", areas)) { setAvisoEnlace(pantallaConEnlace(areas, { vista: true, geovisor: false }).aviso); return; }
+      setAvisoEnlace(null);
+      setFiltro(h.filtro); setEstado(h.estado); setBase(h.base); setMostrarTerrenos(h.terrenos);
+      const w = window as unknown as { __geoIrVista?: (v: VistaMapa, marcar: boolean) => boolean };
+      if (pantalla === "comercial" && vista === "mapa" && w.__geoIrVista?.(h.inicial, true)) return;   // el mapa está montado: vuela y marca
+      setInicialMapa(h.inicial); setMarcaInicial(true);         // el mapa se monta de nuevo en el punto, con la marca
+      setVista("mapa"); setModo("explorar"); setPantalla("comercial");
+    };
+    window.addEventListener("hashchange", alCambiar);
+    return () => window.removeEventListener("hashchange", alCambiar);
+  }, [perfilListo, areas, pantalla, vista]);
   function irA(a: Area | "entrada") {
     setVista("mapa");
     setPantalla(a);
@@ -331,6 +341,12 @@ export default function App() {
           onAdmin={() => setVista(vista === "admin" ? "mapa" : "admin")}
           onSalir={() => supabase.auth.signOut()}
         />
+        {avisoEnlace && (
+          <div className="aviso-enlace" role="alert" data-aviso="enlace">
+            <span>{avisoEnlace}</span>
+            <button type="button" className="aviso-enlace-cerrar" aria-label="Cerrar el aviso" onClick={() => setAvisoEnlace(null)}>×</button>
+          </div>
+        )}
         {vista === "admin" ? (
           <div className="cuerpo" style={{ overflow: "auto", padding: 16 }}>
             <Admin onVolver={() => setVista("mapa")} />
@@ -411,6 +427,7 @@ export default function App() {
         window.setTimeout(() => setCopiado(false), 2000);
       },
       () => {
+        ignorarHash.current = true;                             // no es un enlace que llega: no se vuela ni se marca
         window.location.hash = p.toString();
       },
     );
@@ -1448,7 +1465,9 @@ export default function App() {
             <Suspense fallback={<div className="pantalla-carga">Cargando mapa…</div>}>
             <MapView
               accessToken={session.access_token}
-              inicial={URL0?.inicial ?? null}
+              inicial={inicialMapa}
+              marcarInicial={marcaInicial}
+              onMarcaInicial={() => setMarcaInicial(false)}
               filtro={filtro}
               estado={estado}
               mostrarTerrenos={mostrarTerrenos}

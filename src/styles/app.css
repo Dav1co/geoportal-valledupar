@@ -998,3 +998,9 @@ body {
 .com-modulo .modo-sel { color: var(--t-texto, #22313f); background-color: var(--t-tarjeta, #fff); border-color: var(--t-borde-campo, #7b8b99); min-height: var(--t-toque, 44px);
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%23782a27' stroke-width='1.5' fill='none'/></svg>"); }
 .com-modulo .modo-sel:focus-visible { outline: 3px solid var(--t-foco, #4a90d9); outline-offset: 2px; }
+
+/* «Compartir vista» (24-nov): marca temporal del punto de un enlace. Mediana, con borde blanco y un pulso suave; no tapa los predios (es un punto, no un globo). */
+.marca-enlace { width: 22px; height: 22px; border-radius: 50%; background: #c2410c; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); cursor: pointer; position: relative; box-sizing: border-box; }
+.marca-enlace::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; border: 3px solid rgba(194, 65, 12, .55); animation: marca-enlace-pulso 1.6s ease-out infinite; pointer-events: none; }
+@keyframes marca-enlace-pulso { 0% { transform: scale(.6); opacity: .9; } 100% { transform: scale(1.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .marca-enlace::after { animation: none; opacity: .6; } }
