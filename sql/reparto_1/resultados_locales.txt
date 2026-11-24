@@ -1,9 +1,9 @@
-ensayo: RESULTADO: 119 de 119 pruebas correctas — SIN FALLAS (este ERROR es el esperado: deshace todo)
+ensayo: RESULTADO: 123 de 123 pruebas correctas — SIN FALLAS (este ERROR es el esperado: deshace todo)
 Tiempos:
-11.01 contexto (rutas del período agrupadas) en menos de 5 s: 255 ms
+11.01 contexto (rutas del período agrupadas) en menos de 5 s: 253 ms
 11.02 empezar una ruta del período en menos de 5 s: 32 ms
 11.03 una entrega en menos de 1 s: 1 ms
-11.04 sin ruta, un código que no está en cartera (recorre el período) en menos de 3 s: 15 ms
+11.04 sin ruta, un código que no está en cartera (recorre el período) en menos de 3 s: 16 ms
 11.05 avance del día en menos de 3 s: 2 ms
 huellas ANTES:
 1|1 funciones de reparto y public.geoportal_reparto_* (conjunto)||NO EXISTE (sin aplicar)
@@ -28,7 +28,7 @@ verificación:
 8|8 el Dell (homelab_lectura): USAGE sobre reparto y SELECT sobre las 8 tablas, nada más (ni vistas, ni escritura, ni funciones)|OK
 9|9 la actividad «Supervisión de reparto» (supervision_reparto) está activa en campo.actividades|OK
 huellas DESPUÉS:
-1|1 funciones de reparto y public.geoportal_reparto_* (conjunto)|bcbd3662c29149d7cde8952afb541b04|CON ESTE CORTE
+1|1 funciones de reparto y public.geoportal_reparto_* (conjunto)|31ac6f38c2dc180ecc8245f3bde89911|CON ESTE CORTE
 2|2 funciones de campo (conjunto)|261bed3c9242f6261f845ec4e1374b3a|anote: debe ser igual antes y después (hoy 261bed3c…; cambia con el paquete del Code B, que va antes)
 3|3 funciones de scrr (conjunto)|51b60f7d761d682bb3821fe92d9fac16|anote: debe ser igual antes y después (722fc84b… el 23-nov)
 4|4 public.geoportal_puede (no se toca)|32f174a55b95788d3f8187b507303c2f|anote: debe ser igual antes y después
@@ -37,10 +37,10 @@ huellas DESPUÉS:
 7|7 public.geoportal_admin_permisos (no se toca)|e5a90103b4a83440fd826f03266b7245|anote: debe ser igual antes y después
 8|8 las 5 funciones de campo que llama el reparto|69bc9bd73d5797b826b3e504c1d92070 5ac3368fa5f3a6347328285501894aec 99af03344249f7260357528096e92829 5a381a87f432b8d2a6c88ad98a13fe3c 6133b5c36189e31743270064c8398b8a|LAS DE PRODUCCIÓN (23-nov)
 9|9 definición de bi.v_rutas_geoportal (md5; no se toca)|51da701454deeee5accfd2163a9c8e31|LA DE PRODUCCIÓN (23-nov)
-concurrencia 1 (el mismo toque dos veces A LA VEZ): OK · filas 1 · 1.ª: {"aviso": "Al ciclo 8801 le falta la fecha de reparto en el calendario: se revisó contra las entregas de los últimos 15  · 2.ª: {"contrato": "880000000101", "repetida": true, "entrega_id": 1, "consecutivo": 1, "registrado_en": "2026-11-24T07:31:43.
-concurrencia 2 (la misma factura, dos toques distintos A LA VEZ): OK · filas 1 · 1.ª: {"aviso": "Al ciclo 8801 le falta la fecha de reparto en el calendario: se revisó contra las entregas de los últimos 15  · 2.ª: ERROR:  La factura del contrato 880000000102 ya se registró el 24/11 a las 07:31 (entrega 2) SQL statement "SELECT reparto.f_err(format('La factura del contrato
+concurrencia 1 (el mismo toque dos veces A LA VEZ): OK · filas 1 · 1.ª: {"aviso": "Al ciclo 8801 le falta la fecha de reparto en el calendario: se revisó contra las entregas de los últimos 15  · 2.ª: {"contrato": "880000000101", "repetida": true, "entrega_id": 1, "consecutivo": 1, "registrado_en": "2026-11-24T08:30:32.
+concurrencia 2 (la misma factura, dos toques distintos A LA VEZ): OK · filas 1 · 1.ª: {"aviso": "Al ciclo 8801 le falta la fecha de reparto en el calendario: se revisó contra las entregas de los últimos 15  · 2.ª: ERROR:  La factura del contrato 880000000102 ya se registró el 24/11 a las 08:30 (entrega 2) SQL statement "SELECT reparto.f_err(format('La factura del contrato
 reversa con entregas registradas: SE NIEGA (correcto)
 reversa: la actividad supervision_reparto queda DESACTIVADA (no se borra): true
 reversa: true|0|261bed3c9242f6261f845ec4e1374b3a  (esperado: true|0|261bed3c9242f6261f845ec4e1374b3a: sin reparto, sin RPC y campo igual)
 reversa otra vez (sin nada que revertir): termina sin error (correcto)
-RECORRIDO LOCAL COMPLETO SIN FALLAS (14 s)
+RECORRIDO LOCAL COMPLETO SIN FALLAS (13 s)

@@ -170,7 +170,7 @@ try {
   const e2 = r.c?.entrega_id;
   ok("C7 entregar la 5.ª por el buscador: entrega 2", r.s === 200 && r.c.consecutivo === 2, r.txt);
   r = await E("rep1", "lista", { qs: { jornada_id: String(j1) } });
-  ok("C8 la lista: los saltados (101, 102 y 104) arriba y marcados; las entregadas ya no están", r.s === 200 && r.c.pendientes.map((p) => p.c + (p.s ? "*" : "")).join() === "880000000101*,880000000102*,880000000104*"
+  ok("C8 la lista: los saltados (101 y 102, anteriores a la 103 que se tocó en la lista) arriba y marcados; la 104 NO (la 105 fue con el buscador: no mueve el punto de avance)", r.s === 200 && r.c.pendientes.map((p) => p.c + (p.s ? "*" : "")).join() === "880000000101*,880000000102*,880000000104"
      && r.c.entregadas_mias === 2 && r.cache === "no-store", r.txt);
   ok("C9 la lista de otro repartidor: 403", (await E("rep2", "lista", { qs: { jornada_id: String(j1) } })).s === 403);
   ok("C10 anular con motivo corto: 400; el otro repartidor no la anula: 403", (await E("rep1", "anular", { cuerpo: { entrega_id: e2, motivo: "corto" } })).s === 400

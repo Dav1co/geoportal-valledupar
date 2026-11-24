@@ -334,14 +334,15 @@ language sql stable security definer set search_path = reparto, pg_temp as $$
 $$;
 
 -- Estado de la lista de una jornada: cada contrato con su orden de lectura, si ya se entregó (en la ventana, por cualquiera) y si quedó saltado.
--- Saltado = pendiente con orden de lectura menor que el mayor orden de lectura ya entregado EN ESTA jornada (como en el modelo).
+-- Saltado = pendiente con orden de lectura menor que el mayor orden de lectura ya entregado EN ESTA jornada TOCANDO LA LISTA (David, 24-nov: lo entregado con el
+-- buscador NO mueve el punto de avance; el supervisor ve el orden real completo en el detalle, columna «Habría sido»).
 create function reparto.f_estado_lista(p_jornada bigint) returns table (orden_lectura integer, contrato text, entregada boolean, saltado boolean)
 language sql stable security definer set search_path = reparto, pg_temp as $$
   with j as (select jo.periodo_reparto, jo.reparto_desde from reparto.jornadas jo where jo.id = p_jornada),
        i as (select it.orden_lectura, it.contrato, (reparto.f_entrega_vigente(it.contrato, j.periodo_reparto, j.reparto_desde) is not null) as entregada
                from reparto.jornada_items it, j where it.jornada_id = p_jornada),
        m as (select max(e.orden_lectura) as maximo from reparto.entregas e
-              where e.jornada_id = p_jornada and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id))
+              where e.jornada_id = p_jornada and not e.por_buscador and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id))
   select i.orden_lectura, i.contrato, i.entregada, (not i.entregada and i.orden_lectura < coalesce(m.maximo, 0))
     from i, m
 $$;
@@ -860,6 +861,9 @@ create function pg_temp.err(r jsonb) returns text language sql as $f$ select coa
 -- entregar con XY de Valledupar
 create function pg_temp.ent(p_sol text, p_j bigint, p_c text, p_uuid uuid default gen_random_uuid(), p_prec numeric default 8, p_lon numeric default -73.25, p_lat numeric default 10.47) returns jsonb language sql as $f$
   select pg_temp.rpc(format('public.geoportal_reparto_entregar(%L, %s, %L, %s, %s, %s, false, %L::uuid)', p_sol, p_j, p_c, coalesce(p_lon::text, 'null'), coalesce(p_lat::text, 'null'), coalesce(p_prec::text, 'null'), p_uuid)) $f$;
+-- entregar desde el BUSCADOR (no mueve el punto de avance de los saltados)
+create function pg_temp.entb(p_sol text, p_j bigint, p_c text) returns jsonb language sql as $f$
+  select pg_temp.rpc(format('public.geoportal_reparto_entregar(%L, %s, %L, -73.25, 10.47, 8, true, %L::uuid)', p_sol, p_j, p_c, gen_random_uuid())) $f$;
 create function pg_temp.pend(r jsonb) returns text language sql as $f$
   select coalesce(string_agg(x ->> 'c', ',' order by o), '') from jsonb_array_elements(r -> 'pendientes') with ordinality t(x, o) $f$;
 create function pg_temp.salt(r jsonb) returns text language sql as $f$
@@ -937,7 +941,7 @@ declare
   r jsonb; fx jsonb; j1 bigint; j2 bigint; j3 bigint; ji bigint; jn bigint; u uuid := gen_random_uuid(); e1 bigint; e4 bigint; v_lote uuid; v_lote2 uuid; v_n bigint; v_aud bigint;
   t0 timestamptz; ms numeric; v_orden text; v_sha text := md5('ztrep-lote') || md5('ztrep-lote-b');
   v_hoy date := (now() at time zone 'America/Bogota')::date; v_mes text := to_char(v_hoy, 'YYYYMM');
-  v_mes_ant text := to_char(date_trunc('month', v_hoy) - interval '1 month', 'YYYYMM'); j97 bigint; j97b bigint;
+  v_mes_ant text := to_char(date_trunc('month', v_hoy) - interval '1 month', 'YYYYMM'); j97 bigint; j97b bigint; r2b jsonb;
 begin
   -- ===== 00. Quién entra =====
   r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', R1));
@@ -1315,6 +1319,23 @@ begin
   perform pg_temp.ok('12.08 el avance del supervisor muestra el período de reparto y el respaldo de cada jornada',
     (select y ->> 'respaldo' from jsonb_array_elements(r -> 'filas') y where (y ->> 'jornada_id')::bigint = j97) = 'true'
     and (select y ->> 'periodo_reparto' from jsonb_array_elements(r -> 'filas') y where (y ->> 'jornada_id')::bigint = j1) = v_mes, (r -> 'filas')::text);
+
+  -- ===== 13. Lo entregado con el buscador NO mueve el punto de avance (David, 24-nov) =====
+  -- pendientes de la ruta en este punto: 107 (3.º), 101 (6.º), 103 (9.º), 111 (11.º) y 112 (12.º)
+  r := pg_temp.ent(R2, j2, '880000000107');            -- tocando la lista: el 3.º; lo anterior ya está entregado
+  v_orden := pg_temp.salt(pg_temp.rpc(format('public.geoportal_reparto_lista(%L, %s)', R2, j2)));
+  perform pg_temp.ok('13.01 tocando la lista el 3.º (lo anterior ya está entregado): ningún saltado', (r ->> 'consecutivo') is not null and v_orden = '', v_orden || ' ' || r::text);
+  r := pg_temp.entb(R2, j2, '880000000111');           -- con el buscador: el 11.º
+  r2b := pg_temp.rpc(format('public.geoportal_reparto_lista(%L, %s)', R2, j2));
+  perform pg_temp.ok('13.02 una entrega con el buscador (el 11.º) NO marca como saltados al 101 (6.º) ni al 103 (9.º): el punto de avance sigue en el 3.º',
+    (r ->> 'consecutivo') is not null and pg_temp.salt(r2b) = '' and pg_temp.pend(r2b) = '880000000101,880000000103,880000000112'
+    and (select por_buscador from reparto.entregas where id = (r ->> 'entrega_id')::bigint), pg_temp.pend(r2b) || ' | ' || pg_temp.salt(r2b));
+  r := pg_temp.ent(R2, j2, '880000000103');            -- tocando la lista el 9.º: ahora sí, el 101 queda saltado
+  perform pg_temp.ok('13.03 al tocar en la lista el 9.º, el 101 (6.º) pasa a «Saltado»', pg_temp.salt(pg_temp.rpc(format('public.geoportal_reparto_lista(%L, %s)', R2, j2))) = '880000000101');
+  r := pg_temp.rpc(format('public.geoportal_reparto_detalle(%L, %s)', S, j2));
+  perform pg_temp.ok('13.04 el supervisor ve el orden real completo, con la del buscador (3, 11, 9), y los saltados con la misma regla',
+    (select string_agg(x ->> 'orden_lectura', ',' order by (x ->> 'consecutivo')::int) from jsonb_array_elements(r -> 'entregas') x) like '%3,11,9'
+    and (select string_agg(x ->> 'contrato', ',' order by (x ->> 'orden_lectura')::int) from jsonb_array_elements(r -> 'saltados') x) = '880000000101', r::text);
 end $$;
 
 -- Resultado: termina SIEMPRE en un ERROR (deshace todo). «N de N … SIN FALLAS» es el éxito.

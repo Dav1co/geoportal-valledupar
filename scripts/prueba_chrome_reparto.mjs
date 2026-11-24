@@ -245,6 +245,11 @@ try {
   await clic(pg, `[data-contrato="${C(17)}"]`); await esperar(pg, () => !!document.querySelector('[data-dialogo="confirmar"]'), null, 5000, "c17"); await clic(pg, '[data-accion="si"]');
   await esperarTexto(pg, /Entrega 2 guardada/);
   prueba("R.08 entrega desde el buscador: queda marcada «por buscador» y el buscador se limpia", sqlq(`select por_buscador from reparto.entregas where contrato = '${C(17)}'`) === "t" && (await pg.$eval('[data-campo="buscar"]', (e) => e.value)) === "");
+  await esperar(pg, (c) => !document.querySelector(`[data-contrato="${c}"]`), C(17), 10000, "c17_fuera");
+  await esp(1500);   // la lista nueva del servidor (se pide después de cada entrega)
+  const saltadosTrasBuscador = (await casillas(pg, "arriba")).filter((x) => x.s).map((x) => x.c);
+  prueba("R.08b lo entregado con el buscador (el 17.º) NO mueve el punto de avance: siguen saltados solo los 3 anteriores al 4.º tocado en la lista (David, 24-nov)",
+    JSON.stringify(saltadosTrasBuscador) === JSON.stringify([C(1), C(2), C(3)]), JSON.stringify(saltadosTrasBuscador));
   // sin señal: no se pierde y no se duplica
   await pg.setOfflineMode(true); await esp(300);
   await clic(pg, `[data-contrato="${C(1)}"]`); await esperar(pg, () => !!document.querySelector('[data-dialogo="confirmar"]'), null, 5000, "c1"); await clic(pg, '[data-accion="si"]');

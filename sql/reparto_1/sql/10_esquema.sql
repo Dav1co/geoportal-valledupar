@@ -218,14 +218,15 @@ language sql stable security definer set search_path = reparto, pg_temp as $$
 $$;
 
 -- Estado de la lista de una jornada: cada contrato con su orden de lectura, si ya se entregó (en la ventana, por cualquiera) y si quedó saltado.
--- Saltado = pendiente con orden de lectura menor que el mayor orden de lectura ya entregado EN ESTA jornada (como en el modelo).
+-- Saltado = pendiente con orden de lectura menor que el mayor orden de lectura ya entregado EN ESTA jornada TOCANDO LA LISTA (David, 24-nov: lo entregado con el
+-- buscador NO mueve el punto de avance; el supervisor ve el orden real completo en el detalle, columna «Habría sido»).
 create function reparto.f_estado_lista(p_jornada bigint) returns table (orden_lectura integer, contrato text, entregada boolean, saltado boolean)
 language sql stable security definer set search_path = reparto, pg_temp as $$
   with j as (select jo.periodo_reparto, jo.reparto_desde from reparto.jornadas jo where jo.id = p_jornada),
        i as (select it.orden_lectura, it.contrato, (reparto.f_entrega_vigente(it.contrato, j.periodo_reparto, j.reparto_desde) is not null) as entregada
                from reparto.jornada_items it, j where it.jornada_id = p_jornada),
        m as (select max(e.orden_lectura) as maximo from reparto.entregas e
-              where e.jornada_id = p_jornada and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id))
+              where e.jornada_id = p_jornada and not e.por_buscador and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id))
   select i.orden_lectura, i.contrato, i.entregada, (not i.entregada and i.orden_lectura < coalesce(m.maximo, 0))
     from i, m
 $$;

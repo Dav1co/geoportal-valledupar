@@ -61,6 +61,8 @@ CODIGO = [
    "  if not campo.f_persona_comercial(v_email) then", "00.11"),
   ("el mapa en vivo devuelve todo aunque traiga el cursor", "                   from e where p_despues is null or e.id > p_despues),", "                   from e),", "07.11"),
   ("el enlace del calendario para cualquier supervisor", "    'puede_calendario', v_sup and reparto.f_puede_calendario(v_email),", "    'puede_calendario', v_sup,", "00.02"),
+  ("lo entregado con el buscador mueve el punto de avance",
+   "              where e.jornada_id = p_jornada and not e.por_buscador and not exists", "              where e.jornada_id = p_jornada and not exists", "13.02"),
   ("una RPC ejecutable por authenticated",
    "    execute format('grant execute on function %s to service_role', f.firma);", "    execute format('grant execute on function %s to service_role, authenticated', f.firma);", "10.01"),
 ]
