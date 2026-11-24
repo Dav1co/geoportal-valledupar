@@ -43,7 +43,17 @@ FUNCIONES = [PREPARAR, CREAR, "public.geoportal_campo_obtener_formulario(text,bo
              "campo.f_autorizar_documento(text,text,uuid)", "campo.f_solo_agregar()", "campo.f_error(text,text)", "campo.f_auditar(text,text,text,jsonb,text)", *PERMISOS]
 # Tablas vivas que el paquete lee o toca: su estructura exacta va a la guardia
 TABLAS = ["campo.tipos_reporte", "campo.tipo_campos", "campo.tipo_fotos", "campo.actividades", "campo.derivadas", "campo.derivadas_catalogo",
-          "campo.derivada_eventos", "campo.consultas_analisis", "campo.causales_tipos", "campo.formularios_documento", "campo.grupos_reporte"]
+          "campo.derivada_eventos", "campo.consultas_analisis", "campo.causales_tipos", "campo.formularios_documento", "campo.grupos_reporte", "campo.parametros"]
+# campo.parametros en producción (produccion_parametros_claude.md, consulta de solo lectura del 24-nov 08:18): el doble debe ser igual antes de tomar su huella
+PARAMETROS_PROD = {
+    "columnas": "clave text NOT NULL, valor numeric NOT NULL, unidad text NOT NULL, descripcion text NOT NULL, minimo numeric, maximo numeric, "
+                "actualizado_en timestamp with time zone NOT NULL DEFAULT clock_timestamp(), actualizado_por text",
+    "restricciones": "parametros_clave_check CHECK ((clave ~ '^[a-z][a-z0-9_]{2,59}$'::text)) | parametros_pkey PRIMARY KEY (clave) | "
+                     "parametros_rango_ck CHECK ((((minimo IS NULL) OR (valor >= minimo)) AND ((maximo IS NULL) OR (valor <= maximo))))",
+    "disparadores": "t_no_borrar:campo.f_solo_agregar | t_no_vaciar:campo.f_solo_agregar",
+    "rls_acl": "true {postgres=arwdDxtm/postgres,homelab_lectura=r/postgres}",
+    "filas": "16", "clave_libre": "true",
+}
 # Estructura de una tabla (z.rel): columnas con tipo, NOT NULL, valor por omisión e identidad; restricciones; índices; disparadores; clase, RLS y permisos.
 # Las políticas RLS no entran: la consulta de producción del 23-nov no las trajo (las tablas nuevas copian las de campo.derivadas en la migración).
 EST_EXPR = ("md5(concat_ws('#', "
@@ -88,7 +98,21 @@ def rehacer(db):
 def md5f(con, f): return con.execute("select md5(pg_get_functiondef(to_regprocedure(%s)))", (f,)).fetchone()[0]
 def est(con, t): return con.execute(f"select {EST_EXPR} from (select to_regclass(%s) as rel) z", (t,)).fetchone()[0]
 
+def comprobar_parametros(con):
+    q = {"columnas": "select string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ' NOT NULL' else '' end "
+                     "|| coalesce(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), ''), ', ' order by a.attnum) from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid "
+                     "and d.adnum = a.attnum where a.attrelid = 'campo.parametros'::regclass and a.attnum > 0 and not a.attisdropped",
+         "restricciones": "select string_agg(conname || ' ' || pg_get_constraintdef(oid), ' | ' order by conname) from pg_constraint where conrelid = 'campo.parametros'::regclass",
+         "disparadores": "select string_agg(tgname || ':' || tgfoid::regproc::text, ' | ' order by tgname) from pg_trigger where tgrelid = 'campo.parametros'::regclass and not tgisinternal",
+         "rls_acl": "select relrowsecurity::text || ' ' || coalesce(relacl::text, '') from pg_class where oid = 'campo.parametros'::regclass",
+         "filas": "select count(*)::text from campo.parametros",
+         "clave_libre": "select (not exists (select 1 from campo.parametros where clave = 'vigencia_avisos_dias'))::text"}
+    for k, sql in q.items():
+        v = con.execute(sql).fetchone()[0]
+        assert v == PARAMETROS_PROD[k], f"campo.parametros del doble no es la de producción en «{k}»: {v}"
+
 def valores(con):
+    comprobar_parametros(con)
     base = {k: con.execute(v).fetchone()[0] for k, v in CONJ.items()}
     assert base == PUBLICADA, base
     for f, m in PERMISOS.items(): assert md5f(con, f) == m, f

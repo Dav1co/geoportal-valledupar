@@ -22,11 +22,11 @@ export type PaginaActas = { filas: FilaActa[]; siguiente: string | number | null
 /** Origen de una derivada: un registro (revisión, PQR, instalación) o, desde el 23-nov, una observación del Análisis de contrato (aviso al supervisor). */
 export type OrigenDerivada = { clase?: "registro" | "analisis"; registro_id?: string; tipo: string; tipo_nombre?: string; consecutivo?: string | null; fecha: string; operario?: string;
   observacion?: string; observacion_nombre?: string; texto?: string | null; direccion_correcta?: string | null; trae_datos?: boolean; datos_anulados?: boolean;
-  aviso_id?: number | null; actividad_creada_id?: number | null; vistos?: number; ultimo_visto?: { en: string; autor: string } | null };
+  aviso_id?: number | null; actividad_creada_id?: number | null; entregas_datos?: number; vistos?: number; ultimo_visto?: { en: string; autor: string } | null };
 export type Derivada = { id: number; actividad: string; actividad_nombre: string; destinos?: string[]; destino_nombre?: string | null; antiguedad_dias?: number; origen: OrigenDerivada };
 /** Datos de contacto de un aviso (Ley 1581): solo el supervisor de campo y el administrador; anulados, solo el motivo. No se guardan en el navegador. */
 export type DatosAviso = { derivada_id: number; anulados: boolean; datos?: { nombre?: string; cedula?: string; telefono?: string; correo?: string; relacion?: string };
-  motivo?: string; anulados_en?: string; anulados_por?: string };
+  motivo?: string; anulados_en?: string; anulados_por?: string; entregas?: number; anuladas?: number };
 /** Una fila de «derivadas» (forma de la Edge real 2a249ef): el cierre dice si la atendió un registro (esquema y consecutivo) o se cerró a mano (atendida_fuera o anulada), quién y cuándo. */
 export type FilaDerivada = Derivada & { contrato: string | null; estado: string; creada_en?: string;
   cierre: { en: string; tipo: string; autor: string; esquema: Esquema | null; consecutivo: string | null; registro_id: string | null; motivo?: string | null } | null };

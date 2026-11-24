@@ -54,15 +54,8 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'homelab_lectura' and rolbypassrls) then
     raise exception 'No existe el rol homelab_lectura con BYPASSRLS: deténgase y avise';
   end if;
-  -- campo.parametros (sección 7): la consulta de producción del 23-nov no la trajo; se exigen las columnas que usa el paquete, con su tipo y su NOT NULL, y que la
-  -- clave vigencia_avisos_dias esté libre o sea la que dejó la reversa de este paquete (no se borra). Si producción no coincide, se detiene sin cambiar nada.
-  if to_regclass('campo.parametros') is null
-     or (select string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ':nn' else '' end, ',' order by a.attnum)
-           from pg_attribute a where a.attrelid = 'campo.parametros'::regclass and a.attnum > 0 and not a.attisdropped
-            and a.attname in ('clave', 'valor', 'unidad', 'descripcion', 'minimo', 'maximo', 'actualizado_por'))
-        is distinct from 'clave:text:nn,valor:numeric:nn,unidad:text:nn,descripcion:text:nn,minimo:numeric,maximo:numeric,actualizado_por:text' then
-    raise exception 'campo.parametros no tiene las columnas que usa este paquete: deténgase y avise';
-  end if;
+  -- campo.parametros (sección 7): su estructura completa va en la lista de arriba (produccion_parametros_claude.md, 24-nov). La clave vigencia_avisos_dias debe
+  -- estar libre o ser la que dejó la reversa de este paquete (no se borra). Si producción no coincide, se detiene sin cambiar nada.
   if exists (select 1 from campo.parametros where clave = 'vigencia_avisos_dias' and (unidad <> 'días' or minimo is distinct from 1 or maximo is distinct from 365)) then
     raise exception 'Ya existe el parámetro vigencia_avisos_dias y no es el de este paquete: deténgase y avise';
   end if;

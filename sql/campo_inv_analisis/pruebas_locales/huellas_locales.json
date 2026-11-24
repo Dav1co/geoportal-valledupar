@@ -19,24 +19,24 @@
   "tras_reversa_campos": "barrio:texto:false:false,cita_acordada:dia_hora:false:true,despeje_caja:si_no:false:true,despeje_observacion:texto:false:true,direccion_encontrada:texto:false:true,habitado:si_no:false:false,hallazgo:opcion:true:true,medidor:texto:false:false,observacion:texto:false:true,tipo_predio:opcion:false:false,visita_concertada:si_no:false:true"
  },
  "nuevas": {
-  "HUELLA_CAMPO_NUEVA": "54f9814317dbd0427d57f2c6e29b8c44",
+  "HUELLA_CAMPO_NUEVA": "0d4af526b26dcd9b1a4dda0c72c236f2",
   "MD5_PREPARAR_NUEVA": "a00d66705d7a0c88a38ab5d882153669",
-  "MD5_DERIVADA_JSON_NUEVA": "3a303fdd25d47281413d5b37cb6c3491",
+  "MD5_DERIVADA_JSON_NUEVA": "de7ae127c52919df82d0c17957bdde8c",
   "MD5_DERIVADAS_NUEVA": "9addead3b57c75986cc5eed52d6cb14a",
   "MD5_ATENDER_NUEVA": "6735acb66f16e461a252cb6848b5761a",
   "MD5_ABIERTAS_NUEVA": "3f369afcec700b12f19b1522f03627e9",
   "FUNCIONES_NUEVAS": {
    "campo.f_contacto(jsonb)": "63dc714b152c72a33686c9a181abe204",
    "campo.f_texto_sin_datos(text,text,integer,integer)": "6b4d3e495cdc6be78b299325667ec537",
-   "public.geoportal_campo_analisis_observar(text,text,text,text,text,jsonb,text)": "c6d2b8ff5086b28eac914800c7d95ddb",
+   "public.geoportal_campo_analisis_observar(text,text,text,text,text,jsonb,text)": "035c62f4e9c40554e8258323f4adfdc3",
    "public.geoportal_campo_aviso_crear_actividad(text,bigint,text,text)": "ba0110257bb312f119c74a16b01313d7",
-   "public.geoportal_campo_aviso_datos(text,bigint,text)": "16b06f4221fc8180352b98c0c75b1562",
-   "public.geoportal_campo_aviso_datos_anular(text,bigint,text,text)": "9df5bf31d7f65f46b6c866635fe5d61d"
+   "public.geoportal_campo_aviso_datos(text,bigint,text)": "a9acefd7bd2b7a25110b9d45f41c97f9",
+   "public.geoportal_campo_aviso_datos_anular(text,bigint,text,text)": "860ac1b19ea4ec7bdf54164a446bd79c"
   },
   "TABLAS_NUEVAS": {
    "campo.analisis_observaciones": "8215ffbd87376df4a32f6572808058ed",
-   "campo.analisis_observacion_datos": "63f4f4d56c7fdc55c87301a014a6aef8",
-   "campo.analisis_observacion_anulaciones": "04b4d45b71109783285d3cc0f1eec1ab",
+   "campo.analisis_observacion_datos": "66f57ad5f2a221ce80e7cf52fb4ff21a",
+   "campo.analisis_observacion_anulaciones": "5881fa9bafba4111c1db91b4113e6dd2",
    "campo.analisis_avisos_vistos": "9300c3a82441b35f2fe632aaf7d966d8"
   }
  },

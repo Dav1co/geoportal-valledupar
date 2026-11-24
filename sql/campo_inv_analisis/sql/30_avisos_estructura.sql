@@ -32,18 +32,22 @@ begin
   create trigger t_solo_agregar_trunc before truncate on campo.analisis_observaciones for each statement execute function campo.f_solo_agregar();
   comment on table campo.analisis_observaciones is 'Observaciones que marca quien tiene Análisis de contrato (desocupado, dirección errada, actualización de datos, otra). Cada una crea un aviso en campo.derivadas. Solo inserción. Sin nombres, cédulas ni teléfonos: esos van solo en campo.analisis_observacion_datos.';
 
+  -- Una fila por ENTREGA de datos (David, 24-nov): un aviso pendiente de «Actualización de datos» recibe una entrega nueva solo si las anteriores fueron anuladas.
   create table campo.analisis_observacion_datos (
-    observacion_id uuid primary key references campo.analisis_observaciones (id),
+    id             bigint generated always as identity primary key,
+    observacion_id uuid not null references campo.analisis_observaciones (id),
     datos          jsonb not null check (jsonb_typeof(datos) = 'object' and datos <> '{}'::jsonb and octet_length(datos::text) <= 1024
                                          and (datos - array['nombre', 'cedula', 'telefono', 'correo', 'relacion']) = '{}'::jsonb),
+    autor          text not null check (autor = lower(autor) and position('@' in autor) > 1),
     registrado_en  timestamptz not null default clock_timestamp()
   );
+  create index analisis_observacion_datos_obs_idx on campo.analisis_observacion_datos (observacion_id, id desc);
   create trigger t_solo_agregar before delete or update on campo.analisis_observacion_datos for each row execute function campo.f_solo_agregar();
   create trigger t_solo_agregar_trunc before truncate on campo.analisis_observacion_datos for each statement execute function campo.f_solo_agregar();
-  comment on table campo.analisis_observacion_datos is 'SENSIBLE (Ley 1581): datos de contacto de «Actualización de datos» (nombre, cédula, teléfono, correo, relación con el predio). Solo los lee geoportal_campo_aviso_datos (supervisor de campo y administrador), con lectura auditada; nunca en listas, exportaciones generales ni mapa. homelab_lectura la lee solo para el respaldo cifrado. Solo inserción: si estaban mal, se anulan con motivo (campo.analisis_observacion_anulaciones).';
+  comment on table campo.analisis_observacion_datos is 'SENSIBLE (Ley 1581): datos de contacto de «Actualización de datos» (nombre, cédula, teléfono, correo, relación con el predio), una fila por entrega. Solo los lee geoportal_campo_aviso_datos (supervisor de campo y administrador), con lectura auditada; nunca en listas, exportaciones generales ni mapa. homelab_lectura la lee solo para el respaldo cifrado. Solo inserción: si estaban mal, se anulan con motivo (campo.analisis_observacion_anulaciones).';
 
   create table campo.analisis_observacion_anulaciones (
-    observacion_id uuid primary key references campo.analisis_observacion_datos (observacion_id),
+    datos_id       bigint primary key references campo.analisis_observacion_datos (id),
     motivo         text not null check (length(btrim(motivo)) between 10 and 300),
     autor          text not null check (autor = lower(autor) and position('@' in autor) > 1),
     creado_en      timestamptz not null default clock_timestamp(),
@@ -51,7 +55,7 @@ begin
   );
   create trigger t_solo_agregar before delete or update on campo.analisis_observacion_anulaciones for each row execute function campo.f_solo_agregar();
   create trigger t_solo_agregar_trunc before truncate on campo.analisis_observacion_anulaciones for each statement execute function campo.f_solo_agregar();
-  comment on table campo.analisis_observacion_anulaciones is 'Anulación de los datos de contacto de una observación (una por observación), con motivo. Los datos quedan guardados; anulados, ya no se muestran.';
+  comment on table campo.analisis_observacion_anulaciones is 'Anulación de una entrega de datos de contacto (una por entrega), con motivo. Los datos quedan guardados; anulados, ya no se muestran.';
 
   alter table campo.analisis_observaciones enable row level security;
   alter table campo.analisis_observacion_datos enable row level security;

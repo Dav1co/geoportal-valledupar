@@ -174,6 +174,9 @@ try {
   ok("A02 «Desocupado» → confirmar → «Quedó en la lista del supervisor»", r.habilitado && /Quedó en la lista del supervisor: «Desocupado»/.test(r.aviso), JSON.stringify(r));
   r = await observar(pg, "direccion_errada", () => escribir(pg, "#ac-obs-dir", "[PRUEBA ZTCH] CRA 9 # 12-30"));
   ok("A03 «Dirección errada» con la dirección correcta", r.habilitado && /Dirección errada/.test(r.aviso), JSON.stringify(r));
+  r = await observar(pg, "direccion_errada", () => escribir(pg, "#ac-obs-dir", "[PRUEBA ZTCH] CRA 10 # 1-1"));
+  ok("A03b repetir «Dirección errada» con el aviso pendiente: «Ya hay un aviso pendiente… No se creó otro. Lo que escribió no se guardó.»",
+    /Ya hay un aviso pendiente «Dirección errada» para este contrato \(avisado el .*\)\. No se creó otro\. Lo que escribió no se guardó\./.test(r.aviso ?? ""), JSON.stringify(r));
   await clic(pg, 'input[data-obs="actualizacion_datos"]'); await esp(150);
   ok("A04 «Actualización de datos» muestra las 5 casillas opcionales con la marca «dato personal»", await hay(pg, "#ac-obs-nombre") && await hay(pg, "#ac-obs-cedula") && await hay(pg, "#ac-obs-tel")
     && await hay(pg, "#ac-obs-correo") && await hay(pg, "#ac-obs-rel") && /dato personal/.test(await texto(pg, '[data-testid="observacion"]')));

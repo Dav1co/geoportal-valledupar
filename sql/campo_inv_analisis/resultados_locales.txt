@@ -2,7 +2,7 @@ PRUEBAS LOCALES · [Code B] Investigación de ubicación recortada y avisos del 
 
 OK    B.01 la base local es copia exacta de producción (163 de 163) y trae sus huellas (campo 261bed3c…, acta 111506c6…)
 OK    B.02 huellas de solo lectura ANTES: PUBLICADA
-ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 143 de 143 pruebas correctas — SIN FALLAS
+ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 149 de 149 pruebas correctas — SIN FALLAS
 OK    E.01 el ensayo termina en el ERROR esperado con «N de N … SIN FALLAS» (0.2 s)
 OK    E.02 el ensayo no dejó nada (huella igual, catálogo igual, sin filas ZTINV ni auditoría)
 OK    C.01 migración
@@ -32,13 +32,17 @@ OK    G.09 homelab_lectura sin BYPASSRLS: la migración se detiene sin cambiar n
 OK    G.10 una tabla campo.analisis_observaciones que no es la del paquete: la migración se detiene sin cambiar nada
 OK    G.11 una columna observacion_id ajena en campo.derivadas: la migración se detiene sin cambiar nada
 OK    G.12 campo.parametros con otra columna (unidad renombrada): la migración se detiene sin cambiar nada
+OK    G.14 campo.parametros sin el permiso de lectura de homelab_lectura (distinto de producción): la migración se detiene sin cambiar nada
 OK    G.13 la clave vigencia_avisos_dias ocupada por otro parámetro: la migración se detiene sin cambiar nada
 OK    G.07 la Investigación con un registro de hoy (3 fotos, efectivo): la migración se detiene
 OK    M.01 preparar_subida acepta 0 fotos con CUALQUIER formato: el ensayo lo detecta (fallan 03.02, 03.03, 03.04)
 OK    M.02 preparar_subida nunca acepta 0 fotos: el ensayo lo detecta (fallan 03.01, 03.05, 04.01, 04.02, 04.04, 04.05, 04.06, 04.07, 04.08, 19.03, 19.04, 19.05, 21.00, 21.01, 21.02, 21.05)
 OK    M.13 la vigencia ignora los avisos cerrados: el ensayo lo detecta (fallan 20.03)
-OK    M.14 la vigencia cuenta desde el último «visto otra vez»: el ensayo lo detecta (fallan 23.09, 23.10)
-OK    M.15 la vigencia no lee el parámetro (siempre 20): el ensayo lo detecta (fallan 23.10)
+OK    M.14 la vigencia cuenta desde el último «visto otra vez»: el ensayo lo detecta (fallan 23.04)
+OK    M.15 la vigencia no lee el parámetro (siempre 20): el ensayo lo detecta (fallan 23.05)
+OK    M.16 «Otra» no compara el texto (un texto distinto no crearía su aviso): el ensayo lo detecta (fallan 23.09)
+OK    M.17 «uno pendiente a la vez» cuenta también los cerrados: el ensayo lo detecta (fallan 23.07, 23.16)
+OK    M.18 sin la excepción de los datos anulados: el ensayo lo detecta (fallan 23.11, 23.12, 23.14)
 OK    M.03 la migración no desactiva cita_acordada: el ensayo lo detecta (fallan 01.03, 01.04, 02.02)
 OK    M.12 la migración no desactiva «observacion» (quedarían dos cajas de texto): el ensayo lo detecta (fallan 01.03, 01.04, 02.02, 04.09)
 OK    M.04 la migración deja la dirección opcional: el ensayo lo detecta (fallan 01.03, 04.04)
@@ -50,4 +54,4 @@ OK    M.09 la lista de derivadas trae los datos de contacto: el ensayo lo detect
 OK    M.10 «Crear actividad» no cierra el aviso: el ensayo lo detecta (fallan 18.07, 18.08)
 OK    M.11 un aviso se puede atender con cualquier formulario: el ensayo lo detecta (fallan 19.03, 20.01, 20.03)
 
-RESULTADO: 191 de 191 pruebas correctas — SIN FALLAS
+RESULTADO: 201 de 201 pruebas correctas — SIN FALLAS

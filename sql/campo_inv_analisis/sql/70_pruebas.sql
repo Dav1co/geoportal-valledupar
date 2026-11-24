@@ -454,54 +454,95 @@ begin
   return v_der;
 end $f$;
 
+insert into campo.consultas_analisis (autor, contrato, existe, consultado_en) values ('ztinv.ana@emdupar.gov.co', '990006', true, clock_timestamp()), ('ztinv.ana@emdupar.gov.co', '990007', true, clock_timestamp());
+
 do $p3$
-declare r jsonb; A text := 'ztinv.ana@emdupar.gov.co'; SUP text := 'ztinv.sup@emdupar.gov.co'; d19 bigint; d21 bigint; d5 bigint; dp4 bigint; n0 bigint; jx jsonb;
+declare r jsonb; A text := 'ztinv.ana@emdupar.gov.co'; SUP text := 'ztinv.sup@emdupar.gov.co'; d19 bigint; d21 bigint; d5 bigint; dp4 bigint; dd bigint; n0 bigint; jx jsonb; dnew bigint;
 begin
   perform pg_temp.ok('23.01 el parámetro vigencia_avisos_dias existe: 20 días (de 1 a 365)',
     exists (select 1 from campo.parametros where clave = 'vigencia_avisos_dias' and valor = 20 and unidad = 'días' and minimo = 1 and maximo = 365));
-  d19 := pg_temp.aviso_viejo('direccion_errada', 19);
-  r := pg_temp.obs(A, '990003', 'direccion_errada', null, '[PRUEBA ZTINV] CRA 1');
-  perform pg_temp.ok('23.02 con un aviso de hace 19 días: «ya se avisó» con esa fecha, el mismo aviso y visto otra vez', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb
-    and (r ->> 'derivada_id')::bigint = d19 and (r ->> 'ya_avisado_en')::timestamptz < clock_timestamp() - interval '18 days' and (r ->> 'vistos')::int = 1, r::text);
-  perform pg_temp.ok('23.03 dentro de la vigencia no se guarda la dirección nueva (y se le dice al analista)', r -> 'datos_no_guardados' = 'true'::jsonb
-    and not exists (select 1 from campo.analisis_observaciones where direccion_correcta = '[PRUEBA ZTINV] CRA 1'), r::text);
-  d21 := pg_temp.aviso_viejo('otra', 21);
-  select count(*) into n0 from campo.derivadas where contrato = '990003' and actividad = 'aviso_otra';
-  r := pg_temp.obs(A, '990003', 'otra', '[PRUEBA ZTINV] perro bravo otra vez');
-  perform pg_temp.ok('23.04 con un aviso de hace 21 días (pendiente): pasada la vigencia se crea un aviso NUEVO', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb
-    and (r ->> 'derivada_id')::bigint <> d21 and (select count(*) from campo.derivadas where contrato = '990003' and actividad = 'aviso_otra') = n0 + 1, r::text);
-  perform pg_temp.ok('23.05 el aviso viejo sigue pendiente (no se cierra solo) y muestra su antigüedad: 21 días',
-    campo.f_derivada_estado(d21) = 'pendiente' and (campo.f_derivada_json(d21) ->> 'antiguedad_dias')::int = 21 and (campo.f_derivada_json(d19) ->> 'antiguedad_dias')::int = 19);
-  d5 := pg_temp.aviso_viejo('actualizacion_datos', 5);
-  r := pg_temp.obs(A, '990003', 'actualizacion_datos', null, null, '{"cedula": "12345678"}');
-  perform pg_temp.ok('23.06 «Actualización de datos» dentro de la vigencia: no se guardan los datos nuevos (P1 abierta) y se le dice al analista',
-    pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb and r -> 'datos_no_guardados' = 'true'::jsonb and (r ->> 'derivada_id')::bigint = d5
-    and not exists (select 1 from campo.analisis_observacion_datos x where x.datos ->> 'cedula' = '12345678') and r::text !~ '12345678', r::text);
-  r := pg_temp.lista(SUP, '{"origen": "analisis", "contrato": "990003"}');
-  jx := pg_temp.fila(r, d19);
-  perform pg_temp.ok('23.07 en la lista el aviso dice cuántas veces lo vieron otra vez, cuándo y quién (sin datos nuevos)', pg_temp.err(r) = 'OK'
-    and (jx -> 'origen' ->> 'vistos')::int = 1 and jx -> 'origen' -> 'ultimo_visto' ->> 'autor' = A and (jx ->> 'antiguedad_dias')::int = 19, left(coalesce(jx::text, r::text), 400));
-  perform pg_temp.ok('23.08 «visto otra vez» queda auditado sin el contrato', (select count(*) >= 3 and bool_and(detalle::text !~ '990003') from public.geoportal_auditoria where accion = 'campo_analisis_visto_otra_vez' and email = A));
-  -- P4: la vigencia cuenta desde el aviso ORIGINAL, no desde el último «visto otra vez»
+  -- «Desocupado»: VIGENCIA (sección 7)
+  dd := pg_temp.aviso_viejo('desocupado', 19, '990006');
+  r := pg_temp.obs(A, '990006', 'desocupado');
+  perform pg_temp.ok('23.02 «Desocupado» con un aviso de hace 19 días: «ya se avisó» con esa fecha, el mismo aviso y visto otra vez', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb
+    and r ->> 'regla' = 'vigencia' and (r ->> 'derivada_id')::bigint = dd and (r ->> 'ya_avisado_en')::timestamptz < clock_timestamp() - interval '18 days' and (r ->> 'vistos')::int = 1, r::text);
+  perform pg_temp.ok('23.03 el aviso de «Desocupado» muestra su antigüedad (19 días) y «visto otra vez» con quién',
+    (campo.f_derivada_json(dd) ->> 'antiguedad_dias')::int = 19 and (campo.f_derivada_json(dd) -> 'origen' ->> 'vistos')::int = 1
+    and campo.f_derivada_json(dd) -> 'origen' -> 'ultimo_visto' ->> 'autor' = A);
   dp4 := pg_temp.aviso_viejo('desocupado', 25, '990002');
   insert into campo.analisis_avisos_vistos (observacion_id, autor, visto_en) select observacion_id, 'ztinv.ana2@emdupar.gov.co', clock_timestamp() - interval '2 days' from campo.derivadas where id = dp4;
   r := pg_temp.obs(A, '990002', 'desocupado');
-  perform pg_temp.ok('23.09 P4: un aviso de hace 25 días visto otra vez hace 2 ya no vale (la vigencia cuenta desde el original): se crea uno nuevo',
-    pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb and (r ->> 'derivada_id')::bigint <> dp4, r::text);
-  -- el parámetro manda: con 3 días, el aviso de hace 19 ya no está vigente
-  update campo.parametros set valor = 3 where clave = 'vigencia_avisos_dias';
-  r := pg_temp.obs(A, '990003', 'direccion_errada');
-  perform pg_temp.ok('23.10 con vigencia_avisos_dias = 3, el aviso de hace 19 días ya no vale: se crea uno nuevo', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb and (r ->> 'derivada_id')::bigint <> d19, r::text);
-  update campo.parametros set valor = 365 where clave = 'vigencia_avisos_dias';
-  r := pg_temp.obs(A, '990003', 'otra', '[PRUEBA ZTINV] tercera');
-  perform pg_temp.ok('23.11 con 365 días, el «Otra» recién creado vale y no se crea otro', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb, r::text);
+  perform pg_temp.ok('23.04 «Desocupado» de hace 25 días (visto otra vez hace 2): pasada la vigencia desde el ORIGINAL se crea uno nuevo; el viejo sigue pendiente',
+    pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb and (r ->> 'derivada_id')::bigint <> dp4 and campo.f_derivada_estado(dp4) = 'pendiente'
+    and (campo.f_derivada_json(dp4) ->> 'antiguedad_dias')::int = 25, r::text);
+  update campo.parametros set valor = 5 where clave = 'vigencia_avisos_dias';
+  dd := pg_temp.aviso_viejo('desocupado', 10, '990007');
+  r := pg_temp.obs(A, '990007', 'desocupado');
+  perform pg_temp.ok('23.05 con vigencia_avisos_dias = 5, un «Desocupado» de hace 10 días ya no vale: aviso nuevo', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb and (r ->> 'derivada_id')::bigint <> dd, r::text);
   update campo.parametros set valor = 20 where clave = 'vigencia_avisos_dias';
+
+  -- «Dirección errada»: uno pendiente a la vez (sin días)
+  d19 := pg_temp.aviso_viejo('direccion_errada', 40, '990006');
+  r := pg_temp.obs(A, '990006', 'direccion_errada', null, '[PRUEBA ZTINV] CRA 1');
+  perform pg_temp.ok('23.06 «Dirección errada» con un aviso PENDIENTE (aunque tenga 40 días): «ya hay un aviso pendiente», no se crea otro ni se guarda la dirección',
+    pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb and r ->> 'regla' = 'pendiente' and (r ->> 'derivada_id')::bigint = d19 and r -> 'datos_no_guardados' = 'true'::jsonb
+    and not exists (select 1 from campo.analisis_observaciones where direccion_correcta = '[PRUEBA ZTINV] CRA 1') and not exists (select 1 from campo.analisis_avisos_vistos v join campo.derivadas d on d.observacion_id = v.observacion_id where d.id = d19), r::text);
+  perform pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%L, %s, ''atendida_fuera'', %L)', SUP, d19, '[PRUEBA ZTINV] se corrigió la dirección'));
+  r := pg_temp.obs(A, '990006', 'direccion_errada', null, '[PRUEBA ZTINV] CRA 2');
+  perform pg_temp.ok('23.07 cerrado el anterior, «Dirección errada» se puede avisar de nuevo enseguida (aviso nuevo con su dirección)', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb
+    and exists (select 1 from campo.analisis_observaciones where direccion_correcta = '[PRUEBA ZTINV] CRA 2'), r::text);
+
+  -- «Otra»: uno pendiente a la vez con el mismo texto; un texto distinto crea su propio aviso
+  d21 := pg_temp.aviso_viejo('otra', 30, '990006');
+  r := pg_temp.obs(A, '990006', 'otra', '[PRUEBA ZTINV] VIEJO');
+  perform pg_temp.ok('23.08 «Otra» con el MISMO texto que un aviso pendiente (aunque tenga 30 días, sin importar mayúsculas): ya hay un aviso pendiente',
+    pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb and r ->> 'regla' = 'pendiente' and (r ->> 'derivada_id')::bigint = d21, r::text);
+  select count(*) into n0 from campo.derivadas where contrato = '990006' and actividad = 'aviso_otra';
+  r := pg_temp.obs(A, '990006', 'otra', '[PRUEBA ZTINV] otro asunto');
+  perform pg_temp.ok('23.09 «Otra» con un texto distinto crea su propio aviso (el otro sigue pendiente)', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb
+    and (select count(*) from campo.derivadas where contrato = '990006' and actividad = 'aviso_otra') = n0 + 1 and campo.f_derivada_estado(d21) = 'pendiente', r::text);
+
+  -- «Actualización de datos»: uno pendiente a la vez; excepción: si el supervisor anuló los datos, el analista los vuelve a enviar en ESE aviso
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "11111111", "telefono": "3001112233"}');
+  d5 := (r ->> 'derivada_id')::bigint;
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "22222222"}');
+  perform pg_temp.ok('23.10 «Actualización de datos» con un aviso pendiente con datos VIGENTES: no se crea otro y los datos nuevos NO se guardan',
+    pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb and r ->> 'regla' = 'pendiente' and (r ->> 'derivada_id')::bigint = d5 and r -> 'datos_no_guardados' = 'true'::jsonb
+    and not exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '22222222') and r::text !~ '22222222', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d5, '[PRUEBA ZTINV] la cédula no corresponde'));
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "33333333", "relacion": "familiar"}');
+  perform pg_temp.ok('23.11 anulados por el supervisor: el analista vuelve a enviar los datos y se guardan en ESE MISMO aviso (entrega nueva)',
+    pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb and r -> 'datos_guardados' = 'true'::jsonb and (r ->> 'derivada_id')::bigint = d5
+    and (select count(*) from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = d5) = 2 and r::text !~ '33333333', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d5));
+  perform pg_temp.ok('23.12 el supervisor ve la entrega nueva (vigente) y que hay 1 anulada', pg_temp.err(r) = 'OK' and r -> 'anulados' = 'false'::jsonb
+    and r -> 'datos' ->> 'cedula' = '33333333' and (r ->> 'entregas')::int = 2 and (r ->> 'anuladas')::int = 1, r::text);
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "44444444"}');
+  perform pg_temp.ok('23.13 con la entrega nueva vigente, otra entrega más ya no se guarda', pg_temp.err(r) = 'OK' and r -> 'datos_no_guardados' = 'true'::jsonb
+    and not exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '44444444'), r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d5, '[PRUEBA ZTINV] también estaba mal'));
+  jx := campo.f_derivada_json(d5);
+  perform pg_temp.ok('23.14 anulada también la segunda: la lista dice «datos anulados», con 2 entregas, y aviso_datos muestra solo el motivo',
+    pg_temp.err(r) = 'OK' and jx -> 'origen' -> 'datos_anulados' = 'true'::jsonb and (jx -> 'origen' ->> 'entregas_datos')::int = 2
+    and (pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d5)) ->> 'motivo') = '[PRUEBA ZTINV] también estaba mal', left(jx::text, 300));
+  d19 := pg_temp.aviso_viejo('actualizacion_datos', 3, '990006');
+  r := pg_temp.obs(A, '990006', 'actualizacion_datos', null, null, '{"cedula": "55555555"}');
+  perform pg_temp.ok('23.15 un aviso pendiente SIN datos (nunca tuvo): no es la excepción; los datos nuevos no se guardan', pg_temp.err(r) = 'OK' and r -> 'datos_no_guardados' = 'true'::jsonb
+    and (r ->> 'derivada_id')::bigint = d19 and not exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '55555555'), r::text);
+  perform pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%L, %s, ''anulada'', %L)', SUP, d5, '[PRUEBA ZTINV] se cierra para probar'));
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "66666666"}');
+  perform pg_temp.ok('23.16 cerrado el aviso, «Actualización de datos» crea uno nuevo con sus datos', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb and (r ->> 'derivada_id')::bigint <> d5
+    and exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '66666666'), r::text);
+
+  perform pg_temp.ok('23.17 la auditoría de «visto otra vez», «ya pendiente» y «reenviados» no lleva el contrato ni los datos',
+    (select count(*) >= 5 and bool_and(detalle::text !~ '99000[67]|1111|2222|3333') from public.geoportal_auditoria
+      where accion in ('campo_analisis_visto_otra_vez', 'campo_analisis_ya_pendiente', 'campo_analisis_datos_reenviados') and email = A));
   begin
     update campo.analisis_avisos_vistos set autor = 'x@y' where observacion_id is not null;
-    perform pg_temp.ok('23.12 «visto otra vez» no se modifica (solo inserción)', false);
-  exception when others then perform pg_temp.ok('23.12 «visto otra vez» no se modifica (solo inserción)', true);
+    perform pg_temp.ok('23.18 «visto otra vez» no se modifica (solo inserción)', false);
+  exception when others then perform pg_temp.ok('23.18 «visto otra vez» no se modifica (solo inserción)', true);
   end;
-  perform pg_temp.ok('23.13 ninguna función de campo con DELETE o UPDATE sin WHERE (con la vigencia)', {{SIN_WHERE_CAMPO}} = 0);
+  perform pg_temp.ok('23.19 ninguna función de campo con DELETE o UPDATE sin WHERE (con la vigencia)', {{SIN_WHERE_CAMPO}} = 0);
 end $p3$;
 
 do $fin$

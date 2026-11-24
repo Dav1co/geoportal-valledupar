@@ -52,6 +52,12 @@ ok("18b sección 7: «Ya se avisó el <fecha> (<estado>)», y si escribió algo,
   && O.textoEnviada({ repetida: true, derivada_id: 1, tipo: "actualizacion_datos", contrato: "1", ya_avisado_en: "2026-11-20T15:00:00Z", estado: "atendida_fuera", datos_no_guardados: true })
     === "Ya se avisó «Actualización de datos» el 20 de noviembre de 2026 (cerrado: atendido sin formulario). No se creó otro aviso: se anotó que usted lo volvió a ver. Lo que escribió no se guardó.",
   O.textoEnviada({ repetida: true, derivada_id: 1, tipo: "desocupado", contrato: "1", ya_avisado_en: "2026-11-03T15:00:00Z", estado: "pendiente" }));
+ok("18d David 24-nov: «uno pendiente a la vez» (Dirección errada, Actualización de datos, Otra) y la excepción de los datos anulados",
+  O.textoEnviada({ repetida: true, regla: "pendiente", derivada_id: 1, tipo: "direccion_errada", contrato: "1", ya_avisado_en: "2026-11-03T15:00:00Z", datos_no_guardados: true })
+    === "Ya hay un aviso pendiente «Dirección errada» para este contrato (avisado el 3 de noviembre de 2026). No se creó otro. Lo que escribió no se guardó."
+  && O.textoEnviada({ repetida: true, regla: "pendiente", derivada_id: 1, tipo: "actualizacion_datos", contrato: "1", ya_avisado_en: "2026-11-03T15:00:00Z", datos_guardados: true })
+    === "Ya hay un aviso pendiente «Actualización de datos» para este contrato (avisado el 3 de noviembre de 2026). Como los datos anteriores fueron anulados, los nuevos se guardaron en ese aviso: solo los verá el supervisor."
+  && O.textoEnviada({ repetida: true, regla: "vigencia", derivada_id: 1, tipo: "desocupado", contrato: "1", ya_avisado_en: "2026-11-03T15:00:00Z", estado: "pendiente" }).startsWith("Ya se avisó «Desocupado» el 3 de noviembre"));
 ok("18c antigüedad: hoy, hace 1 día, hace 45 días", O.antiguedadTexto(0) === "hoy" && O.antiguedadTexto(1) === "hace 1 día" && O.antiguedadTexto(45) === "hace 45 días" && O.antiguedadTexto(undefined) === "");
 ok("19 relación: las 5 de la lista", igual(O.RELACIONES.map((r) => r.codigo), ["propietario", "arrendatario", "familiar", "encargado", "otro"]));
 // Investigación de ubicación: mínimo 0 de fotos

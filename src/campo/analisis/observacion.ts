@@ -71,13 +71,20 @@ export function cuerpoObservacion(contrato: string, b: Borrador): CuerpoObservac
 
 /** Sección 7 (vigencia): si es «repetida», el aviso que ya existía (pendiente o cerrado) dentro de la vigencia; no se creó otro y quedó «visto otra vez». */
 export type RespuestaObservacion = { repetida: boolean; derivada_id: number; tipo: TipoObservacion; contrato: string; trae_datos?: boolean;
-  ya_avisado_en?: string; estado?: string; vistos?: number; vigencia_dias?: number; datos_no_guardados?: boolean };
+  ya_avisado_en?: string; estado?: string; vistos?: number; vigencia_dias?: number; datos_no_guardados?: boolean;
+  /** «vigencia» (Desocupado, 20 días) o «pendiente» (los otros tres: uno pendiente a la vez). David, 24-nov. */
+  regla?: "vigencia" | "pendiente"; datos_guardados?: boolean };
 const ESTADO_AVISO: Record<string, string> = { pendiente: "pendiente", atendida: "atendido", atendida_fuera: "cerrado: atendido sin formulario", anulada: "cerrado: anulado" };
 /** «3 de noviembre de 2026», en hora de Colombia. */
 export const fechaLarga = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { timeZone: "America/Bogota", day: "numeric", month: "long", year: "numeric" });
 /** El aviso que se muestra después de enviar. */
 export function textoEnviada(r: RespuestaObservacion): string {
   const nombre = OBSERVACIONES.find((o) => o.codigo === r.tipo)?.nombre ?? r.tipo;
+  if (r.repetida && r.regla === "pendiente") {
+    const cuando = r.ya_avisado_en ? ` (avisado el ${fechaLarga(r.ya_avisado_en)})` : "";
+    if (r.datos_guardados) return `Ya hay un aviso pendiente «${nombre}» para este contrato${cuando}. Como los datos anteriores fueron anulados, los nuevos se guardaron en ese aviso: solo los verá el supervisor.`;
+    return `Ya hay un aviso pendiente «${nombre}» para este contrato${cuando}. No se creó otro.` + (r.datos_no_guardados ? " Lo que escribió no se guardó." : "");
+  }
   if (r.repetida) {
     const cuando = r.ya_avisado_en ? ` el ${fechaLarga(r.ya_avisado_en)}` : "";
     const estado = r.estado ? ` (${ESTADO_AVISO[r.estado] ?? r.estado})` : "";

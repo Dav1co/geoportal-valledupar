@@ -35,7 +35,7 @@ begin
   end loop;
   -- Estructura exacta de las tablas vivas (la misma expresión que calcula generar.py en el doble, que es copia exacta de producción)
   -- (m2: el estado que deja la reversa de este paquete, que conserva la estructura; nada se borra)
-  for r in select * from (values ('campo.tipos_reporte', '3b9274b039c86b8079fee77b484ad5e1', null::text), ('campo.tipo_campos', '9628451c9105875e1c7b2ac2421691a5', null::text), ('campo.tipo_fotos', 'fcce3283ea598e0c1b4f2aeafdd0e9ae', null::text), ('campo.actividades', '9a20496e1319d07650a5e4460a523d64', null::text), ('campo.derivadas', '2ebfe8b36411e10e364231ddbbee8f67', '28a6a571a358b128740ef775974b1225'), ('campo.derivadas_catalogo', '4b406fe705b31222fad55e6abf064c28', null::text), ('campo.derivada_eventos', 'd01fd6ead43730a491b927f36c3136a9', null::text), ('campo.consultas_analisis', '1202c7e6e2999e2d5adaccd2e371320d', null::text), ('campo.causales_tipos', '71502cd2b2d048f6d3bf01a6cc188d0d', null::text), ('campo.formularios_documento', 'b83ea82f1765747e4b8ce6532aff3fc6', null::text), ('campo.grupos_reporte', 'ba97afc37aee73287dc7d000c664b749', null::text)) x(t, m, m2) loop
+  for r in select * from (values ('campo.tipos_reporte', '3b9274b039c86b8079fee77b484ad5e1', null::text), ('campo.tipo_campos', '9628451c9105875e1c7b2ac2421691a5', null::text), ('campo.tipo_fotos', 'fcce3283ea598e0c1b4f2aeafdd0e9ae', null::text), ('campo.actividades', '9a20496e1319d07650a5e4460a523d64', null::text), ('campo.derivadas', '2ebfe8b36411e10e364231ddbbee8f67', '28a6a571a358b128740ef775974b1225'), ('campo.derivadas_catalogo', '4b406fe705b31222fad55e6abf064c28', null::text), ('campo.derivada_eventos', 'd01fd6ead43730a491b927f36c3136a9', null::text), ('campo.consultas_analisis', '1202c7e6e2999e2d5adaccd2e371320d', null::text), ('campo.causales_tipos', '71502cd2b2d048f6d3bf01a6cc188d0d', null::text), ('campo.formularios_documento', 'b83ea82f1765747e4b8ce6532aff3fc6', null::text), ('campo.grupos_reporte', 'ba97afc37aee73287dc7d000c664b749', null::text), ('campo.parametros', 'fd9322f0721b931e71fa96b3010ed6f8', null::text)) x(t, m, m2) loop
     if to_regclass(r.t) is null then raise exception 'No existe la tabla %: deténgase y avise', r.t; end if;
     select md5(concat_ws('#', (select string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ' NOT NULL' else '' end || coalesce(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), '') || case when a.attidentity <> '' then ' IDENTITY ' || a.attidentity::text else '' end, ', ' order by a.attnum) from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum where a.attrelid = z.rel and a.attnum > 0 and not a.attisdropped), (select string_agg(c.conname || ' ' || pg_get_constraintdef(c.oid), ' | ' order by c.conname) from pg_constraint c where c.conrelid = z.rel), (select string_agg(pg_get_indexdef(i.indexrelid), ' | ' order by pg_get_indexdef(i.indexrelid)) from pg_index i where i.indrelid = z.rel), (select string_agg(pg_get_triggerdef(g.oid), ' | ' order by g.tgname) from pg_trigger g where g.tgrelid = z.rel and not g.tgisinternal), (select c.relkind::text || ' ' || c.relrowsecurity::text || ' ' || coalesce(c.relacl::text, '') from pg_class c where c.oid = z.rel))) into v from (select to_regclass(r.t) as rel) z;
     if v is distinct from r.m and v is distinct from coalesce(r.m2, r.m) then
@@ -43,7 +43,7 @@ begin
     end if;
   end loop;
   -- Las tablas nuevas: no existen, o existen exactamente como las crea este paquete (las conservó una reversa)
-  for r in select * from (values ('campo.analisis_observaciones', '8215ffbd87376df4a32f6572808058ed'), ('campo.analisis_observacion_datos', '63f4f4d56c7fdc55c87301a014a6aef8'), ('campo.analisis_observacion_anulaciones', '04b4d45b71109783285d3cc0f1eec1ab'), ('campo.analisis_avisos_vistos', '9300c3a82441b35f2fe632aaf7d966d8')) x(t, m) loop
+  for r in select * from (values ('campo.analisis_observaciones', '8215ffbd87376df4a32f6572808058ed'), ('campo.analisis_observacion_datos', '66f57ad5f2a221ce80e7cf52fb4ff21a'), ('campo.analisis_observacion_anulaciones', '5881fa9bafba4111c1db91b4113e6dd2'), ('campo.analisis_avisos_vistos', '9300c3a82441b35f2fe632aaf7d966d8')) x(t, m) loop
     if to_regclass(r.t) is not null then
       select md5(concat_ws('#', (select string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ' NOT NULL' else '' end || coalesce(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), '') || case when a.attidentity <> '' then ' IDENTITY ' || a.attidentity::text else '' end, ', ' order by a.attnum) from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum where a.attrelid = z.rel and a.attnum > 0 and not a.attisdropped), (select string_agg(c.conname || ' ' || pg_get_constraintdef(c.oid), ' | ' order by c.conname) from pg_constraint c where c.conrelid = z.rel), (select string_agg(pg_get_indexdef(i.indexrelid), ' | ' order by pg_get_indexdef(i.indexrelid)) from pg_index i where i.indrelid = z.rel), (select string_agg(pg_get_triggerdef(g.oid), ' | ' order by g.tgname) from pg_trigger g where g.tgrelid = z.rel and not g.tgisinternal), (select c.relkind::text || ' ' || c.relrowsecurity::text || ' ' || coalesce(c.relacl::text, '') from pg_class c where c.oid = z.rel))) into v from (select to_regclass(r.t) as rel) z;
       if v is distinct from r.m then raise exception 'La tabla % ya existe y no es la de este paquete: deténgase y avise', r.t; end if;
@@ -56,15 +56,8 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'homelab_lectura' and rolbypassrls) then
     raise exception 'No existe el rol homelab_lectura con BYPASSRLS: deténgase y avise';
   end if;
-  -- campo.parametros (sección 7): la consulta de producción del 23-nov no la trajo; se exigen las columnas que usa el paquete, con su tipo y su NOT NULL, y que la
-  -- clave vigencia_avisos_dias esté libre o sea la que dejó la reversa de este paquete (no se borra). Si producción no coincide, se detiene sin cambiar nada.
-  if to_regclass('campo.parametros') is null
-     or (select string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ':nn' else '' end, ',' order by a.attnum)
-           from pg_attribute a where a.attrelid = 'campo.parametros'::regclass and a.attnum > 0 and not a.attisdropped
-            and a.attname in ('clave', 'valor', 'unidad', 'descripcion', 'minimo', 'maximo', 'actualizado_por'))
-        is distinct from 'clave:text:nn,valor:numeric:nn,unidad:text:nn,descripcion:text:nn,minimo:numeric,maximo:numeric,actualizado_por:text' then
-    raise exception 'campo.parametros no tiene las columnas que usa este paquete: deténgase y avise';
-  end if;
+  -- campo.parametros (sección 7): su estructura completa va en la lista de arriba (produccion_parametros_claude.md, 24-nov). La clave vigencia_avisos_dias debe
+  -- estar libre o ser la que dejó la reversa de este paquete (no se borra). Si producción no coincide, se detiene sin cambiar nada.
   if exists (select 1 from campo.parametros where clave = 'vigencia_avisos_dias' and (unidad <> 'días' or minimo is distinct from 1 or maximo is distinct from 365)) then
     raise exception 'Ya existe el parámetro vigencia_avisos_dias y no es el de este paquete: deténgase y avise';
   end if;
@@ -217,18 +210,22 @@ begin
   create trigger t_solo_agregar_trunc before truncate on campo.analisis_observaciones for each statement execute function campo.f_solo_agregar();
   comment on table campo.analisis_observaciones is 'Observaciones que marca quien tiene Análisis de contrato (desocupado, dirección errada, actualización de datos, otra). Cada una crea un aviso en campo.derivadas. Solo inserción. Sin nombres, cédulas ni teléfonos: esos van solo en campo.analisis_observacion_datos.';
 
+  -- Una fila por ENTREGA de datos (David, 24-nov): un aviso pendiente de «Actualización de datos» recibe una entrega nueva solo si las anteriores fueron anuladas.
   create table campo.analisis_observacion_datos (
-    observacion_id uuid primary key references campo.analisis_observaciones (id),
+    id             bigint generated always as identity primary key,
+    observacion_id uuid not null references campo.analisis_observaciones (id),
     datos          jsonb not null check (jsonb_typeof(datos) = 'object' and datos <> '{}'::jsonb and octet_length(datos::text) <= 1024
                                          and (datos - array['nombre', 'cedula', 'telefono', 'correo', 'relacion']) = '{}'::jsonb),
+    autor          text not null check (autor = lower(autor) and position('@' in autor) > 1),
     registrado_en  timestamptz not null default clock_timestamp()
   );
+  create index analisis_observacion_datos_obs_idx on campo.analisis_observacion_datos (observacion_id, id desc);
   create trigger t_solo_agregar before delete or update on campo.analisis_observacion_datos for each row execute function campo.f_solo_agregar();
   create trigger t_solo_agregar_trunc before truncate on campo.analisis_observacion_datos for each statement execute function campo.f_solo_agregar();
-  comment on table campo.analisis_observacion_datos is 'SENSIBLE (Ley 1581): datos de contacto de «Actualización de datos» (nombre, cédula, teléfono, correo, relación con el predio). Solo los lee geoportal_campo_aviso_datos (supervisor de campo y administrador), con lectura auditada; nunca en listas, exportaciones generales ni mapa. homelab_lectura la lee solo para el respaldo cifrado. Solo inserción: si estaban mal, se anulan con motivo (campo.analisis_observacion_anulaciones).';
+  comment on table campo.analisis_observacion_datos is 'SENSIBLE (Ley 1581): datos de contacto de «Actualización de datos» (nombre, cédula, teléfono, correo, relación con el predio), una fila por entrega. Solo los lee geoportal_campo_aviso_datos (supervisor de campo y administrador), con lectura auditada; nunca en listas, exportaciones generales ni mapa. homelab_lectura la lee solo para el respaldo cifrado. Solo inserción: si estaban mal, se anulan con motivo (campo.analisis_observacion_anulaciones).';
 
   create table campo.analisis_observacion_anulaciones (
-    observacion_id uuid primary key references campo.analisis_observacion_datos (observacion_id),
+    datos_id       bigint primary key references campo.analisis_observacion_datos (id),
     motivo         text not null check (length(btrim(motivo)) between 10 and 300),
     autor          text not null check (autor = lower(autor) and position('@' in autor) > 1),
     creado_en      timestamptz not null default clock_timestamp(),
@@ -236,7 +233,7 @@ begin
   );
   create trigger t_solo_agregar before delete or update on campo.analisis_observacion_anulaciones for each row execute function campo.f_solo_agregar();
   create trigger t_solo_agregar_trunc before truncate on campo.analisis_observacion_anulaciones for each statement execute function campo.f_solo_agregar();
-  comment on table campo.analisis_observacion_anulaciones is 'Anulación de los datos de contacto de una observación (una por observación), con motivo. Los datos quedan guardados; anulados, ya no se muestran.';
+  comment on table campo.analisis_observacion_anulaciones is 'Anulación de una entrega de datos de contacto (una por entrega), con motivo. Los datos quedan guardados; anulados, ya no se muestran.';
 
   alter table campo.analisis_observaciones enable row level security;
   alter table campo.analisis_observacion_datos enable row level security;
@@ -379,7 +376,11 @@ AS $function$
                                                                     when 'actualizacion_datos' then 'Actualización de datos' else 'Otra' end,
                                   'texto', o.texto, 'direccion_correcta', o.direccion_correcta, 'fecha', o.creado_en, 'operario', o.autor,
                                   'trae_datos', exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = o.id),
-                                  'datos_anulados', exists (select 1 from campo.analisis_observacion_anulaciones x where x.observacion_id = o.id),
+                                  -- anulados = tiene entregas y ninguna está vigente (sin anular); entregas = cuántas recibió el aviso (David, 24-nov)
+                                  'datos_anulados', exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = o.id)
+                                                    and not exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = o.id
+                                                                      and not exists (select 1 from campo.analisis_observacion_anulaciones a where a.datos_id = x.id)),
+                                  'entregas_datos', (select count(*) from campo.analisis_observacion_datos x where x.observacion_id = o.id),
                                   'aviso_id', (select a.id from campo.derivadas a where a.observacion_id = o.id and a.actividad like 'aviso\_%'),
                                   'actividad_creada_id', (select a.id from campo.derivadas a where a.observacion_id = o.id and a.actividad = 'actividad_supervisor'),
                                   -- sección 7: cuántas veces lo vieron otra vez dentro de la vigencia, y la última
@@ -493,24 +494,48 @@ begin
   if v_con is not null and v_tipo <> 'actualizacion_datos' then perform campo.f_error('Los datos de contacto solo van en «Actualización de datos»'); end if;
 
   perform pg_advisory_xact_lock(hashtext('campo_aviso:' || v_c));
-  -- Vigencia (sección 7, David 24-nov; reemplaza «si hay un aviso pendiente igual, devuelve ese»): dentro de vigencia_avisos_dias desde el aviso ORIGINAL del mismo
-  -- contrato y la misma observación, esté pendiente o cerrado, no se crea otro: se anota «visto otra vez» y no se guarda ningún dato nuevo (texto, dirección ni
-  -- datos de contacto: P1 a P3 abiertas). La vigencia cuenta desde el aviso original, no desde el último «visto otra vez» (P4).
-  v_vig := campo.f_param('vigencia_avisos_dias')::integer;
-  select o.id, o.creado_en, d.id into v_prev_obs, v_prev_en, v_prev
-    from campo.analisis_observaciones o join campo.derivadas d on d.observacion_id = o.id and d.actividad = 'aviso_' || v_tipo
-   where o.contrato = v_c and o.tipo = v_tipo and o.creado_en > clock_timestamp() - make_interval(days => v_vig)
-   order by o.creado_en desc limit 1;
-  if v_prev is not null then
-    insert into campo.analisis_avisos_vistos (observacion_id, autor, ip) values (v_prev_obs, v_email, left(p_ip, 64));
-    perform campo.f_auditar(v_email, 'campo_analisis_visto_otra_vez', v_prev_obs::text, jsonb_build_object('tipo', v_tipo, 'derivada', v_prev), p_ip);
-    return jsonb_build_object('repetida', true, 'derivada_id', v_prev, 'tipo', v_tipo, 'contrato', v_c, 'ya_avisado_en', v_prev_en,
-      'estado', campo.f_derivada_estado(v_prev), 'vistos', (select count(*) from campo.analisis_avisos_vistos v where v.observacion_id = v_prev_obs),
-      'vigencia_dias', v_vig, 'datos_no_guardados', (v_con is not null or v_dir is not null or v_txt is not null));
+  if v_tipo = 'desocupado' then
+    -- «Desocupado» (sección 7, David 24-nov): vigencia. Dentro de vigencia_avisos_dias desde el aviso ORIGINAL del mismo contrato, esté pendiente o cerrado, no se
+    -- crea otro: se anota «visto otra vez». La vigencia cuenta desde el aviso original, no desde el último «visto otra vez». Pasada la vigencia, aviso nuevo.
+    v_vig := campo.f_param('vigencia_avisos_dias')::integer;
+    select o.id, o.creado_en, d.id into v_prev_obs, v_prev_en, v_prev
+      from campo.analisis_observaciones o join campo.derivadas d on d.observacion_id = o.id and d.actividad = 'aviso_' || v_tipo
+     where o.contrato = v_c and o.tipo = v_tipo and o.creado_en > clock_timestamp() - make_interval(days => v_vig)
+     order by o.creado_en desc limit 1;
+    if v_prev is not null then
+      insert into campo.analisis_avisos_vistos (observacion_id, autor, ip) values (v_prev_obs, v_email, left(p_ip, 64));
+      perform campo.f_auditar(v_email, 'campo_analisis_visto_otra_vez', v_prev_obs::text, jsonb_build_object('tipo', v_tipo, 'derivada', v_prev), p_ip);
+      return jsonb_build_object('repetida', true, 'regla', 'vigencia', 'derivada_id', v_prev, 'tipo', v_tipo, 'contrato', v_c, 'ya_avisado_en', v_prev_en,
+        'estado', campo.f_derivada_estado(v_prev), 'vistos', (select count(*) from campo.analisis_avisos_vistos v where v.observacion_id = v_prev_obs),
+        'vigencia_dias', v_vig, 'datos_no_guardados', false);
+    end if;
+  else
+    -- Dirección errada, Actualización de datos y Otra (David, 24-nov): uno PENDIENTE a la vez por contrato («Otra»: con el mismo texto; un texto distinto crea
+    -- su propio aviso). Cerrado el anterior, se puede avisar de nuevo sin importar los días.
+    select o.id, o.creado_en, d.id into v_prev_obs, v_prev_en, v_prev
+      from campo.analisis_observaciones o join campo.derivadas d on d.observacion_id = o.id and d.actividad = 'aviso_' || v_tipo
+     where o.contrato = v_c and o.tipo = v_tipo and campo.f_derivada_estado(d.id) = 'pendiente'
+       and (v_tipo <> 'otra' or lower(o.texto) = lower(v_txt))
+     order by o.creado_en desc limit 1;
+    if v_prev is not null then
+      -- Única excepción: «Actualización de datos» pendiente cuyos datos anuló el supervisor (tiene entregas y ninguna vigente): los nuevos van a ESE aviso
+      if v_tipo = 'actualizacion_datos' and v_con is not null
+         and exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = v_prev_obs)
+         and not exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = v_prev_obs
+                           and not exists (select 1 from campo.analisis_observacion_anulaciones a where a.datos_id = x.id)) then
+        insert into campo.analisis_observacion_datos (observacion_id, datos, autor) values (v_prev_obs, v_con, v_email);
+        perform campo.f_auditar(v_email, 'campo_analisis_datos_reenviados', v_prev_obs::text, jsonb_build_object('derivada', v_prev), p_ip);
+        return jsonb_build_object('repetida', true, 'regla', 'pendiente', 'derivada_id', v_prev, 'tipo', v_tipo, 'contrato', v_c, 'ya_avisado_en', v_prev_en,
+          'estado', 'pendiente', 'datos_guardados', true, 'trae_datos', true);
+      end if;
+      perform campo.f_auditar(v_email, 'campo_analisis_ya_pendiente', v_prev_obs::text, jsonb_build_object('tipo', v_tipo, 'derivada', v_prev), p_ip);
+      return jsonb_build_object('repetida', true, 'regla', 'pendiente', 'derivada_id', v_prev, 'tipo', v_tipo, 'contrato', v_c, 'ya_avisado_en', v_prev_en,
+        'estado', 'pendiente', 'datos_no_guardados', (v_con is not null or v_dir is not null));
+    end if;
   end if;
 
   insert into campo.analisis_observaciones (contrato, tipo, texto, direccion_correcta, autor, ip) values (v_c, v_tipo, v_txt, v_dir, v_email, left(p_ip, 64)) returning id into v_obs;
-  if v_con is not null then insert into campo.analisis_observacion_datos (observacion_id, datos) values (v_obs, v_con); end if;
+  if v_con is not null then insert into campo.analisis_observacion_datos (observacion_id, datos, autor) values (v_obs, v_con, v_email); end if;
   insert into campo.derivadas (observacion_id, contrato, actividad) values (v_obs, v_c, 'aviso_' || v_tipo) returning id into v_der;
   -- Auditoría sin el contrato (queda en la bitácora del análisis, decisión 15) ni los textos ni los datos de contacto
   perform campo.f_auditar(v_email, 'campo_analisis_observar', v_obs::text, jsonb_build_object('tipo', v_tipo, 'derivada', v_der, 'trae_datos', v_con is not null), p_ip);
@@ -540,35 +565,45 @@ end $f$;
 -- Ver los datos de contacto de un aviso (supervisor de campo y administrador); lectura auditada sin los valores. Anulados: solo el motivo (Q2).
 create function public.geoportal_campo_aviso_datos(p_solicitante text, p_derivada_id bigint, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = public, campo, pg_temp as $f$
-declare v_email text; v_obs uuid; v_datos jsonb; v_an campo.analisis_observacion_anulaciones;
+declare v_email text; v_obs uuid; v_datos jsonb; v_an campo.analisis_observacion_anulaciones; v_n integer; v_anuladas integer;
 begin
   v_email := campo.f_autorizar_supervision(p_solicitante);
   select d.observacion_id into v_obs from campo.derivadas d where d.id = p_derivada_id;
   if v_obs is null then perform campo.f_error('Ese aviso no existe o no es del Análisis de contrato', 'P0002'); end if;
-  select x.datos into v_datos from campo.analisis_observacion_datos x where x.observacion_id = v_obs;
-  if v_datos is null then perform campo.f_error('Ese aviso no tiene datos de contacto', 'P0002'); end if;
-  select * into v_an from campo.analisis_observacion_anulaciones a where a.observacion_id = v_obs;
+  select count(*), count(a.datos_id) into v_n, v_anuladas
+    from campo.analisis_observacion_datos x left join campo.analisis_observacion_anulaciones a on a.datos_id = x.id where x.observacion_id = v_obs;
+  if v_n = 0 then perform campo.f_error('Ese aviso no tiene datos de contacto', 'P0002'); end if;
+  -- La entrega vigente: la última sin anular (David, 24-nov: si se anularon, el analista puede volver a enviarlos en este mismo aviso)
+  select x.datos into v_datos from campo.analisis_observacion_datos x
+   where x.observacion_id = v_obs and not exists (select 1 from campo.analisis_observacion_anulaciones a where a.datos_id = x.id) order by x.id desc limit 1;
   perform campo.f_auditar(v_email, 'campo_ver_datos_contacto', p_derivada_id::text,
-                          jsonb_build_object('campos', (select jsonb_agg(k order by k) from jsonb_object_keys(v_datos) k), 'anulados', v_an.observacion_id is not null), p_ip);
-  if v_an.observacion_id is not null then
-    return jsonb_build_object('derivada_id', p_derivada_id, 'anulados', true, 'motivo', v_an.motivo, 'anulados_en', v_an.creado_en, 'anulados_por', v_an.autor);
+                          jsonb_build_object('campos', (select jsonb_agg(k order by k) from jsonb_object_keys(coalesce(v_datos, '{}'::jsonb)) k), 'anulados', v_datos is null,
+                                             'entregas', v_n), p_ip);
+  if v_datos is null then
+    select a.* into v_an from campo.analisis_observacion_anulaciones a join campo.analisis_observacion_datos x on x.id = a.datos_id
+     where x.observacion_id = v_obs order by x.id desc limit 1;
+    return jsonb_build_object('derivada_id', p_derivada_id, 'anulados', true, 'motivo', v_an.motivo, 'anulados_en', v_an.creado_en, 'anulados_por', v_an.autor,
+                              'entregas', v_n, 'anuladas', v_anuladas);
   end if;
-  return jsonb_build_object('derivada_id', p_derivada_id, 'anulados', false, 'datos', v_datos);
+  return jsonb_build_object('derivada_id', p_derivada_id, 'anulados', false, 'datos', v_datos, 'entregas', v_n, 'anuladas', v_anuladas);
 end $f$;
 
 -- Anular los datos de contacto (estaban mal): quedan guardados, ya no se muestran
 create function public.geoportal_campo_aviso_datos_anular(p_solicitante text, p_derivada_id bigint, p_motivo text, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = public, campo, pg_temp as $f$
-declare v_email text; v_obs uuid; v_m text;
+declare v_email text; v_obs uuid; v_m text; v_vig bigint;
 begin
   v_email := campo.f_autorizar_supervision(p_solicitante);
   v_m := campo.f_motivo_personal(p_motivo, true);
   select d.observacion_id into v_obs from campo.derivadas d where d.id = p_derivada_id;
   if v_obs is null then perform campo.f_error('Ese aviso no existe o no es del Análisis de contrato', 'P0002'); end if;
-  perform pg_advisory_xact_lock(hashtext('campo_aviso_datos:' || v_obs));
+  -- el mismo bloqueo por contrato que analisis_observar: anular y volver a enviar no se cruzan
+  perform pg_advisory_xact_lock(hashtext('campo_aviso:' || (select o.contrato from campo.analisis_observaciones o where o.id = v_obs)));
   if not exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = v_obs) then perform campo.f_error('Ese aviso no tiene datos de contacto', 'P0002'); end if;
-  if exists (select 1 from campo.analisis_observacion_anulaciones a where a.observacion_id = v_obs) then perform campo.f_error('Esos datos ya están anulados', '55000'); end if;
-  insert into campo.analisis_observacion_anulaciones (observacion_id, motivo, autor, ip) values (v_obs, v_m, v_email, left(p_ip, 64));
+  select x.id into v_vig from campo.analisis_observacion_datos x
+   where x.observacion_id = v_obs and not exists (select 1 from campo.analisis_observacion_anulaciones a where a.datos_id = x.id) order by x.id desc limit 1;
+  if v_vig is null then perform campo.f_error('Esos datos ya están anulados', '55000'); end if;
+  insert into campo.analisis_observacion_anulaciones (datos_id, motivo, autor, ip) values (v_vig, v_m, v_email, left(p_ip, 64));
   perform campo.f_auditar(v_email, 'campo_anular_datos_contacto', p_derivada_id::text, '{}'::jsonb, p_ip);
   return jsonb_build_object('derivada_id', p_derivada_id, 'anulados', true, 'motivo', v_m);
 end $f$;

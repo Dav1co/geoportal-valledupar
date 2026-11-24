@@ -269,6 +269,9 @@ def main():
         sys.exit('La ruta del CSV no puede llevar comillas.')
     psql(a.db, '-q', entrada=APLICAR.replace('@CSV@', ruta))
     igualar_checks(a.db, prod)
+    # campo.parametros no estaba en la consulta del 23-nov; su estructura de producción (produccion_parametros_claude.md, consulta de solo lectura del 24-nov 08:18)
+    # es la del doble salvo el permiso de lectura de homelab_lectura, que se iguala aquí. generar.py comprueba la tabla completa contra ese archivo.
+    psql(a.db, '-qc', 'grant select on campo.parametros to homelab_lectura')
 
     with tempfile.NamedTemporaryFile('w+', suffix='.csv', delete=False) as t:
         salida = t.name

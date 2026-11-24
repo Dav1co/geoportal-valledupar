@@ -259,6 +259,7 @@ function DatosContacto({ d, onCerrar }: { d: FilaDerivada; onCerrar: (cambio: bo
       <p className="rv-sub"><span className="ac-tag-personal">dato personal</span> Úselos solo para actualizar los datos del suscriptor. No los copie a listas ni descargas.</p>
       {!r && !error ? <p className="rv-sub" role="status">Cargando…</p> : null}
       {r?.anulados ? <div className="rv-aviso" role="status" data-datos="anulados"><strong>Anulados</strong>{r.motivo ? ` · ${r.motivo}` : ""}</div> : null}
+      {r && !r.anulados && (r.anuladas ?? 0) > 0 ? <p className="rv-sub" data-datos="anteriores">Estos datos los volvió a enviar el analista: {r.anuladas === 1 ? "hay 1 entrega anterior anulada" : `hay ${r.anuladas} entregas anteriores anuladas`}.</p> : null}
       {x ? <dl className="rv-per-dl" data-datos="vigentes">
         {x.nombre ? <><dt>Nombre</dt><dd>{x.nombre}</dd></> : null}
         {x.cedula ? <><dt>Cédula</dt><dd>{x.cedula}</dd></> : null}
