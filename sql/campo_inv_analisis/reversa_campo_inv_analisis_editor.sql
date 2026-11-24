@@ -14,7 +14,7 @@ begin
   if md5(pg_get_functiondef('public.geoportal_campo_preparar_subida(text,integer,text,text,text)'::regprocedure)) is distinct from 'a00d66705d7a0c88a38ab5d882153669' then
     raise exception 'preparar_subida no es la de este paquete (sin aplicar o cambiada después): la reversa no la pisa; deténgase y avise';
   end if;
-  for r in select * from (values ('public.geoportal_campo_preparar_subida(text,integer,text,text,text)', 'a00d66705d7a0c88a38ab5d882153669'), ('campo.f_derivada_json(bigint)', 'de7ae127c52919df82d0c17957bdde8c'), ('public.geoportal_campo_derivadas(text,jsonb,text)', '9addead3b57c75986cc5eed52d6cb14a'), ('public.geoportal_campo_derivada_atender(text,bigint,text,uuid,text)', '6735acb66f16e461a252cb6848b5761a'), ('public.geoportal_campo_derivadas_abiertas(text,text,text,text)', '3f369afcec700b12f19b1522f03627e9')) x(f, m) loop
+  for r in select * from (values ('public.geoportal_campo_preparar_subida(text,integer,text,text,text)', 'a00d66705d7a0c88a38ab5d882153669'), ('campo.f_derivada_json(bigint)', '9f59c5cc28a88a5a1f2962ff9d5cb3d2'), ('public.geoportal_campo_derivadas(text,jsonb,text)', '9addead3b57c75986cc5eed52d6cb14a'), ('public.geoportal_campo_derivada_atender(text,bigint,text,uuid,text)', '6735acb66f16e461a252cb6848b5761a'), ('public.geoportal_campo_derivadas_abiertas(text,text,text,text)', '3f369afcec700b12f19b1522f03627e9')) x(f, m) loop
     if md5(pg_get_functiondef(to_regprocedure(r.f))) is distinct from r.m then
       raise exception 'La función % cambió después de este paquete: la reversa no la pisa; deténgase y avise', r.f;
     end if;
@@ -138,7 +138,7 @@ end $function$;
 
 -- DROP (por qué y alcance): las 6 funciones las creó este paquete; con las 4 de las derivadas ya devueltas a su texto publicado, nadie las usa,
 -- y la huella de campo vuelve a 261bed3c9242f6261f845ec4e1374b3a. Alcance: SOLO esas 6 firmas; no toca tablas, datos ni otras funciones.
-drop function public.geoportal_campo_aviso_datos_anular(text, bigint, text, text);
+drop function public.geoportal_campo_aviso_datos_anular(text, bigint, bigint, text, text);
 drop function public.geoportal_campo_aviso_datos(text, bigint, text);
 drop function public.geoportal_campo_aviso_crear_actividad(text, bigint, text, text);
 drop function public.geoportal_campo_analisis_observar(text, text, text, text, text, jsonb, text);

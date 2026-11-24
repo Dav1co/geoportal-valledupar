@@ -38,7 +38,7 @@ end $rev$;
 
 -- DROP (por qué y alcance): las 6 funciones las creó este paquete; con las 4 de las derivadas ya devueltas a su texto publicado, nadie las usa,
 -- y la huella de campo vuelve a {{HUELLA_CAMPO}}. Alcance: SOLO esas 6 firmas; no toca tablas, datos ni otras funciones.
-drop function public.geoportal_campo_aviso_datos_anular(text, bigint, text, text);
+drop function public.geoportal_campo_aviso_datos_anular(text, bigint, bigint, text, text);
 drop function public.geoportal_campo_aviso_datos(text, bigint, text);
 drop function public.geoportal_campo_aviso_crear_actividad(text, bigint, text, text);
 drop function public.geoportal_campo_analisis_observar(text, text, text, text, text, jsonb, text);

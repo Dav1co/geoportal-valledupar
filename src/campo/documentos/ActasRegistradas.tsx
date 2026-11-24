@@ -193,7 +193,7 @@ function Derivadas({ puedeCerrar }: { puedeCerrar: boolean }) {
               {o.texto ? <><dt>Observación</dt><dd>{o.texto}</dd></> : null}
               {esAviso && d.antiguedad_dias !== undefined ? <><dt>Antigüedad</dt><dd data-dato="antiguedad">{antiguedadTexto(d.antiguedad_dias)}</dd></> : null}
               {esAviso && o.vistos ? <><dt>Visto otra vez</dt><dd data-dato="vistos">{o.vistos} {o.vistos === 1 ? "vez" : "veces"}{o.ultimo_visto ? ` · último ${cuando(o.ultimo_visto.en)} por ${o.ultimo_visto.autor}` : ""}</dd></> : null}
-              {esAviso && o.trae_datos ? <><dt>Datos de contacto</dt><dd>{o.datos_anulados ? "Anulados" : "Sí (se ven al abrirlos)"}</dd></> : null}
+              {esAviso && o.trae_datos ? <><dt>Datos de contacto</dt><dd data-dato="entregas">{o.datos_anulados ? "Anulados" : `${o.entregas_datos ?? 1} ${(o.entregas_datos ?? 1) === 1 ? "entrega" : "entregas"}${o.entregas_vigentes !== undefined && o.entregas_vigentes !== o.entregas_datos ? ` (${o.entregas_vigentes} vigente${o.entregas_vigentes === 1 ? "" : "s"})` : ""} · se ven al abrirlos`}</dd></> : null}
               {d.cierre?.tipo === "atendida" ? <><dt>La atendió</dt><dd>{d.cierre.consecutivo ?? "un registro"} · {cuando(d.cierre.en)}</dd></> : null}
               {d.cierre && d.cierre.tipo !== "atendida" ? <><dt>{d.cierre.tipo === "anulada" ? "Anulada" : "Cerrada sin formulario"}</dt><dd>{cuando(d.cierre.en)} · por {d.cierre.autor}</dd></> : null}
               {d.cierre?.motivo ? <><dt>Motivo</dt><dd>{d.cierre.motivo}</dd></> : null}
@@ -245,34 +245,45 @@ function CrearActividad({ d, onCancelar, onHecho }: { d: FilaDerivada; onCancela
 }
 
 const RELACION: Record<string, string> = { propietario: "Propietario", arrendatario: "Arrendatario", familiar: "Familiar", encargado: "Encargado", otro: "Otro" };
-/** Datos de contacto de un aviso (Ley 1581): se piden al abrir (lectura auditada), no se guardan en el navegador y se olvidan al cerrar. Anulados: solo el motivo. */
+/** Datos de contacto de un aviso (Ley 1581): se piden al abrir (lectura auditada), no se guardan en el navegador y se olvidan al cerrar.
+ *  7.4 (David, 24-nov): cada entrega con su relación, autor y fecha; las posibles duplicadas marcadas; cada una se anula con motivo. Anuladas: solo el motivo. */
 function DatosContacto({ d, onCerrar }: { d: FilaDerivada; onCerrar: (cambio: boolean) => void }) {
   const [r, setR] = useState<DatosAviso | null>(null); const [error, setError] = useState<string | null>(null);
-  const [anular, setAnular] = useState(false); const [m, setM] = useState(""); const [enviando, setEnviando] = useState(false); const [cambio, setCambio] = useState(false);
+  const [anular, setAnular] = useState<number | null>(null); const [m, setM] = useState(""); const [enviando, setEnviando] = useState(false); const [cambio, setCambio] = useState(false);
   const cargar = useCallback(() => { setError(null); apiDocumentos.avisoDatos(d.id).then(setR).catch((e) => setError(texto(e))); }, [d.id]);
   useEffect(() => { cargar(); return () => setR(null); }, [cargar]);
   const malo = m.trim().length < 10 || m.trim().length > 300;
-  const x = r?.datos;
+  const cuando = (f: string) => new Date(f).toLocaleString("es-CO", { timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   return (
     <div className="rv-modal-fondo"><div className="rv-modal" role="dialog" aria-modal="true" aria-label="Datos de contacto" data-testid="datos-contacto">
       <h3>Datos de contacto · contrato {d.contrato}</h3>
       <p className="rv-sub"><span className="ac-tag-personal">dato personal</span> Úselos solo para actualizar los datos del suscriptor. No los copie a listas ni descargas.</p>
       {!r && !error ? <p className="rv-sub" role="status">Cargando…</p> : null}
-      {r?.anulados ? <div className="rv-aviso" role="status" data-datos="anulados"><strong>Anulados</strong>{r.motivo ? ` · ${r.motivo}` : ""}</div> : null}
-      {r && !r.anulados && (r.anuladas ?? 0) > 0 ? <p className="rv-sub" data-datos="anteriores">Estos datos los volvió a enviar el analista: {r.anuladas === 1 ? "hay 1 entrega anterior anulada" : `hay ${r.anuladas} entregas anteriores anuladas`}.</p> : null}
-      {x ? <dl className="rv-per-dl" data-datos="vigentes">
-        {x.nombre ? <><dt>Nombre</dt><dd>{x.nombre}</dd></> : null}
-        {x.cedula ? <><dt>Cédula</dt><dd>{x.cedula}</dd></> : null}
-        {x.telefono ? <><dt>Teléfono</dt><dd>{x.telefono}</dd></> : null}
-        {x.correo ? <><dt>Correo</dt><dd>{x.correo}</dd></> : null}
-        {x.relacion ? <><dt>Relación con el predio</dt><dd>{RELACION[x.relacion] ?? x.relacion}</dd></> : null}
-      </dl> : null}
-      {anular && x ? <label className="rv-campo">Por qué se anulan (de 10 a 300 caracteres)<textarea rows={2} maxLength={300} value={m} onChange={(e) => setM(e.target.value)} /></label> : null}
+      {r ? <p className="rv-sub" data-datos="resumen">{r.total === 1 ? "1 entrega" : `${r.total} entregas`} · {r.vigentes === 1 ? "1 vigente" : `${r.vigentes} vigentes`}</p> : null}
+      {(r?.entregas ?? []).map((e, i) => (
+        <div key={e.id} className="rv-per-tarjeta" data-entrega={e.id} data-anulada={e.anulada ? "si" : "no"}>
+          <div className="rv-per-cab"><div><strong>Entrega {i + 1}{e.relacion ? ` · ${RELACION[e.relacion] ?? e.relacion}` : ""}</strong>
+            <div className="rv-tenue">{e.autor} · {cuando(e.registrado_en)}</div></div>
+            {e.anulada ? <span className="rv-marca rv-marca-gris">Anulada</span> : e.posible_duplicado ? <span className="rv-marca rv-marca-amar" data-marca="duplicado">Posible duplicado</span> : null}</div>
+          {e.anulada ? <p className="rv-sub">Motivo: {e.motivo}{e.anulada_por ? ` · por ${e.anulada_por}` : ""}</p> : (
+            <dl className="rv-per-dl">
+              {e.datos?.nombre ? <><dt>Nombre</dt><dd>{e.datos.nombre}</dd></> : null}
+              {e.datos?.cedula ? <><dt>Cédula</dt><dd>{e.datos.cedula}</dd></> : null}
+              {e.datos?.telefono ? <><dt>Teléfono</dt><dd>{e.datos.telefono}</dd></> : null}
+              {e.datos?.correo ? <><dt>Correo</dt><dd>{e.datos.correo}</dd></> : null}
+              {e.datos?.relacion ? <><dt>Relación con el predio</dt><dd>{RELACION[e.datos.relacion] ?? e.datos.relacion}</dd></> : null}
+            </dl>)}
+          {!e.anulada && anular !== e.id ? <div className="rv-botones"><button type="button" className="rv-boton-sec" data-accion="anular" onClick={() => { setAnular(e.id); setM(""); }}>Anular esta entrega</button></div> : null}
+          {!e.anulada && anular === e.id ? <>
+            <label className="rv-campo">Por qué se anula (de 10 a 300 caracteres)<textarea rows={2} maxLength={300} value={m} onChange={(ev) => setM(ev.target.value)} /></label>
+            <div className="rv-botones">
+              <button type="button" className="rv-boton" disabled={enviando || malo} onClick={() => { setEnviando(true); setError(null);
+                apiDocumentos.avisoDatosAnular(d.id, e.id, m.trim()).then(() => { setAnular(null); setM(""); setCambio(true); setR(null); cargar(); }).catch((x) => setError(texto(x))).finally(() => setEnviando(false)); }}>{enviando ? "Anulando…" : "Anular"}</button>
+              <button type="button" className="rv-boton-sec" disabled={enviando} onClick={() => setAnular(null)}>Cancelar</button>
+            </div></> : null}
+        </div>))}
       {error ? <p className="rv-error" role="alert">{error}</p> : null}
       <div className="rv-botones">
-        {x && !anular ? <button type="button" className="rv-boton-sec" data-accion="anular" onClick={() => setAnular(true)}>Anular estos datos</button> : null}
-        {x && anular ? <button type="button" className="rv-boton" disabled={enviando || malo} onClick={() => { setEnviando(true); setError(null);
-          apiDocumentos.avisoDatosAnular(d.id, m.trim()).then(() => { setAnular(false); setM(""); setCambio(true); setR(null); cargar(); }).catch((e) => setError(texto(e))).finally(() => setEnviando(false)); }}>{enviando ? "Anulando…" : "Anular"}</button> : null}
         <button type="button" className="rv-boton-sec" onClick={() => { setR(null); onCerrar(cambio); }}>Cerrar</button>
       </div>
     </div></div>

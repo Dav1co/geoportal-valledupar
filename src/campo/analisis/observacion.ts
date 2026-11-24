@@ -73,7 +73,9 @@ export function cuerpoObservacion(contrato: string, b: Borrador): CuerpoObservac
 export type RespuestaObservacion = { repetida: boolean; derivada_id: number; tipo: TipoObservacion; contrato: string; trae_datos?: boolean;
   ya_avisado_en?: string; estado?: string; vistos?: number; vigencia_dias?: number; datos_no_guardados?: boolean;
   /** «vigencia» (Desocupado, 20 días) o «pendiente» (los otros tres: uno pendiente a la vez). David, 24-nov. */
-  regla?: "vigencia" | "pendiente"; datos_guardados?: boolean };
+  regla?: "vigencia" | "pendiente"; datos_guardados?: boolean;
+  /** 7.4 (David, 24-nov): la entrega se guardó igual, pero ya había una vigente con la misma relación o la misma cédula. */
+  posible_duplicado?: boolean; duplicado_por?: "relacion" | "cedula" | null; duplicado_relacion?: string | null };
 const ESTADO_AVISO: Record<string, string> = { pendiente: "pendiente", atendida: "atendido", atendida_fuera: "cerrado: atendido sin formulario", anulada: "cerrado: anulado" };
 /** «3 de noviembre de 2026», en hora de Colombia. */
 export const fechaLarga = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { timeZone: "America/Bogota", day: "numeric", month: "long", year: "numeric" });
@@ -82,7 +84,14 @@ export function textoEnviada(r: RespuestaObservacion): string {
   const nombre = OBSERVACIONES.find((o) => o.codigo === r.tipo)?.nombre ?? r.tipo;
   if (r.repetida && r.regla === "pendiente") {
     const cuando = r.ya_avisado_en ? ` (avisado el ${fechaLarga(r.ya_avisado_en)})` : "";
-    if (r.datos_guardados) return `Ya hay un aviso pendiente «${nombre}» para este contrato${cuando}. Como los datos anteriores fueron anulados, los nuevos se guardaron en ese aviso: solo los verá el supervisor.`;
+    if (r.datos_guardados) {
+      if (r.posible_duplicado) {
+        const rel = RELACIONES.find((x) => x.codigo === r.duplicado_relacion)?.nombre.toLowerCase();
+        return r.duplicado_por === "relacion" && rel ? `Ya hay datos de ${rel} en este aviso. Se guardó igual; el supervisor revisa cuál vale.`
+          : "Ya hay datos con esa cédula en este aviso. Se guardó igual; el supervisor revisa cuál vale.";
+      }
+      return `Sus datos se guardaron en el aviso pendiente de este contrato${cuando}, como una entrega más: solo los verá el supervisor.`;
+    }
     return `Ya hay un aviso pendiente «${nombre}» para este contrato${cuando}. No se creó otro.` + (r.datos_no_guardados ? " Lo que escribió no se guardó." : "");
   }
   if (r.repetida) {

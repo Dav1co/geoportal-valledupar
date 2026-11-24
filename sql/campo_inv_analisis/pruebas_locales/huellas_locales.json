@@ -19,19 +19,19 @@
   "tras_reversa_campos": "barrio:texto:false:false,cita_acordada:dia_hora:false:true,despeje_caja:si_no:false:true,despeje_observacion:texto:false:true,direccion_encontrada:texto:false:true,habitado:si_no:false:false,hallazgo:opcion:true:true,medidor:texto:false:false,observacion:texto:false:true,tipo_predio:opcion:false:false,visita_concertada:si_no:false:true"
  },
  "nuevas": {
-  "HUELLA_CAMPO_NUEVA": "0d4af526b26dcd9b1a4dda0c72c236f2",
+  "HUELLA_CAMPO_NUEVA": "cce593806f59d3d27c34d7f2070cc5c1",
   "MD5_PREPARAR_NUEVA": "a00d66705d7a0c88a38ab5d882153669",
-  "MD5_DERIVADA_JSON_NUEVA": "de7ae127c52919df82d0c17957bdde8c",
+  "MD5_DERIVADA_JSON_NUEVA": "9f59c5cc28a88a5a1f2962ff9d5cb3d2",
   "MD5_DERIVADAS_NUEVA": "9addead3b57c75986cc5eed52d6cb14a",
   "MD5_ATENDER_NUEVA": "6735acb66f16e461a252cb6848b5761a",
   "MD5_ABIERTAS_NUEVA": "3f369afcec700b12f19b1522f03627e9",
   "FUNCIONES_NUEVAS": {
    "campo.f_contacto(jsonb)": "63dc714b152c72a33686c9a181abe204",
    "campo.f_texto_sin_datos(text,text,integer,integer)": "6b4d3e495cdc6be78b299325667ec537",
-   "public.geoportal_campo_analisis_observar(text,text,text,text,text,jsonb,text)": "035c62f4e9c40554e8258323f4adfdc3",
+   "public.geoportal_campo_analisis_observar(text,text,text,text,text,jsonb,text)": "b2d92153c58a2fb1deb3fe05a524e98f",
    "public.geoportal_campo_aviso_crear_actividad(text,bigint,text,text)": "ba0110257bb312f119c74a16b01313d7",
-   "public.geoportal_campo_aviso_datos(text,bigint,text)": "a9acefd7bd2b7a25110b9d45f41c97f9",
-   "public.geoportal_campo_aviso_datos_anular(text,bigint,text,text)": "860ac1b19ea4ec7bdf54164a446bd79c"
+   "public.geoportal_campo_aviso_datos(text,bigint,text)": "ed0e5da8e084dd7c15ace7dd13fa900b",
+   "public.geoportal_campo_aviso_datos_anular(text,bigint,bigint,text,text)": "207ed972b6cebcad72e9bad5f1bfd3e1"
   },
   "TABLAS_NUEVAS": {
    "campo.analisis_observaciones": "8215ffbd87376df4a32f6572808058ed",

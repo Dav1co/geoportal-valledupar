@@ -31,7 +31,7 @@ ATENDER = "public.geoportal_campo_derivada_atender(text,bigint,text,uuid,text)";
 CAMBIAN = {"PREPARAR": PREPARAR, "DERIVADA_JSON": DERJSON, "DERIVADAS": DERIVADAS, "ATENDER": ATENDER, "ABIERTAS": ABIERTAS}
 NUEVAS_F = ["campo.f_contacto(jsonb)", "campo.f_texto_sin_datos(text,text,integer,integer)",
             "public.geoportal_campo_analisis_observar(text,text,text,text,text,jsonb,text)", "public.geoportal_campo_aviso_crear_actividad(text,bigint,text,text)",
-            "public.geoportal_campo_aviso_datos(text,bigint,text)", "public.geoportal_campo_aviso_datos_anular(text,bigint,text,text)"]
+            "public.geoportal_campo_aviso_datos(text,bigint,text)", "public.geoportal_campo_aviso_datos_anular(text,bigint,bigint,text,text)"]
 RPC_NUEVAS = NUEVAS_F[2:]
 TABLAS_NUEVAS = ["campo.analisis_observaciones", "campo.analisis_observacion_datos", "campo.analisis_observacion_anulaciones", "campo.analisis_avisos_vistos"]
 # Funciones cuyo md5 exige la guardia: las que se reemplazan y aquellas de las que depende el cambio

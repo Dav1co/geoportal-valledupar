@@ -2,7 +2,7 @@ PRUEBAS LOCALES · [Code B] Investigación de ubicación recortada y avisos del 
 
 OK    B.01 la base local es copia exacta de producción (163 de 163) y trae sus huellas (campo 261bed3c…, acta 111506c6…)
 OK    B.02 huellas de solo lectura ANTES: PUBLICADA
-ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 149 de 149 pruebas correctas — SIN FALLAS
+ENSAYO TERMINADO (ERROR esperado: todo se deshace). RESULTADO: 151 de 151 pruebas correctas — SIN FALLAS
 OK    E.01 el ensayo termina en el ERROR esperado con «N de N … SIN FALLAS» (0.2 s)
 OK    E.02 el ensayo no dejó nada (huella igual, catálogo igual, sin filas ZTINV ni auditoría)
 OK    C.01 migración
@@ -41,17 +41,19 @@ OK    M.13 la vigencia ignora los avisos cerrados: el ensayo lo detecta (fallan 
 OK    M.14 la vigencia cuenta desde el último «visto otra vez»: el ensayo lo detecta (fallan 23.04)
 OK    M.15 la vigencia no lee el parámetro (siempre 20): el ensayo lo detecta (fallan 23.05)
 OK    M.16 «Otra» no compara el texto (un texto distinto no crearía su aviso): el ensayo lo detecta (fallan 23.09)
-OK    M.17 «uno pendiente a la vez» cuenta también los cerrados: el ensayo lo detecta (fallan 23.07, 23.16)
-OK    M.18 sin la excepción de los datos anulados: el ensayo lo detecta (fallan 23.11, 23.12, 23.14)
+OK    M.17 «uno pendiente a la vez» cuenta también los cerrados: el ensayo lo detecta (fallan 23.07, 23.16, 23.16)
+OK    M.18 «Actualización de datos» con el aviso pendiente no guarda la entrega nueva: el ensayo lo detecta (fallan 23.10, 23.11, 23.12, 23.13, 23.14, 23.16)
+OK    M.19 el aviso de posible duplicado no mira la cédula: el ensayo lo detecta (fallan 23.12)
+OK    M.20 anular no comprueba que la entrega sea del aviso: el ensayo lo detecta (fallan 23.15)
 OK    M.03 la migración no desactiva cita_acordada: el ensayo lo detecta (fallan 01.03, 01.04, 02.02)
 OK    M.12 la migración no desactiva «observacion» (quedarían dos cajas de texto): el ensayo lo detecta (fallan 01.03, 01.04, 02.02, 04.09)
 OK    M.04 la migración deja la dirección opcional: el ensayo lo detecta (fallan 01.03, 04.04)
-OK    M.05 el teléfono acepta cualquier número de 10 cifras: el ensayo lo detecta (fallan 13.02, 13.05, 14.03, 16.04, 16.05, 16.06, 17.05)
+OK    M.05 el teléfono acepta cualquier número de 10 cifras: el ensayo lo detecta (fallan 13.02, 13.05, 14.03, 16.04, 16.05, 17.04, 17.07)
 OK    M.06 los datos de contacto los lee quien ve la lista (supervisor de actas): el ensayo lo detecta (fallan 16.02, 16.06)
 OK    M.07 marcar sin haber consultado el contrato: el ensayo lo detecta (fallan 11.04, 13.05, 14.08)
 OK    M.08 la tabla sensible sin SELECT para homelab_lectura: el ensayo lo detecta (fallan 10.02)
-OK    M.09 la lista de derivadas trae los datos de contacto: el ensayo lo detecta (fallan 15.02, 15.06)
+OK    M.09 la lista de derivadas trae los datos de contacto: el ensayo lo detecta (fallan 15.02, 15.06, 23.16)
 OK    M.10 «Crear actividad» no cierra el aviso: el ensayo lo detecta (fallan 18.07, 18.08)
 OK    M.11 un aviso se puede atender con cualquier formulario: el ensayo lo detecta (fallan 19.03, 20.01, 20.03)
 
-RESULTADO: 201 de 201 pruebas correctas — SIN FALLAS
+RESULTADO: 205 de 205 pruebas correctas — SIN FALLAS

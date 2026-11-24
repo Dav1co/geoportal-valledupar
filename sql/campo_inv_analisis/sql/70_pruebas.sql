@@ -271,7 +271,7 @@ begin
   r := pg_temp.obs(A, '990001', 'actualizacion_datos', null, null, C); d_act := (r ->> 'derivada_id')::bigint;
   perform pg_temp.ok('14.03 «Actualización de datos» con los 5 datos crea su aviso y guarda los datos aparte, normalizados', pg_temp.err(r) = 'OK' and r -> 'trae_datos' = 'true'::jsonb
     and (select x.datos = '{"nombre": "ZTINV Persona Prueba", "cedula": "1065123456", "telefono": "3001234567", "correo": "ztinv.persona@ejemplo.com", "relacion": "arrendatario"}'::jsonb
-           from campo.derivadas d join campo.analisis_observacion_datos x on x.observacion_id = d.observacion_id where d.id = d_act), r::text);
+           from campo.derivadas d join campo.analisis_observacion_datos x on x.observacion_id = d.observacion_id where d.id = d_act order by x.id limit 1), r::text);
   perform pg_temp.ok('14.04 la respuesta al analista NO devuelve los datos de contacto', r::text !~* 'ztinv persona|1065123456|3001234567|ztinv\.persona' and not (r ? 'datos'), r::text);
   r := pg_temp.obs(A, '990001', 'otra', '[PRUEBA ZTINV] tiene perro bravo'); d_otra := (r ->> 'derivada_id')::bigint;
   perform pg_temp.ok('14.05 «Otra» con texto corto crea su aviso', pg_temp.err(r) = 'OK' and d_otra is not null, r::text);
@@ -317,9 +317,9 @@ begin
   r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', OP, d_act));
   perform pg_temp.ok('16.03 un operario no los lee (42501)', pg_temp.err(r) = '42501', r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d_act));
-  perform pg_temp.ok('16.04 el supervisor de campo los lee al abrir el aviso', pg_temp.err(r) = 'OK' and r -> 'anulados' = 'false'::jsonb and r -> 'datos' ->> 'cedula' = '1065123456' and r -> 'datos' ->> 'telefono' = '3001234567', r::text);
+  perform pg_temp.ok('16.04 el supervisor de campo los lee al abrir el aviso', pg_temp.err(r) = 'OK' and r -> 'anulados' = 'false'::jsonb and r -> 'entregas' -> 0 -> 'datos' ->> 'cedula' = '1065123456' and r -> 'entregas' -> 0 -> 'datos' ->> 'telefono' = '3001234567', r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', ADM, d_act));
-  perform pg_temp.ok('16.05 el administrador también', pg_temp.err(r) = 'OK' and r -> 'datos' ->> 'nombre' = 'ZTINV Persona Prueba', r::text);
+  perform pg_temp.ok('16.05 el administrador también', pg_temp.err(r) = 'OK' and r -> 'entregas' -> 0 -> 'datos' ->> 'nombre' = 'ZTINV Persona Prueba' and r -> 'entregas' -> 0 ->> 'autor' = A, r::text);
   perform pg_temp.ok('16.06 cada lectura queda auditada, con los nombres de las casillas y sin los valores',
     (select count(*) = 2 and bool_and(detalle -> 'campos' = '["cedula", "correo", "nombre", "relacion", "telefono"]'::jsonb and detalle::text !~* '1065123456|3001234567|ztinv persona')
        from public.geoportal_auditoria where accion = 'campo_ver_datos_contacto' and referencia = d_act::text));
@@ -327,17 +327,17 @@ begin
   perform pg_temp.ok('16.07 un aviso sin datos de contacto lo dice', pg_temp.err(r) = 'P0002', r::text);
 
   -- 17: anular los datos de contacto (Q2)
-  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', A, d_act, 'el nombre estaba mal escrito'));
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %s, %L)', A, d_act, (select x.id from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = d_act order by x.id limit 1), 'el nombre estaba mal escrito'));
   perform pg_temp.ok('17.01 el analista no anula (42501)', pg_temp.err(r) = '42501', r::text);
-  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d_act, 'mal'));
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %s, %L)', SUP, d_act, (select x.id from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = d_act order by x.id limit 1), 'mal'));
   perform pg_temp.ok('17.02 sin un motivo de 10 caracteres o más se rechaza', pg_temp.err(r) <> 'OK', r::text);
-  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d_act, '[PRUEBA ZTINV] la cédula no corresponde'));
-  perform pg_temp.ok('17.03 el supervisor anula con motivo', pg_temp.err(r) = 'OK' and r -> 'anulados' = 'true'::jsonb, r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %s, %L)', SUP, d_act, (select x.id from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = d_act order by x.id limit 1), '[PRUEBA ZTINV] la cédula no corresponde'));
+  perform pg_temp.ok('17.03 el supervisor anula la entrega con motivo', pg_temp.err(r) = 'OK' and r -> 'anulada' = 'true'::jsonb, r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d_act));
   perform pg_temp.ok('17.04 anulados: se ve «Anulados» y el motivo, sin los valores', pg_temp.err(r) = 'OK' and r -> 'anulados' = 'true'::jsonb
-    and r ->> 'motivo' = '[PRUEBA ZTINV] la cédula no corresponde' and not (r ? 'datos') and r::text !~* '1065123456|3001234567', r::text);
+    and r -> 'entregas' -> 0 ->> 'motivo' = '[PRUEBA ZTINV] la cédula no corresponde' and not (r -> 'entregas' -> 0 ? 'datos') and r::text !~* '1065123456|3001234567', r::text);
   perform pg_temp.ok('17.05 los datos siguen guardados (nada se borra)', exists (select 1 from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = d_act and x.datos ->> 'cedula' = '1065123456'));
-  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d_act, '[PRUEBA ZTINV] otra vez la anulo'));
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %s, %L)', SUP, d_act, (select x.id from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = d_act order by x.id limit 1), '[PRUEBA ZTINV] otra vez la anulo'));
   perform pg_temp.ok('17.06 anular dos veces se rechaza', pg_temp.err(r) = '55000', r::text);
   perform pg_temp.ok('17.07 la lista marca «datos anulados»', (pg_temp.fila(pg_temp.lista(SUP, '{"origen": "analisis", "contrato": "990001"}'), d_act) -> 'origen' -> 'datos_anulados') = 'true'::jsonb);
 
@@ -436,7 +436,7 @@ begin
   perform pg_temp.ok('22.03 ninguna función nueva lleva DELETE ni UPDATE', (select bool_and(pg_get_functiondef(p.oid) !~* '\m(delete|update)\M\s') from pg_proc p
      where p.oid in ('campo.f_contacto(jsonb)'::regprocedure, 'campo.f_texto_sin_datos(text,text,integer,integer)'::regprocedure,
                      'public.geoportal_campo_analisis_observar(text,text,text,text,text,jsonb,text)'::regprocedure, 'public.geoportal_campo_aviso_crear_actividad(text,bigint,text,text)'::regprocedure,
-                     'public.geoportal_campo_aviso_datos(text,bigint,text)'::regprocedure, 'public.geoportal_campo_aviso_datos_anular(text,bigint,text,text)'::regprocedure)));
+                     'public.geoportal_campo_aviso_datos(text,bigint,text)'::regprocedure, 'public.geoportal_campo_aviso_datos_anular(text,bigint,bigint,text,text)'::regprocedure)));
   perform pg_temp.ok('22.04 solo aviso_datos devuelve los datos de contacto: ninguna otra función de campo, exportación o mapa lee esa tabla',
     (select array_agg(p.proname::text order by p.proname) from pg_proc p where pg_get_functiondef(p.oid) ~ 'analisis_observacion_datos' and p.prokind = 'f')
      = array['f_derivada_json', 'geoportal_campo_analisis_observar', 'geoportal_campo_aviso_datos', 'geoportal_campo_aviso_datos_anular']::text[]);
@@ -502,41 +502,53 @@ begin
   perform pg_temp.ok('23.09 «Otra» con un texto distinto crea su propio aviso (el otro sigue pendiente)', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb
     and (select count(*) from campo.derivadas where contrato = '990006' and actividad = 'aviso_otra') = n0 + 1 and campo.f_derivada_estado(d21) = 'pendiente', r::text);
 
-  -- «Actualización de datos»: uno pendiente a la vez; excepción: si el supervisor anuló los datos, el analista los vuelve a enviar en ESE aviso
-  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "11111111", "telefono": "3001112233"}');
+  -- «Actualización de datos» (David, 24-nov, 7.4): sin restricción de envíos; cada envío es una entrega más del aviso pendiente del contrato
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "11111111", "telefono": "3001112233", "relacion": "propietario"}');
   d5 := (r ->> 'derivada_id')::bigint;
-  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "22222222"}');
-  perform pg_temp.ok('23.10 «Actualización de datos» con un aviso pendiente con datos VIGENTES: no se crea otro y los datos nuevos NO se guardan',
-    pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb and r ->> 'regla' = 'pendiente' and (r ->> 'derivada_id')::bigint = d5 and r -> 'datos_no_guardados' = 'true'::jsonb
-    and not exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '22222222') and r::text !~ '22222222', r::text);
-  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d5, '[PRUEBA ZTINV] la cédula no corresponde'));
-  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "33333333", "relacion": "familiar"}');
-  perform pg_temp.ok('23.11 anulados por el supervisor: el analista vuelve a enviar los datos y se guardan en ESE MISMO aviso (entrega nueva)',
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"nombre": "Ana Arrendataria", "cedula": "22222222", "relacion": "arrendatario"}');
+  perform pg_temp.ok('23.10 un segundo envío (arrendatario) se guarda como entrega nueva del MISMO aviso, sin aviso de duplicado y sin devolver los datos',
     pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb and r -> 'datos_guardados' = 'true'::jsonb and (r ->> 'derivada_id')::bigint = d5
-    and (select count(*) from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = d5) = 2 and r::text !~ '33333333', r::text);
+    and r -> 'posible_duplicado' = 'false'::jsonb and r::text !~ '22222222|Arrendataria'
+    and (select count(*) from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.id = d5) = 2, r::text);
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "33333333", "relacion": "propietario"}');
+  perform pg_temp.ok('23.11 otra entrega con la MISMA relación (propietario): se guarda igual y avisa del posible duplicado por relación',
+    pg_temp.err(r) = 'OK' and r -> 'datos_guardados' = 'true'::jsonb and r -> 'posible_duplicado' = 'true'::jsonb and r ->> 'duplicado_por' = 'relacion'
+    and r ->> 'duplicado_relacion' = 'propietario' and exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '33333333'), r::text);
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "22222222", "telefono": "6055701234"}');
+  perform pg_temp.ok('23.12 otra entrega con la MISMA cédula (sin relación): se guarda igual y avisa del posible duplicado por cédula',
+    pg_temp.err(r) = 'OK' and r -> 'posible_duplicado' = 'true'::jsonb and r ->> 'duplicado_por' = 'cedula' and r -> 'duplicado_relacion' = 'null'::jsonb, r::text);
   r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d5));
-  perform pg_temp.ok('23.12 el supervisor ve la entrega nueva (vigente) y que hay 1 anulada', pg_temp.err(r) = 'OK' and r -> 'anulados' = 'false'::jsonb
-    and r -> 'datos' ->> 'cedula' = '33333333' and (r ->> 'entregas')::int = 2 and (r ->> 'anuladas')::int = 1, r::text);
-  r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "44444444"}');
-  perform pg_temp.ok('23.13 con la entrega nueva vigente, otra entrega más ya no se guarda', pg_temp.err(r) = 'OK' and r -> 'datos_no_guardados' = 'true'::jsonb
-    and not exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '44444444'), r::text);
-  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %L)', SUP, d5, '[PRUEBA ZTINV] también estaba mal'));
-  jx := campo.f_derivada_json(d5);
-  perform pg_temp.ok('23.14 anulada también la segunda: la lista dice «datos anulados», con 2 entregas, y aviso_datos muestra solo el motivo',
-    pg_temp.err(r) = 'OK' and jx -> 'origen' -> 'datos_anulados' = 'true'::jsonb and (jx -> 'origen' ->> 'entregas_datos')::int = 2
-    and (pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d5)) ->> 'motivo') = '[PRUEBA ZTINV] también estaba mal', left(jx::text, 300));
-  d19 := pg_temp.aviso_viejo('actualizacion_datos', 3, '990006');
-  r := pg_temp.obs(A, '990006', 'actualizacion_datos', null, null, '{"cedula": "55555555"}');
-  perform pg_temp.ok('23.15 un aviso pendiente SIN datos (nunca tuvo): no es la excepción; los datos nuevos no se guardan', pg_temp.err(r) = 'OK' and r -> 'datos_no_guardados' = 'true'::jsonb
-    and (r ->> 'derivada_id')::bigint = d19 and not exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '55555555'), r::text);
-  perform pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%L, %s, ''anulada'', %L)', SUP, d5, '[PRUEBA ZTINV] se cierra para probar'));
+  perform pg_temp.ok('23.13 el supervisor ve las 4 entregas con relación, autor y fecha; las de propietario y las de la cédula 22222222 marcadas como posibles duplicadas',
+    pg_temp.err(r) = 'OK' and (r ->> 'total')::int = 4 and (r ->> 'vigentes')::int = 4
+    and (select bool_and(e ? 'autor' and e ? 'registrado_en' and e ? 'relacion') from jsonb_array_elements(r -> 'entregas') e)
+    and (select string_agg((e -> 'posible_duplicado')::text, ',' order by (e ->> 'id')::bigint) from jsonb_array_elements(r -> 'entregas') e) = 'true,true,true,true', r::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %s, %L)', SUP, d5,
+         (select x.id from campo.analisis_observacion_datos x where x.datos ->> 'cedula' = '11111111'), '[PRUEBA ZTINV] el propietario es el de la entrega 3'));
+  jx := pg_temp.rpc(format('public.geoportal_campo_aviso_datos(%L, %s)', SUP, d5));
+  perform pg_temp.ok('23.14 anulada una entrega: queda guardada, se ve solo su motivo, y el propietario restante deja de ser posible duplicado',
+    pg_temp.err(r) = 'OK' and (jx ->> 'vigentes')::int = 3
+    and (select e ->> 'motivo' = '[PRUEBA ZTINV] el propietario es el de la entrega 3' and not (e ? 'datos') from jsonb_array_elements(jx -> 'entregas') e where (e -> 'anulada')::boolean and e ->> 'relacion' = 'propietario')
+    and (select (e -> 'posible_duplicado')::boolean = false from jsonb_array_elements(jx -> 'entregas') e where e -> 'datos' ->> 'cedula' = '33333333')
+    and jx::text !~ '11111111' and exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '11111111'), jx::text);
+  r := pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %s, %L)', SUP, d5,
+         (select x.id from campo.analisis_observacion_datos x where x.datos ->> 'cedula' = '11111111'), '[PRUEBA ZTINV] otra vez'));
+  perform pg_temp.ok('23.15 anular dos veces la misma entrega se rechaza; una entrega de otro aviso tampoco se anula desde este', pg_temp.err(r) = '55000'
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_campo_aviso_datos_anular(%L, %s, %s, %L)', SUP, d5,
+          (select x.id from campo.analisis_observacion_datos x join campo.derivadas d on d.observacion_id = x.observacion_id where d.contrato = '990001' and d.actividad = 'aviso_actualizacion_datos' limit 1), '[PRUEBA ZTINV] de otro aviso'))) = 'P0002', r::text);
+  r := pg_temp.obs(A, '990007', 'actualizacion_datos');
+  perform pg_temp.ok('23.16 sin datos, con el aviso pendiente: «ya hay un aviso pendiente» (nada que guardar)', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'true'::jsonb
+    and not (r ? 'datos_guardados') and (r ->> 'derivada_id')::bigint = d5, r::text);
+  perform pg_temp.rpc(format('public.geoportal_campo_derivada_cerrar(%L, %s, ''atendida_fuera'', %L)', SUP, d5, '[PRUEBA ZTINV] datos actualizados en el sistema'));
   r := pg_temp.obs(A, '990007', 'actualizacion_datos', null, null, '{"cedula": "66666666"}');
-  perform pg_temp.ok('23.16 cerrado el aviso, «Actualización de datos» crea uno nuevo con sus datos', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb and (r ->> 'derivada_id')::bigint <> d5
+  perform pg_temp.ok('23.16b cerrado el aviso, el siguiente envío abre uno nuevo con su entrega', pg_temp.err(r) = 'OK' and r -> 'repetida' = 'false'::jsonb and (r ->> 'derivada_id')::bigint <> d5
     and exists (select 1 from campo.analisis_observacion_datos where datos ->> 'cedula' = '66666666'), r::text);
+  jx := campo.f_derivada_json(d5);
+  perform pg_temp.ok('23.16c la lista del aviso cerrado dice 4 entregas y 3 vigentes, sin los datos', (jx -> 'origen' ->> 'entregas_datos')::int = 4
+    and (jx -> 'origen' ->> 'entregas_vigentes')::int = 3 and jx -> 'origen' -> 'datos_anulados' = 'false'::jsonb and jx::text !~ '22222222|33333333', left(jx::text, 300));
 
-  perform pg_temp.ok('23.17 la auditoría de «visto otra vez», «ya pendiente» y «reenviados» no lleva el contrato ni los datos',
+  perform pg_temp.ok('23.17 la auditoría de «visto otra vez», «ya pendiente» y las entregas no lleva el contrato ni los datos',
     (select count(*) >= 5 and bool_and(detalle::text !~ '99000[67]|1111|2222|3333') from public.geoportal_auditoria
-      where accion in ('campo_analisis_visto_otra_vez', 'campo_analisis_ya_pendiente', 'campo_analisis_datos_reenviados') and email = A));
+      where accion in ('campo_analisis_visto_otra_vez', 'campo_analisis_ya_pendiente', 'campo_analisis_datos_entrega') and email = A));
   begin
     update campo.analisis_avisos_vistos set autor = 'x@y' where observacion_id is not null;
     perform pg_temp.ok('23.18 «visto otra vez» no se modifica (solo inserción)', false);

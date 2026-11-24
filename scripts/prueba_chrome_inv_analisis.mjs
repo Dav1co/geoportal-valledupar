@@ -189,6 +189,9 @@ try {
     await escribir(pg, "#ac-obs-correo", "Persona@Ejemplo.com"); await escribir(pg, "#ac-obs-rel", "propietario"); await esp(150); });
   ok("A06 con los 5 datos se envía y dice que solo los verá el supervisor", r.habilitado && /solo los verá el supervisor/.test(r.aviso), JSON.stringify(r));
   ok("A07 al enviar, los datos de contacto ya no están en la pantalla", !PERSONAL.test(await texto(pg)) && !(await hay(pg, "#ac-obs-cedula")));
+  r = await observar(pg, "actualizacion_datos", async () => { await escribir(pg, "#ac-obs-cedula", "1065999999"); await escribir(pg, "#ac-obs-rel", "propietario"); await esp(150); });
+  ok("A07b (7.4) otra entrega con la misma relación: «Ya hay datos de propietario en este aviso. Se guardó igual; el supervisor revisa cuál vale.»",
+    r.habilitado && /Ya hay datos de propietario en este aviso\. Se guardó igual; el supervisor revisa cuál vale\./.test(r.aviso ?? ""), JSON.stringify(r));
   r = await observar(pg, "otra", () => escribir(pg, "#ac-obs-texto", "llamar al 3001234567"));
   ok("A08 «Otra» con un teléfono no se deja enviar", !r.habilitado);
   r = await observar(pg, "otra", () => escribir(pg, "#ac-obs-texto", "[PRUEBA ZTCH] perro bravo"));
@@ -199,7 +202,8 @@ try {
   ok("A12 nada personal en localStorage ni sessionStorage", await almacenLimpio(pg));
   ok("A13 en la base: 4 observaciones y los datos de contacto aparte, con el correo en minúsculas",
     sqlq(`select count(*) from campo.analisis_observaciones where autor = '${E.ana}'`) === "4"
-    && sqlq(`select x.datos ->> 'correo' from campo.analisis_observacion_datos x join campo.analisis_observaciones o on o.id = x.observacion_id where o.autor = '${E.ana}'`) === "persona@ejemplo.com");
+    && sqlq(`select x.datos ->> 'correo' from campo.analisis_observacion_datos x join campo.analisis_observaciones o on o.id = x.observacion_id where o.autor = '${E.ana}' order by x.id limit 1`) === "persona@ejemplo.com"
+    && sqlq(`select count(*) from campo.analisis_observacion_datos x join campo.analisis_observaciones o on o.id = x.observacion_id where o.autor = '${E.ana}'`) === "2");
   await pg.close();
   pg = await abrir("analisis", "ana", 1280);
   ok("A14 (1280) la tarjeta se ve en escritorio, sin desborde", await consultar(pg, "123456") && await sinDesborde(pg)); await foto(pg, "A14_analisis_1280");
@@ -216,7 +220,7 @@ try {
   ok("B02 con Origen = Análisis de contrato ve los 4 avisos", await esperar(pg, () => document.querySelectorAll('[data-origen="analisis"]').length === 4), await texto(pg));
   let t = await texto(pg, '[data-testid="derivadas"]');
   ok("B03 cada aviso dice de dónde viene (Análisis de contrato · observación · quién) y la lista NO trae los datos de contacto",
-    /Análisis de contrato · Dirección errada/.test(t) && /Aviso: actualización de datos/.test(t) && /Sí \(se ven al abrirlos\)/.test(t) && !PERSONAL.test(t), t.slice(0, 900));
+    /Análisis de contrato · Dirección errada/.test(t) && /Aviso: actualización de datos/.test(t) && /2 entregas · se ven al abrirlos/.test(t) && !PERSONAL.test(t) && !/1065999999/.test(t), t.slice(0, 900));
   ok("B04 muestra la dirección correcta y el texto de «Otra»", /\[PRUEBA ZTCH\] CRA 9 # 12-30/.test(t) && /perro bravo/.test(t));
   const idDes = sqlq(`select d.id from campo.derivadas d where d.actividad = 'aviso_desocupado' and d.contrato = '123456'`);
   const tDes = await texto(pg, `[data-derivada="${idDes}"]`);
@@ -227,11 +231,15 @@ try {
   ok("B05 «Ver datos de contacto» abre los datos (lectura auditada)", await esperar(pg, () => /1065123456/.test(document.querySelector('[data-testid="datos-contacto"]')?.innerText ?? ""))
     && sqlq(`select count(*) from public.geoportal_auditoria where accion = 'campo_ver_datos_contacto' and email = '${E.sup}'`) === "1");
   t = await texto(pg, '[data-testid="datos-contacto"]');
-  ok("B06 con nombre, cédula, teléfono, correo y relación", /ZTCH Persona/.test(t) && /3001234567/.test(t) && /persona@ejemplo\.com/.test(t) && /Propietario/.test(t), t);
+  ok("B06 cada entrega con sus datos, su autor y fecha; las dos de propietario marcadas «Posible duplicado»", /ZTCH Persona/.test(t) && /3001234567/.test(t)
+    && /persona@ejemplo\.com/.test(t) && /Entrega 1 · Propietario/.test(t) && /Entrega 2 · Propietario/.test(t) && /ztch\.ana@emdupar\.gov\.co/.test(t) && /1065999999/.test(t)
+    && (await pg.$$('[data-testid="datos-contacto"] [data-marca="duplicado"]')).length === 2, t);
   await foto(pg, "B06_datos_1280");
   await clic(pg, '[data-testid="datos-contacto"] [data-accion="anular"]'); await esp(150);
   await escribir(pg, '[data-testid="datos-contacto"] textarea', "[PRUEBA ZTCH] la cédula no corresponde"); await clicTexto(pg, '[data-testid="datos-contacto"] button', "Anular");
-  ok("B07 al anularlos se ve «Anulados» y el motivo, sin los valores", await esperar(pg, () => { const x = document.querySelector('[data-testid="datos-contacto"]')?.innerText ?? ""; return /Anulados/.test(x) && /no corresponde/.test(x) && !/1065123456/.test(x); }));
+  ok("B07 al anular la entrega 1 queda «Anulada» con su motivo y sin sus valores; la 2 sigue vigente y deja de ser posible duplicado", await esperar(pg, () => {
+    const x = document.querySelector('[data-testid="datos-contacto"]')?.innerText ?? "";
+    return /Anulada/.test(x) && /no corresponde/.test(x) && !/1065123456/.test(x) && /1065999999/.test(x) && !document.querySelector('[data-testid="datos-contacto"] [data-marca="duplicado"]'); }));
   await clicTexto(pg, '[data-testid="datos-contacto"] button', "Cerrar"); await esp(400);
   ok("B08 al cerrar, los datos no quedan en la página ni en el navegador", !PERSONAL.test(await pg.evaluate(() => document.documentElement.outerHTML)) && await almacenLimpio(pg));
   const idDir = sqlq(`select d.id from campo.derivadas d where d.actividad = 'aviso_direccion_errada' and d.contrato = '123456'`);
