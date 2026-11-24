@@ -69,10 +69,23 @@ export function cuerpoObservacion(contrato: string, b: Borrador): CuerpoObservac
   return cuerpo;
 }
 
-export type RespuestaObservacion = { repetida: boolean; derivada_id: number; tipo: TipoObservacion; contrato: string; trae_datos?: boolean };
+/** Sección 7 (vigencia): si es «repetida», el aviso que ya existía (pendiente o cerrado) dentro de la vigencia; no se creó otro y quedó «visto otra vez». */
+export type RespuestaObservacion = { repetida: boolean; derivada_id: number; tipo: TipoObservacion; contrato: string; trae_datos?: boolean;
+  ya_avisado_en?: string; estado?: string; vistos?: number; vigencia_dias?: number; datos_no_guardados?: boolean };
+const ESTADO_AVISO: Record<string, string> = { pendiente: "pendiente", atendida: "atendido", atendida_fuera: "cerrado: atendido sin formulario", anulada: "cerrado: anulado" };
+/** «3 de noviembre de 2026», en hora de Colombia. */
+export const fechaLarga = (iso: string) => new Date(iso).toLocaleDateString("es-CO", { timeZone: "America/Bogota", day: "numeric", month: "long", year: "numeric" });
 /** El aviso que se muestra después de enviar. */
 export function textoEnviada(r: RespuestaObservacion): string {
   const nombre = OBSERVACIONES.find((o) => o.codigo === r.tipo)?.nombre ?? r.tipo;
-  return r.repetida ? `Ya había un aviso «${nombre}» pendiente para este contrato: no se guardó otro.`
-    : `Quedó en la lista del supervisor: «${nombre}».${r.trae_datos ? " Los datos de contacto solo los verá el supervisor." : ""}`;
+  if (r.repetida) {
+    const cuando = r.ya_avisado_en ? ` el ${fechaLarga(r.ya_avisado_en)}` : "";
+    const estado = r.estado ? ` (${ESTADO_AVISO[r.estado] ?? r.estado})` : "";
+    return `Ya se avisó «${nombre}»${cuando}${estado}. No se creó otro aviso: se anotó que usted lo volvió a ver.`
+      + (r.datos_no_guardados ? " Lo que escribió no se guardó." : "");
+  }
+  return `Quedó en la lista del supervisor: «${nombre}».${r.trae_datos ? " Los datos de contacto solo los verá el supervisor." : ""}`;
 }
+/** Antigüedad de un aviso (sección 7: los pendientes viejos no se cierran solos). */
+export const antiguedadTexto = (dias: number | null | undefined): string =>
+  dias === null || dias === undefined ? "" : dias <= 0 ? "hoy" : dias === 1 ? "hace 1 día" : `hace ${dias} días`;

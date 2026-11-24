@@ -73,6 +73,8 @@ AS $function$
   -- Investigación y Análisis (23-nov): el origen es un registro (revisión, PQR, instalación) o una observación del Análisis de contrato.
   -- Sin datos de contacto: solo «trae_datos» y «datos_anulados». El destino propio de la derivada (actividad creada por el supervisor) manda sobre el del catálogo.
   select jsonb_build_object('id', d.id, 'actividad', d.actividad, 'actividad_nombre', c.nombre, 'contrato', d.contrato, 'estado', campo.f_derivada_estado(d.id), 'creada_en', d.creado_en,
+           -- sección 7: días (de calendario, hora de Colombia) desde que se creó; los pendientes viejos no se cierran solos y muestran su antigüedad
+           'antiguedad_dias', (clock_timestamp() at time zone 'America/Bogota')::date - (d.creado_en at time zone 'America/Bogota')::date,
            'destinos', case when d.destino is not null then jsonb_build_array(d.destino) else to_jsonb(c.destinos) end,
            'destino_omision', coalesce(d.destino, c.destino_omision),
            'destino_nombre', (select t2.nombre from campo.tipos_reporte t2 where 'tipo:' || t2.codigo = d.destino),
@@ -86,7 +88,11 @@ AS $function$
                                   'trae_datos', exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = o.id),
                                   'datos_anulados', exists (select 1 from campo.analisis_observacion_anulaciones x where x.observacion_id = o.id),
                                   'aviso_id', (select a.id from campo.derivadas a where a.observacion_id = o.id and a.actividad like 'aviso\_%'),
-                                  'actividad_creada_id', (select a.id from campo.derivadas a where a.observacion_id = o.id and a.actividad = 'actividad_supervisor'))
+                                  'actividad_creada_id', (select a.id from campo.derivadas a where a.observacion_id = o.id and a.actividad = 'actividad_supervisor'),
+                                  -- sección 7: cuántas veces lo vieron otra vez dentro de la vigencia, y la última
+                                  'vistos', (select count(*) from campo.analisis_avisos_vistos v where v.observacion_id = o.id),
+                                  'ultimo_visto', (select jsonb_build_object('en', v.visto_en, 'autor', v.autor) from campo.analisis_avisos_vistos v
+                                                    where v.observacion_id = o.id order by v.visto_en desc, v.id desc limit 1))
              end,
            'cierre', (select jsonb_build_object('tipo', e.tipo_evento, 'esquema', e.esquema, 'registro_id', e.registro_id, 'autor', e.autor, 'en', e.creado_en, 'motivo', e.motivo,
                                                  'consecutivo', case e.esquema when 'campo' then (select x.consecutivo from campo.reportes x where x.id = e.registro_id)
@@ -173,7 +179,7 @@ create function public.geoportal_campo_analisis_observar(p_solicitante text, p_c
                                                          p_contacto jsonb default null, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = public, campo, pg_temp as $f$
 declare v_email text; v_c text := btrim(coalesce(p_contrato, '')); v_tipo text := btrim(coalesce(p_tipo, '')); v_txt text; v_dir text; v_con jsonb;
-  v_obs uuid; v_der bigint; v_prev bigint;
+  v_obs uuid; v_der bigint; v_prev bigint; v_prev_obs uuid; v_prev_en timestamptz; v_vig integer;
 begin
   v_email := campo.f_autorizar_analisis(p_solicitante);
   if v_c !~ '^\d{1,12}$' then perform campo.f_error('Escriba solo los números del contrato (hasta 12 dígitos)'); end if;
@@ -194,11 +200,20 @@ begin
   if v_con is not null and v_tipo <> 'actualizacion_datos' then perform campo.f_error('Los datos de contacto solo van en «Actualización de datos»'); end if;
 
   perform pg_advisory_xact_lock(hashtext('campo_aviso:' || v_c));
-  -- Sin doble registro: si ya hay un aviso pendiente del mismo contrato y la misma observación, se devuelve ese y no se guarda nada
-  select d.id into v_prev from campo.derivadas d
-   where d.contrato = v_c and d.actividad = 'aviso_' || v_tipo and campo.f_derivada_estado(d.id) = 'pendiente' order by d.id limit 1;
+  -- Vigencia (sección 7, David 24-nov; reemplaza «si hay un aviso pendiente igual, devuelve ese»): dentro de vigencia_avisos_dias desde el aviso ORIGINAL del mismo
+  -- contrato y la misma observación, esté pendiente o cerrado, no se crea otro: se anota «visto otra vez» y no se guarda ningún dato nuevo (texto, dirección ni
+  -- datos de contacto: P1 a P3 abiertas). La vigencia cuenta desde el aviso original, no desde el último «visto otra vez» (P4).
+  v_vig := campo.f_param('vigencia_avisos_dias')::integer;
+  select o.id, o.creado_en, d.id into v_prev_obs, v_prev_en, v_prev
+    from campo.analisis_observaciones o join campo.derivadas d on d.observacion_id = o.id and d.actividad = 'aviso_' || v_tipo
+   where o.contrato = v_c and o.tipo = v_tipo and o.creado_en > clock_timestamp() - make_interval(days => v_vig)
+   order by o.creado_en desc limit 1;
   if v_prev is not null then
-    return jsonb_build_object('repetida', true, 'derivada_id', v_prev, 'tipo', v_tipo, 'contrato', v_c);
+    insert into campo.analisis_avisos_vistos (observacion_id, autor, ip) values (v_prev_obs, v_email, left(p_ip, 64));
+    perform campo.f_auditar(v_email, 'campo_analisis_visto_otra_vez', v_prev_obs::text, jsonb_build_object('tipo', v_tipo, 'derivada', v_prev), p_ip);
+    return jsonb_build_object('repetida', true, 'derivada_id', v_prev, 'tipo', v_tipo, 'contrato', v_c, 'ya_avisado_en', v_prev_en,
+      'estado', campo.f_derivada_estado(v_prev), 'vistos', (select count(*) from campo.analisis_avisos_vistos v where v.observacion_id = v_prev_obs),
+      'vigencia_dias', v_vig, 'datos_no_guardados', (v_con is not null or v_dir is not null or v_txt is not null));
   end if;
 
   insert into campo.analisis_observaciones (contrato, tipo, texto, direccion_correcta, autor, ip) values (v_c, v_tipo, v_txt, v_dir, v_email, left(p_ip, 64)) returning id into v_obs;

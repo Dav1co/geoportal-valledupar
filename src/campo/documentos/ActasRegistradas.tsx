@@ -9,6 +9,7 @@ import { apiDocumentos, type DatosAviso, type Esquema, type FilaActa, type FilaD
 import { apiCampo } from "../apiCampo";
 import type { TipoFormato } from "../formatos/tipos";
 import "../analisis/analisis.css";
+import { antiguedadTexto } from "../analisis/observacion";
 import { PdfRegistro } from "./Registro";
 
 // «Actas registradas» (Comercial 21-nov; decisiones B2 y D11 de David): la entrada del supervisor de actas (y del supervisor de campo y el administrador). Pestañas:
@@ -190,6 +191,8 @@ function Derivadas({ puedeCerrar }: { puedeCerrar: boolean }) {
               <dt>Viene de</dt><dd>{deAnalisis ? `Análisis de contrato · ${o.observacion_nombre ?? ""} · ${o.operario ?? ""} · ${cuando(o.fecha)}` : `${o.consecutivo ?? o.tipo} · ${cuando(o.fecha)}`}</dd>
               {o.direccion_correcta ? <><dt>Dirección correcta</dt><dd>{o.direccion_correcta}</dd></> : null}
               {o.texto ? <><dt>Observación</dt><dd>{o.texto}</dd></> : null}
+              {esAviso && d.antiguedad_dias !== undefined ? <><dt>Antigüedad</dt><dd data-dato="antiguedad">{antiguedadTexto(d.antiguedad_dias)}</dd></> : null}
+              {esAviso && o.vistos ? <><dt>Visto otra vez</dt><dd data-dato="vistos">{o.vistos} {o.vistos === 1 ? "vez" : "veces"}{o.ultimo_visto ? ` · último ${cuando(o.ultimo_visto.en)} por ${o.ultimo_visto.autor}` : ""}</dd></> : null}
               {esAviso && o.trae_datos ? <><dt>Datos de contacto</dt><dd>{o.datos_anulados ? "Anulados" : "Sí (se ven al abrirlos)"}</dd></> : null}
               {d.cierre?.tipo === "atendida" ? <><dt>La atendió</dt><dd>{d.cierre.consecutivo ?? "un registro"} · {cuando(d.cierre.en)}</dd></> : null}
               {d.cierre && d.cierre.tipo !== "atendida" ? <><dt>{d.cierre.tipo === "anulada" ? "Anulada" : "Cerrada sin formulario"}</dt><dd>{cuando(d.cierre.en)} · por {d.cierre.autor}</dd></> : null}

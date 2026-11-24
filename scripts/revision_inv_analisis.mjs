@@ -53,6 +53,12 @@ sqlq(`insert into public.geoportal_lista_blanca (email, nombre, rol, activo, cre
   ${fila(U.operario, "Prueba operario de campo", "consulta", ["ver_campo"])},
   ${fila(U.supActas, "Prueba supervisor de actas", "consulta", ["ver_acta", "ver_dashboard_acta"])},
   ${fila(U.admin, "Prueba administrador", "admin", [])}`);
+// Sección 7 (vigencia): dos avisos de PRUEBA fechados hacia atrás en el contrato 123456, para revisar la vigencia sin esperar días:
+// «Desocupado» de hace 15 días (vigente: marcarlo da «Ya se avisó el …») y «Otra» de hace 25 días (vencido: marcarlo crea un aviso nuevo; el viejo sigue pendiente).
+for (const [tipo, dias, texto] of [["desocupado", 15, null], ["otra", 25, "[PRUEBA] aviso viejo de hace 25 días"]]) {
+  sqlq(`with o as (insert into campo.analisis_observaciones (contrato, tipo, texto, autor, creado_en) values ('123456', '${tipo}', ${lit(texto)}, '${U.analista}${D}', clock_timestamp() - interval '${dias} days') returning id, creado_en)
+        insert into campo.derivadas (observacion_id, contrato, actividad, creado_en) select id, '123456', 'aviso_${tipo}', creado_en from o`);
+}
 const HUELLA = sqlq("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_campo\\_%')");
 
 // ---------- 1. La app completa (Vite), apuntando a los servidores locales ----------
@@ -189,7 +195,8 @@ if (MODO === "--servir") {
   const inv = r.j?.grupos?.flatMap((g) => g.tipos).find((t) => t.codigo === "investigacion_ubicacion");
   ok("la Investigación llega con 0 a 6 fotos y sin resultado", r.s === 200 && inv?.fotos_min === 0 && inv?.genera_resultado === false, JSON.stringify(inv)?.slice(0, 200));
   r = await edgeLlama(U.supCampo, "derivadas", { origen: "analisis" });
-  ok("el supervisor de campo abre la lista con Origen = Análisis de contrato (vacía al empezar)", r.s === 200 && Array.isArray(r.j?.filas) && r.j.filas.length === 0, JSON.stringify(r));
+  ok("el supervisor de campo abre la lista con Origen = Análisis de contrato: los 2 avisos sembrados (hace 15 y 25 días)", r.s === 200 && Array.isArray(r.j?.filas)
+    && r.j.filas.map((f) => f.antiguedad_dias).sort((a, b) => a - b).join(",") === "15,25", JSON.stringify(r).slice(0, 300));
   r = await edgeLlama(U.analista, "analisis_observar", { contrato: "123456", tipo: "desocupado" });
   ok("el analista no marca sin consultar antes el contrato (409)", r.s === 409, JSON.stringify(r));
   await nav.close(); edge.kill(); base.close(); web.close();

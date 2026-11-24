@@ -68,6 +68,35 @@ begin
   alter table campo.derivadas add constraint derivadas_observacion_id_actividad_key unique (observacion_id, actividad);
 end $estructura$;
 
+-- Vigencia de los avisos (sección 7, David 24-nov): dentro de «vigencia_avisos_dias» desde el aviso ORIGINAL del mismo tipo y contrato (pendiente o cerrado) no se crea
+-- otro; se anota «visto otra vez» (quién y cuándo, sin datos nuevos). Tabla de solo inserción, con los mismos permisos que las demás tablas nuevas.
+do $vistos$
+begin
+  if to_regclass('campo.analisis_avisos_vistos') is not null then
+    raise notice 'campo.analisis_avisos_vistos se conservó de una reversa: se reutiliza';
+    return;
+  end if;
+  create table campo.analisis_avisos_vistos (
+    id             bigint generated always as identity primary key,
+    observacion_id uuid not null references campo.analisis_observaciones (id),
+    autor          text not null check (autor = lower(autor) and position('@' in autor) > 1),
+    visto_en       timestamptz not null default clock_timestamp(),
+    ip             text check (ip is null or length(ip) <= 64)
+  );
+  create index analisis_avisos_vistos_obs_idx on campo.analisis_avisos_vistos (observacion_id, visto_en desc);
+  create trigger t_solo_agregar before delete or update on campo.analisis_avisos_vistos for each row execute function campo.f_solo_agregar();
+  create trigger t_solo_agregar_trunc before truncate on campo.analisis_avisos_vistos for each statement execute function campo.f_solo_agregar();
+  comment on table campo.analisis_avisos_vistos is 'Avisos del Análisis de contrato «vistos otra vez»: una observación igual dentro de la vigencia (campo.parametros vigencia_avisos_dias) no crea otro aviso; se anota aquí. Solo inserción; sin datos nuevos.';
+  alter table campo.analisis_avisos_vistos enable row level security;
+  revoke all on campo.analisis_avisos_vistos from public, anon, authenticated, service_role;
+  grant select on campo.analisis_avisos_vistos to homelab_lectura;
+end $vistos$;
+
+-- El parámetro de la vigencia (20 días por omisión; el administrador lo cambia en Catálogo → Parámetros). Si una reversa lo dejó (no se borra), se conserva su valor.
+insert into campo.parametros (clave, valor, unidad, descripcion, minimo, maximo, actualizado_por) values
+  ('vigencia_avisos_dias', 20, 'días', 'Días en que un aviso del Análisis de contrato vale para el mismo contrato y la misma observación; dentro de ellos no se crea otro', 1, 365, 'migracion@geoportal')
+on conflict (clave) do nothing;
+
 -- Catálogo de derivadas: los 4 avisos y la actividad que crea el supervisor (sin destinos propios). Si una reversa los desactivó, se reactivan.
 insert into campo.derivadas_catalogo (codigo, nombre, destinos, destino_omision, activa, orden, autor) values
   ('aviso_desocupado', 'Aviso: predio desocupado', '{}', null, true, 60, 'migracion@geoportal'),

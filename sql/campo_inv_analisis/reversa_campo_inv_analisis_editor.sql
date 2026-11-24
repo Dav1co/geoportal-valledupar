@@ -14,7 +14,7 @@ begin
   if md5(pg_get_functiondef('public.geoportal_campo_preparar_subida(text,integer,text,text,text)'::regprocedure)) is distinct from 'a00d66705d7a0c88a38ab5d882153669' then
     raise exception 'preparar_subida no es la de este paquete (sin aplicar o cambiada después): la reversa no la pisa; deténgase y avise';
   end if;
-  for r in select * from (values ('public.geoportal_campo_preparar_subida(text,integer,text,text,text)', 'a00d66705d7a0c88a38ab5d882153669'), ('campo.f_derivada_json(bigint)', 'e6ac36420ee4dcc409bab33e20f7c3b0'), ('public.geoportal_campo_derivadas(text,jsonb,text)', '9addead3b57c75986cc5eed52d6cb14a'), ('public.geoportal_campo_derivada_atender(text,bigint,text,uuid,text)', '6735acb66f16e461a252cb6848b5761a'), ('public.geoportal_campo_derivadas_abiertas(text,text,text,text)', '3f369afcec700b12f19b1522f03627e9')) x(f, m) loop
+  for r in select * from (values ('public.geoportal_campo_preparar_subida(text,integer,text,text,text)', 'a00d66705d7a0c88a38ab5d882153669'), ('campo.f_derivada_json(bigint)', '3a303fdd25d47281413d5b37cb6c3491'), ('public.geoportal_campo_derivadas(text,jsonb,text)', '9addead3b57c75986cc5eed52d6cb14a'), ('public.geoportal_campo_derivada_atender(text,bigint,text,uuid,text)', '6735acb66f16e461a252cb6848b5761a'), ('public.geoportal_campo_derivadas_abiertas(text,text,text,text)', '3f369afcec700b12f19b1522f03627e9')) x(f, m) loop
     if md5(pg_get_functiondef(to_regprocedure(r.f))) is distinct from r.m then
       raise exception 'La función % cambió después de este paquete: la reversa no la pisa; deténgase y avise', r.f;
     end if;

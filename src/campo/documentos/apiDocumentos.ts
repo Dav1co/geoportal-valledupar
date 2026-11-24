@@ -22,8 +22,8 @@ export type PaginaActas = { filas: FilaActa[]; siguiente: string | number | null
 /** Origen de una derivada: un registro (revisión, PQR, instalación) o, desde el 23-nov, una observación del Análisis de contrato (aviso al supervisor). */
 export type OrigenDerivada = { clase?: "registro" | "analisis"; registro_id?: string; tipo: string; tipo_nombre?: string; consecutivo?: string | null; fecha: string; operario?: string;
   observacion?: string; observacion_nombre?: string; texto?: string | null; direccion_correcta?: string | null; trae_datos?: boolean; datos_anulados?: boolean;
-  aviso_id?: number | null; actividad_creada_id?: number | null };
-export type Derivada = { id: number; actividad: string; actividad_nombre: string; destinos?: string[]; destino_nombre?: string | null; origen: OrigenDerivada };
+  aviso_id?: number | null; actividad_creada_id?: number | null; vistos?: number; ultimo_visto?: { en: string; autor: string } | null };
+export type Derivada = { id: number; actividad: string; actividad_nombre: string; destinos?: string[]; destino_nombre?: string | null; antiguedad_dias?: number; origen: OrigenDerivada };
 /** Datos de contacto de un aviso (Ley 1581): solo el supervisor de campo y el administrador; anulados, solo el motivo. No se guardan en el navegador. */
 export type DatosAviso = { derivada_id: number; anulados: boolean; datos?: { nombre?: string; cedula?: string; telefono?: string; correo?: string; relacion?: string };
   motivo?: string; anulados_en?: string; anulados_por?: string };

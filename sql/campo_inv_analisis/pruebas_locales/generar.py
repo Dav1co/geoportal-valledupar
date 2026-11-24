@@ -33,7 +33,7 @@ NUEVAS_F = ["campo.f_contacto(jsonb)", "campo.f_texto_sin_datos(text,text,intege
             "public.geoportal_campo_analisis_observar(text,text,text,text,text,jsonb,text)", "public.geoportal_campo_aviso_crear_actividad(text,bigint,text,text)",
             "public.geoportal_campo_aviso_datos(text,bigint,text)", "public.geoportal_campo_aviso_datos_anular(text,bigint,text,text)"]
 RPC_NUEVAS = NUEVAS_F[2:]
-TABLAS_NUEVAS = ["campo.analisis_observaciones", "campo.analisis_observacion_datos", "campo.analisis_observacion_anulaciones"]
+TABLAS_NUEVAS = ["campo.analisis_observaciones", "campo.analisis_observacion_datos", "campo.analisis_observacion_anulaciones", "campo.analisis_avisos_vistos"]
 # Funciones cuyo md5 exige la guardia: las que se reemplazan y aquellas de las que depende el cambio
 FUNCIONES = [PREPARAR, CREAR, "public.geoportal_campo_obtener_formulario(text,boolean)", "campo.f_validar_datos(bigint,jsonb,boolean)",
              DERJSON, DERIVADAS, ATENDER, ABIERTAS, "public.geoportal_campo_derivada_cerrar(text,bigint,text,text,text)",
@@ -156,7 +156,7 @@ select o, k, v, estado from (
         fila(13, "13 las 4 RPC nuevas solo para service_role; las 2 internas, para nadie de la API",
              " and ".join(f"has_function_privilege('service_role', {lit(f)}, 'execute') and not has_function_privilege('anon', {lit(f)}, 'execute') and not has_function_privilege('authenticated', {lit(f)}, 'execute')" for f in RPC_NUEVAS)
              + " and " + " and ".join(f"not has_function_privilege({lit(r)}, {lit(f)}, 'execute')" for f in NUEVAS_F[:2] for r in ("anon", "authenticated", "service_role"))),
-        fila(14, "14 las 3 tablas nuevas: RLS activa, sin políticas, sin permisos para la API y SELECT para homelab_lectura (respaldo)",
+        fila(14, "14 las 4 tablas nuevas: RLS activa, sin políticas, sin permisos para la API y SELECT para homelab_lectura (respaldo)",
              " and ".join(f"(select relrowsecurity from pg_class where oid = {lit(t)}::regclass) and not has_table_privilege('anon', {lit(t)}, 'select') "
                           f"and not has_table_privilege('authenticated', {lit(t)}, 'select') and not has_table_privilege('service_role', {lit(t)}, 'select') "
                           f"and not has_table_privilege('service_role', {lit(t)}, 'insert') and has_table_privilege('homelab_lectura', {lit(t)}, 'select') "
@@ -169,6 +169,8 @@ select o, k, v, estado from (
         fila(17, "17 solo una función lee los datos de contacto (aviso_datos); ninguna exportación ni lista los toca",
              "(select array_agg(p.proname::text order by p.proname) from pg_proc p where pg_get_functiondef(p.oid) ~ 'analisis_observacion_datos' and p.prokind = 'f') "
              "= array['f_derivada_json', 'geoportal_campo_analisis_observar', 'geoportal_campo_aviso_datos', 'geoportal_campo_aviso_datos_anular']::text[]"),
+        fila(18, "18 el parámetro vigencia_avisos_dias existe (días, de 1 a 365; 20 por omisión)",
+             "exists (select 1 from campo.parametros where clave = 'vigencia_avisos_dias' and unidad = 'días' and minimo = 1 and maximo = 365 and valor between 1 and 365)"),
     ]
     ver = "select o, k, estado from (\n" + "\n  union all\n".join(filas) + "\n) t order by o;\n"
     return {f"migracion_{NOMBRE}_editor.sql": CAB.format(que="MIGRACIÓN") + "begin;\n" + poner(cuerpo(), p) + "\ncommit;\n",

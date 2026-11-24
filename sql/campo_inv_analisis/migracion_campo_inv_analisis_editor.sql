@@ -43,7 +43,7 @@ begin
     end if;
   end loop;
   -- Las tablas nuevas: no existen, o existen exactamente como las crea este paquete (las conservó una reversa)
-  for r in select * from (values ('campo.analisis_observaciones', '8215ffbd87376df4a32f6572808058ed'), ('campo.analisis_observacion_datos', '63f4f4d56c7fdc55c87301a014a6aef8'), ('campo.analisis_observacion_anulaciones', '04b4d45b71109783285d3cc0f1eec1ab')) x(t, m) loop
+  for r in select * from (values ('campo.analisis_observaciones', '8215ffbd87376df4a32f6572808058ed'), ('campo.analisis_observacion_datos', '63f4f4d56c7fdc55c87301a014a6aef8'), ('campo.analisis_observacion_anulaciones', '04b4d45b71109783285d3cc0f1eec1ab'), ('campo.analisis_avisos_vistos', '9300c3a82441b35f2fe632aaf7d966d8')) x(t, m) loop
     if to_regclass(r.t) is not null then
       select md5(concat_ws('#', (select string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ' NOT NULL' else '' end || coalesce(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), '') || case when a.attidentity <> '' then ' IDENTITY ' || a.attidentity::text else '' end, ', ' order by a.attnum) from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum where a.attrelid = z.rel and a.attnum > 0 and not a.attisdropped), (select string_agg(c.conname || ' ' || pg_get_constraintdef(c.oid), ' | ' order by c.conname) from pg_constraint c where c.conrelid = z.rel), (select string_agg(pg_get_indexdef(i.indexrelid), ' | ' order by pg_get_indexdef(i.indexrelid)) from pg_index i where i.indrelid = z.rel), (select string_agg(pg_get_triggerdef(g.oid), ' | ' order by g.tgname) from pg_trigger g where g.tgrelid = z.rel and not g.tgisinternal), (select c.relkind::text || ' ' || c.relrowsecurity::text || ' ' || coalesce(c.relacl::text, '') from pg_class c where c.oid = z.rel))) into v from (select to_regclass(r.t) as rel) z;
       if v is distinct from r.m then raise exception 'La tabla % ya existe y no es la de este paquete: deténgase y avise', r.t; end if;
@@ -55,6 +55,18 @@ begin
   end if;
   if not exists (select 1 from pg_roles where rolname = 'homelab_lectura' and rolbypassrls) then
     raise exception 'No existe el rol homelab_lectura con BYPASSRLS: deténgase y avise';
+  end if;
+  -- campo.parametros (sección 7): la consulta de producción del 23-nov no la trajo; se exigen las columnas que usa el paquete, con su tipo y su NOT NULL, y que la
+  -- clave vigencia_avisos_dias esté libre o sea la que dejó la reversa de este paquete (no se borra). Si producción no coincide, se detiene sin cambiar nada.
+  if to_regclass('campo.parametros') is null
+     or (select string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ':nn' else '' end, ',' order by a.attnum)
+           from pg_attribute a where a.attrelid = 'campo.parametros'::regclass and a.attnum > 0 and not a.attisdropped
+            and a.attname in ('clave', 'valor', 'unidad', 'descripcion', 'minimo', 'maximo', 'actualizado_por'))
+        is distinct from 'clave:text:nn,valor:numeric:nn,unidad:text:nn,descripcion:text:nn,minimo:numeric,maximo:numeric,actualizado_por:text' then
+    raise exception 'campo.parametros no tiene las columnas que usa este paquete: deténgase y avise';
+  end if;
+  if exists (select 1 from campo.parametros where clave = 'vigencia_avisos_dias' and (unidad <> 'días' or minimo is distinct from 1 or maximo is distinct from 365)) then
+    raise exception 'Ya existe el parámetro vigencia_avisos_dias y no es el de este paquete: deténgase y avise';
   end if;
   -- Estado de partida de la Investigación de ubicación
   select * into v_t from campo.tipos_reporte where codigo = 'investigacion_ubicacion';
@@ -241,6 +253,35 @@ begin
   alter table campo.derivadas add constraint derivadas_observacion_id_actividad_key unique (observacion_id, actividad);
 end $estructura$;
 
+-- Vigencia de los avisos (sección 7, David 24-nov): dentro de «vigencia_avisos_dias» desde el aviso ORIGINAL del mismo tipo y contrato (pendiente o cerrado) no se crea
+-- otro; se anota «visto otra vez» (quién y cuándo, sin datos nuevos). Tabla de solo inserción, con los mismos permisos que las demás tablas nuevas.
+do $vistos$
+begin
+  if to_regclass('campo.analisis_avisos_vistos') is not null then
+    raise notice 'campo.analisis_avisos_vistos se conservó de una reversa: se reutiliza';
+    return;
+  end if;
+  create table campo.analisis_avisos_vistos (
+    id             bigint generated always as identity primary key,
+    observacion_id uuid not null references campo.analisis_observaciones (id),
+    autor          text not null check (autor = lower(autor) and position('@' in autor) > 1),
+    visto_en       timestamptz not null default clock_timestamp(),
+    ip             text check (ip is null or length(ip) <= 64)
+  );
+  create index analisis_avisos_vistos_obs_idx on campo.analisis_avisos_vistos (observacion_id, visto_en desc);
+  create trigger t_solo_agregar before delete or update on campo.analisis_avisos_vistos for each row execute function campo.f_solo_agregar();
+  create trigger t_solo_agregar_trunc before truncate on campo.analisis_avisos_vistos for each statement execute function campo.f_solo_agregar();
+  comment on table campo.analisis_avisos_vistos is 'Avisos del Análisis de contrato «vistos otra vez»: una observación igual dentro de la vigencia (campo.parametros vigencia_avisos_dias) no crea otro aviso; se anota aquí. Solo inserción; sin datos nuevos.';
+  alter table campo.analisis_avisos_vistos enable row level security;
+  revoke all on campo.analisis_avisos_vistos from public, anon, authenticated, service_role;
+  grant select on campo.analisis_avisos_vistos to homelab_lectura;
+end $vistos$;
+
+-- El parámetro de la vigencia (20 días por omisión; el administrador lo cambia en Catálogo → Parámetros). Si una reversa lo dejó (no se borra), se conserva su valor.
+insert into campo.parametros (clave, valor, unidad, descripcion, minimo, maximo, actualizado_por) values
+  ('vigencia_avisos_dias', 20, 'días', 'Días en que un aviso del Análisis de contrato vale para el mismo contrato y la misma observación; dentro de ellos no se crea otro', 1, 365, 'migracion@geoportal')
+on conflict (clave) do nothing;
+
 -- Catálogo de derivadas: los 4 avisos y la actividad que crea el supervisor (sin destinos propios). Si una reversa los desactivó, se reactivan.
 insert into campo.derivadas_catalogo (codigo, nombre, destinos, destino_omision, activa, orden, autor) values
   ('aviso_desocupado', 'Aviso: predio desocupado', '{}', null, true, 60, 'migracion@geoportal'),
@@ -325,6 +366,8 @@ AS $function$
   -- Investigación y Análisis (23-nov): el origen es un registro (revisión, PQR, instalación) o una observación del Análisis de contrato.
   -- Sin datos de contacto: solo «trae_datos» y «datos_anulados». El destino propio de la derivada (actividad creada por el supervisor) manda sobre el del catálogo.
   select jsonb_build_object('id', d.id, 'actividad', d.actividad, 'actividad_nombre', c.nombre, 'contrato', d.contrato, 'estado', campo.f_derivada_estado(d.id), 'creada_en', d.creado_en,
+           -- sección 7: días (de calendario, hora de Colombia) desde que se creó; los pendientes viejos no se cierran solos y muestran su antigüedad
+           'antiguedad_dias', (clock_timestamp() at time zone 'America/Bogota')::date - (d.creado_en at time zone 'America/Bogota')::date,
            'destinos', case when d.destino is not null then jsonb_build_array(d.destino) else to_jsonb(c.destinos) end,
            'destino_omision', coalesce(d.destino, c.destino_omision),
            'destino_nombre', (select t2.nombre from campo.tipos_reporte t2 where 'tipo:' || t2.codigo = d.destino),
@@ -338,7 +381,11 @@ AS $function$
                                   'trae_datos', exists (select 1 from campo.analisis_observacion_datos x where x.observacion_id = o.id),
                                   'datos_anulados', exists (select 1 from campo.analisis_observacion_anulaciones x where x.observacion_id = o.id),
                                   'aviso_id', (select a.id from campo.derivadas a where a.observacion_id = o.id and a.actividad like 'aviso\_%'),
-                                  'actividad_creada_id', (select a.id from campo.derivadas a where a.observacion_id = o.id and a.actividad = 'actividad_supervisor'))
+                                  'actividad_creada_id', (select a.id from campo.derivadas a where a.observacion_id = o.id and a.actividad = 'actividad_supervisor'),
+                                  -- sección 7: cuántas veces lo vieron otra vez dentro de la vigencia, y la última
+                                  'vistos', (select count(*) from campo.analisis_avisos_vistos v where v.observacion_id = o.id),
+                                  'ultimo_visto', (select jsonb_build_object('en', v.visto_en, 'autor', v.autor) from campo.analisis_avisos_vistos v
+                                                    where v.observacion_id = o.id order by v.visto_en desc, v.id desc limit 1))
              end,
            'cierre', (select jsonb_build_object('tipo', e.tipo_evento, 'esquema', e.esquema, 'registro_id', e.registro_id, 'autor', e.autor, 'en', e.creado_en, 'motivo', e.motivo,
                                                  'consecutivo', case e.esquema when 'campo' then (select x.consecutivo from campo.reportes x where x.id = e.registro_id)
@@ -425,7 +472,7 @@ create function public.geoportal_campo_analisis_observar(p_solicitante text, p_c
                                                          p_contacto jsonb default null, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = public, campo, pg_temp as $f$
 declare v_email text; v_c text := btrim(coalesce(p_contrato, '')); v_tipo text := btrim(coalesce(p_tipo, '')); v_txt text; v_dir text; v_con jsonb;
-  v_obs uuid; v_der bigint; v_prev bigint;
+  v_obs uuid; v_der bigint; v_prev bigint; v_prev_obs uuid; v_prev_en timestamptz; v_vig integer;
 begin
   v_email := campo.f_autorizar_analisis(p_solicitante);
   if v_c !~ '^\d{1,12}$' then perform campo.f_error('Escriba solo los números del contrato (hasta 12 dígitos)'); end if;
@@ -446,11 +493,20 @@ begin
   if v_con is not null and v_tipo <> 'actualizacion_datos' then perform campo.f_error('Los datos de contacto solo van en «Actualización de datos»'); end if;
 
   perform pg_advisory_xact_lock(hashtext('campo_aviso:' || v_c));
-  -- Sin doble registro: si ya hay un aviso pendiente del mismo contrato y la misma observación, se devuelve ese y no se guarda nada
-  select d.id into v_prev from campo.derivadas d
-   where d.contrato = v_c and d.actividad = 'aviso_' || v_tipo and campo.f_derivada_estado(d.id) = 'pendiente' order by d.id limit 1;
+  -- Vigencia (sección 7, David 24-nov; reemplaza «si hay un aviso pendiente igual, devuelve ese»): dentro de vigencia_avisos_dias desde el aviso ORIGINAL del mismo
+  -- contrato y la misma observación, esté pendiente o cerrado, no se crea otro: se anota «visto otra vez» y no se guarda ningún dato nuevo (texto, dirección ni
+  -- datos de contacto: P1 a P3 abiertas). La vigencia cuenta desde el aviso original, no desde el último «visto otra vez» (P4).
+  v_vig := campo.f_param('vigencia_avisos_dias')::integer;
+  select o.id, o.creado_en, d.id into v_prev_obs, v_prev_en, v_prev
+    from campo.analisis_observaciones o join campo.derivadas d on d.observacion_id = o.id and d.actividad = 'aviso_' || v_tipo
+   where o.contrato = v_c and o.tipo = v_tipo and o.creado_en > clock_timestamp() - make_interval(days => v_vig)
+   order by o.creado_en desc limit 1;
   if v_prev is not null then
-    return jsonb_build_object('repetida', true, 'derivada_id', v_prev, 'tipo', v_tipo, 'contrato', v_c);
+    insert into campo.analisis_avisos_vistos (observacion_id, autor, ip) values (v_prev_obs, v_email, left(p_ip, 64));
+    perform campo.f_auditar(v_email, 'campo_analisis_visto_otra_vez', v_prev_obs::text, jsonb_build_object('tipo', v_tipo, 'derivada', v_prev), p_ip);
+    return jsonb_build_object('repetida', true, 'derivada_id', v_prev, 'tipo', v_tipo, 'contrato', v_c, 'ya_avisado_en', v_prev_en,
+      'estado', campo.f_derivada_estado(v_prev), 'vistos', (select count(*) from campo.analisis_avisos_vistos v where v.observacion_id = v_prev_obs),
+      'vigencia_dias', v_vig, 'datos_no_guardados', (v_con is not null or v_dir is not null or v_txt is not null));
   end if;
 
   insert into campo.analisis_observaciones (contrato, tipo, texto, direccion_correcta, autor, ip) values (v_c, v_tipo, v_txt, v_dir, v_email, left(p_ip, 64)) returning id into v_obs;

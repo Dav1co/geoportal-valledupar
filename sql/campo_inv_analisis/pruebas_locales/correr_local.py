@@ -131,6 +131,9 @@ def main():
         ("G.09 homelab_lectura sin BYPASSRLS", "alter role homelab_lectura nobypassrls", "No existe el rol homelab_lectura con BYPASSRLS"),
         ("G.10 una tabla campo.analisis_observaciones que no es la del paquete", "create table campo.analisis_observaciones (id uuid primary key)", "La tabla campo.analisis_observaciones ya existe y no es la de este paquete"),
         ("G.11 una columna observacion_id ajena en campo.derivadas", "alter table campo.derivadas add column observacion_id uuid", "La estructura de campo.derivadas no es la de producción"),
+        ("G.12 campo.parametros con otra columna (unidad renombrada)", "alter table campo.parametros rename column unidad to unidad_x", "campo.parametros no tiene las columnas que usa este paquete"),
+        ("G.13 la clave vigencia_avisos_dias ocupada por otro parámetro", "insert into campo.parametros (clave, valor, unidad, descripcion, minimo, maximo) values ('vigencia_avisos_dias', 7, 'horas', 'otro', 1, 48)",
+         "Ya existe el parámetro vigencia_avisos_dias y no es el de este paquete"),
     ]
     for nombre, cambio, esperado in casos:
         con = gn.rehacer("emdupar_b_inv_prueba"); con.execute(cambio)
@@ -146,6 +149,11 @@ def main():
     # Mutación: el ensayo tiene que fallar si preparar_subida queda mal escrita
     mutaciones = [("M.01 preparar_subida acepta 0 fotos con CUALQUIER formato", "v_tmin is distinct from 0 then 1", "false then 1", ["03.02", "03.03", "03.04"]),
                   ("M.02 preparar_subida nunca acepta 0 fotos", "v_tmin is distinct from 0 then 1", "true then 1", ["03.01", "04.01"]),
+                  ("M.13 la vigencia ignora los avisos cerrados", "where o.contrato = v_c and o.tipo = v_tipo and o.creado_en > clock_timestamp() - make_interval(days => v_vig)",
+                   "where o.contrato = v_c and o.tipo = v_tipo and o.creado_en > clock_timestamp() - make_interval(days => v_vig) and campo.f_derivada_estado(d.id) = 'pendiente'", ["20.03"]),
+                  ("M.14 la vigencia cuenta desde el último «visto otra vez»", "where o.contrato = v_c and o.tipo = v_tipo and o.creado_en > clock_timestamp() - make_interval(days => v_vig)",
+                   "where o.contrato = v_c and o.tipo = v_tipo and coalesce((select max(x.visto_en) from campo.analisis_avisos_vistos x where x.observacion_id = o.id), o.creado_en) > clock_timestamp() - make_interval(days => v_vig)", ["23.09"]),
+                  ("M.15 la vigencia no lee el parámetro (siempre 20)", "v_vig := campo.f_param('vigencia_avisos_dias')::integer;", "v_vig := 20;", ["23.10"]),
                   ("M.03 la migración no desactiva cita_acordada", "set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada', 'cita_acordada');",
                    "set activo = false where tipo_id = v_t and codigo in ('despeje_caja', 'despeje_observacion', 'visita_concertada');", ["01.04"]),
                   ("M.12 la migración no desactiva «observacion» (quedarían dos cajas de texto)", "set activo = false where tipo_id = v_t and codigo = 'observacion';",

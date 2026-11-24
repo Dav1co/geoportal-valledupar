@@ -191,7 +191,7 @@ try {
   r = await observar(pg, "otra", () => escribir(pg, "#ac-obs-texto", "[PRUEBA ZTCH] perro bravo"));
   ok("A09 «Otra» con texto corto se envía", r.habilitado && /«Otra»/.test(r.aviso), JSON.stringify(r));
   r = await observar(pg, "desocupado");
-  ok("A10 repetir «Desocupado» dice que ya había un aviso pendiente", /Ya había un aviso «Desocupado» pendiente/.test(r.aviso ?? ""), JSON.stringify(r));
+  ok("A10 repetir «Desocupado» (sección 7): «Ya se avisó … el <fecha> (pendiente)» y no se crea otro", /Ya se avisó «Desocupado» el \d{1,2} de \w+ de \d{4} \(pendiente\)\. No se creó otro aviso/.test(r.aviso ?? ""), JSON.stringify(r));
   ok("A11 (390) sin desborde horizontal", await sinDesborde(pg)); await foto(pg, "A11_analisis_390");
   ok("A12 nada personal en localStorage ni sessionStorage", await almacenLimpio(pg));
   ok("A13 en la base: 4 observaciones y los datos de contacto aparte, con el correo en minúsculas",
@@ -215,6 +215,9 @@ try {
   ok("B03 cada aviso dice de dónde viene (Análisis de contrato · observación · quién) y la lista NO trae los datos de contacto",
     /Análisis de contrato · Dirección errada/.test(t) && /Aviso: actualización de datos/.test(t) && /Sí \(se ven al abrirlos\)/.test(t) && !PERSONAL.test(t), t.slice(0, 900));
   ok("B04 muestra la dirección correcta y el texto de «Otra»", /\[PRUEBA ZTCH\] CRA 9 # 12-30/.test(t) && /perro bravo/.test(t));
+  const idDes = sqlq(`select d.id from campo.derivadas d where d.actividad = 'aviso_desocupado' and d.contrato = '123456'`);
+  const tDes = await texto(pg, `[data-derivada="${idDes}"]`);
+  ok("B04b (sección 7) el aviso muestra su antigüedad («hoy») y «Visto otra vez: 1 vez · último … por el analista»", /Antigüedad\s+hoy/.test(tDes) && /Visto otra vez\s+1 vez · último .* por ztch\.ana@emdupar\.gov\.co/.test(tDes), tDes);
   await foto(pg, "B04_derivadas_1280");
   const idAct = sqlq(`select d.id from campo.derivadas d where d.actividad = 'aviso_actualizacion_datos' and d.contrato = '123456'`);
   await clic(pg, `[data-derivada="${idAct}"] [data-accion="datos"]`);

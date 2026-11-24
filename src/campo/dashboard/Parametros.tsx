@@ -10,6 +10,7 @@ const GRUPOS: { titulo: string; claves: (p: ParametroDef) => boolean }[] = [
   { titulo: "Duplicados", claves: (p) => p.clave === "distancia_duplicados_m" },
   { titulo: "Fotos y descripción", claves: (p) => p.clave === "max_fotos" || p.clave === "max_bytes_foto" || p.clave === "max_descripcion" },
   { titulo: "Hora de inicio", claves: (p) => p.clave === "max_horas_inicio" },
+  { titulo: "Avisos del Análisis de contrato", claves: (p) => p.clave === "vigencia_avisos_dias" },   // sección 7 (24-nov)
 ];
 /** «1.234,5» o «1234.5» o «1234,5» → 1234.5; vacío o ilegible → null. */
 export function leerNumero(t: string): number | null {

@@ -44,8 +44,15 @@ ok("16 correo y nombre mal escritos no se envían", O.faltasObservacion(B({ tipo
   && O.faltasObservacion(B({ tipo: "actualizacion_datos", contacto: { nombre: "Ana 2" } })).length === 1);
 ok("17 los datos de contacto solo viajan con «Actualización de datos»", !("contacto" in O.cuerpoObservacion("1", B({ tipo: "otra", texto: "abc", contacto: C }))));
 ok("18 el aviso de enviada y el de repetida", O.textoEnviada({ repetida: false, derivada_id: 1, tipo: "desocupado", contrato: "1" }) === "Quedó en la lista del supervisor: «Desocupado»."
-  && O.textoEnviada({ repetida: true, derivada_id: 1, tipo: "otra", contrato: "1" }).startsWith("Ya había un aviso «Otra» pendiente")
+  && O.textoEnviada({ repetida: true, derivada_id: 1, tipo: "otra", contrato: "1" }).startsWith("Ya se avisó «Otra». No se creó otro aviso")
   && O.textoEnviada({ repetida: false, derivada_id: 1, tipo: "actualizacion_datos", contrato: "1", trae_datos: true }).includes("solo los verá el supervisor"));
+ok("18b sección 7: «Ya se avisó el <fecha> (<estado>)», y si escribió algo, que no se guardó",
+  O.textoEnviada({ repetida: true, derivada_id: 1, tipo: "desocupado", contrato: "1", ya_avisado_en: "2026-11-03T15:00:00Z", estado: "pendiente" })
+    === "Ya se avisó «Desocupado» el 3 de noviembre de 2026 (pendiente). No se creó otro aviso: se anotó que usted lo volvió a ver."
+  && O.textoEnviada({ repetida: true, derivada_id: 1, tipo: "actualizacion_datos", contrato: "1", ya_avisado_en: "2026-11-20T15:00:00Z", estado: "atendida_fuera", datos_no_guardados: true })
+    === "Ya se avisó «Actualización de datos» el 20 de noviembre de 2026 (cerrado: atendido sin formulario). No se creó otro aviso: se anotó que usted lo volvió a ver. Lo que escribió no se guardó.",
+  O.textoEnviada({ repetida: true, derivada_id: 1, tipo: "desocupado", contrato: "1", ya_avisado_en: "2026-11-03T15:00:00Z", estado: "pendiente" }));
+ok("18c antigüedad: hoy, hace 1 día, hace 45 días", O.antiguedadTexto(0) === "hoy" && O.antiguedadTexto(1) === "hace 1 día" && O.antiguedadTexto(45) === "hace 45 días" && O.antiguedadTexto(undefined) === "");
 ok("19 relación: las 5 de la lista", igual(O.RELACIONES.map((r) => r.codigo), ["propietario", "arrendatario", "familiar", "encargado", "otro"]));
 // Investigación de ubicación: mínimo 0 de fotos
 const INV = { codigo: "investigacion_ubicacion", fotos_min: 0, fotos_max: 6, genera_resultado: false };
