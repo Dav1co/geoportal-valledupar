@@ -166,9 +166,11 @@ const llamar = async (email, accion, cuerpo, qs = "") => {
 };
 
 // ---------- 2. Siembra por la Edge real ----------
-// a) el supervisor de reparto carga un archivo de ruta (ciclo 98, «ZT-ARCHIVO», 8 contratos de la ruta 880101 en otro orden)
-const lote = await llamar(U.sup, "lote_cargar", { nombre: "ruta_ZT-ARCHIVO.xlsx", sha256: "b".repeat(64), tipo: "ruta", ciclo: "98", ruta: "ZT-ARCHIVO",
-  filas: [133, 131, 135, 132, 134, 136, 138, 137].map((n, i) => ({ contrato: String(880000000000 + n), orden: String(i + 1) })) });
+// a) el supervisor de reparto carga un archivo de rutas (la estructura del de facturación; la dirección no viaja): ciclo 98 «ZT-ARCHIVO» (8 contratos de la ruta 880101
+//    en otro orden) y ciclo 97 «ZT-ARCHIVO-97» (2 contratos; el 880000000140 es del 98 en las rutas: queda el aviso de otro ciclo)
+const lote = await llamar(U.sup, "lote_cargar", { nombre: "rutas_noviembre.xlsx", sha256: "b".repeat(64), filas: [
+  ...[133, 131, 135, 132, 134, 136, 138, 137].map((n, i) => ({ contrato: String(880000000000 + n), ciclo: "98", ruta: "ZT-ARCHIVO", consecutivo_ruta: String((i + 1) * 1000000), consecutivo_predio: String(i + 1) })),
+  { contrato: "880000000503", ciclo: "97", ruta: "ZT-ARCHIVO-97", consecutivo_ruta: "1000000" }, { contrato: "880000000140", ciclo: "97", ruta: "ZT-ARCHIVO-97", consecutivo_ruta: "2000000" }] });
 // b) el repartidor dos reparte la ruta 880102 en desorden (1, 4, 2, 6, 3 con el buscador, 9) y anula una; XY repartidos por el centro de Valledupar
 const emp = await llamar(U.dos, "empezar", { origen: "anterior", ciclo: "98", ruta: "880102" });
 const jdos = emp.cuerpo?.jornada?.id;
@@ -179,7 +181,7 @@ for (const [i, n] of orden.entries()) {
   ids.push(r.cuerpo?.entrega_id);
 }
 await llamar(U.dos, "anular", { entrega_id: ids[3], motivo: "Revisión: toqué la que no era" });
-console.log(`Siembra: archivo de ruta ${lote.cuerpo?.ok ? "cargado (8 facturas)" : "NO cargado " + JSON.stringify(lote.cuerpo)} · ${ids.filter(Boolean).length} entregas del repartidor dos (una anulada)`);
+console.log(`Siembra: archivo de rutas ${lote.cuerpo?.ok ? "cargado (10 facturas, 2 rutas, 1 de otro ciclo)" : "NO cargado " + JSON.stringify(lote.cuerpo)} · ${ids.filter(Boolean).length} entregas del repartidor dos (una anulada)`);
 
 // ---------- 3. Comprobar o servir ----------
 if (MODO === "--comprobar") {
@@ -189,12 +191,12 @@ if (MODO === "--comprobar") {
     const r = await llamar(email, "perfil");
     prueba(`${papel}: ${esp.rep ? "repartidor" : "—"} / ${esp.sup ? "supervisor" : "—"}`, r.status === 200 && r.cuerpo.es_repartidor === esp.rep && r.cuerpo.es_supervisor === esp.sup, JSON.stringify(r));
   }
-  prueba("la siembra: el archivo de ruta y 6 entregas (1 anulada)", lote.cuerpo?.ok === true && sqlq("select count(*) || '|' || count(a.entrega_id) from reparto.entregas e left join reparto.entregas_anuladas a on a.entrega_id = e.id") === "6|1");
+  prueba("la siembra: el archivo de rutas (2 rutas, 1 de otro ciclo) y 6 entregas (1 anulada)", lote.cuerpo?.ok === true && lote.cuerpo?.rutas?.length === 2 && lote.cuerpo?.otro_ciclo === 1 && sqlq("select count(*) || '|' || count(a.entrega_id) from reparto.entregas e left join reparto.entregas_anuladas a on a.entrega_id = e.id") === "6|1");
   const av = await llamar(U.sup, "avance");
   prueba("el avance del supervisor muestra la jornada sembrada con su período de reparto", av.cuerpo?.filas?.some((f) => f.jornada_id === jdos && f.entregadas === 5 && f.anuladas === 1 && /^\d{6}$/.test(f.periodo_reparto ?? "")), JSON.stringify(av.cuerpo));
   const ctx = await llamar(U.uno, "contexto");
   prueba("el repartidor ve el ciclo 98 (con fecha), el 97 (sin fecha) y el archivo nuevo", ctx.cuerpo?.anterior?.some((c) => c.ciclo === "98" && c.reparto) && ctx.cuerpo?.anterior?.some((c) => c.ciclo === "97" && !c.reparto)
-    && ctx.cuerpo?.nuevas?.some((l) => l.ruta === "ZT-ARCHIVO"), JSON.stringify(ctx.cuerpo).slice(0, 400));
+    && ctx.cuerpo?.nuevas?.some((l) => l.ruta === "ZT-ARCHIVO" && l.ciclo === "98") && ctx.cuerpo?.nuevas?.some((l) => l.ruta === "ZT-ARCHIVO-97" && l.ciclo === "97"), JSON.stringify(ctx.cuerpo).slice(0, 400));
   prueba("el calendario: con enlace para prueba.sup.comercial (dashboard_campo), sin enlace para prueba.reparto.sup",
     (await llamar(U.supcal, "calendario")).cuerpo?.puede_cambiar === true && (await llamar(U.sup, "calendario")).cuerpo?.puede_cambiar === false);
   const pagina = await fetch(`http://127.0.0.1:${P_WEB}/`);

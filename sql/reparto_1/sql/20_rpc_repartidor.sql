@@ -61,12 +61,16 @@ begin
     'correo', v_email, 'es_repartidor', v_rep, 'es_supervisor', v_sup, 'es_admin', public.geoportal_es_admin(v_email), 'hoy', reparto.f_hoy(),
     'puede_calendario', v_sup and reparto.f_puede_calendario(v_email),
     'periodo', v_periodo, 'anterior', v_rutas,
-    'nuevas', (select coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'nombre_archivo', l.nombre_archivo, 'tipo', l.tipo, 'ciclo', l.ciclo, 'ruta', l.ruta,
-                                                            'filas', l.filas, 'cargado_en', l.creado_en,
-                                                            'reparto', (select jsonb_build_object('periodo', p.periodo, 'desde', p.desde) from reparto.f_periodo_reparto(l.ciclo) p)) order by reparto.f_num(l.ciclo), l.ruta nulls first, l.creado_en desc), '[]'::jsonb)
-                 from reparto.lotes l
-                where not exists (select 1 from reparto.lotes_anulados a where a.lote_id = l.id)
-                  and l.creado_en >= now() - make_interval(days => (reparto.f_param('lote_vigencia_dias'))::int)),
+    -- cada (ciclo, ruta) de cada archivo vigente es una opción
+    'nuevas', (select coalesce(jsonb_agg(jsonb_build_object('id', g.lote_id, 'nombre_archivo', g.nombre_archivo, 'ciclo', g.ciclo, 'ruta', g.ruta,
+                                                            'filas', g.n, 'cargado_en', g.creado_en,
+                                                            'reparto', (select jsonb_build_object('periodo', p.periodo, 'desde', p.desde) from reparto.f_periodo_reparto(g.ciclo) p))
+                                         order by reparto.f_num(g.ciclo), reparto.f_num(g.ruta) nulls last, g.ruta, g.creado_en desc), '[]'::jsonb)
+                 from (select f.lote_id, l.nombre_archivo, l.creado_en, f.ciclo, f.ruta, count(*) as n
+                         from reparto.lote_filas f join reparto.lotes l on l.id = f.lote_id
+                        where not exists (select 1 from reparto.lotes_anulados a where a.lote_id = l.id)
+                          and l.creado_en >= now() - make_interval(days => (reparto.f_param('lote_vigencia_dias'))::int)
+                        group by f.lote_id, l.nombre_archivo, l.creado_en, f.ciclo, f.ruta) g),
     'mis_jornadas_hoy', (select coalesce(jsonb_agg(jsonb_build_object('id', v.jornada_id, 'origen', v.origen, 'ciclo', v.ciclo, 'ruta', v.ruta, 'nombre_archivo', v.nombre_archivo,
                                                                      'total', v.total, 'entregadas', v.entregadas, 'ultima', v.ultima, 'periodo_reparto', v.periodo_reparto,
                                                                      'respaldo', v.respaldo) order by v.jornada_id), '[]'::jsonb)
@@ -94,8 +98,11 @@ begin
     if not found then perform reparto.f_err('Ese archivo de ruta no existe'); end if;
     if exists (select 1 from reparto.lotes_anulados a where a.lote_id = p_lote) then perform reparto.f_err('El supervisor anuló ese archivo de ruta'); end if;
     if v_lote.creado_en < now() - make_interval(days => (reparto.f_param('lote_vigencia_dias'))::int) then perform reparto.f_err('Ese archivo de ruta ya venció: pida al supervisor que lo cargue de nuevo'); end if;
-    v_fuente := 'nueva:' || p_lote::text;
-    v_ciclo := v_lote.ciclo;
+    if v_ciclo !~ '^[0-9]{1,4}$' or v_ruta = '' then perform reparto.f_err('Escoja el ciclo y la ruta del archivo'); end if;
+    if not exists (select 1 from reparto.lote_filas f where f.lote_id = p_lote and f.ciclo = v_ciclo and f.ruta = v_ruta) then
+      perform reparto.f_err('Esa ruta no está en el archivo');
+    end if;
+    v_fuente := 'nueva:' || p_lote::text || ':' || v_ciclo || ':' || v_ruta;
   else
     v_fuente := 'inventada';
   end if;
@@ -118,9 +125,9 @@ begin
       values (v_hoy, v_email, 'anterior', v_fuente, v_periodo, v_ciclo, v_ruta, coalesce(cardinality(v_lista), 0), v_rep.periodo, v_rep.desde, v_rep.periodo is null)
       returning id into v_id;
   elsif p_origen = 'nueva' then
-    select array_agg(f.contrato order by f.orden) into v_lista from reparto.lote_filas f where f.lote_id = p_lote;
+    select array_agg(f.contrato order by f.orden) into v_lista from reparto.lote_filas f where f.lote_id = p_lote and f.ciclo = v_ciclo and f.ruta = v_ruta;
     insert into reparto.jornadas (fecha, repartidor, origen, fuente, ciclo, ruta, lote_id, total, periodo_reparto, reparto_desde, respaldo)
-      values (v_hoy, v_email, 'nueva', v_fuente, v_lote.ciclo, v_lote.ruta, p_lote, coalesce(cardinality(v_lista), 0), v_rep.periodo, v_rep.desde, v_rep.periodo is null)
+      values (v_hoy, v_email, 'nueva', v_fuente, v_ciclo, v_ruta, p_lote, coalesce(cardinality(v_lista), 0), v_rep.periodo, v_rep.desde, v_rep.periodo is null)
       returning id into v_id;
   else
     insert into reparto.jornadas (fecha, repartidor, origen, fuente, total) values (v_hoy, v_email, 'inventada', v_fuente, 0) returning id into v_id;

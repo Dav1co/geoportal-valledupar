@@ -18,7 +18,7 @@ const MUT = [
   ["index.ts", "\"Cache-Control\": \"no-store\"", "\"Cache-Control\": \"max-age=60\"", "Z1", "respuestas en caché"],
   ["rpc.ts", "console.error(`reparto ${fn}: HTTP ${resp.status} código ${c.code ?? \"?\"}`);", "console.error(`reparto ${fn}: HTTP ${resp.status} código ${c.code ?? \"?\"}: ${c.message}`);", "Z3", "escribe el mensaje de la base en el registro"],
   ["rpc.ts", "\"23505\": 409, ", "", "C4", "«ya se registró» sale como error genérico"],
-  ["validar.ts", "confirmar: b.confirmar !== false,", "confirmar: true,", "D1b", "la vista previa escribe (ignora «confirmar»)"],
+  ["validar.ts", "filas, confirmar: b.confirmar !== false };", "filas, confirmar: true };", "D1b", "la vista previa escribe (ignora «confirmar»)"],
   ["index.ts", "p_despues: d ? entero(d, 0, Number.MAX_SAFE_INTEGER, \"El cursor\") : null", "p_despues: null", "D8", "el mapa en vivo ignora el cursor"],
 ];
 let fallas = 0;

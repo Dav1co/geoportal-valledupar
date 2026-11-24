@@ -185,27 +185,26 @@ try {
 
   // ===== D. El supervisor de reparto =====
   const sha = "a".repeat(64);
-  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "ztrep_ruta.xlsx", sha256: sha, tipo: "ruta", ciclo: "98", ruta: "ZT-NUEVA", filas: [{ contrato: "880000000102", orden: 2 }, { contrato: "880000000101", orden: 1 }] } });
+  const filaArch = (c, ci, ru, cr, cp) => ({ contrato: c, ciclo: ci, ruta: ru, consecutivo_ruta: cr, ...(cp ? { consecutivo_predio: cp } : {}) });
+  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "ztrep_ruta.xlsx", sha256: sha, filas: [filaArch("880000000102", "98", "ZT-NUEVA", "20", "2"), filaArch("880000000101", "98", "ZT-NUEVA", "10", "1"),
+    filaArch("880000000501", "98", "ZT-DOS", "1", null)] } });
   const lote = r.c?.lote_id;
-  ok("D1 el supervisor carga un archivo de ruta (Contrato y Orden); el ciclo se deduce de los contratos (98)", r.s === 200 && r.c.ok === true && r.c.filas === 2 && r.c.ciclo === "98" && r.c.ciclo_deducido === true, r.txt);
+  ok("D1 el supervisor carga un archivo de rutas (estructura de facturación): 2 rutas; el 501 dice ciclo 98 y en las rutas es 97: avisa y carga igual (manda el archivo)",
+     r.s === 200 && r.c.ok === true && r.c.filas === 3 && r.c.rutas.length === 2 && r.c.otro_ciclo === 1 && r.c.otro_ciclo_lista[0]?.contrato === "880000000501" && r.c.otro_ciclo_lista[0]?.ciclo_rutas === "97", r.txt);
   const nl = sqlq("select count(*) from reparto.lotes");
-  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "previa.xlsx", sha256: "c".repeat(64), tipo: "ruta", ruta: "ZT-P", filas: [{ contrato: "880000000103" }, { contrato: "880000000977" }], confirmar: false } });
-  ok("D1b vista previa (confirmar: false), SIN ciclo: deduce 98, avisa 1 sin registro y no escribe nada", r.s === 200 && r.c.previa === true && r.c.ciclo === "98" && r.c.sin_registro === 1 && sqlq("select count(*) from reparto.lotes") === nl, r.txt);
-  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "dos.xlsx", sha256: "d".repeat(64), tipo: "ruta", ruta: "ZT-D", filas: [{ contrato: "880000000103" }, { contrato: "880000000104" }, { contrato: "880000000501" }] } });
-  ok("D1c contratos de dos ciclos: rechazo con el detalle por ciclo, sin escribir", r.s === 200 && r.c.ok === false && r.c.errores[0] === "El archivo tiene contratos de más de un ciclo: 98: 2 · 97: 1. Un archivo debe ser de un solo ciclo." && sqlq("select count(*) from reparto.lotes") === nl, r.txt);
-  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "sin.xlsx", sha256: "e".repeat(64), tipo: "ciclo", filas: [{ contrato: "880000000977" }] } });
-  ok("D1d todos sin registro y sin ciclo: pide escogerlo a mano; con «ciclo» se carga", r.s === 200 && r.c.ok === false && r.c.pide_ciclo === true
-     && (await E("sup", "lote_cargar", { cuerpo: { nombre: "sin.xlsx", sha256: "e".repeat(64), tipo: "ciclo", ciclo: "98", filas: [{ contrato: "880000000977" }] } })).c?.ciclo === "98", r.txt);
-  ok("D1e «confirmar» que no es verdadero o falso, o un ciclo con letras: 400",
-     (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: "f".repeat(64), tipo: "ciclo", filas: [{ contrato: "1" }], confirmar: "no" } })).s === 400
-     && (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: "f".repeat(64), tipo: "ciclo", ciclo: "C1", filas: [{ contrato: "1" }] } })).s === 400);
-  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "malo.xlsx", sha256: "b".repeat(64), tipo: "ciclo", ciclo: "98", filas: [{ contrato: "88A" }, { contrato: "880000000101" }, { contrato: "880000000101" }] } });
-  ok("D2 un archivo con errores: 200 con ok=false y los errores por fila", r.s === 200 && r.c.ok === false && r.c.errores.length === 2 && /Fila 2/.test(r.c.errores[0]), r.txt);
-  ok("D3 una columna que no es de la plantilla, un archivo de ciclo con ruta, o 10.001 filas: 400",
-     (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: sha, tipo: "ruta", ciclo: "98", ruta: "R", filas: [{ contrato: "1", nombre: "x" }] } })).s === 400
-     && (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: sha, tipo: "ciclo", ciclo: "98", ruta: "R", filas: [{ contrato: "1" }] } })).s === 400
-     && (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: sha, tipo: "ciclo", ciclo: "98", filas: Array.from({ length: 10001 }, (_, i) => ({ contrato: String(i + 1) })) } })).s === 400);
-  r = await E("rep2", "empezar", { cuerpo: { origen: "nueva", lote_id: lote } });
+  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "previa.xlsx", sha256: "c".repeat(64), filas: [filaArch("880000000103", "98", "ZT-P", "1", null), filaArch("880000000977", "98", "ZT-P", "2", null)], confirmar: false } });
+  ok("D1b vista previa (confirmar: false): las rutas y 1 sin registro, sin escribir nada", r.s === 200 && r.c.previa === true && r.c.rutas[0]?.ruta === "ZT-P" && r.c.sin_registro === 1 && sqlq("select count(*) from reparto.lotes") === nl, r.txt);
+  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "rep.xlsx", sha256: "d".repeat(64), filas: [filaArch("880000000103", "98", "R", "1", null), filaArch("880000000103", "98", "R", "2", null)] } });
+  ok("D1c contratos repetidos: rechazo con la lista, sin escribir", r.s === 200 && r.c.ok === false && r.c.errores[1] === "El contrato 880000000103 está repetido (filas 2, 3)" && sqlq("select count(*) from reparto.lotes") === nl, r.txt);
+  ok("D1e «confirmar» que no es verdadero o falso: 400; la dirección (o cualquier otra columna) no viaja: 400 y dice cuál",
+     (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: "f".repeat(64), filas: [filaArch("1", "98", "R", "1", null)], confirmar: "no" } })).s === 400
+     && /«direccion»/.test((await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: "f".repeat(64), filas: [{ ...filaArch("1", "98", "R", "1", null), direccion: "CALLE 1" }] } })).c?.error ?? ""));
+  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "malo.xlsx", sha256: "b".repeat(64), filas: [filaArch("88A", "98", "R", "1", null), filaArch("880000000101", "C1", "R", "2", null)] } });
+  ok("D2 un archivo con errores: 200 con ok=false y los errores por fila", r.s === 200 && r.c.ok === false && r.c.errores.length === 2 && /Fila 2/.test(r.c.errores[0]) && /CICLO/.test(r.c.errores[1]), r.txt);
+  ok("D3 claves de arriba que ya no existen (tipo, ciclo, ruta) o 10.001 filas: 400",
+     (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: sha, tipo: "ruta", filas: [filaArch("1", "98", "R", "1", null)] } })).s === 400
+     && (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: sha, filas: Array.from({ length: 10001 }, (_, i) => filaArch(String(i + 1), "98", "R", String(i + 1), null)) } })).s === 400);
+  r = await E("rep2", "empezar", { cuerpo: { origen: "nueva", lote_id: lote, ciclo: "98", ruta: "ZT-NUEVA" } });
   const jn = r.c?.jornada?.id;
   ok("D4 el repartidor empieza con el archivo nuevo: su orden (101, 102), sin las ya entregadas", r.s === 200 && r.c.jornada.nombre_archivo === "ztrep_ruta.xlsx"
      && r.c.pendientes.map((p) => p.c).join() === "880000000101,880000000102", r.txt.slice(0, 500));
@@ -245,7 +244,7 @@ try {
 
   // ===== Z. Lo que no debe salir =====
   ok(`Z1 todas las respuestas 200 llevan Cache-Control: no-store`, sinNoStore.length === 0, sinNoStore.join());
-  ok(`Z2 ninguna de las ${respuestas.length} respuestas trae la dirección, el teléfono ni el nombre de un suscriptor`, !respuestas.some((t) => /ZTREP CALLE|telefono|direccion/i.test(t)));
+  ok(`Z2 ninguna de las ${respuestas.length} respuestas trae la dirección, el teléfono ni el nombre de un suscriptor`, !respuestas.some((t) => /ZTREP CALLE|"telefono"\s*:|"direccion"\s*:/i.test(t)));
   ok("Z3 el registro de la Edge no tiene XY, contratos ni filas de archivos", !/10\.47|-73\.25|8800000001|ZT-NUEVA/.test(edgeLog), edgeLog.slice(-600));
   ok("Z4 ninguna RPC que no exista en la base", desconocidas.length === 0, [...new Set(desconocidas)].join(", "));
 } catch (e) { console.log("FALLA (se detuvo) " + String(e?.stack ?? e).slice(0, 600) + " · Edge: " + edgeLog.slice(-500)); resultados.push({ nombre: "se detuvo", ok: false }); }

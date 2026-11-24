@@ -1,8 +1,8 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import "./reparto.css";
 import { lazyConRecarga } from "../../lib/recarga";
-import { apiReparto, avisoDeError, type CalendarioReparto, type Detalle, type FilaAvance, type LoteFila } from "./apiReparto";
-import { textoFecha, textoHora, textoPeriodo } from "./logica";
+import { apiReparto, avisoDeError, type CalendarioReparto, type CargaLote, type Detalle, type FilaAvance, type LoteFila } from "./apiReparto";
+import { ENCABEZADOS, textoFecha, textoHora, textoPeriodo, type FilaArchivo } from "./logica";
 import { descargarPlantillaReparto, leerArchivoRuta } from "./plantilla";
 
 // «Reparto de facturas · Supervisión» (escritorio; modelo navegable del 23-nov, ajustado el 23-nov: el repartidor escoge su ruta, no hay asignación).
@@ -17,7 +17,7 @@ type Pestana = "avance" | "mapa" | "archivos" | "calendario";
 const PESTANAS: [Pestana, string][] = [["avance", "Avance"], ["mapa", "Mapa en vivo"], ["archivos", "Archivos de ruta"], ["calendario", "Calendario"]];
 const hoyBogota = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Bogota" });
 export const rutaDeFila = (f: Pick<FilaAvance, "origen" | "ciclo" | "ruta" | "nombre_archivo">) =>
-  f.origen === "inventada" ? "Sin ruta" : f.origen === "nueva" ? `Ciclo ${f.ciclo} · ${f.ruta ? `Ruta ${f.ruta}` : "todo el ciclo"} · archivo ${f.nombre_archivo ?? ""}` : `Ciclo ${f.ciclo} · Ruta ${f.ruta}`;
+  f.origen === "inventada" ? "Sin ruta" : f.origen === "nueva" ? `Ciclo ${f.ciclo} · Ruta ${f.ruta} · archivo ${f.nombre_archivo ?? ""}` : `Ciclo ${f.ciclo} · Ruta ${f.ruta}`;
 
 export function PantallaSupervisor({ onVolver }: { onVolver: () => void }) {
   const [pestana, setPestana] = useState<Pestana>("avance");
@@ -139,48 +139,40 @@ function DetalleJornada({ jornada, onCambio }: { jornada: number; onCambio: () =
 
 // ---------------------------------------------------------------- Archivos de ruta ----------------------------------------------------------------
 function Archivos() {
-  const [tipo, setTipo] = useState<"ruta" | "ciclo">("ruta");
-  const [ruta, setRuta] = useState("");
+  // David, 24-nov: el archivo es LA MISMA estructura del archivo de rutas de facturación. Ciclo y ruta salen de cada fila (puede traer varias); la DIRECCIÓN
+  // se exige como columna pero no se envía. «Revisar archivo» muestra las rutas y los avisos sin escribir nada; «Cargar archivo» confirma.
   const [archivo, setArchivo] = useState<File | null>(null);
-  // «Todo comienza con el archivo de rutas» (David, 24-nov): el ciclo NO se escribe; la base lo deduce de los contratos y se muestra antes de confirmar.
-  // Solo si ningún contrato tiene registro (ni en rutas ni en cartera) se pide escogerlo a mano.
-  const [leido, setLeido] = useState<{ filas: { contrato: string | null; orden?: string }[]; sha256: string } | null>(null);
-  const [previa, setPrevia] = useState<{ ciclo: string; filas: number; sin_registro: number } | null>(null);
-  const [pideCiclo, setPideCiclo] = useState(false); const [cicloMano, setCicloMano] = useState("");
   const [errores, setErrores] = useState<string[]>([]);
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [lotes, setLotes] = useState<LoteFila[] | null>(null);
   const [anular, setAnular] = useState<LoteFila | null>(null); const [motivo, setMotivo] = useState("");
+  const [leido, setLeido] = useState<{ filas: FilaArchivo[]; sha256: string } | null>(null);
+  const [previa, setPrevia] = useState<Extract<CargaLote, { ok: true }> | null>(null);
   const entrada = useRef<HTMLInputElement>(null);
   const cargarLotes = useCallback(() => { apiReparto.lotes().then((r) => setLotes(r.lotes)).catch((e) => setErrores([avisoDeError(e)])); }, []);
   useEffect(cargarLotes, [cargarLotes]);
-  const rutaOk = tipo === "ciclo" || /^[A-Za-z0-9 _.-]{1,20}$/.test(ruta.trim());
-  const olvidar = () => { setLeido(null); setPrevia(null); setPideCiclo(false); setCicloMano(""); };
-  const cuerpo = (l: NonNullable<typeof leido>, confirmar: boolean) => ({ nombre: archivo!.name, sha256: l.sha256, tipo, ruta: tipo === "ruta" ? ruta.trim() : null, filas: l.filas, confirmar,
-    ciclo: pideCiclo && /^\d{1,4}$/.test(cicloMano) ? cicloMano : null });
-  // 1. revisar: leer el Excel y pedir la vista previa (la base deduce el ciclo sin escribir nada)
   const revisar = async () => {
     if (!archivo) return;
     setOcupado(true); setErrores([]); setOk(null); setPrevia(null);
     try {
-      const l = leido ? { ...leido, errores: [] as string[] } : await leerArchivoRuta(archivo, 10000);
-      if (l.errores?.length) { setErrores(l.errores); return; }
+      const l = await leerArchivoRuta(archivo, 10000);
+      if (l.errores.length) { setErrores(l.errores); return; }
       setLeido({ filas: l.filas, sha256: l.sha256 });
-      const r = await apiReparto.loteCargar(cuerpo({ filas: l.filas, sha256: l.sha256 }, false));
-      if (!r.ok) { setErrores(r.errores); if (r.pide_ciclo) setPideCiclo(true); return; }
-      setPrevia({ ciclo: r.ciclo, filas: r.filas, sin_registro: r.sin_registro });
+      const r = await apiReparto.loteCargar({ nombre: archivo.name, sha256: l.sha256, filas: l.filas, confirmar: false });
+      if (!r.ok) { setErrores(r.errores); return; }
+      setPrevia(r);
     } catch (e) { setErrores([avisoDeError(e)]); } finally { setOcupado(false); }
   };
-  // 2. confirmar: cargar con el ciclo deducido (o el escogido a mano)
   const cargar = async () => {
     if (!archivo || !leido || !previa) return;
     setOcupado(true); setErrores([]);
     try {
-      const r = await apiReparto.loteCargar(cuerpo(leido, true));
+      const r = await apiReparto.loteCargar({ nombre: archivo.name, sha256: leido.sha256, filas: leido.filas, confirmar: true });
       if (!r.ok) { setErrores(r.errores); return; }
-      setOk(`${!r.previa && r.repetido ? "Ese archivo ya estaba cargado hoy" : "Archivo cargado"}: ${r.filas} facturas del ciclo ${r.ciclo}.${r.sin_registro ? ` ${r.sin_registro} contratos no están en las rutas ni en la cartera (se aceptan con aviso).` : ""} Los repartidores ya lo ven al escoger el ciclo ${r.ciclo}.`);
-      setArchivo(null); olvidar(); if (entrada.current) entrada.current.value = "";
+      setOk(`${r.repetido ? "Ese archivo ya estaba cargado hoy" : "Archivo cargado"}: ${r.filas} facturas en ${r.rutas.length} ${r.rutas.length === 1 ? "ruta" : "rutas"}.`
+        + `${r.otro_ciclo ? ` ${r.otro_ciclo} con un ciclo distinto al de las rutas de lectura (manda el archivo).` : ""}${r.sin_registro ? ` ${r.sin_registro} no están en las rutas ni en la cartera.` : ""} Los repartidores ya las ven como rutas nuevas.`);
+      setArchivo(null); setLeido(null); setPrevia(null); if (entrada.current) entrada.current.value = "";
       cargarLotes();
     } catch (e) { setErrores([avisoDeError(e)]); } finally { setOcupado(false); }
   };
@@ -191,29 +183,26 @@ function Archivos() {
   return (
     <section className="rep-bloque rep-dos" aria-label="Archivos de ruta">
       <div className="rep-tarjeta">
-        <h2>Cargar archivo de una ruta o de un ciclo</h2>
-        <p className="rep-suave">Excel pequeño con la plantilla (Contrato y, si quiere, Orden). Se valida antes de cargarlo. Los repartidores lo ven como «archivo nuevo» al escoger el ciclo.</p>
+        <h2>Cargar archivo de rutas</h2>
+        <p className="rep-suave">La misma estructura del archivo de rutas de facturación: {ENCABEZADOS.join(", ")}. Puede traer varias rutas y varios ciclos: cada (ciclo, ruta) le aparece al repartidor como una ruta nueva. La dirección no se guarda.</p>
         <button type="button" className="rep-link" onClick={() => void descargarPlantillaReparto()} data-accion="plantilla">Descargar plantilla (.xlsx)</button>
-        <div className="rep-opciones rep-horizontal" role="radiogroup" aria-label="Tipo de archivo">
-          <button type="button" role="radio" aria-checked={tipo === "ruta"} className="rep-opcion" onClick={() => setTipo("ruta")} data-tipo="ruta"><strong>Una ruta</strong></button>
-          <button type="button" role="radio" aria-checked={tipo === "ciclo"} className="rep-opcion" onClick={() => setTipo("ciclo")} data-tipo="ciclo"><strong>Todo un ciclo</strong></button>
-        </div>
-        {tipo === "ruta" ? <label className="rep-campo">Nombre de la ruta (rótulo para los repartidores)<input value={ruta} maxLength={20} onChange={(e) => { setRuta(e.target.value); setPrevia(null); }} data-campo="ruta" /></label> : null}
-        <label className="rep-campo">Archivo (.xlsx)<input ref={entrada} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => { setArchivo(e.target.files?.[0] ?? null); olvidar(); setErrores([]); setOk(null); }} data-campo="archivo" /></label>
-        <p className="rep-suave">El ciclo no se escribe: sale de los contratos del archivo (según las rutas y, si no están, la cartera). Un archivo debe ser de un solo ciclo.</p>
-        {pideCiclo ? (
-          <label className="rep-campo" data-bloque="ciclo-a-mano">Ningún contrato está en las rutas ni en la cartera: escoja el ciclo
-            <input inputMode="numeric" value={cicloMano} maxLength={4} onChange={(e) => { setCicloMano(e.target.value.replace(/\D/g, "")); setPrevia(null); }} data-campo="ciclo" />
-          </label>
-        ) : null}
-        <button type="button" className="tec-boton-sec" disabled={!archivo || !rutaOk || ocupado || (pideCiclo && !/^\d{1,4}$/.test(cicloMano))} onClick={() => void revisar()} data-accion="revisar">{ocupado && !previa ? "Revisando…" : "Revisar archivo"}</button>
+        <label className="rep-campo">Archivo (.xlsx)<input ref={entrada} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => { setArchivo(e.target.files?.[0] ?? null); setLeido(null); setPrevia(null); setErrores([]); setOk(null); }} data-campo="archivo" /></label>
+        <button type="button" className="tec-boton-sec" disabled={!archivo || ocupado} onClick={() => void revisar()} data-accion="revisar">{ocupado && !previa ? "Revisando…" : "Revisar archivo"}</button>
         {previa ? (
           <div className="rep-aviso rep-aviso-ok" role="status" data-bloque="previa">
-            <strong>Ciclo {previa.ciclo}</strong>{pideCiclo ? " (escogido a mano)" : " (deducido de los contratos)"} · {previa.filas} facturas{tipo === "ruta" ? ` · ruta «${ruta.trim()}»` : " · todo el ciclo"}
-            {previa.sin_registro ? <> · {previa.sin_registro} sin registro (se aceptan con aviso)</> : null}
+            <strong>{previa.filas} facturas en {previa.rutas.length} {previa.rutas.length === 1 ? "ruta" : "rutas"}:</strong>
+            <ul>{previa.rutas.map((x) => <li key={x.ciclo + "|" + x.ruta}>Ciclo {x.ciclo} · Ruta {x.ruta} · {x.filas} facturas</li>)}</ul>
+            {previa.sin_registro ? <p className="rep-suave">{previa.sin_registro} contratos no están en las rutas ni en la cartera (se aceptan con aviso).</p> : null}
           </div>
         ) : null}
-        <button type="button" className="tec-boton" disabled={!previa || !rutaOk || ocupado} onClick={() => void cargar()} data-accion="cargar">{ocupado && previa ? "Cargando…" : "Cargar archivo"}</button>
+        {previa && previa.otro_ciclo ? (
+          <div className="rep-aviso" role="status" data-bloque="otro-ciclo">
+            <strong>{previa.otro_ciclo} {previa.otro_ciclo === 1 ? "contrato tiene" : "contratos tienen"} un CICLO distinto al de las rutas de lectura</strong> (se cargan así: manda el archivo):
+            <ul>{previa.otro_ciclo_lista.map((x) => <li key={x.contrato}>{x.contrato}: el archivo dice {x.ciclo_archivo}; las rutas, {x.ciclo_rutas}</li>)}</ul>
+            {previa.otro_ciclo > previa.otro_ciclo_lista.length ? <p className="rep-suave">… y {previa.otro_ciclo - previa.otro_ciclo_lista.length} más.</p> : null}
+          </div>
+        ) : null}
+        <button type="button" className="tec-boton" disabled={!previa || ocupado} onClick={() => void cargar()} data-accion="cargar">{ocupado && previa ? "Cargando…" : "Cargar archivo"}</button>
         {errores.length ? <div className="rep-aviso rep-aviso-error" role="alert" data-bloque="errores"><strong>El archivo no se cargó:</strong><ul>{errores.map((x, i) => <li key={i}>{x}</li>)}</ul></div> : null}
         {ok ? <p className="rep-aviso rep-aviso-ok" role="status" data-bloque="cargado">{ok}</p> : null}
       </div>
@@ -222,11 +211,14 @@ function Archivos() {
         {lotes === null ? <p className="rep-suave">Cargando…</p> : lotes.length === 0 ? <p className="rep-suave">Todavía no hay archivos.</p> : (
           <div className="rep-tabla-caja">
             <table className="rep-tabla" data-tabla="lotes">
-              <thead><tr><th>Archivo</th><th>Ciclo y ruta</th><th className="n">Facturas</th><th>Cargado</th><th>Estado</th><th /></tr></thead>
+              <thead><tr><th>Archivo</th><th>Rutas</th><th className="n">Facturas</th><th>Avisos</th><th>Cargado</th><th>Estado</th><th /></tr></thead>
               <tbody>
                 {lotes.map((l) => (
                   <tr key={l.id} data-lote={l.id} className={l.anulado ? "rep-anulada" : ""}>
-                    <td>{l.nombre_archivo}</td><td>Ciclo {l.ciclo} · {l.ruta ? `Ruta ${l.ruta}` : "todo el ciclo"}</td><td className="n">{l.filas}</td>
+                    <td>{l.nombre_archivo}</td>
+                    <td>{(l.rutas ?? []).map((x) => `${x.ciclo} · ${x.ruta} (${x.filas})`).join("; ")}</td>
+                    <td className="n">{l.filas}</td>
+                    <td>{[l.otro_ciclo ? `${l.otro_ciclo} de otro ciclo` : "", l.sin_registro ? `${l.sin_registro} sin registro` : ""].filter(Boolean).join(" · ") || "—"}</td>
                     <td>{textoFecha(l.cargado_en)} {textoHora(l.cargado_en)}</td>
                     <td>{l.anulado ? `Anulado: ${l.motivo_anulacion}` : l.vigente ? `Vigente · ${l.jornadas} jornadas` : "Vencido"}</td>
                     <td>{!l.anulado ? <button type="button" className="rep-link" onClick={() => { setAnular(l); setMotivo(""); }} data-anular-lote={l.id}>Anular</button> : null}</td>

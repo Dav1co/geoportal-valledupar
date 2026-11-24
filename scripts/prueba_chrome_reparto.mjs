@@ -163,10 +163,12 @@ await build({ entryPoints: [join(raiz, "src/tecnica/xlsx.ts")], bundle: true, fo
 await build({ entryPoints: [join(raiz, "src/scrr/lectorXlsx.ts")], bundle: true, format: "esm", platform: "node", outfile: join(TX, "l.mjs"), logLevel: "error" });
 const { LibroXlsx } = await import(pathToFileURL(join(TX, "x.mjs")).href); const { leerXlsx } = await import(pathToFileURL(join(TX, "l.mjs")).href);
 async function xlsx(nombre, encab, filas) { const l = new LibroXlsx({ hoja: "Ruta", encabezados: encab, anchos: encab.map(() => 14), leame: [["x", "y"]] }); await l.agregarFilas(filas); const b = await l.finalizar(); const f = join(TX, nombre); writeFileSync(f, Buffer.from(await b.arrayBuffer())); return f; }
-const ARCH_BIEN = await xlsx("ruta_nueva.xlsx", ["Contrato", "Orden"], [["880000000103", "3"], ["880000000101", "1"], ["880000000102", "2"]]);   // ciclo 98 en las rutas
-const ARCH_DOS = await xlsx("ruta_dos_ciclos.xlsx", ["Contrato"], [["880000000101"], ["880000000501"]]);                                            // 98 y 97
-const ARCH_SIN = await xlsx("ruta_sin_registro.xlsx", ["Contrato"], [["880000000977"], ["880000000978"]]);                                         // sin registro
-const ARCH_MAL = await xlsx("ruta_mala.xlsx", ["Contrato", "Nombre"], [["880000000201", "x"]]);
+// Archivos de rutas con la estructura del archivo de facturación (la DIRECCIÓN va en el archivo pero no se guarda)
+const ENC = ["CÓDIGO_DEL_CONTRATO", "CICLO", "DIRECCIÓN", "RUTA", "CONSECUTIVO_EN_LA_RUTA", "NÚMERO_CONSECUTIVO_DE_PREDIO"];
+const ARCH_BIEN = await xlsx("rutas_nuevas.xlsx", ENC, [["880000000103", "98", "CALLE PRUEBA 3", "ZT-NUEVA", "3000000", "3"], ["880000000101", "98", "CALLE PRUEBA 1", "ZT-NUEVA", "1000000", "1"],
+  ["880000000102", "98", "CALLE PRUEBA 2", "ZT-NUEVA", "2000000", "2"], ["880000000104", "97", "CALLE PRUEBA 4", "ZT-OTRA", "1000000", "1"]]);   // 104 es del 98 en las rutas: otro ciclo
+const ARCH_REP = await xlsx("rutas_repetidas.xlsx", ENC, [["880000000101", "98", "x", "R", "1", "1"], ["880000000101", "98", "x", "R", "2", "2"]]);
+const ARCH_MAL = await xlsx("rutas_sin_direccion.xlsx", ["CÓDIGO_DEL_CONTRATO", "CICLO", "RUTA", "CONSECUTIVO_EN_LA_RUTA", "NÚMERO_CONSECUTIVO_DE_PREDIO"], [["880000000201", "98", "R", "1", "1"]]);
 
 // ---------- 3. Chrome ----------
 const puppeteer = createRequire(import.meta.url)(PUP);
@@ -323,45 +325,48 @@ try {
   const cdp = await pg.createCDPSession(); const DESC = join(CAP, "descargas"); mkdirSync(DESC, { recursive: true });
   await cdp.send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: DESC });
   await clic(pg, '[data-accion="plantilla"]');
-  let fp = null; for (let i = 0; i < 50 && !fp; i++) { await esp(200); fp = readdirSync(DESC).find((x) => x === "plantilla_ruta_reparto.xlsx"); }
+  let fp = null; for (let i = 0; i < 50 && !fp; i++) { await esp(200); fp = readdirSync(DESC).find((x) => x === "plantilla_rutas_reparto.xlsx"); }
   let encab = null; if (fp) await leerXlsx(new Uint8Array(readFileSync(join(DESC, fp))), { alFila: (c, h, n) => { if (h === 0 && n === 1) encab = c; } });
-  prueba("S.04 «Descargar plantilla» baja un .xlsx con Contrato y Orden", JSON.stringify(encab) === '["Contrato","Orden"]', JSON.stringify(encab));
-  prueba("S.04b la carga NO pide el ciclo (se deduce de los contratos): solo el nombre de la ruta y el archivo", !(await pg.$('[data-campo="ciclo"]')) && !!(await pg.$('[data-campo="ruta"]')));
-  await pg.type('[data-campo="ruta"]', "ZT-NUEVA");
+  prueba("S.04 «Descargar plantilla» baja un .xlsx con los 6 encabezados del archivo de rutas de facturación", JSON.stringify(encab) === JSON.stringify(ENC), JSON.stringify(encab));
+  prueba("S.04b la carga solo pide el archivo: ni ciclo, ni ruta, ni tipo (salen de cada fila)", !(await pg.$('[data-campo="ciclo"]')) && !(await pg.$('[data-campo="ruta"]')) && !(await pg.$('[data-tipo]')));
   await (await pg.$('[data-campo="archivo"]')).uploadFile(ARCH_MAL); await esp(200); await clic(pg, '[data-accion="revisar"]');
   await esperar(pg, () => !!document.querySelector('[data-bloque="errores"]'), null, 15000, "errores");
-  prueba("S.05 un archivo con una columna que no es de la plantilla se rechaza entero, con mensaje claro", /columnas que no son de la plantilla: NOMBRE/.test(await texto(pg)) && sqlq("select count(*) from reparto.lotes") === "0");
-  await (await pg.$('[data-campo="archivo"]')).uploadFile(ARCH_DOS); await esp(200); await clic(pg, '[data-accion="revisar"]');
-  await esperar(pg, () => /más de un ciclo/.test(document.querySelector('[data-bloque="errores"]')?.innerText ?? ""), null, 15000, "dos_ciclos");
-  prueba("S.05b contratos de dos ciclos: se rechaza con el detalle por ciclo y no se puede cargar", /El archivo tiene contratos de más de un ciclo: 97: 1 · 98: 1\. Un archivo debe ser de un solo ciclo\./.test(await texto(pg))
+  prueba("S.05 un archivo sin la columna DIRECCIÓN se rechaza entero, con mensaje claro", /Faltan las columnas DIRECCIÓN/.test(await texto(pg)) && sqlq("select count(*) from reparto.lotes") === "0");
+  await (await pg.$('[data-campo="archivo"]')).uploadFile(ARCH_REP); await esp(200); await clic(pg, '[data-accion="revisar"]');
+  await esperar(pg, () => /repetido/.test(document.querySelector('[data-bloque="errores"]')?.innerText ?? ""), null, 15000, "repetidos");
+  prueba("S.05b contratos repetidos: se rechaza con la lista y no se puede cargar", /El contrato 880000000101 está repetido \(filas 2, 3\)/.test(await texto(pg))
     && (await pg.$eval('[data-accion="cargar"]', (b) => b.disabled)) && sqlq("select count(*) from reparto.lotes") === "0");
   await (await pg.$('[data-campo="archivo"]')).uploadFile(ARCH_BIEN); await esp(200); await clic(pg, '[data-accion="revisar"]');
   await esperar(pg, () => !!document.querySelector('[data-bloque="previa"]'), null, 15000, "previa");
   const previaTxt = await pg.$eval('[data-bloque="previa"]', (e) => e.innerText);
-  prueba("S.06a antes de confirmar muestra el ciclo deducido (98) y no escribe nada", /Ciclo 98 \(deducido de los contratos\) · 3 facturas · ruta «ZT-NUEVA»/.test(previaTxt) && sqlq("select count(*) from reparto.lotes") === "0", previaTxt);
+  const otroTxt = await pg.$eval('[data-bloque="otro-ciclo"]', (e) => e.innerText).catch(() => "");
+  prueba("S.06a antes de confirmar muestra las rutas del archivo (97 ZT-OTRA y 98 ZT-NUEVA) y el aviso de otro ciclo (104: archivo 97, rutas 98), sin escribir nada",
+    /4 facturas en 2 rutas/.test(previaTxt) && /Ciclo 97 · Ruta ZT-OTRA · 1 facturas/.test(previaTxt) && /Ciclo 98 · Ruta ZT-NUEVA · 3 facturas/.test(previaTxt)
+    && /880000000104: el archivo dice 97; las rutas, 98/.test(otroTxt) && sqlq("select count(*) from reparto.lotes") === "0", previaTxt + " | " + otroTxt);
   await clic(pg, '[data-accion="cargar"]');
   await esperar(pg, () => !!document.querySelector('[data-bloque="cargado"]'), null, 20000, "cargado");
-  prueba("S.06 al confirmar se carga (3 facturas del ciclo 98, en su orden) y aparece en la lista de archivos", /Archivo cargado: 3 facturas del ciclo 98/.test(await texto(pg))
-    && sqlq("select string_agg(right(contrato, 3), ',' order by orden) from reparto.lote_filas") === "101,102,103" && sqlq("select ciclo from reparto.lotes") === "98"
+  prueba("S.06 al confirmar se carga: cada ruta en su orden (CONSECUTIVO_EN_LA_RUTA), manda el CICLO del archivo, y sin la dirección",
+    /Archivo cargado: 4 facturas en 2 rutas\. 1 con un ciclo distinto/.test(await texto(pg))
+    && sqlq("select string_agg(right(contrato, 3), ',' order by orden) from reparto.lote_filas where ruta = 'ZT-NUEVA'") === "101,102,103"
+    && sqlq("select ciclo from reparto.lote_filas where contrato = '880000000104'") === "97"
+    && sqlq("select count(*) from information_schema.columns where table_schema = 'reparto' and column_name ilike '%direcci%'") === "0"
     && (await pg.$$('[data-tabla="lotes"] tbody tr')).length === 1);
   await pg.screenshot({ path: join(CAP, "s06_archivos_1280.png"), fullPage: true });
   const ctxRep = await edgeDirecta(U.rep2, "contexto");
-  prueba("S.07 el repartidor ya ve ese archivo como «nueva» en el ciclo 98", ctxRep.cuerpo?.nuevas?.some((l) => l.ruta === "ZT-NUEVA" && l.filas === 3 && l.ciclo === "98"), JSON.stringify(ctxRep.cuerpo?.nuevas));
-  // todos sin registro: se pide el ciclo a mano
-  await pg.click('[data-campo="ruta"]', { clickCount: 3 }); await pg.type('[data-campo="ruta"]', "ZT-SIN");
-  await (await pg.$('[data-campo="archivo"]')).uploadFile(ARCH_SIN); await esp(200); await clic(pg, '[data-accion="revisar"]');
-  const pide = await esperar(pg, () => !!document.querySelector('[data-bloque="ciclo-a-mano"] [data-campo="ciclo"]'), null, 15000, "pide_ciclo");
-  prueba("S.07b si NINGÚN contrato tiene registro, pide escoger el ciclo a mano", pide && /Ninguno de los 2 contratos está en las rutas ni en la cartera/.test(await texto(pg)));
-  await pg.type('[data-campo="ciclo"]', "97"); await clic(pg, '[data-accion="revisar"]');
-  await esperar(pg, () => !!document.querySelector('[data-bloque="previa"]'), null, 15000, "previa_mano");
-  await clic(pg, '[data-accion="cargar"]'); await esperar(pg, () => /Archivo cargado: 2 facturas del ciclo 97/.test(document.body.innerText), null, 15000, "cargado_mano");
-  prueba("S.07c con el ciclo escogido a mano se carga en ese ciclo, con el aviso de los sin registro", sqlq("select ciclo || '|' || sin_registro from reparto.lotes where ruta = 'ZT-SIN'") === "97|2"
-    && /2 contratos no están en las rutas ni en la cartera/.test(await texto(pg)));
+  prueba("S.07 el repartidor ve cada ruta del archivo como «nueva» en su ciclo (98 ZT-NUEVA y 97 ZT-OTRA)",
+    ctxRep.cuerpo?.nuevas?.some((l) => l.ciclo === "98" && l.ruta === "ZT-NUEVA" && l.filas === 3) && ctxRep.cuerpo?.nuevas?.some((l) => l.ciclo === "97" && l.ruta === "ZT-OTRA" && l.filas === 1), JSON.stringify(ctxRep.cuerpo?.nuevas));
   // mapa en vivo
   const pedidosMapa = []; pg.on("request", (r) => { if (/accion=mapa/.test(r.url())) pedidosMapa.push({ t: Date.now(), despues: new URL(r.url()).searchParams.get("despues") }); });
   await clic(pg, '[data-pestana="mapa"]'); await esperar(pg, () => /entregas · en vivo cada 10 s/.test(document.body.innerText), null, 30000, "mapa");
   const n0 = Number((await pg.$eval('[data-dato="estado-mapa"]', (e) => e.innerText)).split(" ")[0]);
   prueba("S.08 mapa en vivo: los puntos del día, «en vivo cada 10 s», y la línea del recorrido apagada por omisión", n0 === 4 && !(await pg.$eval('[data-campo="recorrido"]', (e) => e.checked)), String(n0));
+  const filasPanel = await pg.$$eval('[data-bloque="repartidores"] [data-repartidor]', (l) => l.map((b) => b.innerText.replace(/\s+/g, " ")));
+  prueba("S.08b al lado del mapa, el panel con TODOS los repartidores activos hoy: nombre, rutas, entregadas y última entrega",
+    filasPanel.length === 3 && filasPanel.some((f) => /^Prueba Repartidor uno .*98 · 880101.*sin ruta.*3 entregadas · última \d/.test(f)) && filasPanel.some((f) => /^Prueba Repartidor dos .*0 entregadas/.test(f)), filasPanel.join(" || "));
+  await clic(pg, `[data-repartidor="${U.rep2}"]`); await esp(600);
+  const soloUno = await pg.$eval('[data-dato="estado-mapa"]', (e) => e.innerText);
+  await clic(pg, '[data-repartidor=""]'); await esp(300);
+  prueba("S.08c al escoger un repartidor, el mapa muestra solo sus puntos (y vuelve a «Todos»)", /^0 entregas/.test(soloUno) && /^4 entregas/.test(await pg.$eval('[data-dato="estado-mapa"]', (e) => e.innerText)) && (await pg.$eval(`[data-repartidor="${U.rep2}"]`, (b) => b.getAttribute("aria-pressed"))) === "false", soloUno);
   await pg.screenshot({ path: join(CAP, "s08_mapa_1280.png") });
   const jr = sqlq(`select id from reparto.jornadas where repartidor = '${U.rep1}' and origen = 'anterior'`);
   await edgeDirecta(U.rep1, "entregar", { jornada_id: Number(jr), contrato: C(9), lon: -73.252, lat: 10.471, precision_m: 5, por_buscador: false, id_cliente: "11111111-2222-4333-8444-555555555555" });

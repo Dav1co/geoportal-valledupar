@@ -63,7 +63,7 @@ function Inicio({ onLista, onVolver }: { onLista: (l: Lista) => void; onVolver: 
           <h2>Siga donde iba</h2>
           {ctx.mis_jornadas_hoy.map((j) => (
             <button key={j.id} type="button" className="rep-opcion" disabled={ocupado} onClick={() => void retomar(j.id)} data-jornada={j.id}>
-              <strong>{j.origen === "inventada" ? "Sin ruta" : j.origen === "nueva" ? `Ciclo ${j.ciclo} · ${j.ruta ? `Ruta ${j.ruta}` : "todo el ciclo"} (archivo)` : `Ciclo ${j.ciclo} · Ruta ${j.ruta}`}</strong>
+              <strong>{j.origen === "inventada" ? "Sin ruta" : j.origen === "nueva" ? `Ciclo ${j.ciclo} · Ruta ${j.ruta} (archivo nuevo)` : `Ciclo ${j.ciclo} · Ruta ${j.ruta}`}</strong>
               <span>{j.origen === "inventada" ? `${j.entregadas} entregadas` : `${j.entregadas} entregadas de ${j.total}`} · última {textoHora(j.ultima)}</span>
             </button>
           ))}
@@ -94,7 +94,7 @@ function Inicio({ onLista, onVolver }: { onLista: (l: Lista) => void; onVolver: 
             </>
           ) : null}
           <button type="button" className="tec-boton rep-grande" disabled={!opcion || ocupado} data-accion="empezar"
-            onClick={() => opcion && void empezar(opcion.tipo === "anterior" ? { origen: "anterior", ciclo: opcion.ciclo, ruta: opcion.ruta } : { origen: "nueva", lote_id: opcion.loteId })}>
+            onClick={() => opcion && void empezar(opcion.tipo === "anterior" ? { origen: "anterior", ciclo: opcion.ciclo, ruta: opcion.ruta } : { origen: "nueva", lote_id: opcion.loteId, ciclo: opcion.ciclo, ruta: opcion.ruta })}>
             {ocupado ? "Abriendo…" : "Empezar reparto"}
           </button>
           <button type="button" className="tec-boton-sec rep-medio" disabled={ocupado} onClick={() => void empezar({ origen: "inventada" })} data-accion="sin-ruta">Repartir sin ruta (solo buscador)</button>
@@ -166,7 +166,7 @@ function Lista_({ lista, setLista, onCambiarRuta, onVolver }: { lista: Lista; se
     try { await apiReparto.anular(anular.id, motivo.trim()); setAviso({ tipo: "info", texto: `Entrega del contrato ${anular.contrato} anulada. Vuelve a la lista.` }); setAnular(null); setMotivo(""); void refrescar(); }
     catch (e) { setAviso({ tipo: "error", texto: avisoDeError(e) }); }
   };
-  const titulo = sinRuta ? "Sin ruta" : j.origen === "nueva" ? `Ciclo ${j.ciclo} · ${j.ruta ? `Ruta ${j.ruta}` : "todo el ciclo"}` : `Ciclo ${j.ciclo} · Ruta ${j.ruta}`;
+  const titulo = sinRuta ? "Sin ruta" : j.origen === "nueva" ? `Ciclo ${j.ciclo} · Ruta ${j.ruta} (archivo nuevo)` : `Ciclo ${j.ciclo} · Ruta ${j.ruta}`;
   const precisionMala = fix && fix.precision_m > UMBRAL_PRECISION_MALA_M;
 
   return (

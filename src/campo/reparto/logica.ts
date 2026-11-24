@@ -25,7 +25,7 @@ export const entregadasDeRuta = (l: Lista): number => Math.max(0, l.jornada.tota
 // ---------- Escoger la ruta: primero el ciclo, luego la ruta, con los dos orígenes (anterior y nueva) ----------
 export type OpcionRuta =
   | { tipo: "anterior"; clave: string; ciclo: string; ruta: string; n: number; titulo: string; detalle: string }
-  | { tipo: "nueva"; clave: string; ciclo: string; loteId: string; n: number; titulo: string; detalle: string };
+  | { tipo: "nueva"; clave: string; ciclo: string; ruta: string; loteId: string; n: number; titulo: string; detalle: string };
 export type CicloOpciones = { ciclo: string; opciones: OpcionRuta[]; reparto: { periodo: string; desde: string } | null };
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -50,10 +50,11 @@ export function ciclosParaEscoger(ctx: Pick<Contexto, "anterior" | "nuevas" | "p
     for (const r of c.rutas) x.opciones.push({ tipo: "anterior", clave: `a:${c.ciclo}:${r.ruta}`, ciclo: c.ciclo, ruta: r.ruta, n: r.n,
       titulo: `Ruta ${r.ruta}`, detalle: `${r.n} facturas · ruta de lectura de ${textoPeriodo(ctx.periodo)}` });
   }
-  for (const l of ctx.nuevas) {
+  // cada (ciclo, ruta) de un archivo nuevo es una opción; van primero en su ciclo
+  for (const l of [...ctx.nuevas].reverse()) {
     const x = dar(l.ciclo, l.reparto);
-    x.opciones.unshift({ tipo: "nueva", clave: `n:${l.id}`, ciclo: l.ciclo, loteId: l.id, n: l.filas,
-      titulo: l.tipo === "ruta" ? `Ruta ${l.ruta} (archivo nuevo)` : "Todo el ciclo (archivo nuevo)", detalle: `${l.filas} facturas · ${l.nombre_archivo}` });
+    x.opciones.unshift({ tipo: "nueva", clave: `n:${l.id}:${l.ciclo}:${l.ruta}`, ciclo: l.ciclo, ruta: l.ruta, loteId: l.id, n: l.filas,
+      titulo: `Ruta ${l.ruta} (archivo nuevo)`, detalle: `${l.filas} facturas · ${l.nombre_archivo}` });
   }
   return [...m.values()].sort((a, b) => Number(a.ciclo) - Number(b.ciclo));
 }
@@ -67,43 +68,56 @@ export function leerLista(a: Almacen): Lista | null { try { const t = a.getItem(
 export function guardarToque(a: Almacen, t: ToquePendiente | null) { try { if (t) a.setItem(CLAVE_TOQUE, JSON.stringify(t)); else a.removeItem(CLAVE_TOQUE); } catch { /* */ } }
 export function leerToque(a: Almacen): ToquePendiente | null { try { const t = a.getItem(CLAVE_TOQUE); return t ? (JSON.parse(t) as ToquePendiente) : null; } catch { return null; } }
 
-// ---------- Archivo de una ruta o de un ciclo (plantilla: Contrato y, opcional, Orden) ----------
-export const ENCABEZADOS = ["Contrato", "Orden"] as const;
+// ---------- Archivo de rutas (David, 24-nov): LA MISMA estructura del archivo de rutas de facturación ----------
+export const ENCABEZADOS = ["CÓDIGO_DEL_CONTRATO", "CICLO", "DIRECCIÓN", "RUTA", "CONSECUTIVO_EN_LA_RUTA", "NÚMERO_CONSECUTIVO_DE_PREDIO"] as const;
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
-/** Contrato → solo dígitos (hasta 12) o null. «123.0» y «1.23E+5» (números de Excel) también. */
-export function contratoDeCelda(v: unknown): string | null {
+const CLAVE: Record<string, "contrato" | "ciclo" | "direccion" | "ruta" | "consecutivo_ruta" | "consecutivo_predio"> = {
+  "CODIGO DEL CONTRATO": "contrato", "CICLO": "ciclo", "DIRECCION": "direccion", "RUTA": "ruta", "CONSECUTIVO EN LA RUTA": "consecutivo_ruta", "NUMERO CONSECUTIVO DE PREDIO": "consecutivo_predio",
+};
+/** Número de Excel → texto entero o null («123.0», «1.23E+5» también). */
+export function enteroDeCelda(v: unknown, maxDigitos = 15): string | null {
   if (v === null || v === undefined) return null;
   let t = String(v).trim();
   if (/^\d+(\.\d+)?e\+\d+$/i.test(t)) { const n = Number(t); if (!Number.isSafeInteger(n)) return null; t = String(n); }
   t = t.replace(/\.0+$/, "");
-  return /^\d{1,12}$/.test(t) ? t : null;
+  return new RegExp(`^\\d{1,${maxDigitos}}$`).test(t) ? t : null;
 }
-/** Filas crudas de la hoja (la primera con «Contrato» es el encabezado) → filas para el servidor, o los errores (hasta 20) con su fila de Excel. */
-export function procesarArchivoRuta(filas: string[][], tope: number): { filas: { contrato: string | null; orden?: string }[]; errores: string[] } {
+export const contratoDeCelda = (v: unknown): string | null => enteroDeCelda(v, 12);
+export type FilaArchivo = { contrato: string | null; ciclo: string; ruta: string; consecutivo_ruta: string; consecutivo_predio?: string };
+/** Filas crudas de la hoja (la primera con «CÓDIGO_DEL_CONTRATO» es el encabezado) → filas para el servidor, o los errores (hasta 20).
+ *  Exige EXACTAMENTE los 6 encabezados (en cualquier orden). La DIRECCIÓN se valida como columna pero NO se envía. */
+export function procesarArchivoRuta(filas: string[][], tope: number): { filas: FilaArchivo[]; errores: string[] } {
   const errores: string[] = [];
-  let i = filas.findIndex((f) => f.some((c) => norm(c ?? "") === "CONTRATO"));
-  if (i < 0) return { filas: [], errores: ["El archivo no tiene la columna «Contrato». Use la plantilla."] };
+  const i = filas.findIndex((f) => f.some((c) => norm(c ?? "") === "CODIGO DEL CONTRATO"));
+  if (i < 0) return { filas: [], errores: ["El archivo no tiene la columna «CÓDIGO_DEL_CONTRATO». Use la plantilla (la misma del archivo de rutas de facturación)."] };
   const enc = filas[i].map((c) => norm(c ?? ""));
-  const sobran = enc.filter((c) => c && c !== "CONTRATO" && c !== "ORDEN");
-  if (sobran.length) return { filas: [], errores: [`El archivo trae columnas que no son de la plantilla: ${sobran.slice(0, 5).join(", ")}. La plantilla lleva solo Contrato y Orden.`] };
-  const ic = enc.indexOf("CONTRATO"), io = enc.indexOf("ORDEN");
-  const salida: { contrato: string | null; orden?: string }[] = [];
-  const vistos = new Set<string>();
+  const faltan = ENCABEZADOS.filter((e) => !enc.includes(norm(e)));
+  const sobran = filas[i].filter((_, k) => enc[k] && !CLAVE[enc[k]]).map((c) => String(c).trim());
+  if (faltan.length || sobran.length) {
+    return { filas: [], errores: [[faltan.length ? `Faltan las columnas ${faltan.join(", ")}` : "", sobran.length ? `sobran las columnas ${sobran.slice(0, 5).join(", ")}` : ""].filter(Boolean).join("; ")
+      + ". El archivo debe tener exactamente los encabezados del archivo de rutas de facturación."] };
+  }
+  const pos = (clave: string) => enc.findIndex((e) => CLAVE[e] === clave);
+  const [ic, ici, ir, icr, icp] = ["contrato", "ciclo", "ruta", "consecutivo_ruta", "consecutivo_predio"].map(pos);
+  const salida: FilaArchivo[] = [];
+  const vistos = new Map<string, number[]>();
   for (let k = i + 1; k < filas.length; k++) {
     const f = filas[k];
     if (!f || f.every((c) => !String(c ?? "").trim())) continue;
     const fila = k + 1, crudo = String(f[ic] ?? "").trim(), c = contratoDeCelda(crudo);
-    const orden = io >= 0 ? String(f[io] ?? "").trim().replace(/\.0+$/, "") : "";
+    const cicloTxt = enteroDeCelda(f[ici], 4), ciclo = cicloTxt === null ? null : String(Number(cicloTxt)), ruta = String(f[ir] ?? "").trim(), cr = enteroDeCelda(f[icr]), cpTxt = String(f[icp] ?? "").trim(), cp = cpTxt ? enteroDeCelda(cpTxt) : null;
     if (!c) errores.push(`Fila ${fila}: el contrato «${crudo.slice(0, 20)}» no es válido (solo números, de 1 a 12).`);
-    else if (vistos.has(c)) errores.push(`Fila ${fila}: el contrato ${c} está repetido.`);
-    else vistos.add(c);
-    if (orden && !/^[1-9]\d{0,6}$/.test(orden)) errores.push(`Fila ${fila}: el Orden «${orden.slice(0, 12)}» no es un entero mayor que cero.`);
-    salida.push({ contrato: c, ...(orden ? { orden } : {}) });
+    else vistos.set(c, [...(vistos.get(c) ?? []), fila]);
+    if (!ciclo) errores.push(`Fila ${fila}: el CICLO «${String(f[ici] ?? "").slice(0, 12)}» no es válido (número de hasta 4 cifras).`);
+    if (!/^[A-Za-z0-9 _.-]{1,20}$/.test(ruta)) errores.push(`Fila ${fila}: la RUTA «${ruta.slice(0, 24)}» no es válida (hasta 20 letras o números).`);
+    if (!cr) errores.push(`Fila ${fila}: el CONSECUTIVO_EN_LA_RUTA «${String(f[icr] ?? "").slice(0, 20)}» no es un número.`);
+    if (cpTxt && !cp) errores.push(`Fila ${fila}: el NÚMERO_CONSECUTIVO_DE_PREDIO «${cpTxt.slice(0, 20)}» no es un número.`);
+    salida.push({ contrato: c, ciclo: ciclo ?? "", ruta, consecutivo_ruta: cr ?? "", ...(cp ? { consecutivo_predio: cp } : {}) });
   }
+  const repetidos = [...vistos.entries()].filter(([, l]) => l.length > 1);
+  if (repetidos.length) errores.unshift("El archivo trae contratos repetidos: cada contrato va una sola vez.", ...repetidos.slice(0, 19).map(([c, l]) => `El contrato ${c} está repetido (filas ${l.join(", ")}).`));
   if (!salida.length) errores.push("El archivo no trae contratos debajo del encabezado.");
   if (salida.length > tope) errores.push(`El archivo trae ${salida.length} filas y el tope es ${tope}.`);
-  const conOrden = salida.filter((x) => x.orden).length;
-  if (conOrden && conOrden !== salida.length) errores.push("La columna Orden debe venir en todas las filas o en ninguna.");
   return { filas: salida, errores: errores.slice(0, 20) };
 }
 

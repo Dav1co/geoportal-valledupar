@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { CENTRO_VALLEDUPAR, FUENTE_BASE_CALLES } from "../../lib/mapaBase";
-import { apiReparto, avisoDeError, type Punto } from "./apiReparto";
+import { apiReparto, avisoDeError, type FilaAvance, type Punto } from "./apiReparto";
 import { INTERVALO_MAPA_MS, textoHora, unirPuntos } from "./logica";
 
 // Mapa EN VIVO del supervisor de reparto (David, 23 y 24-nov): puntos numerados por el orden de entrega, que se actualizan solos cada 10 s SOLO con la pestaña
@@ -27,7 +27,8 @@ export default function MapaReparto({ fecha, enVivo }: { fecha: string; enVivo: 
   const [error, setError] = useState<string | null>(null);
   const [recorrido, setRecorrido] = useState(false);
   const [calles, setCalles] = useState(true);
-  const [jornada, setJornada] = useState<number | "">("");
+  const [repSel, setRepSel] = useState<string>("");          // repartidor escogido en el panel ("" = todos)
+  const [activos, setActivos] = useState<FilaAvance[]>([]);    // jornadas del día (para el panel de repartidores)
   const [actualizado, setActualizado] = useState<Date | null>(null);
   const [fallo, setFallo] = useState<string | null>(null);
   const ajustado = useRef(false);
@@ -36,7 +37,19 @@ export default function MapaReparto({ fecha, enVivo }: { fecha: string; enVivo: 
   // colores por jornada (repartidor y ruta)
   const jornadas = useMemo(() => [...new Map(puntos.map((p) => [p.jornada_id, p.repartidor])).entries()].sort((a, b) => a[0] - b[0]), [puntos]);
   const color = useMemo(() => new Map(jornadas.map(([id], i) => [id, PALETA[i % PALETA.length]])), [jornadas]);
-  const visibles = useMemo(() => puntos.filter((p) => jornada === "" || p.jornada_id === jornada), [puntos, jornada]);
+  const visibles = useMemo(() => puntos.filter((p) => repSel === "" || p.repartidor === repSel), [puntos, repSel]);
+  // Panel (David, 24-nov): TODOS los repartidores activos del día, con su nombre, sus rutas, entregadas y la última entrega
+  const panel = useMemo(() => {
+    const m = new Map<string, { correo: string; nombre: string; rutas: string[]; entregadas: number; ultima: string | null }>();
+    for (const f of activos) {
+      const x = m.get(f.repartidor) ?? { correo: f.repartidor, nombre: f.nombre ?? f.repartidor, rutas: [], entregadas: 0, ultima: null };
+      x.rutas.push(f.origen === "inventada" ? "sin ruta" : `${f.ciclo} · ${f.ruta}${f.origen === "nueva" ? " (archivo)" : ""}`);
+      x.entregadas += f.entregadas;
+      if (f.ultima && (!x.ultima || f.ultima > x.ultima)) x.ultima = f.ultima;
+      m.set(f.repartidor, x);
+    }
+    return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  }, [activos]);
   const datos = useMemo(() => ({ type: "FeatureCollection" as const, features: visibles.map((p) => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
     properties: { id: p.id, img: `n${p.consecutivo}-${(color.get(p.jornada_id) ?? PALETA[0]).slice(1)}${p.anulada ? "-x" : ""}`, anulada: p.anulada ? 1 : 0, consecutivo: p.consecutivo } })) }), [visibles, color]);
   const lineas = useMemo(() => ({ type: "FeatureCollection" as const, features: [...new Set(visibles.map((p) => p.jornada_id))].map((id) => ({ type: "Feature" as const,
@@ -49,8 +62,9 @@ export default function MapaReparto({ fecha, enVivo }: { fecha: string; enVivo: 
     let vivo = true; setPuntos([]); setUltimo(null); ajustado.current = false; setError(null);
     const pedir = async (completo: boolean) => {
       try {
-        const r = await apiReparto.mapa({ fecha, despues: completo ? null : ultimoRef.current });
+        const [r, av] = await Promise.all([apiReparto.mapa({ fecha, despues: completo ? null : ultimoRef.current }), apiReparto.avance(fecha)]);
         if (!vivo) return;
+        setActivos(av.filas);
         setPuntos((act) => (completo ? r.puntos : unirPuntos(act, r.puntos, r.anuladas)));
         if (r.ultimo_id !== null) setUltimo(r.ultimo_id);
         setActualizado(new Date()); setError(null);
@@ -106,24 +120,34 @@ export default function MapaReparto({ fecha, enVivo }: { fecha: string; enVivo: 
   }, [datos, lineas]);
   useEffect(() => { const m = mapa.current; if (m && listo.current) m.setLayoutProperty("recorrido", "visibility", recorrido ? "visible" : "none"); }, [recorrido]);
   useEffect(() => { const m = mapa.current; if (m && listo.current && m.getLayer("osm")) m.setLayoutProperty("osm", "visibility", calles ? "visible" : "none"); }, [calles]);
-  useEffect(() => { ajustado.current = false; }, [jornada]);
+  useEffect(() => { ajustado.current = false; }, [repSel]);
 
   if (fallo) return <p className="rep-aviso rep-aviso-error" role="alert">{fallo}</p>;
   return (
     <section className="rep-bloque" aria-label="Mapa en vivo" data-bloque="mapa">
       <div className="rep-mapa-ctl">
-        <label className="rep-campo-linea">Repartidor y ruta
-          <select value={jornada} onChange={(e) => setJornada(e.target.value ? Number(e.target.value) : "")} data-campo="jornada">
-            <option value="">Todos</option>
-            {jornadas.map(([id, rep]) => <option key={id} value={id}>{rep} · jornada {id}</option>)}
-          </select>
-        </label>
         <label className="rep-campo-linea"><input type="checkbox" checked={recorrido} onChange={(e) => setRecorrido(e.target.checked)} data-campo="recorrido" /> Mostrar el recorrido</label>
         <label className="rep-campo-linea"><input type="checkbox" checked={calles} onChange={(e) => setCalles(e.target.checked)} /> Calles</label>
         <span className="rep-suave" data-dato="estado-mapa">{visibles.length} entregas · {enVivo ? `en vivo cada ${INTERVALO_MAPA_MS / 1000} s` : "día cerrado"}{actualizado ? ` · actualizado ${actualizado.toLocaleTimeString("es-CO", { timeZone: "America/Bogota" })}` : ""}</span>
       </div>
       {error ? <p className="rep-aviso rep-aviso-error" role="alert">{error}</p> : null}
-      <div ref={cont} className="rep-mapa" role="application" aria-label="Mapa de las entregas" />
+      <div className="rep-mapa-grid">
+        <aside className="rep-panel" aria-label="Repartidores activos" data-bloque="repartidores">
+          <h3>Repartidores {enVivo ? "activos hoy" : "del día"} ({panel.length})</h3>
+          <button type="button" className="rep-panel-fila" aria-pressed={repSel === ""} onClick={() => setRepSel("")} data-repartidor="">
+            <strong>Todos</strong><span>{puntos.length} entregas</span>
+          </button>
+          {panel.map((x) => (
+            <button key={x.correo} type="button" className="rep-panel-fila" aria-pressed={repSel === x.correo} onClick={() => setRepSel(repSel === x.correo ? "" : x.correo)} data-repartidor={x.correo}>
+              <strong>{x.nombre}</strong>
+              <span>{x.rutas.join(" · ")}</span>
+              <span>{x.entregadas} entregadas · última {textoHora(x.ultima)}</span>
+            </button>
+          ))}
+          {panel.length === 0 ? <p className="rep-suave">Nadie ha empezado a repartir.</p> : null}
+        </aside>
+        <div ref={cont} className="rep-mapa" role="application" aria-label="Mapa de las entregas" />
+      </div>
     </section>
   );
 }

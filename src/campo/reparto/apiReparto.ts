@@ -6,7 +6,8 @@ import { supabase, FUNCTIONS_URL } from "../../lib/supabase";
 export type Perfil = { es_repartidor: boolean; es_supervisor: boolean };
 export type RepartoPeriodo = { periodo: string; desde: string } | null;
 export type CicloAnterior = { ciclo: string; rutas: { ruta: string; n: number }[]; reparto: RepartoPeriodo };
-export type LoteVigente = { id: string; nombre_archivo: string; tipo: "ruta" | "ciclo"; ciclo: string; ruta: string | null; filas: number; cargado_en: string; reparto: RepartoPeriodo };
+/** Cada (ciclo, ruta) de un archivo vigente es una opción (un archivo puede traer varias rutas y ciclos). */
+export type LoteVigente = { id: string; nombre_archivo: string; ciclo: string; ruta: string; filas: number; cargado_en: string; reparto: RepartoPeriodo };
 export type JornadaHoy = { id: number; origen: Origen; ciclo: string | null; ruta: string | null; nombre_archivo: string | null; total: number; entregadas: number; ultima: string | null;
   periodo_reparto: string | null; respaldo: boolean };
 export type Contexto = { correo: string; es_repartidor: boolean; es_supervisor: boolean; es_admin: boolean; puede_calendario: boolean; hoy: string; periodo: string | null;
@@ -26,14 +27,14 @@ export type EntregaDetalle = { id: number; contrato: string; consecutivo: number
 export type Detalle = { jornada: FilaAvance & { nombre: string | null }; entregas: EntregaDetalle[]; saltados: { contrato: string; orden_lectura: number }[]; pendientes: number };
 export type Punto = { id: number; jornada_id: number; repartidor: string; contrato: string; consecutivo: number; hora: string; lon: number; lat: number; precision_m: number; anulada: boolean };
 export type Mapa = { fecha: string; puntos: Punto[]; anuladas: number[]; ultimo_id: number | null };
-export type LoteFila = { id: string; nombre_archivo: string; tipo: "ruta" | "ciclo"; ciclo: string; ruta: string | null; filas: number; autor: string; cargado_en: string; vigente: boolean;
+export type RutaArchivo = { ciclo: string; ruta: string; filas: number };
+export type OtroCiclo = { contrato: string; ciclo_archivo: string; ciclo_rutas: string };
+export type LoteFila = { id: string; nombre_archivo: string; rutas: RutaArchivo[]; filas: number; otro_ciclo: number; sin_registro: number; autor: string; cargado_en: string; vigente: boolean;
   anulado: boolean; motivo_anulacion: string | null; anulado_por: string | null; anulado_en: string | null; jornadas: number };
-export type PorCiclo = { ciclo: string; contratos: number }[];
-/** El ciclo lo deduce la base de los contratos (rutas y, si no, cartera). «previa»: la vista previa (no escribe). «pide_ciclo»: ningún contrato tiene registro. */
+/** El archivo de rutas: «previa» = la vista previa (no escribe); los avisos de otro ciclo no impiden cargar (manda el archivo). */
 export type CargaLote =
-  | { ok: true; previa?: false; lote_id: string; repetido: boolean; ciclo: string; ciclo_deducido: boolean; filas: number; sin_registro: number }
-  | { ok: true; previa: true; ciclo: string; ciclo_deducido: boolean; filas: number; sin_registro: number; por_ciclo: PorCiclo }
-  | { ok: false; errores: string[]; pide_ciclo?: boolean; sin_registro?: number; por_ciclo?: PorCiclo };
+  | { ok: true; previa?: boolean; lote_id?: string; repetido?: boolean; filas: number; rutas: RutaArchivo[]; otro_ciclo: number; otro_ciclo_lista: OtroCiclo[]; sin_registro: number }
+  | { ok: false; errores: string[] };
 export type CalendarioReparto = { periodo: string; hoy: string; puede_cambiar: boolean; ciclos: { ciclo: number; reparto: string | null; en_reparto_hoy: RepartoPeriodo }[] };
 
 export type TipoError = "red" | "sesion" | "horario" | "denegado" | "permiso" | "conflicto" | "validacion" | "servidor";
@@ -91,7 +92,7 @@ export const apiReparto = {
   entregar: (c: { jornada_id: number; contrato: string; lon: number | null; lat: number | null; precision_m: number | null; por_buscador: boolean; id_cliente: string }) =>
     pedir<Entrega>("entregar", { cuerpo: c, timeoutMs: 15000 }),
   anular: (entrega_id: number, motivo: string) => pedir<{ ok: boolean; entrega_id: number; contrato: string }>("anular", { cuerpo: { entrega_id, motivo } }),
-  loteCargar: (c: { nombre: string; sha256: string; tipo: "ruta" | "ciclo"; ciclo?: string | null; ruta?: string | null; filas: { contrato: string | null; orden?: string }[]; confirmar: boolean }) =>
+  loteCargar: (c: { nombre: string; sha256: string; filas: { contrato: string | null; ciclo: string; ruta: string; consecutivo_ruta: string; consecutivo_predio?: string }[]; confirmar: boolean }) =>
     pedir<CargaLote>("lote_cargar", { cuerpo: c, timeoutMs: 60000 }),
   loteAnular: (lote_id: string, motivo: string) => pedir<{ ok: boolean }>("lote_anular", { cuerpo: { lote_id, motivo } }),
   lotes: () => pedir<{ lotes: LoteFila[] }>("lotes"),

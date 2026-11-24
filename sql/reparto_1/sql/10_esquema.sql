@@ -77,27 +77,31 @@ begin
   return v;
 end $$;
 
--- 2. Archivos de ruta o de ciclo que carga el supervisor (origen «nueva»)
+-- 2. Archivos de rutas que carga el supervisor (origen «nueva»). David, 24-nov: la plantilla es LA MISMA del archivo de rutas de facturación
+--    (CÓDIGO_DEL_CONTRATO, CICLO, DIRECCIÓN, RUTA, CONSECUTIVO_EN_LA_RUTA, NÚMERO_CONSECUTIVO_DE_PREDIO). Un archivo puede traer varias rutas y varios ciclos:
+--    cada (ciclo, ruta) es una opción para el repartidor. La DIRECCIÓN se valida como columna en la pantalla pero NO llega aquí: no se guarda.
 create table reparto.lotes (
   id              uuid        primary key default gen_random_uuid(),
   nombre_archivo  text        not null check (length(btrim(nombre_archivo)) between 1 and 200),
   archivo_sha256  text        not null check (archivo_sha256 ~ '^[0-9a-f]{64}$'),
-  tipo            text        not null check (tipo in ('ruta', 'ciclo')),
-  ciclo           text        not null check (ciclo ~ '^[0-9]{1,4}$'),
-  ruta            text        check (ruta is null or ruta ~ '^[A-Za-z0-9 _.-]{1,20}$'),
   filas           integer     not null check (filas between 1 and 20000),
-  sin_registro    integer     not null default 0 check (sin_registro >= 0),   -- contratos que no están en rutas ni en cartera (P5: se aceptan con aviso)
+  rutas           integer     not null check (rutas >= 1),                     -- cuántas (ciclo, ruta) trae
+  sin_registro    integer     not null default 0 check (sin_registro >= 0),   -- contratos que no están en rutas ni en cartera (se aceptan con aviso)
+  otro_ciclo      integer     not null default 0 check (otro_ciclo >= 0),     -- filas cuyo CICLO no coincide con bi.v_rutas_geoportal (se cargan: manda el archivo)
   autor           text        not null check (autor = lower(autor) and position('@' in autor) > 1),
-  creado_en       timestamptz not null default now(),
-  check ((tipo = 'ruta') = (ruta is not null))
+  creado_en       timestamptz not null default now()
 );
 create index lotes_creado_idx on reparto.lotes (creado_en desc);
 
 create table reparto.lote_filas (
-  lote_id   uuid    not null references reparto.lotes (id),
-  orden     integer not null check (orden >= 1),
-  contrato  text    not null check (contrato ~ '^[0-9]{1,12}$'),
-  primary key (lote_id, orden),
+  lote_id             uuid    not null references reparto.lotes (id),
+  ciclo               text    not null check (ciclo ~ '^[0-9]{1,4}$'),
+  ruta                text    not null check (ruta ~ '^[A-Za-z0-9 _.-]{1,20}$'),
+  orden               integer not null check (orden >= 1),                     -- 1…N dentro de su (ciclo, ruta): CONSECUTIVO_EN_LA_RUTA y, en el empate, el de predio
+  contrato            text    not null check (contrato ~ '^[0-9]{1,12}$'),
+  consecutivo_ruta    numeric not null,
+  consecutivo_predio  numeric,
+  primary key (lote_id, ciclo, ruta, orden),
   unique (lote_id, contrato)
 );
 
@@ -109,7 +113,7 @@ create table reparto.lotes_anulados (
 );
 
 -- 3. Jornadas: una por (fecha, repartidor, fuente). La fuente es la ruta exacta de donde salió la lista:
---    'anterior:<periodo>:<ciclo>:<ruta>' · 'nueva:<lote_id>' · 'inventada'
+--    'anterior:<periodo>:<ciclo>:<ruta>' · 'nueva:<lote_id>:<ciclo>:<ruta>' · 'inventada' (más '|<período de reparto>' en las de ruta)
 create table reparto.jornadas (
   id          bigint      generated always as identity primary key,
   fecha       date        not null,
@@ -130,6 +134,7 @@ create table reparto.jornadas (
   check (case when origen = 'inventada' then periodo_reparto is null and not respaldo else respaldo = (periodo_reparto is null) end),
   check ((origen = 'anterior') = (periodo is not null and ruta is not null)),
   check ((origen = 'nueva') = (lote_id is not null)),
+  check (origen <> 'nueva' or ruta is not null),
   check ((origen = 'inventada') = (ciclo is null and total = 0)),
   check (origen = 'inventada' or ciclo is not null)
 );

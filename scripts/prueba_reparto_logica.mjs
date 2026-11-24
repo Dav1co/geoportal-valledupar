@@ -34,10 +34,12 @@ ok("2.2 «Entregadas N de T» cuenta lo que ya no está pendiente (de quien sea)
 // 3. Escoger la ruta: primero el ciclo, luego la ruta; los archivos nuevos primero
 const ctx = { periodo: "202610",
   anterior: [{ ciclo: "10", rutas: [{ ruta: "101008", n: 614 }], reparto: { periodo: "202611", desde: "2026-11-05" } }, { ciclo: "2", rutas: [{ ruta: "20101", n: 300 }, { ruta: "20102", n: 10 }], reparto: null }],
-  nuevas: [{ id: "u1", nombre_archivo: "r.xlsx", tipo: "ruta", ciclo: "2", ruta: "ZT", filas: 5, cargado_en: "", reparto: null }, { id: "u2", nombre_archivo: "c.xlsx", tipo: "ciclo", ciclo: "30", ruta: null, filas: 9, cargado_en: "", reparto: { periodo: "202611", desde: "2026-11-02" } }] };
+  nuevas: [{ id: "u1", nombre_archivo: "r.xlsx", ciclo: "2", ruta: "ZT", filas: 5, cargado_en: "", reparto: null }, { id: "u2", nombre_archivo: "c.xlsx", ciclo: "30", ruta: "300101", filas: 9, cargado_en: "", reparto: { periodo: "202611", desde: "2026-11-02" } },
+           { id: "u2", nombre_archivo: "c.xlsx", ciclo: "30", ruta: "300102", filas: 4, cargado_en: "", reparto: { periodo: "202611", desde: "2026-11-02" } }] };
 const cs = L.ciclosParaEscoger(ctx);
 ok("3.1 ciclos ordenados por número (2, 10, 30), con el ciclo que solo tiene archivo", igual(cs.map((c) => c.ciclo), ["2", "10", "30"]));
-ok("3.2 en un ciclo, el archivo nuevo va primero y luego las rutas de lectura", igual(cs[0].opciones.map((o) => o.clave), ["n:u1", "a:2:20101", "a:2:20102"]) && cs[0].opciones[0].titulo === "Ruta ZT (archivo nuevo)" && cs[2].opciones[0].titulo === "Todo el ciclo (archivo nuevo)");
+ok("3.2 en un ciclo, cada ruta del archivo nuevo va primero (en su orden) y luego las rutas de lectura", igual(cs[0].opciones.map((o) => o.clave), ["n:u1:2:ZT", "a:2:20101", "a:2:20102"]) && cs[0].opciones[0].titulo === "Ruta ZT (archivo nuevo)"
+   && igual(cs[2].opciones.map((o) => o.clave), ["n:u2:30:300101", "n:u2:30:300102"]) && cs[2].opciones[1].ruta === "300102", JSON.stringify(cs[2].opciones));
 ok("3.3 cada ciclo trae su período de reparto (o nulo: sin fecha)", cs[0].reparto === null && cs[1].reparto.periodo === "202611" && cs[2].reparto.desde === "2026-11-02");
 ok("3.4 textos de período y fecha", L.textoPeriodo("202611") === "noviembre de 2026" && L.textoFecha("2026-11-05") === "05/11/2026" && L.textoPeriodo(null) === "—");
 
@@ -49,18 +51,23 @@ L.guardarToque(A, null); L.guardarLista(A, null);
 ok("4.2 al confirmarse se borran", L.leerToque(A) === null && L.leerLista(A) === null);
 mem.set("reparto.lista", "{roto"); ok("4.3 una lista dañada no rompe la pantalla", L.leerLista(A) === null);
 
-// 5. Archivo de ruta (plantilla Contrato y Orden)
-let r = L.procesarArchivoRuta([["Contrato", "Orden"], ["1001", "2"], ["1.002E+3", "1"], ["", ""]], 10);
-ok("5.1 la plantilla: contratos (también con formato de número de Excel) y orden", r.errores.length === 0 && igual(r.filas, [{ contrato: "1001", orden: "2" }, { contrato: "1002", orden: "1" }]), JSON.stringify(r));
-r = L.procesarArchivoRuta([["Contrato"], ["1001"], ["1001"], ["88A"]], 10);
-ok("5.2 repetidos e inválidos con su fila de Excel", igual(r.errores, ["Fila 3: el contrato 1001 está repetido.", "Fila 4: el contrato «88A» no es válido (solo números, de 1 a 12)."]), JSON.stringify(r.errores));
-ok("5.3 una columna que no es de la plantilla se rechaza", L.procesarArchivoRuta([["Contrato", "Nombre"], ["1", "x"]], 10).errores[0].startsWith("El archivo trae columnas que no son de la plantilla"));
-ok("5.4 sin la columna Contrato, o vacío", L.procesarArchivoRuta([["Codigo"], ["1"]], 10).errores[0].includes("«Contrato»") && L.procesarArchivoRuta([["Contrato"]], 10).errores.includes("El archivo no trae contratos debajo del encabezado."));
-ok("5.5 Orden en unas filas y en otras no; Orden 0; más filas que el tope",
-   L.procesarArchivoRuta([["Contrato", "Orden"], ["1", "1"], ["2", ""]], 10).errores.includes("La columna Orden debe venir en todas las filas o en ninguna.")
-   && L.procesarArchivoRuta([["Contrato", "Orden"], ["1", "0"]], 10).errores[0].includes("no es un entero mayor que cero")
-   && L.procesarArchivoRuta([["Contrato"], ["1"], ["2"], ["3"]], 2).errores.includes("El archivo trae 3 filas y el tope es 2."));
-ok("5.6 encabezado con tilde, mayúsculas o espacios y filas antes del encabezado", L.procesarArchivoRuta([["Ruta 5"], ["  CONTRATO "], ["7"]], 10).filas[0].contrato === "7");
+// 5. Archivo de rutas: la estructura del archivo de facturación (encabezados exactos; la DIRECCIÓN se exige pero no viaja)
+const ENC = ["CÓDIGO_DEL_CONTRATO", "CICLO", "DIRECCIÓN", "RUTA", "CONSECUTIVO_EN_LA_RUTA", "NÚMERO_CONSECUTIVO_DE_PREDIO"];
+let r = L.procesarArchivoRuta([ENC, ["1001", "98", "CALLE 1", "131013", "2000000", "5"], ["1.002E+3", "098", "CALLE 2", "131013", "1000000.0", ""], ["", "", "", "", "", ""]], 10);
+ok("5.1 la plantilla de facturación: cada fila con su ciclo y su ruta, consecutivos enteros, SIN la dirección", r.errores.length === 0
+   && igual(r.filas, [{ contrato: "1001", ciclo: "98", ruta: "131013", consecutivo_ruta: "2000000", consecutivo_predio: "5" }, { contrato: "1002", ciclo: "98", ruta: "131013", consecutivo_ruta: "1000000" }])
+   && !JSON.stringify(r.filas).includes("CALLE"), JSON.stringify(r));
+r = L.procesarArchivoRuta([ENC, ["1001", "98", "x", "R", "1", ""], ["1002", "98", "x", "R", "2", ""], ["1001", "97", "x", "S", "3", ""]], 10);
+ok("5.2 contratos repetidos: el error con la lista (y sus filas)", r.errores[0] === "El archivo trae contratos repetidos: cada contrato va una sola vez." && r.errores[1] === "El contrato 1001 está repetido (filas 2, 4).", JSON.stringify(r.errores));
+ok("5.3 falta la DIRECCIÓN o sobra una columna: se rechaza con el detalle",
+   /Faltan las columnas DIRECCIÓN/.test(L.procesarArchivoRuta([ENC.filter((e) => e !== "DIRECCIÓN"), ["1", "98", "R", "1", ""]], 10).errores[0])
+   && /sobran las columnas NOMBRE/.test(L.procesarArchivoRuta([[...ENC, "NOMBRE"], ["1", "98", "x", "R", "1", "", "y"]], 10).errores[0]));
+ok("5.4 sin la columna CÓDIGO_DEL_CONTRATO, o vacío", L.procesarArchivoRuta([["Contrato"], ["1"]], 10).errores[0].includes("«CÓDIGO_DEL_CONTRATO»") && L.procesarArchivoRuta([ENC], 10).errores.includes("El archivo no trae contratos debajo del encabezado."));
+r = L.procesarArchivoRuta([ENC, ["88A", "C1", "x", "", "y", "z"]], 10);
+ok("5.5 errores por fila: contrato, ciclo, ruta y consecutivos", r.errores.length === 5 && r.errores.every((e) => e.startsWith("Fila 2:")), JSON.stringify(r.errores));
+ok("5.6 encabezados sin tildes, en otro orden y con filas antes del encabezado; más filas que el tope",
+   L.procesarArchivoRuta([["Rutas de noviembre"], ["RUTA", "codigo_del_contrato", "ciclo", "direccion", "consecutivo en la ruta", "numero consecutivo de predio"], ["R1", "7", "5", "x", "9", ""]], 10).filas[0]?.contrato === "7"
+   && L.procesarArchivoRuta([ENC, ["1", "1", "x", "R", "1", ""], ["2", "1", "x", "R", "2", ""], ["3", "1", "x", "R", "3", ""]], 2).errores.includes("El archivo trae 3 filas y el tope es 2."));
 
 // 6. Mapa en vivo
 const p = (id, an = false) => ({ id, anulada: an });

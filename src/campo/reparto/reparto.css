@@ -77,3 +77,10 @@
 .rep-mapa-ctl { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
 .rep-mapa { width: 100%; height: min(70vh, 620px); border-radius: 12px; border: 1px solid var(--t-borde, #d5dde6); }
 .rep-calendario-cartera { border: 1px solid var(--t-borde, #d5dde6); border-radius: 12px; padding: 12px; background: #fafbfc; }
+.rep-mapa-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 900px) { .rep-mapa-grid { grid-template-columns: 300px minmax(0, 1fr); } }
+.rep-panel { display: flex; flex-direction: column; gap: 6px; max-height: min(70vh, 620px); overflow-y: auto; }
+.rep-panel h3 { margin: 0 0 4px; font-size: 15px; }
+.rep-panel-fila { text-align: left; border: 1px solid var(--t-borde, #d5dde6); border-radius: 10px; background: #fff; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; font: inherit; min-height: 44px; }
+.rep-panel-fila span { font-size: 13px; color: var(--t-texto-2, #52626f); }
+.rep-panel-fila[aria-pressed="true"] { border: 2px solid var(--t-modo, #782a27); background: #f6e8e7; }
