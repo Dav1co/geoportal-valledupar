@@ -9,7 +9,11 @@ create function reparto.f_lista(p_jornada bigint) returns jsonb
 language sql stable security definer set search_path = reparto, public, pg_temp as $$
   select jsonb_build_object(
     'jornada', (select jsonb_build_object('id', j.id, 'fecha', j.fecha, 'origen', j.origen, 'periodo', j.periodo, 'ciclo', j.ciclo, 'ruta', j.ruta,
-                                          'lote_id', j.lote_id, 'nombre_archivo', l.nombre_archivo, 'total', j.total)
+                                          'lote_id', j.lote_id, 'nombre_archivo', l.nombre_archivo, 'total', j.total,
+                                          'periodo_reparto', j.periodo_reparto, 'reparto_desde', j.reparto_desde, 'respaldo', j.respaldo,
+                                          -- aviso en pantalla cuando al ciclo le falta la fecha de reparto (David, 23-nov)
+                                          'aviso', case when j.respaldo then format('Al ciclo %s le falta la fecha de reparto en el calendario: se toman como entregadas las facturas de los últimos %s días.',
+                                                                                    j.ciclo, reparto.f_param('respaldo_dias')) end)
                   from reparto.jornadas j left join reparto.lotes l on l.id = j.lote_id where j.id = p_jornada),
     'entregadas_mias', (select count(*) from reparto.entregas e where e.jornada_id = p_jornada and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)),
     'siguiente', (select coalesce(max(e.consecutivo), 0) + 1 from reparto.entregas e where e.jornada_id = p_jornada),
@@ -36,20 +40,26 @@ begin
               group by 1, 2, 3),
        c as (select g.ciclo, jsonb_agg(jsonb_build_object('ruta', g.ruta, 'n', g.n) order by reparto.f_num(g.ruta) nulls last, g.ruta) as rutas
                from g group by g.ciclo)
-  select (select max(periodo_carga) from g), coalesce(jsonb_agg(jsonb_build_object('ciclo', c.ciclo, 'rutas', c.rutas) order by reparto.f_num(c.ciclo)), '[]'::jsonb)
+  -- con cada ciclo, el período que se reparte hoy según el calendario (nulo: le falta la fecha de reparto → aviso y respaldo)
+  select (select max(periodo_carga) from g),
+         coalesce(jsonb_agg(jsonb_build_object('ciclo', c.ciclo, 'rutas', c.rutas,
+                                               'reparto', (select jsonb_build_object('periodo', p.periodo, 'desde', p.desde) from reparto.f_periodo_reparto(c.ciclo) p))
+                            order by reparto.f_num(c.ciclo)), '[]'::jsonb)
     into v_periodo, v_rutas from c;
   return jsonb_build_object(
     'correo', v_email, 'es_repartidor', v_rep, 'es_supervisor', v_sup, 'es_admin', public.geoportal_es_admin(v_email), 'hoy', reparto.f_hoy(),
     'periodo', v_periodo, 'anterior', v_rutas,
     'nuevas', (select coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'nombre_archivo', l.nombre_archivo, 'tipo', l.tipo, 'ciclo', l.ciclo, 'ruta', l.ruta,
-                                                            'filas', l.filas, 'cargado_en', l.creado_en) order by reparto.f_num(l.ciclo), l.ruta nulls first, l.creado_en desc), '[]'::jsonb)
+                                                            'filas', l.filas, 'cargado_en', l.creado_en,
+                                                            'reparto', (select jsonb_build_object('periodo', p.periodo, 'desde', p.desde) from reparto.f_periodo_reparto(l.ciclo) p)) order by reparto.f_num(l.ciclo), l.ruta nulls first, l.creado_en desc), '[]'::jsonb)
                  from reparto.lotes l
                 where not exists (select 1 from reparto.lotes_anulados a where a.lote_id = l.id)
                   and l.creado_en >= now() - make_interval(days => (reparto.f_param('lote_vigencia_dias'))::int)),
     'mis_jornadas_hoy', (select coalesce(jsonb_agg(jsonb_build_object('id', v.jornada_id, 'origen', v.origen, 'ciclo', v.ciclo, 'ruta', v.ruta, 'nombre_archivo', v.nombre_archivo,
-                                                                     'total', v.total, 'entregadas', v.entregadas, 'ultima', v.ultima) order by v.jornada_id), '[]'::jsonb)
+                                                                     'total', v.total, 'entregadas', v.entregadas, 'ultima', v.ultima, 'periodo_reparto', v.periodo_reparto,
+                                                                     'respaldo', v.respaldo) order by v.jornada_id), '[]'::jsonb)
                            from reparto.v_avance v where v.fecha = reparto.f_hoy() and v.repartidor = v_email),
-    'parametros', jsonb_build_object('precision_mala_m', reparto.f_param('precision_mala_m'), 'ventana_dias', reparto.f_param('ventana_dias'),
+    'parametros', jsonb_build_object('precision_mala_m', reparto.f_param('precision_mala_m'), 'respaldo_dias', reparto.f_param('respaldo_dias'),
                                      'tope_filas_lote', reparto.f_param('tope_filas_lote')));
 end $$;
 
@@ -58,7 +68,7 @@ create function public.geoportal_reparto_empezar(p_solicitante text, p_origen te
                                                  p_lote uuid default null, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public, reparto as $$
 declare v_email text := reparto.f_autorizar_repartidor(p_solicitante); v_hoy date := reparto.f_hoy(); v_fuente text; v_periodo text; v_id bigint;
-        v_lista text[]; v_lote record; v_ciclo text := btrim(coalesce(p_ciclo, '')); v_ruta text := btrim(coalesce(p_ruta, ''));
+        v_lista text[]; v_lote record; v_ciclo text := btrim(coalesce(p_ciclo, '')); v_ruta text := btrim(coalesce(p_ruta, '')); v_rep record;
 begin
   if p_origen is null or p_origen not in ('anterior', 'nueva', 'inventada') then perform reparto.f_err('Origen de la ruta no válido'); end if;
   if p_origen = 'anterior' then
@@ -73,8 +83,14 @@ begin
     if exists (select 1 from reparto.lotes_anulados a where a.lote_id = p_lote) then perform reparto.f_err('El supervisor anuló ese archivo de ruta'); end if;
     if v_lote.creado_en < now() - make_interval(days => (reparto.f_param('lote_vigencia_dias'))::int) then perform reparto.f_err('Ese archivo de ruta ya venció: pida al supervisor que lo cargue de nuevo'); end if;
     v_fuente := 'nueva:' || p_lote::text;
+    v_ciclo := v_lote.ciclo;
   else
     v_fuente := 'inventada';
+  end if;
+  -- el período que se reparte hoy para el ciclo de la ruta (calendario de reparto). Va en la fuente: si el calendario cambia, la lista es otra jornada.
+  if p_origen <> 'inventada' then
+    select p.periodo, p.desde into v_rep from reparto.f_periodo_reparto(v_ciclo) p;
+    v_fuente := v_fuente || '|' || coalesce(v_rep.periodo, 'respaldo');
   end if;
   perform pg_advisory_xact_lock(hashtextextended('reparto_jornada:' || v_hoy::text || ':' || v_email || ':' || v_fuente, 0));
   select j.id into v_id from reparto.jornadas j where j.fecha = v_hoy and j.repartidor = v_email and j.fuente = v_fuente;
@@ -86,12 +102,14 @@ begin
               from bi.v_rutas_geoportal r
              where r.ciclo = v_ciclo and r.ruta = v_ruta and r.periodo_carga = v_periodo and reparto.f_contrato(r.contrato) is not null
              order by r.contrato, reparto.f_num(r.consecutivo_ruta) nulls last, reparto.f_num(r.consecutivo_predio) nulls last) x;
-    insert into reparto.jornadas (fecha, repartidor, origen, fuente, periodo, ciclo, ruta, total)
-      values (v_hoy, v_email, 'anterior', v_fuente, v_periodo, v_ciclo, v_ruta, coalesce(cardinality(v_lista), 0)) returning id into v_id;
+    insert into reparto.jornadas (fecha, repartidor, origen, fuente, periodo, ciclo, ruta, total, periodo_reparto, reparto_desde, respaldo)
+      values (v_hoy, v_email, 'anterior', v_fuente, v_periodo, v_ciclo, v_ruta, coalesce(cardinality(v_lista), 0), v_rep.periodo, v_rep.desde, v_rep.periodo is null)
+      returning id into v_id;
   elsif p_origen = 'nueva' then
     select array_agg(f.contrato order by f.orden) into v_lista from reparto.lote_filas f where f.lote_id = p_lote;
-    insert into reparto.jornadas (fecha, repartidor, origen, fuente, ciclo, ruta, lote_id, total)
-      values (v_hoy, v_email, 'nueva', v_fuente, v_lote.ciclo, v_lote.ruta, p_lote, coalesce(cardinality(v_lista), 0)) returning id into v_id;
+    insert into reparto.jornadas (fecha, repartidor, origen, fuente, ciclo, ruta, lote_id, total, periodo_reparto, reparto_desde, respaldo)
+      values (v_hoy, v_email, 'nueva', v_fuente, v_lote.ciclo, v_lote.ruta, p_lote, coalesce(cardinality(v_lista), 0), v_rep.periodo, v_rep.desde, v_rep.periodo is null)
+      returning id into v_id;
   else
     insert into reparto.jornadas (fecha, repartidor, origen, fuente, total) values (v_hoy, v_email, 'inventada', v_fuente, 0) returning id into v_id;
   end if;
@@ -112,13 +130,14 @@ end $$;
 
 -- Registrar una entrega en el momento, con su XY. Doble toque y reintentos:
 --  · el mismo id_cliente (uuid del toque) devuelve la MISMA entrega (repetida = true), sin error;
---  · un contrato con una entrega vigente en la ventana (cualquier repartidor u origen) no se registra otra vez;
+--  · un contrato con una entrega vigente del período que se reparte (cualquier repartidor u origen) no se registra otra vez; la entrega guarda ese período;
 --  · el consecutivo se calcula bajo el bloqueo de la jornada: no hay dos iguales.
 create function public.geoportal_reparto_entregar(p_solicitante text, p_jornada bigint, p_contrato text, p_lon numeric, p_lat numeric, p_precision_m numeric,
                                                   p_por_buscador boolean, p_id_cliente uuid, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public, reparto as $$
 declare v_email text := reparto.f_autorizar_repartidor(p_solicitante); v_c text := reparto.f_contrato(p_contrato); v_j record; v_orden integer;
-        v_prev record; v_cons integer; v_id bigint; v_hora timestamptz; v_vig bigint;
+        v_prev record; v_cons integer; v_id bigint; v_hora timestamptz; v_vig bigint; v_ciclo text; v_existe boolean;
+        v_per text; v_desde date;
 begin
   if p_id_cliente is null then perform reparto.f_err('Falta el identificador del toque'); end if;
   -- primero el bloqueo de la jornada: así un reintento que llega A LA VEZ espera al primero y después lo encuentra por su uuid
@@ -139,16 +158,24 @@ begin
     perform reparto.f_err('El supervisor anuló el archivo de esta ruta', '55000');
   end if;
   if v_j.origen = 'inventada' then
-    if not exists (select 1 from public.cartera_suscripcion s where s.contrato = v_c)
-       and not exists (select 1 from bi.v_rutas_geoportal r where r.contrato = v_c) then
-      perform reparto.f_err('No hay ningún contrato con el código ' || v_c);
+    -- sin ruta: el contrato debe existir; su ciclo (cartera o rutas) da el período que se reparte; sin ciclo, el mes del día (David, 23-nov)
+    select true, s.ciclo into v_existe, v_ciclo from public.cartera_suscripcion s where s.contrato = v_c order by s.cargado_en desc limit 1;
+    if v_existe is null then
+      select true, r.ciclo into v_existe, v_ciclo from bi.v_rutas_geoportal r where r.contrato = v_c limit 1;
+    end if;
+    if v_existe is null then perform reparto.f_err('No hay ningún contrato con el código ' || v_c); end if;
+    if btrim(coalesce(v_ciclo, '')) ~ '^0*[1-9][0-9]?$' then
+      select p.periodo, p.desde into v_per, v_desde from reparto.f_periodo_reparto(ltrim(btrim(v_ciclo), '0')) p;   -- sin fila: respaldo
+    else
+      v_per := to_char(reparto.f_hoy(), 'YYYYMM'); v_desde := date_trunc('month', reparto.f_hoy())::date;
     end if;
   else
     select it.orden_lectura into v_orden from reparto.jornada_items it where it.jornada_id = p_jornada and it.contrato = v_c;
     if v_orden is null then perform reparto.f_err('El contrato ' || v_c || ' no está en esta ruta'); end if;
+    v_per := v_j.periodo_reparto; v_desde := v_j.reparto_desde;
   end if;
   perform pg_advisory_xact_lock(hashtextextended('reparto_contrato:' || v_c, 0));
-  v_vig := reparto.f_entrega_vigente(v_c, reparto.f_desde());
+  v_vig := reparto.f_entrega_vigente(v_c, v_per, v_desde);
   if v_vig is not null then
     select e.id, e.consecutivo, e.autor, e.registrado_en into v_prev from reparto.entregas e where e.id = v_vig;
     perform reparto.f_err(format('La factura del contrato %s ya se registró el %s%s', v_c,
@@ -157,8 +184,8 @@ begin
   end if;
   select coalesce(max(e.consecutivo), 0) + 1 into v_cons from reparto.entregas e where e.jornada_id = p_jornada;
   begin
-    insert into reparto.entregas (jornada_id, contrato, consecutivo, orden_lectura, lon, lat, precision_m, por_buscador, id_cliente, autor)
-      values (p_jornada, v_c, v_cons, v_orden, round(p_lon, 6), round(p_lat, 6), round(p_precision_m, 1), coalesce(p_por_buscador, false), p_id_cliente, v_email)
+    insert into reparto.entregas (jornada_id, contrato, consecutivo, orden_lectura, periodo_reparto, lon, lat, precision_m, por_buscador, id_cliente, autor)
+      values (p_jornada, v_c, v_cons, v_orden, v_per, round(p_lon, 6), round(p_lat, 6), round(p_precision_m, 1), coalesce(p_por_buscador, false), p_id_cliente, v_email)
       returning id, registrado_en into v_id, v_hora;
   exception when unique_violation then
     -- el mismo toque llegó dos veces a la vez: gana el primero y este devuelve el mismo
@@ -169,7 +196,9 @@ begin
     raise;
   end;
   return jsonb_build_object('entrega_id', v_id, 'consecutivo', v_cons, 'contrato', v_c, 'registrado_en', v_hora, 'repetida', false,
-                            'precision_mala', p_precision_m > (reparto.f_param('precision_mala_m'))::numeric);
+                            'precision_mala', p_precision_m > (reparto.f_param('precision_mala_m'))::numeric, 'periodo_reparto', v_per, 'respaldo', v_per is null,
+                            'aviso', case when v_per is null then format('Al ciclo %s le falta la fecha de reparto en el calendario: se revisó contra las entregas de los últimos %s días.',
+                                                                         coalesce(v_ciclo, v_j.ciclo), reparto.f_param('respaldo_dias')) end);
 end $$;
 
 -- Anular una entrega con motivo (P7): el supervisor, cualquiera; el repartidor, solo las suyas del mismo día. Nada se borra y el consecutivo no se renumera.

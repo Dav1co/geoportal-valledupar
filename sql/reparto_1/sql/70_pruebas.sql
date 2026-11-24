@@ -1,6 +1,7 @@
 -- =====================================================================
 -- REPARTO DE FACTURAS · COMMIT 1 · 70 — PRUEBAS. Dentro del ensayo: todo se deshace con el ERROR esperado del final.
--- Datos propios con prefijo ZTREP (correos ztrep.*@emdupar.gov.co; contratos de 12 dígitos 88000000xxxx, que no existen; ciclo 8801, que no existe).
+-- Datos propios con prefijo ZTREP (correos ztrep.*@emdupar.gov.co; contratos de 12 dígitos 88000000xxxx, que no existen; ciclos 97 y 98, que no existen:
+-- el calendario de reparto solo admite ciclos de 1 a 99). Las fechas de reparto de prueba se escriben en scrr.calendario_ciclos y se deshacen al final.
 -- Las rutas de prueba se escriben en hechos.rutas_consecutivos con el período MÁS RECIENTE (así las ve bi.v_rutas_geoportal) y se deshacen al final.
 -- Cada prueba cuenta SOLO sus filas. Las RPC se llaman como service_role con los topes de producción (30 s, lock 8 s), como lo hace la Edge.
 -- Sin tablas temporales que se borren al confirmar (regla de David, 21-nov).
@@ -55,27 +56,40 @@ insert into campo.personal_eventos (persona, tipo_evento, valor, motivo, autor) 
 insert into hechos.rutas_consecutivos (ciclo, consecutivo_ruta, ruta, contrato, direccion, consecutivo_predio, periodo, archivo_origen, fecha_carga)
 select x.ciclo, x.cr, x.ruta, x.contrato, 'ZTREP CALLE', x.cp, coalesce(x.periodo, (select max(periodo) from hechos.rutas_consecutivos)), 'ZTREP.xlsx', '2026-11-23'
   from (values
-    ('8801', '5000000',  '880101', '880000000101', '10', null),
-    ('8801', '1000000',  '880101', '880000000102', '7',  null),
-    ('8801', '9000000',  '880101', '880000000103', '3',  null),
-    ('8801', '2000000',  '880101', '880000000104', '9',  null),   -- empate con 107: va DESPUÉS (predio 9 > 4)
-    ('8801', '2000000',  '880101', '880000000107', '4',  null),
-    ('8801', '3000000',  '880101', '880000000105', '1',  null),
-    ('8801', '8000000',  '880101', '880000000105', '1',  null),   -- repetido en el período
-    ('8801', '0',        '880101', '880000000106', '2',  null),   -- consecutivo 0: va primero
-    ('8801', '7000000',  '880101', '880000000108', '5',  null),
-    ('8801', '6000000',  '880101', '880000000109', '6',  null),
-    ('8801', '9500000',  '880101', '880000000110', '8',  null),
-    ('8801', '9600000',  '880101', '880000000111', '11', null),
-    ('8801', '9700000',  '880101', '880000000112', '12', null),
-    ('8801', '100',      '880101', '880000000199', '1',  '190001'),  -- período viejo
-    ('8801', '1000000',  '880102', '880000000201', '1',  null),
-    ('8801', '2000000',  '880102', '880000000202', '2',  null),
-    ('8801', '3000000',  '880102', '880000000203', '3',  null),
-    ('9999', '1000000',  '889999', '880000000901', '1',  null)
+    ('98', '5000000',  '880101', '880000000101', '10', null),
+    ('98', '1000000',  '880101', '880000000102', '7',  null),
+    ('98', '9000000',  '880101', '880000000103', '3',  null),
+    ('98', '2000000',  '880101', '880000000104', '9',  null),   -- empate con 107: va DESPUÉS (predio 9 > 4)
+    ('98', '2000000',  '880101', '880000000107', '4',  null),
+    ('98', '3000000',  '880101', '880000000105', '1',  null),
+    ('98', '8000000',  '880101', '880000000105', '1',  null),   -- repetido en el período
+    ('98', '0',        '880101', '880000000106', '2',  null),   -- consecutivo 0: va primero
+    ('98', '7000000',  '880101', '880000000108', '5',  null),
+    ('98', '6000000',  '880101', '880000000109', '6',  null),
+    ('98', '9500000',  '880101', '880000000110', '8',  null),
+    ('98', '9600000',  '880101', '880000000111', '11', null),
+    ('98', '9700000',  '880101', '880000000112', '12', null),
+    ('98', '100',      '880101', '880000000199', '1',  '190001'),  -- período viejo
+    ('98', '1000000',  '880102', '880000000201', '1',  null),
+    ('98', '2000000',  '880102', '880000000202', '2',  null),
+    ('98', '3000000',  '880102', '880000000203', '3',  null),
+    ('9999', '1000000',  '889999', '880000000901', '1',  null),
+    ('97',   '1000000',  '970101', '880000000501', '1',  null),   -- ciclo 97: sin fecha de reparto (respaldo)
+    ('97',   '2000000',  '970101', '880000000502', '2',  null)
   ) x(ciclo, cr, ruta, contrato, cp, periodo);
 -- un contrato que solo está en cartera_suscripcion (para «inventada»)
-insert into public.cartera_suscripcion (contrato, estado, ciclo, periodo_carga) values ('880000000301', 'ACTIVO', '8801', 'ZTREP');
+insert into public.cartera_suscripcion (contrato, estado, ciclo, periodo_carga) values ('880000000301', 'ACTIVO', '98', 'ZTREP'),
+  ('880000000302', 'ACTIVO', '9999', 'ZTREP'),   -- sin ciclo de calendario: el mes del día
+  ('880000000303', 'ACTIVO', '97', 'ZTREP');     -- ciclo sin fecha de reparto: respaldo
+-- Calendario de reparto de prueba. Ciclo 98: el mes pasado (reparto hace 32 días), este mes (hace 2 días) y el próximo (en 3 días: aún no llega).
+-- Ciclo 97: este mes, sin fecha de reparto (solo lectura).
+insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, autor)
+select to_char(date_trunc('month', h.h) + make_interval(months => x.k), 'YYYYMM'), x.c, h.h + 10, h.h + 15, x.e, 'ztrep.adm@emdupar.gov.co'
+  from (select (now() at time zone 'America/Bogota')::date as h) h,
+       lateral (values (-1, 98::smallint, jsonb_build_object('reparto', (h.h - 32)::text)),
+                       ( 0, 98::smallint, jsonb_build_object('reparto', (h.h - 2)::text)),
+                       ( 1, 98::smallint, jsonb_build_object('reparto', (h.h + 3)::text)),
+                       ( 0, 97::smallint, jsonb_build_object('lectura', h.h::text))) x(k, c, e);
 analyze hechos.rutas_consecutivos;
 
 do $$
@@ -83,6 +97,8 @@ declare
   A text := 'ztrep.adm@emdupar.gov.co'; S text := 'ztrep.sup@emdupar.gov.co'; R1 text := 'ztrep.rep1@emdupar.gov.co'; R2 text := 'ztrep.rep2@emdupar.gov.co';
   r jsonb; fx jsonb; j1 bigint; j2 bigint; j3 bigint; ji bigint; jn bigint; u uuid := gen_random_uuid(); e1 bigint; e4 bigint; v_lote uuid; v_lote2 uuid; v_n bigint; v_aud bigint;
   t0 timestamptz; ms numeric; v_orden text; v_sha text := md5('ztrep-lote') || md5('ztrep-lote-b');
+  v_hoy date := (now() at time zone 'America/Bogota')::date; v_mes text := to_char(v_hoy, 'YYYYMM');
+  v_mes_ant text := to_char(date_trunc('month', v_hoy) - interval '1 month', 'YYYYMM'); j97 bigint; j97b bigint;
 begin
   -- ===== 00. Quién entra =====
   r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', R1));
@@ -98,25 +114,29 @@ begin
   perform pg_temp.ok('00.07 solo Técnica: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', 'ztrep.tec@emdupar.gov.co'))) = '42501');
   perform pg_temp.ok('00.08 sin solicitante: 28000', pg_temp.err(pg_temp.rpc('public.geoportal_reparto_contexto(null)')) = '28000');
   perform pg_temp.ok('00.09 el repartidor no carga archivos ni ve el avance (42501)',
-    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', R1, 'x.xlsx', v_sha, 'ruta', '8801', '880101', '[{"contrato":"880000000101"}]'))) = '42501'
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', R1, 'x.xlsx', v_sha, 'ruta', '98', '880101', '[{"contrato":"880000000101"}]'))) = '42501'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', R1))) = '42501'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_mapa(%L)', R1))) = '42501'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lotes(%L)', R1))) = '42501');
   perform pg_temp.ok('00.10 el supervisor que no reparte no empieza jornadas (42501)',
-    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', S, 'anterior', '8801', '880101'))) = '42501');
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', S, 'anterior', '98', '880101'))) = '42501');
 
   -- ===== 01. Rutas del último período en el contexto =====
   r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', R1));
   perform pg_temp.ok('01.01 el contexto trae el período más reciente', r ->> 'periodo' = (select max(periodo) from hechos.rutas_consecutivos), r ->> 'periodo');
-  perform pg_temp.ok('01.02 ciclo 8801 con sus rutas 880101 (12 contratos distintos) y 880102 (3)',
-    (select x -> 'rutas' from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '8801') = '[{"n": 12, "ruta": "880101"}, {"n": 3, "ruta": "880102"}]'::jsonb,
-    (select (x -> 'rutas')::text from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '8801'));
+  perform pg_temp.ok('01.02 ciclo 98 con sus rutas 880101 (12 contratos distintos) y 880102 (3)',
+    (select x -> 'rutas' from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '98') = '[{"n": 12, "ruta": "880101"}, {"n": 3, "ruta": "880102"}]'::jsonb,
+    (select (x -> 'rutas')::text from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '98'));
   perform pg_temp.ok('01.03 el ciclo 9999 no se ofrece (P4)', not exists (select 1 from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '9999'));
-  perform pg_temp.ok('01.04 parámetros: ventana 5 días, tope 10000 filas, precisión mala 30 m',
-    r -> 'parametros' = '{"ventana_dias": 5, "tope_filas_lote": 10000, "precision_mala_m": 30}'::jsonb, (r -> 'parametros')::text);
+  perform pg_temp.ok('01.04 parámetros: respaldo 15 días, tope 10000 filas, precisión mala 30 m',
+    r -> 'parametros' = '{"respaldo_dias": 15, "tope_filas_lote": 10000, "precision_mala_m": 30}'::jsonb, (r -> 'parametros')::text);
+  perform pg_temp.ok('01.05 calendario: el ciclo 98 reparte el período de este mes (su fecha de reparto ya llegó; la del próximo mes no); el 97 no tiene fecha',
+    (select x -> 'reparto' from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '98') = jsonb_build_object('periodo', v_mes, 'desde', v_hoy - 2)
+    and (select x -> 'reparto' from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '97') = 'null'::jsonb,
+    (select string_agg((x -> 'reparto')::text, ' ') from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' in ('97', '98')));
 
   -- ===== 02. Empezar con la ruta anterior =====
-  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '8801', '880101'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '98', '880101'));
   j1 := (r -> 'jornada' ->> 'id')::bigint;
   perform pg_temp.ok('02.01 empieza la jornada: 12 facturas, origen anterior, sin retomar', j1 is not null and (r -> 'jornada' ->> 'total')::int = 12
     and r -> 'jornada' ->> 'origen' = 'anterior' and not (r ->> 'retomada')::boolean and (r ->> 'siguiente')::int = 1, r::text);
@@ -126,13 +146,16 @@ begin
   perform pg_temp.ok('02.03 la lista trae solo los códigos (sin el número de orden), en ese orden y sin saltados',
     pg_temp.pend(r) = '880000000106,880000000102,880000000107,880000000104,880000000105,880000000101,880000000109,880000000108,880000000103,880000000110,880000000111,880000000112'
     and pg_temp.salt(r) = '' and not exists (select 1 from jsonb_array_elements(r -> 'pendientes') x where x ? 'o' or x ? 'orden_lectura'), pg_temp.pend(r));
+  perform pg_temp.ok('02.09 la jornada reparte el período de este mes, sin respaldo ni aviso',
+    r -> 'jornada' ->> 'periodo_reparto' = v_mes and (r -> 'jornada' ->> 'reparto_desde')::date = v_hoy - 2 and not (r -> 'jornada' ->> 'respaldo')::boolean
+    and r -> 'jornada' -> 'aviso' = 'null'::jsonb, (r -> 'jornada')::text);
   perform pg_temp.ok('02.04 el contrato del período viejo no está', not exists (select 1 from reparto.jornada_items where jornada_id = j1 and contrato = '880000000199'));
-  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '8801', '880101'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '98', '880101'));
   perform pg_temp.ok('02.05 volver a escoger la misma ruta el mismo día retoma la MISMA jornada', (r -> 'jornada' ->> 'id')::bigint = j1 and (r ->> 'retomada')::boolean
     and (select count(*) from reparto.jornadas where repartidor = R1) = 1);
   perform pg_temp.ok('02.06 ciclo 9999: no se reparte por ruta', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '9999', '889999'))) = '22023');
   perform pg_temp.ok('02.07 una ruta que no está en el último período: error claro',
-    pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '8801', '880199')) ->> 'msg' = 'Esa ruta no está en el último período cargado');
+    pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '98', '880199')) ->> 'msg' = 'Esa ruta no está en el último período cargado');
   perform pg_temp.ok('02.08 origen inválido o sin ciclo: 22023',
     pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L)', R1, 'otro'))) = '22023'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, null, %L)', R1, 'anterior', '880101'))) = '22023');
@@ -140,7 +163,8 @@ begin
   -- ===== 03. Entregar en desorden, saltar, doble toque =====
   r := pg_temp.ent(R1, j1, '880000000106', u);
   e1 := (r ->> 'entrega_id')::bigint;
-  perform pg_temp.ok('03.01 primera entrega: consecutivo 1, con su XY y no repetida', (r ->> 'consecutivo')::int = 1 and not (r ->> 'repetida')::boolean
+  perform pg_temp.ok('03.01 primera entrega: consecutivo 1, con su XY, su período de reparto y no repetida', (r ->> 'consecutivo')::int = 1 and not (r ->> 'repetida')::boolean
+    and r ->> 'periodo_reparto' = v_mes and (select periodo_reparto from reparto.entregas where id = e1) = v_mes
     and exists (select 1 from reparto.entregas where id = e1 and lon = -73.25 and lat = 10.47 and precision_m = 8 and orden_lectura = 1 and autor = R1), r::text);
   r := pg_temp.ent(R1, j1, '880000000106', u);
   perform pg_temp.ok('03.02 el MISMO toque (mismo uuid) otra vez devuelve la misma entrega, sin error y sin otra fila',
@@ -165,7 +189,7 @@ begin
   perform pg_temp.ok('03.10 contrato con letras: 22023', pg_temp.err(pg_temp.ent(R1, j1, '88A')) = '22023');
   perform pg_temp.ok('03.11 sin uuid del toque: 22023', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_entregar(%L, %s, %L, -73.25, 10.47, 5, false, null)', R1, j1, '880000000101'))) = '22023');
   -- segundo repartidor en la MISMA ruta
-  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R2, 'anterior', '8801', '880101'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R2, 'anterior', '98', '880101'));
   j2 := (r -> 'jornada' ->> 'id')::bigint;
   perform pg_temp.ok('03.12 otro repartidor en la misma ruta: su propia jornada, y su lista ya descuenta lo entregado por el primero',
     j2 <> j1 and pg_temp.pend(r) = '880000000107,880000000101,880000000109,880000000108,880000000103,880000000110,880000000111,880000000112' and pg_temp.salt(r) = '', pg_temp.pend(r));
@@ -203,7 +227,8 @@ begin
   ji := (r -> 'jornada' ->> 'id')::bigint;
   perform pg_temp.ok('05.01 repartir sin ruta: jornada sin lista', ji is not null and (r -> 'jornada' ->> 'total')::int = 0 and r -> 'pendientes' = '[]'::jsonb, r::text);
   r := pg_temp.ent(R1, ji, '880000000301');
-  perform pg_temp.ok('05.02 un contrato que solo está en cartera_suscripcion: entrega 1 (su orden real es su ruta)', (r ->> 'consecutivo')::int = 1
+  perform pg_temp.ok('05.02 un contrato que solo está en cartera_suscripcion: entrega 1 (su orden real es su ruta), con el período de reparto de SU ciclo (98)',
+    (r ->> 'consecutivo')::int = 1 and r ->> 'periodo_reparto' = v_mes
     and (select orden_lectura from reparto.entregas where id = (r ->> 'entrega_id')::bigint) is null, r::text);
   r := pg_temp.ent(R1, ji, '880000000203');
   perform pg_temp.ok('05.03 un contrato que solo está en las rutas: entrega 2', (r ->> 'consecutivo')::int = 2, r::text);
@@ -211,29 +236,29 @@ begin
   perform pg_temp.ok('05.05 sin ruta tampoco se registra dos veces la misma factura (ya entregada desde una ruta)', pg_temp.err(pg_temp.ent(R1, ji, '880000000106')) = '23505');
 
   -- ===== 06. Archivos de ruta («nueva») =====
-  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'ztrep_ruta.xlsx', v_sha, 'ruta', '8801', 'ZT-NUEVA',
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'ztrep_ruta.xlsx', v_sha, 'ruta', '98', 'ZT-NUEVA',
          '[{"contrato":"880000000203","orden":"30"},{"contrato":"880000000201","orden":"10"},{"contrato":"880000000202","orden":"20"},{"contrato":"880000000401","orden":"40"},{"contrato":"880000000402","orden":"50"}]'));
   v_lote := (r ->> 'lote_id')::uuid;
   perform pg_temp.ok('06.01 el supervisor carga un archivo de una ruta: 5 filas, 2 sin registro (se aceptan con aviso, P5)', (r ->> 'ok')::boolean and (r ->> 'filas')::int = 5
     and (r ->> 'sin_registro')::int = 2 and not (r ->> 'repetido')::boolean and (select sin_registro from reparto.lotes where id = v_lote) = 2, r::text);
   perform pg_temp.ok('06.02 el orden es el de la columna Orden, renumerado 1…N',
     (select string_agg(right(contrato, 3) || ':' || orden, ',' order by orden) from reparto.lote_filas where lote_id = v_lote) = '201:1,202:2,203:3,401:4,402:5');
-  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'ztrep_ruta.xlsx', v_sha, 'ruta', '8801', 'ZT-NUEVA', '[{"contrato":"880000000203"}]'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'ztrep_ruta.xlsx', v_sha, 'ruta', '98', 'ZT-NUEVA', '[{"contrato":"880000000203"}]'));
   perform pg_temp.ok('06.03 el mismo archivo otra vez el mismo día (doble clic): el mismo lote', (r ->> 'lote_id')::uuid = v_lote and (r ->> 'repetido')::boolean
     and (select count(*) from reparto.lotes where autor = S) = 1, r::text);
   v_n := (select count(*) from reparto.lotes);
-  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'malo.xlsx', md5('m') || md5('n'), 'ciclo', '8801', null,
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'malo.xlsx', md5('m') || md5('n'), 'ciclo', '98', null,
          '[{"contrato":"88A"},{"contrato":"880000000201"},{"contrato":"880000000201"},{"contrato":"880000000202","orden":"0"}]'));
   perform pg_temp.ok('06.04 un archivo con errores no escribe nada y dice cada error con su fila de Excel',
     not (r ->> 'ok')::boolean and (select count(*) from reparto.lotes) = v_n
     and r -> 'errores' = '["Fila 2: el contrato «88A» no es válido (solo números, de 1 a 12)", "Fila 4: el contrato 880000000201 está repetido", "Fila 5: el Orden «0» no es un entero mayor que cero", "La columna Orden debe venir en todas las filas o en ninguna"]'::jsonb,
     (r -> 'errores')::text);
   perform pg_temp.ok('06.05 archivo de ruta sin la ruta, o ciclo inválido: 22023',
-    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ruta', '8801', '[{"contrato":"1"}]'))) = '22023'
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ruta', '98', '[{"contrato":"1"}]'))) = '22023'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ciclo', 'C1', '[{"contrato":"1"}]'))) = '22023');
   insert into reparto.parametros (clave, valor, nota, autor) values ('tope_filas_lote', '2', 'ZTREP prueba del tope', A);
   perform pg_temp.ok('06.06 más filas que el tope: 22023 con el tope en el mensaje',
-    pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ciclo', '8801', '[{"contrato":"1"},{"contrato":"2"},{"contrato":"3"}]')) ->> 'msg'
+    pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ciclo', '98', '[{"contrato":"1"},{"contrato":"2"},{"contrato":"3"}]')) ->> 'msg'
       = 'El archivo debe tener entre 1 y 2 filas (trae 3)');
   insert into reparto.parametros (clave, valor, nota, autor) values ('tope_filas_lote', '10000', 'ZTREP vuelve el tope', A);
   r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', R2));
@@ -252,7 +277,7 @@ begin
     and pg_temp.ent(R2, jn, '880000000401') ->> 'msg' = 'El supervisor anuló el archivo de esta ruta'
     and not exists (select 1 from jsonb_array_elements(pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', R2)) -> 'nuevas') x where (x ->> 'id')::uuid = v_lote));
   perform pg_temp.ok('06.12 anular el archivo dos veces: 55000', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_anular(%L, %L::uuid, %L)', S, v_lote, 'ZTREP otra vez lo mismo'))) = '55000');
-  insert into reparto.lotes (nombre_archivo, archivo_sha256, tipo, ciclo, ruta, filas, autor, creado_en) values ('ztrep_viejo.xlsx', v_sha, 'ciclo', '8801', null, 1, S, now() - interval '50 days')
+  insert into reparto.lotes (nombre_archivo, archivo_sha256, tipo, ciclo, ruta, filas, autor, creado_en) values ('ztrep_viejo.xlsx', v_sha, 'ciclo', '98', null, 1, S, now() - interval '50 days')
     returning id into v_lote2;
   insert into reparto.lote_filas (lote_id, orden, contrato) values (v_lote2, 1, '880000000111');
   perform pg_temp.ok('06.13 un archivo vencido (más de 45 días) no se ofrece ni se empieza',
@@ -307,8 +332,14 @@ begin
     and (pg_temp.rpc(format('public.geoportal_reparto_anular(%L, %s, %L)', S, e1, 'ZTREP anular la de ayer')) ->> 'ok')::boolean);
   insert into reparto.entregas (jornada_id, contrato, consecutivo, lon, lat, precision_m, id_cliente, autor, registrado_en)
     values (j3, '880000000110', 102, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '10 days');
-  perform pg_temp.ok('08.03 una entrega de hace 10 días (fuera de la ventana de 5) no impide entregar de nuevo y no la descuenta de la lista',
+  perform pg_temp.ok('08.03 una entrega de respaldo (sin período) de ANTES de la fecha de reparto no cuenta para este período: se entrega',
     pg_temp.err(pg_temp.ent(R1, j1, '880000000110')) = 'OK');
+  insert into reparto.entregas (jornada_id, contrato, consecutivo, periodo_reparto, lon, lat, precision_m, id_cliente, autor, registrado_en)
+    values (j3, '880000000109', 103, v_mes_ant, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '1 hour'),
+           (j3, '880000000108', 104, null, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '1 day');
+  perform pg_temp.ok('08.04 una entrega del período ANTERIOR (aunque sea de hoy) no cuenta: se entrega', pg_temp.err(pg_temp.ent(R1, j1, '880000000109')) = 'OK');
+  perform pg_temp.ok('08.05 una entrega de respaldo (sin período) DESPUÉS de la fecha de reparto sí cuenta: no se registra otra vez',
+    pg_temp.err(pg_temp.ent(R1, j1, '880000000108')) = '23505');
 
   -- ===== 09. Solo inserción =====
   begin
@@ -341,6 +372,9 @@ begin
   perform pg_temp.ok('10.05 redes.f_funciones_sin_where() devuelve cero filas', (select count(*) from redes.f_funciones_sin_where()) = 0);
   perform pg_temp.ok('10.06 las 4 funciones de permisos no cambiaron', {{PERMISOS_SIN_CAMBIO}});
   perform pg_temp.ok('10.07 la huella de campo es la misma que antes de la migración (el reparto no toca campo)', {{CAMPO_SIN_CAMBIO}});
+  perform pg_temp.ok('10.09 el Dell (homelab_lectura): USAGE sobre reparto y SELECT sobre las 8 tablas, nada más', {{HOMELAB}});
+  perform pg_temp.ok('10.10 el reparto no escribe en el calendario: solo las filas de prueba',
+    (select count(*) from scrr.calendario_ciclos where autor like 'ztrep.%') = 4 and not exists (select 1 from scrr.calendario_ciclos where autor like 'ztrep.%' and ciclo not in (97, 98)));
   perform pg_temp.ok('10.08 ninguna función de reparto ni RPC sin search_path fijo',
     not exists (select 1 from pg_proc p where (p.pronamespace = 'reparto'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%'))
                   and p.prokind = 'f' and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')));
@@ -351,7 +385,7 @@ begin
   ms := round(extract(epoch from clock_timestamp() - t0) * 1000);
   perform pg_temp.ok('11.01 contexto (rutas del período agrupadas) en menos de 5 s: ' || ms || ' ms', pg_temp.err(r) = 'OK' and ms < 5000, ms::text);
   t0 := clock_timestamp();
-  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '8801', '880102'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '98', '880102'));
   ms := round(extract(epoch from clock_timestamp() - t0) * 1000);
   perform pg_temp.ok('11.02 empezar una ruta del período en menos de 5 s: ' || ms || ' ms', pg_temp.err(r) = 'OK' and ms < 5000, ms::text);
   t0 := clock_timestamp();
@@ -366,6 +400,34 @@ begin
   r := pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', S));
   ms := round(extract(epoch from clock_timestamp() - t0) * 1000);
   perform pg_temp.ok('11.05 avance del día en menos de 3 s: ' || ms || ' ms', pg_temp.err(r) = 'OK' and ms < 3000, ms::text);
+
+  -- ===== 12. Calendario de reparto: falta la fecha (respaldo de 15 días), sin ruta y cambio del calendario en el día =====
+  insert into reparto.entregas (jornada_id, contrato, consecutivo, lon, lat, precision_m, id_cliente, autor, registrado_en)
+    values (j3, '880000000501', 105, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '20 days'),
+           (j3, '880000000502', 106, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '10 days');
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '97', '970101'));
+  j97 := (r -> 'jornada' ->> 'id')::bigint;
+  perform pg_temp.ok('12.01 ciclo sin fecha de reparto: la jornada va en respaldo y trae el aviso para la pantalla',
+    (r -> 'jornada' ->> 'respaldo')::boolean and r -> 'jornada' -> 'periodo_reparto' = 'null'::jsonb
+    and r -> 'jornada' ->> 'aviso' = 'Al ciclo 97 le falta la fecha de reparto en el calendario: se toman como entregadas las facturas de los últimos 15 días.', (r -> 'jornada')::text);
+  perform pg_temp.ok('12.02 respaldo de 15 días: la de hace 20 días queda pendiente; la de hace 10, entregada', pg_temp.pend(r) = '880000000501', pg_temp.pend(r));
+  r := pg_temp.ent(R1, j97, '880000000501');
+  perform pg_temp.ok('12.03 se entrega en respaldo: sin período, con el aviso', (r ->> 'respaldo')::boolean and r -> 'periodo_reparto' = 'null'::jsonb and r ->> 'aviso' like 'Al ciclo 97 le falta%', r::text);
+  r := pg_temp.ent(R1, ji, '880000000302');
+  perform pg_temp.ok('12.04 sin ruta, un contrato sin ciclo de calendario (9999): el período es el mes del día', r ->> 'periodo_reparto' = v_mes and not (r ->> 'respaldo')::boolean, r::text);
+  r := pg_temp.ent(R1, ji, '880000000303');
+  perform pg_temp.ok('12.05 sin ruta, un contrato cuyo ciclo no tiene fecha de reparto: respaldo con aviso', (r ->> 'respaldo')::boolean and r ->> 'aviso' like 'Al ciclo 97 le falta%', r::text);
+  insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, motivo, autor)
+    values (v_mes, 97, v_hoy + 10, v_hoy + 15, jsonb_build_object('lectura', v_hoy::text, 'reparto', v_hoy::text), 'ZTREP llega la fecha de reparto', A);
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '97', '970101'));
+  j97b := (r -> 'jornada' ->> 'id')::bigint;
+  perform pg_temp.ok('12.06 el supervisor llena la fecha de reparto en el día: al volver a abrir la ruta es otra jornada, ya con el período y sin aviso',
+    j97b <> j97 and r -> 'jornada' ->> 'periodo_reparto' = v_mes and not (r -> 'jornada' ->> 'respaldo')::boolean and r -> 'jornada' -> 'aviso' = 'null'::jsonb, (r -> 'jornada')::text);
+  perform pg_temp.ok('12.07 con la fecha nueva (hoy): la entrega de respaldo de hoy cuenta; la de hace 10 días ya no', pg_temp.pend(r) = '880000000502', pg_temp.pend(r));
+  r := pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', S));
+  perform pg_temp.ok('12.08 el avance del supervisor muestra el período de reparto y el respaldo de cada jornada',
+    (select y ->> 'respaldo' from jsonb_array_elements(r -> 'filas') y where (y ->> 'jornada_id')::bigint = j97) = 'true'
+    and (select y ->> 'periodo_reparto' from jsonb_array_elements(r -> 'filas') y where (y ->> 'jornada_id')::bigint = j1) = v_mes, (r -> 'filas')::text);
 end $$;
 
 -- Resultado: termina SIEMPRE en un ERROR (deshace todo). «N de N … SIN FALLAS» es el éxito.

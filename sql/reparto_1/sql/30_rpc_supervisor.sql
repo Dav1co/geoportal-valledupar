@@ -103,6 +103,7 @@ begin
   return jsonb_build_object('fecha', v_fecha, 'filas', (select coalesce(jsonb_agg(jsonb_build_object(
       'jornada_id', v.jornada_id, 'repartidor', v.repartidor, 'nombre', (select b.nombre from public.geoportal_lista_blanca b where b.email = v.repartidor),
       'origen', v.origen, 'periodo', v.periodo, 'ciclo', v.ciclo, 'ruta', v.ruta, 'nombre_archivo', v.nombre_archivo, 'total', v.total,
+      'periodo_reparto', v.periodo_reparto, 'reparto_desde', v.reparto_desde, 'respaldo', v.respaldo,
       'entregadas', v.entregadas, 'anuladas', v.anuladas, 'ultima', v.ultima,
       'pendientes', case when v.origen = 'inventada' then null else s.pendientes end,
       'saltadas', case when v.origen = 'inventada' then null else s.saltadas end) order by v.repartidor, v.jornada_id), '[]'::jsonb)
@@ -122,6 +123,7 @@ begin
     'jornada', (select to_jsonb(v) - 'lote_id' || jsonb_build_object('nombre', (select b.nombre from public.geoportal_lista_blanca b where b.email = v.repartidor))
                   from reparto.v_avance v where v.jornada_id = p_jornada),
     'entregas', (select coalesce(jsonb_agg(jsonb_build_object('id', e.id, 'contrato', e.contrato, 'consecutivo', e.consecutivo, 'orden_lectura', e.orden_lectura,
+                   'periodo_reparto', e.periodo_reparto,
                    'hora', e.registrado_en, 'lon', e.lon, 'lat', e.lat, 'precision_m', e.precision_m, 'por_buscador', e.por_buscador,
                    'anulada', e.anulada, 'motivo_anulacion', e.motivo_anulacion, 'anulada_por', e.anulada_por, 'anulada_en', e.anulada_en) order by e.consecutivo), '[]'::jsonb)
                    from reparto.v_entregas e where e.jornada_id = p_jornada),

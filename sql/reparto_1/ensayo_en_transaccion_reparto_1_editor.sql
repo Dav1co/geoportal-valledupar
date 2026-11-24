@@ -16,6 +16,10 @@ create temp table ztrep_antes as select f, md5(pg_get_functiondef(to_regprocedur
 --   · hechos.rutas_consecutivos (la lee la vista; las pruebas escriben en ella dentro del ensayo) no es una tabla con sus 9 columnas de texto, sin NOT NULL ni
 --     defaults, sin CHECK y sin disparadores propios (como en producción: consulta A del 23-nov);
 --   · public.cartera_suscripcion no tiene sus 23 columnas de producción (nombre, tipo, NOT NULL y default) o le falta el índice por contrato;
+--   · scrr.v_calendario_vigente no es una vista con su definición de producción (md5 64f9c515a0323a72737b950afaf4a741) o scrr.calendario_ciclos no es una tabla con sus
+--     8 columnas, sus 7 restricciones (md5 f09f069a5ec1fd32518a9444bcb18ed2) y su disparador de solo inserción (el reparto lee etapas->>'reparto'; no los toca;
+--     las pruebas escriben fechas de prueba dentro del ensayo);
+--   · no existe el rol homelab_lectura (el Dell: USAGE sobre reparto y SELECT sobre cada tabla, cambio de D2 del 23-nov);
 --   · public.geoportal_lista_blanca o public.geoportal_auditoria no tienen las columnas que se usan; falta redes.f_funciones_sin_where().
 -- No toca las 4 funciones de permisos (geoportal_admin_permisos, geoportal_mis_permisos, geoportal_puede, geoportal_admin_guardar).
 -- =====================================================================
@@ -80,6 +84,27 @@ begin
         and column_name in ('email', 'accion', 'referencia', 'detalle', 'ip')) <> 5 then
     raise exception 'GUARDIA REPARTO: a public.geoportal_auditoria le faltan columnas.';
   end if;
+  -- calendario de reparto (scrr, publicado: huella 722fc84b… del 23-nov)
+  if (select relkind from pg_class where oid = to_regclass('scrr.v_calendario_vigente')) is distinct from 'v'
+     or md5(pg_get_viewdef('scrr.v_calendario_vigente'::regclass, true)) <> '64f9c515a0323a72737b950afaf4a741' then
+    raise exception 'GUARDIA REPARTO: scrr.v_calendario_vigente no existe o su definición cambió (se esperaba md5 64f9c515a0323a72737b950afaf4a741). Deténgase y avise.';
+  end if;
+  if (select relkind from pg_class where oid = to_regclass('scrr.calendario_ciclos')) is distinct from 'r' then
+    raise exception 'GUARDIA REPARTO: scrr.calendario_ciclos no existe o no es una tabla.';
+  end if;
+  select string_agg(column_name || ':' || data_type || ':' || is_nullable || ':' || coalesce(column_default, ''), ',' order by ordinal_position) into v
+    from information_schema.columns where table_schema = 'scrr' and table_name = 'calendario_ciclos';
+  if v is distinct from 'periodo:character:NO:,ciclo:smallint:NO:,pago_oportuno:date:NO:,fecha_suspension:date:NO:,etapas:jsonb:NO:''{}''::jsonb,motivo:text:YES:,autor:text:NO:,vigente_desde:timestamp with time zone:NO:clock_timestamp()' then
+    raise exception 'GUARDIA REPARTO: las columnas de scrr.calendario_ciclos (nombre:tipo:nulable:default) no son las esperadas: %', v;
+  end if;
+  if (select md5(string_agg(c.conname || '=' || pg_get_constraintdef(c.oid), ' | ' order by c.conname)) from pg_constraint c where c.conrelid = 'scrr.calendario_ciclos'::regclass)
+       is distinct from 'f09f069a5ec1fd32518a9444bcb18ed2'
+     or not exists (select 1 from pg_trigger t where t.tgrelid = 'scrr.calendario_ciclos'::regclass and not t.tgisinternal and t.tgname = 'calendario_ciclos_solo_insercion') then
+    raise exception 'GUARDIA REPARTO: las restricciones o el disparador de solo inserción de scrr.calendario_ciclos no son los de producción. Deténgase y avise.';
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'homelab_lectura') then
+    raise exception 'GUARDIA REPARTO: no existe el rol homelab_lectura (respaldo del Dell).';
+  end if;
   if to_regprocedure('redes.f_funciones_sin_where()') is null or to_regprocedure('public.geoportal_es_admin(text)') is null then
     raise exception 'GUARDIA REPARTO: falta redes.f_funciones_sin_where() o public.geoportal_es_admin(text).';
   end if;
@@ -93,6 +118,10 @@ end $guardia$;
 -- Cada vez que un repartidor abre una ruta en un día nace (o se retoma) una JORNADA con su lista CONGELADA (la recarga mensual de rutas borra el período).
 -- Esquema cerrado a anon, authenticated y service_role: todo pasa por las RPC public.geoportal_reparto_* (SECURITY DEFINER), que solo ejecuta service_role.
 -- Sin PostGIS (portabilidad): el XY se guarda en grados (lon, lat) con su precisión.
+-- «Ya entregada» va por el CALENDARIO DE REPARTO (David, 23-nov): scrr.v_calendario_vigente, etapas->>'reparto' de cada (período, ciclo). Al abrir una ruta,
+-- el período que se reparte es el último cuya fecha de reparto ya llegó para ese ciclo; cada entrega guarda ese período, y una factura está entregada si ya
+-- tiene una entrega vigente de ese período. Si al ciclo le falta la fecha de reparto: aviso en pantalla y respaldo de 15 días (parámetro respaldo_dias).
+-- Sin ruta: el ciclo del contrato; si no tiene ciclo, el mes del día. El reparto LEE el calendario; no lo toca.
 -- =====================================================================
 
 create schema reparto;
@@ -125,6 +154,15 @@ create function reparto.f_contrato(p text) returns text
 language sql immutable parallel safe set search_path = pg_catalog as $$
   select case when btrim(coalesce(p, '')) ~ '^[0-9]{1,12}$' then btrim(p) else null end
 $$;
+
+-- Fecha segura desde el texto del calendario (aaaa-mm-dd); lo demás, nulo
+create function reparto.f_fecha(p text) returns date
+language plpgsql immutable set search_path = pg_catalog as $$
+begin
+  if p is null or btrim(p) !~ '^20[0-9]{2}-[0-9]{2}-[0-9]{2}$' then return null; end if;
+  return btrim(p)::date;
+exception when others then return null;
+end $$;
 
 -- Hoy en Valledupar
 create function reparto.f_hoy() returns date
@@ -195,8 +233,13 @@ create table reparto.jornadas (
   ruta        text        check (ruta is null or length(ruta) between 1 and 20),
   lote_id     uuid        references reparto.lotes (id),
   total       integer     not null check (total >= 0),
+  periodo_reparto text    check (periodo_reparto is null or periodo_reparto ~ '^20[0-9]{2}(0[1-9]|1[0-2])$'),   -- el período que se reparte (calendario)
+  reparto_desde   date,                                                    -- su fecha de reparto
+  respaldo        boolean not null default false,                         -- al ciclo le falta la fecha de reparto: ventana de respaldo
   creado_en   timestamptz not null default now(),
   unique (fecha, repartidor, fuente),
+  check ((periodo_reparto is null) = (reparto_desde is null)),
+  check (case when origen = 'inventada' then periodo_reparto is null and not respaldo else respaldo = (periodo_reparto is null) end),
   check ((origen = 'anterior') = (periodo is not null and ruta is not null)),
   check ((origen = 'nueva') = (lote_id is not null)),
   check ((origen = 'inventada') = (ciclo is null and total = 0)),
@@ -220,6 +263,7 @@ create table reparto.entregas (
   contrato       text         not null check (contrato ~ '^[0-9]{1,12}$'),
   consecutivo    integer      not null check (consecutivo >= 1),             -- orden REAL de entrega dentro de la jornada (no se renumera al anular)
   orden_lectura  integer      check (orden_lectura is null or orden_lectura >= 1),   -- copiado de la lista; nulo en «inventada»
+  periodo_reparto text        check (periodo_reparto is null or periodo_reparto ~ '^20[0-9]{2}(0[1-9]|1[0-2])$'),   -- nulo = respaldo (sin fecha de reparto)
   lon            numeric(9,6) not null check (lon between -82 and -66),      -- Colombia continental e insular (grados)
   lat            numeric(8,6) not null check (lat between -5 and 14),
   precision_m    numeric(7,1) not null check (precision_m >= 0 and precision_m <= 5000),
@@ -254,31 +298,44 @@ create view reparto.v_entregas as
   select e.*, (a.entrega_id is not null) as anulada, a.motivo as motivo_anulacion, a.autor as anulada_por, a.creado_en as anulada_en
     from reparto.entregas e left join reparto.entregas_anuladas a on a.entrega_id = e.id;
 
--- ¿Este contrato tiene una entrega vigente en la ventana (cualquier origen y cualquier repartidor)? Regla de una sola entrega por factura.
-create function reparto.f_entrega_vigente(p_contrato text, p_desde timestamptz) returns bigint
-language sql stable security definer set search_path = reparto, pg_temp as $$
-  select e.id from reparto.entregas e
-   where e.contrato = p_contrato and e.registrado_en >= p_desde
-     and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)
-   order by e.registrado_en desc limit 1
+-- El período que se reparte HOY para un ciclo: el último del calendario vigente cuya fecha de reparto (etapas->>'reparto') ya llegó. Sin fila: el ciclo no tiene
+-- fecha de reparto (respaldo). Solo lee scrr.v_calendario_vigente.
+create function reparto.f_periodo_reparto(p_ciclo text) returns table (periodo text, desde date)
+language sql stable security definer set search_path = reparto, scrr, pg_temp as $$
+  select v.periodo::text, reparto.f_fecha(v.etapas ->> 'reparto')
+    from scrr.v_calendario_vigente v
+   where btrim(coalesce(p_ciclo, '')) ~ '^[0-9]{1,2}$' and v.ciclo = btrim(p_ciclo)::smallint
+     and reparto.f_fecha(v.etapas ->> 'reparto') <= reparto.f_hoy()
+   order by v.periodo desc limit 1
 $$;
 
--- Comienzo de la ventana de «ya entregada» (parámetro ventana_dias: días calendario contando hoy)
-create function reparto.f_desde() returns timestamptz
+-- Comienzo de la ventana de respaldo (parámetro respaldo_dias: días calendario contando hoy), cuando al ciclo le falta la fecha de reparto
+create function reparto.f_desde_respaldo() returns timestamptz
 language sql stable security definer set search_path = reparto, pg_temp as $$
-  select ((reparto.f_hoy() - ((reparto.f_param('ventana_dias'))::int - 1))::timestamp at time zone 'America/Bogota')
+  select ((reparto.f_hoy() - ((reparto.f_param('respaldo_dias'))::int - 1))::timestamp at time zone 'America/Bogota')
+$$;
+
+-- ¿Este contrato ya tiene una entrega vigente del período que se reparte (cualquier origen y cualquier repartidor)? Regla de una sola entrega por factura.
+--  · con período: una entrega de ese período, o una de respaldo (sin período) hecha desde su fecha de reparto;
+--  · sin período (respaldo): cualquier entrega de los últimos respaldo_dias días.
+create function reparto.f_entrega_vigente(p_contrato text, p_periodo text, p_desde date) returns bigint
+language sql stable security definer set search_path = reparto, pg_temp as $$
+  select e.id from reparto.entregas e
+   where e.contrato = p_contrato
+     and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)
+     and case when p_periodo is not null
+              then e.periodo_reparto = p_periodo or (e.periodo_reparto is null and e.registrado_en >= (p_desde::timestamp at time zone 'America/Bogota'))
+              else e.registrado_en >= reparto.f_desde_respaldo() end
+   order by e.registrado_en desc limit 1
 $$;
 
 -- Estado de la lista de una jornada: cada contrato con su orden de lectura, si ya se entregó (en la ventana, por cualquiera) y si quedó saltado.
 -- Saltado = pendiente con orden de lectura menor que el mayor orden de lectura ya entregado EN ESTA jornada (como en el modelo).
 create function reparto.f_estado_lista(p_jornada bigint) returns table (orden_lectura integer, contrato text, entregada boolean, saltado boolean)
 language sql stable security definer set search_path = reparto, pg_temp as $$
-  with d as (select reparto.f_desde() as desde),
-       i as (select it.orden_lectura, it.contrato,
-                    exists (select 1 from reparto.entregas e, d
-                             where e.contrato = it.contrato and e.registrado_en >= d.desde
-                               and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)) as entregada
-               from reparto.jornada_items it where it.jornada_id = p_jornada),
+  with j as (select jo.periodo_reparto, jo.reparto_desde from reparto.jornadas jo where jo.id = p_jornada),
+       i as (select it.orden_lectura, it.contrato, (reparto.f_entrega_vigente(it.contrato, j.periodo_reparto, j.reparto_desde) is not null) as entregada
+               from reparto.jornada_items it, j where it.jornada_id = p_jornada),
        m as (select max(e.orden_lectura) as maximo from reparto.entregas e
               where e.jornada_id = p_jornada and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id))
   select i.orden_lectura, i.contrato, i.entregada, (not i.entregada and i.orden_lectura < coalesce(m.maximo, 0))
@@ -288,6 +345,7 @@ $$;
 -- Avance por jornada (lo lee el supervisor)
 create view reparto.v_avance as
   select j.id as jornada_id, j.fecha, j.repartidor, j.origen, j.periodo, j.ciclo, j.ruta, j.lote_id, l.nombre_archivo, j.total,
+         j.periodo_reparto, j.reparto_desde, j.respaldo,
          (select count(*) from reparto.entregas e where e.jornada_id = j.id and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)) as entregadas,
          (select count(*) from reparto.entregas e where e.jornada_id = j.id and exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)) as anuladas,
          (select max(e.registrado_en) from reparto.entregas e where e.jornada_id = j.id and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)) as ultima
@@ -331,7 +389,11 @@ create function reparto.f_lista(p_jornada bigint) returns jsonb
 language sql stable security definer set search_path = reparto, public, pg_temp as $$
   select jsonb_build_object(
     'jornada', (select jsonb_build_object('id', j.id, 'fecha', j.fecha, 'origen', j.origen, 'periodo', j.periodo, 'ciclo', j.ciclo, 'ruta', j.ruta,
-                                          'lote_id', j.lote_id, 'nombre_archivo', l.nombre_archivo, 'total', j.total)
+                                          'lote_id', j.lote_id, 'nombre_archivo', l.nombre_archivo, 'total', j.total,
+                                          'periodo_reparto', j.periodo_reparto, 'reparto_desde', j.reparto_desde, 'respaldo', j.respaldo,
+                                          -- aviso en pantalla cuando al ciclo le falta la fecha de reparto (David, 23-nov)
+                                          'aviso', case when j.respaldo then format('Al ciclo %s le falta la fecha de reparto en el calendario: se toman como entregadas las facturas de los últimos %s días.',
+                                                                                    j.ciclo, reparto.f_param('respaldo_dias')) end)
                   from reparto.jornadas j left join reparto.lotes l on l.id = j.lote_id where j.id = p_jornada),
     'entregadas_mias', (select count(*) from reparto.entregas e where e.jornada_id = p_jornada and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)),
     'siguiente', (select coalesce(max(e.consecutivo), 0) + 1 from reparto.entregas e where e.jornada_id = p_jornada),
@@ -358,20 +420,26 @@ begin
               group by 1, 2, 3),
        c as (select g.ciclo, jsonb_agg(jsonb_build_object('ruta', g.ruta, 'n', g.n) order by reparto.f_num(g.ruta) nulls last, g.ruta) as rutas
                from g group by g.ciclo)
-  select (select max(periodo_carga) from g), coalesce(jsonb_agg(jsonb_build_object('ciclo', c.ciclo, 'rutas', c.rutas) order by reparto.f_num(c.ciclo)), '[]'::jsonb)
+  -- con cada ciclo, el período que se reparte hoy según el calendario (nulo: le falta la fecha de reparto → aviso y respaldo)
+  select (select max(periodo_carga) from g),
+         coalesce(jsonb_agg(jsonb_build_object('ciclo', c.ciclo, 'rutas', c.rutas,
+                                               'reparto', (select jsonb_build_object('periodo', p.periodo, 'desde', p.desde) from reparto.f_periodo_reparto(c.ciclo) p))
+                            order by reparto.f_num(c.ciclo)), '[]'::jsonb)
     into v_periodo, v_rutas from c;
   return jsonb_build_object(
     'correo', v_email, 'es_repartidor', v_rep, 'es_supervisor', v_sup, 'es_admin', public.geoportal_es_admin(v_email), 'hoy', reparto.f_hoy(),
     'periodo', v_periodo, 'anterior', v_rutas,
     'nuevas', (select coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'nombre_archivo', l.nombre_archivo, 'tipo', l.tipo, 'ciclo', l.ciclo, 'ruta', l.ruta,
-                                                            'filas', l.filas, 'cargado_en', l.creado_en) order by reparto.f_num(l.ciclo), l.ruta nulls first, l.creado_en desc), '[]'::jsonb)
+                                                            'filas', l.filas, 'cargado_en', l.creado_en,
+                                                            'reparto', (select jsonb_build_object('periodo', p.periodo, 'desde', p.desde) from reparto.f_periodo_reparto(l.ciclo) p)) order by reparto.f_num(l.ciclo), l.ruta nulls first, l.creado_en desc), '[]'::jsonb)
                  from reparto.lotes l
                 where not exists (select 1 from reparto.lotes_anulados a where a.lote_id = l.id)
                   and l.creado_en >= now() - make_interval(days => (reparto.f_param('lote_vigencia_dias'))::int)),
     'mis_jornadas_hoy', (select coalesce(jsonb_agg(jsonb_build_object('id', v.jornada_id, 'origen', v.origen, 'ciclo', v.ciclo, 'ruta', v.ruta, 'nombre_archivo', v.nombre_archivo,
-                                                                     'total', v.total, 'entregadas', v.entregadas, 'ultima', v.ultima) order by v.jornada_id), '[]'::jsonb)
+                                                                     'total', v.total, 'entregadas', v.entregadas, 'ultima', v.ultima, 'periodo_reparto', v.periodo_reparto,
+                                                                     'respaldo', v.respaldo) order by v.jornada_id), '[]'::jsonb)
                            from reparto.v_avance v where v.fecha = reparto.f_hoy() and v.repartidor = v_email),
-    'parametros', jsonb_build_object('precision_mala_m', reparto.f_param('precision_mala_m'), 'ventana_dias', reparto.f_param('ventana_dias'),
+    'parametros', jsonb_build_object('precision_mala_m', reparto.f_param('precision_mala_m'), 'respaldo_dias', reparto.f_param('respaldo_dias'),
                                      'tope_filas_lote', reparto.f_param('tope_filas_lote')));
 end $$;
 
@@ -380,7 +448,7 @@ create function public.geoportal_reparto_empezar(p_solicitante text, p_origen te
                                                  p_lote uuid default null, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public, reparto as $$
 declare v_email text := reparto.f_autorizar_repartidor(p_solicitante); v_hoy date := reparto.f_hoy(); v_fuente text; v_periodo text; v_id bigint;
-        v_lista text[]; v_lote record; v_ciclo text := btrim(coalesce(p_ciclo, '')); v_ruta text := btrim(coalesce(p_ruta, ''));
+        v_lista text[]; v_lote record; v_ciclo text := btrim(coalesce(p_ciclo, '')); v_ruta text := btrim(coalesce(p_ruta, '')); v_rep record;
 begin
   if p_origen is null or p_origen not in ('anterior', 'nueva', 'inventada') then perform reparto.f_err('Origen de la ruta no válido'); end if;
   if p_origen = 'anterior' then
@@ -395,8 +463,14 @@ begin
     if exists (select 1 from reparto.lotes_anulados a where a.lote_id = p_lote) then perform reparto.f_err('El supervisor anuló ese archivo de ruta'); end if;
     if v_lote.creado_en < now() - make_interval(days => (reparto.f_param('lote_vigencia_dias'))::int) then perform reparto.f_err('Ese archivo de ruta ya venció: pida al supervisor que lo cargue de nuevo'); end if;
     v_fuente := 'nueva:' || p_lote::text;
+    v_ciclo := v_lote.ciclo;
   else
     v_fuente := 'inventada';
+  end if;
+  -- el período que se reparte hoy para el ciclo de la ruta (calendario de reparto). Va en la fuente: si el calendario cambia, la lista es otra jornada.
+  if p_origen <> 'inventada' then
+    select p.periodo, p.desde into v_rep from reparto.f_periodo_reparto(v_ciclo) p;
+    v_fuente := v_fuente || '|' || coalesce(v_rep.periodo, 'respaldo');
   end if;
   perform pg_advisory_xact_lock(hashtextextended('reparto_jornada:' || v_hoy::text || ':' || v_email || ':' || v_fuente, 0));
   select j.id into v_id from reparto.jornadas j where j.fecha = v_hoy and j.repartidor = v_email and j.fuente = v_fuente;
@@ -408,12 +482,14 @@ begin
               from bi.v_rutas_geoportal r
              where r.ciclo = v_ciclo and r.ruta = v_ruta and r.periodo_carga = v_periodo and reparto.f_contrato(r.contrato) is not null
              order by r.contrato, reparto.f_num(r.consecutivo_ruta) nulls last, reparto.f_num(r.consecutivo_predio) nulls last) x;
-    insert into reparto.jornadas (fecha, repartidor, origen, fuente, periodo, ciclo, ruta, total)
-      values (v_hoy, v_email, 'anterior', v_fuente, v_periodo, v_ciclo, v_ruta, coalesce(cardinality(v_lista), 0)) returning id into v_id;
+    insert into reparto.jornadas (fecha, repartidor, origen, fuente, periodo, ciclo, ruta, total, periodo_reparto, reparto_desde, respaldo)
+      values (v_hoy, v_email, 'anterior', v_fuente, v_periodo, v_ciclo, v_ruta, coalesce(cardinality(v_lista), 0), v_rep.periodo, v_rep.desde, v_rep.periodo is null)
+      returning id into v_id;
   elsif p_origen = 'nueva' then
     select array_agg(f.contrato order by f.orden) into v_lista from reparto.lote_filas f where f.lote_id = p_lote;
-    insert into reparto.jornadas (fecha, repartidor, origen, fuente, ciclo, ruta, lote_id, total)
-      values (v_hoy, v_email, 'nueva', v_fuente, v_lote.ciclo, v_lote.ruta, p_lote, coalesce(cardinality(v_lista), 0)) returning id into v_id;
+    insert into reparto.jornadas (fecha, repartidor, origen, fuente, ciclo, ruta, lote_id, total, periodo_reparto, reparto_desde, respaldo)
+      values (v_hoy, v_email, 'nueva', v_fuente, v_lote.ciclo, v_lote.ruta, p_lote, coalesce(cardinality(v_lista), 0), v_rep.periodo, v_rep.desde, v_rep.periodo is null)
+      returning id into v_id;
   else
     insert into reparto.jornadas (fecha, repartidor, origen, fuente, total) values (v_hoy, v_email, 'inventada', v_fuente, 0) returning id into v_id;
   end if;
@@ -434,13 +510,14 @@ end $$;
 
 -- Registrar una entrega en el momento, con su XY. Doble toque y reintentos:
 --  · el mismo id_cliente (uuid del toque) devuelve la MISMA entrega (repetida = true), sin error;
---  · un contrato con una entrega vigente en la ventana (cualquier repartidor u origen) no se registra otra vez;
+--  · un contrato con una entrega vigente del período que se reparte (cualquier repartidor u origen) no se registra otra vez; la entrega guarda ese período;
 --  · el consecutivo se calcula bajo el bloqueo de la jornada: no hay dos iguales.
 create function public.geoportal_reparto_entregar(p_solicitante text, p_jornada bigint, p_contrato text, p_lon numeric, p_lat numeric, p_precision_m numeric,
                                                   p_por_buscador boolean, p_id_cliente uuid, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public, reparto as $$
 declare v_email text := reparto.f_autorizar_repartidor(p_solicitante); v_c text := reparto.f_contrato(p_contrato); v_j record; v_orden integer;
-        v_prev record; v_cons integer; v_id bigint; v_hora timestamptz; v_vig bigint;
+        v_prev record; v_cons integer; v_id bigint; v_hora timestamptz; v_vig bigint; v_ciclo text; v_existe boolean;
+        v_per text; v_desde date;
 begin
   if p_id_cliente is null then perform reparto.f_err('Falta el identificador del toque'); end if;
   -- primero el bloqueo de la jornada: así un reintento que llega A LA VEZ espera al primero y después lo encuentra por su uuid
@@ -461,16 +538,24 @@ begin
     perform reparto.f_err('El supervisor anuló el archivo de esta ruta', '55000');
   end if;
   if v_j.origen = 'inventada' then
-    if not exists (select 1 from public.cartera_suscripcion s where s.contrato = v_c)
-       and not exists (select 1 from bi.v_rutas_geoportal r where r.contrato = v_c) then
-      perform reparto.f_err('No hay ningún contrato con el código ' || v_c);
+    -- sin ruta: el contrato debe existir; su ciclo (cartera o rutas) da el período que se reparte; sin ciclo, el mes del día (David, 23-nov)
+    select true, s.ciclo into v_existe, v_ciclo from public.cartera_suscripcion s where s.contrato = v_c order by s.cargado_en desc limit 1;
+    if v_existe is null then
+      select true, r.ciclo into v_existe, v_ciclo from bi.v_rutas_geoportal r where r.contrato = v_c limit 1;
+    end if;
+    if v_existe is null then perform reparto.f_err('No hay ningún contrato con el código ' || v_c); end if;
+    if btrim(coalesce(v_ciclo, '')) ~ '^0*[1-9][0-9]?$' then
+      select p.periodo, p.desde into v_per, v_desde from reparto.f_periodo_reparto(ltrim(btrim(v_ciclo), '0')) p;   -- sin fila: respaldo
+    else
+      v_per := to_char(reparto.f_hoy(), 'YYYYMM'); v_desde := date_trunc('month', reparto.f_hoy())::date;
     end if;
   else
     select it.orden_lectura into v_orden from reparto.jornada_items it where it.jornada_id = p_jornada and it.contrato = v_c;
     if v_orden is null then perform reparto.f_err('El contrato ' || v_c || ' no está en esta ruta'); end if;
+    v_per := v_j.periodo_reparto; v_desde := v_j.reparto_desde;
   end if;
   perform pg_advisory_xact_lock(hashtextextended('reparto_contrato:' || v_c, 0));
-  v_vig := reparto.f_entrega_vigente(v_c, reparto.f_desde());
+  v_vig := reparto.f_entrega_vigente(v_c, v_per, v_desde);
   if v_vig is not null then
     select e.id, e.consecutivo, e.autor, e.registrado_en into v_prev from reparto.entregas e where e.id = v_vig;
     perform reparto.f_err(format('La factura del contrato %s ya se registró el %s%s', v_c,
@@ -479,8 +564,8 @@ begin
   end if;
   select coalesce(max(e.consecutivo), 0) + 1 into v_cons from reparto.entregas e where e.jornada_id = p_jornada;
   begin
-    insert into reparto.entregas (jornada_id, contrato, consecutivo, orden_lectura, lon, lat, precision_m, por_buscador, id_cliente, autor)
-      values (p_jornada, v_c, v_cons, v_orden, round(p_lon, 6), round(p_lat, 6), round(p_precision_m, 1), coalesce(p_por_buscador, false), p_id_cliente, v_email)
+    insert into reparto.entregas (jornada_id, contrato, consecutivo, orden_lectura, periodo_reparto, lon, lat, precision_m, por_buscador, id_cliente, autor)
+      values (p_jornada, v_c, v_cons, v_orden, v_per, round(p_lon, 6), round(p_lat, 6), round(p_precision_m, 1), coalesce(p_por_buscador, false), p_id_cliente, v_email)
       returning id, registrado_en into v_id, v_hora;
   exception when unique_violation then
     -- el mismo toque llegó dos veces a la vez: gana el primero y este devuelve el mismo
@@ -491,7 +576,9 @@ begin
     raise;
   end;
   return jsonb_build_object('entrega_id', v_id, 'consecutivo', v_cons, 'contrato', v_c, 'registrado_en', v_hora, 'repetida', false,
-                            'precision_mala', p_precision_m > (reparto.f_param('precision_mala_m'))::numeric);
+                            'precision_mala', p_precision_m > (reparto.f_param('precision_mala_m'))::numeric, 'periodo_reparto', v_per, 'respaldo', v_per is null,
+                            'aviso', case when v_per is null then format('Al ciclo %s le falta la fecha de reparto en el calendario: se revisó contra las entregas de los últimos %s días.',
+                                                                         coalesce(v_ciclo, v_j.ciclo), reparto.f_param('respaldo_dias')) end);
 end $$;
 
 -- Anular una entrega con motivo (P7): el supervisor, cualquiera; el repartidor, solo las suyas del mismo día. Nada se borra y el consecutivo no se renumera.
@@ -619,6 +706,7 @@ begin
   return jsonb_build_object('fecha', v_fecha, 'filas', (select coalesce(jsonb_agg(jsonb_build_object(
       'jornada_id', v.jornada_id, 'repartidor', v.repartidor, 'nombre', (select b.nombre from public.geoportal_lista_blanca b where b.email = v.repartidor),
       'origen', v.origen, 'periodo', v.periodo, 'ciclo', v.ciclo, 'ruta', v.ruta, 'nombre_archivo', v.nombre_archivo, 'total', v.total,
+      'periodo_reparto', v.periodo_reparto, 'reparto_desde', v.reparto_desde, 'respaldo', v.respaldo,
       'entregadas', v.entregadas, 'anuladas', v.anuladas, 'ultima', v.ultima,
       'pendientes', case when v.origen = 'inventada' then null else s.pendientes end,
       'saltadas', case when v.origen = 'inventada' then null else s.saltadas end) order by v.repartidor, v.jornada_id), '[]'::jsonb)
@@ -638,6 +726,7 @@ begin
     'jornada', (select to_jsonb(v) - 'lote_id' || jsonb_build_object('nombre', (select b.nombre from public.geoportal_lista_blanca b where b.email = v.repartidor))
                   from reparto.v_avance v where v.jornada_id = p_jornada),
     'entregas', (select coalesce(jsonb_agg(jsonb_build_object('id', e.id, 'contrato', e.contrato, 'consecutivo', e.consecutivo, 'orden_lectura', e.orden_lectura,
+                   'periodo_reparto', e.periodo_reparto,
                    'hora', e.registrado_en, 'lon', e.lon, 'lat', e.lat, 'precision_m', e.precision_m, 'por_buscador', e.por_buscador,
                    'anulada', e.anulada, 'motivo_anulacion', e.motivo_anulacion, 'anulada_por', e.anulada_por, 'anulada_en', e.anulada_en) order by e.consecutivo), '[]'::jsonb)
                    from reparto.v_entregas e where e.jornada_id = p_jornada),
@@ -662,6 +751,8 @@ end $$;
 -- =====================================================================
 -- REPARTO DE FACTURAS · COMMIT 1 · 55 — PERMISOS. Todo objeto nuevo: revoke all … from public, anon, authenticated, service_role ANTES de dar permisos.
 -- Solo service_role ejecuta las RPC public.geoportal_reparto_* (la Edge geoportal-reparto). Nadie más toca el esquema reparto: las RPC son SECURITY DEFINER.
+-- El Dell (respaldo cifrado, cambio de D2 del 23-nov): homelab_lectura recibe USAGE sobre reparto y SELECT sobre CADA tabla, con la lista explícita
+-- (sin ALTER DEFAULT PRIVILEGES: una tabla futura no queda legible por accidente). Las tablas de reparto no tienen RLS: el SELECT basta.
 -- =====================================================================
 revoke all on all tables in schema reparto from public, anon, authenticated, service_role;
 revoke all on all sequences in schema reparto from public, anon, authenticated, service_role;
@@ -674,19 +765,23 @@ begin
     execute format('grant execute on function %s to service_role', f.firma);
   end loop;
 end $$;
+grant usage on schema reparto to homelab_lectura;
+grant select on reparto.parametros, reparto.lotes, reparto.lote_filas, reparto.lotes_anulados,
+                reparto.jornadas, reparto.jornada_items, reparto.entregas, reparto.entregas_anuladas to homelab_lectura;
 
 -- =====================================================================
 -- REPARTO DE FACTURAS · COMMIT 1 · 60 — SEMILLA: los parámetros iniciales (versionados; un cambio es una fila nueva)
 -- =====================================================================
 insert into reparto.parametros (clave, valor, nota, autor) values
-  ('ventana_dias', '5', 'Días (contando hoy) en que una factura entregada no se vuelve a ofrecer ni se deja registrar otra vez (cualquier repartidor u origen).', 'migracion@geoportal'),
+  ('respaldo_dias', '15', 'Respaldo cuando al ciclo le falta la fecha de reparto en el calendario: días (contando hoy) en que una factura entregada no se vuelve a ofrecer.', 'migracion@geoportal'),
   ('lote_vigencia_dias', '45', 'Días en que un archivo de ruta cargado por el supervisor se ofrece a los repartidores.', 'migracion@geoportal'),
   ('tope_filas_lote', '10000', 'Filas máximas de un archivo de ruta o de ciclo (el ciclo más grande tiene unos 9.100 contratos).', 'migracion@geoportal'),
   ('precision_mala_m', '30', 'Precisión del GPS (metros) desde la que una entrega queda marcada como imprecisa (P8). Se registra igual.', 'migracion@geoportal');
 
 -- =====================================================================
 -- REPARTO DE FACTURAS · COMMIT 1 · 70 — PRUEBAS. Dentro del ensayo: todo se deshace con el ERROR esperado del final.
--- Datos propios con prefijo ZTREP (correos ztrep.*@emdupar.gov.co; contratos de 12 dígitos 88000000xxxx, que no existen; ciclo 8801, que no existe).
+-- Datos propios con prefijo ZTREP (correos ztrep.*@emdupar.gov.co; contratos de 12 dígitos 88000000xxxx, que no existen; ciclos 97 y 98, que no existen:
+-- el calendario de reparto solo admite ciclos de 1 a 99). Las fechas de reparto de prueba se escriben en scrr.calendario_ciclos y se deshacen al final.
 -- Las rutas de prueba se escriben en hechos.rutas_consecutivos con el período MÁS RECIENTE (así las ve bi.v_rutas_geoportal) y se deshacen al final.
 -- Cada prueba cuenta SOLO sus filas. Las RPC se llaman como service_role con los topes de producción (30 s, lock 8 s), como lo hace la Edge.
 -- Sin tablas temporales que se borren al confirmar (regla de David, 21-nov).
@@ -741,27 +836,40 @@ insert into campo.personal_eventos (persona, tipo_evento, valor, motivo, autor) 
 insert into hechos.rutas_consecutivos (ciclo, consecutivo_ruta, ruta, contrato, direccion, consecutivo_predio, periodo, archivo_origen, fecha_carga)
 select x.ciclo, x.cr, x.ruta, x.contrato, 'ZTREP CALLE', x.cp, coalesce(x.periodo, (select max(periodo) from hechos.rutas_consecutivos)), 'ZTREP.xlsx', '2026-11-23'
   from (values
-    ('8801', '5000000',  '880101', '880000000101', '10', null),
-    ('8801', '1000000',  '880101', '880000000102', '7',  null),
-    ('8801', '9000000',  '880101', '880000000103', '3',  null),
-    ('8801', '2000000',  '880101', '880000000104', '9',  null),   -- empate con 107: va DESPUÉS (predio 9 > 4)
-    ('8801', '2000000',  '880101', '880000000107', '4',  null),
-    ('8801', '3000000',  '880101', '880000000105', '1',  null),
-    ('8801', '8000000',  '880101', '880000000105', '1',  null),   -- repetido en el período
-    ('8801', '0',        '880101', '880000000106', '2',  null),   -- consecutivo 0: va primero
-    ('8801', '7000000',  '880101', '880000000108', '5',  null),
-    ('8801', '6000000',  '880101', '880000000109', '6',  null),
-    ('8801', '9500000',  '880101', '880000000110', '8',  null),
-    ('8801', '9600000',  '880101', '880000000111', '11', null),
-    ('8801', '9700000',  '880101', '880000000112', '12', null),
-    ('8801', '100',      '880101', '880000000199', '1',  '190001'),  -- período viejo
-    ('8801', '1000000',  '880102', '880000000201', '1',  null),
-    ('8801', '2000000',  '880102', '880000000202', '2',  null),
-    ('8801', '3000000',  '880102', '880000000203', '3',  null),
-    ('9999', '1000000',  '889999', '880000000901', '1',  null)
+    ('98', '5000000',  '880101', '880000000101', '10', null),
+    ('98', '1000000',  '880101', '880000000102', '7',  null),
+    ('98', '9000000',  '880101', '880000000103', '3',  null),
+    ('98', '2000000',  '880101', '880000000104', '9',  null),   -- empate con 107: va DESPUÉS (predio 9 > 4)
+    ('98', '2000000',  '880101', '880000000107', '4',  null),
+    ('98', '3000000',  '880101', '880000000105', '1',  null),
+    ('98', '8000000',  '880101', '880000000105', '1',  null),   -- repetido en el período
+    ('98', '0',        '880101', '880000000106', '2',  null),   -- consecutivo 0: va primero
+    ('98', '7000000',  '880101', '880000000108', '5',  null),
+    ('98', '6000000',  '880101', '880000000109', '6',  null),
+    ('98', '9500000',  '880101', '880000000110', '8',  null),
+    ('98', '9600000',  '880101', '880000000111', '11', null),
+    ('98', '9700000',  '880101', '880000000112', '12', null),
+    ('98', '100',      '880101', '880000000199', '1',  '190001'),  -- período viejo
+    ('98', '1000000',  '880102', '880000000201', '1',  null),
+    ('98', '2000000',  '880102', '880000000202', '2',  null),
+    ('98', '3000000',  '880102', '880000000203', '3',  null),
+    ('9999', '1000000',  '889999', '880000000901', '1',  null),
+    ('97',   '1000000',  '970101', '880000000501', '1',  null),   -- ciclo 97: sin fecha de reparto (respaldo)
+    ('97',   '2000000',  '970101', '880000000502', '2',  null)
   ) x(ciclo, cr, ruta, contrato, cp, periodo);
 -- un contrato que solo está en cartera_suscripcion (para «inventada»)
-insert into public.cartera_suscripcion (contrato, estado, ciclo, periodo_carga) values ('880000000301', 'ACTIVO', '8801', 'ZTREP');
+insert into public.cartera_suscripcion (contrato, estado, ciclo, periodo_carga) values ('880000000301', 'ACTIVO', '98', 'ZTREP'),
+  ('880000000302', 'ACTIVO', '9999', 'ZTREP'),   -- sin ciclo de calendario: el mes del día
+  ('880000000303', 'ACTIVO', '97', 'ZTREP');     -- ciclo sin fecha de reparto: respaldo
+-- Calendario de reparto de prueba. Ciclo 98: el mes pasado (reparto hace 32 días), este mes (hace 2 días) y el próximo (en 3 días: aún no llega).
+-- Ciclo 97: este mes, sin fecha de reparto (solo lectura).
+insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, autor)
+select to_char(date_trunc('month', h.h) + make_interval(months => x.k), 'YYYYMM'), x.c, h.h + 10, h.h + 15, x.e, 'ztrep.adm@emdupar.gov.co'
+  from (select (now() at time zone 'America/Bogota')::date as h) h,
+       lateral (values (-1, 98::smallint, jsonb_build_object('reparto', (h.h - 32)::text)),
+                       ( 0, 98::smallint, jsonb_build_object('reparto', (h.h - 2)::text)),
+                       ( 1, 98::smallint, jsonb_build_object('reparto', (h.h + 3)::text)),
+                       ( 0, 97::smallint, jsonb_build_object('lectura', h.h::text))) x(k, c, e);
 analyze hechos.rutas_consecutivos;
 
 do $$
@@ -769,6 +877,8 @@ declare
   A text := 'ztrep.adm@emdupar.gov.co'; S text := 'ztrep.sup@emdupar.gov.co'; R1 text := 'ztrep.rep1@emdupar.gov.co'; R2 text := 'ztrep.rep2@emdupar.gov.co';
   r jsonb; fx jsonb; j1 bigint; j2 bigint; j3 bigint; ji bigint; jn bigint; u uuid := gen_random_uuid(); e1 bigint; e4 bigint; v_lote uuid; v_lote2 uuid; v_n bigint; v_aud bigint;
   t0 timestamptz; ms numeric; v_orden text; v_sha text := md5('ztrep-lote') || md5('ztrep-lote-b');
+  v_hoy date := (now() at time zone 'America/Bogota')::date; v_mes text := to_char(v_hoy, 'YYYYMM');
+  v_mes_ant text := to_char(date_trunc('month', v_hoy) - interval '1 month', 'YYYYMM'); j97 bigint; j97b bigint;
 begin
   -- ===== 00. Quién entra =====
   r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', R1));
@@ -784,25 +894,29 @@ begin
   perform pg_temp.ok('00.07 solo Técnica: 42501', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', 'ztrep.tec@emdupar.gov.co'))) = '42501');
   perform pg_temp.ok('00.08 sin solicitante: 28000', pg_temp.err(pg_temp.rpc('public.geoportal_reparto_contexto(null)')) = '28000');
   perform pg_temp.ok('00.09 el repartidor no carga archivos ni ve el avance (42501)',
-    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', R1, 'x.xlsx', v_sha, 'ruta', '8801', '880101', '[{"contrato":"880000000101"}]'))) = '42501'
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', R1, 'x.xlsx', v_sha, 'ruta', '98', '880101', '[{"contrato":"880000000101"}]'))) = '42501'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', R1))) = '42501'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_mapa(%L)', R1))) = '42501'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lotes(%L)', R1))) = '42501');
   perform pg_temp.ok('00.10 el supervisor que no reparte no empieza jornadas (42501)',
-    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', S, 'anterior', '8801', '880101'))) = '42501');
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', S, 'anterior', '98', '880101'))) = '42501');
 
   -- ===== 01. Rutas del último período en el contexto =====
   r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', R1));
   perform pg_temp.ok('01.01 el contexto trae el período más reciente', r ->> 'periodo' = (select max(periodo) from hechos.rutas_consecutivos), r ->> 'periodo');
-  perform pg_temp.ok('01.02 ciclo 8801 con sus rutas 880101 (12 contratos distintos) y 880102 (3)',
-    (select x -> 'rutas' from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '8801') = '[{"n": 12, "ruta": "880101"}, {"n": 3, "ruta": "880102"}]'::jsonb,
-    (select (x -> 'rutas')::text from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '8801'));
+  perform pg_temp.ok('01.02 ciclo 98 con sus rutas 880101 (12 contratos distintos) y 880102 (3)',
+    (select x -> 'rutas' from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '98') = '[{"n": 12, "ruta": "880101"}, {"n": 3, "ruta": "880102"}]'::jsonb,
+    (select (x -> 'rutas')::text from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '98'));
   perform pg_temp.ok('01.03 el ciclo 9999 no se ofrece (P4)', not exists (select 1 from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '9999'));
-  perform pg_temp.ok('01.04 parámetros: ventana 5 días, tope 10000 filas, precisión mala 30 m',
-    r -> 'parametros' = '{"ventana_dias": 5, "tope_filas_lote": 10000, "precision_mala_m": 30}'::jsonb, (r -> 'parametros')::text);
+  perform pg_temp.ok('01.04 parámetros: respaldo 15 días, tope 10000 filas, precisión mala 30 m',
+    r -> 'parametros' = '{"respaldo_dias": 15, "tope_filas_lote": 10000, "precision_mala_m": 30}'::jsonb, (r -> 'parametros')::text);
+  perform pg_temp.ok('01.05 calendario: el ciclo 98 reparte el período de este mes (su fecha de reparto ya llegó; la del próximo mes no); el 97 no tiene fecha',
+    (select x -> 'reparto' from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '98') = jsonb_build_object('periodo', v_mes, 'desde', v_hoy - 2)
+    and (select x -> 'reparto' from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' = '97') = 'null'::jsonb,
+    (select string_agg((x -> 'reparto')::text, ' ') from jsonb_array_elements(r -> 'anterior') x where x ->> 'ciclo' in ('97', '98')));
 
   -- ===== 02. Empezar con la ruta anterior =====
-  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '8801', '880101'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '98', '880101'));
   j1 := (r -> 'jornada' ->> 'id')::bigint;
   perform pg_temp.ok('02.01 empieza la jornada: 12 facturas, origen anterior, sin retomar', j1 is not null and (r -> 'jornada' ->> 'total')::int = 12
     and r -> 'jornada' ->> 'origen' = 'anterior' and not (r ->> 'retomada')::boolean and (r ->> 'siguiente')::int = 1, r::text);
@@ -812,13 +926,16 @@ begin
   perform pg_temp.ok('02.03 la lista trae solo los códigos (sin el número de orden), en ese orden y sin saltados',
     pg_temp.pend(r) = '880000000106,880000000102,880000000107,880000000104,880000000105,880000000101,880000000109,880000000108,880000000103,880000000110,880000000111,880000000112'
     and pg_temp.salt(r) = '' and not exists (select 1 from jsonb_array_elements(r -> 'pendientes') x where x ? 'o' or x ? 'orden_lectura'), pg_temp.pend(r));
+  perform pg_temp.ok('02.09 la jornada reparte el período de este mes, sin respaldo ni aviso',
+    r -> 'jornada' ->> 'periodo_reparto' = v_mes and (r -> 'jornada' ->> 'reparto_desde')::date = v_hoy - 2 and not (r -> 'jornada' ->> 'respaldo')::boolean
+    and r -> 'jornada' -> 'aviso' = 'null'::jsonb, (r -> 'jornada')::text);
   perform pg_temp.ok('02.04 el contrato del período viejo no está', not exists (select 1 from reparto.jornada_items where jornada_id = j1 and contrato = '880000000199'));
-  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '8801', '880101'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '98', '880101'));
   perform pg_temp.ok('02.05 volver a escoger la misma ruta el mismo día retoma la MISMA jornada', (r -> 'jornada' ->> 'id')::bigint = j1 and (r ->> 'retomada')::boolean
     and (select count(*) from reparto.jornadas where repartidor = R1) = 1);
   perform pg_temp.ok('02.06 ciclo 9999: no se reparte por ruta', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '9999', '889999'))) = '22023');
   perform pg_temp.ok('02.07 una ruta que no está en el último período: error claro',
-    pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '8801', '880199')) ->> 'msg' = 'Esa ruta no está en el último período cargado');
+    pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '98', '880199')) ->> 'msg' = 'Esa ruta no está en el último período cargado');
   perform pg_temp.ok('02.08 origen inválido o sin ciclo: 22023',
     pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L)', R1, 'otro'))) = '22023'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, null, %L)', R1, 'anterior', '880101'))) = '22023');
@@ -826,7 +943,8 @@ begin
   -- ===== 03. Entregar en desorden, saltar, doble toque =====
   r := pg_temp.ent(R1, j1, '880000000106', u);
   e1 := (r ->> 'entrega_id')::bigint;
-  perform pg_temp.ok('03.01 primera entrega: consecutivo 1, con su XY y no repetida', (r ->> 'consecutivo')::int = 1 and not (r ->> 'repetida')::boolean
+  perform pg_temp.ok('03.01 primera entrega: consecutivo 1, con su XY, su período de reparto y no repetida', (r ->> 'consecutivo')::int = 1 and not (r ->> 'repetida')::boolean
+    and r ->> 'periodo_reparto' = v_mes and (select periodo_reparto from reparto.entregas where id = e1) = v_mes
     and exists (select 1 from reparto.entregas where id = e1 and lon = -73.25 and lat = 10.47 and precision_m = 8 and orden_lectura = 1 and autor = R1), r::text);
   r := pg_temp.ent(R1, j1, '880000000106', u);
   perform pg_temp.ok('03.02 el MISMO toque (mismo uuid) otra vez devuelve la misma entrega, sin error y sin otra fila',
@@ -851,7 +969,7 @@ begin
   perform pg_temp.ok('03.10 contrato con letras: 22023', pg_temp.err(pg_temp.ent(R1, j1, '88A')) = '22023');
   perform pg_temp.ok('03.11 sin uuid del toque: 22023', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_entregar(%L, %s, %L, -73.25, 10.47, 5, false, null)', R1, j1, '880000000101'))) = '22023');
   -- segundo repartidor en la MISMA ruta
-  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R2, 'anterior', '8801', '880101'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R2, 'anterior', '98', '880101'));
   j2 := (r -> 'jornada' ->> 'id')::bigint;
   perform pg_temp.ok('03.12 otro repartidor en la misma ruta: su propia jornada, y su lista ya descuenta lo entregado por el primero',
     j2 <> j1 and pg_temp.pend(r) = '880000000107,880000000101,880000000109,880000000108,880000000103,880000000110,880000000111,880000000112' and pg_temp.salt(r) = '', pg_temp.pend(r));
@@ -889,7 +1007,8 @@ begin
   ji := (r -> 'jornada' ->> 'id')::bigint;
   perform pg_temp.ok('05.01 repartir sin ruta: jornada sin lista', ji is not null and (r -> 'jornada' ->> 'total')::int = 0 and r -> 'pendientes' = '[]'::jsonb, r::text);
   r := pg_temp.ent(R1, ji, '880000000301');
-  perform pg_temp.ok('05.02 un contrato que solo está en cartera_suscripcion: entrega 1 (su orden real es su ruta)', (r ->> 'consecutivo')::int = 1
+  perform pg_temp.ok('05.02 un contrato que solo está en cartera_suscripcion: entrega 1 (su orden real es su ruta), con el período de reparto de SU ciclo (98)',
+    (r ->> 'consecutivo')::int = 1 and r ->> 'periodo_reparto' = v_mes
     and (select orden_lectura from reparto.entregas where id = (r ->> 'entrega_id')::bigint) is null, r::text);
   r := pg_temp.ent(R1, ji, '880000000203');
   perform pg_temp.ok('05.03 un contrato que solo está en las rutas: entrega 2', (r ->> 'consecutivo')::int = 2, r::text);
@@ -897,29 +1016,29 @@ begin
   perform pg_temp.ok('05.05 sin ruta tampoco se registra dos veces la misma factura (ya entregada desde una ruta)', pg_temp.err(pg_temp.ent(R1, ji, '880000000106')) = '23505');
 
   -- ===== 06. Archivos de ruta («nueva») =====
-  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'ztrep_ruta.xlsx', v_sha, 'ruta', '8801', 'ZT-NUEVA',
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'ztrep_ruta.xlsx', v_sha, 'ruta', '98', 'ZT-NUEVA',
          '[{"contrato":"880000000203","orden":"30"},{"contrato":"880000000201","orden":"10"},{"contrato":"880000000202","orden":"20"},{"contrato":"880000000401","orden":"40"},{"contrato":"880000000402","orden":"50"}]'));
   v_lote := (r ->> 'lote_id')::uuid;
   perform pg_temp.ok('06.01 el supervisor carga un archivo de una ruta: 5 filas, 2 sin registro (se aceptan con aviso, P5)', (r ->> 'ok')::boolean and (r ->> 'filas')::int = 5
     and (r ->> 'sin_registro')::int = 2 and not (r ->> 'repetido')::boolean and (select sin_registro from reparto.lotes where id = v_lote) = 2, r::text);
   perform pg_temp.ok('06.02 el orden es el de la columna Orden, renumerado 1…N',
     (select string_agg(right(contrato, 3) || ':' || orden, ',' order by orden) from reparto.lote_filas where lote_id = v_lote) = '201:1,202:2,203:3,401:4,402:5');
-  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'ztrep_ruta.xlsx', v_sha, 'ruta', '8801', 'ZT-NUEVA', '[{"contrato":"880000000203"}]'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'ztrep_ruta.xlsx', v_sha, 'ruta', '98', 'ZT-NUEVA', '[{"contrato":"880000000203"}]'));
   perform pg_temp.ok('06.03 el mismo archivo otra vez el mismo día (doble clic): el mismo lote', (r ->> 'lote_id')::uuid = v_lote and (r ->> 'repetido')::boolean
     and (select count(*) from reparto.lotes where autor = S) = 1, r::text);
   v_n := (select count(*) from reparto.lotes);
-  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'malo.xlsx', md5('m') || md5('n'), 'ciclo', '8801', null,
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'malo.xlsx', md5('m') || md5('n'), 'ciclo', '98', null,
          '[{"contrato":"88A"},{"contrato":"880000000201"},{"contrato":"880000000201"},{"contrato":"880000000202","orden":"0"}]'));
   perform pg_temp.ok('06.04 un archivo con errores no escribe nada y dice cada error con su fila de Excel',
     not (r ->> 'ok')::boolean and (select count(*) from reparto.lotes) = v_n
     and r -> 'errores' = '["Fila 2: el contrato «88A» no es válido (solo números, de 1 a 12)", "Fila 4: el contrato 880000000201 está repetido", "Fila 5: el Orden «0» no es un entero mayor que cero", "La columna Orden debe venir en todas las filas o en ninguna"]'::jsonb,
     (r -> 'errores')::text);
   perform pg_temp.ok('06.05 archivo de ruta sin la ruta, o ciclo inválido: 22023',
-    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ruta', '8801', '[{"contrato":"1"}]'))) = '22023'
+    pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ruta', '98', '[{"contrato":"1"}]'))) = '22023'
     and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ciclo', 'C1', '[{"contrato":"1"}]'))) = '22023');
   insert into reparto.parametros (clave, valor, nota, autor) values ('tope_filas_lote', '2', 'ZTREP prueba del tope', A);
   perform pg_temp.ok('06.06 más filas que el tope: 22023 con el tope en el mensaje',
-    pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ciclo', '8801', '[{"contrato":"1"},{"contrato":"2"},{"contrato":"3"}]')) ->> 'msg'
+    pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ciclo', '98', '[{"contrato":"1"},{"contrato":"2"},{"contrato":"3"}]')) ->> 'msg'
       = 'El archivo debe tener entre 1 y 2 filas (trae 3)');
   insert into reparto.parametros (clave, valor, nota, autor) values ('tope_filas_lote', '10000', 'ZTREP vuelve el tope', A);
   r := pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', R2));
@@ -938,7 +1057,7 @@ begin
     and pg_temp.ent(R2, jn, '880000000401') ->> 'msg' = 'El supervisor anuló el archivo de esta ruta'
     and not exists (select 1 from jsonb_array_elements(pg_temp.rpc(format('public.geoportal_reparto_contexto(%L)', R2)) -> 'nuevas') x where (x ->> 'id')::uuid = v_lote));
   perform pg_temp.ok('06.12 anular el archivo dos veces: 55000', pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_anular(%L, %L::uuid, %L)', S, v_lote, 'ZTREP otra vez lo mismo'))) = '55000');
-  insert into reparto.lotes (nombre_archivo, archivo_sha256, tipo, ciclo, ruta, filas, autor, creado_en) values ('ztrep_viejo.xlsx', v_sha, 'ciclo', '8801', null, 1, S, now() - interval '50 days')
+  insert into reparto.lotes (nombre_archivo, archivo_sha256, tipo, ciclo, ruta, filas, autor, creado_en) values ('ztrep_viejo.xlsx', v_sha, 'ciclo', '98', null, 1, S, now() - interval '50 days')
     returning id into v_lote2;
   insert into reparto.lote_filas (lote_id, orden, contrato) values (v_lote2, 1, '880000000111');
   perform pg_temp.ok('06.13 un archivo vencido (más de 45 días) no se ofrece ni se empieza',
@@ -993,8 +1112,14 @@ begin
     and (pg_temp.rpc(format('public.geoportal_reparto_anular(%L, %s, %L)', S, e1, 'ZTREP anular la de ayer')) ->> 'ok')::boolean);
   insert into reparto.entregas (jornada_id, contrato, consecutivo, lon, lat, precision_m, id_cliente, autor, registrado_en)
     values (j3, '880000000110', 102, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '10 days');
-  perform pg_temp.ok('08.03 una entrega de hace 10 días (fuera de la ventana de 5) no impide entregar de nuevo y no la descuenta de la lista',
+  perform pg_temp.ok('08.03 una entrega de respaldo (sin período) de ANTES de la fecha de reparto no cuenta para este período: se entrega',
     pg_temp.err(pg_temp.ent(R1, j1, '880000000110')) = 'OK');
+  insert into reparto.entregas (jornada_id, contrato, consecutivo, periodo_reparto, lon, lat, precision_m, id_cliente, autor, registrado_en)
+    values (j3, '880000000109', 103, v_mes_ant, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '1 hour'),
+           (j3, '880000000108', 104, null, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '1 day');
+  perform pg_temp.ok('08.04 una entrega del período ANTERIOR (aunque sea de hoy) no cuenta: se entrega', pg_temp.err(pg_temp.ent(R1, j1, '880000000109')) = 'OK');
+  perform pg_temp.ok('08.05 una entrega de respaldo (sin período) DESPUÉS de la fecha de reparto sí cuenta: no se registra otra vez',
+    pg_temp.err(pg_temp.ent(R1, j1, '880000000108')) = '23505');
 
   -- ===== 09. Solo inserción =====
   begin
@@ -1036,6 +1161,9 @@ begin
   perform pg_temp.ok('10.05 redes.f_funciones_sin_where() devuelve cero filas', (select count(*) from redes.f_funciones_sin_where()) = 0);
   perform pg_temp.ok('10.06 las 4 funciones de permisos no cambiaron', not exists (select 1 from ztrep_antes z where z.f <> 'campo' and md5(pg_get_functiondef(to_regprocedure(z.f))) is distinct from z.md5));
   perform pg_temp.ok('10.07 la huella de campo es la misma que antes de la migración (el reparto no toca campo)', (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) = (select z.md5 from ztrep_antes z where z.f = 'campo'));
+  perform pg_temp.ok('10.09 el Dell (homelab_lectura): USAGE sobre reparto y SELECT sobre las 8 tablas, nada más', has_schema_privilege('homelab_lectura', 'reparto', 'usage') and (select bool_and(has_table_privilege('homelab_lectura', c.oid, 'select') = (c.relkind = 'r' and c.relname = any (array['parametros', 'lotes', 'lote_filas', 'lotes_anulados', 'jornadas', 'jornada_items', 'entregas', 'entregas_anuladas'])) and not has_table_privilege('homelab_lectura', c.oid, 'insert, update, delete, truncate')) from pg_class c where c.relnamespace = 'reparto'::regnamespace and c.relkind in ('r','v','m')) and (select count(*) from pg_class c where c.relnamespace = 'reparto'::regnamespace and c.relkind = 'r' and has_table_privilege('homelab_lectura', c.oid, 'select')) = 8 and not exists (select 1 from pg_proc p where (p.pronamespace = 'reparto'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%')) and has_function_privilege('homelab_lectura', p.oid, 'execute')));
+  perform pg_temp.ok('10.10 el reparto no escribe en el calendario: solo las filas de prueba',
+    (select count(*) from scrr.calendario_ciclos where autor like 'ztrep.%') = 4 and not exists (select 1 from scrr.calendario_ciclos where autor like 'ztrep.%' and ciclo not in (97, 98)));
   perform pg_temp.ok('10.08 ninguna función de reparto ni RPC sin search_path fijo',
     not exists (select 1 from pg_proc p where (p.pronamespace = 'reparto'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%'))
                   and p.prokind = 'f' and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')));
@@ -1046,7 +1174,7 @@ begin
   ms := round(extract(epoch from clock_timestamp() - t0) * 1000);
   perform pg_temp.ok('11.01 contexto (rutas del período agrupadas) en menos de 5 s: ' || ms || ' ms', pg_temp.err(r) = 'OK' and ms < 5000, ms::text);
   t0 := clock_timestamp();
-  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '8801', '880102'));
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '98', '880102'));
   ms := round(extract(epoch from clock_timestamp() - t0) * 1000);
   perform pg_temp.ok('11.02 empezar una ruta del período en menos de 5 s: ' || ms || ' ms', pg_temp.err(r) = 'OK' and ms < 5000, ms::text);
   t0 := clock_timestamp();
@@ -1061,6 +1189,34 @@ begin
   r := pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', S));
   ms := round(extract(epoch from clock_timestamp() - t0) * 1000);
   perform pg_temp.ok('11.05 avance del día en menos de 3 s: ' || ms || ' ms', pg_temp.err(r) = 'OK' and ms < 3000, ms::text);
+
+  -- ===== 12. Calendario de reparto: falta la fecha (respaldo de 15 días), sin ruta y cambio del calendario en el día =====
+  insert into reparto.entregas (jornada_id, contrato, consecutivo, lon, lat, precision_m, id_cliente, autor, registrado_en)
+    values (j3, '880000000501', 105, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '20 days'),
+           (j3, '880000000502', 106, -73.25, 10.47, 5, gen_random_uuid(), R1, now() - interval '10 days');
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '97', '970101'));
+  j97 := (r -> 'jornada' ->> 'id')::bigint;
+  perform pg_temp.ok('12.01 ciclo sin fecha de reparto: la jornada va en respaldo y trae el aviso para la pantalla',
+    (r -> 'jornada' ->> 'respaldo')::boolean and r -> 'jornada' -> 'periodo_reparto' = 'null'::jsonb
+    and r -> 'jornada' ->> 'aviso' = 'Al ciclo 97 le falta la fecha de reparto en el calendario: se toman como entregadas las facturas de los últimos 15 días.', (r -> 'jornada')::text);
+  perform pg_temp.ok('12.02 respaldo de 15 días: la de hace 20 días queda pendiente; la de hace 10, entregada', pg_temp.pend(r) = '880000000501', pg_temp.pend(r));
+  r := pg_temp.ent(R1, j97, '880000000501');
+  perform pg_temp.ok('12.03 se entrega en respaldo: sin período, con el aviso', (r ->> 'respaldo')::boolean and r -> 'periodo_reparto' = 'null'::jsonb and r ->> 'aviso' like 'Al ciclo 97 le falta%', r::text);
+  r := pg_temp.ent(R1, ji, '880000000302');
+  perform pg_temp.ok('12.04 sin ruta, un contrato sin ciclo de calendario (9999): el período es el mes del día', r ->> 'periodo_reparto' = v_mes and not (r ->> 'respaldo')::boolean, r::text);
+  r := pg_temp.ent(R1, ji, '880000000303');
+  perform pg_temp.ok('12.05 sin ruta, un contrato cuyo ciclo no tiene fecha de reparto: respaldo con aviso', (r ->> 'respaldo')::boolean and r ->> 'aviso' like 'Al ciclo 97 le falta%', r::text);
+  insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, motivo, autor)
+    values (v_mes, 97, v_hoy + 10, v_hoy + 15, jsonb_build_object('lectura', v_hoy::text, 'reparto', v_hoy::text), 'ZTREP llega la fecha de reparto', A);
+  r := pg_temp.rpc(format('public.geoportal_reparto_empezar(%L, %L, %L, %L)', R1, 'anterior', '97', '970101'));
+  j97b := (r -> 'jornada' ->> 'id')::bigint;
+  perform pg_temp.ok('12.06 el supervisor llena la fecha de reparto en el día: al volver a abrir la ruta es otra jornada, ya con el período y sin aviso',
+    j97b <> j97 and r -> 'jornada' ->> 'periodo_reparto' = v_mes and not (r -> 'jornada' ->> 'respaldo')::boolean and r -> 'jornada' -> 'aviso' = 'null'::jsonb, (r -> 'jornada')::text);
+  perform pg_temp.ok('12.07 con la fecha nueva (hoy): la entrega de respaldo de hoy cuenta; la de hace 10 días ya no', pg_temp.pend(r) = '880000000502', pg_temp.pend(r));
+  r := pg_temp.rpc(format('public.geoportal_reparto_avance(%L)', S));
+  perform pg_temp.ok('12.08 el avance del supervisor muestra el período de reparto y el respaldo de cada jornada',
+    (select y ->> 'respaldo' from jsonb_array_elements(r -> 'filas') y where (y ->> 'jornada_id')::bigint = j97) = 'true'
+    and (select y ->> 'periodo_reparto' from jsonb_array_elements(r -> 'filas') y where (y ->> 'jornada_id')::bigint = j1) = v_mes, (r -> 'filas')::text);
 end $$;
 
 -- Resultado: termina SIEMPRE en un ERROR (deshace todo). «N de N … SIN FALLAS» es el éxito.

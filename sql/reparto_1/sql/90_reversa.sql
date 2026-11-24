@@ -5,6 +5,7 @@
 --
 -- DROP 1 — POR QUÉ: las RPC public.geoportal_reparto_* son nuevas de este corte y no existían antes. ALCANCE EXACTO: solo las funciones de public cuyo nombre
 --          empieza por «geoportal_reparto_» (las lista la consulta de abajo). Ninguna otra función de public.
+-- Antes de los DROP se quitan los permisos de homelab_lectura (el Dell) sobre reparto.
 -- DROP 2 — POR QUÉ: el esquema reparto es nuevo de este corte. ALCANCE EXACTO: el esquema reparto con lo suyo (tablas, vistas, funciones, disparadores y los
 --          parámetros de la semilla). «cascade» solo alcanza objetos DENTRO de reparto: nada fuera de reparto depende de él (las RPC de public se quitan antes).
 -- No toca campo, bi, hechos, public.cartera_suscripcion, public.geoportal_auditoria (lo auditado se queda) ni las funciones de permisos.
@@ -18,6 +19,11 @@ begin
   end if;
   if exists (select 1 from reparto.entregas) or exists (select 1 from reparto.lotes) or exists (select 1 from reparto.jornadas) then
     raise exception 'REVERSA REPARTO: ya hay jornadas, entregas o archivos de ruta registrados (son hechos y no se borran). Desactive el reparto en vez de revertirlo.';
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'homelab_lectura') then
+    revoke select on reparto.parametros, reparto.lotes, reparto.lote_filas, reparto.lotes_anulados,
+                     reparto.jornadas, reparto.jornada_items, reparto.entregas, reparto.entregas_anuladas from homelab_lectura;
+    revoke usage on schema reparto from homelab_lectura;
   end if;
   for f in select p.oid::regprocedure as firma from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_reparto\_%' loop
     execute format('drop function %s', f.firma);                 -- DROP 1 (ver arriba)

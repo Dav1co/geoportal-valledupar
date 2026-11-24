@@ -6,6 +6,10 @@
 -- Cada vez que un repartidor abre una ruta en un día nace (o se retoma) una JORNADA con su lista CONGELADA (la recarga mensual de rutas borra el período).
 -- Esquema cerrado a anon, authenticated y service_role: todo pasa por las RPC public.geoportal_reparto_* (SECURITY DEFINER), que solo ejecuta service_role.
 -- Sin PostGIS (portabilidad): el XY se guarda en grados (lon, lat) con su precisión.
+-- «Ya entregada» va por el CALENDARIO DE REPARTO (David, 23-nov): scrr.v_calendario_vigente, etapas->>'reparto' de cada (período, ciclo). Al abrir una ruta,
+-- el período que se reparte es el último cuya fecha de reparto ya llegó para ese ciclo; cada entrega guarda ese período, y una factura está entregada si ya
+-- tiene una entrega vigente de ese período. Si al ciclo le falta la fecha de reparto: aviso en pantalla y respaldo de 15 días (parámetro respaldo_dias).
+-- Sin ruta: el ciclo del contrato; si no tiene ciclo, el mes del día. El reparto LEE el calendario; no lo toca.
 -- =====================================================================
 
 create schema reparto;
@@ -38,6 +42,15 @@ create function reparto.f_contrato(p text) returns text
 language sql immutable parallel safe set search_path = pg_catalog as $$
   select case when btrim(coalesce(p, '')) ~ '^[0-9]{1,12}$' then btrim(p) else null end
 $$;
+
+-- Fecha segura desde el texto del calendario (aaaa-mm-dd); lo demás, nulo
+create function reparto.f_fecha(p text) returns date
+language plpgsql immutable set search_path = pg_catalog as $$
+begin
+  if p is null or btrim(p) !~ '^20[0-9]{2}-[0-9]{2}-[0-9]{2}$' then return null; end if;
+  return btrim(p)::date;
+exception when others then return null;
+end $$;
 
 -- Hoy en Valledupar
 create function reparto.f_hoy() returns date
@@ -108,8 +121,13 @@ create table reparto.jornadas (
   ruta        text        check (ruta is null or length(ruta) between 1 and 20),
   lote_id     uuid        references reparto.lotes (id),
   total       integer     not null check (total >= 0),
+  periodo_reparto text    check (periodo_reparto is null or periodo_reparto ~ '^20[0-9]{2}(0[1-9]|1[0-2])$'),   -- el período que se reparte (calendario)
+  reparto_desde   date,                                                    -- su fecha de reparto
+  respaldo        boolean not null default false,                         -- al ciclo le falta la fecha de reparto: ventana de respaldo
   creado_en   timestamptz not null default now(),
   unique (fecha, repartidor, fuente),
+  check ((periodo_reparto is null) = (reparto_desde is null)),
+  check (case when origen = 'inventada' then periodo_reparto is null and not respaldo else respaldo = (periodo_reparto is null) end),
   check ((origen = 'anterior') = (periodo is not null and ruta is not null)),
   check ((origen = 'nueva') = (lote_id is not null)),
   check ((origen = 'inventada') = (ciclo is null and total = 0)),
@@ -133,6 +151,7 @@ create table reparto.entregas (
   contrato       text         not null check (contrato ~ '^[0-9]{1,12}$'),
   consecutivo    integer      not null check (consecutivo >= 1),             -- orden REAL de entrega dentro de la jornada (no se renumera al anular)
   orden_lectura  integer      check (orden_lectura is null or orden_lectura >= 1),   -- copiado de la lista; nulo en «inventada»
+  periodo_reparto text        check (periodo_reparto is null or periodo_reparto ~ '^20[0-9]{2}(0[1-9]|1[0-2])$'),   -- nulo = respaldo (sin fecha de reparto)
   lon            numeric(9,6) not null check (lon between -82 and -66),      -- Colombia continental e insular (grados)
   lat            numeric(8,6) not null check (lat between -5 and 14),
   precision_m    numeric(7,1) not null check (precision_m >= 0 and precision_m <= 5000),
@@ -167,31 +186,44 @@ create view reparto.v_entregas as
   select e.*, (a.entrega_id is not null) as anulada, a.motivo as motivo_anulacion, a.autor as anulada_por, a.creado_en as anulada_en
     from reparto.entregas e left join reparto.entregas_anuladas a on a.entrega_id = e.id;
 
--- ¿Este contrato tiene una entrega vigente en la ventana (cualquier origen y cualquier repartidor)? Regla de una sola entrega por factura.
-create function reparto.f_entrega_vigente(p_contrato text, p_desde timestamptz) returns bigint
-language sql stable security definer set search_path = reparto, pg_temp as $$
-  select e.id from reparto.entregas e
-   where e.contrato = p_contrato and e.registrado_en >= p_desde
-     and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)
-   order by e.registrado_en desc limit 1
+-- El período que se reparte HOY para un ciclo: el último del calendario vigente cuya fecha de reparto (etapas->>'reparto') ya llegó. Sin fila: el ciclo no tiene
+-- fecha de reparto (respaldo). Solo lee scrr.v_calendario_vigente.
+create function reparto.f_periodo_reparto(p_ciclo text) returns table (periodo text, desde date)
+language sql stable security definer set search_path = reparto, scrr, pg_temp as $$
+  select v.periodo::text, reparto.f_fecha(v.etapas ->> 'reparto')
+    from scrr.v_calendario_vigente v
+   where btrim(coalesce(p_ciclo, '')) ~ '^[0-9]{1,2}$' and v.ciclo = btrim(p_ciclo)::smallint
+     and reparto.f_fecha(v.etapas ->> 'reparto') <= reparto.f_hoy()
+   order by v.periodo desc limit 1
 $$;
 
--- Comienzo de la ventana de «ya entregada» (parámetro ventana_dias: días calendario contando hoy)
-create function reparto.f_desde() returns timestamptz
+-- Comienzo de la ventana de respaldo (parámetro respaldo_dias: días calendario contando hoy), cuando al ciclo le falta la fecha de reparto
+create function reparto.f_desde_respaldo() returns timestamptz
 language sql stable security definer set search_path = reparto, pg_temp as $$
-  select ((reparto.f_hoy() - ((reparto.f_param('ventana_dias'))::int - 1))::timestamp at time zone 'America/Bogota')
+  select ((reparto.f_hoy() - ((reparto.f_param('respaldo_dias'))::int - 1))::timestamp at time zone 'America/Bogota')
+$$;
+
+-- ¿Este contrato ya tiene una entrega vigente del período que se reparte (cualquier origen y cualquier repartidor)? Regla de una sola entrega por factura.
+--  · con período: una entrega de ese período, o una de respaldo (sin período) hecha desde su fecha de reparto;
+--  · sin período (respaldo): cualquier entrega de los últimos respaldo_dias días.
+create function reparto.f_entrega_vigente(p_contrato text, p_periodo text, p_desde date) returns bigint
+language sql stable security definer set search_path = reparto, pg_temp as $$
+  select e.id from reparto.entregas e
+   where e.contrato = p_contrato
+     and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)
+     and case when p_periodo is not null
+              then e.periodo_reparto = p_periodo or (e.periodo_reparto is null and e.registrado_en >= (p_desde::timestamp at time zone 'America/Bogota'))
+              else e.registrado_en >= reparto.f_desde_respaldo() end
+   order by e.registrado_en desc limit 1
 $$;
 
 -- Estado de la lista de una jornada: cada contrato con su orden de lectura, si ya se entregó (en la ventana, por cualquiera) y si quedó saltado.
 -- Saltado = pendiente con orden de lectura menor que el mayor orden de lectura ya entregado EN ESTA jornada (como en el modelo).
 create function reparto.f_estado_lista(p_jornada bigint) returns table (orden_lectura integer, contrato text, entregada boolean, saltado boolean)
 language sql stable security definer set search_path = reparto, pg_temp as $$
-  with d as (select reparto.f_desde() as desde),
-       i as (select it.orden_lectura, it.contrato,
-                    exists (select 1 from reparto.entregas e, d
-                             where e.contrato = it.contrato and e.registrado_en >= d.desde
-                               and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)) as entregada
-               from reparto.jornada_items it where it.jornada_id = p_jornada),
+  with j as (select jo.periodo_reparto, jo.reparto_desde from reparto.jornadas jo where jo.id = p_jornada),
+       i as (select it.orden_lectura, it.contrato, (reparto.f_entrega_vigente(it.contrato, j.periodo_reparto, j.reparto_desde) is not null) as entregada
+               from reparto.jornada_items it, j where it.jornada_id = p_jornada),
        m as (select max(e.orden_lectura) as maximo from reparto.entregas e
               where e.jornada_id = p_jornada and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id))
   select i.orden_lectura, i.contrato, i.entregada, (not i.entregada and i.orden_lectura < coalesce(m.maximo, 0))
@@ -201,6 +233,7 @@ $$;
 -- Avance por jornada (lo lee el supervisor)
 create view reparto.v_avance as
   select j.id as jornada_id, j.fecha, j.repartidor, j.origen, j.periodo, j.ciclo, j.ruta, j.lote_id, l.nombre_archivo, j.total,
+         j.periodo_reparto, j.reparto_desde, j.respaldo,
          (select count(*) from reparto.entregas e where e.jornada_id = j.id and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)) as entregadas,
          (select count(*) from reparto.entregas e where e.jornada_id = j.id and exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)) as anuladas,
          (select max(e.registrado_en) from reparto.entregas e where e.jornada_id = j.id and not exists (select 1 from reparto.entregas_anuladas a where a.entrega_id = e.id)) as ultima

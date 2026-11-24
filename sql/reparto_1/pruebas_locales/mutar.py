@@ -16,7 +16,21 @@ MIGRACION = (PAQ / f"migracion_{g.NOMBRE}_editor.sql").read_text()
 # (nombre, texto original, texto mutado, prueba que debe fallar)
 CODIGO = [
   ("sin la regla de una sola entrega por factura",
-   "  v_vig := reparto.f_entrega_vigente(v_c, reparto.f_desde());", "  v_vig := null;", "03.03"),
+   "  v_vig := reparto.f_entrega_vigente(v_c, v_per, v_desde);", "  v_vig := null;", "03.03"),
+  ("el calendario toma un período cuya fecha de reparto aún no llega",
+   "     and reparto.f_fecha(v.etapas ->> 'reparto') <= reparto.f_hoy()\n", "     and reparto.f_fecha(v.etapas ->> 'reparto') is not null\n", "01.05"),
+  ("la entrega de respaldo posterior a la fecha de reparto no cuenta",
+   "then e.periodo_reparto = p_periodo or (e.periodo_reparto is null and e.registrado_en >= (p_desde::timestamp at time zone 'America/Bogota'))",
+   "then e.periodo_reparto = p_periodo", "08.05"),
+  ("una entrega de otro período cuenta como entregada",
+   "then e.periodo_reparto = p_periodo or (e.periodo_reparto is null", "then e.periodo_reparto is not null or (e.periodo_reparto is null", "08.04"),
+  ("sin ciclo de calendario no toma el mes del día",
+   "      v_per := to_char(reparto.f_hoy(), 'YYYYMM'); v_desde := date_trunc('month', reparto.f_hoy())::date;", "      v_per := null; v_desde := null;", "12.04"),
+  ("el calendario no entra en la fuente de la jornada",
+   "    v_fuente := v_fuente || '|' || coalesce(v_rep.periodo, 'respaldo');", "    v_fuente := v_fuente;", "12.06"),
+  ("el Dell también lee una vista",
+   "                reparto.jornadas, reparto.jornada_items, reparto.entregas, reparto.entregas_anuladas to homelab_lectura;",
+   "                reparto.jornadas, reparto.jornada_items, reparto.entregas, reparto.entregas_anuladas, reparto.v_entregas to homelab_lectura;", "10.09"),
   ("sin la idempotencia del toque (uuid)",
    "  select e.id, e.consecutivo, e.contrato, e.autor, e.registrado_en into v_prev from reparto.entregas e where e.id_cliente = p_id_cliente;\n  if found then\n    if v_prev.autor <> v_email then perform reparto.f_err('Identificador de toque no válido'); end if;\n    return",
    "  select e.id, e.consecutivo, e.contrato, e.autor, e.registrado_en into v_prev from reparto.entregas e where e.id_cliente = p_id_cliente and false;\n  if found then\n    if v_prev.autor <> v_email then perform reparto.f_err('Identificador de toque no válido'); end if;\n    return", "03.02"),
@@ -47,6 +61,9 @@ CODIGO = [
 ]
 # (nombre, SQL que cambia lo vivo en la copia, mensaje de la guardia)
 GUARDIA = [
+  ("la vista del calendario cambió", "create or replace view scrr.v_calendario_vigente as select distinct on (periodo, ciclo) periodo, ciclo, pago_oportuno, fecha_suspension, etapas, motivo, autor, vigente_desde from scrr.calendario_ciclos order by periodo, ciclo, vigente_desde;",
+   "scrr.v_calendario_vigente no existe o su definición cambió"),
+  ("el calendario tiene un CHECK más", "alter table scrr.calendario_ciclos add constraint zt_ck check (ciclo < 90);", "las restricciones o el disparador de solo inserción de scrr.calendario_ciclos"),
   ("una función de campo que se llama cambió", "create or replace function campo.f_verificar(p_solicitante text, p_modo text) returns text language plpgsql security definer set search_path to 'public', 'campo', 'pg_temp' as $f$ begin return lower(p_solicitante); end $f$;",
    "campo.f_verificar(text,text) no está o cambió"),
   ("la vista de rutas cambió de definición", "create or replace view bi.v_rutas_geoportal as select contrato, periodo as periodo_carga, ciclo, ruta, consecutivo_ruta, consecutivo_predio from hechos.rutas_consecutivos;",

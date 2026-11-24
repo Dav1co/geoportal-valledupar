@@ -1,6 +1,6 @@
 """Arma los archivos _editor del Reparto de facturas (commit 1, SQL) desde sql/ y una base local TEMPORAL del Code A (clúster 55432; NUNCA Supabase).
 La plantilla «reparto_plantilla» = doble de Administración con el cargo del supervisor (campo 261bed3c… = producción del 22-nov) + dobles locales del SCRR
-(cartera_suscripcion con sus 23 columnas) + dobles de las rutas (doble_rutas_local.sql) + el volumen de producción (volumen_local.sql).
+(cartera_suscripcion con sus 23 columnas) + dobles de las rutas (doble_rutas_local.sql) + el calendario del SCRR y el rol homelab_lectura (doble_calendario_local.sql) + el volumen de producción (volumen_local.sql).
 Uso: python3 -I generar.py [-h]"""
 import sys, re, json, pathlib, subprocess, hashlib, os
 if __name__ == "__main__":
@@ -9,7 +9,7 @@ if __name__ == "__main__":
         print(f"Opción desconocida: {a}\n{__doc__}", file=sys.stderr); sys.exit(2)
 AQUI = pathlib.Path(__file__).resolve().parent; PAQ = AQUI.parent; SQL = PAQ / "sql"; H = pathlib.Path.home()
 NOMBRE = "reparto_1"
-PLANTILLA = "reparto_plantilla"
+PLANTILLA = "reparto_plantilla_v2"   # v2 (23-nov): con el calendario del SCRR y homelab_lectura; la v1 la dejó una corrida anterior y no se borra
 DOBLE = H / "geoportal-consultas/campo/admin_perfiles_22nov/doble_admin_4a/doble_admin_permisos_4a_con_cargo_supervisor.sql"
 DOBLE_SCRR = H / "geoportal-emdupar/sql/scrr_corte2/pruebas_locales/doble_base_local.sql"
 PSQL = "/opt/homebrew/opt/postgresql@17/bin/psql"
@@ -23,6 +23,12 @@ CAMPO_LLAMADAS = {"campo.f_verificar(text,text)": "6133b5c36189e31743270064c8398
                   "campo.f_actividades_persona(text)": "69bc9bd73d5797b826b3e504c1d92070", "campo.f_persona_comercial(text)": "99af03344249f7260357528096e92829",
                   "campo.f_quien_puede(text)": "5a381a87f432b8d2a6c88ad98a13fe3c"}
 MD5_V_RUTAS = "51da701454deeee5accfd2163a9c8e31"   # consulta A del 23-nov; el doble local da la misma
+# Calendario de reparto (scrr publicado; huella 722fc84b… = la del repositorio: valores tomados de la migración real del SCRR en una base desechable, 23-nov)
+MD5_V_CALENDARIO = "64f9c515a0323a72737b950afaf4a741"
+MD5_RESTRICCIONES_CALENDARIO = "f09f069a5ec1fd32518a9444bcb18ed2"
+COLUMNAS_CALENDARIO = ("periodo:character:NO:,ciclo:smallint:NO:,pago_oportuno:date:NO:,fecha_suspension:date:NO:,etapas:jsonb:NO:'{}'::jsonb,motivo:text:YES:,"
+                       "autor:text:NO:,vigente_desde:timestamp with time zone:NO:clock_timestamp()")
+TABLAS = ["parametros", "lotes", "lote_filas", "lotes_anulados", "jornadas", "jornada_items", "entregas", "entregas_anuladas"]
 COLUMNAS_V_RUTAS = "contrato:text,periodo_carga:text,ciclo:text,ruta:text,consecutivo_ruta:text,consecutivo_predio:text"
 COLUMNAS_HECHOS_RUTAS = ",".join(f"{c}:text:YES:" for c in "ciclo consecutivo_ruta ruta contrato direccion consecutivo_predio periodo archivo_origen fecha_carga".split())
 COLUMNAS_SUSCRIPCION = ("id:bigint:NO:nextval('cartera_suscripcion_id_seq'::regclass),contrato:text:NO:,"
@@ -45,6 +51,12 @@ SIN_WHERE_REPARTO = r"""(with f as (
    where (s.st ~ '\mdelete\s+from\M' and substring(s.st from '\mdelete\s+from\M.*$') !~ '\m(where|using)\M')
       or (s.st ~ '\mupdate\s+(only\s+)?[a-z_][a-z0-9_."]*(\s+(as\s+)?[a-z_][a-z0-9_]*)?\s+set\M'
           and substring(s.st from '\mupdate\s+(?:only\s+)?[a-z_][a-z0-9_."]*(?:\s+(?:as\s+)?[a-z_][a-z0-9_]*)?\s+set\M.*$') !~ '\mwhere\M'))"""
+HOMELAB = ("has_schema_privilege('homelab_lectura', 'reparto', 'usage') "
+           "and (select bool_and(has_table_privilege('homelab_lectura', c.oid, 'select') = (c.relkind = 'r' and c.relname = any (array[" + ", ".join(f"'{t}'" for t in TABLAS) + "])) "
+           "and not has_table_privilege('homelab_lectura', c.oid, 'insert, update, delete, truncate')) from pg_class c where c.relnamespace = 'reparto'::regnamespace and c.relkind in ('r','v','m')) "
+           "and (select count(*) from pg_class c where c.relnamespace = 'reparto'::regnamespace and c.relkind = 'r' and has_table_privilege('homelab_lectura', c.oid, 'select')) = " + str(len(TABLAS)) + " "
+           "and not exists (select 1 from pg_proc p where (p.pronamespace = 'reparto'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_reparto\\_%')) "
+           "and has_function_privilege('homelab_lectura', p.oid, 'execute'))")
 CAB = "-- REPARTO DE FACTURAS · COMMIT 1 (SQL) · {que} (versión para el editor SQL de Supabase; generado por pruebas_locales/generar.py, no editar a mano)\n"
 lee = lambda n: (SQL / n).read_text()
 
@@ -61,9 +73,9 @@ def plantilla():
     """La plantilla se arma UNA vez (si no existe) y no se borra: las bases de cada corrida son copias. Si existe pero no es la de este paquete, se niega."""
     if valor("postgres", f"select count(*) from pg_database where datname = '{PLANTILLA}'") == "0":
         psql("postgres", f"create database {PLANTILLA}")
-        for f in (DOBLE, DOBLE_SCRR, AQUI / "doble_rutas_local.sql", AQUI / "volumen_local.sql"):
+        for f in (DOBLE, DOBLE_SCRR, AQUI / "doble_rutas_local.sql", AQUI / "doble_calendario_local.sql", AQUI / "volumen_local.sql"):
             psql(PLANTILLA, archivo=f, at=False)
-    elif valor(PLANTILLA, "select (to_regclass('bi.v_rutas_geoportal') is not null and (select count(*) from hechos.rutas_consecutivos) > 600000)::text") != "true":
+    elif valor(PLANTILLA, "select (to_regclass('bi.v_rutas_geoportal') is not null and to_regclass('scrr.v_calendario_vigente') is not null and (select count(*) from hechos.rutas_consecutivos) > 600000)::text") != "true":
         raise SystemExit(f"La plantilla {PLANTILLA} no tiene los dobles de rutas o el volumen. Este guion no la borra: pida permiso y bórrela a mano.")
 
 def base_nueva(nombre):
@@ -97,11 +109,15 @@ def main():
         cols = "select string_agg(column_name || ':' || data_type || ':' || is_nullable || ':' || coalesce(column_default, ''), ',' order by ordinal_position) from information_schema.columns "
         assert valor(b, cols + "where table_schema = 'hechos' and table_name = 'rutas_consecutivos'") == COLUMNAS_HECHOS_RUTAS
         assert valor(b, cols + "where table_schema = 'public' and table_name = 'cartera_suscripcion'") == COLUMNAS_SUSCRIPCION
+        assert valor(b, cols + "where table_schema = 'scrr' and table_name = 'calendario_ciclos'") == COLUMNAS_CALENDARIO
+        assert valor(b, "select md5(pg_get_viewdef('scrr.v_calendario_vigente'::regclass, true))") == MD5_V_CALENDARIO
+        assert valor(b, "select md5(string_agg(c.conname || '=' || pg_get_constraintdef(c.oid), ' | ' order by c.conname)) from pg_constraint c where c.conrelid = 'scrr.calendario_ciclos'::regclass") == MD5_RESTRICCIONES_CALENDARIO
         PROD = {"MD5_CAMPO_LLAMADAS": ", ".join(f"('{f}', '{m}')" for f, m in CAMPO_LLAMADAS.items()),
-                "COLUMNAS_V_RUTAS": COLUMNAS_V_RUTAS, "MD5_V_RUTAS": MD5_V_RUTAS, "COLUMNAS_HECHOS_RUTAS": COLUMNAS_HECHOS_RUTAS,
+                "COLUMNAS_V_RUTAS": COLUMNAS_V_RUTAS, "MD5_V_RUTAS": MD5_V_RUTAS, "MD5_V_CALENDARIO": MD5_V_CALENDARIO,
+                "MD5_RESTRICCIONES_CALENDARIO": MD5_RESTRICCIONES_CALENDARIO, "COLUMNAS_CALENDARIO": COLUMNAS_CALENDARIO.replace("'", "''"), "COLUMNAS_HECHOS_RUTAS": COLUMNAS_HECHOS_RUTAS,
                 "COLUMNAS_SUSCRIPCION": COLUMNAS_SUSCRIPCION.replace("'", "''"), "SIN_WHERE_REPARTO": SIN_WHERE_REPARTO,
                 "PERMISOS_SIN_CAMBIO": "not exists (select 1 from ztrep_antes z where z.f <> 'campo' and md5(pg_get_functiondef(to_regprocedure(z.f))) is distinct from z.md5)",
-                "CAMPO_SIN_CAMBIO": f"({CONJ_CAMPO}) = (select z.md5 from ztrep_antes z where z.f = 'campo')"}
+                "CAMPO_SIN_CAMBIO": f"({CONJ_CAMPO}) = (select z.md5 from ztrep_antes z where z.f = 'campo')", "HOMELAB": HOMELAB}
         permisos_antes = {f: valor(b, f"select {md5p(f)}") for f in PERMISOS}
         # en el ensayo, las md5 de las 4 funciones de permisos y la huella de campo se toman ANTES de la migración y se comparan al final (sirve en local y en producción)
         captura = ("create temp table ztrep_antes as select f, md5(pg_get_functiondef(to_regprocedure(f))) as md5 from unnest(array["
@@ -153,12 +169,14 @@ select o, k, v, estado from (
              "or has_table_privilege('authenticated', c.oid, 'select') or has_table_privilege('anon', c.oid, 'select')))"),
         fila(4, "4 ninguna función de reparto con DELETE o UPDATE sin WHERE", SIN_WHERE_REPARTO + " = 0"),
         fila(5, "5 redes.f_funciones_sin_where() devuelve cero filas", "(select count(*) from redes.f_funciones_sin_where()) = 0"),
-        fila(6, "6 semilla: 4 parámetros (ventana 5 días, vigencia de archivos 45, tope 10000 filas, precisión mala 30 m) y ningún dato",
-             "(select jsonb_object_agg(clave, valor) from reparto.v_parametros_vigentes) = '{\"ventana_dias\": 5, \"lote_vigencia_dias\": 45, \"tope_filas_lote\": 10000, \"precision_mala_m\": 30}'::jsonb "
+        fila(6, "6 semilla: 4 parámetros (respaldo 15 días, vigencia de archivos 45, tope 10000 filas, precisión mala 30 m) y ningún dato",
+             "(select jsonb_object_agg(clave, valor) from reparto.v_parametros_vigentes) = '{\"respaldo_dias\": 15, \"lote_vigencia_dias\": 45, \"tope_filas_lote\": 10000, \"precision_mala_m\": 30}'::jsonb "
              "and not exists (select 1 from reparto.jornadas) and not exists (select 1 from reparto.entregas) and not exists (select 1 from reparto.lotes)"),
         fila(7, "7 las 8 tablas son de solo inserción (16 disparadores)",
              "(select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid where c.relnamespace = 'reparto'::regnamespace and not t.tgisinternal "
              "and t.tgfoid = 'reparto.f_solo_insercion()'::regprocedure) = 16"),
+        fila(8, "8 el Dell (homelab_lectura): USAGE sobre reparto y SELECT sobre las 8 tablas, nada más (ni vistas, ni escritura, ni funciones)",
+             HOMELAB),
     ]) + "\n) t order by o;\n"
 
     esc = lambda n, t: (PAQ / n).write_text(t)
@@ -167,7 +185,7 @@ select o, k, v, estado from (
         + poner(lee("70_pruebas.sql"), v) + "\nrollback;\n")
     esc(f"reversa_{NOMBRE}_editor.sql", CAB.format(que="REVERSA") + "begin;\n" + lee("90_reversa.sql") + "\ncommit;\n")
     esc(f"huellas_solo_lectura_{NOMBRE}_editor.sql", CAB.format(que="HUELLAS (solo lectura; ANTES y DESPUÉS)") + huellas)
-    esc(f"verificacion_{NOMBRE}_editor.sql", CAB.format(que="VERIFICACIÓN (solo lectura; después de la migración: 7 de 7 OK)") + ver)
+    esc(f"verificacion_{NOMBRE}_editor.sql", CAB.format(que="VERIFICACIÓN (solo lectura; después de la migración: 8 de 8 OK)") + ver)
     (AQUI / "huellas_locales.json").write_text(json.dumps({"campo_llamadas": CAMPO_LLAMADAS, "permisos": permisos_antes, "nuevas": nuevas}, indent=1))
     for n in sorted(PAQ.glob("*_editor.sql")):
         t = n.read_text(); assert "on commit drop" not in t.lower(), n

@@ -1,19 +1,27 @@
-[ATRAPADA] sin la regla de una sola entrega por factura → RESULTADO: 79 de 95 pruebas correctas — FALLAS: (debe fallar la 03.03)
-[ATRAPADA] sin la idempotencia del toque (uuid) → RESULTADO: 93 de 95 pruebas correctas — FALLAS: (debe fallar la 03.02)
-[ATRAPADA] el empate sin consecutivo_predio → RESULTADO: 90 de 95 pruebas correctas — FALLAS: (debe fallar la 02.02)
-[ATRAPADA] el repartidor sin exigir la actividad reparto → RESULTADO: 90 de 95 pruebas correctas — FALLAS: (debe fallar la 00.04)
-[ATRAPADA] el repartidor anula las de otros → RESULTADO: 93 de 95 pruebas correctas — FALLAS: (debe fallar la 04.02)
-[ATRAPADA] saltado mal calculado (<=) → RESULTADO: 90 de 95 pruebas correctas — FALLAS: (debe fallar la 03.05)
-[ATRAPADA] el archivo sin revisar repetidos → RESULTADO: 94 de 95 pruebas correctas — FALLAS: (debe fallar la 06.04)
-[ATRAPADA] se entrega en una lista de otro día → RESULTADO: 93 de 95 pruebas correctas — FALLAS: (debe fallar la 08.01)
-[ATRAPADA] el consecutivo se reutiliza al anular → RESULTADO: 88 de 95 pruebas correctas — FALLAS: (debe fallar la 04.06)
-[ATRAPADA] el archivo anulado se sigue usando → RESULTADO: 93 de 95 pruebas correctas — FALLAS: (debe fallar la 06.11)
-[ATRAPADA] se entrega sin GPS → RESULTADO: 94 de 95 pruebas correctas — FALLAS: (debe fallar la 03.08)
-[ATRAPADA] una RPC ejecutable por authenticated → RESULTADO: 94 de 95 pruebas correctas — FALLAS: (debe fallar la 10.01)
+[ATRAPADA] sin la regla de una sola entrega por factura → RESULTADO: 92 de 109 pruebas correctas — FALLAS: (debe fallar la 03.03)
+[ATRAPADA] el calendario toma un período cuya fecha de reparto aún no llega → RESULTADO: 103 de 109 pruebas correctas — FALLAS: (debe fallar la 01.05)
+[ATRAPADA] la entrega de respaldo posterior a la fecha de reparto no cuenta → RESULTADO: 107 de 109 pruebas correctas — FALLAS: (debe fallar la 08.05)
+[ATRAPADA] una entrega de otro período cuenta como entregada → RESULTADO: 108 de 109 pruebas correctas — FALLAS: (debe fallar la 08.04)
+[ATRAPADA] sin ciclo de calendario no toma el mes del día → RESULTADO: 108 de 109 pruebas correctas — FALLAS: (debe fallar la 12.04)
+[ATRAPADA] el calendario no entra en la fuente de la jornada → RESULTADO: 107 de 109 pruebas correctas — FALLAS: (debe fallar la 12.06)
+[ATRAPADA] el Dell también lee una vista → RESULTADO: 108 de 109 pruebas correctas — FALLAS: (debe fallar la 10.09)
+[ATRAPADA] sin la idempotencia del toque (uuid) → RESULTADO: 107 de 109 pruebas correctas — FALLAS: (debe fallar la 03.02)
+[ATRAPADA] el empate sin consecutivo_predio → RESULTADO: 104 de 109 pruebas correctas — FALLAS: (debe fallar la 02.02)
+[ATRAPADA] el repartidor sin exigir la actividad reparto → RESULTADO: 104 de 109 pruebas correctas — FALLAS: (debe fallar la 00.04)
+[ATRAPADA] el repartidor anula las de otros → RESULTADO: 107 de 109 pruebas correctas — FALLAS: (debe fallar la 04.02)
+[ATRAPADA] saltado mal calculado (<=) → RESULTADO: 104 de 109 pruebas correctas — FALLAS: (debe fallar la 03.05)
+[ATRAPADA] el archivo sin revisar repetidos → RESULTADO: 108 de 109 pruebas correctas — FALLAS: (debe fallar la 06.04)
+[ATRAPADA] se entrega en una lista de otro día → RESULTADO: 107 de 109 pruebas correctas — FALLAS: (debe fallar la 08.01)
+[ATRAPADA] el consecutivo se reutiliza al anular → RESULTADO: 101 de 109 pruebas correctas — FALLAS: (debe fallar la 04.06)
+[ATRAPADA] el archivo anulado se sigue usando → RESULTADO: 107 de 109 pruebas correctas — FALLAS: (debe fallar la 06.11)
+[ATRAPADA] se entrega sin GPS → RESULTADO: 108 de 109 pruebas correctas — FALLAS: (debe fallar la 03.08)
+[ATRAPADA] una RPC ejecutable por authenticated → RESULTADO: 108 de 109 pruebas correctas — FALLAS: (debe fallar la 10.01)
+[SE NIEGA] guardia: la vista del calendario cambió → GUARDIA REPARTO: scrr.v_calendario_vigente no existe o su definición cambió (se esperaba md5 64f9c515a0323a72737b950afaf4a741). Deténgase y avise.
+[SE NIEGA] guardia: el calendario tiene un CHECK más → GUARDIA REPARTO: las restricciones o el disparador de solo inserción de scrr.calendario_ciclos no son los de producción. Deténgase y avise.
 [SE NIEGA] guardia: una función de campo que se llama cambió → GUARDIA REPARTO: campo.f_verificar(text,text) no está o cambió (se esperaba md5 6133b5c36189e31743270064c8398b8a). Deténgase y avise.
 [SE NIEGA] guardia: la vista de rutas cambió de definición → GUARDIA REPARTO: la definición de bi.v_rutas_geoportal cambió (md5 93c389ede41497ff16665b580e544ac4; se esperaba 51da701454deeee5accfd2163a9c8e31). Deténgase y avise.
 [SE NIEGA] guardia: la tabla de rutas tiene un CHECK que el doble no tenía → GUARDIA REPARTO: hechos.rutas_consecutivos tiene disparadores o restricciones que el doble local no tiene. Deténgase y avise.
 [SE NIEGA] guardia: la tabla de rutas tiene un NOT NULL → GUARDIA REPARTO: las columnas de hechos.rutas_consecutivos (nombre:tipo:nulable:default) no son las esperadas: ciclo:text:YES:,consecutivo_ruta:text:YES:,ruta:text:YES:,contrato:text:YES:,direccion:te
 [SE NIEGA] guardia: cartera_suscripcion con una columna más → GUARDIA REPARTO: las columnas de public.cartera_suscripcion (nombre:tipo:nulable:default) no son las esperadas: id:bigint:NO:nextval('cartera_suscripcion_id_seq'::regclass),contrato:text:NO:,estado:te
 [SE NIEGA] guardia: la actividad reparto no existe → GUARDIA REPARTO: la actividad «reparto» no existe o no está activa en campo.actividades.
-MUTACIONES: 18 de 18 atrapadas — SIN FALLAS
+MUTACIONES: 26 de 26 atrapadas — SIN FALLAS
