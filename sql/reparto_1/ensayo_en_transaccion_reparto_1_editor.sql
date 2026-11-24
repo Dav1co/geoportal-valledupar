@@ -636,20 +636,25 @@ end $$;
 -- Las filas de los archivos nunca se escriben en la auditoría (solo nombre, huella, tipo, ciclo, ruta y conteos).
 -- =====================================================================
 
--- Cargar un archivo de una ruta o de un ciclo (plantilla: Contrato y, opcional, Orden). Valida TODO otra vez (la pantalla ya lo hizo):
---  · de 1 a tope_filas_lote filas; contrato solo dígitos (1 a 12) y sin repetir; Orden en todas las filas o en ninguna, entero ≥ 1 y sin repetir;
---  · si hay errores no escribe nada y devuelve hasta 20, con su fila de Excel (la 1 es el encabezado);
---  · los contratos que no están ni en cartera_suscripcion ni en el último período de rutas se aceptan con aviso (P5) y se cuentan;
+-- Cargar un archivo de una ruta o de un ciclo (plantilla: Contrato y, opcional, Orden). «Todo comienza con el archivo de rutas» (David, 24-nov):
+--  · EL CICLO NO LO ESCRIBE EL SUPERVISOR: se deduce de los contratos según bi.v_rutas_geoportal (último período); si un contrato no está ahí, según
+--    public.cartera_suscripcion (su fila más reciente); si discrepan, manda la tabla de rutas. La comparación es numérica («098» = «98»);
+--  · si los contratos con ciclo conocido son de MÁS DE UN ciclo, se rechaza sin escribir nada, con el detalle por ciclo («98: 30 · 15: 10»);
+--  · los contratos sin registro (ni en rutas ni en cartera) se aceptan con aviso, como antes, y NO cuentan para decidir el ciclo; si TODOS son sin registro,
+--    el supervisor escoge el ciclo a mano (p_ciclo; si no viene, se le pide: «pide_ciclo»). Si el ciclo se deduce, p_ciclo se ignora;
+--  · la ruta la escribe el supervisor, como rótulo, sin validarla contra los contratos;
+--  · p_confirmar = false es la VISTA PREVIA: valida, deduce y devuelve el ciclo y los conteos sin escribir nada (la pantalla lo muestra antes de confirmar);
+--  · forma: de 1 a tope_filas_lote filas; contrato solo dígitos (1 a 12) y sin repetir; Orden en todas las filas o en ninguna, entero ≥ 1 y sin repetir;
+--    si hay errores no escribe nada y devuelve hasta 20, con su fila de Excel (la 1 es el encabezado);
 --  · el mismo archivo (huella), de la misma persona, con el mismo tipo, ciclo y ruta, el mismo día y sin anular, devuelve el mismo lote (doble clic).
 create function public.geoportal_reparto_lote_cargar(p_solicitante text, p_nombre text, p_sha256 text, p_tipo text, p_ciclo text, p_ruta text,
-                                                     p_filas jsonb, p_ip text default null) returns jsonb
+                                                     p_filas jsonb, p_confirmar boolean default true, p_ip text default null) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public, reparto as $$
 declare v_email text := reparto.f_autorizar_supervisor(p_solicitante); v_tope integer := (reparto.f_param('tope_filas_lote'))::integer; v_n integer;
-        v_err jsonb; v_id uuid; v_ciclo text := btrim(coalesce(p_ciclo, '')); v_ruta text := nullif(btrim(coalesce(p_ruta, '')), ''); v_con_orden integer;
-        v_sin integer;
+        v_err jsonb; v_id uuid; v_ciclo text; v_ruta text := nullif(btrim(coalesce(p_ruta, '')), ''); v_con_orden integer;
+        v_sin integer; v_por_ciclo jsonb; v_ciclos integer; v_texto text; v_deducido boolean;
 begin
   if p_tipo is null or p_tipo not in ('ruta', 'ciclo') then perform reparto.f_err('Indique si el archivo es de una ruta o de un ciclo'); end if;
-  if v_ciclo !~ '^[0-9]{1,4}$' then perform reparto.f_err('Indique el ciclo (solo números)'); end if;
   if p_tipo = 'ruta' and (v_ruta is null or v_ruta !~ '^[A-Za-z0-9 _.-]{1,20}$') then perform reparto.f_err('Indique la ruta (hasta 20 letras o números)'); end if;
   if p_tipo = 'ciclo' then v_ruta := null; end if;
   if length(btrim(coalesce(p_nombre, ''))) not between 1 and 200 then perform reparto.f_err('Nombre de archivo no válido'); end if;
@@ -657,15 +662,7 @@ begin
   if p_filas is null or jsonb_typeof(p_filas) <> 'array' then perform reparto.f_err('El archivo no trae filas'); end if;
   v_n := jsonb_array_length(p_filas);
   if v_n < 1 or v_n > v_tope then perform reparto.f_err(format('El archivo debe tener entre 1 y %s filas (trae %s)', v_tope, v_n)); end if;
-  perform pg_advisory_xact_lock(hashtextextended('reparto_lote:' || v_email || ':' || p_sha256, 0));
-  select l.id into v_id from reparto.lotes l
-   where l.archivo_sha256 = p_sha256 and l.autor = v_email and l.tipo = p_tipo and l.ciclo = v_ciclo and l.ruta is not distinct from v_ruta
-     and (l.creado_en at time zone 'America/Bogota')::date = reparto.f_hoy() and not exists (select 1 from reparto.lotes_anulados a where a.lote_id = l.id)
-   order by l.creado_en desc limit 1;
-  if v_id is not null then
-    return jsonb_build_object('ok', true, 'lote_id', v_id, 'repetido', true, 'filas', (select filas from reparto.lotes where id = v_id),
-                              'sin_registro', (select sin_registro from reparto.lotes where id = v_id));
-  end if;
+  -- 1. la forma
   with f as (select x.o::integer + 1 as fila, x.v from jsonb_array_elements(p_filas) with ordinality x(v, o)),
        c as (select f.fila, f.v ->> 'contrato' as bruto, reparto.f_contrato(f.v ->> 'contrato') as contrato,
                     nullif(btrim(coalesce(f.v ->> 'orden', '')), '') as orden_txt from f),
@@ -685,9 +682,48 @@ begin
     v_err := coalesce(v_err, '[]'::jsonb) || jsonb_build_array('La columna Orden debe venir en todas las filas o en ninguna');
   end if;
   if v_err is not null then return jsonb_build_object('ok', false, 'errores', v_err); end if;
-  select count(*) into v_sin from (select reparto.f_contrato(x.v ->> 'contrato') as contrato from jsonb_array_elements(p_filas) x(v)) f
-   where not exists (select 1 from public.cartera_suscripcion s where s.contrato = f.contrato)
-     and f.contrato not in (select r.contrato from bi.v_rutas_geoportal r where r.contrato is not null);
+  -- 2. el ciclo de cada contrato: rutas (último período) y, si no está, cartera; manda rutas; comparación numérica
+  with f as (select distinct reparto.f_contrato(x.v ->> 'contrato') as contrato from jsonb_array_elements(p_filas) x(v)),
+       r as (select distinct on (r.contrato) r.contrato, r.ciclo from bi.v_rutas_geoportal r
+              where r.contrato in (select contrato from f) order by r.contrato, reparto.f_num(r.consecutivo_ruta) nulls last),
+       s as (select distinct on (s.contrato) s.contrato, s.ciclo from public.cartera_suscripcion s
+              where s.contrato in (select contrato from f) and not exists (select 1 from r where r.contrato = s.contrato) order by s.contrato, s.cargado_en desc),
+       k as (select case when btrim(coalesce(x.ciclo, '')) ~ '^[0-9]{1,9}$' then (btrim(x.ciclo)::bigint)::text end as ciclo from (select ciclo from r union all select ciclo from s) x),
+       g as (select k.ciclo, count(*) as n from k where k.ciclo is not null group by k.ciclo)
+  select (select count(*) from f) - (select count(*) from r) - (select count(*) from s), (select count(*) from g),
+         (select jsonb_agg(jsonb_build_object('ciclo', g.ciclo, 'contratos', g.n) order by g.n desc, g.ciclo::bigint) from g),
+         (select string_agg(g.ciclo || ': ' || g.n, ' · ' order by g.n desc, g.ciclo::bigint) from g),
+         (select min(g.ciclo) from g)
+    into v_sin, v_ciclos, v_por_ciclo, v_texto, v_ciclo;
+  if v_ciclos > 1 then
+    return jsonb_build_object('ok', false, 'por_ciclo', v_por_ciclo,
+      'errores', jsonb_build_array(format('El archivo tiene contratos de más de un ciclo: %s. Un archivo debe ser de un solo ciclo.', v_texto)));
+  end if;
+  v_deducido := v_ciclos = 1;
+  if not v_deducido then
+    v_ciclo := btrim(coalesce(p_ciclo, ''));
+    if v_ciclo = '' then
+      return jsonb_build_object('ok', false, 'pide_ciclo', true, 'sin_registro', v_sin,
+        'errores', jsonb_build_array(format('Ninguno de los %s contratos está en las rutas ni en la cartera: escoja el ciclo a mano.', v_n)));
+    end if;
+    if v_ciclo !~ '^[0-9]{1,4}$' then perform reparto.f_err('Indique el ciclo (solo números)'); end if;
+    v_ciclo := (v_ciclo::integer)::text;
+  end if;
+  if v_ciclo !~ '^[0-9]{1,4}$' then perform reparto.f_err(format('El ciclo deducido (%s) no es válido', v_ciclo)); end if;
+  -- 3. vista previa: sin escribir nada
+  if not coalesce(p_confirmar, true) then
+    return jsonb_build_object('ok', true, 'previa', true, 'ciclo', v_ciclo, 'ciclo_deducido', v_deducido, 'filas', v_n, 'sin_registro', v_sin, 'por_ciclo', coalesce(v_por_ciclo, '[]'::jsonb));
+  end if;
+  -- 4. cargar (doble clic = el mismo lote)
+  perform pg_advisory_xact_lock(hashtextextended('reparto_lote:' || v_email || ':' || p_sha256, 0));
+  select l.id into v_id from reparto.lotes l
+   where l.archivo_sha256 = p_sha256 and l.autor = v_email and l.tipo = p_tipo and l.ciclo = v_ciclo and l.ruta is not distinct from v_ruta
+     and (l.creado_en at time zone 'America/Bogota')::date = reparto.f_hoy() and not exists (select 1 from reparto.lotes_anulados a where a.lote_id = l.id)
+   order by l.creado_en desc limit 1;
+  if v_id is not null then
+    return jsonb_build_object('ok', true, 'lote_id', v_id, 'repetido', true, 'ciclo', v_ciclo, 'ciclo_deducido', v_deducido, 'filas', (select filas from reparto.lotes where id = v_id),
+                              'sin_registro', (select sin_registro from reparto.lotes where id = v_id));
+  end if;
   insert into reparto.lotes (nombre_archivo, archivo_sha256, tipo, ciclo, ruta, filas, sin_registro, autor)
     values (btrim(p_nombre), p_sha256, p_tipo, v_ciclo, v_ruta, v_n, v_sin, v_email) returning id into v_id;
   -- el orden: el de la columna Orden (renumerado 1…N) o, si no viene, el de las filas
@@ -695,8 +731,8 @@ begin
     select v_id, row_number() over (order by coalesce(nullif(btrim(coalesce(x.v ->> 'orden', '')), '')::integer, x.o::integer), x.o), reparto.f_contrato(x.v ->> 'contrato')
       from jsonb_array_elements(p_filas) with ordinality x(v, o);
   perform reparto.f_auditar(v_email, 'reparto_lote_cargar', v_id::text,
-            jsonb_build_object('nombre', btrim(p_nombre), 'sha256', p_sha256, 'tipo', p_tipo, 'ciclo', v_ciclo, 'ruta', v_ruta, 'filas', v_n, 'sin_registro', v_sin), p_ip);
-  return jsonb_build_object('ok', true, 'lote_id', v_id, 'repetido', false, 'filas', v_n, 'sin_registro', v_sin);
+            jsonb_build_object('nombre', btrim(p_nombre), 'sha256', p_sha256, 'tipo', p_tipo, 'ciclo', v_ciclo, 'ciclo_deducido', v_deducido, 'ruta', v_ruta, 'filas', v_n, 'sin_registro', v_sin), p_ip);
+  return jsonb_build_object('ok', true, 'lote_id', v_id, 'repetido', false, 'ciclo', v_ciclo, 'ciclo_deducido', v_deducido, 'filas', v_n, 'sin_registro', v_sin);
 end $$;
 
 create function public.geoportal_reparto_lote_anular(p_solicitante text, p_lote uuid, p_motivo text, p_ip text default null) returns jsonb
@@ -923,7 +959,9 @@ select x.ciclo, x.cr, x.ruta, x.contrato, 'ZTREP CALLE', x.cp, coalesce(x.period
 -- un contrato que solo está en cartera_suscripcion (para «inventada»)
 insert into public.cartera_suscripcion (contrato, estado, ciclo, periodo_carga) values ('880000000301', 'ACTIVO', '98', 'ZTREP'),
   ('880000000302', 'ACTIVO', '9999', 'ZTREP'),   -- sin ciclo de calendario: el mes del día
-  ('880000000303', 'ACTIVO', '97', 'ZTREP');     -- ciclo sin fecha de reparto: respaldo
+  ('880000000303', 'ACTIVO', '97', 'ZTREP'),     -- ciclo sin fecha de reparto: respaldo
+  ('880000000201', 'ACTIVO', '97', 'ZTREP'),     -- en las rutas es del ciclo 98: al deducir el ciclo de un archivo manda la tabla de rutas
+  ('880000000304', 'ACTIVO', '098', 'ZTREP');    -- solo en la cartera, con el ciclo escrito «098» (comparación numérica)
 -- Calendario de reparto de prueba. Ciclo 98: el mes pasado (reparto hace 32 días), este mes (hace 2 días) y el próximo (en 3 días: aún no llega).
 -- Ciclo 97: este mes, sin fecha de reparto (solo lectura).
 insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, autor)
@@ -1118,7 +1156,7 @@ begin
     (r -> 'errores')::text);
   perform pg_temp.ok('06.05 archivo de ruta sin la ruta, o ciclo inválido: 22023',
     pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ruta', '98', '[{"contrato":"1"}]'))) = '22023'
-    and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ciclo', 'C1', '[{"contrato":"1"}]'))) = '22023');
+    and pg_temp.err(pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ciclo', 'C1', '[{"contrato":"880000000998"}]'))) = '22023');
   insert into reparto.parametros (clave, valor, nota, autor) values ('tope_filas_lote', '2', 'ZTREP prueba del tope', A);
   perform pg_temp.ok('06.06 más filas que el tope: 22023 con el tope en el mensaje',
     pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'x.xlsx', v_sha, 'ciclo', '98', '[{"contrato":"1"},{"contrato":"2"},{"contrato":"3"}]')) ->> 'msg'
@@ -1336,6 +1374,40 @@ begin
   perform pg_temp.ok('13.04 el supervisor ve el orden real completo, con la del buscador (3, 11, 9), y los saltados con la misma regla',
     (select string_agg(x ->> 'orden_lectura', ',' order by (x ->> 'consecutivo')::int) from jsonb_array_elements(r -> 'entregas') x) like '%3,11,9'
     and (select string_agg(x ->> 'contrato', ',' order by (x ->> 'orden_lectura')::int) from jsonb_array_elements(r -> 'saltados') x) = '880000000101', r::text);
+
+  -- ===== 14. El ciclo del archivo se DEDUCE de sus contratos («todo comienza con el archivo de rutas», David, 24-nov) =====
+  v_n := (select count(*) from reparto.lotes);
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, null, %L, %L::jsonb, false)', S, 'previa.xlsx', md5('p1') || md5('p2'), 'ruta', 'ZT-PREVIA',
+         '[{"contrato":"880000000201"},{"contrato":"880000000301"},{"contrato":"880000000304"},{"contrato":"880000000977"}]'));
+  perform pg_temp.ok('14.01 vista previa: deduce el ciclo 98 (201 por las rutas aunque la cartera diga 97; 301 «98» y 304 «098» por la cartera, comparación numérica), cuenta 1 sin registro y NO escribe nada',
+    (r ->> 'ok')::boolean and (r ->> 'previa')::boolean and r ->> 'ciclo' = '98' and (r ->> 'ciclo_deducido')::boolean and (r ->> 'sin_registro')::int = 1
+    and r -> 'por_ciclo' = '[{"ciclo": "98", "contratos": 3}]'::jsonb and (select count(*) from reparto.lotes) = v_n, r::text);
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, null, %L, %L::jsonb)', S, 'dos_ciclos.xlsx', md5('d1') || md5('d2'), 'ruta', 'ZT-MAL',
+         '[{"contrato":"880000000101"},{"contrato":"880000000102"},{"contrato":"880000000501"},{"contrato":"880000000977"}]'));
+  perform pg_temp.ok('14.02 contratos de más de un ciclo: se rechaza sin escribir nada, con el detalle por ciclo (los sin registro no cuentan)',
+    not (r ->> 'ok')::boolean and r -> 'errores' ->> 0 = 'El archivo tiene contratos de más de un ciclo: 98: 2 · 97: 1. Un archivo debe ser de un solo ciclo.'
+    and (select count(*) from reparto.lotes) = v_n, r::text);
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, %L, %L::jsonb)', S, 'otro_rotulo.xlsx', md5('o1') || md5('o2'), 'ruta', '15', 'ZT-ROTULO',
+         '[{"contrato":"880000000102"},{"contrato":"880000000101"}]'));
+  perform pg_temp.ok('14.03 el ciclo deducido manda aunque llegue otro escrito; la ruta es solo el rótulo que escribió el supervisor',
+    (r ->> 'ok')::boolean and r ->> 'ciclo' = '98' and (select ciclo || '|' || ruta from reparto.lotes where id = (r ->> 'lote_id')::uuid) = '98|ZT-ROTULO', r::text);
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, null, null, %L::jsonb)', S, 'sin_registro.xlsx', md5('s1') || md5('s2'), 'ciclo',
+         '[{"contrato":"880000000977"},{"contrato":"880000000978"}]'));
+  perform pg_temp.ok('14.04 si TODOS son sin registro y no viene el ciclo: no escribe y pide escogerlo a mano',
+    not (r ->> 'ok')::boolean and (r ->> 'pide_ciclo')::boolean and r -> 'errores' ->> 0 like 'Ninguno de los 2 contratos está en las rutas ni en la cartera%' and (select count(*) from reparto.lotes) = v_n + 1, r::text);
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, %L, null, %L::jsonb)', S, 'sin_registro.xlsx', md5('s1') || md5('s2'), 'ciclo', '097',
+         '[{"contrato":"880000000977"},{"contrato":"880000000978"}]'));
+  perform pg_temp.ok('14.05 con el ciclo escogido a mano («097» = 97), se carga, con los 2 sin registro avisados',
+    (r ->> 'ok')::boolean and r ->> 'ciclo' = '97' and not (r ->> 'ciclo_deducido')::boolean and (r ->> 'sin_registro')::int = 2
+    and (select ciclo from reparto.lotes where id = (r ->> 'lote_id')::uuid) = '97', r::text);
+  t0 := clock_timestamp();
+  r := pg_temp.rpc(format('public.geoportal_reparto_lote_cargar(%L, %L, %L, %L, null, null, %L::jsonb, false)', S, 'grande.xlsx', md5('g1') || md5('g2'), 'ciclo',
+         (select jsonb_agg(jsonb_build_object('contrato', (880000100000 + g)::text)) from generate_series(1, 9000) g)));
+  ms := round(extract(epoch from clock_timestamp() - t0) * 1000);
+  perform pg_temp.ok('14.07 deducir el ciclo de un archivo de 9.000 contratos (cruza el período de rutas y la cartera) en menos de 5 s: ' || ms || ' ms',
+    (r ->> 'pide_ciclo')::boolean and (r ->> 'sin_registro')::int = 9000 and ms < 5000, ms::text || ' ' || left(r::text, 200));
+  perform pg_temp.ok('14.06 la auditoría dice si el ciclo se dedujo', exists (select 1 from public.geoportal_auditoria where accion = 'reparto_lote_cargar'
+    and referencia = (select id::text from reparto.lotes where nombre_archivo = 'sin_registro.xlsx') and detalle ->> 'ciclo_deducido' = 'false' and detalle ->> 'ciclo' = '97'));
 end $$;
 
 -- Resultado: termina SIEMPRE en un ERROR (deshace todo). «N de N … SIN FALLAS» es el éxito.
@@ -1343,7 +1415,7 @@ do $$
 declare v_tot int; v_ok int; v_fallas text; v_tiempos text;
 begin
   select count(*), count(*) filter (where ok), string_agg(format('%s — %s', nombre, coalesce(detalle, '')), E'\n' order by n) filter (where not ok),
-         string_agg(nombre, E'\n' order by n) filter (where nombre like '11.%')
+         string_agg(nombre, E'\n' order by n) filter (where nombre like '11.%' or nombre like '14.07%')
     into v_tot, v_ok, v_fallas, v_tiempos from ztrep_res;
   if v_ok = v_tot then
     raise exception 'RESULTADO: % de % pruebas correctas — SIN FALLAS (este ERROR es el esperado: deshace todo)%', v_ok, v_tot, E'\nTiempos:\n' || coalesce(v_tiempos, '');

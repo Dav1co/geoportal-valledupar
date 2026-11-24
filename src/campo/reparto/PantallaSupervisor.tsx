@@ -140,8 +140,13 @@ function DetalleJornada({ jornada, onCambio }: { jornada: number; onCambio: () =
 // ---------------------------------------------------------------- Archivos de ruta ----------------------------------------------------------------
 function Archivos() {
   const [tipo, setTipo] = useState<"ruta" | "ciclo">("ruta");
-  const [ciclo, setCiclo] = useState(""); const [ruta, setRuta] = useState("");
+  const [ruta, setRuta] = useState("");
   const [archivo, setArchivo] = useState<File | null>(null);
+  // «Todo comienza con el archivo de rutas» (David, 24-nov): el ciclo NO se escribe; la base lo deduce de los contratos y se muestra antes de confirmar.
+  // Solo si ningún contrato tiene registro (ni en rutas ni en cartera) se pide escogerlo a mano.
+  const [leido, setLeido] = useState<{ filas: { contrato: string | null; orden?: string }[]; sha256: string } | null>(null);
+  const [previa, setPrevia] = useState<{ ciclo: string; filas: number; sin_registro: number } | null>(null);
+  const [pideCiclo, setPideCiclo] = useState(false); const [cicloMano, setCicloMano] = useState("");
   const [errores, setErrores] = useState<string[]>([]);
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -150,17 +155,32 @@ function Archivos() {
   const entrada = useRef<HTMLInputElement>(null);
   const cargarLotes = useCallback(() => { apiReparto.lotes().then((r) => setLotes(r.lotes)).catch((e) => setErrores([avisoDeError(e)])); }, []);
   useEffect(cargarLotes, [cargarLotes]);
-  const listo = archivo && /^\d{1,4}$/.test(ciclo) && (tipo === "ciclo" || /^[A-Za-z0-9 _.-]{1,20}$/.test(ruta.trim()));
-  const cargar = async () => {
+  const rutaOk = tipo === "ciclo" || /^[A-Za-z0-9 _.-]{1,20}$/.test(ruta.trim());
+  const olvidar = () => { setLeido(null); setPrevia(null); setPideCiclo(false); setCicloMano(""); };
+  const cuerpo = (l: NonNullable<typeof leido>, confirmar: boolean) => ({ nombre: archivo!.name, sha256: l.sha256, tipo, ruta: tipo === "ruta" ? ruta.trim() : null, filas: l.filas, confirmar,
+    ciclo: pideCiclo && /^\d{1,4}$/.test(cicloMano) ? cicloMano : null });
+  // 1. revisar: leer el Excel y pedir la vista previa (la base deduce el ciclo sin escribir nada)
+  const revisar = async () => {
     if (!archivo) return;
-    setOcupado(true); setErrores([]); setOk(null);
+    setOcupado(true); setErrores([]); setOk(null); setPrevia(null);
     try {
-      const l = await leerArchivoRuta(archivo, 10000);
-      if (l.errores.length) { setErrores(l.errores); return; }
-      const r = await apiReparto.loteCargar({ nombre: archivo.name, sha256: l.sha256, tipo, ciclo, ruta: tipo === "ruta" ? ruta.trim() : null, filas: l.filas });
+      const l = leido ? { ...leido, errores: [] as string[] } : await leerArchivoRuta(archivo, 10000);
+      if (l.errores?.length) { setErrores(l.errores); return; }
+      setLeido({ filas: l.filas, sha256: l.sha256 });
+      const r = await apiReparto.loteCargar(cuerpo({ filas: l.filas, sha256: l.sha256 }, false));
+      if (!r.ok) { setErrores(r.errores); if (r.pide_ciclo) setPideCiclo(true); return; }
+      setPrevia({ ciclo: r.ciclo, filas: r.filas, sin_registro: r.sin_registro });
+    } catch (e) { setErrores([avisoDeError(e)]); } finally { setOcupado(false); }
+  };
+  // 2. confirmar: cargar con el ciclo deducido (o el escogido a mano)
+  const cargar = async () => {
+    if (!archivo || !leido || !previa) return;
+    setOcupado(true); setErrores([]);
+    try {
+      const r = await apiReparto.loteCargar(cuerpo(leido, true));
       if (!r.ok) { setErrores(r.errores); return; }
-      setOk(`${r.repetido ? "Ese archivo ya estaba cargado hoy" : "Archivo cargado"}: ${r.filas} facturas.${r.sin_registro ? ` ${r.sin_registro} contratos no están en las rutas ni en la cartera (se aceptan con aviso).` : ""} Los repartidores ya lo ven al escoger el ciclo ${ciclo}.`);
-      setArchivo(null); if (entrada.current) entrada.current.value = "";
+      setOk(`${!r.previa && r.repetido ? "Ese archivo ya estaba cargado hoy" : "Archivo cargado"}: ${r.filas} facturas del ciclo ${r.ciclo}.${r.sin_registro ? ` ${r.sin_registro} contratos no están en las rutas ni en la cartera (se aceptan con aviso).` : ""} Los repartidores ya lo ven al escoger el ciclo ${r.ciclo}.`);
+      setArchivo(null); olvidar(); if (entrada.current) entrada.current.value = "";
       cargarLotes();
     } catch (e) { setErrores([avisoDeError(e)]); } finally { setOcupado(false); }
   };
@@ -178,12 +198,22 @@ function Archivos() {
           <button type="button" role="radio" aria-checked={tipo === "ruta"} className="rep-opcion" onClick={() => setTipo("ruta")} data-tipo="ruta"><strong>Una ruta</strong></button>
           <button type="button" role="radio" aria-checked={tipo === "ciclo"} className="rep-opcion" onClick={() => setTipo("ciclo")} data-tipo="ciclo"><strong>Todo un ciclo</strong></button>
         </div>
-        <div className="rep-campos">
-          <label className="rep-campo">Ciclo<input inputMode="numeric" value={ciclo} maxLength={4} onChange={(e) => setCiclo(e.target.value.replace(/\D/g, ""))} data-campo="ciclo" /></label>
-          {tipo === "ruta" ? <label className="rep-campo">Ruta<input value={ruta} maxLength={20} onChange={(e) => setRuta(e.target.value)} data-campo="ruta" /></label> : null}
-        </div>
-        <label className="rep-campo">Archivo (.xlsx)<input ref={entrada} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => setArchivo(e.target.files?.[0] ?? null)} data-campo="archivo" /></label>
-        <button type="button" className="tec-boton" disabled={!listo || ocupado} onClick={() => void cargar()} data-accion="cargar">{ocupado ? "Validando y cargando…" : "Cargar archivo"}</button>
+        {tipo === "ruta" ? <label className="rep-campo">Nombre de la ruta (rótulo para los repartidores)<input value={ruta} maxLength={20} onChange={(e) => { setRuta(e.target.value); setPrevia(null); }} data-campo="ruta" /></label> : null}
+        <label className="rep-campo">Archivo (.xlsx)<input ref={entrada} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => { setArchivo(e.target.files?.[0] ?? null); olvidar(); setErrores([]); setOk(null); }} data-campo="archivo" /></label>
+        <p className="rep-suave">El ciclo no se escribe: sale de los contratos del archivo (según las rutas y, si no están, la cartera). Un archivo debe ser de un solo ciclo.</p>
+        {pideCiclo ? (
+          <label className="rep-campo" data-bloque="ciclo-a-mano">Ningún contrato está en las rutas ni en la cartera: escoja el ciclo
+            <input inputMode="numeric" value={cicloMano} maxLength={4} onChange={(e) => { setCicloMano(e.target.value.replace(/\D/g, "")); setPrevia(null); }} data-campo="ciclo" />
+          </label>
+        ) : null}
+        <button type="button" className="tec-boton-sec" disabled={!archivo || !rutaOk || ocupado || (pideCiclo && !/^\d{1,4}$/.test(cicloMano))} onClick={() => void revisar()} data-accion="revisar">{ocupado && !previa ? "Revisando…" : "Revisar archivo"}</button>
+        {previa ? (
+          <div className="rep-aviso rep-aviso-ok" role="status" data-bloque="previa">
+            <strong>Ciclo {previa.ciclo}</strong>{pideCiclo ? " (escogido a mano)" : " (deducido de los contratos)"} · {previa.filas} facturas{tipo === "ruta" ? ` · ruta «${ruta.trim()}»` : " · todo el ciclo"}
+            {previa.sin_registro ? <> · {previa.sin_registro} sin registro (se aceptan con aviso)</> : null}
+          </div>
+        ) : null}
+        <button type="button" className="tec-boton" disabled={!previa || !rutaOk || ocupado} onClick={() => void cargar()} data-accion="cargar">{ocupado && previa ? "Cargando…" : "Cargar archivo"}</button>
         {errores.length ? <div className="rep-aviso rep-aviso-error" role="alert" data-bloque="errores"><strong>El archivo no se cargó:</strong><ul>{errores.map((x, i) => <li key={i}>{x}</li>)}</ul></div> : null}
         {ok ? <p className="rep-aviso rep-aviso-ok" role="status" data-bloque="cargado">{ok}</p> : null}
       </div>

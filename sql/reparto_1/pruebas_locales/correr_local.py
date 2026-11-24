@@ -48,7 +48,7 @@ def main():
     b2 = g.base_nueva(f"reparto_rev_{os.getpid()}")
     try:
         _, _, err = corre(b, PAQ / f"ensayo_en_transaccion_{N}_editor.sql")
-        m = re.search(r"RESULTADO: (\d+) de (\d+) pruebas correctas — (SIN FALLAS|FALLAS:)[^\n]*(\nTiempos:(\n11\.[^\n]*)+)?", err)
+        m = re.search(r"RESULTADO: (\d+) de (\d+) pruebas correctas — (SIN FALLAS|FALLAS:)[^\n]*(\nTiempos:(\n1[14]\.[^\n]*)+)?", err)
         log("ensayo: " + (m.group(0) if m else "SIN RESULTADO: " + err[-2500:]))
         assert m and "SIN FALLAS" in m.group(0)
         _, out, _ = corre(b, PAQ / f"huellas_solo_lectura_{N}_editor.sql", at=True); log("huellas ANTES:\n" + out.strip())

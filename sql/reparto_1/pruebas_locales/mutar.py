@@ -63,6 +63,10 @@ CODIGO = [
   ("el enlace del calendario para cualquier supervisor", "    'puede_calendario', v_sup and reparto.f_puede_calendario(v_email),", "    'puede_calendario', v_sup,", "00.02"),
   ("lo entregado con el buscador mueve el punto de avance",
    "              where e.jornada_id = p_jornada and not e.por_buscador and not exists", "              where e.jornada_id = p_jornada and not exists", "13.02"),
+  ("un archivo de varios ciclos se acepta", "  if v_ciclos > 1 then\n", "  if false then\n", "14.02"),
+  ("la cartera también cuenta aunque el contrato esté en las rutas (no manda la tabla de rutas)",
+   "where s.contrato in (select contrato from f) and not exists (select 1 from r where r.contrato = s.contrato) order by", "where s.contrato in (select contrato from f) order by", "14.01"),
+  ("el ciclo escrito por el supervisor manda sobre el deducido", "  v_deducido := v_ciclos = 1;\n", "  v_deducido := v_ciclos = 1; if p_ciclo is not null then v_ciclo := p_ciclo; end if;\n", "14.03"),
   ("una RPC ejecutable por authenticated",
    "    execute format('grant execute on function %s to service_role', f.firma);", "    execute format('grant execute on function %s to service_role, authenticated', f.firma);", "10.01"),
 ]

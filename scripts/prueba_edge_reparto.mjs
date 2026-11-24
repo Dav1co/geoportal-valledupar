@@ -52,7 +52,7 @@ const PER = sqlq("select max(periodo) from hechos.rutas_consecutivos");
 sqlq(`insert into hechos.rutas_consecutivos (ciclo, consecutivo_ruta, ruta, contrato, direccion, consecutivo_predio, periodo) values
   ('98', '1000000', '880101', '880000000101', 'ZTREP CALLE', '1', '${PER}'), ('98', '2000000', '880101', '880000000102', 'ZTREP CALLE', '2', '${PER}'),
   ('98', '3000000', '880101', '880000000103', 'ZTREP CALLE', '3', '${PER}'), ('98', '4000000', '880101', '880000000104', 'ZTREP CALLE', '4', '${PER}'),
-  ('98', '5000000', '880101', '880000000105', 'ZTREP CALLE', '5', '${PER}')`);
+  ('98', '5000000', '880101', '880000000105', 'ZTREP CALLE', '5', '${PER}'), ('97', '1000000', '970101', '880000000501', 'ZTREP CALLE', '1', '${PER}')`);
 sqlq(`insert into scrr.calendario_ciclos (periodo, ciclo, pago_oportuno, fecha_suspension, etapas, autor)
   select to_char(h, 'YYYYMM'), 98, h + 10, h + 15, jsonb_build_object('reparto', (h - 1)::text), '${E_.adm}' from (select (now() at time zone 'America/Bogota')::date as h) x`);
 sqlq("analyze hechos.rutas_consecutivos");
@@ -187,7 +187,18 @@ try {
   const sha = "a".repeat(64);
   r = await E("sup", "lote_cargar", { cuerpo: { nombre: "ztrep_ruta.xlsx", sha256: sha, tipo: "ruta", ciclo: "98", ruta: "ZT-NUEVA", filas: [{ contrato: "880000000102", orden: 2 }, { contrato: "880000000101", orden: 1 }] } });
   const lote = r.c?.lote_id;
-  ok("D1 el supervisor carga un archivo de ruta (Contrato y Orden)", r.s === 200 && r.c.ok === true && r.c.filas === 2, r.txt);
+  ok("D1 el supervisor carga un archivo de ruta (Contrato y Orden); el ciclo se deduce de los contratos (98)", r.s === 200 && r.c.ok === true && r.c.filas === 2 && r.c.ciclo === "98" && r.c.ciclo_deducido === true, r.txt);
+  const nl = sqlq("select count(*) from reparto.lotes");
+  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "previa.xlsx", sha256: "c".repeat(64), tipo: "ruta", ruta: "ZT-P", filas: [{ contrato: "880000000103" }, { contrato: "880000000977" }], confirmar: false } });
+  ok("D1b vista previa (confirmar: false), SIN ciclo: deduce 98, avisa 1 sin registro y no escribe nada", r.s === 200 && r.c.previa === true && r.c.ciclo === "98" && r.c.sin_registro === 1 && sqlq("select count(*) from reparto.lotes") === nl, r.txt);
+  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "dos.xlsx", sha256: "d".repeat(64), tipo: "ruta", ruta: "ZT-D", filas: [{ contrato: "880000000103" }, { contrato: "880000000104" }, { contrato: "880000000501" }] } });
+  ok("D1c contratos de dos ciclos: rechazo con el detalle por ciclo, sin escribir", r.s === 200 && r.c.ok === false && r.c.errores[0] === "El archivo tiene contratos de más de un ciclo: 98: 2 · 97: 1. Un archivo debe ser de un solo ciclo." && sqlq("select count(*) from reparto.lotes") === nl, r.txt);
+  r = await E("sup", "lote_cargar", { cuerpo: { nombre: "sin.xlsx", sha256: "e".repeat(64), tipo: "ciclo", filas: [{ contrato: "880000000977" }] } });
+  ok("D1d todos sin registro y sin ciclo: pide escogerlo a mano; con «ciclo» se carga", r.s === 200 && r.c.ok === false && r.c.pide_ciclo === true
+     && (await E("sup", "lote_cargar", { cuerpo: { nombre: "sin.xlsx", sha256: "e".repeat(64), tipo: "ciclo", ciclo: "98", filas: [{ contrato: "880000000977" }] } })).c?.ciclo === "98", r.txt);
+  ok("D1e «confirmar» que no es verdadero o falso, o un ciclo con letras: 400",
+     (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: "f".repeat(64), tipo: "ciclo", filas: [{ contrato: "1" }], confirmar: "no" } })).s === 400
+     && (await E("sup", "lote_cargar", { cuerpo: { nombre: "x.xlsx", sha256: "f".repeat(64), tipo: "ciclo", ciclo: "C1", filas: [{ contrato: "1" }] } })).s === 400);
   r = await E("sup", "lote_cargar", { cuerpo: { nombre: "malo.xlsx", sha256: "b".repeat(64), tipo: "ciclo", ciclo: "98", filas: [{ contrato: "88A" }, { contrato: "880000000101" }, { contrato: "880000000101" }] } });
   ok("D2 un archivo con errores: 200 con ok=false y los errores por fila", r.s === 200 && r.c.ok === false && r.c.errores.length === 2 && /Fila 2/.test(r.c.errores[0]), r.txt);
   ok("D3 una columna que no es de la plantilla, un archivo de ciclo con ruta, o 10.001 filas: 400",
