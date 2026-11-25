@@ -208,7 +208,10 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
   // «Encontrar o reportar activo» (David, 17-nov): en Distribución para todo el que lo tiene; en Plantas para quien tiene formularios de planta,
   // los supervisores y el administrador. Ya no va en Supervisión.
   // PTAR-2 (D6): quien solo tiene la PTAR no ve los formularios de la PTAP (el servidor los cierra en PTAR-4, f_autorizar_captura)
-  const formulariosPlanta = ptar?.ptap === false ? [] : ordenados.filter((f) => !FORMULARIOS_REDES.has(f.clave) && !esPtar(f.clave));
+  // 24-nov: el alcance PTAP/PTAR existe SOLO para supervisor y administrador. geoportal_tec_ptar_perfil devuelve ptap:false a todo el que no lo es, así que al
+  // operador no se le puede vaciar la lista por eso: sus formularios son los que el servidor le entrega en mis_formularios (que además decide cada ruta).
+  const alcanceSinPtap = (perfil === "admin" || perfil === "supervisor") && ptar?.ptap === false;
+  const formulariosPlanta = alcanceSinPtap ? [] : ordenados.filter((f) => !FORMULARIOS_REDES.has(f.clave) && !esPtar(f.clave));
   // PTAR-3: los de la PTAR (Caracterización), para quien tiene el alcance PTAR o es operador con el formulario asignado (el servidor lo vuelve a decidir)
   const formulariosPtar = puedePtar || perfil === "operador" ? ordenados.filter((f) => esPtar(f.clave)) : [];
   const porModo: Record<Modo, Tarjeta[]> = {
