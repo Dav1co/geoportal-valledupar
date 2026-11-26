@@ -78,6 +78,29 @@ SINWHERE = r"""(with f as (
    where (s.st ~ '\mdelete\s+from\M' and substring(s.st from '\mdelete\s+from\M.*$') !~ '\mwhere\M')
       or (s.st ~ '\mupdate\s+(only\s+)?[a-z_][a-z0-9_."]*(\s+(as\s+)?[a-z_][a-z0-9_]*)?\s+set\M'
           and substring(s.st from '\mupdate\s+(?:only\s+)?[a-z_][a-z0-9_."]*(?:\s+(?:as\s+)?[a-z_][a-z0-9_]*)?\s+set\M.*$') !~ '\mwhere\M'))"""
+# Paso 0 (David, 25-nov 22:53): md5 de estructura de producción. reporte_fotos y geoportal_auditoria quedan IGUALES en el doble (ALINEAR_PRODUCCION). campo.reportes
+# NO puede quedar igual: en producción geom es geometry(Point,4326) con índice GiST, y el doble 4a tiene un PostGIS de juguete. Los _editor llevan el md5 de
+# producción de campo.reportes y las pruebas locales lo cambian por el del doble (EST_REPORTES_LOCAL, en huellas_locales.json), como la huella de Técnica.
+EST_PROD_25NOV = {"campo.reportes": "9ce9e1d83b72403818f3b4b863c4e051", "campo.reporte_fotos": "b76411a2e71fedc64bbf76df9304906f",
+                  "public.geoportal_auditoria": "cc86a838b2508cea17873c213e7fea8f"}
+ALINEAR_PRODUCCION = """
+grant select on campo.reportes to homelab_lectura;
+grant select on campo.reporte_fotos to homelab_lectura;
+alter table public.geoportal_auditoria alter column email set not null, alter column accion set not null, alter column creado_en set not null;
+alter table public.geoportal_auditoria enable row level security;
+grant all on public.geoportal_auditoria to service_role;
+grant select on public.geoportal_auditoria to homelab_lectura;
+create index idx_auditoria_accion on public.geoportal_auditoria using btree (accion, creado_en desc);
+create index idx_auditoria_creado on public.geoportal_auditoria using btree (creado_en desc);
+create index idx_geoportal_auditoria_email on public.geoportal_auditoria using btree (email);
+create index idx_geoportal_auditoria_fecha on public.geoportal_auditoria using btree (creado_en desc);
+create function redes.f_evento_tg_campo() returns trigger language plpgsql security definer set search_path = redes, public, pg_temp as $$
+begin
+  perform count(*) from nuevos c join campo.tipos_reporte tc on tc.id = c.tipo_id;   -- doble: lee la tabla de transición como la real; sin eventos, no asocia nada
+  return null;
+end $$;
+create trigger t_evento_asociar after insert on campo.reportes referencing new table as nuevos for each statement execute function redes.f_evento_tg_campo();
+"""
 PARTES = ["05_guardia.sql", "10_estructura.sql", "20_crear.sql", "30_lecturas.sql", "40_derivadas.sql"]
 lee = lambda n: (SQL / n).read_text()
 CAB = "-- [Code A] REGISTRO FLEXIBLE (25-nov) · {que} (versión para el editor SQL de Supabase; generado por pruebas_locales/generar.py, no editar a mano)\n"
@@ -102,9 +125,20 @@ def rehacer(db):
                    create or replace function public.zz_cluster_paso(integer, public.geometry, double precision, integer) returns integer language sql immutable as $$ select 0 $$;
                    do $$ begin if to_regprocedure('public.st_clusterdbscan(public.geometry,double precision,integer)') is null then
                      create aggregate public.st_clusterdbscan(public.geometry, double precision, integer) (sfunc = public.zz_cluster_paso, stype = integer, initcond = '0'); end if; end $$;""")
+    # Estructura REAL de producción (paso 0, estructura_produccion_25nov.txt): permisos de homelab_lectura en campo.reportes y campo.reporte_fotos; en
+    # public.geoportal_auditoria, NOT NULL, RLS, permisos de service_role y homelab_lectura y sus 4 índices; y el disparador t_evento_asociar de campo.reportes
+    # (Corte 15). Ese disparador llama a redes.f_evento_tg_campo, que depende del esquema de eventos que el doble no trae: aquí va un doble de la MISMA clase
+    # (AFTER INSERT, REFERENCING NEW TABLE AS nuevos, FOR EACH STATEMENT) que lee la tabla de transición y no asocia nada (no hay eventos en el doble).
+    con.execute(ALINEAR_PRODUCCION)
     base = {k: con.execute(HUELLA[k]).fetchone()[0] for k in ("campo", "acta")}
     if base != PUBLICADA: raise SystemExit(f"El doble no tiene las huellas publicadas: {base}")
+    for tb in ("campo.reporte_fotos", "public.geoportal_auditoria"):
+        assert est(con, tb) == EST_PROD_25NOV[tb], f"{tb} del doble no quedó igual a producción"
     return con
+
+def a_local(texto, hl):
+    """Un _editor (hecho para producción) → su versión para el doble: la huella de Técnica y el md5 de estructura de campo.reportes del doble (PostGIS de juguete)."""
+    return texto.replace(TECNICA_PRODUCCION, hl["partida"]["HUELLA_TECNICA_LOCAL"]).replace(EST_PROD_25NOV["campo.reportes"], hl["partida"]["EST_REPORTES_LOCAL"])
 
 def md5f(con, f): return con.execute("select md5(pg_get_functiondef(to_regprocedure(%s)))", (f,)).fetchone()[0]
 def defn(con, f): return con.execute("select pg_get_functiondef(to_regprocedure(%s))", (f,)).fetchone()[0].rstrip() + ";"
@@ -120,10 +154,12 @@ def valores(con):
          "RESPALDO_CREAR": defn(con, CREAR), "RESPALDO_TEC_CREAR": defn(con, TEC), **{f"RESPALDO_{k}": defn(con, f) for k, f in MISMA_FIRMA.items()},
          **{f"MD5_{k}": md5f(con, f) for k, f in MISMA_FIRMA.items()}, "MD5_CREAR": md5f(con, CREAR), "MD5_TEC": md5f(con, TEC)}
     est_prod = {t: est(con, t) for t in TABLAS}
+    p["EST_REPORTES_LOCAL"] = est_prod["campo.reportes"]
+    est_prod["campo.reportes"] = EST_PROD_25NOV["campo.reportes"]      # el de producción (ver EST_PROD_25NOV)
     p["EST_LISTA"] = ", ".join(f"({lit(t)}, {lit(m)}, null::text)" for t, m in est_prod.items())
     p["EST_NUEVAS"] = "('campo.zz_ninguna', 'x')"; p["MD5_CAMBIAN_NUEVA"] = "('x', 'x')"
     with con.transaction(force_rollback=True):
-        con.execute(poner(cuerpo(), {**p, "HUELLA_TECNICA": p["HUELLA_TECNICA_LOCAL"]}))
+        con.execute(poner(cuerpo(), {**p, "HUELLA_TECNICA": p["HUELLA_TECNICA_LOCAL"]}).replace(EST_PROD_25NOV["campo.reportes"], p["EST_REPORTES_LOCAL"]))
         p["HUELLA_CAMPO_NUEVA"] = con.execute(HUELLA["campo"]).fetchone()[0]
         assert con.execute(HUELLA["tecnica"]).fetchone()[0] == p["HUELLA_TECNICA_LOCAL"], "la huella de Técnica cambió con el paquete"
         assert con.execute(HUELLA["acta"]).fetchone()[0] == p["HUELLA_ACTA"], "la huella del acta cambió con el paquete"
@@ -131,7 +167,8 @@ def valores(con):
         p["MD5_NUEVA"] = {k: md5f(con, f) for k, f in cambian.items()}
         p["MD5_CAMBIAN_NUEVA"] = ", ".join(f"({lit(f)}, {lit(p['MD5_NUEVA'][k])})" for k, f in cambian.items())
         p["MD5_NUEVAS_F"] = {f: md5f(con, f) for f in NUEVAS_F}
-        est_nueva = {t: est(con, t) for t in TABLAS}; p["EST_TABLAS_NUEVAS"] = {t: est(con, t) for t in TABLAS_NUEVAS}
+        est_nueva = {t: est(con, t) for t in TABLAS}; est_nueva["campo.reportes"] = EST_PROD_25NOV["campo.reportes"] if est_nueva["campo.reportes"] == p["EST_REPORTES_LOCAL"] else est_nueva["campo.reportes"]
+        p["EST_TABLAS_NUEVAS"] = {t: est(con, t) for t in TABLAS_NUEVAS}
         p["ESTADO_NUEVO"] = {t: m for t, m in est_nueva.items() if m != est_prod[t]}
         assert set(p["ESTADO_NUEVO"]) == {"campo.reporte_fotos"}, f"cambió la estructura de más tablas de las previstas: {list(p['ESTADO_NUEVO'])}"
         con.execute(poner(lee("90_reversa.sql"), p))
@@ -222,7 +259,7 @@ def main():
         (PAQ / nombre).write_text(t)
         print(f"[OK ] {nombre}  md5 {hashlib.md5(t.encode()).hexdigest()}")
     (AQUI / "huellas_locales.json").write_text(json.dumps({
-        "partida": {"HUELLA_CAMPO": p["HUELLA_CAMPO"], "HUELLA_ACTA": p["HUELLA_ACTA"], "HUELLA_TECNICA_PRODUCCION": p["HUELLA_TECNICA"], "HUELLA_TECNICA_LOCAL": p["HUELLA_TECNICA_LOCAL"],
+        "partida": {"EST_REPORTES_PRODUCCION": EST_PROD_25NOV["campo.reportes"], "EST_REPORTES_LOCAL": p["EST_REPORTES_LOCAL"], "HUELLA_CAMPO": p["HUELLA_CAMPO"], "HUELLA_ACTA": p["HUELLA_ACTA"], "HUELLA_TECNICA_PRODUCCION": p["HUELLA_TECNICA"], "HUELLA_TECNICA_LOCAL": p["HUELLA_TECNICA_LOCAL"],
                     "MD5_CREAR": p["MD5_CREAR"], "MD5_TEC": p["MD5_TEC"]},
         "nuevas": {"HUELLA_CAMPO_NUEVA": p["HUELLA_CAMPO_NUEVA"], "MD5_NUEVA": p["MD5_NUEVA"], "FUNCIONES_NUEVAS": p["MD5_NUEVAS_F"], "TABLAS_NUEVAS": p["EST_TABLAS_NUEVAS"],
                    "ESTRUCTURA_NUEVA": p["ESTADO_NUEVO"]},

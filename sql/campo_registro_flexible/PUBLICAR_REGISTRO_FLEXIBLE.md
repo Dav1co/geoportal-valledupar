@@ -13,15 +13,17 @@ Sondas: geoportal-campo 43 → 48, geoportal-acta 16 (sin cambio).
 ## Orden (no cambiarlo)
 
 ### 0. Antes de nada: la estructura real de cuatro tablas (solo lectura)
-Corra `consulta_produccion_estructura_campo_registro_flexible_editor.sql` (md5 `9d0778b57ff09dfb0ee0c3bb269db0c7`) y mire la columna «estado» de las 8 filas «0 md5».
+Corra `consulta_produccion_estructura_campo_registro_flexible_editor.sql` (md5 `25746347c4e494b1efce32d72569cd54`) y mire la columna «estado» de las 8 filas «0 md5».
 - Si las 8 dicen **IGUAL AL DOBLE**: siga.
 - Si alguna dice **DISTINTO**: pare y mándeme la salida entera en CSV. La consulta del 24-nov no traía `campo.reportes`, `campo.reporte_fotos`, `campo.reporte_datos_sensibles` ni `public.geoportal_auditoria`, y tengo que rehacer la guardia con la estructura real (los permisos de `homelab_lectura` son lo más probable).
 
+**25-nov, 23:40:** la primera vez, el paso 0 dio DISTINTO en `campo.reportes`, `campo.reporte_fotos` y `public.geoportal_auditoria`. La guardia ya se regeneró con la estructura real. Al volver a correr la consulta (md5 nuevo, arriba), las 8 filas deben decir IGUAL AL DOBLE.
+
 ### 1. SQL (editor de Supabase), cada archivo con su md5
 1. `huellas_solo_lectura_campo_registro_flexible_editor.sql` — `4842c3534fdd21f540fbede4b6e32ef9`. ANTES: las tres filas dicen «PUBLICADA».
-2. `ensayo_en_transaccion_campo_registro_flexible_editor.sql` — `2e5ef33d1052c7ad857e484cc48177b8`. Debe terminar en ERROR: «RESULTADO: 97 de 97 pruebas correctas — SIN FALLAS». No deja nada. Si da otro número, pare y mándeme el texto.
-3. `migracion_campo_registro_flexible_editor.sql` — `022c85c26b2fb2fed61a376ccb504a43`.
-4. `verificacion_campo_registro_flexible_editor.sql` — `e0c2d8341c968c26e3b52d21d56e2969`: 15 de 15 OK.
+2. `ensayo_en_transaccion_campo_registro_flexible_editor.sql` — `99c6490e569965037a95efd301c493bb`. Debe terminar en ERROR: «RESULTADO: 97 de 97 pruebas correctas — SIN FALLAS». No deja nada. Si da otro número, pare y mándeme el texto.
+3. `migracion_campo_registro_flexible_editor.sql` — `c28abc1a68cac2f3c3cd779ae2874839`.
+4. `verificacion_campo_registro_flexible_editor.sql` — `b46a14f65bd331c125926b80fa5fb969`: 15 de 15 OK.
 5. Huellas otra vez: 1 «CON ESTE CAMBIO» (`66496328…`); 2 y 3 «PUBLICADA».
 
 Reversa, si hiciera falta: `reversa_campo_registro_flexible_editor.sql` — `9979391253267c5a3f903786cb6e50e6`. Nada se borra: `campo.reporte_registro` y `campo.reporte_fotos.origen` se quedan con sus datos, y el sello del PDF de cualquier reporte vuelve a ser el de antes.

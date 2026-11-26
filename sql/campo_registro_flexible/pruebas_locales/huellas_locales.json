@@ -1,5 +1,7 @@
 {
  "partida": {
+  "EST_REPORTES_PRODUCCION": "9ce9e1d83b72403818f3b4b863c4e051",
+  "EST_REPORTES_LOCAL": "d7e26cd7138e2fc6cf91ad42f0cdd778",
   "HUELLA_CAMPO": "cce593806f59d3d27c34d7f2070cc5c1",
   "HUELLA_ACTA": "111506c690249ad3b56ebf572566434c",
   "HUELLA_TECNICA_PRODUCCION": "838b80984e51cc7873a666f85d657195",
@@ -29,18 +31,18 @@
    "campo.reporte_registro": "6bbcd353497807cfff9d4b0b5722da93"
   },
   "ESTRUCTURA_NUEVA": {
-   "campo.reporte_fotos": "72faae4ca1b8a54ff014301997b22ffc"
+   "campo.reporte_fotos": "a335a73ca7d435baec5442905f81dc41"
   }
  },
  "estructura_produccion": {
-  "campo.reportes": "3528e465f4ee67349f16832ca3d05827",
-  "campo.reporte_fotos": "c341433f90314544c5b06703f6b3ee3e",
+  "campo.reportes": "9ce9e1d83b72403818f3b4b863c4e051",
+  "campo.reporte_fotos": "b76411a2e71fedc64bbf76df9304906f",
   "campo.reporte_datos_sensibles": "5d03ed6c45eb0047c143338e6ee060d7",
   "campo.derivadas": "28a6a571a358b128740ef775974b1225",
   "campo.derivada_eventos": "d01fd6ead43730a491b927f36c3136a9",
   "campo.tipos_reporte": "3b9274b039c86b8079fee77b484ad5e1",
   "campo.parametros": "fd9322f0721b931e71fa96b3010ed6f8",
-  "public.geoportal_auditoria": "4012748c34060e929d0a2418a7df9472"
+  "public.geoportal_auditoria": "cc86a838b2508cea17873c213e7fea8f"
  },
  "verificacion": 15
 }

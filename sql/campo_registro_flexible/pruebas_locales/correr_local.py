@@ -20,7 +20,7 @@ LOG = []; TOT = [0, 0]
 def out(t=""): print(t); LOG.append(t)
 def ok(n, c, d=""):
     TOT[0] += 1; TOT[1] += bool(c); out(f"{'OK   ' if c else 'FALLA'} {n}" + (f"  → {d}" if d and not c else ""))
-def leer(n): return (PAQ / n).read_text().replace(gn.TECNICA_PRODUCCION, TEC_LOCAL)
+def leer(n): return gn.a_local((PAQ / n).read_text(), HL)
 def correr(con, t):
     try: con.execute(t); return None
     except Exception as e:
@@ -59,6 +59,8 @@ def registros_reales(con):
 def main():
     out("PRUEBAS LOCALES · [Code A] Registro flexible para supervisores de Comercial (25-nov) · clúster 55432"); out("")
     out(f"Huella de Técnica: en los _editor va la de producción {gn.TECNICA_PRODUCCION}; en local se cambia por la del doble {TEC_LOCAL} (el doble 4a es anterior a lo último de Técnica).")
+    out(f"Estructura de campo.reportes: en los _editor va la de producción {gn.EST_PROD_25NOV['campo.reportes']} (paso 0 del 25-nov); en local, la del doble {HL['partida']['EST_REPORTES_LOCAL']}")
+    out("  (geom es geometry(Point,4326) con índice GiST en producción; el doble tiene un PostGIS de juguete). reporte_fotos y geoportal_auditoria: iguales a producción.")
     out("")
     con = gn.rehacer("emdupar_a_rf_ciclo")
     h = hl(con); ok("01 huellas ANTES: campo, acta y Técnica «PUBLICADA»", all(x[3].startswith("PUBLICADA") for x in h), str(h))

@@ -1,6 +1,8 @@
 PRUEBAS LOCALES · [Code A] Registro flexible para supervisores de Comercial (25-nov) · clúster 55432
 
 Huella de Técnica: en los _editor va la de producción 838b80984e51cc7873a666f85d657195; en local se cambia por la del doble 0c7f5364ab1d3bc04b6222762934306a (el doble 4a es anterior a lo último de Técnica).
+Estructura de campo.reportes: en los _editor va la de producción 9ce9e1d83b72403818f3b4b863c4e051 (paso 0 del 25-nov); en local, la del doble d7e26cd7138e2fc6cf91ad42f0cdd778
+  (geom es geometry(Point,4326) con índice GiST en producción; el doble tiene un PostGIS de juguete). reporte_fotos y geoportal_auditoria: iguales a producción.
 
 OK    01 huellas ANTES: campo, acta y Técnica «PUBLICADA»
 OK    02 ensayo: termina en ERROR esperado, 97 de 97 (0.2 s)

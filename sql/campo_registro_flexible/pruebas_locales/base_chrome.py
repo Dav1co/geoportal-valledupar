@@ -11,7 +11,7 @@ AQUI = pathlib.Path(__file__).resolve().parent
 s = importlib.util.spec_from_file_location("gn", AQUI / "generar.py"); gn = importlib.util.module_from_spec(s); s.loader.exec_module(gn)
 HL = json.loads((AQUI / "huellas_locales.json").read_text())
 con = gn.rehacer(args[0])
-con.execute((AQUI.parent / f"migracion_{gn.NOMBRE}_editor.sql").read_text().replace(gn.TECNICA_PRODUCCION, HL["partida"]["HUELLA_TECNICA_LOCAL"]))
+con.execute(gn.a_local((AQUI.parent / f"migracion_{gn.NOMBRE}_editor.sql").read_text(), HL))
 h = con.execute(gn.HUELLA["campo"]).fetchone()[0]
 if h != HL["nuevas"]["HUELLA_CAMPO_NUEVA"]: sys.exit(f"La huella de campo tras migrar no es la esperada: {h}")
 print(f"base {args[0]} lista · huella de campo {h}")
