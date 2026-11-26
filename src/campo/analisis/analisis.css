@@ -22,6 +22,10 @@
 .ac-tag-censo { background: var(--t-suave, #eef2f5); color: var(--t-texto-2, #52626f); border: 1px solid var(--t-borde, #d5dde6); }
 .ac-tels { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .ac-tel { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 10px; border: 2px solid var(--t-modo, #1e5aa8); background: var(--t-modo-suave, #e8f1fb); color: var(--t-modo, #1e5aa8); font-weight: 700; font-size: 16px; text-decoration: none; white-space: nowrap; }
+/* 26-nov: las dos direcciones con su nombre, debajo del nombre y el teléfono */
+.ac-direcciones { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.ac-direcciones dt { display: inline; font-weight: 600; color: var(--t-texto-2, #52626f); }
+.ac-direcciones dd { display: inline; margin: 0; }
 .ac-lineas { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
 .ac-corte { display: inline-block; margin-left: 6px; font-size: 12px; font-weight: 400; color: var(--t-texto-2, #52626f); }
 .ac-tramo { font-weight: 700; text-transform: uppercase; font-size: 13px; }

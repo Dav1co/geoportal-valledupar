@@ -84,8 +84,8 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
     descripcion: "Registro digital que acompaña al acta física firmada.", habilitada: true,
   });
   if (c.puedeAnalisis === true) e.push({
-    id: "analisis_contrato", titulo: "Consultar", seccion: 3, bloque: "registrar", habilitada: true,
-    descripcion: "Análisis de contrato: escriba un contrato y vea cartera, consumo, medidor, gestiones y ubicación.",
+    id: "analisis_contrato", titulo: "Análisis de contrato", seccion: 3, bloque: "registrar", habilitada: true,   // 26-nov (David): vuelve a llamarse así (fue «Consultar»)
+    descripcion: "Escriba un contrato y vea cartera, consumo, medidor, gestiones y ubicación.",
   });
   // Comercial 21-nov (B2): «Actas registradas» reúne las actas con PDF, las actividades derivadas, «Aperturas sin registrar» y Personal en solo lectura (el id interno no cambia).
   // 22-nov (R3, David): también el supervisor de campo (dashboard_campo); lee por geoportal-campo (campo.f_autorizar_registradas). Ver veActasRegistradas.

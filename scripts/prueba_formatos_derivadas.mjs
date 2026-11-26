@@ -34,7 +34,7 @@ ok("supervisor de Comercial: los dos bloques; Supervisar con sus tarjetas", igua
 ok("operario de campo: SOLO «Registrar en campo» (sin pestañas, sin ninguna tarjeta de supervisión)", igual(bl("operario"), ["registrar"]) && lista("operario").every((e) => !e.gestion));
 ok("dual: los dos bloques; Supervisar sin Reparto (no tiene esa actividad)", igual(bl("dual"), ["registrar", "supervisar"]) && !lista("dual").some((e) => e.id === "reparto_supervision"));
 ok("sin permisos: ninguna entrada y ningún bloque", lista("sinPermisos").length === 0 && bl("sinPermisos").length === 0);
-ok("Registrar en campo: Reportar anomalía, Formatos de actividad, Reportar posible pérdida y «Consultar» (Análisis de contrato) están todas aquí",
+ok("Registrar en campo: Reportar anomalía, Formatos de actividad, Reportar posible pérdida y «Análisis de contrato» están todas aquí",
   ["reporte_general", "formatos", "acta", "analisis_contrato"].every((id) => E.entradasDelBloque(lista("operario"), "registrar").some((e) => e.id === id)));
 ok("toda gestión va en Supervisar y todo lo demás en Registrar", lista("admin").every((e) => (e.gestion ? e.bloque === "supervisar" : e.bloque === "registrar")));
 ok("cada tarjeta de Supervisar tiene descripción propia y distinta", (() => { const d = E.entradasDelBloque(lista("admin"), "supervisar").map((e) => e.descripcion); return d.every((x) => x.length > 20) && new Set(d).size === d.length; })());

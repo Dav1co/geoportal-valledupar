@@ -143,8 +143,8 @@ function Ficha({ r, destinos, onIrA, puedeCambioMedidor, onCambioMedidor }: { r:
             </p>
           ) : <p className="campo-sub">Sin teléfono registrado.</p>}
         </div>
+        <DireccionesTarjeta r={r} />
         <ul className="ac-lineas">
-          <li>{[c?.direccion, c?.barrio ? `Barrio ${c.barrio}` : null].filter(Boolean).join(" · ") || "Sin dirección registrada"}</li>
           <li>{[sinCodigo(c?.categoria) || null, sinCodigo(c?.subcategoria) || null, c?.ciclo ? `Ciclo ${c.ciclo}` : null].filter(Boolean).join(" · ") || "Uso y estrato sin dato"}</li>
           <li>
             Deuda <strong>{pesos(c?.deuda_total)}</strong>{c?.facturas_pendientes !== null && c?.facturas_pendientes !== undefined ? ` · ${plural(c.facturas_pendientes, "factura", "facturas")}` : ""}
@@ -435,7 +435,7 @@ function Cercanos({ onAbrir, ocupado }: { onAbrir: (contrato: string) => void; o
   );
 }
 
-// ============ Consultar direcciones (25-nov): sección «Predio» (las dos direcciones por separado y los datos del censo) ============
+// ============ Consultar direcciones (25-nov): sección «Predio» (datos del censo; las dos direcciones están en la tarjeta inicial desde el 26-nov) ============
 function Unidades({ valor }: { valor: string | null }) {
   const u = leerUnidades(valor);
   if (u.estado === "sin_dato") return <>Sin dato</>;
@@ -448,15 +448,25 @@ function Unidades({ valor }: { valor: string | null }) {
     </>
   );
 }
+// 26-nov (David): las dos direcciones van en la tarjeta inicial, con su nombre, justo debajo del nombre y el teléfono (y ya no en «Predio», para no repetirlas).
+// Siempre las dos, aunque sean iguales (no se unen); la que falta dice «Sin dato». Con una Edge de antes (sin `direcciones`) queda la línea de siempre.
+const lineaDireccion = (x: { direccion: string | null; barrio: string | null } | null | undefined) => (x?.direccion ? [x.direccion, x.barrio].filter(Boolean).join(" · ") : "Sin dato");
+function DireccionesTarjeta({ r }: { r: AnalisisCompleto }) {
+  const d = r.direcciones, c = r.comercial;
+  if (d === undefined) return <ul className="ac-lineas"><li>{[c?.direccion, c?.barrio ? `Barrio ${c.barrio}` : null].filter(Boolean).join(" · ") || "Sin dirección registrada"}</li></ul>;
+  return (
+    <dl className="ac-direcciones" data-testid="direcciones">
+      <div><dt>Dirección base comercial:</dt> <dd data-tarjeta="dir-comercial">{lineaDireccion(d?.comercial)}</dd></div>
+      <div><dt>Dirección catastro:</dt> <dd data-tarjeta="dir-catastro">{lineaDireccion(d?.catastro)}</dd></div>
+    </dl>
+  );
+}
 function SeccionPredio({ r }: { r: AnalisisCompleto }) {
-  const d = r.direcciones, p = r.predio;
-  const dir = (x: { direccion: string | null; barrio: string | null } | null | undefined) => (x?.direccion ? [x.direccion, x.barrio].filter(Boolean).join(" · ") : "Sin dato");
+  const p = r.predio;
   return (
     <details className="ac-seccion" data-seccion="predio" open>
       <summary>Predio</summary>
       <dl className="ac-predio">
-        <dt>Dirección base comercial</dt><dd data-predio="dir-comercial">{dir(d?.comercial)}</dd>
-        <dt>Dirección catastro</dt><dd data-predio="dir-catastro">{dir(d?.catastro)}</dd>
         <dt>Unidades habitacionales</dt><dd data-predio="unih">{p ? <Unidades valor={p.unih} /> : "Sin dato"}</dd>
         <dt>Unidades no habitacionales</dt><dd data-predio="uninh">{p ? <Unidades valor={p.uninh} /> : "Sin dato"}</dd>
         <dt>Clase de uso</dt><dd data-predio="clase-uso">{p?.clase_uso ?? "Sin dato"}</dd>

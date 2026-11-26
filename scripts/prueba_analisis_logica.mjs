@@ -45,7 +45,7 @@ ok("pesos con punto de miles: «$ 412.300»", L.pesos(412300) === "$ 412.300" &&
 ok("m³ con coma decimal: 14,2 · 7 · 7,8", L.m3(14.2) === "14,2" && L.m3(7) === "7" && L.m3(7.8) === "7,8" && L.m3(null) === "—");
 ok("años del medidor: «12 años», «1 año», «sin dato»", L.anios(12) === "12 años" && L.anios(1) === "1 año" && L.anios(null) === "sin dato");
 ok("tramo de mora en palabras", L.tramoTexto("media") === "mora media" && L.tramoTexto("al_dia") === "al día" && L.tramoTexto(null) === "sin dato");
-ok("sin código inicial: «2 Estrato 2» → «Estrato 2»; «1 Residencial» → «Residencial»", L.sinCodigo("2 Estrato 2") === "Estrato 2" && L.sinCodigo("1 Residencial") === "Residencial" && L.sinCodigo(null) === "");
+ok("sin código inicial: «2 Estrato 2» → «Estrato 2»; «1 Residencial» → «Residencial»", L.sinCodigo("2 Estrato 2") === "Estrato 2" && L.sinCodigo("1 Residencial") === "Residencial" && L.sinCodigo(null) === "" && L.sinCodigo("1 - Residencial") === "Residencial" && L.sinCodigo("3 - Estrato 3") === "Estrato 3" && L.sinCodigo("-") === "" && L.sinCodigo("3") === "3");
 ok("ninguna palabra «tarifa» en la lógica ni en la pantalla", !/tarifa/i.test(readFileSync(join(aqui, "../src/campo/analisis/logica.ts"), "utf8") + readFileSync(join(aqui, "../src/campo/analisis/AnalisisContrato.tsx"), "utf8") + readFileSync(join(aqui, "../src/campo/analisis/GraficaConsumo.tsx"), "utf8")));
 
 // ---- Gráfica ----

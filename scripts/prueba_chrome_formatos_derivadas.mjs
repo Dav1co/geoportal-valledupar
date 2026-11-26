@@ -265,7 +265,7 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
     }
     await llegarACampo(pg, tok);
     const tj = await tarjetas(pg), ps = await pestanas(pg);
-    const reg = ["Reportar anomalía", "Formatos de actividad", "Encontrar o reportar activo", "Reportar posible pérdida", "Consultar"];
+    const reg = ["Reportar anomalía", "Formatos de actividad", "Encontrar o reportar activo", "Reportar posible pérdida", "Análisis de contrato"];
     await foto(pg, `p${pf}_registrar`);
     ok(`${T} (Registrar en campo): ve ${reg.join(", ")} y ninguna de supervisión`, reg.every((x) => tj.includes(x)) && !tj.some((x) => /Supervisión|Actas registradas/.test(x)), JSON.stringify(tj));
     ok(`${T}: el ícono de cada tarjeta es distinto (sin la inicial repetida)`, await pg.evaluate(() => { const i = [...document.querySelectorAll("button.campo-formato svg[data-icono]")].map((s) => s.getAttribute("data-icono")); return i.length === document.querySelectorAll("button.campo-formato").length && new Set(i).size === i.length && !document.querySelector(".com-tarjeta-ini[data-ini]"); }));

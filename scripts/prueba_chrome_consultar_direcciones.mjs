@@ -43,9 +43,9 @@ sqlq(`insert into public.geoportal_lista_blanca (email, nombre, rol, activo, hor
   ('${E.planta}', 'ZTDC Planta', 'consulta', true, 'sin_restriccion', 'todos', false, false, false, true, false);
   insert into tecnica.personal_tecnico_eventos (persona, tipo_evento, formulario, autor) values ('${E.dual}', 'asignar_formulario', 'anomalia_compartida', '${E.adm}'),
    ('${E.planta}', 'asignar_formulario', 'entrada', '${E.adm}'), ('${E.planta}', 'asignar_formulario', 'anomalia_compartida', '${E.adm}');
-  insert into public.cartera_suscripcion (contrato, estado, nombre, telefono, direccion, barrio, deuda_total, periodo_carga) values
-    ('991800000001', 'ACTIVO', 'ZTDC PERSONA UNO', '3001112233', 'CRA 9 # 12-30 TORRE 2 APTO 301', 'CENTRO', 123456, '20261123'),
-    ('991800000002', 'ACTIVO', 'ZTDC PERSONA DOS', '3002223344', 'CLL 5 # 3-10', 'LOS MAYALES', 0, '20261123');
+  insert into public.cartera_suscripcion (contrato, estado, nombre, telefono, direccion, barrio, deuda_total, periodo_carga, categoria, subcategoria, ciclo) values
+    ('991800000001', 'ACTIVO', 'ZTDC PERSONA UNO', '3001112233', 'CRA 9 # 12-30 TORRE 2 APTO 301', 'CENTRO', 123456, '20261123', '1 - Residencial', '3', '15'),
+    ('991800000002', 'ACTIVO', 'ZTDC PERSONA DOS', '3002223344', 'CLL 5 # 3-10', 'LOS MAYALES', 0, '20261123', null, null, null);
   insert into public.catastro_valledupar (cod_usuario, direccion, barrio, clase_uso, act_eco, unih, uninh, telefono) values
     ('991800000001', 'CRA 9 12 30', 'CENTRO', 'RESIDENCIAL RESIDENCIAL', 'NO APLICA', '- 4- - - CASA- CS- 1- - - - ,- - - - - APTO- AP- 101- - - - ,- ', 'NO APLICA', '3009998877');`);
 const GRUPO_OTRO = sqlq("select g.codigo from campo.tipos_reporte t join campo.grupos_reporte g on g.id = t.grupo_id where t.codigo = 'otro'");
@@ -220,17 +220,24 @@ try {
     let pg = await abrir("p=consultar&rol=ana", ancho);
     await escribir(pg, "#ac-contrato", "991800000001"); await clicTexto(pg, "button", "Consultar");
     const vio = await esperar(pg, () => !!document.querySelector('[data-seccion="predio"]'));
-    ok(`C${ancho}.01 Consultar: sección «Predio» con las dos direcciones por separado`, vio && await pg.$eval('[data-predio="dir-comercial"]', (e) => e.innerText) === "CRA 9 # 12-30 TORRE 2 APTO 301 · CENTRO"
-      && await pg.$eval('[data-predio="dir-catastro"]', (e) => e.innerText) === "CRA 9 12 30 · CENTRO", (await texto(pg)).slice(0, 500));
+    ok(`C${ancho}.01 Consultar: sección «Predio» con las dos direcciones por separado`, vio && await pg.$eval('[data-tarjeta="dir-comercial"]', (e) => e.innerText) === "CRA 9 # 12-30 TORRE 2 APTO 301 · CENTRO"
+      && await pg.$eval('[data-tarjeta="dir-catastro"]', (e) => e.innerText) === "CRA 9 12 30 · CENTRO", (await texto(pg)).slice(0, 500));
     const unih = await pg.$eval('[data-predio="unih"]', (e) => e.innerText).catch(() => "");
     ok(`C${ancho}.02 unidades habitacionales: «2 unidades», cada una en su renglón y el original debajo`, /2 unidades/.test(unih) && /4 · CASA · CS · 1/.test(unih) && /APTO · AP · 101/.test(unih) && /En el censo:/.test(unih), unih);
     ok(`C${ancho}.03 no habitacionales «No aplica», clase de uso «RESIDENCIAL», actividad «NO APLICA»`, await pg.$eval('[data-predio="uninh"]', (e) => e.innerText) === "No aplica"
       && await pg.$eval('[data-predio="clase-uso"]', (e) => e.innerText) === "RESIDENCIAL" && await pg.$eval('[data-predio="act-eco"]', (e) => e.innerText) === "NO APLICA");
+    {
+      const t = await pg.$eval('[data-testid="tarjeta"]', (e) => e.innerText);
+      const pr = await pg.$eval('[data-seccion="predio"]', (e) => e.innerText);
+      ok(`C${ancho}.01b 26-nov: las dos direcciones con su nombre en la tarjeta inicial, debajo del nombre; «Predio» ya no las repite; sin guion suelto`,
+        /Dirección base comercial:\s*CRA 9 # 12-30 TORRE 2 APTO 301 · CENTRO/.test(t) && /Dirección catastro:\s*CRA 9 12 30 · CENTRO/.test(t)
+          && t.indexOf("Dirección base comercial") > t.indexOf("dato personal") && !/Barrio CENTRO/.test(t) && !/^\s*-\s/m.test(t) && !/Dirección/.test(pr), t.slice(0, 400) + " || " + pr.slice(0, 200));
+    }
     ok(`C${ancho}.04 sin desborde horizontal (Consultar)`, await sinDesborde(pg));
     await pg.evaluate(() => document.querySelector('[data-seccion="predio"]').scrollIntoView()); await foto(pg, `${ancho}_consultar_predio`);
     await escribir(pg, "#ac-contrato", "991800000002"); await clicTexto(pg, "button", "Consultar");
-    await esperar(pg, () => /CLL 5 # 3-10/.test(document.querySelector('[data-predio="dir-comercial"]')?.innerText ?? ""));
-    ok(`C${ancho}.05 sin predio en el censo: catastro y predio «Sin dato»`, await pg.$eval('[data-predio="dir-catastro"]', (e) => e.innerText) === "Sin dato" && /no tiene predio en el censo/.test(await texto(pg)));
+    await esperar(pg, () => /CLL 5 # 3-10/.test(document.querySelector('[data-tarjeta="dir-comercial"]')?.innerText ?? ""));
+    ok(`C${ancho}.05 sin predio en el censo: catastro y predio «Sin dato»`, await pg.$eval('[data-tarjeta="dir-catastro"]', (e) => e.innerText) === "Sin dato" && /no tiene predio en el censo/.test(await texto(pg)));
     await pg.close();
     // ===== Operario sin Análisis, en un formato con contrato obligatorio =====
     pg = await abrir("p=formato&tipo=revision_previa&rol=op", ancho);

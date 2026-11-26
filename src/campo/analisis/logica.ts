@@ -100,7 +100,12 @@ const TRAMOS: Record<TramoMora, string> = { al_dia: "al día", leve: "mora leve"
 export const tramoTexto = (t: TramoMora | null | undefined): string => (t ? TRAMOS[t] ?? t : "sin dato");
 export const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString("es-CO")} ${n === 1 ? uno : varios}`;
 /** «2 Estrato 2» → «Estrato 2»; «1 Residencial» → «Residencial» (se quita el código inicial). */
-export const sinCodigo = (s: string | null | undefined): string => (s ?? "").replace(/^\s*\d+\s+(?=\D)/, "").trim();
+// 26-nov: la cartera trae «1 - Residencial» (código, guion, nombre): se quita también el guion separador, que antes quedaba suelto («- Residencial»).
+// Un valor que solo es guiones («-», «--») se trata como vacío.
+export const sinCodigo = (s: string | null | undefined): string => {
+  const t = (s ?? "").replace(/^\s*\d+\s*-\s*|^\s*\d+\s+(?=\D)/, "").trim();
+  return /^-+$/.test(t) ? "" : t;
+};
 
 // ---------------- Gráfica ----------------
 export type FilaGrafica = {
