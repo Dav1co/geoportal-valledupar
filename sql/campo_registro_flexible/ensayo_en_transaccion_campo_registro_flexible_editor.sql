@@ -838,8 +838,8 @@ end $function$;
 --   igual que hoy. La usan la lista y la descarga, así que las dos filtran lo mismo.
 -- geoportal_campo_derivadas: además de las filas, «total» (con los filtros) y «pendientes» (con los filtros, menos el de estado). Antes la pantalla veía «100+».
 -- Descarga auditada, como la de Reportes: iniciar (cuenta y fija el corte, deja la auditoría), pagina (hasta 5.000 filas por página, por id) y cerrar.
---   SIN datos de contacto (aviso_datos nunca se lee aquí: f_derivada_json solo dice trae_datos y cuántas entregas); los correos de las personas (quien registró,
---   quien cerró, quien lo vio otra vez) solo para el administrador que lo pide (incluir_autor), como en Reportes.
+--   SIN datos de contacto (aviso_datos nunca se lee aquí: f_derivada_json solo dice trae_datos y cuántas entregas) y sin texto libre (observación, dirección
+--   correcta, motivo de cierre); los correos de las personas (quien registró, quien cerró, quien lo vio otra vez) solo para el administrador que lo pide.
 -- Mismo permiso que la lista: campo.f_autorizar_registradas (administrador, supervisor de actas o de campo).
 -- =====================================================================
 create function campo.f_derivadas_filtradas(p_filtros jsonb)
@@ -891,16 +891,18 @@ begin
                             'total', v_total, 'pendientes', v_pend);
 end $function$;
 
--- Quita los correos de las personas de una fila de f_derivada_json (para quien no es administrador o no lo pidió)
-create function campo.f_derivada_sin_correos(p jsonb)
+-- Una fila de f_derivada_json para la DESCARGA: nunca el texto libre (la observación escrita, la dirección correcta ni el motivo de cierre, que pueden traer datos de
+-- personas); los correos de las personas (quien originó, quien cerró, quien lo vio otra vez) solo si p_con_correos (el administrador que los pidió).
+create function campo.f_derivada_descarga(p jsonb, p_con_correos boolean)
  returns jsonb
  language sql
  immutable
  set search_path to 'pg_catalog'
 as $function$
-  select p #- '{origen,operario}' #- '{cierre,autor}' #- '{origen,ultimo_visto,autor}'
+  select case when p_con_correos then x else x #- '{origen,operario}' #- '{cierre,autor}' #- '{origen,ultimo_visto,autor}' end
+    from (select p #- '{origen,texto}' #- '{origen,direccion_correcta}' #- '{cierre,motivo}' as x) s
 $function$;
-revoke all on function campo.f_derivada_sin_correos(jsonb) from public, anon, authenticated, service_role;
+revoke all on function campo.f_derivada_descarga(jsonb, boolean) from public, anon, authenticated, service_role;
 
 create function public.geoportal_campo_derivadas_descarga_iniciar(p_solicitante text, p_filtros jsonb DEFAULT '{}'::jsonb, p_formato text DEFAULT 'xlsx'::text,
                                                                   p_incluir_autor boolean DEFAULT false, p_ip text DEFAULT NULL::text)
@@ -940,7 +942,7 @@ begin
     perform campo.f_error('La descarga ya se cerró', '55000');
   end if;
   v_f := a.detalle -> 'filtros'; v_corte := (a.detalle ->> 'hasta_id')::bigint; v_autor := coalesce((a.detalle ->> 'incluir_autor')::boolean, false);
-  select count(*), coalesce(jsonb_agg(case when v_autor then campo.f_derivada_json(q.id) else campo.f_derivada_sin_correos(campo.f_derivada_json(q.id)) end order by q.id desc)
+  select count(*), coalesce(jsonb_agg(campo.f_derivada_descarga(campo.f_derivada_json(q.id), v_autor) order by q.id desc)
                                       filter (where q.rn <= v_lim), '[]'::jsonb), min(q.id) filter (where q.rn <= v_lim)
     into v_n, v_rows, v_min
     from (select x.id, row_number() over (order by x.id desc) as rn from campo.f_derivadas_filtradas(v_f) x
@@ -1221,8 +1223,9 @@ begin
   perform pg_temp.ok('09.05 el supervisor inicia la descarga: 3 filas y queda auditada', pg_temp.err(i) = 'OK' and (i ->> 'total')::int = 3
     and exists (select 1 from public.geoportal_auditoria where id = (i ->> 'descarga_id')::bigint and accion = 'campo_derivadas_descarga_iniciar' and email = SUP), i::text);
   pg := pg_temp.rpc(format('public.geoportal_campo_derivadas_descarga_pagina(%L, %s, null, 2)', SUP, i ->> 'descarga_id'));
-  perform pg_temp.ok('09.06 primera página de 2, sin los correos de las personas y sin datos de contacto', pg_temp.err(pg) = 'OK' and (pg ->> 'devueltos')::int = 2 and pg -> 'hay_mas' = 'true'::jsonb
-    and pg::text !~ 'ztrf\.(op|sup)@' and pg::text !~ '"(cedula|telefono|celular|correo)"', left(pg::text, 400));
+  perform pg_temp.ok('09.06 primera página de 2, sin los correos de las personas, sin datos de contacto y sin texto libre ni motivo de cierre', pg_temp.err(pg) = 'OK'
+    and (pg ->> 'devueltos')::int = 2 and pg -> 'hay_mas' = 'true'::jsonb
+    and pg::text !~ 'ztrf\.(op|sup)@' and pg::text !~ '"(cedula|telefono|celular|correo|texto|direccion_correcta|motivo)"' and pg::text !~ 'anulada en el ensayo', left(pg::text, 400));
   r := pg_temp.rpc(format('public.geoportal_campo_derivadas_descarga_pagina(%L, %s, %s, 2)', SUP, i ->> 'descarga_id', pg ->> 'ultimo_id'));
   perform pg_temp.ok('09.07 la segunda página trae la que falta', (r ->> 'devueltos')::int = 1 and r -> 'hay_mas' = 'false'::jsonb, left(r::text, 200));
   r := pg_temp.rpc(format('public.geoportal_campo_derivadas_descarga_pagina(%L, %s, null, 10)', ADM, i ->> 'descarga_id'));
@@ -1266,7 +1269,7 @@ begin
     and has_function_privilege('service_role', 'public.geoportal_campo_tec_crear_reporte(text,uuid,text,text,text,text,numeric,numeric,numeric,boolean,jsonb,text,jsonb,text,text,timestamp with time zone,jsonb)', 'execute') and not has_function_privilege('authenticated', 'public.geoportal_campo_tec_crear_reporte(text,uuid,text,text,text,text,numeric,numeric,numeric,boolean,jsonb,text,jsonb,text,text,timestamp with time zone,jsonb)', 'execute')
     and has_function_privilege('service_role', 'public.geoportal_campo_derivadas_descarga_pagina(text,bigint,bigint,integer)', 'execute')
     and not has_function_privilege('authenticated', 'public.geoportal_campo_derivadas_descarga_pagina(text,bigint,bigint,integer)', 'execute')
-    and not has_function_privilege('service_role', 'campo.f_derivadas_filtradas(jsonb)', 'execute') and not has_function_privilege('service_role', 'campo.f_derivada_sin_correos(jsonb)', 'execute'));
+    and not has_function_privilege('service_role', 'campo.f_derivadas_filtradas(jsonb)', 'execute') and not has_function_privilege('service_role', 'campo.f_derivada_descarga(jsonb,boolean)', 'execute'));
   perform pg_temp.ok('10.04 las 4 funciones de permisos vivas no cambiaron', md5(pg_get_functiondef(to_regprocedure('public.geoportal_puede(text,text)'))) = '32f174a55b95788d3f8187b507303c2f' and md5(pg_get_functiondef(to_regprocedure('public.geoportal_mis_permisos(text)'))) = '83166fe17be58da67bbdedaae429bedb' and md5(pg_get_functiondef(to_regprocedure('public.geoportal_admin_guardar(text,text,text,text,boolean,text,text)'))) = '01fda69a9d912067b8b4dc153ac7957e' and md5(pg_get_functiondef(to_regprocedure('public.geoportal_admin_permisos(text,text,boolean,boolean,boolean,boolean,text,text,boolean,boolean,boolean,text,boolean,boolean,boolean,boolean,boolean,boolean,boolean,boolean)'))) = 'e5a90103b4a83440fd826f03266b7245');
   perform pg_temp.ok('10.05 la auditoría de crear no lleva coordenadas ni dirección, solo marcas',
     (select bool_and(detalle ? 'xy_manual' and detalle::text !~ '10\.4801|PRUEBA ZTRF\] CRA|Centro') from public.geoportal_auditoria
@@ -1801,7 +1804,7 @@ end $function$;
 drop function public.geoportal_campo_derivadas_descarga_cerrar(text, bigint, integer, text, text);
 drop function public.geoportal_campo_derivadas_descarga_pagina(text, bigint, bigint, integer);
 drop function public.geoportal_campo_derivadas_descarga_iniciar(text, jsonb, text, boolean, text);
-drop function campo.f_derivada_sin_correos(jsonb);
+drop function campo.f_derivada_descarga(jsonb, boolean);
 drop function campo.f_derivadas_filtradas(jsonb);
 
 

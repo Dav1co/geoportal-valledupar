@@ -43,7 +43,7 @@ DPAGINA = "public.geoportal_campo_descarga_pagina(text,bigint,bigint,integer)"; 
 DERIVADAS = "public.geoportal_campo_derivadas(text,jsonb,text)"
 # Las que cambian de texto con la misma firma (respaldo = su texto publicado)
 MISMA_FIRMA = {"LISTAR": LISTAR, "OBTENER": OBTENER, "DESCARGA_PAGINA": DPAGINA, "PDF_DATOS": PDF, "DERIVADAS": DERIVADAS}
-NUEVAS_F = ["campo.f_derivadas_filtradas(jsonb)", "campo.f_derivada_sin_correos(jsonb)",
+NUEVAS_F = ["campo.f_derivadas_filtradas(jsonb)", "campo.f_derivada_descarga(jsonb,boolean)",
             "public.geoportal_campo_derivadas_descarga_iniciar(text,jsonb,text,boolean,text)", "public.geoportal_campo_derivadas_descarga_pagina(text,bigint,bigint,integer)",
             "public.geoportal_campo_derivadas_descarga_cerrar(text,bigint,integer,text,text)"]
 RPC_NUEVAS = NUEVAS_F[2:]

@@ -88,7 +88,7 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
     if (!supervisaCampo) { setPendientes(null); return; }
     let vivo = true;
     apiDocumentos.derivadas({ estado: "pendiente", limite: TOPE_PENDIENTES })
-      .then((r) => { if (vivo) setPendientes(pendientesDe(r.filas.length, r.siguiente !== null && r.siguiente !== undefined)); })
+      .then((r) => { if (vivo) setPendientes(pendientesDe(r.filas.length, r.siguiente !== null && r.siguiente !== undefined, r.pendientes)); })
       .catch(() => { if (vivo) setPendientes(null); });
     return () => { vivo = false; };
   }, [supervisaCampo, recuento]);

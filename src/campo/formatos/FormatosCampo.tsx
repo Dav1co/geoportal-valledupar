@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BotonVolver } from "../BotonVolver";
 import "./formatos.css";
 import type { FormularioCampo } from "../apiCampo";
 import { formatosDisponibles, type TipoFormato } from "./tipos";
@@ -28,7 +29,7 @@ export function FormatosCampo({ def, correo, onVolver, puedeActa = false, onAbri
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
         <div className="campo-cab">
-          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={onVolver}>← Formatos</button>
+          <BotonVolver onClick={onVolver} descripcion="Formatos de campo" />
           <h1>Formatos de actividad</h1>
         </div>
         {grupos.length === 0 ? (

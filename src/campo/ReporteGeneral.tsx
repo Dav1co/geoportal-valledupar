@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BotonVolver } from "./BotonVolver";
 import { IconoCamara } from "../tecnica/IconoCamara";
 import { AvisoSinAgua } from "./AvisoSinAgua";
 import { apiCampo, avisoDeError, ErrorCampo, type Confirmacion, type FormularioCampo, type Preparacion } from "./apiCampo";
@@ -197,7 +198,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
         <div className="campo-cab">
-          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={pedirCancelar} disabled={bloqueado}>← Formatos</button>
+          <BotonVolver onClick={pedirCancelar} deshabilitado={bloqueado} descripcion="Formatos de campo" />
           <h1>Reportar anomalía</h1>
           <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={bloqueado}>Cancelar</button>
         </div>

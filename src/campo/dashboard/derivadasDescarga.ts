@@ -2,8 +2,8 @@ import type { FilaDerivada } from "../documentos/apiDocumentos";
 import { BOM, textoCsv } from "./archivo";
 
 // Descarga de «Avisos y actividades derivadas» desde Reportes (25-nov). Lógica PURA (se prueba en Node, scripts/prueba_formatos_derivadas.mjs).
-// Se arma en el navegador con lo que devuelve la ruta `derivadas` de geoportal-campo. ADVERTENCIA (pendiente del Code A): esta descarga NO queda auditada en el servidor como la de Reportes
-// (descargaIniciar/descargaCerrar); cuando exista la ruta auditada se cambia solo el origen de las filas.
+// Las filas llegan de la descarga AUDITADA del servidor (derivadas_descarga_iniciar/pagina/cerrar, 25-nov, Code A), que ya quita los datos de contacto y el texto libre
+// y solo da los correos al administrador que los pidió; aquí solo se arman las columnas (las mismas que antes).
 // NO incluye nunca: datos de contacto de los avisos (`aviso_datos`: nombre, cédula, teléfono, correo del suscriptor), ni el texto libre de la observación, ni la dirección correcta, ni el motivo de cierre
 // (texto libre de personas). Del aviso solo dice SI trae datos de contacto y cuántas entregas, sin su contenido. El correo de quien registró o cerró solo va si el administrador lo pide.
 
@@ -43,6 +43,6 @@ export function leameDerivadas(a: { generadoPor: string; generadoEn: string; fil
     ["Datos de contacto", "NO incluye los datos de contacto de los avisos (nombre, cédula, teléfono, correo del suscriptor): se consultan solo en pantalla, con lectura auditada. Solo se indica si el aviso trae datos y cuántas entregas."],
     ["Texto libre", "No incluye la observación escrita, la dirección correcta ni el motivo de cierre."],
     ["Correos", a.incluyeAutor ? "Incluye el correo de quien originó y de quien cerró: información interna de EMDUPAR, no la comparta fuera de la empresa." : "No incluye el correo de quien originó ni de quien cerró."],
-    ["Auditoría", "Esta descarga se armó en el navegador con la lista de «Avisos y actividades derivadas»; todavía no queda auditada en el servidor."],
+    ["Auditoría", "Esta descarga queda registrada en el servidor (quién, cuándo, con qué filtros y cuántas filas), como la de Reportes."],
   ];
 }

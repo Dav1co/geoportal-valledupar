@@ -8,7 +8,9 @@ import { fmtMiles } from "./formatoRevision";
 import { importarConRecarga } from "../../lib/recarga";
 
 // «Actividades derivadas» dentro de Reportes (25-nov, David): CONSULTA y DESCARGA. Atender y cerrar siguen en un solo sitio: Actas registradas → «Avisos y actividades derivadas».
-// Misma ruta `derivadas` de apiDocumentos.ts (sin ruta nueva): estado, actividad, origen, contrato y fechas van al servidor. La descarga se arma aquí (sin datos de contacto; ver derivadasDescarga.ts).
+// Misma ruta `derivadas` de apiDocumentos.ts: estado, actividad, origen, contrato y fechas van al servidor, que además devuelve el total y los pendientes (25-nov, Code A).
+// La descarga es AUDITADA en el servidor (derivadas_descarga_iniciar → páginas → cerrar, como la de Reportes): el servidor fija el corte, quita los datos de contacto
+// y el texto libre, y solo da los correos al administrador que los pide; aquí se arma el archivo con las mismas columnas (derivadasDescarga.ts).
 const PAGINA = TOPE_PENDIENTES;          // 100: el tamaño que ya usa la pantalla de atención (el servidor puede acotarlo; se sigue por `siguiente`)
 const MAX_PAGINAS = 100;                 // 10.000 filas en pantalla; si se llega, se dice
 const texto = (e: unknown) => (e instanceof ErrorCampo ? e.message : "No se pudo cargar.");
@@ -27,12 +29,13 @@ export function DerivadasReporte({ correo, admin, onIrAAtender }: { correo: stri
   const [bajando, setBajando] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  const [cuenta, setCuenta] = useState<{ total: number; pendientes: number } | null>(null);   // del servidor (nulo con una Edge de antes)
   const version = useRef(0);
   const invalido = !!f.desde && !!f.hasta && f.desde > f.hasta;
 
   useEffect(() => {
     if (invalido) return;
-    const v = ++version.current; setCargando(true); setError(null); setFilas([]); setTruncado(false);
+    const v = ++version.current; setCargando(true); setError(null); setFilas([]); setTruncado(false); setCuenta(null);
     const t = window.setTimeout(async () => {
       try {
         let antes: string | number | undefined; let acc: FilaDerivada[] = [];
@@ -41,6 +44,7 @@ export function DerivadasReporte({ correo, admin, onIrAAtender }: { correo: stri
             desde: f.desde || undefined, hasta: f.hasta || undefined, antes, limite: PAGINA });
           if (v !== version.current) return;
           acc = acc.concat(r.filas); setFilas(acc);
+          if (p === 0 && typeof r.total === "number" && typeof r.pendientes === "number") setCuenta({ total: r.total, pendientes: r.pendientes });
           if (r.siguiente === null || r.siguiente === undefined || r.filas.length === 0) break;
           if (p === MAX_PAGINAS - 1) setTruncado(true);
           antes = r.siguiente;
@@ -57,28 +61,44 @@ export function DerivadasReporte({ correo, admin, onIrAAtender }: { correo: stri
     f.actividad ? `Actividad: ${conocidas.get(f.actividad) ?? f.actividad}` : "", f.contrato ? `Contrato: ${f.contrato}` : "", f.desde ? `Desde: ${f.desde}` : "", f.hasta ? `Hasta: ${f.hasta}` : "",
   ].filter(Boolean), [f, conocidas]);
   const set = <K extends keyof Filtros>(k: K, v: Filtros[K]) => setF((x) => ({ ...x, [k]: v }));
-  const pendientes = filas.filter((d) => d.estado === "pendiente").length;
+  const pendientes = cuenta ? cuenta.pendientes : filas.filter((d) => d.estado === "pendiente").length;
+  const filtrosServidor = { estado: f.estado || undefined, origen: f.origen || undefined, actividad: f.actividad || undefined, contrato: f.contrato || undefined, desde: f.desde || undefined, hasta: f.hasta || undefined };
 
   async function descargar(formato: "csv" | "xlsx") {
     if (bajando || filas.length === 0) return;
-    setMsg(null); setBajando(formato === "xlsx" ? "Armando el Excel…" : "Armando el CSV…");
+    setMsg(null); setBajando("Preparando la descarga…");
+    const quien = admin && incluirAutor;
+    let id: number | null = null; let todas: FilaDerivada[] = [];
     try {
+      const ini = await apiDocumentos.derivadasDescargaIniciar(filtrosServidor, formato, quien);   // queda en la auditoría del servidor (quién, cuándo, filtros, filas)
+      id = ini.descarga_id;
+      let despues: number | null = null;
+      for (;;) {
+        const pg = await apiDocumentos.derivadasDescargaPagina(id, despues);
+        todas = todas.concat(pg.registros);
+        setBajando(`Bajando ${fmtMiles(todas.length)} de ${fmtMiles(ini.total)}…`);
+        if (!pg.hay_mas || pg.ultimo_id === null) break;
+        despues = pg.ultimo_id;
+      }
       const ahora = new Date(); const nombre = nombreArchivoDerivadas(ahora, formato);
-      const generadoEn = ahora.toLocaleString("es-CO", { timeZone: "America/Bogota", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-      const quien = admin && incluirAutor;
       let blob: Blob;
-      if (formato === "csv") blob = new Blob([csvDerivadas(filas, quien)], { type: "text/csv;charset=utf-8" });
+      if (formato === "csv") blob = new Blob([csvDerivadas(todas, quien)], { type: "text/csv;charset=utf-8" });
       else {
+        setBajando("Armando el Excel…");
         const m = await importarConRecarga(() => import("./xlsxRevision"));
-        const libro = new m.LibroMulti(leameDerivadas({ generadoPor: correo, generadoEn, filas: filas.length, filtros: legibles, incluyeAutor: quien }));
+        const libro = new m.LibroMulti(leameDerivadas({ generadoPor: ini.generado_por || correo, generadoEn: ini.generado_en, filas: todas.length, filtros: legibles, incluyeAutor: quien }));
         const cols = columnasDerivadas(quien);
         const h = libro.hoja("d", "Derivadas", cols, cols.map((c) => (c === "Actividad" || c === "Viene de" ? 34 : c.startsWith("Quién") ? 30 : 18)));
-        await h.agregarFilas(filas.map((d) => filaDerivada(d, quien)));
+        await h.agregarFilas(todas.map((d) => filaDerivada(d, quien)));
         blob = await libro.finalizar();
       }
-      guardarArchivo({ nombre, filas: filas.length, blob });
-      setMsg({ tipo: "ok", texto: `Se descargó ${nombre} con ${fmtMiles(filas.length)} ${filas.length === 1 ? "fila" : "filas"}. Sin datos de contacto. Esta descarga aún no queda auditada en el servidor.` });
-    } catch (e) { setMsg({ tipo: "error", texto: e instanceof Error ? e.message : "No se pudo armar el archivo." }); }
+      guardarArchivo({ nombre, filas: todas.length, blob });
+      await apiDocumentos.derivadasDescargaCerrar(id, todas.length, "completa").catch(() => undefined);
+      setMsg({ tipo: "ok", texto: `Se descargó ${nombre} con ${fmtMiles(todas.length)} ${todas.length === 1 ? "fila" : "filas"}. Sin datos de contacto. La descarga quedó registrada en el servidor.` });
+    } catch (e) {
+      if (id !== null) await apiDocumentos.derivadasDescargaCerrar(id, todas.length, "error").catch(() => undefined);
+      setMsg({ tipo: "error", texto: e instanceof Error ? e.message : "No se pudo armar el archivo." });
+    }
     finally { setBajando(null); }
   }
 
@@ -117,7 +137,7 @@ export function DerivadasReporte({ correo, admin, onIrAAtender }: { correo: stri
       {invalido ? <p className="rv-error" role="alert">La fecha «Desde» no puede ser posterior a «Hasta».</p> : null}
       <p className="rv-activos" aria-label="Filtros activos">{legibles.join(" · ")}</p>
       <div className="rv-barra" role="status" aria-live="polite">
-        <strong>{fmtMiles(filas.length)} {filas.length === 1 ? "fila" : "filas"}</strong>{pendientes && f.estado !== "pendiente" ? <span className="rv-tenue"> · {fmtMiles(pendientes)} pendientes</span> : null}
+        <strong>{fmtMiles(cuenta ? cuenta.total : filas.length)} {(cuenta ? cuenta.total : filas.length) === 1 ? "fila" : "filas"}</strong>{pendientes && f.estado !== "pendiente" ? <span className="rv-tenue" data-cuenta-pendientes> · {fmtMiles(pendientes)} pendientes</span> : null}
         {cargando ? <span className="rv-tenue"> · cargando…</span> : null}
         {truncado ? <span className="rv-tenue"> · se muestran las primeras {fmtMiles(MAX_PAGINAS * PAGINA)}; afine los filtros</span> : null}
       </div>

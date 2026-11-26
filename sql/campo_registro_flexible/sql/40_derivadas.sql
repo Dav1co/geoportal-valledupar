@@ -4,8 +4,8 @@
 --   igual que hoy. La usan la lista y la descarga, así que las dos filtran lo mismo.
 -- geoportal_campo_derivadas: además de las filas, «total» (con los filtros) y «pendientes» (con los filtros, menos el de estado). Antes la pantalla veía «100+».
 -- Descarga auditada, como la de Reportes: iniciar (cuenta y fija el corte, deja la auditoría), pagina (hasta 5.000 filas por página, por id) y cerrar.
---   SIN datos de contacto (aviso_datos nunca se lee aquí: f_derivada_json solo dice trae_datos y cuántas entregas); los correos de las personas (quien registró,
---   quien cerró, quien lo vio otra vez) solo para el administrador que lo pide (incluir_autor), como en Reportes.
+--   SIN datos de contacto (aviso_datos nunca se lee aquí: f_derivada_json solo dice trae_datos y cuántas entregas) y sin texto libre (observación, dirección
+--   correcta, motivo de cierre); los correos de las personas (quien registró, quien cerró, quien lo vio otra vez) solo para el administrador que lo pide.
 -- Mismo permiso que la lista: campo.f_autorizar_registradas (administrador, supervisor de actas o de campo).
 -- =====================================================================
 create function campo.f_derivadas_filtradas(p_filtros jsonb)
@@ -57,16 +57,18 @@ begin
                             'total', v_total, 'pendientes', v_pend);
 end $function$;
 
--- Quita los correos de las personas de una fila de f_derivada_json (para quien no es administrador o no lo pidió)
-create function campo.f_derivada_sin_correos(p jsonb)
+-- Una fila de f_derivada_json para la DESCARGA: nunca el texto libre (la observación escrita, la dirección correcta ni el motivo de cierre, que pueden traer datos de
+-- personas); los correos de las personas (quien originó, quien cerró, quien lo vio otra vez) solo si p_con_correos (el administrador que los pidió).
+create function campo.f_derivada_descarga(p jsonb, p_con_correos boolean)
  returns jsonb
  language sql
  immutable
  set search_path to 'pg_catalog'
 as $function$
-  select p #- '{origen,operario}' #- '{cierre,autor}' #- '{origen,ultimo_visto,autor}'
+  select case when p_con_correos then x else x #- '{origen,operario}' #- '{cierre,autor}' #- '{origen,ultimo_visto,autor}' end
+    from (select p #- '{origen,texto}' #- '{origen,direccion_correcta}' #- '{cierre,motivo}' as x) s
 $function$;
-revoke all on function campo.f_derivada_sin_correos(jsonb) from public, anon, authenticated, service_role;
+revoke all on function campo.f_derivada_descarga(jsonb, boolean) from public, anon, authenticated, service_role;
 
 create function public.geoportal_campo_derivadas_descarga_iniciar(p_solicitante text, p_filtros jsonb DEFAULT '{}'::jsonb, p_formato text DEFAULT 'xlsx'::text,
                                                                   p_incluir_autor boolean DEFAULT false, p_ip text DEFAULT NULL::text)
@@ -106,7 +108,7 @@ begin
     perform campo.f_error('La descarga ya se cerró', '55000');
   end if;
   v_f := a.detalle -> 'filtros'; v_corte := (a.detalle ->> 'hasta_id')::bigint; v_autor := coalesce((a.detalle ->> 'incluir_autor')::boolean, false);
-  select count(*), coalesce(jsonb_agg(case when v_autor then campo.f_derivada_json(q.id) else campo.f_derivada_sin_correos(campo.f_derivada_json(q.id)) end order by q.id desc)
+  select count(*), coalesce(jsonb_agg(campo.f_derivada_descarga(campo.f_derivada_json(q.id), v_autor) order by q.id desc)
                                       filter (where q.rn <= v_lim), '[]'::jsonb), min(q.id) filter (where q.rn <= v_lim)
     into v_n, v_rows, v_min
     from (select x.id, row_number() over (order by x.id desc) as rn from campo.f_derivadas_filtradas(v_f) x

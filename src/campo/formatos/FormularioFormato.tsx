@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BotonVolver } from "../BotonVolver";
 import { IconoCamara } from "../../tecnica/IconoCamara";
 import { AvisoSinAgua } from "../AvisoSinAgua";
 import "./formatos.css";
@@ -243,7 +244,7 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
             </div>
           )}
           <button type="button" className="tec-boton" onClick={onOtro}>Hacer otro reporte</button>
-          <button type="button" className="tec-boton-sec" onClick={onVolver}>Volver a los formatos</button>
+          <BotonVolver onClick={onVolver} descripcion="Formatos de actividad" />
         </section>
       </div>
     );
@@ -264,7 +265,7 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
         <div className="campo-cab">
-          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={pedirCancelar} disabled={bloqueado}>← Formatos</button>
+          <BotonVolver onClick={pedirCancelar} deshabilitado={bloqueado} descripcion="Formatos de actividad" />
           <h1>{tipo.nombre}</h1>
           <button type="button" className="btn-cancelar" onClick={pedirCancelar} disabled={bloqueado}>Cancelar</button>
         </div>

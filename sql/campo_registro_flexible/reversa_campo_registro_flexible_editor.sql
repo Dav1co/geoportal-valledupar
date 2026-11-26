@@ -527,7 +527,7 @@ end $function$;
 drop function public.geoportal_campo_derivadas_descarga_cerrar(text, bigint, integer, text, text);
 drop function public.geoportal_campo_derivadas_descarga_pagina(text, bigint, bigint, integer);
 drop function public.geoportal_campo_derivadas_descarga_iniciar(text, jsonb, text, boolean, text);
-drop function campo.f_derivada_sin_correos(jsonb);
+drop function campo.f_derivada_descarga(jsonb, boolean);
 drop function campo.f_derivadas_filtradas(jsonb);
 
 commit;

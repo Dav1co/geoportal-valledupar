@@ -356,8 +356,9 @@ begin
   perform pg_temp.ok('09.05 el supervisor inicia la descarga: 3 filas y queda auditada', pg_temp.err(i) = 'OK' and (i ->> 'total')::int = 3
     and exists (select 1 from public.geoportal_auditoria where id = (i ->> 'descarga_id')::bigint and accion = 'campo_derivadas_descarga_iniciar' and email = SUP), i::text);
   pg := pg_temp.rpc(format('public.geoportal_campo_derivadas_descarga_pagina(%L, %s, null, 2)', SUP, i ->> 'descarga_id'));
-  perform pg_temp.ok('09.06 primera página de 2, sin los correos de las personas y sin datos de contacto', pg_temp.err(pg) = 'OK' and (pg ->> 'devueltos')::int = 2 and pg -> 'hay_mas' = 'true'::jsonb
-    and pg::text !~ 'ztrf\.(op|sup)@' and pg::text !~ '"(cedula|telefono|celular|correo)"', left(pg::text, 400));
+  perform pg_temp.ok('09.06 primera página de 2, sin los correos de las personas, sin datos de contacto y sin texto libre ni motivo de cierre', pg_temp.err(pg) = 'OK'
+    and (pg ->> 'devueltos')::int = 2 and pg -> 'hay_mas' = 'true'::jsonb
+    and pg::text !~ 'ztrf\.(op|sup)@' and pg::text !~ '"(cedula|telefono|celular|correo|texto|direccion_correcta|motivo)"' and pg::text !~ 'anulada en el ensayo', left(pg::text, 400));
   r := pg_temp.rpc(format('public.geoportal_campo_derivadas_descarga_pagina(%L, %s, %s, 2)', SUP, i ->> 'descarga_id', pg ->> 'ultimo_id'));
   perform pg_temp.ok('09.07 la segunda página trae la que falta', (r ->> 'devueltos')::int = 1 and r -> 'hay_mas' = 'false'::jsonb, left(r::text, 200));
   r := pg_temp.rpc(format('public.geoportal_campo_derivadas_descarga_pagina(%L, %s, null, 10)', ADM, i ->> 'descarga_id'));
@@ -392,7 +393,7 @@ begin
     and has_function_privilege('service_role', '{{F_TEC_NUEVA}}', 'execute') and not has_function_privilege('authenticated', '{{F_TEC_NUEVA}}', 'execute')
     and has_function_privilege('service_role', 'public.geoportal_campo_derivadas_descarga_pagina(text,bigint,bigint,integer)', 'execute')
     and not has_function_privilege('authenticated', 'public.geoportal_campo_derivadas_descarga_pagina(text,bigint,bigint,integer)', 'execute')
-    and not has_function_privilege('service_role', 'campo.f_derivadas_filtradas(jsonb)', 'execute') and not has_function_privilege('service_role', 'campo.f_derivada_sin_correos(jsonb)', 'execute'));
+    and not has_function_privilege('service_role', 'campo.f_derivadas_filtradas(jsonb)', 'execute') and not has_function_privilege('service_role', 'campo.f_derivada_descarga(jsonb,boolean)', 'execute'));
   perform pg_temp.ok('10.04 las 4 funciones de permisos vivas no cambiaron', {{PERMISOS_IGUALES}});
   perform pg_temp.ok('10.05 la auditoría de crear no lleva coordenadas ni dirección, solo marcas',
     (select bool_and(detalle ? 'xy_manual' and detalle::text !~ '10\.4801|PRUEBA ZTRF\] CRA|Centro') from public.geoportal_auditoria

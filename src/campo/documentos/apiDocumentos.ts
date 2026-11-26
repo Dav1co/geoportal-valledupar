@@ -40,6 +40,7 @@ const pedir = <T>(esquema: Esquema, accion: string, cuerpo: unknown, timeoutMs?:
   esquema === "acta" ? pedirActa<T>(accion, { metodo: "POST", cuerpo, timeoutMs }) : pedirCampo<T>(accion, { cuerpo, timeoutMs });
 const sinVacios = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== "" && v !== null)) as Partial<T>;
 
+export type FiltrosDerivadas = { estado?: string; contrato?: string; actividad?: string; desde?: string; hasta?: string; origen?: "registro" | "analisis" };
 export const apiDocumentos = {
   catalogo: (esquema: Esquema) => pedir<{ formularios: DocumentoFormulario[] }>(esquema, "documentos_catalogo", {}),
   firmaGuardar: (esquema: Esquema, c: { registro_id: string; rol: "operario" | "usuario" | "testigo"; estado: EstadoUsuario | "quitar"; nombre?: string; imagen?: string }) =>
@@ -53,7 +54,15 @@ export const apiDocumentos = {
   derivadaAtender: (derivada_id: number, registro_id: string) => pedir<{ cambio?: boolean }>("campo", "derivada_atender", { derivada_id, registro_id }),
   derivadaCerrar: (derivada_id: number, tipo: "atendida_fuera" | "anulada", motivo: string) => pedir<{ cambio?: boolean }>("campo", "derivada_cerrar", { derivada_id, tipo, motivo }),
   derivadas: (filtros: { estado?: string; contrato?: string; actividad?: string; desde?: string; hasta?: string; antes?: string | number; limite?: number; origen?: "registro" | "analisis" }) =>
-    pedir<{ filas: FilaDerivada[]; siguiente: string | number | null }>("campo", "derivadas", sinVacios(filtros), 60000),       // los filtros van en el cuerpo, planos
+    // registro flexible (25-nov, Code A): «total» y «pendientes» (con los mismos filtros; los pendientes, sin el de estado). Una Edge de antes no los trae.
+    pedir<{ filas: FilaDerivada[]; siguiente: string | number | null; total?: number; pendientes?: number }>("campo", "derivadas", sinVacios(filtros), 60000),       // los filtros van en el cuerpo, planos
+  // Descarga AUDITADA (25-nov, Code A): como la de Reportes. Sin datos de contacto ni texto libre; los correos solo si el administrador los pide.
+  derivadasDescargaIniciar: (filtros: FiltrosDerivadas, formato: "csv" | "xlsx", incluir_autor: boolean) =>
+    pedir<{ descarga_id: number; total: number; hasta_id: number; generado_por: string; generado_en: string }>("campo", "derivadas_descarga_iniciar", { filtros: sinVacios(filtros), formato, incluir_autor }),
+  derivadasDescargaPagina: (descarga_id: number, despues_de: number | null) =>
+    pedir<{ registros: FilaDerivada[]; devueltos: number; ultimo_id: number | null; hay_mas: boolean }>("campo", "derivadas_descarga_pagina", { descarga_id, despues_de, limite: 5000 }, 60000),
+  derivadasDescargaCerrar: (descarga_id: number, filas: number, resultado: "completa" | "cancelada" | "error") =>
+    pedir<{ cerrada: boolean; repetida: boolean }>("campo", "derivadas_descarga_cerrar", { descarga_id, filas, resultado }),
   actasAbiertas: (contrato: string) => pedir<{ actas: ActaAbierta[] }>("campo", "actas_abiertas", { contrato }),
   // Investigación y Análisis (23-nov): avisos del Análisis de contrato (solo geoportal-campo; supervisor de campo y administrador)
   avisoCrearActividad: (derivada_id: number, formulario: string) => pedir<{ aviso: FilaDerivada; actividad: FilaDerivada }>("campo", "aviso_crear_actividad", { derivada_id, formulario }),
