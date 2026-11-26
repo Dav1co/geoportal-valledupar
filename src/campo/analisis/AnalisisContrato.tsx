@@ -1,3 +1,4 @@
+import { BotonVolver } from "../BotonVolver";
 import { cuantasUnidades, leerUnidades } from "./predio";
 import { ObservarContrato } from "./ObservarContrato";
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -77,7 +78,7 @@ export default function AnalisisContrato({ onVolver, destinos = [], onIrA, puede
     <div className="tec-pagina campo-pagina ac-pagina">
       <section className="tec-tarjeta ac-cab">
         <div className="campo-cab">
-          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={onVolver}>← Formularios de campo</button>
+          <BotonVolver onClick={onVolver} descripcion="Formatos de campo" />
           <h1>Análisis de contrato</h1>
         </div>
         <form className="ac-buscar" onSubmit={consultar} noValidate>

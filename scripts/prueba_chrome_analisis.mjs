@@ -314,7 +314,7 @@ try {
     let t = await texto(pg);
     ok(`${T} lista: «Análisis de contrato» es una tarjeta activa (sin «Próximamente») con su descripción`, await pg.evaluate(() => [...document.querySelectorAll("button.campo-formato-activo")].some((b) => b.textContent.includes("Análisis de contrato") && b.textContent.includes("Escriba un contrato y vea cartera, consumo, medidor, gestiones y ubicación.") && !b.disabled)) && !t.includes("Próximamente"));
     await clicTexto(pg, "button.campo-formato", "Análisis de contrato"); await pg.waitForSelector("#ac-contrato");
-    ok(`${T} cabecera: «← Formularios de campo», título y campo numérico (inputmode numeric, máx. 12)`, await pg.evaluate(() => { const i = document.querySelector("#ac-contrato"); return i.inputMode === "numeric" && i.maxLength === 12 && i.getAttribute("pattern") === "[0-9]*" && [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "← Formularios de campo") && document.body.innerText.includes("Análisis de contrato"); }));
+    ok(`${T} cabecera: «← Volver» (BotonVolver, 26-nov), título y campo numérico (inputmode numeric, máx. 12)`, await pg.evaluate(() => { const i = document.querySelector("#ac-contrato"); return i.inputMode === "numeric" && i.maxLength === 12 && i.getAttribute("pattern") === "[0-9]*" && [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "← Volver") && document.body.innerText.includes("Análisis de contrato"); }));
     await pg.type("#ac-contrato", "10a00-001xx99999999");
     ok(`${T} el campo deja solo dígitos y máximo 12`, (await pg.$eval("#ac-contrato", (i) => i.value)) === "100000199999");
     await consultar(pg, "1000001");
