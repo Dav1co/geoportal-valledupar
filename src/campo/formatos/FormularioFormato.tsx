@@ -7,6 +7,7 @@ import { avisoDeError, apiCampo, ErrorCampo, type FormularioCampo, type Preparac
 import { maxDescripcion } from "../limites";
 import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara, ladoPara, LADO_MAYOR_PX } from "../camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "../ubicacion";
+import { armarRegistro, BotonesAdjuntar, DIRECCION_VACIA, MarcaOrigen, PanelDireccion, PanelXY, puedeFlexible, xyDigitado, type EstadoDireccion, type EstadoXY, type OrigenFoto } from "../registroFlexible";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
 import { apiFormatos } from "./apiFormatos";
 import { SeccionConstancia } from "../constancia/SeccionConstancia";
@@ -21,13 +22,15 @@ import { esFirmaDefinitiva } from "../documentos/apiDocumentos";
 
 // Formulario de UN formato del Paso D (campos propios, fotos con etiqueta, resultado y causal, consecutivo). Pensado para el celular (380 px) y una mano.
 // - Todo (campos, fotos mínimas y máximas, causales) sale del catálogo que entrega el servidor; aquí no hay nombres de formatos.
-// - Fotos: SOLO con la cámara del formulario (1600 px, JPEG 0,72, sello, tope de bytes del servidor), SOLO en memoria. Sin galería ni selector de archivos.
+// - Fotos: con la cámara del formulario (1600 px, JPEG 0,72, sello, tope de bytes del servidor), SOLO en memoria. Registro flexible (25-nov): el supervisor o el
+//   administrador de campo también puede adjuntarlas desde la galería o un archivo y digitar el XY (el servidor lo exige). Para todos viaja dónde estaba el
+//   dispositivo; la dirección opcional, en los formatos cuyo contrato no es obligatorio.
 // - Envío: preparar_subida (con el tipo) → subida directa de cada foto → crear con el mismo reporte_id. «Reintentar» reutiliza el reporte_id: no duplica ni gasta otro consecutivo.
 // - Visita inefectiva: no se exigen campos ni fotos obligatorias; se pide la causal, la foto de fachada o predio (soporte) y la precisión de la ubicación.
 // - MALA SEÑAL: no hay modo sin conexión todavía. Si el envío falla por red, todo queda en pantalla para reintentar. GANCHO: `alFallarRed` recibe el cuerpo sin fotos cuando el
 //   fallo es de red; un modo sin conexión futuro podría encolarlo. Guardar fotos en el dispositivo está prohibido por ahora (solo memoria).
 
-type FotoLocal = { blob: Blob; url: string; subida: boolean };
+type FotoLocal = { blob: Blob; url: string; subida: boolean; origen: OrigenFoto };
 type Fase = "editando" | "enviando" | "error" | "guardado";
 type Destino = { tipo: "etiqueta"; codigo: string; nombre: string } | { tipo: "adicional"; indice: number | null; nombre: string };
 
@@ -66,6 +69,10 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
   const [preparada, setPreparada] = useState(false);
   const [ahora, setAhora] = useState(() => new Date());
   const ubic = useUbicacion();
+  const flexible = puedeFlexible(def);                          // registro flexible: solo supervisor o administrador de campo, y no desde Técnica
+  const conDireccion = tipo.requiere_contrato !== "si";        // la dirección opcional solo donde el contrato no es obligatorio (David, 25-nov)
+  const [xy, setXy] = useState<EstadoXY>({ activo: false, lat: "", lon: "" });
+  const [dir, setDir] = useState<EstadoDireccion>(DIRECCION_VACIA);
   const prep = useRef<Preparacion | null>(null);
   const enviando = useRef(false);
   const cons = useConstancia(tipo.codigo);
@@ -103,12 +110,16 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
   const maxDesc = maxDescripcion(def.limites);   // un solo tope: el de la base (limites.max_descripcion)
   const minimo = minimoFotos(tipo, resultado);
   const maximo = maximoFotos(tipo, tope);
+  const xyOk = flexible && xy.activo ? xyDigitado(xy, def.zona) : null;
+  const xyListo = !!xyOk && !("falta" in xyOk);
   const faltasFormato = validarFormato(tipo, {
     resultado, causal, subtipo, descripcion, contrato, valores,
     etiquetasConFoto: etiquetas.filter((e) => porEtiqueta[e.codigo]).map((e) => e.codigo),
     // Sin etiquetas en el catálogo, todas las fotos van en «adicionales» (sin etiqueta): cuentan igual.
-    adicionales: adicionales.length, tieneUbicacion: !!fix, tienePrecision: !!fix && Number.isFinite(fix.precision_m), topeGeneral: tope,
+    // con el XY digitado (supervisor) la ubicación es la digitada y la visita inefectiva no exige la precisión del GPS (David, 25-nov)
+    adicionales: adicionales.length, tieneUbicacion: !!fix || xyListo, tienePrecision: xyListo || (!!fix && Number.isFinite(fix.precision_m)), topeGeneral: tope,
   });
+  if (xyOk && "falta" in xyOk) faltasFormato.push(xyOk.falta);
   const tiene = (c: string) => (tipo.campos ?? []).some((x) => x.codigo === c && x.activo !== false);
   const fuente: FuenteFormulario = reglas ? { estado: tiene("firma_atendio") ? estadoDeFirmaAtendio(valores.firma_atendio) : undefined, nombre: tiene("atendio_nombre") ? String(valores.atendio_nombre ?? "") : undefined } : SIN_FUENTE;
   const faltasDoc = doc === undefined ? ["Cargando lo que lleva este formulario…"] : faltasFirmas(reglas, firmas, fuente);
@@ -122,8 +133,8 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
 
   function ponerValor(codigo: string, v: string | string[]) { setValores((p) => ({ ...p, [codigo]: v })); }
 
-  function guardarFoto(d: Destino, blob: Blob) {
-    const nueva: FotoLocal = { blob, url: URL.createObjectURL(blob), subida: false };
+  function guardarFoto(d: Destino, blob: Blob, origen: OrigenFoto = "camara") {
+    const nueva: FotoLocal = { blob, url: URL.createObjectURL(blob), subida: false, origen };
     if (d.tipo === "etiqueta") {
       setPorEtiqueta((p) => { if (p[d.codigo]) URL.revokeObjectURL(p[d.codigo]!.url); return { ...p, [d.codigo]: nueva }; });
     } else {
@@ -143,7 +154,8 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
   ], [fix]);
 
   async function enviar() {
-    if (enviando.current || faltas.length > 0 || !fix) return;                  // sin doble pulsación
+    const punto = xyOk && !("falta" in xyOk) ? xyOk : null;      // XY digitado (solo supervisor) o el del GPS
+    if (enviando.current || faltas.length > 0 || (!punto && !fix)) return;                  // sin doble pulsación
     enviando.current = true;
     setFase("enviando");
     setErrorEnvio(null);
@@ -172,8 +184,10 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
       const conf = await apiFormatos.crear({
         reporte_id: p.reporte_id, tipo: tipo.codigo, subtipo: subtipo || null, descripcion: descripcion.trim() || null,
         contrato: tipo.requiere_contrato === "no" ? null : contrato || null,
-        lat: Number(fix.lat.toFixed(6)), lon: Number(fix.lon.toFixed(6)), precision_m: Math.round(fix.precision_m * 10) / 10, riesgo_inmediato: false, origen: "campo",
-        fotos: fotosParaCrear(ordenadas, rutas),
+        ...(punto ? { lat: punto.lat, lon: punto.lon, precision_m: null } : { lat: Number(fix!.lat.toFixed(6)), lon: Number(fix!.lon.toFixed(6)), precision_m: Math.round(fix!.precision_m * 10) / 10 }),
+        riesgo_inmediato: false, origen: "campo",
+        fotos: fotosParaCrear(ordenadas, rutas).map((x, i) => ({ ...x, origen: ordenadas[i].foto.origen })),
+        registro: armarRegistro(!!punto, fix, conDireccion ? dir : null),
         datos, resultado: tipo.genera_resultado ? (resultado || null) : null, causal: inefectivo ? causal : null,
         ...(cons.bloque ? { constancia: cons.bloque } : {}),
         inicio_dispositivo: inicio.current.iso,
@@ -242,7 +256,8 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
   const puedeMas = !fotosFijas && nFotos < maximo;
   const hayInterac = nFotos > 0 || resultado !== "" || Object.keys(valores).length > 0;
   // «Cancelar»: el consecutivo se toma al REGISTRAR (no antes), así que solo se descarta lo del teléfono. Sin nada escrito sale directo; con algo, pide confirmación.
-  const hayDatos = hayInterac || causal !== "" || subtipo !== "" || descripcion.trim() !== "" || contrato !== contratoInicial || preparada;
+  const hayDatos = hayInterac || causal !== "" || subtipo !== "" || descripcion.trim() !== "" || contrato !== contratoInicial || preparada || xy.activo
+    || dir.direccion.trim() !== "" || dir.barrio.trim() !== "" || dir.referencia.trim() !== "";
   const pedirCancelar = () => { if (hayDatos) setCancelando(true); else onVolver(); };
 
   return (
@@ -330,7 +345,8 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
           <span className="campo-etiqueta">Fotos <small>(máximo {megas(def.limites.max_bytes_foto)} cada una)</small></span>
           <span className={`campo-contador-fotos${contadorOk ? " campo-contador-ok" : ""}`} aria-live="polite">Fotos: {contador}</span>
           {/* Investigación y Análisis (23-nov): con un mínimo de 0 fotos (Investigación de ubicación) el formulario se envía sin cámara; el aviso solo bloquea si hay mínimo */}
-          {!camaraDisponible() && (minimo > 0
+          {!camaraDisponible() && flexible && <p className="campo-sub" role="status">Este navegador no permite usar la cámara desde la página: adjunte las fotos desde la galería o desde un archivo.</p>}
+          {!camaraDisponible() && !flexible && (minimo > 0
             ? <p className="campo-error" role="alert">Este navegador no permite usar la cámara desde la página, y sin las fotos no se puede enviar. Use Safari en iPhone o Chrome en Android, actualizado, y abra el geoportal desde su dirección oficial (https).</p>
             : <p className="campo-sub" role="status">Este navegador no permite usar la cámara desde la página. Las fotos de este formato son opcionales: puede enviarlo sin ellas.</p>)}
           <div className="campo-fotos">
@@ -343,15 +359,20 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
                   {f ? (
                     <>
                       <img src={f.url} alt={`Foto: ${e.nombre}`} className="campo-foto-img" />
+                      <MarcaOrigen origen={f.origen} />
                       {!fotosFijas && (
                         <div className="campo-foto-acc">
-                          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => setCamaraEn({ tipo: "etiqueta", codigo: e.codigo, nombre: e.nombre })}>Repetir</button>
+                          <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => setCamaraEn({ tipo: "etiqueta", codigo: e.codigo, nombre: e.nombre })} disabled={!camaraDisponible()}>Repetir</button>
                           <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => quitarEtiqueta(e.codigo)}>Quitar</button>
                         </div>
                       )}
                     </>
                   ) : (
-                    <button type="button" className="tec-boton campo-boton-foto" onClick={() => setCamaraEn({ tipo: "etiqueta", codigo: e.codigo, nombre: e.nombre })} disabled={fotosFijas || !camaraDisponible() || nFotos >= maximo}><IconoCamara />Tomar foto</button>
+                    <>
+                      <button type="button" className="tec-boton campo-boton-foto" onClick={() => setCamaraEn({ tipo: "etiqueta", codigo: e.codigo, nombre: e.nombre })} disabled={fotosFijas || !camaraDisponible() || nFotos >= maximo}><IconoCamara />Tomar foto</button>
+                      {flexible && <BotonesAdjuntar rotulo={e.nombre} maxBytes={def.limites.max_bytes_foto} ladoMayor={ladoPara(e.codigo, e.nombre)} deshabilitado={fotosFijas || nFotos >= maximo}
+                        onFoto={(blob, o) => guardarFoto({ tipo: "etiqueta", codigo: e.codigo, nombre: e.nombre }, blob, o)} />}
+                    </>
                   )}
                 </div>
               );
@@ -360,9 +381,10 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
               <div key={f.url} className="campo-foto">
                 <span className="campo-foto-n">{usaEtiquetas ? `Foto adicional ${i + 1}` : `Foto ${i + 1}`}</span>
                 <img src={f.url} alt={`Foto adicional ${i + 1}`} className="campo-foto-img" />
+                <MarcaOrigen origen={f.origen} />
                 {!fotosFijas && (
                   <div className="campo-foto-acc">
-                    <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => setCamaraEn({ tipo: "adicional", indice: i, nombre: `Foto adicional ${i + 1}` })}>Repetir</button>
+                    <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => setCamaraEn({ tipo: "adicional", indice: i, nombre: `Foto adicional ${i + 1}` })} disabled={!camaraDisponible()}>Repetir</button>
                     <button type="button" className="tec-boton-sec tec-boton-corto" onClick={() => quitarAdicional(i)}>Quitar</button>
                   </div>
                 )}
@@ -377,9 +399,15 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
           {!usaEtiquetas && adicionales.length > 0 && (
             <button type="button" className="tec-boton-sec" onClick={() => setCamaraEn({ tipo: "adicional", indice: null, nombre: `Foto ${adicionales.length + 1}` })} disabled={!puedeMas || !camaraDisponible()}><IconoCamara />Agregar otra foto</button>
           )}
+          {flexible && <BotonesAdjuntar rotulo={usaEtiquetas ? "Foto adicional" : `Foto ${adicionales.length + 1}`} maxBytes={def.limites.max_bytes_foto} deshabilitado={!puedeMas}
+            onFoto={(blob, o) => guardarFoto({ tipo: "adicional", indice: null, nombre: "Foto adicional" }, blob, o)} />}
           {preparada && fase !== "guardado" && <p className="campo-sub">Las fotos y el resultado ya están reservados para este envío; no se pueden cambiar hasta enviarlo.</p>}
-          <p className="campo-sub">Las fotos se toman con la cámara y quedan solo en la memoria de esta pantalla: no se guardan en el celular ni en la galería.</p>
+          <p className="campo-sub">{flexible ? "Las fotos (de la cámara o adjuntadas) quedan solo en la memoria de esta pantalla: no se guardan en el celular. Las adjuntadas quedan marcadas en el reporte."
+                                             : "Las fotos se toman con la cámara y quedan solo en la memoria de esta pantalla: no se guardan en el celular ni en la galería."}</p>
         </div>
+
+        {conDireccion && <PanelDireccion estado={dir} onCambio={setDir} deshabilitado={bloqueado} />}
+        {flexible && <PanelXY estado={xy} onCambio={setXy} fix={fix} zona={def.zona} deshabilitado={bloqueado} />}
 
         <SeccionConstancia config={cons.config} valor={cons.valor} onCambio={cons.setValor} bloqueado={bloqueado} />
         {reglas ? <FirmasRegistro reglas={reglas} valor={firmas} onCambio={setFirmas} fuente={fuente} deshabilitado={bloqueado} nombreOperario={correo} /> : null}
@@ -387,7 +415,7 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
         {/* Automáticos */}
         <dl className="campo-auto">
           <div>
-            <dt>Ubicación</dt>
+            <dt>{xyListo ? "Ubicación del dispositivo" : "Ubicación"}</dt>
             <dd>
               {fix ? `${decimal(fix.lat, 5)}, ${decimal(fix.lon, 5)} (${metros(fix.precision_m)})` : ubic.estado === "buscando" ? "Buscando…" : "No disponible"}
               <button type="button" className="campo-enlace" onClick={ubic.actualizar} disabled={bloqueado}>Actualizar ubicación</button>

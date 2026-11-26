@@ -1,0 +1,16 @@
+/* Registro flexible (25-nov): casillas neutras (no rojas como «riesgo inmediato»), XY en dos columnas desde 360 px y la marca de foto adjuntada. */
+.rf-panel { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 12px; }
+.rf-check:has(input:checked) { border: 2px solid var(--t-azul, #1f5f99); background: var(--t-azul-suave, #eaf2fb); }
+.rf-check input { accent-color: var(--t-azul, #1f5f99); }
+.rf-xy { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rf-xy .tec-campo { margin: 0; min-width: 0; }
+.rf-xy input { width: 100%; box-sizing: border-box; font-size: 17px; }
+.rf-xy-nota { grid-column: 1 / -1; }
+.rf-direccion { display: flex; flex-direction: column; gap: 8px; }
+.rf-direccion .tec-campo { margin: 0; }
+.rf-adjuntar { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.rf-adjuntar .campo-foto-acc { flex-wrap: wrap; }
+.rf-adjuntar .tec-boton-corto { min-height: 44px; }
+.rf-marca { display: inline-block; font-size: 13px; font-weight: 600; color: var(--t-texto, #1d2b36); background: var(--t-amarillo-suave, #fff4cc); border: 1px solid #b38600; border-radius: 6px; padding: 2px 8px; }
+.rf-aviso { border-left: 4px solid var(--t-azul, #1f5f99); padding: 8px 10px; background: var(--t-azul-suave, #eaf2fb); border-radius: 6px; font-size: 14px; margin: 0 0 8px; }
+@media (max-width: 359px) { .rf-xy { grid-template-columns: 1fr; } }

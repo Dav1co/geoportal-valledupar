@@ -17,7 +17,15 @@ export type FilaReporte = {
   inicio_en?: string | null; inicio_origen?: "dispositivo" | "servidor" | null;
   /** Solo en filas de descarga (pasada 14/11): inicio en hora de pared de Bogotá y duración en minutos calculada por la base. */
   inicio_local?: string | null; duracion_min?: number | null;
+  /** Registro flexible (25-nov). Lista y descarga: planos; nulos en los reportes anteriores (sin fila en reporte_registro). */
+  xy_manual?: boolean | null; sin_ubicacion_dispositivo?: boolean | null; direccion?: string | null; barrio?: string | null; referencia?: string | null; fotos_adjuntadas?: number;
+  /** Solo en la descarga: dónde estaba el dispositivo y a cuántos metros del punto. */
+  lat_registro?: number | null; lon_registro?: number | null; precision_registro_m?: number | null; distancia_registro_m?: number | null;
+  /** Solo en el detalle: el bloque completo (nulo en los reportes anteriores). */
+  registro?: RegistroDetalle | null;
 };
+export type RegistroDetalle = { xy_manual: boolean; lat_registro: number | null; lon_registro: number | null; precision_registro_m: number | null; sin_ubicacion_dispositivo: boolean;
+  distancia_m: number | null; direccion: string | null; barrio: string | null; referencia: string | null };
 export type ListaResp = { reportes: FilaReporte[]; total: number; siguiente: number | null; distancia_duplicados_m: number };
 export type FiltrosServidor = {
   tipo?: string; grupo?: string; estado?: string; desde?: string; hasta?: string; riesgo_inmediato?: boolean; ocultos?: "no" | "si" | "todos";
@@ -44,7 +52,7 @@ export type FormularioRev = {
 };
 
 export type EventoRep = { id: number; tipo_evento: string; estado_nuevo: string | null; reporte_original_id: string | null; motivo: string | null; autor: string; creado_en: string };
-export type FotoRep = { orden: number; tamano_bytes: number; tipo_mime: string; registrada_en: string; etiqueta?: string | null; etiqueta_nombre?: string | null };
+export type FotoRep = { orden: number; tamano_bytes: number; tipo_mime: string; registrada_en: string; etiqueta?: string | null; etiqueta_nombre?: string | null; origen?: "camara" | "galeria" | "archivo" };
 export type Cercano = { id: string; distancia_m: number; registrado_en: string; estado: string };
 export type DetalleResp = { reporte: FilaReporte; campos: CampoDef[]; fotos: FotoRep[]; eventos: EventoRep[]; cercanos: Cercano[]; distancia_duplicados_m: number };
 export type SensiblesResp = { reporte_id: string; datos: Record<string, unknown>; campos: CampoDef[] };
@@ -62,6 +70,8 @@ export type FilaDescarga = {
   descripcion: string | null; lat: number; lon: number; precision_m: number | null; origen: string; n_fotos: number; grupo_duplicados: string | null; tamano_grupo: number | null;
   reporte_original_id: string | null; orden_trabajo_id: string | null; datos: Record<string, unknown>; autor?: string;
   inicio_local?: string | null; inicio_origen?: string | null; duracion_min?: number | null;   // pasada 14/11
+  xy_manual?: boolean | null; sin_ubicacion_dispositivo?: boolean | null; lat_registro?: number | null; lon_registro?: number | null; precision_registro_m?: number | null;
+  distancia_registro_m?: number | null; direccion?: string | null; barrio?: string | null; referencia?: string | null; fotos_adjuntadas?: number;   // registro flexible (25-nov)
 };
 export type DescargaPagina = { registros: FilaDescarga[]; devueltos: number; ultimo_seq: number | null; hay_mas: boolean };
 export type CambioParametro = { clave: string; antes: number; despues: number };

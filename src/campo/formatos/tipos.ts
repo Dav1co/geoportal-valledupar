@@ -32,12 +32,14 @@ export type ConfirmacionFormato = { id: string; registrado_en: string; repetido:
 export type CuerpoCrearFormato = {
   reporte_id: string; tipo: string; subtipo?: string | null; descripcion?: string | null; contrato?: string | null;
   lat: number; lon: number; precision_m?: number | null; riesgo_inmediato: boolean; origen: "campo" | "escritorio";
-  fotos: { orden: number; ruta: string; etiqueta?: string }[];
+  fotos: { orden: number; ruta: string; etiqueta?: string; origen?: import("../registroFlexible").OrigenFoto }[];
   datos?: Record<string, unknown> | null; resultado?: Resultado | null; causal?: string | null; orden_trabajo_id?: string | null;
   /** Constancia por correo (opcional; solo en los 4 formatos del acta de revisión o instalación). */
   constancia?: import("../constancia/logica").BloqueConstancia;
   /** Pasada 14/11: hora del celular al abrir el formulario (ISO con zona). */
   inicio_dispositivo?: string;
+  /** Registro flexible (25-nov): ubicación del dispositivo, XY digitado (solo supervisor) y dirección opcional (formatos con contrato no obligatorio). */
+  registro?: import("../registroFlexible").Registro;
 };
 
 const lista = <T,>(v: T[] | undefined): T[] => (Array.isArray(v) ? v : []);

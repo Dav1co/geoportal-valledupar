@@ -56,5 +56,9 @@ export function filaDeDescarga(r: FilaDescarga): FilaReporte {
     reporte_original_id: r.reporte_original_id, grupo_duplicados: r.grupo_duplicados, tamano_grupo: r.tamano_grupo, n_fotos: r.n_fotos, consecutivo: r.consecutivo, resultado: r.resultado,
     causal: r.causal_nombre ? { codigo: "", nombre: r.causal_nombre } : null, orden_trabajo_id: r.orden_trabajo_id, datos: r.datos,
     inicio_local: r.inicio_local ?? null, inicio_origen: (r.inicio_origen as FilaReporte["inicio_origen"]) ?? null, duracion_min: r.duracion_min ?? null,   // pasada 14/11
+    // registro flexible (25-nov)
+    xy_manual: r.xy_manual ?? null, sin_ubicacion_dispositivo: r.sin_ubicacion_dispositivo ?? null, lat_registro: r.lat_registro ?? null, lon_registro: r.lon_registro ?? null,
+    precision_registro_m: r.precision_registro_m ?? null, distancia_registro_m: r.distancia_registro_m ?? null, direccion: r.direccion ?? null, barrio: r.barrio ?? null,
+    referencia: r.referencia ?? null, fotos_adjuntadas: r.fotos_adjuntadas ?? 0,
   };
 }

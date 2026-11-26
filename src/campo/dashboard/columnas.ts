@@ -31,6 +31,14 @@ export function duracionMin(f: FilaReporte): number | null {
 }
 export const textoDuracion = (f: FilaReporte): string => { const m = duracionMin(f); return m === null ? "" : fmtDuracion(Math.max(0, m) * 60); };
 
+/** Registro flexible (25-nov): «XY digitado — registrado desde otro punto», «Sin ubicación del dispositivo» o «En el sitio (GPS)»; vacío en los reportes anteriores. */
+export function textoRegistro(f: Pick<FilaReporte, "xy_manual" | "sin_ubicacion_dispositivo">): string {
+  if (f.xy_manual === null || f.xy_manual === undefined) return "";
+  const partes = [f.xy_manual ? "XY digitado — registrado desde otro punto" : "En el sitio (GPS)"];
+  if (f.sin_ubicacion_dispositivo) partes.push("sin ubicación del dispositivo");
+  return partes.join(" · ");
+}
+
 /** Columnas base. `conPasoD`: hay datos del Paso D en la respuesta (consecutivo, resultado, causal, datos propios): se muestran por omisión solo entonces. */
 export function columnasBase(conPasoD = false): Columna[] {
   const c = (x: Omit<Columna, "origen" | "filtrable"> & { filtrable?: boolean }): Columna => ({ origen: "base", filtrable: false, ...x });
@@ -56,12 +64,21 @@ export function columnasBase(conPasoD = false): Columna[] {
     c({ clave: "grupo_duplicados", etiqueta: "Posibles duplicados", tipo: "texto", porOmision: true, ordenable: true, filtrable: true, enDescarga: true, valor: (f) => f.tamano_grupo ?? 0,
         texto: (f) => (f.grupo_duplicados ? `${f.tamano_grupo ?? "?"} en el grupo` : "") }),
     c({ clave: "origen", etiqueta: "Origen", tipo: "etiqueta", porOmision: true, ordenable: true, enDescarga: true, valor: (f) => f.origen, texto: (f) => (f.origen === "campo" ? "Campo" : f.origen === "escritorio" ? "Escritorio" : f.origen) }),
+    // Registro flexible (25-nov): la marca va en la tabla por omisión; la ubicación del dispositivo y la distancia, solo en la descarga y el detalle
+    c({ clave: "registro_desde", etiqueta: "Registro", tipo: "etiqueta", porOmision: true, ordenable: true, filtrable: true, enDescarga: true, valor: (f) => textoRegistro(f) || null, texto: (f) => textoRegistro(f) }),
+    c({ clave: "fotos_adjuntadas", etiqueta: "Fotos adjuntadas", tipo: "numero", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.fotos_adjuntadas ?? 0, texto: (f) => (f.fotos_adjuntadas ? String(f.fotos_adjuntadas) : "") }),
+    c({ clave: "direccion", etiqueta: "Dirección", tipo: "texto", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.direccion ?? null, texto: (f) => f.direccion ?? "" }),
+    c({ clave: "barrio", etiqueta: "Barrio", tipo: "texto", porOmision: false, ordenable: true, filtrable: true, enDescarga: true, valor: (f) => f.barrio ?? null, texto: (f) => f.barrio ?? "" }),
+    c({ clave: "referencia", etiqueta: "Referencia", tipo: "texto", porOmision: false, ordenable: false, enDescarga: true, valor: (f) => f.referencia ?? null, texto: (f) => f.referencia ?? "" }),
     c({ clave: "autor", etiqueta: "Autor", tipo: "texto", porOmision: true, ordenable: true, enDescarga: false, valor: (f) => f.autor ?? null, texto: (f) => f.autor ?? "" }),
     c({ clave: "descripcion", etiqueta: "Descripción", tipo: "texto", porOmision: true, ordenable: false, enDescarga: true, valor: (f) => f.descripcion ?? null, texto: (f) => f.descripcion ?? "" }),
     c({ clave: "precision_m", etiqueta: "Precisión (m)", tipo: "numero", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.precision_m ?? null, texto: (f) => (f.precision_m === null || f.precision_m === undefined ? "" : fmtNumero(f.precision_m, 1)) }),
     c({ clave: "orden_trabajo_id", etiqueta: "Orden de trabajo", tipo: "texto", porOmision: false, ordenable: false, enDescarga: true, valor: (f) => f.orden_trabajo_id ?? null, texto: (f) => f.orden_trabajo_id ?? "" }),
     c({ clave: "lat", etiqueta: "Latitud", tipo: "numero", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.lat, texto: (f) => fmtNumero(f.lat, 6) }),
     c({ clave: "lon", etiqueta: "Longitud", tipo: "numero", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.lon, texto: (f) => fmtNumero(f.lon, 6) }),
+    c({ clave: "lat_registro", etiqueta: "Latitud del dispositivo", tipo: "numero", porOmision: false, ordenable: false, enDescarga: true, valor: (f) => f.lat_registro ?? null, texto: (f) => (f.lat_registro == null ? "" : fmtNumero(f.lat_registro, 6)) }),
+    c({ clave: "lon_registro", etiqueta: "Longitud del dispositivo", tipo: "numero", porOmision: false, ordenable: false, enDescarga: true, valor: (f) => f.lon_registro ?? null, texto: (f) => (f.lon_registro == null ? "" : fmtNumero(f.lon_registro, 6)) }),
+    c({ clave: "distancia_registro_m", etiqueta: "Distancia al punto (m)", tipo: "numero", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.distancia_registro_m ?? null, texto: (f) => (f.distancia_registro_m == null ? "" : fmtNumero(f.distancia_registro_m, 0)) }),
     c({ clave: "id", etiqueta: "Identificador", tipo: "texto", porOmision: false, ordenable: false, enDescarga: true, valor: (f) => f.id, texto: (f) => f.id }),
   ];
 }

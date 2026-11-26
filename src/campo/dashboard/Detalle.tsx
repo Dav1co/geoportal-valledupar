@@ -46,6 +46,9 @@ export function Detalle({ id, def, ctx, onCerrar, onCambio, onAbrir }: {
             {r.riesgo_inmediato ? <span className="rv-marca rv-marca-alerta">⚠ Riesgo inmediato</span> : null}
             {r.oculto ? <span className="rv-marca rv-marca-gris">Oculto</span> : null}
             {r.fuera_de_zona ? <span className="rv-marca rv-marca-info">Fuera de zona</span> : null}
+            {r.registro?.xy_manual ? <span className="rv-marca rv-marca-amar" data-rf-detalle-xy>XY digitado — registrado desde otro punto</span> : null}
+            {r.registro?.sin_ubicacion_dispositivo ? <span className="rv-marca rv-marca-gris">Sin ubicación del dispositivo</span> : null}
+            {d.fotos.some((f) => f.origen && f.origen !== "camara") ? <span className="rv-marca rv-marca-info">Fotos adjuntadas</span> : null}
             {r.contrato && r.contrato_verificado === false ? <span className="rv-marca rv-marca-amar">Contrato sin verificar</span> : null}
             {r.grupo_duplicados ? <span className="rv-marca rv-marca-dup">◎ Posible duplicado ({r.tamano_grupo ?? "?"} en el grupo)</span> : null}
           </div>
@@ -66,7 +69,12 @@ export function Detalle({ id, def, ctx, onCerrar, onCambio, onAbrir }: {
             <dt>Contrato</dt><dd>{r.contrato ?? "—"}{r.contrato && r.contrato_verificado !== null ? (r.contrato_verificado ? " (verificado)" : " (no verificado)") : ""}</dd>
             <dt>Autor</dt><dd>{r.autor ?? "—"}</dd>
             <dt>Origen</dt><dd>{val("origen")}</dd>
-            <dt>Ubicación</dt><dd>{fmtNumero(r.lat, 6)}, {fmtNumero(r.lon, 6)}{r.precision_m !== null && r.precision_m !== undefined ? ` · precisión ±${fmtNumero(r.precision_m, 0)} m` : ""}{r.fuera_de_zona ? " · fuera de la zona" : ""}</dd>
+            <dt>{r.registro?.xy_manual ? "Ubicación (XY digitado)" : "Ubicación"}</dt><dd>{fmtNumero(r.lat, 6)}, {fmtNumero(r.lon, 6)}{r.precision_m !== null && r.precision_m !== undefined ? ` · precisión ±${fmtNumero(r.precision_m, 0)} m` : ""}{r.fuera_de_zona ? " · fuera de la zona" : ""}</dd>
+            {r.registro ? <><dt>Registrado desde</dt><dd data-rf-detalle-desde>{r.registro.lat_registro === null || r.registro.lon_registro === null ? "Sin ubicación del dispositivo"
+              : `${fmtNumero(r.registro.lat_registro, 6)}, ${fmtNumero(r.registro.lon_registro, 6)}${r.registro.precision_registro_m !== null ? ` · precisión ±${fmtNumero(r.registro.precision_registro_m, 0)} m` : ""}${r.registro.distancia_m !== null ? ` · a ${fmtNumero(r.registro.distancia_m, 0)} m del punto` : ""}`}</dd></> : null}
+            {r.registro?.direccion ? <><dt>Dirección</dt><dd>{r.registro.direccion}</dd></> : null}
+            {r.registro?.barrio ? <><dt>Barrio</dt><dd>{r.registro.barrio}</dd></> : null}
+            {r.registro?.referencia ? <><dt>Referencia</dt><dd>{r.registro.referencia}</dd></> : null}
             {r.orden_trabajo_id ? <><dt>Orden de trabajo</dt><dd>{r.orden_trabajo_id}</dd></> : null}
             {r.reporte_original_id ? <><dt>Duplicado de</dt><dd><button type="button" className="rv-enlace" onClick={() => onAbrir(r.reporte_original_id as string)}>Abrir el reporte original</button></dd></> : null}
           </dl>
@@ -93,7 +101,7 @@ export function Detalle({ id, def, ctx, onCerrar, onCambio, onAbrir }: {
 
           <h3 className="rv-h3">Fotos ({d.fotos.length})</h3>
           {d.fotos.length === 0 ? <p className="rv-sub">Este reporte no tiene fotos.</p> : (
-            <div className="rv-fotos">{d.fotos.map((f) => <FotoVisor key={f.orden} id={id} orden={f.orden} rotulo={f.etiqueta_nombre ?? `Foto ${f.orden}`} />)}</div>
+            <div className="rv-fotos">{d.fotos.map((f) => <FotoVisor key={f.orden} id={id} orden={f.orden} rotulo={`${f.etiqueta_nombre ?? `Foto ${f.orden}`}${f.origen === "galeria" ? " · adjuntada desde la galería" : f.origen === "archivo" ? " · adjuntada desde un archivo" : ""}`} />)}</div>
           )}
 
           <h3 className="rv-h3">Historia</h3>
