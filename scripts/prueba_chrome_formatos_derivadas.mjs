@@ -93,6 +93,11 @@ const derivadas = (yo, f) => {
   const ini = f.antes ? todas.findIndex((d) => d.id === Number(f.antes)) + 1 : 0, lim = Math.min(f.limite ?? 100, 100), pag = todas.slice(ini, ini + lim);
   return { filas: pag, siguiente: ini + lim < todas.length ? pag.at(-1).id : null };
 };
+// Registro flexible (Code A, 25-nov): descarga AUDITADA simulada como la del servidor (iniciar → páginas → cerrar). Quita siempre el texto libre y el motivo; los correos
+// solo si el administrador los pidió. Se cuenta cuántas se iniciaron y cerraron.
+const descargas = new Map(); let nDesc = 0; const cerradas = [];
+const sinTexto = (d, conCorreos) => { const x = structuredClone(d); delete x.origen.texto; delete x.origen.direccion_correcta; if (x.cierre) delete x.cierre.motivo;
+  if (!conCorreos) { delete x.origen.operario; if (x.cierre) delete x.cierre.autor; } return x; };
 const mock = http.createServer((q, res) => {
   const u = new URL(q.url, MOCK);
   const json = (o, s = 200) => { res.writeHead(s, { ...CAB, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(o)); };
@@ -125,6 +130,17 @@ const mock = http.createServer((q, res) => {
           case "documentos_catalogo": return json({ formularios: [{ formulario: "tipo:instalacion_medidor", lleva_pdf: true, firmas: { operario: "obligatoria", usuario: "opcional", testigo: "opcional" } }] });
           case "actas_registradas": return json({ filas: [{ registro_id: "00000000-0000-4000-8000-000000000001", esquema: "campo", tipo: "instalacion_medidor", tipo_nombre: "Instalación de medidor", consecutivo: "IME-000001", numero_fisico: null, fecha: "2026-11-21", registrado_en: new Date().toISOString(), operario: "zt.ana@emdupar.gov.co", contrato: "1000001", barrio: "BARRIO DE PRUEBA", resultado: "efectivo", pdf: { estado: "pendiente", nombre: null, version: null }, derivadas: { total: 0, pendientes: 0 }, firmas: { operario: true, usuario: "nadie_atendio", testigo: false } }], siguiente: null });
           case "derivadas": return json(derivadas(yo, b ?? {}));
+          case "derivadas_descarga_iniciar": {
+            if (b?.incluir_autor && yo.email !== USUARIOS["tok-adm"].email) return json({ error: "No tiene permiso para esta acción." }, 403);
+            const f = b?.filtros ?? {}; const filas = TODAS(yo.pend).filter((d) => (!f.estado || d.estado === f.estado) && (!f.origen || d.origen.clase === (f.origen === "analisis" ? "analisis" : "registro"))
+              && (!f.actividad || d.actividad === f.actividad) && (!f.contrato || d.contrato.includes(f.contrato)) && (!f.desde || d.creada_en.slice(0, 10) >= f.desde) && (!f.hasta || d.creada_en.slice(0, 10) <= f.hasta));
+            if (!filas.length) return json({ error: "No hay avisos ni actividades con esos filtros" }, 400);
+            const id = ++nDesc; descargas.set(id, { filas, autor: !!b?.incluir_autor });
+            return json({ descarga_id: id, total: filas.length, hasta_id: Math.max(...filas.map((d) => d.id)), generado_por: yo.email, generado_en: "25/11/2026 10:00" });
+          }
+          case "derivadas_descarga_pagina": { const d = descargas.get(b?.descarga_id); if (!d) return json({ error: "La descarga no existe" }, 404);
+            return json({ registros: d.filas.map((x) => sinTexto(x, d.autor)), devueltos: d.filas.length, ultimo_id: d.filas.at(-1).id, hay_mas: false }); }
+          case "derivadas_descarga_cerrar": cerradas.push(b); return json({ cerrada: true, repetida: false });
           case "cuadrillas": return json({ cuadrillas: [] });
           case "constancia_estado": return json({ texto: null, documentos: [{ documento: "constancia_visita", habilitado: false, copias_internas: [] }], cola: {}, fallos_ultimos_30_dias: 0 });
           case "analisis_contrato": return json(u.searchParams.get("contrato") === "1000001" ? ANALISIS : { encontrado: false, contrato: u.searchParams.get("contrato") });
@@ -308,9 +324,9 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
     ok(`${T}: descarga CSV (sin datos de contacto, texto libre ni correos)`, !!csvR && (() => { const t = readFileSync(csvR, "utf8"); return SENSIBLES.every((x) => !t.includes(x)) && t.trim().split("\r\n").length === U.pend + 5 + 1 && t.startsWith("﻿"); })(), csvR ?? "no bajó");
     const xlR = await descargarArchivo(pg, "excel", "xlsx");
     ok(`${T}: descarga Excel (libro válido, sin datos de contacto, hoja Léame)`, !!xlR && (() => { const l = (p) => spawnSync("unzip", ["-p", xlR, p], { encoding: "utf8", maxBuffer: 1e8 }).stdout; const h1 = l("xl/worksheets/sheet1.xml"), le = l("xl/worksheets/sheet2.xml"), wb = l("xl/workbook.xml");
-      return h1.includes("<row") && (h1.match(/<row /g) ?? []).length === U.pend + 5 + 1 && SENSIBLES.every((x) => !h1.includes(x) && (x === U.email || !le.includes(x)))   /* el Léame dice quién descargó (su propio correo, como en Reportes) */ && /Derivadas/.test(wb) && /Léame/.test(wb) && /no queda auditada/.test(le); })(), xlR ?? "no bajó");
+      return h1.includes("<row") && (h1.match(/<row /g) ?? []).length === U.pend + 5 + 1 && SENSIBLES.every((x) => !h1.includes(x) && (x === U.email || !le.includes(x)))   /* el Léame dice quién descargó (su propio correo, como en Reportes) */ && /Derivadas/.test(wb) && /Léame/.test(wb) && /queda registrada en el servidor/.test(le) /* descarga auditada del Code A */; })(), xlR ?? "no bajó");
     const aviso = await pg.evaluate(() => document.querySelector("[data-testid=reportes-derivadas] .rv-aviso-ok")?.textContent ?? "");
-    ok(`${T}: avisa que la descarga aún no queda auditada`, /no queda auditada/.test(aviso), aviso);
+    ok(`${T}: avisa que la descarga quedó registrada en el servidor (descarga auditada del Code A)`, /quedó registrada en el servidor/.test(aviso), aviso);
     // ir a atender
     await clic(pg, "button[data-accion=ir-actividades]", "Ir a Actividades derivadas"); await esp(1800);
     const tit = await pg.evaluate(() => ({ h1: document.querySelector(".rv-cab h1")?.textContent, tab: document.querySelector(".rv-tab[aria-current=page]")?.textContent, derivadas: !!document.querySelector("[data-testid=derivadas]") }));

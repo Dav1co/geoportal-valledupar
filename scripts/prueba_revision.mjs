@@ -37,7 +37,7 @@ const fila = (o = {}) => ({ id: "11111111-2222-4333-8444-555555555555", seq: 10,
   grupo_duplicados: null, tamano_grupo: null, n_fotos: 2, ...o });
 const ctx = { estados: new Map([["reportado", "Reportado"], ["en_revision", "En revisión"]]) };
 const base = C.columnasBase(false), baseD = C.columnasBase(true);
-ok("las columnas base son las 26 (23 del contrato + inicio, duración y origen del inicio de la pasada 14/11), con clave única", base.length === 26 && new Set(base.map((c) => c.clave)).size === 26);
+ok("las columnas base son las 34 (23 del contrato + inicio, duración y origen del inicio de la pasada 14/11 + 8 del registro flexible del 25-nov), con clave única", base.length === 34 && new Set(base.map((c) => c.clave)).size === 34);
 { // Pasada 14/11: inicio y duración
   const ctx0 = { estados: new Map() };
   const f0 = { registrado_en: "2026-11-14T15:30:00Z", inicio_en: "2026-11-14T15:00:00Z", inicio_origen: "dispositivo" };

@@ -65,8 +65,8 @@ ok("descarga: los correos de quien originó y cerró solo con la opción del adm
 ok("descarga: «Actividad: destino» para la actividad del supervisor, estado y cierre rotulados", D.filaDerivada(filas[2], false)[3] === "Actividad: Investigación de ubicación" && D.filaDerivada(filas[0], false)[4] === "Pendiente" && D.filaDerivada(filas[1], false)[12] === "Atendida por un registro" && D.filaDerivada(filas[1], false)[14] === "IME-000009");
 ok("descarga: fechas en hora de Bogotá (20/11/2026 10:30) y día sin hora para el día suelto (19/11/2026)", D.filaDerivada(filas[0], false)[7] === "20/11/2026 10:30" && D.filaDerivada(filas[2], false)[6] === "19/11/2026", JSON.stringify([D.filaDerivada(filas[0], false)[7], D.filaDerivada(filas[2], false)[6]]));
 ok("descarga: inyección de fórmulas neutralizada (=, +, -, @)", D.csvDerivadas([fila(4, { contrato: "=1+1" })], false).includes("'=1+1"));
-ok("descarga: nombre de archivo y Léame (dice que no hay datos de contacto ni auditoría)", D.nombreArchivoDerivadas(new Date(2026, 10, 25, 9, 5), "xlsx") === "avisos_y_actividades_derivadas_20261125_0905.xlsx"
-  && (() => { const l = D.leameDerivadas({ generadoPor: "zt@x", generadoEn: "25/11/2026 09:05", filas: 3, filtros: ["Estado: Pendiente"], incluyeAutor: false }).flat().join(" "); return /NO incluye los datos de contacto/.test(l) && /no queda auditada/.test(l) && /No incluye el correo/.test(l); })());
+ok("descarga: nombre de archivo y Léame (dice que no hay datos de contacto y que la descarga queda registrada en el servidor: registro flexible, Code A)", D.nombreArchivoDerivadas(new Date(2026, 10, 25, 9, 5), "xlsx") === "avisos_y_actividades_derivadas_20261125_0905.xlsx"
+  && (() => { const l = D.leameDerivadas({ generadoPor: "zt@x", generadoEn: "25/11/2026 09:05", filas: 3, filtros: ["Estado: Pendiente"], incluyeAutor: false }).flat().join(" "); return /NO incluye los datos de contacto/.test(l) && /queda registrada en el servidor/.test(l) && /No incluye el correo/.test(l); })());
 
 // ---- 4. Íconos y botón de volver (lectura del código) ----
 const icon = leer("src/campo/iconosEntradas.tsx");
@@ -78,10 +78,11 @@ const volver = leer("src/campo/BotonVolver.tsx");
 ok("BotonVolver: texto único «← Volver», exportado", /TEXTO_VOLVER = "← Volver"/.test(volver) && /export function BotonVolver/.test(volver));
 const PANTALLAS = ["src/campo/dashboard/Revision.tsx", "src/campo/documentos/ActasRegistradas.tsx", "src/campo/acta/PantallaActa.tsx", "src/campo/acta/AperturasSinRegistrar.tsx", "src/campo/reparto/PantallaRepartidor.tsx", "src/campo/reparto/PantallaSupervisor.tsx"];
 ok("pantallas: todas usan BotonVolver (sin «Volver a Formatos de campo» ni «Volver» sueltos en la cabecera)", PANTALLAS.every((p) => /<BotonVolver /.test(leer(p)) && !/← Volver a Formatos de campo/.test(leer(p))), PANTALLAS.filter((p) => !/<BotonVolver /.test(leer(p))).join());
-ok("zona del Code A intacta: formatos/ y ReporteGeneral.tsx no usan BotonVolver todavía (los cambia el A con el componente exportado)", !/BotonVolver/.test(leer("src/campo/formatos/FormatosCampo.tsx")) && !/BotonVolver/.test(leer("src/campo/ReporteGeneral.tsx")));
+// Registro flexible (Code A, 25-nov): formatos/ y ReporteGeneral.tsx ya usan BotonVolver (antes esta prueba exigía que no lo usaran todavía)
+ok("formatos/ y ReporteGeneral.tsx usan BotonVolver (cambio del Code A con el componente exportado)", ["src/campo/formatos/FormatosCampo.tsx", "src/campo/formatos/FormularioFormato.tsx", "src/campo/ReporteGeneral.tsx"].every((p) => /<BotonVolver /.test(leer(p)) && !/← Formatos|Volver a los formatos/.test(leer(p))));
 import { spawnSync } from "node:child_process";
-const cambios = spawnSync("git", ["diff", "--name-only", "main", "--", "src/campo/dashboard/PersonalCampo.tsx", "src/campo/dashboard/Cuadrillas.tsx", "src/campo/formatos", "src/campo/ReporteGeneral.tsx", "src/campo/dashboard/ejecutarDescarga.ts", "src/campo/dashboard/xlsxRevision.ts"], { cwd: raiz, encoding: "utf8" }).stdout.trim();
-ok("intactos: Personal, Cuadrillas, formatos/, ReporteGeneral.tsx y el mecanismo de descarga (ejecutarDescarga, xlsxRevision)", cambios === "", cambios);
+const cambios = spawnSync("git", ["diff", "--name-only", "main", "--", "src/campo/dashboard/PersonalCampo.tsx", "src/campo/dashboard/Cuadrillas.tsx", "src/campo/dashboard/ejecutarDescarga.ts", "src/campo/dashboard/xlsxRevision.ts"], { cwd: raiz, encoding: "utf8" }).stdout.trim();
+ok("intactos: Personal, Cuadrillas y el mecanismo de descarga (ejecutarDescarga, xlsxRevision); formatos/ y ReporteGeneral.tsx los cambia el Code A", cambios === "", cambios);
 
 rmSync(tmp, { recursive: true, force: true });
 console.log(`\nRESULTADO: ${total - fallas} de ${total} pruebas correctas${fallas ? ` — ${fallas} FALLA(S)` : " — SIN FALLAS"}`);
