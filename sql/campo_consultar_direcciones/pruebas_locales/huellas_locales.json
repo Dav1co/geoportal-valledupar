@@ -1,0 +1,31 @@
+{
+ "partida": {
+  "HUELLA_CAMPO": "66496328d10a5b25eb01e572edae7cda",
+  "HUELLA_TECNICA_LOCAL": "0c7f5364ab1d3bc04b6222762934306a"
+ },
+ "nuevas": {
+  "HUELLA_CAMPO_NUEVA": "c476f14d495ea7bdf6c3f42101e9a583",
+  "MD5_NUEVA": {
+   "CONSULTAR": "6ed039f4949ca17daeae67b0a9e249d7",
+   "OBSERVAR": "0fd592f4dfb17f17d517b67bf6b03ee6",
+   "CREAR": "da7405c163918640f02224079f55936e",
+   "OBTENER": "9539872000f6db1ac9aea0cc7684c342",
+   "LISTAR": "7e9c54c7948f8980bf0de5739e58d784",
+   "DPAGINA": "5ebaebf601458e58cddb91633853c61b",
+   "PDF": "e5f5e5b1e3053520f132077767fae0b0"
+  },
+  "FUNCIONES_NUEVAS": {
+   "campo.f_texto_censo(text,boolean)": "935418f48611173474c1b173fc90a7dd",
+   "campo.f_direcciones_contrato(text)": "a8574fcbc4a04ddaf3a59335e4afd354",
+   "public.geoportal_campo_direccion_contrato(text,text,text)": "dda8ba7364d3df1c7d2f058870a833d2",
+   "public.geoportal_campo_tec_direccion_contrato(text,text,text)": "b310b8a89f7e80aefab52c3c83ce2581"
+  },
+  "TABLAS_NUEVAS": {
+   "campo.reporte_direccion_contrato": "de99e9852daabcac1a85aff809f2f9c7"
+  },
+  "ESTRUCTURA_NUEVA": {
+   "campo.consultas_analisis": "de9c49d68dcdb8547cc072a961bcdc23"
+  }
+ },
+ "verificacion": 14
+}
