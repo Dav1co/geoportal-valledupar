@@ -314,7 +314,7 @@ for (const ancho of ANCHOS) {
   await p.close();
   p = await abrir(ancho, "dist"); await alGeovisor(p);
   t = await porEdad(p);
-  ok(`${tag} B2 la leyenda por edad dice que, sin fecha de instalación, la edad sale de la «fecha regulatoria, no de instalación»`, /la edad sale de la fecha regulatoria, no de instalación/.test(t) && /Sin fecha de instalación/.test(t), t);
+  ok(`${tag} B2 la leyenda por edad dice «Edad según fecha regulatoria de la valoración cuando no hay fecha de instalación» (texto de David, 26-nov)`, /Edad según fecha regulatoria de la valoración cuando no hay fecha de instalación/.test(t) && /Sin fecha de instalación/.test(t), t);
   tj = await tarjetaTramo(p);
   ok(`${tag} B3 al tocar un tramo sin fecha de instalación (${TRAMO}): «Edad: N años (fecha regulatoria, no de instalación)»`, tj && tj.txt.includes(TRAMO) && /Edad\s*3[0-9] años \(fecha regulatoria, no de instalación\)/.test(tj.txt) && tj.dentro, JSON.stringify(tj));
   s = await p.evaluate((lon, lat) => { const m = document.querySelector(".geo-mapa").__mapa; const f = m.queryRenderedFeatures(m.project([lon, lat])).find((x) => x.properties.prefijo === "RED"); return f ? JSON.stringify(f.properties) : ""; }, TLON, TLAT);

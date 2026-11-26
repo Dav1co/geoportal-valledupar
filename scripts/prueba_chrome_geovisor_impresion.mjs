@@ -256,6 +256,7 @@ function revisarPdf(tag, nombre, r, fondoEsperado) {
   const paginas = (t.match(/\/Type \/Page\b/g) || []).length;
   ok(`${tag} ${nombre}: PDF válido con 2 páginas carta vertical (${(r.pdf.length / 1048576).toFixed(1)} MB en ${r.seg} s)`, t.startsWith("%PDF-1.4") && t.trimEnd().endsWith("%%EOF") && paginas === 2
     && (t.match(/\/MediaBox \[0 0 612 792\]/g) || []).length === 2 && r.info?.paginas === 2, `páginas ${paginas}`);
+  ok(`${tag} ${nombre}: cajetín bajo (${r.info?.cajetin} pt) y el mapa más alto (${r.info?.marco?.h} pt de 792)`, r.info?.cajetin <= 120 && r.info?.marco?.h >= 600, JSON.stringify(r.info?.marco));
   ok(`${tag} ${nombre}: orden 1) Total y 2) Urbano, a z14 y z15`, r.info.medidas[0].clave === "total" && r.info.medidas[1].clave === "urbano" && r.info.medidas[0].zoom === 14 && r.info.medidas[1].zoom === 15);
   const cubre = r.info.medidas.every((m) => { const e = EXT[m.clave], v = m.vista; return v.oeste <= e.oeste && v.este >= e.este && v.sur <= e.sur && v.norte >= e.norte; });
   ok(`${tag} ${nombre}: sin cortes: cada página cubre su extensión completa (norte y sur incluidos, con margen)`, cubre, JSON.stringify(r.info.medidas.map((m) => [m.clave, m.vista])));
@@ -291,6 +292,13 @@ for (const ancho of ANCHOS) {
   await irA(p, CENTRO[0], CENTRO[1], 13.2);
   const nombres = [...new Set((await renderizados(p, "t-sectores-a")) ?? [])];
   ok(`${tag} A5 la tesela trae los SEC con nombre y todos están en la lista del paso 0 (${nombres.length} a la vista)`, nombres.length >= 20 && nombres.every((n) => SECT.some((s) => s.nombre === n)), nombres.filter((n) => !SECT.some((s) => s.nombre === n)).join() + " · teselas " + JSON.stringify(teselas) + " · " + edgeLog.slice(-400));
+  // revisión 26-nov: un SEC que no está en el paso 0 (en local, los dobles «ZTBASE Sector 1–3» de doble_planta_sectores.sql) viene en la tesela pero no se dibuja
+  await irA(p, -73.24, 10.499, 14);
+  const ajenos = await enMapa(p, `const n = new Set(a[0]); const fuente = m.querySourceFeatures("red", { sourceLayer: "activos" }).filter((f) => f.properties.prefijo === "SEC" && !n.has(f.properties.nombre)).map((f) => f.properties.codigo + " " + f.properties.nombre);
+    const dib = m.queryRenderedFeatures({ layers: ["t-sectores-a", "t-sectores-ab", "t-sectores-as"] }).filter((f) => !n.has(f.properties.nombre)).map((f) => f.properties.nombre);
+    return { fuente: [...new Set(fuente)], dib: [...new Set(dib)] };`, SECT.map((s) => s.nombre));
+  ok(`${tag} A5b un SEC ajeno al paso 0 viene en la tesela pero no se dibuja (${ajenos.fuente.join(", ") || "ninguno a la vista"})`, ajenos.fuente.length > 0 && ajenos.dib.length === 0, JSON.stringify(ajenos));
+  await irA(p, CENTRO[0], CENTRO[1], 13.2);
   if (process.env.PARAR_A5) { console.log("errores:", errores.join(" | ").slice(0, 1500)); console.log("capas:", await enMapa(p, "return m.getStyle().layers.map((l) => l.id + \":\" + (l.layout?.visibility ?? \"v\")).join(\" \");")); process.exit(0); }
   ok(`${tag} A6 desde lejos (z13,2), sin texto`, ((await renderizados(p, "x-sec-etq-s")) ?? []).length === 0 && ((await renderizados(p, "x-sec-etq-u")) ?? []).length === 0);
   await irA(p, CENTRO[0], CENTRO[1], 14);
@@ -356,8 +364,15 @@ for (const ancho of ANCHOS) {
   for (const [boton, nombre, fondo] of casos) {
     await clicTexto(p, ".geo-seg button", boton);
     await clicTexto(p, "[data-testid=fondo] button", fondo === "satelite" ? "Satélite" : "Calles"); await quieto(p);
+    const NOTA_REG = "Edad según fecha regulatoria de la valoración cuando no hay fecha de instalación", NOTA_SIN = "Ningún tramo tiene fecha de instalación cargada";
+    if (nombre === "antiguedad") {      // 26-nov (David): las dos notas de «Edad» (en local, como en producción, ningún tramo tiene fecha de instalación)
+      const ley = await p.evaluate(() => document.querySelector("[data-leyenda=edad]")?.innerText ?? "");
+      ok(`${tag} B10 leyenda «Edad» en pantalla: «${NOTA_REG}» y «${NOTA_SIN}»`, ley.includes(NOTA_REG) && ley.includes(NOTA_SIN), ley);
+    }
     const r = await imprimir(p, ancho, `pdf_${nombre}_${fondo}_${ancho}`);
     revisarPdf(tag, `PDF ${nombre} (${fondo})`, r, fondo);
+    if (!r.err) ok(`${tag} B11 PDF ${nombre}: ${nombre === "antiguedad" ? "las dos notas de «Edad» al pie de la leyenda, en las 2 páginas" : "sin notas de «Edad»"}`,
+      r.info.medidas.every((m) => nombre === "antiguedad" ? m.notas.includes(NOTA_REG) && m.notas.includes(NOTA_SIN) : m.notas.length === 0), JSON.stringify(r.info.medidas.map((m) => m.notas)));
     const esperado = { antiguedad: "Antigüedad de tuberías", material: "Material de tuberías", tipo: "Tipo de activo" }[nombre];
     if (!r.err) ok(`${tag} PDF ${nombre}: título «${r.info.titulo} — Total / Urbano»`, /^Redes? de (acueducto|alcantarillado|acueducto y alcantarillado) — /.test(r.info.titulo) && r.info.titulo.endsWith(esperado), r.info.titulo);
   }

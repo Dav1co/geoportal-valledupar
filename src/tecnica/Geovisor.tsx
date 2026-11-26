@@ -12,9 +12,9 @@ import { PedirHora } from "./PanelCierre";
 import { apiEventos, nReportes, textoReportes, type Evento, type EventosVigentes } from "./apiEventos";      // Corte 15: eventos de suspensión
 import { BORDE_EVENTO_PX, cajaDeZona, COLOR_EVENTO, RELLENO_EVENTO } from "./mapaEvento";
 import { EventosSuspension } from "./EventosSuspension";
-import { ESTILO_SECTOR, TEMATICA, TEXTOS_IMPRESION, ZOOM_ETIQUETA } from "./impresion/config";      // Corte 1 del geovisor único (26-nov)
-import { colorSector, etiquetasSectores, exprColorSector, fichaSector, nombresOcultos, SOLO_SECTORES, subsectoresDe, VER_SECTORES_INICIAL, type VerSectores } from "./sectores";
-import { ImprimirMapa, type LeyendaImpresion } from "./impresion/ImprimirMapa";
+import { ESTILO_SECTOR, NOTAS_EDAD, TEMATICA, TEXTOS_IMPRESION, ZOOM_ETIQUETA } from "./impresion/config";      // Corte 1 del geovisor único (26-nov)
+import { colorSector, etiquetasSectores, exprColorSector, fichaSector, NOMBRES_SECTORES, nombresOcultos, SOLO_SECTORES, subsectoresDe, VER_SECTORES_INICIAL, type VerSectores } from "./sectores";
+import { ImprimirMapa, tramosConInstalacion, type LeyendaImpresion } from "./impresion/ImprimirMapa";
 
 // Geovisor técnico (Técnica fase 1, Corte 6a; 01 sección D, N-11, N-13 y N-14).
 // · Interruptores por grupo, encendidos al abrir según el perfil (lo decide el servidor) y «Volver a la vista por omisión». Encender o apagar no se guarda.
@@ -156,6 +156,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
   const [periodo, setPeriodo] = useState<Periodo>(inicial ? { modo: inicial.periodo.modo, desde: inicial.periodo.desde, hasta: inicial.periodo.hasta } : { modo: "hoy", desde: cfg.hoy, hasta: cfg.hoy });
   const [atenuadas, setAtenuadas] = useState<Set<string>>(new Set(inicial?.atenuadas ?? []));
   const [compartir, setCompartir] = useState(false);
+  const [sinInstalacion, setSinInstalacion] = useState(false);      // 26-nov (David): en «Edad», si ningún tramo a la vista tiene fecha de instalación, la leyenda lo dice
   const [imprimir, setImprimir] = useState(false);      // Corte 1 (26-nov): «Imprimir / PDF»
   const [fondo, setFondo] = useState<"calles" | "satelite">("calles");      // Corte 1: selector «Calles / Satélite» (no se guarda)
   const [verSec, setVerSec] = useState<VerSectores>(VER_SECTORES_INICIAL);      // Corte 1: interruptores de la leyenda de sectores
@@ -213,6 +214,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
           // Corte 1 del geovisor único (26-nov): cada sector con su color; el sector con relleno al 18 % y borde continuo, y sus subsectores con borde
           // punteado del mismo color y relleno tenue. Los filtros de la leyenda (interruptores) se ponen después (efecto de los sectores).
           const color = exprColorSector() as string;
+          const area = ["all", f, ["==", ["get", "forma"], "area"], ["in", ["get", "nombre"], ["literal", NOMBRES_SECTORES]]];      // solo los SEC del paso 0
           capas.push({ id: `t-${c.codigo}-a`, type: "fill", source: "red", "source-layer": "activos", filter: area as unknown as maplibregl.FilterSpecification, layout: { visibility: vis },
                        paint: { "fill-color": color, "fill-opacity": ["case", ["==", ["get", "clase"], "subsector"], ESTILO_SECTOR.rellenoSubsector, ESTILO_SECTOR.rellenoSector] } });
           capas.push({ id: `t-${c.codigo}-ab`, type: "line", source: "red", "source-layer": "activos", filter: ["all", area, ["!=", ["get", "clase"], "subsector"]] as unknown as maplibregl.FilterSpecification,
@@ -418,6 +420,15 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
     if (m.getLayer("sel")) aplicar(); else m.once("styledata", aplicar);
   }, [on, atenuadas, listo]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 26-nov (David): en «Edad», ¿algún tramo a la vista tiene fecha de instalación? Se recalcula cada vez que el mapa queda quieto.
+  useEffect(() => {
+    const m = mapa.current;
+    if (!m || !listo || colores !== "edad") { setSinInstalacion(false); return; }
+    const medir = () => { const t = tramosConInstalacion(m); setSinInstalacion(t.tramos > 0 && t.conInstalacion === 0); };
+    m.on("idle", medir); medir();
+    return () => { m.off("idle", medir); };
+  }, [colores, listo]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ---------- Corte 1 (26-nov): sectores (interruptores de la leyenda y etiquetas) y el fondo ----------
   const capaSec = teselas.find((c) => c.prefijos.includes("SEC"))?.codigo ?? null;
   const secOn = capaSec !== null && on.has(capaSec);
@@ -426,7 +437,8 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
     if (!m || !listo || !capaSec) return;
     const aplicar = () => {
       const ocultos = nombresOcultos(verSec);
-      const base = ["all", ["in", ["get", "prefijo"], ["literal", ["SEC"]]], ["==", ["get", "forma"], "area"], ["!", ["in", ["get", "nombre"], ["literal", ocultos]]]];
+      const base = ["all", ["in", ["get", "prefijo"], ["literal", ["SEC"]]], ["==", ["get", "forma"], "area"], ["in", ["get", "nombre"], ["literal", NOMBRES_SECTORES]],
+        ["!", ["in", ["get", "nombre"], ["literal", ocultos]]]];      // solo los SEC del paso 0 (un polígono ajeno o de prueba no se dibuja)
       const f = (extra?: unknown[]) => (extra ? [...base, extra] : base) as unknown as maplibregl.FilterSpecification;
       if (m.getLayer(`t-${capaSec}-a`)) m.setFilter(`t-${capaSec}-a`, f());
       if (m.getLayer(`t-${capaSec}-ab`)) m.setFilter(`t-${capaSec}-ab`, f(["!=", ["get", "clase"], "subsector"]));
@@ -641,14 +653,14 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
               : `${c.nombre}: se muestran los ${cfg.max_elementos} más recientes. Acorte el rango de fechas.`}</p>)}
           </div>) : null}
         {flujoOn ? <LeyendaFlujo info={flujo} derecha={colores !== "tipo"} /> : null}
-        {colores === "afectaciones" ? <LeyendaCortes cortes={cortes} danos={danosAb} hoy={!cfg.completo} eventos={eventos} onEventos={cfg.completo ? () => setPantallaEventos({}) : undefined} onRecalcular={cfg.completo && cortes?.hay ? () => { setTarjeta(null); setCorteSel({ tipo: "recalcular" }); } : undefined} /> : colores === "remuneracion" ? <LeyendaRemuneracion /> : <Leyenda key={colores} colores={colores} materiales={materiales} edadRef={cfg.edad_ref === true} tipos={cfg.tipos} />}
+        {colores === "afectaciones" ? <LeyendaCortes cortes={cortes} danos={danosAb} hoy={!cfg.completo} eventos={eventos} onEventos={cfg.completo ? () => setPantallaEventos({}) : undefined} onRecalcular={cfg.completo && cortes?.hay ? () => { setTarjeta(null); setCorteSel({ tipo: "recalcular" }); } : undefined} /> : colores === "remuneracion" ? <LeyendaRemuneracion /> : <Leyenda key={colores} colores={colores} materiales={materiales} edadRef={cfg.edad_ref === true} sinInstalacion={sinInstalacion} tipos={cfg.tipos} />}
         {on.has("pqr_116") ? <Leyenda116 derecha={colores !== "tipo" || [...CAPAS_PRESION].some((c) => on.has(c))}
           sinUbicar={(() => { const d = datos.pqr_116; return d && d !== "cargando" && !("error" in d) ? (d as { sin_ubicar?: number }).sin_ubicar ?? 0 : 0; })()} /> : null}
         {[...CAPAS_PRESION].some((c) => on.has(c)) ? <LeyendaPresion modelo={on.has("presion_modelo")} medida={on.has("campana_2014")} arriba={colores !== "tipo"} /> : null}
         {on.has("contratos") && zoom < (cfg.zoom.contratos ?? 16) && zoom >= cfg.zoom.min ? <div className="geo-aviso geo-aviso-suave geo-aviso-abajo" role="status">Acerque más para ver los contratos</div> : null}
         {avisoAbierto ? <div className="geo-vista-aviso" role="status"><span>{avisoAbierto}</span><button type="button" className="geo-cerrar" onClick={() => setAvisoAbierto(null)} aria-label="Cerrar el aviso">✕</button></div> : null}
         {compartir ? <Compartir cfg={cfg} mapa={mapa.current} on={on} colores={colores === "afectaciones" || colores === "remuneracion" || colores === "diametro" ? "tipo" : colores} periodo={periodo} atenuadas={atenuadas} onCerrar={() => setCompartir(false)} /> : null}
-        {imprimir ? <ImprimirMapa mapa={mapa.current} titulo={tituloImpresion(cfg, on, colores)} leyenda={leyendaImpresion(colores, materiales, cfg.tipos, secOn ? verSec : null)}
+        {imprimir ? <ImprimirMapa mapa={mapa.current} titulo={tituloImpresion(cfg, on, colores)} leyenda={leyendaImpresion(colores, materiales, cfg.tipos, secOn ? verSec : null, cfg.edad_ref === true)}
           fondo={fondo} onCerrar={() => setImprimir(false)} /> : null}
         {remSel && colores === "remuneracion" ? <TarjetaRemuneracion codigo={remSel} onCerrar={() => setRemSel(null)} onVerFicha={cfg.ficha ? (c) => setFicha([c]) : undefined} /> : null}
         {tarjeta && tarjeta.capa === "flujo" ? <TarjetaFlujo codigo={String(tarjeta.props.codigo)} onCerrar={() => setTarjeta(null)} />
@@ -768,7 +780,7 @@ function itemsRed(colores: ColoresRed, materiales: { codigo: string; nombre: str
 }
 const NOMBRE_RED: Record<ColoresRed, string> = { tipo: "Tipo", material: "Material", edad: "Edad", diametro: "Diámetro" };
 
-function Leyenda({ colores, materiales, edadRef, tipos }: { colores: ColoresRed; materiales: { codigo: string; nombre: string; color: string }[]; edadRef?: boolean; tipos: Record<string, string> }) {
+function Leyenda({ colores, materiales, edadRef, sinInstalacion, tipos }: { colores: ColoresRed; materiales: { codigo: string; nombre: string; color: string }[]; edadRef?: boolean; sinInstalacion?: boolean; tipos: Record<string, string> }) {
   const items = itemsRed(colores, materiales, tipos);
   // 26-nov: la leyenda de «Tipo» (nueva y larga) abre plegada en el celular, donde ocuparía medio mapa; las demás, abiertas como siempre. Se pliega tocando su título.
   const [abierta, setAbierta] = useState(() => colores !== "tipo" || typeof window === "undefined" || !window.matchMedia?.("(max-width: 600px)").matches);
@@ -776,7 +788,8 @@ function Leyenda({ colores, materiales, edadRef, tipos }: { colores: ColoresRed;
     <div className="geo-leyenda" aria-label={`Colores por ${NOMBRE_RED[colores].toLowerCase()}`} data-leyenda={colores} data-abierta={abierta ? "si" : "no"}>
       <button type="button" className="geo-leyenda-titulo" aria-expanded={abierta} onClick={() => setAbierta((a) => !a)}><strong>{NOMBRE_RED[colores]}</strong> <span aria-hidden="true">{abierta ? "▾" : "▸"}</span></button>
       {abierta ? <ul>{items.map((x) => <li key={x.texto}><span className={x.forma === "punto" ? "geo-leyenda-nodo" : undefined} style={{ background: x.color }} aria-hidden="true" />{x.texto}</li>)}</ul> : null}
-      {abierta && colores === "edad" && edadRef ? <p className="geo-leyenda-nota" data-testid="leyenda-edad-reg">Si el activo no tiene fecha de instalación, la edad sale de la fecha regulatoria, no de instalación.</p> : null}
+      {abierta && colores === "edad" && edadRef ? <p className="geo-leyenda-nota" data-testid="leyenda-edad-reg">{NOTAS_EDAD.regulatoria}.</p> : null}
+      {abierta && colores === "edad" && sinInstalacion ? <p className="geo-leyenda-nota" data-testid="leyenda-edad-sin-instalacion">{NOTAS_EDAD.sinInstalacion}.</p> : null}
     </div>
   );
 }
@@ -1387,14 +1400,15 @@ function tituloImpresion(cfg: ConfigGeovisor, on: Set<string>, colores: Colores)
 }
 
 /** La leyenda del PDF: solo la temática activa (clases y colores de pantalla) y, aparte, los sectores si están encendidos. */
-function leyendaImpresion(colores: Colores, materiales: { codigo: string; nombre: string; color: string }[], tipos: Record<string, string>, verSec: VerSectores | null): LeyendaImpresion {
+function leyendaImpresion(colores: Colores, materiales: { codigo: string; nombre: string; color: string }[], tipos: Record<string, string>, verSec: VerSectores | null, edadRef: boolean): LeyendaImpresion {
   const tematica = colores === "afectaciones"
     ? { titulo: "Afectaciones", items: [{ color: COLOR_CORTE.afectado, texto: "Sin agua", forma: "linea" as const }, { color: COLOR_CORTE.cerrado, texto: "Tubería cerrada", forma: "linea" as const },
         { color: COLOR_CORTE.cerrado, texto: "Válvula cerrada", forma: "punto" as const }, { color: COLOR_DANO_CONTORNO, texto: "Daño reportado", forma: "linea" as const },
         { color: COLOR_EVENTO, texto: "Zona sin agua (evento de suspensión)", forma: "area" as const }] }
     : colores === "remuneracion"
       ? { titulo: "Remuneración", items: Object.entries(COLOR_REMUN).map(([k, color]) => ({ color, texto: { remunerado: "Remunerado", no_remunerado: "No remunerado", sin_fila: "Sin fila en la valoración", proyectado: "Proyectado" }[k] ?? k, forma: "linea" as const })) }
-      : { titulo: NOMBRE_RED[colores], items: itemsRed(colores, materiales, tipos) };
+      : { titulo: NOMBRE_RED[colores], items: itemsRed(colores, materiales, tipos),
+          ...(colores === "edad" ? { notas: edadRef ? [NOTAS_EDAD.regulatoria] : [], notaSinInstalacion: NOTAS_EDAD.sinInstalacion } : {}) };      // 26-nov (David): notas de «Edad»
   const sectores = verSec && (verSec.sectores || verSec.subsectores)
     ? SOLO_SECTORES.filter((s) => !verSec.apagados.includes(`s:${s.sector}`)).map((s) => ({ color: colorSector(s.sector), texto: s.nombre })) : [];
   return { tematica, sectores, subsectores: !!verSec?.subsectores };

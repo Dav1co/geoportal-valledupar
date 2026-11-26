@@ -21,6 +21,8 @@ export const SECTORES: Sector[] = SECTORES_DATOS;
 export const SOLO_SECTORES = SECTORES.filter((s) => s.clase === "sector").sort((a, b) => Number(a.sector) - Number(b.sector));
 export const subsectoresDe = (sector: string) => SECTORES.filter((s) => s.clase === "subsector" && s.sector === sector)
   .sort((a, b) => Number(a.sub!.split(".")[1]) - Number(b.sub!.split(".")[1]));
+/** Los 36 nombres del paso 0: solo se dibujan los SEC con uno de estos nombres (26-nov, revisión: un polígono ajeno o de prueba no sale en el mapa ni en el PDF). */
+export const NOMBRES_SECTORES: string[] = SECTORES.map((s) => s.nombre);
 export const colorSector = (sector: string | null | undefined) => (sector && COLOR_SECTOR[sector]) || COLOR_SECTOR_SIN;
 
 /** Expresión de MapLibre: el color de un SEC por su nombre (sector y subsectores del mismo sector, el mismo color). */
