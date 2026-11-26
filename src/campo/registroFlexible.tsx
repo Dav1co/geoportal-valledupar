@@ -59,11 +59,17 @@ export function armarRegistro(xyManual: boolean, fix: Fix | null, dir: EstadoDir
   return r;
 }
 
-/** Foto que llega de la galería o de un archivo: se redibuja (sin EXIF) con su sello y se comprime. Nulo si ni reducida cabe en `maxBytes`. */
+/** ¿Es una foto HEIC/HEIF (la del iPhone)? Por el tipo o, si el navegador no lo informa, por la extensión. */
+export const esHeic = (a: Blob) => /hei[cf]/i.test(a.type) || /\.hei[cf]$/i.test((a as File).name ?? "");
+export const TEXTO_HEIC = "Este navegador no puede abrir fotos HEIC. Exporte la foto como JPEG o adjúntela desde el celular.";
+
+/** Foto que llega de la galería o de un archivo, en CUALQUIER formato que el navegador pueda leer (JPEG, PNG, WebP; HEIC donde se pueda, como Safari):
+ *  se redibuja en un lienzo (sin EXIF) con su sello y SIEMPRE se codifica en image/jpeg con la misma regla de la cámara (comprimirFoto). Nulo si ni reducida
+ *  cabe en `maxBytes`. Si el navegador no puede leerla, el error lo dice (con un texto propio para HEIC). */
 export async function prepararAdjunta(archivo: Blob, origen: Exclude<OrigenFoto, "camara">, maxBytes: number, ladoMayor: number = LADO_FOTO_PX): Promise<Blob | null> {
   let img: ImageBitmap;
   try { img = await createImageBitmap(archivo, { imageOrientation: "from-image" }); }
-  catch { throw new Error("Ese archivo no es una foto que se pueda leer (use JPEG, PNG o HEIC)."); }
+  catch { throw new Error(esHeic(archivo) ? TEXTO_HEIC : "Este navegador no puede abrir ese archivo como foto. Use una foto JPEG, PNG o WebP."); }
   try {
     const sello = [`Adjuntada desde ${origen === "galeria" ? "la galería" : "un archivo"} · ${fechaHoraSello(new Date())}`, "No tomada con la cámara del formulario"];
     const dibujar = (lado: number) => {
@@ -79,7 +85,11 @@ export async function prepararAdjunta(archivo: Blob, origen: Exclude<OrigenFoto,
       return c;
     };
     const r = await codificar(dibujar(ladoMayor), maxBytes, dibujar, ladoMayor);
-    return r ? r.blob : null;
+    if (!r) return null;
+    // siempre JPEG: codificar usa canvas.toBlob("image/jpeg"); se comprueba el tipo y la firma del archivo (FF D8 FF) para no subir nunca otra cosa
+    const cabeza = new Uint8Array(await r.blob.slice(0, 3).arrayBuffer());
+    if (r.blob.type !== "image/jpeg" || cabeza[0] !== 0xff || cabeza[1] !== 0xd8 || cabeza[2] !== 0xff) throw new Error("No se pudo convertir la foto a JPEG en este navegador.");
+    return new Blob([r.blob], { type: "image/jpeg" });
   } finally { img.close?.(); }
 }
 
@@ -110,7 +120,7 @@ export function BotonesAdjuntar({ rotulo, maxBytes, ladoMayor, deshabilitado, on
           aria-label={`${rotulo}: adjuntar desde un archivo`}>Desde un archivo</button>
       </div>
       <input ref={galeria} type="file" accept="image/*" hidden data-rf-input="galeria" onChange={(e) => { void elegir("galeria", e.target.files?.[0]); e.target.value = ""; }} />
-      <input ref={archivo} type="file" accept="image/jpeg,image/png,image/heic,image/heif,image/webp" hidden data-rf-input="archivo" onChange={(e) => { void elegir("archivo", e.target.files?.[0]); e.target.value = ""; }} />
+      <input ref={archivo} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" hidden data-rf-input="archivo" onChange={(e) => { void elegir("archivo", e.target.files?.[0]); e.target.value = ""; }} />
       {procesando && <p className="campo-sub" role="status">Preparando la foto…</p>}
       {error && <p className="campo-error" role="alert">{error}</p>}
     </div>

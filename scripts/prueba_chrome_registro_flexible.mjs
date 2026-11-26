@@ -54,7 +54,7 @@ const doble = { name: "doble-supabase", setup(b) {
     export const FUNCTIONS_URL = "http://127.0.0.1:${P_EDGE}/functions/v1"; export const DOMINIO = "@emdupar.gov.co";
     export const supabase = { auth: { getSession: async () => ({ data: { session: { access_token: "tok-" + rol } } }), refreshSession: async () => ({ error: null }), signOut: async () => ({}) },
       storage: { from: (bucket) => ({ uploadToSignedUrl: async (ruta, token, blob) => {
-        const r = await fetch("http://127.0.0.1:${P_BASE}/subida-simulada?bucket=" + bucket + "&ruta=" + encodeURIComponent(ruta) + "&bytes=" + blob.size + "&mime=" + encodeURIComponent(blob.type), { method: "PUT" });
+        const r = await fetch("http://127.0.0.1:${P_BASE}/subida-simulada?bucket=" + bucket + "&ruta=" + encodeURIComponent(ruta) + "&bytes=" + blob.size + "&mime=" + encodeURIComponent(blob.type), { method: "PUT", body: blob });
         return r.ok ? { error: null } : { error: { status: r.status } }; } }) } };` }));
 } };
 await build({
@@ -101,6 +101,7 @@ function rpcBase(fn, a) {
     return { status: 400, cuerpo: { code: (t.match(/ERROR:\s+([0-9A-Z]{5}):/) || [])[1] || "XX000", message: ((t.match(/ERROR:\s+[0-9A-Z]{5}:\s+(.*)/) || [])[1] || "").trim(), hint: (t.match(/HINT:\s+(\S+)/) || [])[1] } };
   }
 }
+const firmas = new Map();   // ruta → «jpeg» si los bytes subidos empiezan con FF D8 FF
 const JPEG_1PX = Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==", "base64");
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS", "Access-Control-Allow-Headers": "authorization, content-type, x-upsert, apikey" };
 const srv = http.createServer((req, res) => {
@@ -113,7 +114,8 @@ const srv = http.createServer((req, res) => {
   req.on("end", () => {
     const cuerpo = Buffer.concat(trozos), p = decodeURIComponent(u.pathname);
     const tok = (req.headers.authorization ?? "").replace(/^Bearer /, "");
-    if (p === "/subida-simulada") {   // el navegador «sube» la foto: queda como objeto de Storage con su tamaño y tipo (lo que lee crear_reporte)
+    if (p === "/subida-simulada") {   // el navegador «sube» la foto: queda como objeto de Storage con su tamaño y tipo (lo que lee crear_reporte), y se mira su firma
+      firmas.set(u.searchParams.get("ruta"), cuerpo.length >= 3 && cuerpo[0] === 0xff && cuerpo[1] === 0xd8 && cuerpo[2] === 0xff ? "jpeg" : "otra");
       sqlq(`insert into storage.objects (bucket_id, name, metadata) values (${lit(u.searchParams.get("bucket"))}, ${lit(u.searchParams.get("ruta"))}, ${lit({ size: Number(u.searchParams.get("bytes")), mimetype: u.searchParams.get("mime") })})`);
       return json(200, { Key: u.searchParams.get("ruta") });
     }
@@ -229,11 +231,19 @@ const nav = await puppeteer.launch({ executablePath: CHROME, headless: "new", pr
 await nav.defaultBrowserContext().overridePermissions(`http://127.0.0.1:${P_BASE}`, ["geolocation", "camera"]);
 // la «foto de la galería»: un JPEG de 1.200 × 900 px que dibuja el propio Chrome (con EXIF nulo: lo que importa es que se redibuje y comprima)
 const FOTO = join(dir, "foto_galeria.jpg");
+// Fotos de prueba en varios formatos (las dibuja el propio Chrome): JPEG, PNG y WebP. Y un «HEIC» (cabecera ftypheic) que Chrome no sabe abrir.
+const FORMATOS = { jpeg: join(dir, "foto.jpg"), png: join(dir, "foto.png"), webp: join(dir, "foto.webp") };
 { const pg0 = await nav.newPage(); await pg0.goto(`http://127.0.0.1:${P_BASE}/?p=nada`);
-  const b64 = await pg0.evaluate(() => { const c = document.createElement("canvas"); c.width = 1200; c.height = 900; const x = c.getContext("2d");
-    const g = x.createLinearGradient(0, 0, 1200, 900); g.addColorStop(0, "#3b7"); g.addColorStop(1, "#246"); x.fillStyle = g; x.fillRect(0, 0, 1200, 900);
-    x.fillStyle = "#fff"; x.font = "bold 80px sans-serif"; x.fillText("FACHADA ZTRFC", 120, 450); return c.toDataURL("image/jpeg", 0.9).split(",")[1]; });
-  writeFileSync(FOTO, Buffer.from(b64, "base64")); await pg0.close(); }
+  for (const [f, ruta] of Object.entries({ ...FORMATOS, base: FOTO })) {
+    const b64 = await pg0.evaluate((tipo) => { const c = document.createElement("canvas"); c.width = 1200; c.height = 900; const x = c.getContext("2d");
+      const g = x.createLinearGradient(0, 0, 1200, 900); g.addColorStop(0, "#3b7"); g.addColorStop(1, "#246"); x.fillStyle = g; x.fillRect(0, 0, 1200, 900);
+      x.fillStyle = "#fff"; x.font = "bold 80px sans-serif"; x.fillText("FACHADA " + tipo.toUpperCase(), 120, 450); return c.toDataURL("image/" + (tipo === "base" ? "jpeg" : tipo), 0.9).split(",")[1]; }, f);
+    writeFileSync(ruta, Buffer.from(b64, "base64"));
+  }
+  await pg0.close(); }
+const HEIC = join(dir, "foto_iphone.heic");
+writeFileSync(HEIC, Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from("ftypheic\0\0\0\0mif1heic"), Buffer.alloc(400, 7)]));
+ok("F00 las fotos de prueba se generaron en su formato (PNG con su firma, WebP con RIFF)", readFileSync(FORMATOS.png).subarray(1, 4).toString() === "PNG" && readFileSync(FORMATOS.webp).subarray(8, 12).toString() === "WEBP");
 async function abrir(qs, ancho) {
   const pg = await nav.newPage();
   await pg.setViewport({ width: ancho, height: 900, deviceScaleFactor: ancho < 500 ? 2 : 1, isMobile: ancho < 500, hasTouch: ancho < 500 });
@@ -367,6 +377,30 @@ try {
     ok(`C${ancho}.33 el archivo se descargó`, readdirSync(bajadas).some((f) => f.endsWith(".csv")), readdirSync(bajadas).join(","));
     ok(`C${ancho}.34 sin desborde horizontal (derivadas)`, await sinDesborde(pg));
     await foto(pg, `${ancho}_sup_derivadas`);
+    await pg.close();
+  }
+  // ===== Formatos de entrada (Chrome de escritorio, 1280 px): la foto adjuntada SIEMPRE se sube como JPEG; HEIC ilegible da un mensaje claro =====
+  console.log("— Formatos de la foto adjuntada (1280 px) —");
+  for (const [formato, archivo, boton] of [["jpeg", FORMATOS.jpeg, "galeria"], ["png", FORMATOS.png, "galeria"], ["webp", FORMATOS.webp, "archivo"]]) {
+    const pg = await abrir("p=reporte&rol=sup", 1280);
+    await escribir(pg, "#campo-grupo", GRUPO_OTRO); await esp(150); await escribir(pg, "#campo-tipo", "otro"); await esp(150);
+    await escribir(pg, "#campo-desc", `[PRUEBA ZTRFC] foto adjuntada en ${formato}`); await esp(100);
+    await (await pg.$(`input[data-rf-input="${boton}"]`)).uploadFile(archivo);
+    const puesta = await esperar(pg, () => !!document.querySelector("[data-rf-marca]"));
+    await clic(pg, ".campo-enviar");
+    const guardo = puesta && await esperar(pg, () => /Reporte guardado/.test(document.body.innerText));
+    const f = sqlq(`select f.ruta_storage || '|' || f.tipo_mime || '|' || f.origen from campo.reportes x join campo.reporte_fotos f on f.reporte_id = x.id where x.autor = '${E.sup}' and x.descripcion like '%en ${formato}' order by x.seq desc limit 1`);
+    const [ruta, mime, origen] = f.split("|");
+    ok(`F.${formato} una foto ${formato.toUpperCase()} adjuntada (${boton}) se guarda como JPEG (tipo image/jpeg y bytes FF D8 FF)`, guardo && mime === "image/jpeg" && firmas.get(ruta) === "jpeg" && origen === boton,
+      `${f} firma=${firmas.get(ruta)} ${(await texto(pg)).slice(0, 300)}`);
+    await pg.close();
+  }
+  {
+    const pg = await abrir("p=reporte&rol=sup", 1280);
+    await (await pg.$('input[data-rf-input="archivo"]')).uploadFile(HEIC);
+    const msg = await esperar(pg, () => /Este navegador no puede abrir fotos HEIC\. Exporte la foto como JPEG o adjúntela desde el celular\./.test(document.body.innerText));
+    ok("F.heic una foto HEIC que Chrome no puede leer: mensaje claro y no queda puesta", msg && !(await hay(pg, "[data-rf-marca]")), (await texto(pg)).slice(0, 300));
+    await foto(pg, "1280_heic_mensaje");
     await pg.close();
   }
 } catch (e) { total++; fallas++; console.log("FALLA excepción:", e?.stack ?? e); }
