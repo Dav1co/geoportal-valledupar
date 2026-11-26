@@ -814,9 +814,10 @@ declare v_e text; v_m text;
 begin
   begin
     execute p_sql;
-    perform pg_temp.reg(p_nombre, false, 'No falló y debía fallar');
+    raise exception 'no falló' using errcode = 'ZT001';        -- si no falló, este error deshace lo que alcanzó a escribir: las pruebas siguientes parten del mismo estado
   exception when others then
     get stacked diagnostics v_e = returned_sqlstate, v_m = message_text;
+    if v_e = 'ZT001' then perform pg_temp.reg(p_nombre, false, 'No falló y debía fallar'); return; end if;
     perform pg_temp.reg(p_nombre, (p_estado is null or v_e = p_estado) and (p_texto is null or position(p_texto in v_m) > 0), 'SQLSTATE ' || v_e || ': ' || left(v_m, 200));
   end;
 end $$;
