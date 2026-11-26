@@ -24,7 +24,9 @@ const aqui = dirname(fileURLToPath(import.meta.url)), raiz = join(aqui, "..");
 const CAP = resolve(args[5] || mkdtempSync(join(tmpdir(), "capturas_reparto_"))); mkdirSync(CAP, { recursive: true });
 const P_WEB = 55003, P_BASE = 55004, P_EDGE = 55005, BASE = `http://127.0.0.1:${P_BASE}`;
 const DB = `reparto_chrome_${process.pid}`;
-const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: "55432", PGUSER: "postgres", PGDATABASE: DB, PGOPTIONS: "-c client_min_messages=warning" };
+// Puerto del clúster local: por omisión el 55432 (Code A); el Code B corre con PGPORT_B=55442 (25-nov-2026).
+const PUERTO_PG = process.env.PGPORT_B || "55432";
+const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: PUERTO_PG, PGUSER: "postgres", PGDATABASE: DB, PGOPTIONS: "-c client_min_messages=warning" };
 for (const k of ["SUPABASE_RO_URL", "DATABASE_URL", "PGPASSWORD", "PGSERVICE"]) delete PGENV[k];
 const psqlIn = (sql, db = DB) => execFileSync(PSQL, ["-AtqX", "-v", "ON_ERROR_STOP=1", "-d", db], { input: sql, env: PGENV, encoding: "utf8", maxBuffer: 256 << 20 }).trim();
 const sqlq = (s) => psqlIn(s);
@@ -36,14 +38,14 @@ const prueba = (n, c, d = "") => { tot++; if (c) { ok++; console.log("OK   ", n)
 const esp = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- 0. Base propia ----------
-if (psqlIn("show port", "postgres") !== "55432") { console.error("No es el clúster del Code A (55432)"); process.exit(2); }
+if (psqlIn("show port", "postgres") !== PUERTO_PG) { console.error(`No es el clúster esperado (${PUERTO_PG})`); process.exit(2); }
 if (psqlIn(`select count(*) from pg_database where datname = '${DB}'`, "postgres") !== "0") { console.error(`La base ${DB} ya existe: esta prueba no la borra.`); process.exit(2); }
 if (psqlIn("select count(*) from pg_roles where rolname = 'scrr_refresco'", "postgres") !== "0") {
   console.error("El rol scrr_refresco ya existe en el clúster (lo usa otra base o quedó de otra corrida): esta prueba no lo toca. Pida permiso para quitarlo."); process.exit(2);
 }
 // Producción de HOY (24-nov): el doble con el catálogo de producción del Code B (rehacer_doble.py, 163 de 163 iguales) + su migración publicada
 if (psqlIn("select count(*) from pg_database where datname = 'emdupar_b_inv_para_reparto'", "postgres") === "0") {
-  console.error("Falta la base emdupar_b_inv_para_reparto: PGPORT_B=55432 python3 -I sql/campo_inv_analisis/pruebas_locales/rehacer_doble.py --csv ~/geoportal-consultas/campo/paquete_inv_analisis_1/produccion_doble.csv --db emdupar_b_inv_para_reparto"); process.exit(2);
+  console.error("Falta la base emdupar_b_inv_para_reparto: PGPORT_B=<puerto> python3 -I sql/campo_inv_analisis/pruebas_locales/rehacer_doble.py --csv ~/geoportal-consultas/campo/paquete_inv_analisis_1/produccion_doble.csv --db emdupar_b_inv_para_reparto"); process.exit(2);
 }
 psqlIn(`create database ${DB} template emdupar_b_inv_para_reparto`, "postgres");
 let rolCreado = false, limpio = false;
@@ -310,6 +312,9 @@ try {
 
   // ===== S. El supervisor de reparto (1280 px) =====
   ({ pg, ctx } = await entrar(U.sup, 1280));
+  // 25-nov (Formatos de campo ordenados): la supervisión está en la pestaña «Supervisar»
+  await esperar(pg, () => document.querySelector(".com-bloque-tab"), null, 15000, "pestanas_sup");
+  await pg.evaluate(() => [...document.querySelectorAll(".com-bloque-tab")].find((b) => b.textContent.trim() === "Supervisar")?.click());
   await esperar(pg, () => [...document.querySelectorAll(".campo-formato")].some((b) => b.innerText.startsWith("Reparto de facturas")), null, 15000, "entrada_sup");
   const entS = await pg.$$eval(".campo-formato", (l) => l.map((b) => b.innerText.split("\n")[0]));
   prueba("S.01 el supervisor de reparto ve «Reparto de facturas · Supervisión» (gestión) y no la del repartidor", entS.includes("Reparto de facturas · Supervisión") && !entS.includes("Reparto de facturas"), entS.join(" | "));
@@ -403,6 +408,8 @@ try {
   // el supervisor de reparto que además tiene dashboard_campo: el enlace abre el MISMO calendario de Cartera
   ({ pg, ctx } = await entrar(U.supcal, 1280));
   await pg.evaluate(() => [...document.querySelectorAll('.modo-capsula [data-modo="campo"]')][0]?.click()); await esp(800);
+  await esperar(pg, () => document.querySelector(".com-bloque-tab"), null, 15000, "pestanas_sup2");   // 25-nov: la supervisión está en la pestaña «Supervisar»
+  await pg.evaluate(() => [...document.querySelectorAll(".com-bloque-tab")].find((b) => b.textContent.trim() === "Supervisar")?.click());
   await clicTexto(pg, "Reparto de facturas · Supervisión"); await esperar(pg, () => !!document.querySelector('[data-pestana="calendario"]'), null, 20000, "sup2");
   await clic(pg, '[data-pestana="calendario"]'); await esperar(pg, () => !!document.querySelector('[data-accion="cambiar-calendario"]'), null, 15000, "enlace");
   prueba("S.15 con dashboard_campo aparece «Cambiar en Calendario»", !!(await pg.$('[data-accion="cambiar-calendario"]')));

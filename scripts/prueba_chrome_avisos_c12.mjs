@@ -18,7 +18,9 @@ mkdirSync(CAP, { recursive: true });
 const puppeteer = createRequire(import.meta.url)(PUP);
 const { build } = createRequire(join(raiz, "package.json"))("esbuild");
 const P_BASE = 54981, P_EDGE = 54982;
-const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: "55432", PGUSER: "postgres", PGDATABASE: "redes_local", PGOPTIONS: "-c client_min_messages=warning" };
+// Puerto del clúster local: por omisión el 55432 (Code A); el Code B corre con PGPORT_B=55442 (25-nov-2026).
+const PUERTO_PG = process.env.PGPORT_B || "55432";
+const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: PUERTO_PG, PGUSER: "postgres", PGDATABASE: "redes_local", PGOPTIONS: "-c client_min_messages=warning" };
 const sqlq = (s) => execFileSync(PSQL, ["-AtX", "-v", "ON_ERROR_STOP=1", "-c", s], { env: PGENV, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trim();
 const lit = (v) => (v === null || v === undefined ? "null" : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : typeof v === "object" ? `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb` : `'${String(v).replace(/'/g, "''")}'`);
 const EMAILS = { adm: "zt.admin@emdupar.gov.co", dist: "zt.dist@emdupar.gov.co", planta: "zt.planta@emdupar.gov.co", op: "zt.oper@emdupar.gov.co", op2: "zt.oper.sinform@emdupar.gov.co" };      // planta: supervisor de planta; dist: supervisor de distribución

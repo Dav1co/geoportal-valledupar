@@ -5,8 +5,8 @@
 set -e
 cd "$(dirname "$0")/.."
 PSQL=${PSQL:-/opt/homebrew/opt/postgresql@17/bin/psql}
-export PGHOST=localhost PGPORT=55432 PGUSER=postgres PGOPTIONS='-c client_min_messages=warning'
-echo "base: redes_local en localhost:55432 (Code A)"
+export PGHOST=localhost PGPORT=${PGPORT_B:-55432} PGUSER=postgres PGOPTIONS='-c client_min_messages=warning'
+echo "base: redes_local en localhost:$PGPORT (por omisión 55432, Code A; PGPORT_B lo cambia)"
 sh ../tecnica_corte7a/pruebas_locales/base_chrome.sh >/dev/null
 $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f ../redes_corte9a/migracion_redes_corte9a_editor.sql >/dev/null
 $PSQL -q -X -d redes_local -v ON_ERROR_STOP=1 -f ../redes_corte9a_bis/migracion_redes_corte9a_bis_editor.sql >/dev/null

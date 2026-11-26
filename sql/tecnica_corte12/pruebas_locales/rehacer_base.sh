@@ -4,8 +4,8 @@
 set -e
 cd "$(dirname "$0")/.."
 PSQL=${PSQL:-/opt/homebrew/opt/postgresql@17/bin/psql}
-export PGHOST=localhost PGPORT=55432 PGUSER=postgres PGOPTIONS='-c client_min_messages=warning'
-echo "base: redes_local en localhost:55432 (Code A)"
+export PGHOST=localhost PGPORT=${PGPORT_B:-55432} PGUSER=postgres PGOPTIONS='-c client_min_messages=warning'
+echo "base: redes_local en localhost:$PGPORT (por omisión 55432, Code A; PGPORT_B lo cambia)"
 sh ../tecnica_corte7c/pruebas_locales/base_chrome_integrada.sh >/dev/null
 # el rol del Dell es de todo el clúster (no de la base): se quita para que la migración lo cree de nuevo, como en producción
 $PSQL -q -X -d redes_local -c "drop role if exists dell_avisos" >/dev/null

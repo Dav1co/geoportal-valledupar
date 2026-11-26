@@ -276,7 +276,7 @@ try {
     ok(`[${ancho}] sup · Descargar CSV desde la Edge (actas_registradas_descarga): las 2 filas, sin nombres de quien atendió ni del testigo`, csv.split("\r\n").length === 3 && csv.includes(conf.consecutivo) && !/ZT Rosa|ZT Luis/.test(csv), csv.slice(0, 400));
     await pg.screenshot({ path: join(CAP, `edge_actas_registradas_${ancho}.png`), fullPage: ancho < 500 });
     // Derivadas: «fuga afuera» pendiente → cerrar sin formulario (solo en el primer ancho; en el segundo ya está cerrada)
-    await clicTexto(pg, "button.rv-tab", "Actividades derivadas"); await pg.waitForSelector("[data-testid=derivadas]"); await esp(800);
+    await clicTexto(pg, "button.rv-tab", "Avisos y actividades derivadas"); await pg.waitForSelector("[data-testid=derivadas]"); await esp(800);
     t = await texto(pg, "[data-testid=derivadas]");
     if (ancho === 390) {
       ok(`[${ancho}] sup · Actividades derivadas: «fuga afuera» pendiente con su origen`, /fuga/i.test(t) && t.includes("Pendiente") && t.includes(conf.consecutivo), t.slice(0, 500));
@@ -294,12 +294,18 @@ try {
     pg = await abrir("act", ancho, "&p=actas");
     await pg.waitForSelector("[data-testid=actas-registradas] [data-registro], [data-testid=actas-registradas] [role=alert], [data-testid=actas-registradas] .rv-vacio", { timeout: 30000 }); await esp(300);
     t = await texto(pg, "[data-testid=actas-registradas]");
-    ok(`[${ancho}] supervisor de actas · lee por geoportal-acta (la misma RPC): ve las dos y sin la pestaña de derivadas`, t.includes(conf.consecutivo) && t.includes(confInst.consecutivo) && !(await pg.$$eval("button.rv-tab", (l) => l.map((x) => x.textContent))).includes("Actividades derivadas"), t.slice(0, 400));
+    ok(`[${ancho}] supervisor de actas · lee por geoportal-acta (la misma RPC): ve las dos y sin la pestaña de derivadas`, t.includes(conf.consecutivo) && t.includes(confInst.consecutivo) && !(await pg.$$eval("button.rv-tab", (l) => l.map((x) => x.textContent))).join("|").includes("ctividades derivadas"), t.slice(0, 400));
     await pg.close();
   }
   // 7. R3 (22-nov, David): la ENTRADA «Actas registradas» de Formatos de campo, con la puerta real de AreaCampo y el formulario real de geoportal-campo (def.puede.supervisar)
-  const entradas = (pg) => pg.$$eval(".campo-formatos button strong", (l) => l.map((x) => x.textContent.trim()));
-  const pestanas = (pg) => pg.$$eval("button.rv-tab", (l) => l.map((x) => x.textContent.trim()));
+  // 25-nov (Formatos de campo ordenados): las entradas se reparten en las pestañas «Registrar en campo» y «Supervisar». `entradas` reúne las de todas; `clicEntrada` busca la entrada en la pestaña donde está.
+  const tomarEntradas = (pg) => pg.$$eval(".campo-formatos button strong", (l) => l.map((x) => x.textContent.trim()));
+  const pestanasBloque = (pg) => pg.$$eval(".com-bloque-tab", (l) => l.map((x) => x.textContent.trim()));
+  const irAlBloque = (pg, r) => pg.evaluate((x) => [...document.querySelectorAll(".com-bloque-tab")].find((b) => b.textContent.trim() === x)?.click(), r);
+  const entradas = async (pg) => { const bl = await pestanasBloque(pg); if (!bl.length) return tomarEntradas(pg); const todas = []; for (const b of bl) { await irAlBloque(pg, b); await esp(150); todas.push(...await tomarEntradas(pg)); } await irAlBloque(pg, bl[0]); return todas; };
+  const clicEntrada = async (pg, t) => { const bl = await pestanasBloque(pg); for (const b of [null, ...bl]) { if (b) { await irAlBloque(pg, b); await esp(150); } if ((await tomarEntradas(pg)).includes(t)) return clicTexto(pg, ".campo-formatos button", t); } throw new Error(`No hay la entrada «${t}»`); };
+  // la pestaña de derivadas ahora dice «Avisos y actividades derivadas · N pendientes»: se compara sin el contador
+  const pestanas = async (pg) => (await pg.$$eval("button.rv-tab", (l) => l.map((x) => x.textContent.trim()))).map((x) => x.replace(/ · .*pendientes?$/, ""));
   const pedidos = (pg) => { const l = []; pg.on("request", (r) => { const u = new URL(r.url()); if (u.port === String(P_EDGE)) l.push(`${u.pathname.split("/").pop()}:${u.searchParams.get("accion")}`); }); return l; };
   const abrirArea = async (rol, ancho) => { const pg = await abrir(rol, ancho, "&p=area"); await pg.waitForSelector(".campo-formatos button", { timeout: 30000 }); await esp(400); return pg; };
   for (const ancho of [390, 1280]) {
@@ -309,17 +315,17 @@ try {
     ok(`[${ancho}] R3 · supervisor de campo (solo dashboard_campo): Formatos de campo le muestra «Actas registradas» y «Supervisión y dashboard», y no «Reportar posible pérdida»`,
       e.includes("Actas registradas") && e.includes("Supervisión y dashboard") && !e.includes("Reportar posible pérdida"), JSON.stringify(e));
     await pg.screenshot({ path: join(CAP, `r3_sup_campo_entradas_${ancho}.png`), fullPage: ancho < 500 });
-    await clicTexto(pg, ".campo-formatos button", "Actas registradas");
+    await clicEntrada(pg, "Actas registradas");
     await pg.waitForSelector("[data-testid=actas-registradas] [data-registro]", { timeout: 30000 }); await esp(500);
     ok(`[${ancho}] R3 · supervisor de campo: pestañas «Actas registradas», «Actividades derivadas» y «Personal»; sin «Aperturas sin registrar»`,
-      JSON.stringify(await pestanas(pg)) === JSON.stringify(["Actas registradas", "Actividades derivadas", "Personal"]), JSON.stringify(await pestanas(pg)));
+      JSON.stringify(await pestanas(pg)) === JSON.stringify(["Actas registradas", "Avisos y actividades derivadas", "Personal"]), JSON.stringify(await pestanas(pg)));
     let t = await texto(pg, "[data-testid=actas-registradas]");
     // geoportal-acta solo se toca para documentos_catalogo (el selector de tipo junta los catálogos de las dos Edges); las actas en sí, nunca
     ok(`[${ancho}] R3 · supervisor de campo: las actas llegan de la Edge real por geoportal-campo (de geoportal-acta solo el catálogo del selector)`,
       t.includes(conf.consecutivo) && t.includes(confInst.consecutivo) && red.includes("geoportal-campo:actas_registradas")
       && red.filter((x) => x.startsWith("geoportal-acta:")).every((x) => x === "geoportal-acta:documentos_catalogo"), JSON.stringify(red));
     await pg.screenshot({ path: join(CAP, `r3_sup_campo_actas_${ancho}.png`), fullPage: ancho < 500 });
-    await clicTexto(pg, "button.rv-tab", "Actividades derivadas"); await pg.waitForSelector("[data-testid=derivadas]"); await esp(900);
+    await clicTexto(pg, "button.rv-tab", "Avisos y actividades derivadas"); await pg.waitForSelector("[data-testid=derivadas]"); await esp(900);
     await escribir(pg, "[data-filtro=estado]", ""); await esp(1200);
     t = await texto(pg, "[data-testid=derivadas]");
     ok(`[${ancho}] R3 · supervisor de campo: «Actividades derivadas» desde geoportal-campo (la atendida y la anulada de las pruebas anteriores)`,
@@ -329,7 +335,7 @@ try {
     // supervisor de actas: lee por geoportal-acta, con aperturas y sin derivadas (como antes del R3)
     pg = await abrirArea("act", ancho); red = pedidos(pg);
     ok(`[${ancho}] R3 · supervisor de actas: sigue viendo «Actas registradas»`, (await entradas(pg)).includes("Actas registradas"), JSON.stringify(await entradas(pg)));
-    await clicTexto(pg, ".campo-formatos button", "Actas registradas");
+    await clicEntrada(pg, "Actas registradas");
     await pg.waitForSelector("[data-testid=actas-registradas] [data-registro]", { timeout: 30000 }); await esp(500);
     ok(`[${ancho}] R3 · supervisor de actas: pestañas «Actas registradas», «Aperturas sin registrar» y «Personal» (sin derivadas); lee por geoportal-acta`,
       JSON.stringify(await pestanas(pg)) === JSON.stringify(["Actas registradas", "Aperturas sin registrar", "Personal"]) && red.includes("geoportal-acta:actas_registradas") && !red.includes("geoportal-campo:actas_registradas"), JSON.stringify([await pestanas(pg), red]));
@@ -344,9 +350,9 @@ try {
     pg = await abrirArea("adm", ancho); red = pedidos(pg);
     e = await entradas(pg);
     ok(`[${ancho}] R3 · administrador: «Actas registradas» una sola vez`, e.filter((x) => x === "Actas registradas").length === 1, JSON.stringify(e));
-    await clicTexto(pg, ".campo-formatos button", "Actas registradas");
+    await clicEntrada(pg, "Actas registradas");
     await pg.waitForSelector("[data-testid=actas-registradas] [data-registro]", { timeout: 30000 }); await esp(500);
-    ok(`[${ancho}] R3 · administrador: las cuatro pestañas, por geoportal-acta`, JSON.stringify(await pestanas(pg)) === JSON.stringify(["Actas registradas", "Actividades derivadas", "Aperturas sin registrar", "Personal"]) && red.includes("geoportal-acta:actas_registradas"), JSON.stringify([await pestanas(pg), red]));
+    ok(`[${ancho}] R3 · administrador: las cuatro pestañas, por geoportal-acta`, JSON.stringify(await pestanas(pg)) === JSON.stringify(["Actas registradas", "Avisos y actividades derivadas", "Aperturas sin registrar", "Personal"]) && red.includes("geoportal-acta:actas_registradas"), JSON.stringify([await pestanas(pg), red]));
     await pg.close();
   }
   const lentas = rpcs.filter((x) => !x.error).sort((a, b) => b.ms - a.ms).slice(0, 3);

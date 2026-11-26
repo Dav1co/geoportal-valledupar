@@ -21,7 +21,9 @@ mkdirSync(CAP, { recursive: true });
 const puppeteer = createRequire(import.meta.url)(PUP);
 const { build } = createRequire(join(raiz, "package.json"))("esbuild");
 const P_BASE = 54995, P_EDGE = 54996;
-const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: "55432", PGUSER: "postgres", PGDATABASE: "redes_local" };
+// Puerto del clúster local: por omisión el 55432 (Code A); el Code B corre con PGPORT_B=55442 (25-nov-2026).
+const PUERTO_PG = process.env.PGPORT_B || "55432";
+const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: PUERTO_PG, PGUSER: "postgres", PGDATABASE: "redes_local" };
 const sqlq = (s) => execFileSync(PSQL, ["-AtX", "-v", "ON_ERROR_STOP=1", "-c", s], { env: PGENV, encoding: "utf8" }).trim();
 const lit = (v) => (v === null || v === undefined ? "null" : typeof v === "number" ? String(v) : typeof v === "object" ? `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb` : `'${String(v).replace(/'/g, "''")}'`);
 const EMAILS = { op: "zt.oper@emdupar.gov.co", sup: "zt.super@emdupar.gov.co", adm: "zt.admin@emdupar.gov.co", planta: "zt.planta@emdupar.gov.co", dist: "zt.dist@emdupar.gov.co" };
