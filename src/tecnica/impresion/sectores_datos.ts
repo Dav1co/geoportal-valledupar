@@ -1,0 +1,43 @@
+// GENERADO por scripts/sectores_desde_paso0.py — no editar a mano. Origen: paso 0 de producción (paso0_geovisor_unico_resultado_26nov.json).
+// Los 36 SEC (7 sectores y 29 subsectores, Plan Maestro 2014, Anexo C): el sector sale de atributos->'modelo'->>'sector' (comprobado contra el nombre)
+// y el punto de cada etiqueta es ST_PointOnSurface.
+export type SectorDato = { codigo: string; nombre: string; clase: "sector" | "subsector"; sector: string; sub: string | null; lon: number; lat: number };
+export const ORIGEN_SECTORES = "paso 0 de producción (paso0_geovisor_unico_resultado_26nov.json)";
+export const SECTORES_DATOS: SectorDato[] = [
+  { codigo: "SEC-000001", nombre: "Sector 1", clase: "sector", sector: "1", sub: null, lon: -73.282336, lat: 10.476154 },
+  { codigo: "SEC-000002", nombre: "Sector 2", clase: "sector", sector: "2", sub: null, lon: -73.259425, lat: 10.483009 },
+  { codigo: "SEC-000003", nombre: "Sector 3", clase: "sector", sector: "3", sub: null, lon: -73.275445, lat: 10.449666 },
+  { codigo: "SEC-000004", nombre: "Sector 4", clase: "sector", sector: "4", sub: null, lon: -73.263619, lat: 10.45888 },
+  { codigo: "SEC-000005", nombre: "Sector 5", clase: "sector", sector: "5", sub: null, lon: -73.252521, lat: 10.459091 },
+  { codigo: "SEC-000006", nombre: "Sector 6", clase: "sector", sector: "6", sub: null, lon: -73.236778, lat: 10.457618 },
+  { codigo: "SEC-000007", nombre: "Sector 7", clase: "sector", sector: "7", sub: null, lon: -73.237853, lat: 10.420545 },
+  { codigo: "SEC-000008", nombre: "Subsector 1.1", clase: "subsector", sector: "1", sub: "1.1", lon: -73.282286, lat: 10.490062 },
+  { codigo: "SEC-000009", nombre: "Subsector 1.2", clase: "subsector", sector: "1", sub: "1.2", lon: -73.275765, lat: 10.48141 },
+  { codigo: "SEC-000010", nombre: "Subsector 1.3", clase: "subsector", sector: "1", sub: "1.3", lon: -73.280861, lat: 10.482031 },
+  { codigo: "SEC-000011", nombre: "Subsector 1.4", clase: "subsector", sector: "1", sub: "1.4", lon: -73.288591, lat: 10.479386 },
+  { codigo: "SEC-000012", nombre: "Subsector 1.5", clase: "subsector", sector: "1", sub: "1.5", lon: -73.288369, lat: 10.4718 },
+  { codigo: "SEC-000013", nombre: "Subsector 1.6", clase: "subsector", sector: "1", sub: "1.6", lon: -73.278977, lat: 10.473675 },
+  { codigo: "SEC-000014", nombre: "Subsector 1.7", clase: "subsector", sector: "1", sub: "1.7", lon: -73.282926, lat: 10.463402 },
+  { codigo: "SEC-000015", nombre: "Subsector 2.1", clase: "subsector", sector: "2", sub: "2.1", lon: -73.273787, lat: 10.489568 },
+  { codigo: "SEC-000016", nombre: "Subsector 2.2", clase: "subsector", sector: "2", sub: "2.2", lon: -73.269549, lat: 10.49619 },
+  { codigo: "SEC-000017", nombre: "Subsector 2.3", clase: "subsector", sector: "2", sub: "2.3", lon: -73.267415, lat: 10.487469 },
+  { codigo: "SEC-000018", nombre: "Subsector 2.4", clase: "subsector", sector: "2", sub: "2.4", lon: -73.265759, lat: 10.472497 },
+  { codigo: "SEC-000019", nombre: "Subsector 2.5", clase: "subsector", sector: "2", sub: "2.5", lon: -73.26172, lat: 10.474578 },
+  { codigo: "SEC-000020", nombre: "Subsector 2.6", clase: "subsector", sector: "2", sub: "2.6", lon: -73.256311, lat: 10.480491 },
+  { codigo: "SEC-000021", nombre: "Subsector 2.7", clase: "subsector", sector: "2", sub: "2.7", lon: -73.247014, lat: 10.48198 },
+  { codigo: "SEC-000022", nombre: "Subsector 3.1", clase: "subsector", sector: "3", sub: "3.1", lon: -73.28187, lat: 10.452843 },
+  { codigo: "SEC-000023", nombre: "Subsector 3.2", clase: "subsector", sector: "3", sub: "3.2", lon: -73.273135, lat: 10.454592 },
+  { codigo: "SEC-000024", nombre: "Subsector 3.3", clase: "subsector", sector: "3", sub: "3.3", lon: -73.271778, lat: 10.444587 },
+  { codigo: "SEC-000025", nombre: "Subsector 4.1", clase: "subsector", sector: "4", sub: "4.1", lon: -73.259723, lat: 10.462897 },
+  { codigo: "SEC-000026", nombre: "Subsector 4.2", clase: "subsector", sector: "4", sub: "4.2", lon: -73.262845, lat: 10.451324 },
+  { codigo: "SEC-000027", nombre: "Subsector 5.1", clase: "subsector", sector: "5", sub: "5.1", lon: -73.254207, lat: 10.467572 },
+  { codigo: "SEC-000028", nombre: "Subsector 5.2", clase: "subsector", sector: "5", sub: "5.2", lon: -73.252542, lat: 10.457388 },
+  { codigo: "SEC-000029", nombre: "Subsector 5.3", clase: "subsector", sector: "5", sub: "5.3", lon: -73.256122, lat: 10.451126 },
+  { codigo: "SEC-000030", nombre: "Subsector 6.1", clase: "subsector", sector: "6", sub: "6.1", lon: -73.247276, lat: 10.471221 },
+  { codigo: "SEC-000031", nombre: "Subsector 6.2", clase: "subsector", sector: "6", sub: "6.2", lon: -73.239222, lat: 10.470386 },
+  { codigo: "SEC-000032", nombre: "Subsector 6.3", clase: "subsector", sector: "6", sub: "6.3", lon: -73.244941, lat: 10.453972 },
+  { codigo: "SEC-000033", nombre: "Subsector 6.4", clase: "subsector", sector: "6", sub: "6.4", lon: -73.234229, lat: 10.459236 },
+  { codigo: "SEC-000034", nombre: "Subsector 6.5", clase: "subsector", sector: "6", sub: "6.5", lon: -73.23408, lat: 10.445886 },
+  { codigo: "SEC-000035", nombre: "Subsector 7.1", clase: "subsector", sector: "7", sub: "7.1", lon: -73.261555, lat: 10.433589 },
+  { codigo: "SEC-000036", nombre: "Subsector 7.2", clase: "subsector", sector: "7", sub: "7.2", lon: -73.237836, lat: 10.420529 },
+];

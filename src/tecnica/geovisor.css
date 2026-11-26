@@ -157,3 +157,35 @@
 .geo-franja-textos p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .geo-franja-evento .geo-franja-ver { background: var(--t-naranja, #c25e00); }
 .geo-leyenda li .geo-corte-evento { height: 12px; box-sizing: border-box; border: 2px solid var(--t-naranja, #c25e00); background: color-mix(in srgb, var(--t-naranja, #c25e00) 12%, transparent); border-radius: 2px; }
+
+/* ===== Corte 1 del geovisor único (26-nov): nodos en la leyenda de «Tipo», leyenda de sectores e impresión ===== */
+.geo-leyenda li .geo-leyenda-nodo { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #9aa5ad; margin: 0 4px; }
+.geo-sectores { margin: 0 0 8px 32px; padding: 6px 0 4px; font-size: 14px; }
+.geo-sectores-gen { display: flex; flex-wrap: wrap; gap: 4px 18px; padding-bottom: 6px; border-bottom: 1px solid #eef2f5; }
+.geo-sectores label { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; }
+.geo-sectores input { width: 20px; height: 20px; margin: 0; accent-color: var(--geo-color); }
+.geo-sectores ul { list-style: none; margin: 0; padding: 0; }
+.geo-sector-fila { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.geo-sector-muestra { width: 22px; height: 14px; border-radius: 3px; flex: 0 0 auto; opacity: 0.85; }
+.geo-sector-punteada { background: transparent !important; border: 2px dashed; box-sizing: border-box; }
+.geo-sector-pliegue { min-width: 44px; min-height: 40px; border: 1px solid #c8d3da; border-radius: 8px; background: #fff; color: #22313f; font: inherit; font-size: 13px; cursor: pointer; }
+.geo-subsectores { margin-left: 28px !important; }
+.geo-imprimir { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(10, 37, 64, 0.35); padding: 12px; }
+.geo-imprimir-caja { width: min(440px, 100%); max-height: 100%; overflow: auto; background: #fff; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+.geo-imprimir-caja h2 { margin: 0; font-size: 18px; }
+.geo-imprimir-caja p { margin: 0; font-size: 14px; }
+.geo-imprimir-acciones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.geo-imprimir-aviso { background: #fff4e5; border: 1px solid #c25e00; border-radius: 8px; padding: 8px 10px; color: #3b2a14; }
+.geo-imprimir-oculto { position: fixed; left: -100000px; top: 0; pointer-events: none; }
+.geo-corto { display: none; }
+.geo-leyenda-titulo { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 32px; padding: 0; border: none; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+@media (max-width: 600px) {
+  .geo-largo { display: none; }
+  .geo-corto { display: inline; }
+  .geo-barra .geo-boton { padding: 0 10px; }
+  .geo-titulo { min-width: 0; }
+  .geo-titulo h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+/* 26-nov: con «Diámetro» el selector de temáticas ya no cabe a 390 px: se desliza a lo ancho (ningún botón queda fuera de alcance) */
+.geo-herr .geo-seg { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.geo-herr .geo-seg button { flex: 0 0 auto; white-space: nowrap; }
