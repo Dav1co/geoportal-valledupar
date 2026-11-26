@@ -10,6 +10,7 @@ import { decimal, fechaHora, fechaHoraSello, megas, metros } from "./formato";
 import { sinFormatosD } from "./formatos/tipos";
 import { ConfirmarCancelar, type Destino } from "../components/ConfirmarCancelar";
 import { abrirReloj, esRechazoPorHora, recalcularReloj, type RelojInicio } from "./inicio";
+import { contratoConDireccion, DireccionDelContrato, PanelDireccionTerreno, useDireccionContrato } from "./direccionContrato";
 import { armarRegistro, BotonesAdjuntar, DIRECCION_VACIA, MarcaOrigen, PanelDireccion, PanelXY, puedeFlexible, xyDigitado, type EstadoDireccion, type EstadoXY, type OrigenFoto } from "./registroFlexible";
 
 // Formulario del reporte general de campo. Pensado para el celular (380 px), una mano, buen contraste.
@@ -37,6 +38,7 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
   const flexible = puedeFlexible(def);                          // registro flexible: solo supervisor o administrador de campo, y no desde Técnica
   const [xy, setXy] = useState<EstadoXY>({ activo: false, lat: "", lon: "" });
   const [dir, setDir] = useState<EstadoDireccion>(DIRECCION_VACIA);
+  const dirContrato = useDireccionContrato(contrato);         // consultar direcciones (25-nov): la dirección del contrato al escribirlo
   const maxDesc = maxDescripcion(def.limites);   // un solo tope: el de la base (limites.max_descripcion)
   const [fotos, setFotos] = useState<(FotoLocal | null)[]>(() => Array.from({ length: Math.max(1, def.limites.max_fotos) }, () => null));
   const [camaraEn, setCamaraEn] = useState<number | null>(null);
@@ -282,10 +284,13 @@ export function ReporteGeneral({ def, correo, onVolver, onOtro, contratoInicial 
           <label htmlFor="campo-contrato">Número de contrato (opcional)</label>
           <input id="campo-contrato" type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" maxLength={20} value={contrato} onChange={(e) => setContrato(e.target.value.replace(/\D/g, ""))} disabled={bloqueado} />
           <AvisoSinAgua contrato={contrato} />
+          <DireccionDelContrato estado={dirContrato} />
         </div>
 
-        {/* 4b. Dirección opcional (registro flexible, 25-nov) */}
-        <PanelDireccion estado={dir} onCambio={setDir} deshabilitado={bloqueado} />
+        {/* 4b. Con un contrato que existe: «La dirección en terreno es distinta»; si no, la dirección opcional del registro flexible */}
+        {contratoConDireccion(dirContrato.r)
+          ? <PanelDireccionTerreno estado={dir} onCambio={setDir} deshabilitado={bloqueado} />
+          : <PanelDireccion estado={dir} onCambio={setDir} deshabilitado={bloqueado} />}
 
         {/* 5. Riesgo inmediato */}
         <label className="campo-check">

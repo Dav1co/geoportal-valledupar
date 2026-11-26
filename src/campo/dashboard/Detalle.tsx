@@ -1,3 +1,4 @@
+import type { DireccionContratoDetalle } from "./apiRevision";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRev, textoError, type Cercano, type DetalleResp, type EventoRep, type FilaReporte, type FormularioRev, type SensiblesResp } from "./apiRevision";
 import { columnasBase, paresDeDatos, textoDeDato, textoInicio, textoDuracion, type Contexto } from "./columnas";
@@ -22,6 +23,9 @@ export function Detalle({ id, def, ctx, onCerrar, onCambio, onAbrir }: {
   useEffect(() => { const t = (e: KeyboardEvent) => { if (e.key === "Escape" && !accion) onCerrar(); }; window.addEventListener("keydown", t); return () => window.removeEventListener("keydown", t); }, [accion, onCerrar]);
 
   const r = d?.reporte;
+  // consultar direcciones (25-nov): en el detalle, direccion_contrato llega como bloque (en la lista y la descarga es texto plano)
+  const dcCrudo = r?.direccion_contrato as unknown;
+  const dc = dcCrudo && typeof dcCrudo === "object" ? (dcCrudo as DireccionContratoDetalle) : null;
   const base = columnasBase(true);
   const val = (clave: string) => { const c = base.find((x) => x.clave === clave); return r && c ? c.texto(r, ctx) : ""; };
 
@@ -72,7 +76,9 @@ export function Detalle({ id, def, ctx, onCerrar, onCambio, onAbrir }: {
             <dt>{r.registro?.xy_manual ? "Ubicación (XY digitado)" : "Ubicación"}</dt><dd>{fmtNumero(r.lat, 6)}, {fmtNumero(r.lon, 6)}{r.precision_m !== null && r.precision_m !== undefined ? ` · precisión ±${fmtNumero(r.precision_m, 0)} m` : ""}{r.fuera_de_zona ? " · fuera de la zona" : ""}</dd>
             {r.registro ? <><dt>Registrado desde</dt><dd data-rf-detalle-desde>{r.registro.lat_registro === null || r.registro.lon_registro === null ? "Sin ubicación del dispositivo"
               : `${fmtNumero(r.registro.lat_registro, 6)}, ${fmtNumero(r.registro.lon_registro, 6)}${r.registro.precision_registro_m !== null ? ` · precisión ±${fmtNumero(r.registro.precision_registro_m, 0)} m` : ""}${r.registro.distancia_m !== null ? ` · a ${fmtNumero(r.registro.distancia_m, 0)} m del punto` : ""}`}</dd></> : null}
-            {r.registro?.direccion ? <><dt>Dirección</dt><dd>{r.registro.direccion}</dd></> : null}
+            {dc ? <><dt>Dirección del contrato</dt><dd data-dc-detalle>{dc.comercial ? [dc.comercial, dc.barrio_comercial].filter(Boolean).join(" · ") : "Sin dato en la base comercial"}
+              {dc.catastro && dc.catastro.toUpperCase() !== (dc.comercial ?? "").toUpperCase() ? <><br /><small>En el catastro: {[dc.catastro, dc.barrio_catastro].filter(Boolean).join(" · ")}</small></> : null}</dd></> : null}
+            {r.registro?.direccion ? <><dt>{r.contrato ? "Dirección encontrada en terreno" : "Dirección"}</dt><dd>{r.registro.direccion}</dd></> : null}
             {r.registro?.barrio ? <><dt>Barrio</dt><dd>{r.registro.barrio}</dd></> : null}
             {r.registro?.referencia ? <><dt>Referencia</dt><dd>{r.registro.referencia}</dd></> : null}
             {r.orden_trabajo_id ? <><dt>Orden de trabajo</dt><dd>{r.orden_trabajo_id}</dd></> : null}

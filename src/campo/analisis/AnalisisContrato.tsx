@@ -1,3 +1,4 @@
+import { cuantasUnidades, leerUnidades } from "./predio";
 import { ObservarContrato } from "./ObservarContrato";
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AvisoSinAgua } from "../AvisoSinAgua";
@@ -290,6 +291,8 @@ function Ficha({ r, destinos, onIrA, puedeCambioMedidor, onCambioMedidor }: { r:
           ) : <p className="campo-sub">Ninguna pendiente.</p>}
         </details>
 
+        {r.direcciones !== undefined ? <SeccionPredio r={r} /> : null}
+
         <details className="ac-seccion" data-seccion="ubicacion" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) setVerMapa(true); }}>
           <summary>Ubicación (mapa y Google Maps)</summary>
           {punto ? (
@@ -428,5 +431,37 @@ function Cercanos({ onAbrir, ocupado }: { onAbrir: (contrato: string) => void; o
         )
       ) : null}
     </div>
+  );
+}
+
+// ============ Consultar direcciones (25-nov): sección «Predio» (las dos direcciones por separado y los datos del censo) ============
+function Unidades({ valor }: { valor: string | null }) {
+  const u = leerUnidades(valor);
+  if (u.estado === "sin_dato") return <>Sin dato</>;
+  if (u.estado === "no_aplica") return <>No aplica</>;
+  return (
+    <>
+      <span className="ac-unidades-n">{cuantasUnidades(u.unidades.length)}</span>
+      <ul className="ac-unidades" title={u.original ?? undefined}>{u.unidades.map((x, i) => <li key={i}>{x}</li>)}</ul>
+      <small className="ac-original">En el censo: <code>{u.original}</code></small>
+    </>
+  );
+}
+function SeccionPredio({ r }: { r: AnalisisCompleto }) {
+  const d = r.direcciones, p = r.predio;
+  const dir = (x: { direccion: string | null; barrio: string | null } | null | undefined) => (x?.direccion ? [x.direccion, x.barrio].filter(Boolean).join(" · ") : "Sin dato");
+  return (
+    <details className="ac-seccion" data-seccion="predio" open>
+      <summary>Predio</summary>
+      <dl className="ac-predio">
+        <dt>Dirección base comercial</dt><dd data-predio="dir-comercial">{dir(d?.comercial)}</dd>
+        <dt>Dirección catastro</dt><dd data-predio="dir-catastro">{dir(d?.catastro)}</dd>
+        <dt>Unidades habitacionales</dt><dd data-predio="unih">{p ? <Unidades valor={p.unih} /> : "Sin dato"}</dd>
+        <dt>Unidades no habitacionales</dt><dd data-predio="uninh">{p ? <Unidades valor={p.uninh} /> : "Sin dato"}</dd>
+        <dt>Clase de uso</dt><dd data-predio="clase-uso">{p?.clase_uso ?? "Sin dato"}</dd>
+        <dt>Actividad económica</dt><dd data-predio="act-eco">{p?.act_eco ?? "Sin dato"}</dd>
+      </dl>
+      {!p ? <p className="campo-sub">Este contrato no tiene predio en el censo.</p> : p.predios_total > 1 ? <p className="campo-sub">{p.predios_total} predios en el censo: se muestran los datos del principal.</p> : null}
+    </details>
   );
 }

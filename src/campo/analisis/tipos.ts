@@ -75,6 +75,10 @@ export type Predio = { direccion: string | null; barrio: string | null; lat: num
 export type Ubicacion = { predios_total: number; predios: Predio[] };
 
 export type Cortes = { cartera: string | null; consumo: string | null; ficha: string | null };
+/** Consultar direcciones (25-nov): las dos direcciones por separado (nulas si el contrato no está en esa fuente) y el predio principal del censo. */
+export type DireccionFuente = { direccion: string | null; barrio: string | null; corte?: string | null };
+export type Direcciones = { comercial: DireccionFuente | null; catastro: DireccionFuente | null };
+export type PredioCenso = { unih: string | null; uninh: string | null; clase_uso: string | null; act_eco: string | null; predios_total: number };
 
 /** Contrato encontrado (no comodín). Con `ficha_disponible=false`: consumo, medidor (salvo el serial diario), submedición, pago, pqr y emd vienen null. */
 export type AnalisisCompleto = {
@@ -91,6 +95,9 @@ export type AnalisisCompleto = {
   fotos: unknown[];
   cortes: Cortes | null;
   ficha_disponible: boolean;
+  /** Consultar direcciones (25-nov). Una Edge o base de antes no las trae. */
+  direcciones?: Direcciones | null;
+  predio?: PredioCenso | null;
 };
 export type AnalisisNoEncontrado = { encontrado: false; contrato: string };
 export type AnalisisComodin = { encontrado: true; comodin: true; contrato: string };

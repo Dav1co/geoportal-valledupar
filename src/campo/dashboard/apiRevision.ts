@@ -23,7 +23,10 @@ export type FilaReporte = {
   lat_registro?: number | null; lon_registro?: number | null; precision_registro_m?: number | null; distancia_registro_m?: number | null;
   /** Solo en el detalle: el bloque completo (nulo en los reportes anteriores). */
   registro?: RegistroDetalle | null;
+  /** Consultar direcciones (25-nov): las dos direcciones del contrato al registrar. Lista y descarga, planas; detalle, el bloque. Nulas sin contrato o en reportes de antes. */
+  direccion_contrato?: string | null; barrio_contrato?: string | null; direccion_catastro?: string | null; barrio_catastro?: string | null;
 };
+export type DireccionContratoDetalle = { comercial: string | null; barrio_comercial: string | null; catastro: string | null; barrio_catastro: string | null; predios_catastro: number };
 export type RegistroDetalle = { xy_manual: boolean; lat_registro: number | null; lon_registro: number | null; precision_registro_m: number | null; sin_ubicacion_dispositivo: boolean;
   distancia_m: number | null; direccion: string | null; barrio: string | null; referencia: string | null };
 export type ListaResp = { reportes: FilaReporte[]; total: number; siguiente: number | null; distancia_duplicados_m: number };
@@ -72,6 +75,7 @@ export type FilaDescarga = {
   inicio_local?: string | null; inicio_origen?: string | null; duracion_min?: number | null;   // pasada 14/11
   xy_manual?: boolean | null; sin_ubicacion_dispositivo?: boolean | null; lat_registro?: number | null; lon_registro?: number | null; precision_registro_m?: number | null;
   distancia_registro_m?: number | null; direccion?: string | null; barrio?: string | null; referencia?: string | null; fotos_adjuntadas?: number;   // registro flexible (25-nov)
+  direccion_contrato?: string | null; barrio_contrato?: string | null; direccion_catastro?: string | null; barrio_catastro?: string | null;   // consultar direcciones (25-nov)
 };
 export type DescargaPagina = { registros: FilaDescarga[]; devueltos: number; ultimo_seq: number | null; hay_mas: boolean };
 export type CambioParametro = { clave: string; antes: number; despues: number };

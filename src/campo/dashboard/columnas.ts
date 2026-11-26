@@ -67,6 +67,11 @@ export function columnasBase(conPasoD = false): Columna[] {
     // Registro flexible (25-nov): la marca va en la tabla por omisión; la ubicación del dispositivo y la distancia, solo en la descarga y el detalle
     c({ clave: "registro_desde", etiqueta: "Registro", tipo: "etiqueta", porOmision: true, ordenable: true, filtrable: true, enDescarga: true, valor: (f) => textoRegistro(f) || null, texto: (f) => textoRegistro(f) }),
     c({ clave: "fotos_adjuntadas", etiqueta: "Fotos adjuntadas", tipo: "numero", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.fotos_adjuntadas ?? 0, texto: (f) => (f.fotos_adjuntadas ? String(f.fotos_adjuntadas) : "") }),
+    // Consultar direcciones (25-nov): las dos direcciones del contrato al registrar, junto a la encontrada en terreno
+    c({ clave: "direccion_contrato", etiqueta: "Dirección del contrato", tipo: "texto", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.direccion_contrato ?? null, texto: (f) => f.direccion_contrato ?? "" }),
+    c({ clave: "barrio_contrato", etiqueta: "Barrio del contrato", tipo: "texto", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.barrio_contrato ?? null, texto: (f) => f.barrio_contrato ?? "" }),
+    c({ clave: "direccion_catastro", etiqueta: "Dirección del contrato en el catastro", tipo: "texto", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.direccion_catastro ?? null, texto: (f) => f.direccion_catastro ?? "" }),
+    c({ clave: "barrio_catastro", etiqueta: "Barrio en el catastro", tipo: "texto", porOmision: false, ordenable: false, enDescarga: true, valor: (f) => f.barrio_catastro ?? null, texto: (f) => f.barrio_catastro ?? "" }),
     c({ clave: "direccion", etiqueta: "Dirección", tipo: "texto", porOmision: false, ordenable: true, enDescarga: true, valor: (f) => f.direccion ?? null, texto: (f) => f.direccion ?? "" }),
     c({ clave: "barrio", etiqueta: "Barrio", tipo: "texto", porOmision: false, ordenable: true, filtrable: true, enDescarga: true, valor: (f) => f.barrio ?? null, texto: (f) => f.barrio ?? "" }),
     c({ clave: "referencia", etiqueta: "Referencia", tipo: "texto", porOmision: false, ordenable: false, enDescarga: true, valor: (f) => f.referencia ?? null, texto: (f) => f.referencia ?? "" }),

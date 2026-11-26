@@ -60,5 +60,7 @@ export function filaDeDescarga(r: FilaDescarga): FilaReporte {
     xy_manual: r.xy_manual ?? null, sin_ubicacion_dispositivo: r.sin_ubicacion_dispositivo ?? null, lat_registro: r.lat_registro ?? null, lon_registro: r.lon_registro ?? null,
     precision_registro_m: r.precision_registro_m ?? null, distancia_registro_m: r.distancia_registro_m ?? null, direccion: r.direccion ?? null, barrio: r.barrio ?? null,
     referencia: r.referencia ?? null, fotos_adjuntadas: r.fotos_adjuntadas ?? 0,
+    // consultar direcciones (25-nov)
+    direccion_contrato: r.direccion_contrato ?? null, barrio_contrato: r.barrio_contrato ?? null, direccion_catastro: r.direccion_catastro ?? null, barrio_catastro: r.barrio_catastro ?? null,
   };
 }

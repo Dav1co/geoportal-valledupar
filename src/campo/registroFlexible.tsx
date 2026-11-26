@@ -167,7 +167,9 @@ export function PanelXY({ estado, onCambio, fix, zona, deshabilitado }: {
 }
 
 /** «¿Quiere agregar dirección?»: desmarcada por omisión; al marcarla aparecen Dirección, Barrio y Referencia (opcionales). */
-export function PanelDireccion({ estado, onCambio, deshabilitado }: { estado: EstadoDireccion; onCambio: (e: EstadoDireccion) => void; deshabilitado?: boolean }) {
+export function PanelDireccion({ estado, onCambio, deshabilitado, rotulo = "¿Quiere agregar dirección?", ayuda = "Dirección, barrio y referencia del sitio. Si la desmarca, no se envían." }: {
+  estado: EstadoDireccion; onCambio: (e: EstadoDireccion) => void; deshabilitado?: boolean; rotulo?: string; ayuda?: string;
+}) {
   const campo = (k: "direccion" | "barrio" | "referencia", rotulo: string) => (
     <div className="tec-campo">
       <label htmlFor={`rf-${k}`}>{rotulo} (opcional)</label>
@@ -178,7 +180,7 @@ export function PanelDireccion({ estado, onCambio, deshabilitado }: { estado: Es
     <div className="rf-panel" data-rf-direccion>
       <label className="campo-check rf-check">
         <input type="checkbox" checked={estado.activa} onChange={(e) => onCambio({ ...estado, activa: e.target.checked })} disabled={deshabilitado} data-rf-direccion-activar />
-        <span><strong>¿Quiere agregar dirección?</strong><small>Dirección, barrio y referencia del sitio. Si la desmarca, no se envían.</small></span>
+        <span><strong>{rotulo}</strong><small>{ayuda}</small></span>
       </label>
       {estado.activa && <div className="rf-direccion">{campo("direccion", "Dirección")}{campo("barrio", "Barrio")}{campo("referencia", "Referencia")}</div>}
     </div>

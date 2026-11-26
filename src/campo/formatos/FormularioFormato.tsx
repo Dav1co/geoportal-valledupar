@@ -8,6 +8,7 @@ import { avisoDeError, apiCampo, ErrorCampo, type FormularioCampo, type Preparac
 import { maxDescripcion } from "../limites";
 import { abrirCamara, camaraDisponible, capturarFoto, cerrarCamara, ErrorCamara, ladoPara, LADO_MAYOR_PX } from "../camara";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M, type Fix } from "../ubicacion";
+import { contratoConDireccion, DireccionDelContrato, PanelDireccionTerreno, useDireccionContrato } from "../direccionContrato";
 import { armarRegistro, BotonesAdjuntar, DIRECCION_VACIA, MarcaOrigen, PanelDireccion, PanelXY, puedeFlexible, xyDigitado, type EstadoDireccion, type EstadoXY, type OrigenFoto } from "../registroFlexible";
 import { decimal, fechaHora, fechaHoraSello, megas, metros } from "../formato";
 import { apiFormatos } from "./apiFormatos";
@@ -74,6 +75,8 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
   const conDireccion = tipo.requiere_contrato !== "si";        // la dirección opcional solo donde el contrato no es obligatorio (David, 25-nov)
   const [xy, setXy] = useState<EstadoXY>({ activo: false, lat: "", lon: "" });
   const [dir, setDir] = useState<EstadoDireccion>(DIRECCION_VACIA);
+  const dirContrato = useDireccionContrato(tipo.requiere_contrato === "no" ? "" : contrato);   // consultar direcciones (25-nov)
+  const conDireccionTerreno = contratoConDireccion(dirContrato.r);    // con un contrato que existe: «La dirección en terreno es distinta» (cualquier formato)
   const prep = useRef<Preparacion | null>(null);
   const enviando = useRef(false);
   const cons = useConstancia(tipo.codigo);
@@ -188,7 +191,7 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
         ...(punto ? { lat: punto.lat, lon: punto.lon, precision_m: null } : { lat: Number(fix!.lat.toFixed(6)), lon: Number(fix!.lon.toFixed(6)), precision_m: Math.round(fix!.precision_m * 10) / 10 }),
         riesgo_inmediato: false, origen: "campo",
         fotos: fotosParaCrear(ordenadas, rutas).map((x, i) => ({ ...x, origen: ordenadas[i].foto.origen })),
-        registro: armarRegistro(!!punto, fix, conDireccion ? dir : null),
+        registro: armarRegistro(!!punto, fix, conDireccion || conDireccionTerreno ? dir : null),
         datos, resultado: tipo.genera_resultado ? (resultado || null) : null, causal: inefectivo ? causal : null,
         ...(cons.bloque ? { constancia: cons.bloque } : {}),
         inicio_dispositivo: inicio.current.iso,
@@ -313,6 +316,7 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
             <label htmlFor="fp-contrato">Número de contrato{tipo.requiere_contrato === "si" ? " (obligatorio)" : " (opcional)"}</label>
             <input id="fp-contrato" type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" maxLength={20} value={contrato} onChange={(e) => setContrato(e.target.value.replace(/\D/g, ""))} disabled={bloqueado} />
             <AvisoSinAgua contrato={contrato} />
+            <DireccionDelContrato estado={dirContrato} />
           </div>
         )}
         {tipo.requiere_contrato !== "no" && <VieneDe contrato={contrato} formulario={`tipo:${tipo.codigo}`} conActas={tiene("da_lugar")} valor={origen} onCambio={setOrigen} deshabilitado={bloqueado} />}
@@ -407,7 +411,8 @@ export function FormularioFormato({ def, tipo: tipoServidor, correo, onVolver, o
                                              : "Las fotos se toman con la cámara y quedan solo en la memoria de esta pantalla: no se guardan en el celular ni en la galería."}</p>
         </div>
 
-        {conDireccion && <PanelDireccion estado={dir} onCambio={setDir} deshabilitado={bloqueado} />}
+        {conDireccionTerreno ? <PanelDireccionTerreno estado={dir} onCambio={setDir} deshabilitado={bloqueado} />
+          : conDireccion && <PanelDireccion estado={dir} onCambio={setDir} deshabilitado={bloqueado} />}
         {flexible && <PanelXY estado={xy} onCambio={setXy} fix={fix} zona={def.zona} deshabilitado={bloqueado} />}
 
         <SeccionConstancia config={cons.config} valor={cons.valor} onCambio={cons.setValor} bloqueado={bloqueado} />

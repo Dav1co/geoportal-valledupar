@@ -14,3 +14,7 @@
 .rf-marca { display: inline-block; font-size: 13px; font-weight: 600; color: var(--t-texto, #1d2b36); background: var(--t-amarillo-suave, #fff4cc); border: 1px solid #b38600; border-radius: 6px; padding: 2px 8px; }
 .rf-aviso { border-left: 4px solid var(--t-azul, #1f5f99); padding: 8px 10px; background: var(--t-azul-suave, #eaf2fb); border-radius: 6px; font-size: 14px; margin: 0 0 8px; }
 @media (max-width: 359px) { .rf-xy { grid-template-columns: 1fr; } }
+/* Consultar direcciones (25-nov): la dirección del contrato bajo el número */
+.dc-direccion { border-left: 4px solid var(--t-azul, #1f5f99); background: var(--t-azul-suave, #eaf2fb); border-radius: 6px; padding: 8px 10px; margin: 6px 0 4px; font-size: 15px; line-height: 1.4; }
+.dc-direccion p { margin: 2px 0; overflow-wrap: anywhere; }
+.dc-rotulo { font-weight: 700; }

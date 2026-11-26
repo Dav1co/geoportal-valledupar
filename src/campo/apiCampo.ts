@@ -122,6 +122,8 @@ const TIEMPO_SUBIDA_MS = 60000;
 
 export const apiCampo = {
   formulario: () => pedir<FormularioCampo>("formulario"),
+  /** Consultar direcciones (25-nov): las dos direcciones del contrato (base comercial y catastro) para mostrarlas en el formato. Con tope por hora (429). */
+  direccionContrato: (contrato: string) => pedir<import("./direccionContrato").RespuestaDireccion>("direccion_contrato", { qs: { contrato }, timeoutMs: 10000 }),
   prepararSubida: (cantidad: number, origen: "campo" | "escritorio") => pedir<Preparacion>("preparar_subida", { cuerpo: { cantidad, origen } }),
   // 30 s: un envío lento en señal débil no debe cortarse antes de tiempo; si se corta, el reintento con el mismo reporte_id es seguro.
   crear: (cuerpo: CuerpoCrear) => pedir<Confirmacion>("crear", { cuerpo, timeoutMs: 30000 }),

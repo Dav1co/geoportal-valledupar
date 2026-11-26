@@ -304,10 +304,14 @@ export function AreaTecnica({ uid, correo }: { uid: string; correo: string }) {
 
   return (
     <div className={`tec-pagina ${FORMULARIOS_REDES.has(elegido) ? "tec-modo-distribucion" : esPtar(elegido) ? "tec-modo-ptar" : "tec-modo-plantas"}`} data-modo-form={FORMULARIOS_REDES.has(elegido) ? "distribucion" : esPtar(elegido) ? "ptar" : "plantas"}>
-      <div className="tec-volver-barra">
-        <button type="button" className="tec-volver" onClick={volverInicio}><span aria-hidden="true">←</span> Volver</button>
-        <span className="tec-volver-tit">{nombreElegido}</span>
-      </div>
+      {/* Consultar direcciones (25-nov, punto 3): los reportes compartidos con Comercial traen su propia cabecera «← Volver · título» (que además pregunta
+          antes de descartar lo escrito); aquí no se dibuja otra encima. Los demás formularios de Técnica siguen con esta barra. */}
+      {elegido === "anomalia_compartida" || elegido === "revision_compartida" ? null : (
+        <div className="tec-volver-barra">
+          <button type="button" className="tec-volver" onClick={volverInicio}><span aria-hidden="true">←</span> Volver</button>
+          <span className="tec-volver-tit">{nombreElegido}</span>
+        </div>
+      )}
 
       {elegido === "anomalia_compartida" || elegido === "revision_compartida" ? <ReporteCompartido key={elegido} formulario={elegido} correo={correo} onVolver={volverInicio} /> : null}
       {elegido === "entrada_quimicos" || elegido === "uso_quimicos" ? <FormularioQuimicos key={elegido} formulario={elegido} onSalir={volverInicio} /> : null}

@@ -153,3 +153,13 @@
 .ac-obs .tec-campo textarea { padding: 10px 12px; }
 .ac-obs-faltas { margin: 0; padding-left: 20px; }
 .ac-obs-ok { margin: 0; font-weight: 700; color: #1d6b3a; }
+/* Consultar direcciones (25-nov): sección «Predio» */
+.ac-predio { margin: 0; display: grid; grid-template-columns: 1fr; gap: 2px 12px; }
+.ac-predio dt { font-size: 13.5px; color: var(--t-texto-2, #52626f); margin-top: 8px; }
+.ac-predio dd { margin: 0; font-size: 15.5px; overflow-wrap: anywhere; padding-bottom: 6px; border-bottom: 1px solid var(--t-suave, #eef2f5); }
+@media (min-width: 720px) { .ac-predio { grid-template-columns: minmax(180px, 34%) 1fr; } .ac-predio dt { margin-top: 0; padding: 6px 0; } .ac-predio dd { padding: 6px 0; } }
+.ac-unidades-n { font-weight: 700; }
+.ac-unidades { margin: 4px 0; padding-left: 20px; }
+.ac-unidades li { margin: 2px 0; }
+.ac-original { display: block; color: var(--t-texto-2, #52626f); font-size: 12.5px; overflow-wrap: anywhere; }
+.ac-original code { font-size: 12px; white-space: pre-wrap; }
