@@ -1,0 +1,46 @@
+{
+ "partida": {
+  "HUELLA_CAMPO": "cce593806f59d3d27c34d7f2070cc5c1",
+  "HUELLA_ACTA": "111506c690249ad3b56ebf572566434c",
+  "HUELLA_TECNICA_PRODUCCION": "838b80984e51cc7873a666f85d657195",
+  "HUELLA_TECNICA_LOCAL": "0c7f5364ab1d3bc04b6222762934306a",
+  "MD5_CREAR": "51ecb98ca2e7f940c66b9a1f3e828222",
+  "MD5_TEC": "7281c4bbf3db56fdfc1c11bb42f645ff"
+ },
+ "nuevas": {
+  "HUELLA_CAMPO_NUEVA": "bd23880d2b070c49281980795241c12f",
+  "MD5_NUEVA": {
+   "CREAR": "cfb2dbb022ae0f6e93989dcc6579e4d8",
+   "TEC": "8ae23410abdba2194377b5ae19abc417",
+   "LISTAR": "c6a74c023f37e5e0de7527b71d7cb369",
+   "OBTENER": "bf9900e35a4051a00fec8b87cb34f153",
+   "DESCARGA_PAGINA": "0f4ce407e77abe49b1e6cc6132507f86",
+   "PDF_DATOS": "52d496ead7c6ea884b1c58b8c80541eb",
+   "DERIVADAS": "87250167e19a0b95ff7c40c351638a52"
+  },
+  "FUNCIONES_NUEVAS": {
+   "campo.f_derivadas_filtradas(jsonb)": "89b5cb6f1ce412e2dc90c31e8293e261",
+   "campo.f_derivada_sin_correos(jsonb)": "1ce3ca8e39365bd42592bef52657f463",
+   "public.geoportal_campo_derivadas_descarga_iniciar(text,jsonb,text,boolean,text)": "9409da6f24d33697631a618e8fdd22de",
+   "public.geoportal_campo_derivadas_descarga_pagina(text,bigint,bigint,integer)": "0bc89f15ba933272c59464fd9f3e6b94",
+   "public.geoportal_campo_derivadas_descarga_cerrar(text,bigint,integer,text,text)": "f55cce52d42d0904f769feb6c5056113"
+  },
+  "TABLAS_NUEVAS": {
+   "campo.reporte_registro": "6bbcd353497807cfff9d4b0b5722da93"
+  },
+  "ESTRUCTURA_NUEVA": {
+   "campo.reporte_fotos": "72faae4ca1b8a54ff014301997b22ffc"
+  }
+ },
+ "estructura_produccion": {
+  "campo.reportes": "3528e465f4ee67349f16832ca3d05827",
+  "campo.reporte_fotos": "c341433f90314544c5b06703f6b3ee3e",
+  "campo.reporte_datos_sensibles": "5d03ed6c45eb0047c143338e6ee060d7",
+  "campo.derivadas": "28a6a571a358b128740ef775974b1225",
+  "campo.derivada_eventos": "d01fd6ead43730a491b927f36c3136a9",
+  "campo.tipos_reporte": "3b9274b039c86b8079fee77b484ad5e1",
+  "campo.parametros": "fd9322f0721b931e71fa96b3010ed6f8",
+  "public.geoportal_auditoria": "4012748c34060e929d0a2418a7df9472"
+ },
+ "verificacion": 15
+}

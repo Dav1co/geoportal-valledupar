@@ -1,0 +1,34 @@
+PRUEBAS LOCALES · [Code A] Registro flexible para supervisores de Comercial (25-nov) · clúster 55432
+
+Huella de Técnica: en los _editor va la de producción 838b80984e51cc7873a666f85d657195; en local se cambia por la del doble 0c7f5364ab1d3bc04b6222762934306a (el doble 4a es anterior a lo último de Técnica).
+
+OK    01 huellas ANTES: campo, acta y Técnica «PUBLICADA»
+OK    02 ensayo: termina en ERROR esperado, 97 de 97 (0.2 s)
+OK    03 el ensayo no dejó nada (huella de campo publicada, sin la tabla nueva)
+OK    04 migración (0.0 s)
+OK    05 verificación 15 de 15
+OK    06 huellas DESPUÉS: campo «CON ESTE CAMBIO», acta y Técnica sin cambio
+OK    07 huella de campo nueva = bd23880d2b070c49281980795241c12f
+OK    08 repetir la migración: la guardia la rechaza
+OK    09 el ensayo sobre la base ya migrada también se detiene en la guardia
+OK    10 registros reales: el supervisor con galería y XY digitado, el operario con cámara
+OK    11 sus marcas: true:galeria, false:camara
+OK    12 reversa
+OK    13 la huella de campo vuelve a la publicada
+OK    14 huellas tras la reversa: las tres «PUBLICADA»
+OK    15 nada se borró: los registros y sus marcas siguen
+OK    16 repetir la reversa: se rechaza
+OK    17 volver a aplicar sobre lo que dejó la reversa
+OK    18 verificación otra vez 15 de 15
+
+Guardias (una base nueva cada una):
+OK    19 una función de campo distinta: la migración se detiene sin cambiar nada
+OK    20 la estructura de campo.reporte_fotos distinta: la migración se detiene sin cambiar nada
+OK    21 las funciones de Técnica distintas: la migración se detiene sin cambiar nada
+OK    22 una tabla campo.reporte_registro que no es la de este paquete: la migración se detiene sin cambiar nada
+
+Mutaciones (el ensayo debe fallar):
+OK    23 sello con la fila vacía de reporte_registro: el ensayo falla en 02.01
+OK    24 sin la regla del supervisor: el ensayo falla en 03.04
+
+RESULTADO: 24 de 24 — SIN FALLAS
