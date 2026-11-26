@@ -1,3 +1,4 @@
+import { BotonVolver } from "../BotonVolver";
 import { useCallback, useEffect, useState } from "react";
 import "./acta.css";
 import { avisoDeError, ErrorCampo } from "../apiCampo";
@@ -35,8 +36,8 @@ export function AperturasSinRegistrar({ onVolver, incrustada = false }: { onVolv
   const cuerpo = (
       <section className="tec-tarjeta">
         {incrustada ? <h2>Aperturas sin registrar</h2> : <div className="campo-cab">
+          <BotonVolver onClick={onVolver} />
           <h1>Aperturas sin registrar</h1>
-          <button type="button" className="tec-boton-sec" onClick={onVolver}>Volver</button>
         </div>}
         <p className="campo-sub">Consecutivos del acta de inspección que se entregaron y no llegaron a registrarse. Cancelar un registro deja el consecutivo justificado (motivo, quién y cuándo); no se borra nada.</p>
         <label className="campo-check">

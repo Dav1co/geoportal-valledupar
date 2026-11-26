@@ -6,13 +6,33 @@ import { FILTROS_INICIALES, aFiltrosServidor, filtrosLegibles, filtrosSoloPantal
 import { fmtMiles } from "./formatoRevision";
 import { TablaReportes } from "./TablaReportes";
 import { Detalle } from "./Detalle";
+import { DerivadasReporte } from "./DerivadasReporte";
 import { DescargaCancelada, ExcelDemasiadoGrande, ejecutarDescarga, guardarArchivo, type Progreso } from "./ejecutarDescarga";
 
 // El mapa (y MapLibre con él) se descarga SOLO cuando la persona abre la vista «Mapa».
 const MapaReportes = lazyConRecarga(() => import("./MapaReportes"));
 const PAGINA = 5000;
 
-export function Reportes({ def }: { def: FormularioRev }) {
+/** «Reportes» con dos vistas (25-nov): los reportes de campo y «Avisos y actividades derivadas» (solo consulta y descarga; se atiende en Actas registradas). La de derivadas solo la ve el supervisor y se monta al abrirla. */
+export function Reportes({ def, correo = "", onIrAAtender, vistaInicial = "reportes" }: { def: FormularioRev; correo?: string; onIrAAtender?: () => void; vistaInicial?: "reportes" | "derivadas" }) {
+  const [vista, setVista] = useState<"reportes" | "derivadas">(vistaInicial);
+  const [vistaDer, setVistaDer] = useState(vistaInicial === "derivadas");
+  const veDerivadas = def.puede.supervisar === true;
+  return (
+    <>
+      {veDerivadas ? (
+        <div className="rv-vistas rv-vistas-rep" role="group" aria-label="Qué ver en Reportes">
+          <button type="button" className="rv-boton-sec rv-corto" aria-pressed={vista === "reportes"} onClick={() => setVista("reportes")} data-vista="reportes">Reportes de campo</button>
+          <button type="button" className="rv-boton-sec rv-corto" aria-pressed={vista === "derivadas"} onClick={() => { setVista("derivadas"); setVistaDer(true); }} data-vista="derivadas">Avisos y actividades derivadas</button>
+        </div>
+      ) : null}
+      <div hidden={vista !== "reportes"}><ListaReportes def={def} /></div>
+      {veDerivadas && vistaDer ? <div hidden={vista !== "derivadas"}><DerivadasReporte correo={correo} admin={def.perfil === "admin"} onIrAAtender={onIrAAtender} /></div> : null}
+    </>
+  );
+}
+
+function ListaReportes({ def }: { def: FormularioRev }) {
   const [f, setF] = useState<FiltrosUI>(FILTROS_INICIALES);
   const [filas, setFilas] = useState<FilaReporte[]>([]);
   const [total, setTotal] = useState(0);

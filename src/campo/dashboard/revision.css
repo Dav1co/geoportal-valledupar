@@ -3,6 +3,8 @@
 .rv { flex: 1; overflow: auto; background: var(--t-fondo, #f2f5f8); color: var(--t-texto, #22313f); -webkit-text-size-adjust: 100%; min-height: 0; }
 .rv-cab { background: var(--t-modo, #0a2540); color: #fff; }      /* encabezado común de los dashboards (como el Dashboard PTAP y el de distribución), en el color del módulo */
 .rv-ancho { max-width: 1400px; margin: 0 auto; padding: 12px 16px 0; box-sizing: border-box; }
+.rv-fila-volver { justify-content: flex-start; flex-wrap: nowrap; gap: 12px; }
+.rv-fila-volver h1 { flex: 1 1 auto; min-width: 0; }
 .rv-fila { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
 .rv-cab h1 { margin: 0; font-size: 20px; }
 .rv-sesion { font-size: 14px; color: rgba(255, 255, 255, .82); margin-top: 4px; overflow-wrap: anywhere; }
@@ -177,3 +179,16 @@
 .rv-cat-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .rv-cat-lista .rv-cat-item { border-bottom: 1px solid var(--t-borde, #d5dde6); padding: 6px 0; }
 .rv-cat-acc .rv-enlace, .rv-cat-acc .rv-boton-sec { min-height: 44px; }
+
+/* 25-nov: «Avisos y actividades derivadas» dentro de Reportes (solo consulta y descarga) */
+.rv-vistas-rep { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.rv-der-envoltura { overflow-x: auto; }
+.rv-der-tabla { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--t-tarjeta, #fff); }
+.rv-der-tabla th, .rv-der-tabla td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--t-borde, #d5dde6); vertical-align: top; }
+.rv-der-tabla th { background: var(--t-suave, #eef2f5); font-weight: 700; white-space: nowrap; }
+@media (max-width: 640px) {
+  .rv-der-tabla thead { position: absolute; left: -9999px; }
+  .rv-der-tabla tr { display: block; border: 1px solid var(--t-borde, #d5dde6); border-radius: 8px; margin-bottom: 8px; padding: 4px 0; }
+  .rv-der-tabla td { display: flex; justify-content: space-between; gap: 12px; border: 0; padding: 4px 10px; }
+  .rv-der-tabla td::before { content: attr(data-etiqueta); font-weight: 700; color: var(--t-texto-2, #52626f); }
+}

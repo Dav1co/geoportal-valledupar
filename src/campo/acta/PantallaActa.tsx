@@ -1,3 +1,4 @@
+import { BotonVolver } from "../BotonVolver";
 import { PdfRegistro, useDocumento } from "../documentos/Registro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./acta.css";
@@ -56,7 +57,7 @@ export function PantallaActa({ correo, onVolver, contratoInicial = "", destinos,
           <h1>{sinAcceso ? "Sin acceso a «Reportar posible pérdida»" : "No se pudo abrir «Reportar posible pérdida»"}</h1>
           <p>{sinAcceso ? "Su cuenta no tiene acceso a «Reportar posible pérdida». Solicítelo a un administrador." : avisoDeError(error).texto}</p>
           {!sinAcceso && error.tipo !== "sesion" && <button type="button" className="tec-boton" onClick={recargar}>Reintentar</button>}
-          <button type="button" className="tec-boton-sec" onClick={onVolver}>Volver</button>
+          <BotonVolver onClick={onVolver} />
         </section>
       </div>
     );
@@ -76,8 +77,8 @@ export function PantallaActa({ correo, onVolver, contratoInicial = "", destinos,
     <div className="tec-pagina campo-pagina">
       <section className="tec-tarjeta">
         <div className="campo-cab">
+          <BotonVolver onClick={onVolver} />
           <h1>Reportar posible pérdida</h1>
-          <button type="button" className="tec-boton-sec" onClick={onVolver}>Volver</button>
         </div>
         <h2 className="campo-grupo-titulo">Mis actas</h2>
         <p className="campo-nota" role="note">{L.TEXTO_PAPEL}</p>

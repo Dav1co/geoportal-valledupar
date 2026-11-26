@@ -8,7 +8,10 @@ import { apiCampo, avisoDeError, ErrorCampo, type FormularioCampo } from "./apiC
 import { ReporteGeneral } from "./ReporteGeneral";
 import { FormatosCampo } from "./formatos/FormatosCampo";
 import { formatosDisponibles } from "./formatos/tipos";
-import { entradasDeCampo, veActasRegistradas, type EntradaId } from "./entradas";
+import { entradasDeCampo, entradasDelBloque, bloquesVisibles, ROTULO_BLOQUE, veActasRegistradas, type BloqueEntrada, type EntradaId } from "./entradas";
+import { IconoEntrada } from "./iconosEntradas";
+import { apiDocumentos } from "./documentos/apiDocumentos";
+import { pendientesDe, textoPendientes, TOPE_PENDIENTES, type Pendientes } from "./documentos/contadorDerivadas";
 import { PantallaActa } from "./acta/PantallaActa";
 import { ActasRegistradas } from "./documentos/ActasRegistradas";
 import type { Destino } from "../components/ConfirmarCancelar";
@@ -54,6 +57,10 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
   const [formatoInicial, setFormatoInicial] = useState<string | undefined>(undefined);                    // atajo de submedición: formato que se abre de una vez…
   const [valoresIniciales, setValoresIniciales] = useState<Record<string, unknown> | undefined>(undefined); // …y lo que trae marcado («Cambio»)
   const [version, setVersion] = useState(0);        // sube con cada «Hacer otro reporte»: el formulario nace limpio y se vuelve a leer la definición
+  const [bloque, setBloque] = useState<BloqueEntrada>("registrar");   // pestaña de la lista de entradas
+  const [abrirActasEn, setAbrirActasEn] = useState<"actas" | "derivadas">("actas");
+  const [abrirReportesEn, setAbrirReportesEn] = useState<"reportes" | "derivadas">("reportes");
+  const [pendientes, setPendientes] = useState<Pendientes | null>(null);   // pendientes de «Avisos y actividades derivadas»; nulo = no aplica o no se pudo leer (no se muestra nada)
   const [reparto, setReparto] = useState<Perfil>({ es_repartidor: false, es_supervisor: false });   // lo decide el servidor (perfil liviano de geoportal-reparto)
 
   useEffect(() => { fijarAreaCampo(null); }, []);      // Comercial: sin área (por si antes se abrió un reporte compartido desde Técnica)
@@ -73,6 +80,18 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
       .catch((e) => { if (vivo) setError(e instanceof ErrorCampo ? e : new ErrorCampo("servidor", "No se pudo cargar.", 0)); });
     return () => { vivo = false; };
   }, [intento, version, campo]);
+
+  // Contador de «Avisos y actividades derivadas» (25-nov): una consulta liviana al abrir, SOLO para quien supervisa (la ruta es del supervisor de campo). Si falla, no se muestra nada y no bloquea.
+  const supervisaCampo = def?.puede.supervisar === true;
+  const [recuento, setRecuento] = useState(0);
+  useEffect(() => {
+    if (!supervisaCampo) { setPendientes(null); return; }
+    let vivo = true;
+    apiDocumentos.derivadas({ estado: "pendiente", limite: TOPE_PENDIENTES })
+      .then((r) => { if (vivo) setPendientes(pendientesDe(r.filas.length, r.siguiente !== null && r.siguiente !== undefined)); })
+      .catch(() => { if (vivo) setPendientes(null); });
+    return () => { vivo = false; };
+  }, [supervisaCampo, recuento]);
 
   if (campo && error) {
     const a = avisoDeError(error);
@@ -115,7 +134,9 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
   }
   // R3 (22-nov): también el supervisor de campo. Las aperturas y la lectura por geoportal-acta siguen solo con dashboardActa (ActasRegistradas elige la vía por puedeAperturas).
   if (abierta === "acta_supervision" && veActasRegistradas({ puedeSupervisarActas: dashboardActa, puedeSupervisar: def?.puede.supervisar === true })) {
-    return <ActasRegistradas correo={correo} onVolver={() => setAbierta(null)} nombres={nombresFormularios(def)} puedeAperturas={dashboardActa} puedeCerrarDerivadas={def?.puede.supervisar === true} />;
+    return <ActasRegistradas correo={correo} onVolver={() => { setAbrirActasEn("actas"); setAbierta(null); }} nombres={nombresFormularios(def)} puedeAperturas={dashboardActa} puedeCerrarDerivadas={def?.puede.supervisar === true}
+      pendientes={pendientes} onRecontar={() => setRecuento((n) => n + 1)} abrirEn={abrirActasEn}
+      onIrAReportes={def?.puede.supervisar === true ? () => { setAbrirReportesEn("derivadas"); setAbierta("revision"); } : undefined} />;
   }
 
   if (abierta === "activo_campo" && campo) {
@@ -142,7 +163,7 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
   }
 
   if (abierta === "revision" && def?.puede.supervisar) {
-    return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando Supervisión y dashboard…</p></section></div>}><Revision correo={correo} onVolver={() => setAbierta(null)} /></Suspense>;
+    return <Suspense fallback={<div className="tec-pagina"><section className="tec-tarjeta"><p>Cargando Supervisión y dashboard…</p></section></div>}><Revision correo={correo} onVolver={() => { setAbrirReportesEn("reportes"); setAbierta(null); }} abrirDerivadas={abrirReportesEn === "derivadas"} onIrADerivadas={() => { setAbrirActasEn("derivadas"); setAbierta("acta_supervision"); }} /></Suspense>;
   }
 
   const entradas = entradasDeCampo({
@@ -151,27 +172,39 @@ function PantallasCampo({ correo, acta = false, campo = true, dashboardActa = fa
     puedeRepartir: reparto.es_repartidor, puedeSupervisarReparto: reparto.es_supervisor,
   });
 
+  const bloques = bloquesVisibles(entradas);
+  const bloqueActivo: BloqueEntrada = bloques.includes(bloque) ? bloque : bloques[0] ?? "registrar";
+  const delBloque = entradasDelBloque(entradas, bloqueActivo);
   return (
     <div className="tec-pagina campo-pagina com-inicio">
       <section className="tec-tarjeta com-hoja">
         <h1>{campo || !acta ? "Formatos de campo" : "Reportar posible pérdida"}</h1>
         <p className="campo-sub">{def ? ROTULO_PERFIL[def.perfil] : acta ? "Registro digital de actas" : "Consulta de contratos"}</p>
-        <div className="campo-formatos">
-          {entradas.map((e, i) => {
-            const separar = i > 0 && entradas[i - 1].seccion !== e.seccion;
+        {bloques.length > 1 ? (
+          <div className="com-bloques" role="tablist" aria-label="Qué quiere hacer">
+            {bloques.map((b) => <button key={b} type="button" role="tab" id={`com-bloque-${b}`} aria-selected={bloqueActivo === b} aria-controls="com-bloque-panel" className="com-bloque-tab" data-bloque={b}
+              onClick={() => setBloque(b)}>{ROTULO_BLOQUE[b]}</button>)}
+          </div>
+        ) : null}
+        <div className="campo-formatos" id="com-bloque-panel" role={bloques.length > 1 ? "tabpanel" : undefined} aria-labelledby={bloques.length > 1 ? `com-bloque-${bloqueActivo}` : undefined} data-bloque-activo={bloqueActivo}>
+          {delBloque.map((e, i) => {
+            const separar = i > 0 && delBloque[i - 1].seccion !== e.seccion;
             const clase = `campo-formato${e.gestion ? " campo-formato-gestion" : ""}${e.abreMas ? " campo-formato-mas" : ""}`;
+            const insignia = e.id === "acta_supervision" ? textoPendientes(pendientes) : "";
+            const icono = <span className="com-tarjeta-ini" aria-hidden="true"><IconoEntrada id={e.id} /></span>;
             return (
               <Fragment key={e.id}>
                 {separar ? <hr className="campo-separador" aria-hidden="true" /> : null}
                 {e.pendiente ? (
                   <div className={`${clase} campo-formato-proximo`} aria-disabled="true">
-                    <span className="com-tarjeta-ini" data-ini={e.titulo.charAt(0)} aria-hidden="true" />
+                    {icono}
                     <span className="com-tarjeta-txt"><strong>{e.titulo}</strong><span>Próximamente. {e.descripcion}</span></span>
                   </div>
                 ) : (
-                  <button type="button" className={`${clase} campo-formato-activo`} onClick={() => setAbierta(e.id)} disabled={!e.habilitada}>
-                    <span className="com-tarjeta-ini" data-ini={e.titulo.charAt(0)} aria-hidden="true" />
-                    <span className="com-tarjeta-txt"><strong>{e.titulo}</strong>{e.descripcion ? <span>{e.descripcion}</span> : null}</span>
+                  <button type="button" className={`${clase} campo-formato-activo`} onClick={() => { if (e.id === "acta_supervision") setAbrirActasEn("actas"); setAbierta(e.id); }} disabled={!e.habilitada} data-entrada={e.id}>
+                    {icono}
+                    <span className="com-tarjeta-txt"><strong>{e.titulo}</strong>{e.descripcion ? <span>{e.descripcion}</span> : null}
+                      {insignia ? <span className="com-insignia" data-testid="pendientes-derivadas">{insignia} {insignia === "1" ? "aviso o actividad pendiente" : "avisos y actividades pendientes"}</span> : null}</span>
                     {e.abreMas ? <span className="campo-formato-flecha" aria-hidden="true">›</span> : null}
                   </button>
                 )}

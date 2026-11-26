@@ -3,6 +3,7 @@ import "./reparto.css";
 import { apiReparto, avisoDeError, ErrorReparto, type Contexto, type Lista } from "./apiReparto";
 import { ciclosParaEscoger, codigoValido, dividir, entregadasDeRuta, guardarLista, guardarToque, leerLista, leerToque, sinEntregada, textoFecha, textoHora, textoPeriodo,
          type OpcionRuta, type ToquePendiente } from "./logica";
+import { BotonVolver } from "../BotonVolver";
 import { useUbicacion, UMBRAL_PRECISION_MALA_M } from "../ubicacion";
 
 // «Reparto de facturas» del repartidor (celular, 390 px; modelo navegable del 23-nov). El repartidor escoge su ruta (primero el ciclo y luego la ruta) entre la
@@ -26,7 +27,7 @@ export function PantallaRepartidor({ onVolver }: { onVolver: () => void }) {
 function Cabecera({ titulo, sub, onVolver, rotulo = "← Volver" }: { titulo: string; sub?: React.ReactNode; onVolver: () => void; rotulo?: string }) {
   return (
     <header className="campo-cab rep-cab">
-      <button type="button" className="tec-boton-sec" onClick={onVolver}>{rotulo}</button>
+      <BotonVolver onClick={onVolver} descripcion={rotulo === "← Volver" ? undefined : rotulo} />
       <div><h1>{titulo}</h1>{sub ? <p className="campo-sub">{sub}</p> : null}</div>
     </header>
   );

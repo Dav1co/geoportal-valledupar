@@ -9,13 +9,14 @@ import { ConstanciasAdmin } from "../constancia/ConstanciasAdmin";
 import { PersonalCampo } from "./PersonalCampo";
 import { Cuadrillas } from "./Cuadrillas";
 import { supabase } from "../../lib/supabase";
+import { BotonVolver } from "../BotonVolver";
 
 // «Supervisión y dashboard» (antes «Revisión de reportes», Paso C): pantalla del supervisor y del administrador de Formatos de campo. Se carga bajo demanda (React.lazy desde AreaCampo): quien no tiene el permiso no descarga este código.
 // Qué se muestra lo decide el SERVIDOR (`puede` y `perfil` de «formulario»). Pasada 14/11: Catálogo y Parámetros los VE el supervisor (solo lectura, ruta «catalogo_lectura»);
 // solo el administrador los edita (y la base rechaza cualquier escritura de otro perfil). Personal: lo ve el supervisor; qué edita cada quien lo dice el servidor (desde el 21-nov también el supervisor: cuadrilla, actividades y formularios). Cuadrillas (21-nov): pestaña propia.
 type Seccion = "reportes" | "indicadores" | "catalogo" | "parametros" | "personal" | "cuadrillas";
 
-export default function Revision({ correo, onVolver }: { correo: string; onVolver: () => void }) {
+export default function Revision({ correo, onVolver, onIrADerivadas, abrirDerivadas = false }: { correo: string; onVolver: () => void; onIrADerivadas?: () => void; abrirDerivadas?: boolean }) {
   const [def, setDef] = useState<FormularioRev | null>(null);
   const [error, setError] = useState<{ texto: string; sesion: boolean } | null>(null);
   const [seccion, setSeccion] = useState<Seccion>("reportes");
@@ -51,9 +52,9 @@ export default function Revision({ correo, onVolver }: { correo: string; onVolve
     <div className="rv">
       <div className="rv-cab">
         <div className="rv-ancho">
-          <div className="rv-fila">
+          <div className="rv-fila rv-fila-volver">
+            <BotonVolver variante="claro" onClick={onVolver} />
             <h1>Supervisión y dashboard</h1>
-            <button type="button" className="rv-boton-claro" onClick={onVolver}>← Volver a Formatos de campo</button>
           </div>
           <div className="rv-sesion">{correo} · {def?.perfil === "admin" ? "Administrador" : "Supervisor de reportes de campo"}</div>
           {def && supervisa ? (
@@ -70,7 +71,7 @@ export default function Revision({ correo, onVolver }: { correo: string; onVolve
           </div>
         ) : !def ? <p className="rv-sub" role="status">Cargando la revisión…</p>
           : !supervisa ? <div className="rv-aviso rv-aviso-error" role="alert">Su cuenta no tiene permiso para revisar reportes.</div>
-          : seccion === "reportes" ? <Reportes def={def} />
+          : seccion === "reportes" ? <Reportes def={def} correo={correo} onIrAAtender={onIrADerivadas} vistaInicial={abrirDerivadas ? "derivadas" : "reportes"} />
           : seccion === "indicadores" ? <Indicadores def={def} />
           : seccion === "catalogo" && admin ? <><Catalogo alCambiar={() => void cargar(false)} /><ConstanciasAdmin /></>
           : seccion === "parametros" && admin ? <Parametros def={def} alCambiar={() => void cargar(false)} />

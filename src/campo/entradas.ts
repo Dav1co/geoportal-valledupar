@@ -18,7 +18,15 @@ export type EntradaCampo = {
   gestion?: boolean;
   /** Abre más opciones (se dibuja con flecha ›). */
   abreMas?: boolean;
+  /** 25-nov (David): «Registrar en campo» (lo que hace el operario) o «Supervisar» (una tarjeta por motor; cada actividad nueva suma la suya, no se unen en un tablero). */
+  bloque: BloqueEntrada;
 };
+export type BloqueEntrada = "registrar" | "supervisar";
+export const ROTULO_BLOQUE: Record<BloqueEntrada, string> = { registrar: "Registrar en campo", supervisar: "Supervisar" };
+/** Las entradas de un bloque, en su orden. */
+export const entradasDelBloque = (es: EntradaCampo[], b: BloqueEntrada): EntradaCampo[] => es.filter((e) => e.bloque === b);
+/** Bloques que se dibujan: las pestañas solo salen si la persona tiene entradas en los dos. */
+export const bloquesVisibles = (es: EntradaCampo[]): BloqueEntrada[] => (["registrar", "supervisar"] as const).filter((b) => es.some((e) => e.bloque === b));
 
 export type CondicionesEntradas = {
   /** El servidor dice que la persona puede reportar (def.puede.reportar). */
@@ -54,37 +62,37 @@ export function entradasDeCampo(c: CondicionesEntradas): EntradaCampo[] {
   const e: EntradaCampo[] = [];
   const campo = c.puedeCampo !== false;
   if (campo) e.push({
-    id: "reporte_general", titulo: "Reportar anomalía", seccion: 1,
+    id: "reporte_general", titulo: "Reportar anomalía", seccion: 1, bloque: "registrar",
     descripcion: "Registre en segundos lo que encontró: tipo, fotos, ubicación y contrato.", habilitada: c.puedeReportar,
   });
   if (campo && c.hayFormatos) e.push({
-    id: "formatos", titulo: "Formatos de actividad", seccion: 2, abreMas: true,
+    id: "formatos", titulo: "Formatos de actividad", seccion: 2, abreMas: true, bloque: "registrar",
     descripcion: "Suspensión, corte, instalaciones y otras actividades, con sus campos, fotos y resultado.", habilitada: c.puedeReportar,
   });
   // Corte 14 de Técnica: «Encontrar o reportar activo» (la misma pantalla de Técnica). La ve quien tiene Formularios de campo; el servidor lo vuelve a decidir al abrirla.
   if (campo && c.puedeActivoCampo === true) e.push({
-    id: "activo_campo", titulo: "Encontrar o reportar activo", seccion: 2,
+    id: "activo_campo", titulo: "Encontrar o reportar activo", seccion: 2, bloque: "registrar",
     descripcion: "Vea los activos de la red que tiene cerca o reporte uno que no está.", habilitada: true,
   });
   // Reparto de facturas (24-nov): quien tiene la actividad «Reparto» en Personal de Comercial
   if (campo && c.puedeRepartir === true) e.push({
-    id: "reparto", titulo: "Reparto de facturas", seccion: 2, habilitada: true,
+    id: "reparto", titulo: "Reparto de facturas", seccion: 2, bloque: "registrar", habilitada: true,
     descripcion: "Escoja su ruta y marque cada factura entregada, con su ubicación, en el orden en que reparte.",
   });
   if (c.puedeActa) e.push({
-    id: "acta", titulo: "Reportar posible pérdida", seccion: 3,
+    id: "acta", titulo: "Reportar posible pérdida", seccion: 3, bloque: "registrar",
     descripcion: "Registro digital que acompaña al acta física firmada.", habilitada: true,
   });
   if (c.puedeAnalisis === true) e.push({
-    id: "analisis_contrato", titulo: "Análisis de contrato", seccion: 3, habilitada: true,
-    descripcion: "Escriba un contrato y vea cartera, consumo, medidor, gestiones y ubicación.",
+    id: "analisis_contrato", titulo: "Consultar", seccion: 3, bloque: "registrar", habilitada: true,
+    descripcion: "Análisis de contrato: escriba un contrato y vea cartera, consumo, medidor, gestiones y ubicación.",
   });
   // Comercial 21-nov (B2): «Actas registradas» reúne las actas con PDF, las actividades derivadas, «Aperturas sin registrar» y Personal en solo lectura (el id interno no cambia).
   // 22-nov (R3, David): también el supervisor de campo (dashboard_campo); lee por geoportal-campo (campo.f_autorizar_registradas). Ver veActasRegistradas.
-  if (veActasRegistradas(c)) e.push({ id: "acta_supervision", titulo: "Actas registradas", seccion: 4, gestion: true, descripcion: "", habilitada: true });
+  if (veActasRegistradas(c)) e.push({ id: "acta_supervision", titulo: "Actas registradas", seccion: 4, bloque: "supervisar", gestion: true, descripcion: "Actas con su PDF, avisos y actividades derivadas, aperturas sin registrar y personal.", habilitada: true });
   // Paso C: «Supervisión y dashboard» (antes «Revisión de reportes»: lista, mapa, indicadores; y catálogo y parámetros para el administrador) solo con el permiso de supervisión
-  if (c.puedeSupervisar) e.push({ id: "revision", titulo: "Supervisión y dashboard", seccion: 4, gestion: true, descripcion: "", habilitada: true });
+  if (c.puedeSupervisar) e.push({ id: "revision", titulo: "Supervisión y dashboard", seccion: 4, bloque: "supervisar", gestion: true, descripcion: "Reportes, indicadores, catálogo, parámetros, personal y cuadrillas.", habilitada: true });
   // Reparto de facturas: el supervisor de reparto (actividad «Supervisión de reparto»; dashboard_campo solo no basta)
-  if (campo && c.puedeSupervisarReparto === true) e.push({ id: "reparto_supervision", titulo: "Reparto de facturas · Supervisión", seccion: 4, gestion: true, descripcion: "", habilitada: true });
+  if (campo && c.puedeSupervisarReparto === true) e.push({ id: "reparto_supervision", titulo: "Reparto de facturas · Supervisión", seccion: 4, bloque: "supervisar", gestion: true, descripcion: "Archivos de ruta, avance, mapa y calendario del reparto.", habilitada: true });
   return e;
 }

@@ -3,6 +3,7 @@ import "./reparto.css";
 import { lazyConRecarga } from "../../lib/recarga";
 import { apiReparto, avisoDeError, type CalendarioReparto, type CargaLote, type Detalle, type FilaAvance, type LoteFila } from "./apiReparto";
 import { ENCABEZADOS, textoFecha, textoHora, textoPeriodo, type FilaArchivo } from "./logica";
+import { BotonVolver } from "../BotonVolver";
 import { descargarPlantillaReparto, leerArchivoRuta } from "./plantilla";
 
 // «Reparto de facturas · Supervisión» (escritorio; modelo navegable del 23-nov, ajustado el 23-nov: el repartidor escoge su ruta, no hay asignación).
@@ -25,7 +26,7 @@ export function PantallaSupervisor({ onVolver }: { onVolver: () => void }) {
   return (
     <div className="tec-pagina campo-pagina rep-pagina rep-sup" data-pantalla="reparto-supervisor">
       <header className="campo-cab rep-cab">
-        <button type="button" className="tec-boton-sec" onClick={onVolver}>← Volver</button>
+        <BotonVolver onClick={onVolver} />
         <div><h1>Reparto de facturas · Supervisión</h1><p className="campo-sub">Archivos de ruta, avance, mapa y calendario de reparto</p></div>
       </header>
       <nav className="rep-tabs" aria-label="Secciones">

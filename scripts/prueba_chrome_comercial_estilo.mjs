@@ -255,15 +255,17 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
   await revisar(pg, "C0 inicio de Formatos de campo", T);
   if (!SOLO_CAPTURAS) {
     const t = await pg.evaluate(() => [...document.querySelectorAll("button.campo-formato")].map((b) => { const cs = getComputedStyle(b), ini = b.querySelector(".com-tarjeta-ini");
-      return { izq: cs.borderLeftWidth, col: cs.borderLeftColor, fondo: cs.backgroundColor, radio: cs.borderTopLeftRadius, alto: b.getBoundingClientRect().height, ini: ini && getComputedStyle(ini).backgroundColor, letra: ini && getComputedStyle(ini, "::before").content, txt: b.textContent }; }));
-    ok(`${T} C1 cada entrada es la tarjeta de la guía: blanca, borde izquierdo de 5 px del color de Comercial, radio 12 px, cuadro con la inicial; ${t.length} entradas`,
-       t.length >= 7 && t.every((x) => x.izq === "5px" && x.col === VINO && x.fondo === "rgb(255, 255, 255)" && x.radio === "12px" && x.alto >= 64 && x.ini === VINO && x.letra === `"${x.txt.trim().charAt(0)}"`), JSON.stringify(t.slice(0, 2)));
+      return { izq: cs.borderLeftWidth, col: cs.borderLeftColor, fondo: cs.backgroundColor, radio: cs.borderTopLeftRadius, alto: b.getBoundingClientRect().height, svg: !!b.querySelector(".com-tarjeta-ini svg[data-icono]"), ini: ini && getComputedStyle(ini).backgroundColor, letra: ini && getComputedStyle(ini, "::before").content, txt: b.textContent }; }));
+    ok(`${T} C1 cada entrada es la tarjeta de la guía: blanca, borde izquierdo de 5 px del color de Comercial, radio 12 px, cuadro con su ícono SVG; ${t.length} entradas (25-nov: las de «Registrar en campo»)`,
+       t.length >= 5 && t.every((x) => x.izq === "5px" && x.col === VINO && x.fondo === "rgb(255, 255, 255)" && x.radio === "12px" && x.alto >= 64 && x.ini === VINO && x.svg), JSON.stringify(t.slice(0, 2)));
     const cols = await pg.evaluate(() => new Set([...document.querySelectorAll("button.campo-formato")].map((b) => Math.round(b.getBoundingClientRect().left))).size);
     ok(`${T} C2 rejilla: ${ancho < 500 ? "una columna en el celular" : "varias columnas en el PC"}`, ancho < 500 ? cols === 1 : cols >= 2, String(cols));
   }
   const ENTRADAS = [["21_reportar_anomalia", "Reportar anomalía"], ["22_formatos", "Formatos de actividad"], ["24_acta", "Reportar posible pérdida"], ["25_actas_registradas", "Actas registradas"],
     ["26_analisis", "Análisis de contrato"], ["27_encontrar", "Encontrar o reportar activo"], ["28_supervision", "Supervisión y dashboard"]];
   for (const [nom, t] of ENTRADAS) {
+    // 25-nov: las entradas de gestión están en la pestaña «Supervisar»; las demás, en «Registrar en campo»
+    await clic(pg, "[role=tab]", /Actas registradas|Supervisión y dashboard/.test(t) ? "Supervisar" : "Registrar en campo"); await esp(300);
     if (!(await clic(pg, "button.campo-formato, button", t))) { console.log(`(no se encontró la entrada «${t}»)`); continue; }
     await esp(1500);
     if (nom === "22_formatos") { await foto(pg, nom); if (await clic(pg, "button", "Instalación de medidor")) { await esp(900); await foto(pg, "23_formato_abierto"); } }
@@ -272,7 +274,7 @@ for (const [ancho, alto] of [[390, 844], [1280, 900]]) {
       const c = await pg.$("#ac-contrato"); if (c) { await c.type("1000001"); await pg.keyboard.press("Enter"); await esperarTexto(pg, /BARRIO DE PRUEBA|Consumo/); await esp(1200); await foto(pg, "26b_analisis_resultado"); }
     } else if (nom === "25_actas_registradas") {
       await foto(pg, nom);
-      for (const [k, s2] of [["b_derivadas", "Actividades derivadas"], ["c_aperturas", "Aperturas sin registrar"]]) { if (await clic(pg, "button.rv-tab", s2)) { await esp(900); await foto(pg, `25${k}`); } }
+      for (const [k, s2] of [["b_derivadas", "Avisos y actividades derivadas"], ["c_aperturas", "Aperturas sin registrar"]]) { if (await clic(pg, "button.rv-tab", s2)) { await esp(900); await foto(pg, `25${k}`); } }
     } else if (nom === "28_supervision") {
       await foto(pg, nom);
       for (const [k, s] of [["b_indicadores", "Indicadores"], ["c_catalogo", "Catálogo"], ["d_parametros", "Parámetros"], ["e_personal", "Personal"]]) { if (await clic(pg, "button, [role=tab]", s)) { await esp(900); await foto(pg, `28${k}`); } }

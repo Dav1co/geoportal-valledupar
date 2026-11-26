@@ -43,3 +43,11 @@
 .com-modulo .dan-opcion { color: var(--t-texto); border-color: var(--t-borde-campo); font-family: var(--t-fuente); }
 .com-modulo .dan-opcion[aria-pressed="true"] { color: #fff; border-color: var(--t-modo); }
 .com-modulo .dan-opcion-off { color: var(--t-texto-2); background: var(--t-suave); }
+
+/* ---------- 25-nov: bloques «Registrar en campo» / «Supervisar», íconos propios, insignia de pendientes ---------- */
+.com-modulo .com-bloques { display: flex; gap: var(--t-esp-2); flex-wrap: wrap; border-bottom: 2px solid var(--t-borde); padding-bottom: 0; }
+.com-modulo .com-bloque-tab { min-height: var(--t-toque); padding: 0 var(--t-esp-4); background: transparent; color: var(--t-texto-2); border: 0; border-bottom: 4px solid transparent; margin-bottom: -2px; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.com-modulo .com-bloque-tab[aria-selected="true"] { color: var(--t-titulo); border-bottom-color: var(--t-modo); }
+.com-modulo .com-bloque-tab:focus-visible { outline: 3px solid var(--t-foco, #4a90d9); outline-offset: 2px; }
+.com-modulo .com-tarjeta-ini .com-tarjeta-svg { display: block; }
+.com-modulo .com-insignia { align-self: flex-start; background: #fff3cd; color: #5c4400; border: 1px solid #e0b84a; border-radius: 999px; padding: 1px 10px; font-size: 13px; font-weight: 700; margin-top: 2px; }
