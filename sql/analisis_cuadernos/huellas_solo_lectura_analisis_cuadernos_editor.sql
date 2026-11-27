@@ -1,6 +1,6 @@
 -- =====================================================================
 -- ANÁLISIS · «Cuadernos de análisis» · 05 — HUELLAS (SOLO LECTURA; una sola consulta, apta para el editor SQL web). Correr ANTES y DESPUÉS de la migración.
--- Antes: 1 = 1ba192724c2fddcf321104700829f3cc, 2 = 838b80984e51cc7873a666f85d657195, 3 = vacío, 4 = 0, 5 = 0, 6 = el bucket ya creado por David. Después: 1 y 2 IGUALES, 3 = 1b0af7d56f1dbf4010dbf5ac8774db6e, 4 = 10, 5 = 11.
+-- Antes: 1 = 1ba192724c2fddcf321104700829f3cc, 2 = 838b80984e51cc7873a666f85d657195, 3 = vacío, 4 = 0, 5 = 0, 6 = el bucket ya creado por David. Después: 1 y 2 IGUALES, 3 = c8a803aae851e77c9cdf010535dec090, 4 = 11, 5 = 12.
 -- =====================================================================
 select k, valor, esperado_antes, esperado_despues from (
   select 1 as o, '1 huella de redes (no cambia)' as k,
@@ -16,11 +16,11 @@ select k, valor, esperado_antes, esperado_despues from (
   select 3, '3 huella de análisis (esquema analisis y geoportal_analisis_*)',
          coalesce((select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.oid::regprocedure::text)) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where p.prokind = 'f' and (n.nspname = 'analisis' or (n.nspname = 'public' and p.proname like 'geoportal\_analisis\_%'))), '(sin funciones)'),
-         '(sin funciones)', '1b0af7d56f1dbf4010dbf5ac8774db6e'
+         '(sin funciones)', 'c8a803aae851e77c9cdf010535dec090'
   union all
-  select 4, '4 tablas del esquema analisis', (select count(*)::text from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'analisis' and c.relkind = 'r'), '0', '10'
+  select 4, '4 tablas del esquema analisis', (select count(*)::text from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'analisis' and c.relkind = 'r'), '0', '11'
   union all
-  select 5, '5 RPC geoportal_analisis_*', (select count(*)::text from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\_analisis\_%'), '0', '11'
+  select 5, '5 RPC geoportal_analisis_*', (select count(*)::text from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\_analisis\_%'), '0', '12'
   union all
   select 6, '6 bucket analisis-capturas (privado · bytes · tipos)',
          coalesce((select case when public then 'PÚBLICO' else 'privado' end || ' · ' || coalesce(file_size_limit::text, 'sin tope') || ' · ' || coalesce(array_to_string(allowed_mime_types, ','), 'cualquiera')

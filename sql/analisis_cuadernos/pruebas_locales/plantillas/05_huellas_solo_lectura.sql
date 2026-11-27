@@ -1,6 +1,6 @@
 -- =====================================================================
 -- ANÁLISIS · «Cuadernos de análisis» · 05 — HUELLAS (SOLO LECTURA; una sola consulta, apta para el editor SQL web). Correr ANTES y DESPUÉS de la migración.
--- Antes: 1 = {{MD5_REDES}}, 2 = {{MD5_TECNICA}}, 3 = vacío, 4 = 0, 5 = 0, 6 = el bucket ya creado por David. Después: 1 y 2 IGUALES, 3 = {{MD5_ANALISIS}}, 4 = 10, 5 = 11.
+-- Antes: 1 = {{MD5_REDES}}, 2 = {{MD5_TECNICA}}, 3 = vacío, 4 = 0, 5 = 0, 6 = el bucket ya creado por David. Después: 1 y 2 IGUALES, 3 = {{MD5_ANALISIS}}, 4 = 11, 5 = 12.
 -- =====================================================================
 select k, valor, esperado_antes, esperado_despues from (
   select 1 as o, '1 huella de redes (no cambia)' as k,
@@ -18,9 +18,9 @@ select k, valor, esperado_antes, esperado_despues from (
            where p.prokind = 'f' and (n.nspname = 'analisis' or (n.nspname = 'public' and p.proname like 'geoportal\_analisis\_%'))), '(sin funciones)'),
          '(sin funciones)', '{{MD5_ANALISIS}}'
   union all
-  select 4, '4 tablas del esquema analisis', (select count(*)::text from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'analisis' and c.relkind = 'r'), '0', '10'
+  select 4, '4 tablas del esquema analisis', (select count(*)::text from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'analisis' and c.relkind = 'r'), '0', '11'
   union all
-  select 5, '5 RPC geoportal_analisis_*', (select count(*)::text from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\_analisis\_%'), '0', '11'
+  select 5, '5 RPC geoportal_analisis_*', (select count(*)::text from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\_analisis\_%'), '0', '12'
   union all
   select 6, '6 bucket analisis-capturas (privado · bytes · tipos)',
          coalesce((select case when public then 'PÚBLICO' else 'privado' end || ' · ' || coalesce(file_size_limit::text, 'sin tope') || ' · ' || coalesce(array_to_string(allowed_mime_types, ','), 'cualquiera')

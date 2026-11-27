@@ -32,7 +32,7 @@ HUELLA_TEC = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by
               "where p.prokind = 'f' and (p.pronamespace = 'tecnica'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_tec\\_%'))")
 FN = ("pg_proc p join pg_namespace n on n.oid = p.pronamespace where p.prokind = 'f' and (n.nspname = 'analisis' or (n.nspname = 'public' and p.proname like 'geoportal\\_analisis\\_%'))")
 HUELLA_ANA = f"select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.oid::regprocedure::text)) from {FN}"
-N_RPC = 11
+N_RPC = 12
 LOCAL = os.path.join(AQUI, 'local')
 RES = os.path.join(RAIZ, 'resultados')
 
@@ -145,8 +145,8 @@ def main():
     p = corre(TMP, os.path.join(LOCAL, f'reversa_{NOMBRE}_local.sql'))
     assert p.returncode == 0 and 'hay datos' in p.stderr, p.stderr
     assert q("select count(*) from analisis.cuadernos", TMP) == '1' and q("select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'geoportal\\_analisis\\_%'", TMP) == '0'
-    assert q("select count(*) from pg_trigger g join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'analisis' and not g.tgisinternal", TMP) == '20'
-    informe += ['== reversa con un cuaderno: quita las 11 RPC y conserva las 10 tablas, la fila y los 20 disparadores']
+    assert q("select count(*) from pg_trigger g join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'analisis' and not g.tgisinternal", TMP) == '22'
+    informe += ['== reversa con un cuaderno: quita las 12 RPC y conserva las 11 tablas, la fila y los 22 disparadores']
     # 5. ensayo (en una copia limpia; termina en el ERROR esperado y no deja nada)
     copia(TMP)
     p = corre(TMP, os.path.join(LOCAL, f'ensayo_en_transaccion_{NOMBRE}_local.sql'))

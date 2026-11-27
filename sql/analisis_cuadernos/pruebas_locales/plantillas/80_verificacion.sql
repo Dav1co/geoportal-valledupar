@@ -24,9 +24,9 @@ select k, valor, case when ok then 'OK' else 'REVISAR' end as estado from (
   select 4, '4 las {{N_FUNC}} funciones son las del paquete, una por una', (select count(*)::text from fn where fn.firma in ({{FIRMAS}})),
          (select count(*) from fn) = {{N_FUNC}} and (select count(*) from fn where fn.firma in ({{FIRMAS}}) and md5(pg_get_functiondef(fn.oid)) = case fn.firma {{CASOS}} end) = {{N_FUNC}}
   union all
-  select 5, '5 las 11 RPC: SECURITY DEFINER, search_path fijo y EXECUTE solo para service_role',
+  select 5, '5 las 12 RPC: SECURITY DEFINER, search_path fijo y EXECUTE solo para service_role',
          (select count(*)::text from fn where fn.nspname = 'public'),
-         (select count(*) = 11 and bool_and(fn.prosecdef and exists (select 1 from unnest(fn.proconfig) c where c like 'search_path=%')
+         (select count(*) = 12 and bool_and(fn.prosecdef and exists (select 1 from unnest(fn.proconfig) c where c like 'search_path=%')
                  and has_function_privilege('service_role', fn.oid, 'execute') and not has_function_privilege('anon', fn.oid, 'execute')
                  and not has_function_privilege('authenticated', fn.oid, 'execute')
                  and not exists (select 1 from aclexplode(coalesce(fn.proacl, acldefault('f', fn.proowner))) a where a.grantee = 0)) from fn where fn.nspname = 'public')
@@ -36,16 +36,16 @@ select k, valor, case when ok then 'OK' else 'REVISAR' end as estado from (
                  and not has_function_privilege('anon', fn.oid, 'execute') and not has_function_privilege('authenticated', fn.oid, 'execute')
                  and not exists (select 1 from aclexplode(coalesce(fn.proacl, acldefault('f', fn.proowner))) a where a.grantee = 0)) from fn where fn.nspname = 'analisis')
   union all
-  select 7, '7 las 10 tablas: RLS sin políticas y sin privilegios para la API', (select string_agg(tb.relname, ', ' order by tb.relname) from tb),
-         (select count(*) = 10 and bool_and(tb.relrowsecurity and not has_table_privilege('anon', tb.oid, 'select') and not has_table_privilege('authenticated', tb.oid, 'select')
+  select 7, '7 las 11 tablas: RLS sin políticas y sin privilegios para la API', (select string_agg(tb.relname, ', ' order by tb.relname) from tb),
+         (select count(*) = 11 and bool_and(tb.relrowsecurity and not has_table_privilege('anon', tb.oid, 'select') and not has_table_privilege('authenticated', tb.oid, 'select')
                  and not has_table_privilege('service_role', tb.oid, 'select') and not has_table_privilege('service_role', tb.oid, 'insert')) from tb)
          and not exists (select 1 from pg_policy p join tb on tb.oid = p.polrelid)
   union all
   select 8, '8 solo agregar: 2 disparadores por tabla (UPDATE/DELETE por fila y TRUNCATE por sentencia)', (select count(*)::text from pg_trigger g join tb on tb.oid = g.tgrelid where not g.tgisinternal),
-         (select count(*) = 20 and count(*) filter (where (g.tgtype & 32) = 32) = 10 and count(*) filter (where (g.tgtype & 24) = 24) = 10 and bool_and(g.tgenabled = 'O')
+         (select count(*) = 22 and count(*) filter (where (g.tgtype & 32) = 32) = 11 and count(*) filter (where (g.tgtype & 24) = 24) = 11 and bool_and(g.tgenabled = 'O')
             from pg_trigger g join tb on tb.oid = g.tgrelid where not g.tgisinternal)
   union all
-  select 9, '9 el Dell: USAGE del esquema y SELECT en las 10 tablas', (select count(*)::text from tb where has_table_privilege('homelab_lectura', tb.oid, 'select')),
+  select 9, '9 el Dell: USAGE del esquema y SELECT en las 11 tablas', (select count(*)::text from tb where has_table_privilege('homelab_lectura', tb.oid, 'select')),
          has_schema_privilege('homelab_lectura', 'analisis', 'usage') and (select bool_and(has_table_privilege('homelab_lectura', tb.oid, 'select') and not has_table_privilege('homelab_lectura', tb.oid, 'insert')) from tb)
   union all
   select 10, '10 catálogo (9 problemas y 12 activos) y los 8 topes', (select count(*) from analisis.catalogo) || ' · ' || (select count(distinct clave) from analisis.parametros),

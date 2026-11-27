@@ -31,9 +31,9 @@ declare
   adm text := 'prueba.cuad.adm@emdupar.gov.co'; sp text := 'prueba.cuad.sp@emdupar.gov.co'; sd text := 'prueba.cuad.sd@emdupar.gov.co';
   op text := 'prueba.cuad.op@emdupar.gov.co'; op2 text := 'prueba.cuad.op2@emdupar.gov.co'; dual text := 'prueba.cuad.dual@emdupar.gov.co';
   nadie text := 'prueba.cuad.nadie@emdupar.gov.co'; fuera text := 'prueba.cuad.fuera@emdupar.gov.co';
-  tablas text[] := array['catalogo', 'parametros', 'cuadernos', 'cuaderno_versiones', 'cuaderno_eventos', 'marcas', 'marca_versiones', 'capturas', 'capturas_confirmadas', 'zona_consultas'];
+  tablas text[] := array['catalogo', 'parametros', 'cuadernos', 'cuaderno_versiones', 'cuaderno_eventos', 'marcas', 'marca_versiones', 'capturas', 'capturas_confirmadas', 'capturas_anuladas', 'zona_consultas'];
   rpcs text[] := array['geoportal_analisis_perfil', 'geoportal_analisis_cuadernos', 'geoportal_analisis_cuaderno', 'geoportal_analisis_cuaderno_crear', 'geoportal_analisis_cuaderno_guardar',
-                       'geoportal_analisis_cuaderno_estado', 'geoportal_analisis_zona', 'geoportal_analisis_captura_firmar', 'geoportal_analisis_captura_confirmar',
+                       'geoportal_analisis_cuaderno_estado', 'geoportal_analisis_zona', 'geoportal_analisis_captura_firmar', 'geoportal_analisis_captura_confirmar', 'geoportal_analisis_captura_anular',
                        'geoportal_analisis_captura_ruta', 'geoportal_analisis_cuaderno_exportar'];
   llamadas text[]; t text; q text; quien text; i integer;
   j jsonb; m jsonb; v_id uuid; v_id2 uuid; v_adm uuid; v_cap uuid; v_cap2 uuid; v_ruta text; v_n integer; v_n2 integer; v_txt text; v_act text;
@@ -53,9 +53,9 @@ begin
   perform public.geoportal_redes_personal_fijar(sd, op, 'geovisor', 'si', 'ZTCUAD necesita ver la red en la calle');
 
   -- ===================== 00. Estructura y permisos =====================
-  perform pg_temp.reg('00.01 las 10 tablas existen, con RLS activado y SIN políticas',
-    (select count(*) = 10 and bool_and(c.relrowsecurity) from pg_class c where c.relnamespace = 'analisis'::regnamespace and c.relkind = 'r' and c.relname = any (tablas))
-    and (select count(*) from pg_class c where c.relnamespace = 'analisis'::regnamespace and c.relkind = 'r') = 10
+  perform pg_temp.reg('00.01 las 11 tablas existen, con RLS activado y SIN políticas',
+    (select count(*) = 11 and bool_and(c.relrowsecurity) from pg_class c where c.relnamespace = 'analisis'::regnamespace and c.relkind = 'r' and c.relname = any (tablas))
+    and (select count(*) from pg_class c where c.relnamespace = 'analisis'::regnamespace and c.relkind = 'r') = 11
     and not exists (select 1 from pg_policy p join pg_class c on c.oid = p.polrelid where c.relnamespace = 'analisis'::regnamespace));
   perform pg_temp.reg('00.02 ninguna tabla da privilegios a public, anon, authenticated ni service_role',
     not exists (select 1 from pg_class c, unnest(array['anon', 'authenticated', 'service_role']) r, unnest(array['select', 'insert', 'update', 'delete', 'truncate']) p
@@ -64,21 +64,21 @@ begin
   perform pg_temp.reg('00.03 el esquema no da USAGE a la API (solo al Dell)',
     not has_schema_privilege('anon', 'analisis', 'usage') and not has_schema_privilege('authenticated', 'analisis', 'usage') and not has_schema_privilege('service_role', 'analisis', 'usage')
     and has_schema_privilege('homelab_lectura', 'analisis', 'usage') and not has_schema_privilege('homelab_lectura', 'analisis', 'create'));
-  perform pg_temp.reg('00.04 homelab_lectura: SELECT en las 10 tablas y nada más',
+  perform pg_temp.reg('00.04 homelab_lectura: SELECT en las 11 tablas y nada más',
     (select bool_and(has_table_privilege('homelab_lectura', c.oid, 'select') and not has_table_privilege('homelab_lectura', c.oid, 'insert')
                      and not has_table_privilege('homelab_lectura', c.oid, 'update') and not has_table_privilege('homelab_lectura', c.oid, 'delete')
                      and not has_table_privilege('homelab_lectura', c.oid, 'truncate'))
        from pg_class c where c.relnamespace = 'analisis'::regnamespace and c.relkind = 'r'));
-  perform pg_temp.reg('00.05 las 11 RPC public.geoportal_analisis_* son las del paquete',
+  perform pg_temp.reg('00.05 las 12 RPC public.geoportal_analisis_* son las del paquete',
     (select array_agg(distinct p.proname::text order by p.proname::text) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_analisis\_%')
       = (select array_agg(x order by x) from unnest(rpcs) x)
-    and (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_analisis\_%') = 11);
-  perform pg_temp.reg('00.06 las 11 RPC son SECURITY DEFINER con search_path fijo',
+    and (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_analisis\_%') = 12);
+  perform pg_temp.reg('00.06 las 12 RPC son SECURITY DEFINER con search_path fijo',
     (select bool_and(p.prosecdef and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) from pg_proc p
       where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_analisis\_%'),
     (select string_agg(p.proname, ', ') from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_analisis\_%'
         and not (p.prosecdef and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%'))));
-  perform pg_temp.reg('00.07 las 11 RPC: EXECUTE para service_role y NO para public, anon ni authenticated',
+  perform pg_temp.reg('00.07 las 12 RPC: EXECUTE para service_role y NO para public, anon ni authenticated',
     (select bool_and(has_function_privilege('service_role', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute')
                      and not has_function_privilege('authenticated', p.oid, 'execute')
                      and not exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0))
@@ -92,8 +92,8 @@ begin
     (select bool_and(exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) from pg_proc p
       where p.pronamespace = 'analisis'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_analisis\_%')));
   perform pg_temp.reg('00.10 cada tabla tiene sus dos disparadores de solo agregar: por fila (UPDATE y DELETE) y por sentencia (TRUNCATE)',
-    (select count(*) = 20 and count(*) filter (where (g.tgtype & 32) = 32 and (g.tgtype & 1) = 0) = 10            -- 32 = TRUNCATE, 1 = por fila
-            and count(*) filter (where (g.tgtype & 16) = 16 and (g.tgtype & 8) = 8 and (g.tgtype & 1) = 1) = 10     -- 16 = UPDATE, 8 = DELETE
+    (select count(*) = 22 and count(*) filter (where (g.tgtype & 32) = 32 and (g.tgtype & 1) = 0) = 11            -- 32 = TRUNCATE, 1 = por fila
+            and count(*) filter (where (g.tgtype & 16) = 16 and (g.tgtype & 8) = 8 and (g.tgtype & 1) = 1) = 11     -- 16 = UPDATE, 8 = DELETE
             and bool_and(g.tgenabled = 'O' and (g.tgtype & 2) = 2 and g.tgfoid = 'analisis.f_solo_agregar()'::regprocedure)
        from pg_trigger g join pg_class c on c.oid = g.tgrelid where not g.tgisinternal and c.relnamespace = 'analisis'::regnamespace));
   foreach t in array tablas loop
@@ -112,8 +112,8 @@ begin
   perform pg_temp.reg('00.14 pg-safeupdate: ninguna función del paquete (ni de redes o técnica) con DELETE/UPDATE sin WHERE',
     not exists (select 1 from analisis.f_funciones_sin_where()) and not exists (select 1 from redes.f_funciones_sin_where()),
     (select string_agg(funcion, ', ') from analisis.f_funciones_sin_where()));
-  perform pg_temp.reg('00.15 la revisión de «sin WHERE» sí mira las funciones del paquete (19 o más)',
-    (select count(*) from pg_proc p where p.pronamespace = 'analisis'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_analisis\_%')) >= 19);
+  perform pg_temp.reg('00.15 la revisión de «sin WHERE» sí mira las funciones del paquete (20 o más)',
+    (select count(*) from pg_proc p where p.pronamespace = 'analisis'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_analisis\_%')) >= 20);
   perform pg_temp.reg('00.16 el bucket analisis-capturas es privado, solo JPEG y de 600 KB',
     exists (select 1 from storage.buckets where id = 'analisis-capturas' and not public and file_size_limit = 614400 and allowed_mime_types = array['image/jpeg']));
   perform pg_temp.reg('00.17 ninguna tabla guarda nombre, teléfono, dirección ni cédula de suscriptores (solo el nombre del catálogo)',
@@ -135,7 +135,7 @@ begin
     format('geoportal_analisis_cuaderno_guardar(%%L, %L, 1, ''ZTCUAD x'')', v_id), format('geoportal_analisis_cuaderno_estado(%%L, %L, ''archivar'', ''ZTCUAD motivo'')', v_id),
     format('geoportal_analisis_zona(%%L, %L::jsonb)', zona),
     format('geoportal_analisis_captura_firmar(%%L, %L, ''ZTCUAD captura'', -73.26, 10.46, -73.25, 10.47, 800, 600, 1000, %L)', v_id, repeat('a', 64)),
-    format('geoportal_analisis_captura_confirmar(%%L, %L)', v_id), format('geoportal_analisis_captura_ruta(%%L, %L)', v_id), format('geoportal_analisis_cuaderno_exportar(%%L, %L)', v_id)];
+    format('geoportal_analisis_captura_confirmar(%%L, %L)', v_id), format('geoportal_analisis_captura_anular(%%L, %L, ''ZTCUAD motivo'')', v_id), format('geoportal_analisis_captura_ruta(%%L, %L)', v_id), format('geoportal_analisis_cuaderno_exportar(%%L, %L)', v_id)];
   for i in 1 .. array_length(llamadas, 1) loop
     foreach quien in array array[op, op2, dual, nadie, fuera] loop
       perform pg_temp.err(format('01.04 %s · %s → 403', rpcs[i], split_part(split_part(quien, '@', 1), '.', 3)), 'select public.' || format(llamadas[i], quien), '42501');
@@ -417,12 +417,48 @@ begin
     format('insert into analisis.capturas (cuaderno_id, ruta, titulo, oeste, sur, este, norte, ancho, alto, bytes, sha256, autor) values (%L, ''otra/cosa.jpg'', ''ZTCUAD x'', -73.26, 10.46, -73.25, 10.47, 800, 600, 1000, %L, %L)',
            v_id, repeat('a', 64), sp), '23514');
 
+  -- anular una captura (decisión de David, 26-nov): con motivo, sin borrar el archivo ni la fila; las anuladas no cuentan para el tope
+  perform pg_temp.err('06.23 otro supervisor no anula la captura ajena', format('select public.geoportal_analisis_captura_anular(%L, %L, ''ZTCUAD motivo'')', sd, v_cap), '42501');
+  perform pg_temp.err('06.24 el administrador tampoco', format('select public.geoportal_analisis_captura_anular(%L, %L, ''ZTCUAD motivo'')', adm, v_cap), '42501');
+  perform pg_temp.err('06.25 anular sin motivo', format('select public.geoportal_analisis_captura_anular(%L, %L, ''  ab '')', sp, v_cap), '22023', 'motivo');
+  perform pg_temp.err('06.26 una captura sin confirmar no se anula → 404', format('select public.geoportal_analisis_captura_anular(%L, %L, ''ZTCUAD motivo'')', sp, v_cap2), 'P0002');
+  insert into analisis.parametros (clave, valor, motivo, autor) values ('capturas_por_cuaderno', 3, 'ZTCUAD prueba del tope con anuladas', 'prueba');
+  perform pg_temp.err('06.27 antes de anular, el cuaderno está en su tope (3)',
+    format('select public.geoportal_analisis_captura_firmar(%L, %L, ''ZTCUAD captura'', -73.26, 10.46, -73.25, 10.47, 800, 600, 1000, %L)', sp, v_id, repeat('d', 64)), '55000', 'ya tiene sus 3 capturas');
+  j := public.geoportal_analisis_captura_anular(sp, v_cap, '  ZTCUAD salió movida  ');
+  perform pg_temp.reg('06.28 el autor anula con motivo: queda la fila de la anulación con el motivo recortado',
+    (j ->> 'anulada')::boolean and (select motivo = 'ZTCUAD salió movida' and autor = sp from analisis.capturas_anuladas where captura_id = v_cap));
+  perform pg_temp.reg('06.29 nada se borra: siguen la captura, su confirmación y el archivo en el bucket',
+    exists (select 1 from analisis.capturas where id = v_cap) and exists (select 1 from analisis.capturas_confirmadas where captura_id = v_cap)
+    and exists (select 1 from storage.objects o join analisis.capturas k on k.ruta = o.name where o.bucket_id = 'analisis-capturas' and k.id = v_cap));
+  begin
+    j := public.geoportal_analisis_captura_firmar(sp, v_id, 'ZTCUAD captura tras anular', -73.26, 10.46, -73.25, 10.47, 800, 600, 1000, repeat('f', 64));
+    perform pg_temp.reg('06.30 la anulada no cuenta para el tope: ahora sí entra otra', j ? 'captura_id');
+  exception when others then
+    perform pg_temp.reg('06.30 la anulada no cuenta para el tope: ahora sí entra otra', false, sqlerrm);
+  end;
+  insert into analisis.parametros (clave, valor, motivo, autor) values ('capturas_por_cuaderno', 20, 'ZTCUAD vuelve al valor', 'prueba');
+  perform pg_temp.reg('06.31 la anulada ya no sale en el cuaderno ni en el conteo de la lista',
+    jsonb_array_length(public.geoportal_analisis_cuaderno(sd, v_id) -> 'capturas') = 0
+    and (select (x ->> 'capturas')::integer from jsonb_array_elements(public.geoportal_analisis_cuadernos(sd) -> 'cuadernos') x where x ->> 'id' = v_id::text) = 0);
+  perform pg_temp.err('06.32 una captura anulada ya no se abre → 404', format('select public.geoportal_analisis_captura_ruta(%L, %L)', sd, v_cap), 'P0002');
+  perform pg_temp.err('06.33 anularla dos veces → 409', format('select public.geoportal_analisis_captura_anular(%L, %L, ''ZTCUAD otra vez'')', sp, v_cap), '55000', 'ya está anulada');
+  perform pg_temp.err('06.34 CHECK: una anulación sin motivo no entra ni por inserción directa',
+    format('insert into analisis.capturas_anuladas (captura_id, motivo, autor) values (%L, ''ab'', %L)', v_cap2, sp), '23514');
+  -- una segunda captura buena, para que la exportación tenga qué mostrar
+  v_cap := (public.geoportal_analisis_captura_firmar(sp, v_id, 'ZTCUAD Vista definitiva', -73.26, 10.46, -73.25, 10.47, 1600, 900, 280000, repeat('9', 64)) ->> 'captura_id')::uuid;
+  insert into storage.objects (bucket_id, name, metadata) select 'analisis-capturas', ruta, jsonb_build_object('size', 280000, 'mimetype', 'image/jpeg') from analisis.capturas where id = v_cap;
+  perform public.geoportal_analisis_captura_confirmar(sp, v_cap);
+  perform public.geoportal_analisis_cuaderno_estado(sp, v_id, 'archivar', 'ZTCUAD para probar la anulación');
+  perform pg_temp.err('06.35 en un cuaderno archivado no se anulan capturas → 409', format('select public.geoportal_analisis_captura_anular(%L, %L, ''ZTCUAD motivo'')', sp, v_cap), '55000', 'archivado');
+  perform public.geoportal_analisis_cuaderno_estado(sp, v_id, 'reabrir', 'ZTCUAD sigue la prueba');
+
   -- ===================== 07. Exportar =====================
   j := public.geoportal_analisis_cuaderno_exportar(sd, v_id);
-  perform pg_temp.reg('07.01 exportar (lo lee también el otro supervisor): las 7 marcas vigentes numeradas, sin las anuladas, y la captura confirmada',
+  perform pg_temp.reg('07.01 exportar (lo lee también el otro supervisor): las 7 marcas vigentes numeradas, sin las anuladas, y solo la captura vigente (la anulada no sale)',
     jsonb_array_length(j -> 'marcas') = 7 and (select array_agg((x ->> 'n')::integer order by (x ->> 'n')::integer) from jsonb_array_elements(j -> 'marcas') x) = array[1, 2, 3, 4, 5, 6, 7]
     and not exists (select 1 from jsonb_array_elements(j -> 'marcas') x where x ->> 'tipo' in ('postit', 'circulo'))
-    and jsonb_array_length(j -> 'capturas') = 1 and j -> 'cuaderno' ->> 'titulo' = 'ZTCUAD Cuaderno del POIR 2027' and (j -> 'cuaderno' ->> 'version')::integer = 4);
+    and jsonb_array_length(j -> 'capturas') = 1 and j -> 'capturas' -> 0 ->> 'titulo' = 'ZTCUAD Vista definitiva' and j -> 'cuaderno' ->> 'titulo' = 'ZTCUAD Cuaderno del POIR 2027' and (j -> 'cuaderno' ->> 'version')::integer = 4);
   perform pg_temp.reg('07.02 cada fila trae su punto (lon, lat), el nombre del catálogo, el sector y, según la figura, longitud, área o conteos',
     (select bool_and(x ->> 'lon' is not null and x ->> 'lat' is not null) from jsonb_array_elements(j -> 'marcas') x)
     and (select x ->> 'nombre' = 'Válvula por revisar' and x ->> 'activo_codigo' = v_act from jsonb_array_elements(j -> 'marcas') x where x ->> 'tipo' = 'problema')
@@ -433,7 +469,7 @@ begin
     j::text not like '%.jpg%' and not exists (select 1 from jsonb_array_elements(j -> 'marcas') x where x ? 'id' or x ? 'geom'));
   perform pg_temp.err('07.04 exportar un cuaderno que no existe → 404', format('select public.geoportal_analisis_cuaderno_exportar(%L, %L)', sp, gen_random_uuid()), 'P0002');
 
-  -- ===================== 08. Solo agregar, con datos en las 10 tablas =====================
+  -- ===================== 08. Solo agregar, con datos en las 11 tablas =====================
   foreach t in array tablas loop
     execute format('select count(*) from analisis.%I', t) into v_n;
     perform pg_temp.reg('08.01 analisis.' || t || ' tiene filas para probar', v_n > 0, v_n::text);
@@ -442,14 +478,14 @@ begin
     perform pg_temp.err('08.03 UPDATE bloqueado en analisis.' || t, format('update analisis.%I set %I = %I where true', t, q, q), '42501', 'UPDATE no permitido');
   end loop;
   perform pg_temp.err('08.04 TRUNCATE de todas a la vez', 'truncate analisis.cuadernos, analisis.cuaderno_versiones, analisis.cuaderno_eventos, analisis.marcas, analisis.marca_versiones, '
-    || 'analisis.capturas, analisis.capturas_confirmadas, analisis.zona_consultas, analisis.catalogo, analisis.parametros', '42501', 'TRUNCATE no permitido');
+    || 'analisis.capturas, analisis.capturas_confirmadas, analisis.capturas_anuladas, analisis.zona_consultas, analisis.catalogo, analisis.parametros', '42501', 'TRUNCATE no permitido');
 
   -- ===================== 09. Lo que el paquete NO toca =====================
   perform pg_temp.reg('09.01 la huella de redes es la de antes (foto tomada antes de aplicar, en esta misma transacción)',
     (select a.v = d.v and a.v is not null from _foto_antes a join pg_temp.foto() d using (k) where k = 'huella_redes'), (select v from _foto_antes where k = 'huella_redes'));
   perform pg_temp.reg('09.02 la huella de técnica es la de antes',
     (select a.v = d.v and a.v is not null from _foto_antes a join pg_temp.foto() d using (k) where k = 'huella_tecnica'), (select v from _foto_antes where k = 'huella_tecnica'));
-  perform pg_temp.reg('09.03 redes y técnica: los mismos objetos, columnas y disparadores; public, las mismas funciones más las 11 RPC',
+  perform pg_temp.reg('09.03 redes y técnica: los mismos objetos, columnas y disparadores; public, las mismas funciones más las 12 RPC',
     (select bool_and(a.v = d.v) from _foto_antes a join pg_temp.foto() d using (k) where k in ('objetos_redes_tecnica', 'columnas_redes_tecnica', 'disparadores_redes_tecnica', 'funciones_public')),
     (select string_agg(k || ' ' || a.v || '→' || d.v, ' · ') from _foto_antes a join pg_temp.foto() d using (k) where a.v <> d.v));
 

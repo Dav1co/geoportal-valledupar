@@ -1,6 +1,6 @@
 -- =====================================================================
 -- ANÁLISIS · «Cuadernos de análisis» · 90 — REVERSA.
--- Siempre quita las 11 RPC public.geoportal_analisis_* (la Edge deja de responder; nadie más entra a las tablas).
+-- Siempre quita las 12 RPC public.geoportal_analisis_* (la Edge deja de responder; nadie más entra a las tablas).
 -- · Si todavía NO hay cuadernos ni conteos: quita también las tablas, las funciones y el esquema (queda como antes de la migración; se puede volver a migrar).
 -- · Si YA hay datos: NADA se borra. Quedan las tablas con sus filas, sus disparadores de solo agregar y las funciones internas (que nadie de la API puede ejecutar).
 -- No toca redes ni técnica; el bucket analisis-capturas tampoco (lo administra David).
@@ -9,6 +9,7 @@ do $$
 begin
   if not exists (select 1 from pg_namespace where nspname = 'analisis') then raise exception 'REVERSA ANÁLISIS: el paquete no está aplicado'; end if;
 end $$;
+drop function public.geoportal_analisis_captura_anular(text,uuid,text);
 drop function public.geoportal_analisis_captura_confirmar(text,uuid);
 drop function public.geoportal_analisis_captura_firmar(text,uuid,text,numeric,numeric,numeric,numeric,integer,integer,integer,text);
 drop function public.geoportal_analisis_captura_ruta(text,uuid);
@@ -23,11 +24,11 @@ drop function public.geoportal_analisis_zona(text,jsonb);
 do $$
 begin
   if exists (select 1 from analisis.cuadernos) or exists (select 1 from analisis.zona_consultas) then
-    raise notice 'REVERSA ANÁLISIS: hay datos; se quitaron solo las 11 RPC. Las tablas, sus filas y las funciones internas se conservan.';
+    raise notice 'REVERSA ANÁLISIS: hay datos; se quitaron solo las 12 RPC. Las tablas, sus filas y las funciones internas se conservan.';
     return;
   end if;
   drop function analisis.f_cuaderno(text,uuid,boolean);                 -- devuelve una fila de analisis.cuadernos: va antes que la tabla
-  drop table analisis.zona_consultas, analisis.capturas_confirmadas, analisis.capturas, analisis.marca_versiones, analisis.marcas, analisis.cuaderno_eventos,
+  drop table analisis.zona_consultas, analisis.capturas_anuladas, analisis.capturas_confirmadas, analisis.capturas, analisis.marca_versiones, analisis.marcas, analisis.cuaderno_eventos,
              analisis.cuaderno_versiones, analisis.cuadernos, analisis.parametros, analisis.catalogo;
   drop function analisis.f_acceso(text);
   drop function analisis.f_archivado(uuid);

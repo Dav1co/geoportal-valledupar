@@ -224,7 +224,15 @@ create table analisis.capturas_confirmadas (
   confirmada_en  timestamptz not null default now()
 );
 
--- ---------- 10. Conteos de zona pedidos (para el tope por hora; solo números, sin la geometría) ----------
+-- ---------- 10. Capturas anuladas: con motivo; ni el archivo ni la fila se borran. Las anuladas no cuentan para el tope ni se muestran ----------
+create table analisis.capturas_anuladas (
+  captura_id  uuid        primary key references analisis.capturas (id),
+  motivo      text        not null check (motivo = btrim(motivo) and length(motivo) between 5 and 300),
+  autor       text        not null check (autor = lower(btrim(autor)) and position('@' in autor) > 1),
+  anulada_en  timestamptz not null default now()
+);
+
+-- ---------- 11. Conteos de zona pedidos (para el tope por hora; solo números, sin la geometría) ----------
 create table analisis.zona_consultas (
   id           bigint      generated always as identity primary key,
   solicitante  text        not null check (solicitante = lower(btrim(solicitante)) and position('@' in solicitante) > 1),
@@ -239,7 +247,7 @@ create index zona_consultas_quien_idx on analisis.zona_consultas (solicitante, c
 do $t$
 declare t text;
 begin
-  foreach t in array array['catalogo', 'parametros', 'cuadernos', 'cuaderno_versiones', 'cuaderno_eventos', 'marcas', 'marca_versiones', 'capturas', 'capturas_confirmadas', 'zona_consultas'] loop
+  foreach t in array array['catalogo', 'parametros', 'cuadernos', 'cuaderno_versiones', 'cuaderno_eventos', 'marcas', 'marca_versiones', 'capturas', 'capturas_confirmadas', 'capturas_anuladas', 'zona_consultas'] loop
     execute format('create trigger solo_agregar_fila before update or delete on analisis.%I for each row execute function analisis.f_solo_agregar()', t);
     execute format('create trigger solo_agregar_truncate before truncate on analisis.%I for each statement execute function analisis.f_solo_agregar()', t);
     execute format('alter table analisis.%I enable row level security', t);

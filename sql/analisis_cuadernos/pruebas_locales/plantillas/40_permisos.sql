@@ -16,7 +16,7 @@ $p$;
 
 grant usage on schema analisis to homelab_lectura;
 grant select on analisis.catalogo, analisis.parametros, analisis.cuadernos, analisis.cuaderno_versiones, analisis.cuaderno_eventos, analisis.marcas, analisis.marca_versiones,
-                analisis.capturas, analisis.capturas_confirmadas, analisis.zona_consultas to homelab_lectura;
+                analisis.capturas, analisis.capturas_confirmadas, analisis.capturas_anuladas, analisis.zona_consultas to homelab_lectura;
 
 -- Cierre: las huellas de redes y de técnica siguen iguales, y ninguna función del paquete tiene DELETE/UPDATE sin WHERE (pg-safeupdate)
 do $cierre$

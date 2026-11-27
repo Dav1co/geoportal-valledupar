@@ -225,7 +225,15 @@ create table analisis.capturas_confirmadas (
   confirmada_en  timestamptz not null default now()
 );
 
--- ---------- 10. Conteos de zona pedidos (para el tope por hora; solo números, sin la geometría) ----------
+-- ---------- 10. Capturas anuladas: con motivo; ni el archivo ni la fila se borran. Las anuladas no cuentan para el tope ni se muestran ----------
+create table analisis.capturas_anuladas (
+  captura_id  uuid        primary key references analisis.capturas (id),
+  motivo      text        not null check (motivo = btrim(motivo) and length(motivo) between 5 and 300),
+  autor       text        not null check (autor = lower(btrim(autor)) and position('@' in autor) > 1),
+  anulada_en  timestamptz not null default now()
+);
+
+-- ---------- 11. Conteos de zona pedidos (para el tope por hora; solo números, sin la geometría) ----------
 create table analisis.zona_consultas (
   id           bigint      generated always as identity primary key,
   solicitante  text        not null check (solicitante = lower(btrim(solicitante)) and position('@' in solicitante) > 1),
@@ -240,7 +248,7 @@ create index zona_consultas_quien_idx on analisis.zona_consultas (solicitante, c
 do $t$
 declare t text;
 begin
-  foreach t in array array['catalogo', 'parametros', 'cuadernos', 'cuaderno_versiones', 'cuaderno_eventos', 'marcas', 'marca_versiones', 'capturas', 'capturas_confirmadas', 'zona_consultas'] loop
+  foreach t in array array['catalogo', 'parametros', 'cuadernos', 'cuaderno_versiones', 'cuaderno_eventos', 'marcas', 'marca_versiones', 'capturas', 'capturas_confirmadas', 'capturas_anuladas', 'zona_consultas'] loop
     execute format('create trigger solo_agregar_fila before update or delete on analisis.%I for each row execute function analisis.f_solo_agregar()', t);
     execute format('create trigger solo_agregar_truncate before truncate on analisis.%I for each statement execute function analisis.f_solo_agregar()', t);
     execute format('alter table analisis.%I enable row level security', t);
@@ -423,7 +431,7 @@ begin
                    c.creado_en, v.version, v.creado_en as actualizado_en, c.autor = a.email as es_mio, analisis.f_archivado(c.id) as archivado,
                    (select count(*) from (select distinct on (mv.marca_id) mv.anulada from analisis.marca_versiones mv where mv.cuaderno_id = c.id
                                            order by mv.marca_id, mv.version desc) u where not u.anulada) as marcas,
-                   (select count(*) from analisis.capturas k join analisis.capturas_confirmadas kc on kc.captura_id = k.id where k.cuaderno_id = c.id) as capturas
+                   (select count(*) from analisis.capturas k join analisis.capturas_confirmadas kc on kc.captura_id = k.id where k.cuaderno_id = c.id and not exists (select 1 from analisis.capturas_anuladas ka where ka.captura_id = k.id)) as capturas
               from analisis.cuadernos c
               join analisis.cuaderno_versiones v on v.cuaderno_id = c.id and v.version = analisis.f_ultima_version(c.id)
              where c.modulo = 'tecnica' and analisis.f_archivado(c.id) = coalesce(p_archivados, false)
@@ -450,7 +458,7 @@ begin
     'marcas', analisis.f_marcas(c.id, v.version),
     'capturas', coalesce((select jsonb_agg(jsonb_build_object('id', k.id, 'titulo', k.titulo, 'extension', jsonb_build_array(k.oeste, k.sur, k.este, k.norte),
                                  'ancho', k.ancho, 'alto', k.alto, 'bytes', kc.bytes_reales, 'creado_en', k.creado_en) order by k.creado_en, k.id)
-                            from analisis.capturas k join analisis.capturas_confirmadas kc on kc.captura_id = k.id where k.cuaderno_id = c.id), '[]'::jsonb),
+                            from analisis.capturas k join analisis.capturas_confirmadas kc on kc.captura_id = k.id where k.cuaderno_id = c.id and not exists (select 1 from analisis.capturas_anuladas ka where ka.captura_id = k.id)), '[]'::jsonb),
     'eventos', coalesce((select jsonb_agg(jsonb_build_object('tipo', e.tipo, 'motivo', e.motivo, 'creado_en', e.creado_en) order by e.id)
                            from analisis.cuaderno_eventos e where e.cuaderno_id = c.id), '[]'::jsonb));
 end $f$;
@@ -675,9 +683,10 @@ begin
   end if;
   if p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$' then perform analisis.f_err('La huella de la captura no es válida'); end if;
   perform pg_advisory_xact_lock(hashtextextended('analisis.cuaderno:' || c.id::text, 0));
-  -- Cuentan las confirmadas y las reservadas en los últimos 15 minutos que aún no se confirman (una subida a medias no ocupa el cupo para siempre)
+  -- Cuentan las confirmadas y las reservadas en los últimos 15 minutos que aún no se confirman (una subida a medias no ocupa el cupo para siempre).
+  -- Las ANULADAS no cuentan.
   select count(*) into v_n from analisis.capturas k
-   where k.cuaderno_id = c.id and (exists (select 1 from analisis.capturas_confirmadas kc where kc.captura_id = k.id) or k.creado_en > now() - interval '15 minutes');
+   where k.cuaderno_id = c.id and not exists (select 1 from analisis.capturas_anuladas ka where ka.captura_id = k.id) and (exists (select 1 from analisis.capturas_confirmadas kc where kc.captura_id = k.id) or k.creado_en > now() - interval '15 minutes');
   if v_n >= analisis.f_parametro('capturas_por_cuaderno') then
     perform analisis.f_err(format('El cuaderno ya tiene sus %s capturas', analisis.f_parametro('capturas_por_cuaderno')::integer), '55000');
   end if;
@@ -707,13 +716,31 @@ begin
   return jsonb_build_object('captura_id', k.id, 'confirmada', true);
 end $f$;
 
+-- ---------- captura · anular: SOLO el autor, con motivo. No se borra el archivo ni la fila; deja de mostrarse y de contar para el tope ----------
+create function public.geoportal_analisis_captura_anular(p_solicitante text, p_captura uuid, p_motivo text) returns jsonb
+language plpgsql security definer set search_path = public, analisis, pg_temp as $f$
+declare a record; k analisis.capturas; c analisis.cuadernos; v_motivo text := btrim(coalesce(p_motivo, ''));
+begin
+  a := analisis.f_acceso(p_solicitante);
+  select x.* into k from analisis.capturas x join analisis.capturas_confirmadas kc on kc.captura_id = x.id where x.id = p_captura;
+  if not found then perform analisis.f_err('La captura no existe', 'P0002'); end if;
+  c := analisis.f_cuaderno(a.email, k.cuaderno_id, true);
+  if analisis.f_archivado(c.id) then perform analisis.f_err('El cuaderno está archivado: reábralo para anular capturas', '55000'); end if;
+  if length(v_motivo) not between 5 and 300 then perform analisis.f_err('Para anular la captura escriba el motivo (de 5 a 300 letras)'); end if;
+  perform pg_advisory_xact_lock(hashtextextended('analisis.cuaderno:' || c.id::text, 0));
+  if exists (select 1 from analisis.capturas_anuladas ka where ka.captura_id = k.id) then perform analisis.f_err('La captura ya está anulada', '55000'); end if;
+  insert into analisis.capturas_anuladas (captura_id, motivo, autor) values (k.id, v_motivo, a.email);
+  return jsonb_build_object('captura_id', k.id, 'anulada', true);
+end $f$;
+
 -- ---------- captura · 3: la ruta de una captura confirmada (la Edge firma la lectura de 60 s) ----------
 create function public.geoportal_analisis_captura_ruta(p_solicitante text, p_captura uuid) returns jsonb
 language plpgsql stable security definer set search_path = public, analisis, pg_temp as $f$
 declare a record; k analisis.capturas; c analisis.cuadernos;
 begin
   a := analisis.f_acceso(p_solicitante);
-  select x.* into k from analisis.capturas x join analisis.capturas_confirmadas kc on kc.captura_id = x.id where x.id = p_captura;
+  select x.* into k from analisis.capturas x join analisis.capturas_confirmadas kc on kc.captura_id = x.id where x.id = p_captura
+     and not exists (select 1 from analisis.capturas_anuladas ka where ka.captura_id = x.id);        -- una captura anulada ya no se abre
   if not found then perform analisis.f_err('La captura no existe', 'P0002'); end if;
   c := analisis.f_cuaderno(a.email, k.cuaderno_id);
   return jsonb_build_object('captura_id', k.id, 'ruta', k.ruta, 'titulo', k.titulo);
@@ -745,7 +772,7 @@ begin
                where not w.anulada) u), '[]'::jsonb),
     'capturas', coalesce((select jsonb_agg(jsonb_build_object('titulo', k.titulo, 'creado_en', k.creado_en, 'ancho', k.ancho, 'alto', k.alto, 'bytes', kc.bytes_reales,
                                  'oeste', k.oeste, 'sur', k.sur, 'este', k.este, 'norte', k.norte) order by k.creado_en, k.id)
-                            from analisis.capturas k join analisis.capturas_confirmadas kc on kc.captura_id = k.id where k.cuaderno_id = c.id), '[]'::jsonb));
+                            from analisis.capturas k join analisis.capturas_confirmadas kc on kc.captura_id = k.id where k.cuaderno_id = c.id and not exists (select 1 from analisis.capturas_anuladas ka where ka.captura_id = k.id)), '[]'::jsonb));
 end $f$;
 -- =====================================================================
 -- ANÁLISIS · «Cuadernos de análisis» · 40 — PERMISOS
@@ -765,7 +792,7 @@ $p$;
 
 grant usage on schema analisis to homelab_lectura;
 grant select on analisis.catalogo, analisis.parametros, analisis.cuadernos, analisis.cuaderno_versiones, analisis.cuaderno_eventos, analisis.marcas, analisis.marca_versiones,
-                analisis.capturas, analisis.capturas_confirmadas, analisis.zona_consultas to homelab_lectura;
+                analisis.capturas, analisis.capturas_confirmadas, analisis.capturas_anuladas, analisis.zona_consultas to homelab_lectura;
 
 -- Cierre: las huellas de redes y de técnica siguen iguales, y ninguna función del paquete tiene DELETE/UPDATE sin WHERE (pg-safeupdate)
 do $cierre$

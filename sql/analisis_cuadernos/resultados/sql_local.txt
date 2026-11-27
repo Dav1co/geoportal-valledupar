@@ -1,25 +1,25 @@
-huella de redes 1ba192724c2fddcf321104700829f3cc (no cambia) · técnica PRODUCCIÓN 838b80984e51cc7873a666f85d657195 (guardia del _editor; no cambia) · técnica local 4a10aa60971401954717fc3c74d3d869 (no cambia) · huella de análisis 1b0af7d56f1dbf4010dbf5ac8774db6e · 27 funciones (11 RPC y 16 internas)
+huella de redes 1ba192724c2fddcf321104700829f3cc (no cambia) · técnica PRODUCCIÓN 838b80984e51cc7873a666f85d657195 (guardia del _editor; no cambia) · técnica local 4a10aa60971401954717fc3c74d3d869 (no cambia) · huella de análisis c8a803aae851e77c9cdf010535dec090 · 28 funciones (12 RPC y 16 internas)
 == verificación tras la migración (local)
-k                                              |                                                                     valor                                                                      | estado 
---------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------+--------
- 1 huella de redes sin cambio                                                               | 1ba192724c2fddcf321104700829f3cc                                                                                                               | OK
- 2 huella de técnica sin cambio                                                             | 4a10aa60971401954717fc3c74d3d869                                                                                                               | OK
- 3 huella de análisis                                                                       | 1b0af7d56f1dbf4010dbf5ac8774db6e                                                                                                               | OK
- 4 las 27 funciones son las del paquete, una por una                                        | 27                                                                                                                                             | OK
- 5 las 11 RPC: SECURITY DEFINER, search_path fijo y EXECUTE solo para service_role          | 11                                                                                                                                             | OK
- 6 las internas: search_path fijo y sin EXECUTE para la API                                 | 16                                                                                                                                             | OK
- 7 las 10 tablas: RLS sin políticas y sin privilegios para la API                           | capturas, capturas_confirmadas, catalogo, cuaderno_eventos, cuaderno_versiones, cuadernos, marca_versiones, marcas, parametros, zona_consultas | OK
- 8 solo agregar: 2 disparadores por tabla (UPDATE/DELETE por fila y TRUNCATE por sentencia) | 20                                                                                                                                             | OK
- 9 el Dell: USAGE del esquema y SELECT en las 10 tablas                                     | 10                                                                                                                                             | OK
- 10 catálogo (9 problemas y 12 activos) y los 8 topes                                       | 21 · 8                                                                                                                                         | OK
- 11 pg-safeupdate: funciones con DELETE/UPDATE sin WHERE                                    | 0                                                                                                                                              | OK
- 12 bucket analisis-capturas: privado, solo JPEG, 600 KB                                    | 1                                                                                                                                              | OK
+k                                              |                                                                               valor                                                                               | estado 
+--------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------
+ 1 huella de redes sin cambio                                                               | 1ba192724c2fddcf321104700829f3cc                                                                                                                                  | OK
+ 2 huella de técnica sin cambio                                                             | 4a10aa60971401954717fc3c74d3d869                                                                                                                                  | OK
+ 3 huella de análisis                                                                       | c8a803aae851e77c9cdf010535dec090                                                                                                                                  | OK
+ 4 las 28 funciones son las del paquete, una por una                                        | 28                                                                                                                                                                | OK
+ 5 las 12 RPC: SECURITY DEFINER, search_path fijo y EXECUTE solo para service_role          | 12                                                                                                                                                                | OK
+ 6 las internas: search_path fijo y sin EXECUTE para la API                                 | 16                                                                                                                                                                | OK
+ 7 las 11 tablas: RLS sin políticas y sin privilegios para la API                           | capturas, capturas_anuladas, capturas_confirmadas, catalogo, cuaderno_eventos, cuaderno_versiones, cuadernos, marca_versiones, marcas, parametros, zona_consultas | OK
+ 8 solo agregar: 2 disparadores por tabla (UPDATE/DELETE por fila y TRUNCATE por sentencia) | 22                                                                                                                                                                | OK
+ 9 el Dell: USAGE del esquema y SELECT en las 11 tablas                                     | 11                                                                                                                                                                | OK
+ 10 catálogo (9 problemas y 12 activos) y los 8 topes                                       | 21 · 8                                                                                                                                                            | OK
+ 11 pg-safeupdate: funciones con DELETE/UPDATE sin WHERE                                    | 0                                                                                                                                                                 | OK
+ 12 bucket analisis-capturas: privado, solo JPEG, 600 KB                                    | 1                                                                                                                                                                 | OK
 (12 filas)
 == segunda migración sobre la misma base: la guardia se niega (esperado)
 == reversa sin datos: sin esquema ni funciones; redes y técnica iguales; se volvió a migrar
-== reversa con un cuaderno: quita las 11 RPC y conserva las 10 tablas, la fila y los 20 disparadores
+== reversa con un cuaderno: quita las 12 RPC y conserva las 11 tablas, la fila y los 22 disparadores
 == ensayo (local)
 PRUEBAS DE ANÁLISIS · CUADERNOS (esperado: este ERROR deshace todo lo de la prueba)
 
-RESULTADO: 256 de 256 pruebas correctas — SIN FALLAS
-CONTEXTO:  PL/pgSQL function inline_code_block line 429 at RAISE
+RESULTADO: 279 de 279 pruebas correctas — SIN FALLAS
+CONTEXTO:  PL/pgSQL function inline_code_block line 465 at RAISE
