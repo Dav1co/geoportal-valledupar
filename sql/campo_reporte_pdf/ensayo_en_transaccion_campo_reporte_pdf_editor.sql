@@ -137,7 +137,7 @@ begin
   -- la tabla nueva, si quedó de una reversa, debe ser exactamente la de este paquete
   if to_regclass('campo.reporte_pdf') is not null then
     select md5(concat_ws('#', (select string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ' NOT NULL' else '' end || coalesce(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), '') || case when a.attidentity <> '' then ' IDENTITY ' || a.attidentity::text else '' end, ', ' order by a.attnum) from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum where a.attrelid = z.rel and a.attnum > 0 and not a.attisdropped), (select string_agg(c.conname || ' ' || pg_get_constraintdef(c.oid), ' | ' order by c.conname) from pg_constraint c where c.conrelid = z.rel), (select string_agg(pg_get_indexdef(i.indexrelid), ' | ' order by pg_get_indexdef(i.indexrelid)) from pg_index i where i.indrelid = z.rel), (select string_agg(pg_get_triggerdef(g.oid), ' | ' order by g.tgname) from pg_trigger g where g.tgrelid = z.rel and not g.tgisinternal), (select c.relkind::text || ' ' || c.relrowsecurity::text || ' ' || coalesce(c.relacl::text, '') from pg_class c where c.oid = z.rel))) into v from (select to_regclass('campo.reporte_pdf') as rel) z;
-    if v is distinct from '76d52df663351ac83d110224d9ba8470' then raise exception 'La tabla campo.reporte_pdf ya existe y no es la de este paquete: deténgase y avise'; end if;
+    if v is distinct from '5c28826d6ba13de024a0583384601d36' then raise exception 'La tabla campo.reporte_pdf ya existe y no es la de este paquete: deténgase y avise'; end if;
   end if;
   -- columnas que se leen (con su tipo)
   for r in select * from (values ('campo.reportes', 'id', 'uuid'), ('campo.reportes', 'seq', 'bigint'), ('campo.reportes', 'tipo_id', 'bigint'), ('campo.reportes', 'subtipo_id', 'bigint'), ('campo.reportes', 'descripcion', 'text'), ('campo.reportes', 'contrato', 'text'), ('campo.reportes', 'lat', 'numeric(9,6)'), ('campo.reportes', 'lon', 'numeric(9,6)'), ('campo.reportes', 'precision_m', 'numeric(8,1)'), ('campo.reportes', 'autor', 'text'), ('campo.reportes', 'registrado_en', 'timestamp with time zone'), ('campo.reportes', 'inicio_en', 'timestamp with time zone'), ('campo.reportes', 'inicio_origen', 'text'), ('campo.reporte_fotos', 'orden', 'smallint'), ('campo.reporte_fotos', 'ruta_storage', 'text'), ('campo.reporte_fotos', 'etiqueta', 'text'), ('campo.reporte_fotos', 'origen', 'text'), ('campo.reporte_eventos', 'tipo_evento', 'text'), ('campo.reporte_eventos', 'estado_nuevo', 'text'), ('campo.reporte_eventos', 'motivo', 'text'), ('campo.reporte_eventos', 'acta_id', 'uuid'), ('campo.reporte_eventos', 'reporte_original_id', 'uuid'), ('campo.reporte_registro', 'xy_manual', 'boolean'), ('campo.reporte_registro', 'lat_registro', 'numeric(9,6)'), ('campo.reporte_registro', 'direccion', 'text'), ('campo.reporte_direccion_contrato', 'direccion_comercial', 'text'), ('campo.reporte_direccion_contrato', 'direccion_catastro', 'text'), ('campo.estados_reporte', 'nombre', 'text'), ('public.geoportal_lista_blanca', 'nombre', 'text'), ('acta.actas', 'consecutivo', 'text')) x(t, c, ty) loop
@@ -169,7 +169,8 @@ end $guardia$;
 -- PDF DE «REPORTAR ANOMALÍA» (Code A, 27-nov; plan aprobado por David) · 10 — ESTRUCTURA
 -- campo.reporte_pdf: una fila por VERSIÓN del PDF de un reporte. Versión nueva solo si cambia el sello del contenido (estado, historial, datos); si no cambió,
 -- se entrega la misma. Solo inserción (disparadores de campo.f_solo_agregar, como reporte_fotos), RLS sin políticas, sin permisos para la API, SELECT para
--- homelab_lectura. El archivo va al bucket privado actas-pdf (el de los PDF de los formatos); aquí solo su ruta, sha256 y tamaño.
+-- homelab_lectura. El archivo va al bucket privado actas-pdf (el de los PDF de los formatos); aquí solo su ruta, sha256 y tamaño. La ruta lleva los 16 primeros
+-- caracteres del sha256 del PDF: cada intento de generación sube a su propia ruta y nunca pisa otro archivo (un intento que no llega a registrarse queda sin fila).
 -- =====================================================================
 -- Tras una reversa la tabla se conserva (nada se borra): si ya existe, la guardia exigió que fuera exactamente la de este paquete y aquí no se toca.
 do $estructura$
@@ -182,7 +183,7 @@ create table campo.reporte_pdf (
   version        integer not null check (version between 1 and 99),
   sello          text not null check (sello ~ '^[0-9a-f]{64}$'),
   nombre         text not null check (nombre ~ '^[0-9]{14}-RAN-[0-9]{6,12}(-v[0-9]{1,2})?\.pdf$'),
-  ruta           text not null unique check (ruta ~ '^campo/[0-9]{4}-[0-9]{2}/[0-9a-f-]{36}/[0-9]{14}-RAN-[0-9]{6,12}(-v[0-9]{1,2})?\.pdf$'),
+  ruta           text not null unique check (ruta ~ '^campo/[0-9]{4}-[0-9]{2}/[0-9a-f-]{36}/[0-9a-f]{16}/[0-9]{14}-RAN-[0-9]{6,12}(-v[0-9]{1,2})?\.pdf$'),
   sha256         text not null check (sha256 ~ '^[0-9a-f]{64}$'),
   bytes          integer not null check (bytes between 200 and 26214400),
   fotos_omitidas integer not null default 0 check (fotos_omitidas >= 0),
@@ -228,7 +229,7 @@ language sql stable security definer set search_path = public, campo, pg_temp as
   select coalesce((select nullif(btrim(b.nombre), '') from public.geoportal_lista_blanca b where b.email = lower(btrim(p_email)) limit 1), lower(btrim(p_email)))
 $$;
 
--- Todo lo que va al PDF (menos el mapa y el pie de generación). Su sha256 es el sello: si cambia (estado, historial, datos), hay versión nueva.
+-- Todo lo que va al PDF (menos el mapa y el pie de generación). Solo caracteres de WinAnsi (el escritor del PDF no tiene «→»). Su sha256 es el sello: si cambia (estado, historial, datos), hay versión nueva.
 -- NUNCA lee campo.reporte_datos_sensibles. Las rutas de las fotos van solo para que la Edge las lea; el PDF no las imprime.
 create function campo.f_ran_contenido(p_id uuid) returns jsonb
 language plpgsql stable security definer set search_path = public, campo, acta, pg_temp as $$
@@ -268,7 +269,7 @@ begin
     'historial', jsonb_build_array(jsonb_build_object('fecha', to_char(v.registrado_en at time zone 'America/Bogota', f_hora), 'texto', 'Reportado', 'quien', campo.f_ran_persona(v.autor)))
       || coalesce((select jsonb_agg(jsonb_build_object('fecha', to_char(e.creado_en at time zone 'America/Bogota', f_hora),
                      'texto', case e.tipo_evento
-                                when 'cambio_estado' then 'Cambio de estado → ' || coalesce((select x.nombre from campo.estados_reporte x where x.codigo = e.estado_nuevo), e.estado_nuevo)
+                                when 'cambio_estado' then 'Cambio de estado a ' || coalesce((select x.nombre from campo.estados_reporte x where x.codigo = e.estado_nuevo), e.estado_nuevo)
                                 when 'ocultar' then 'Se ocultó el reporte'
                                 when 'reincluir' then 'Se reincluyó el reporte'
                                 when 'vincular_duplicado' then 'Se vinculó como duplicado de ' || coalesce((select 'RAN-' || lpad(o.seq::text, 6, '0') from campo.reportes o where o.id = e.reporte_original_id), 'otro reporte')
@@ -284,7 +285,7 @@ begin
   return r;
 end $$;
 
--- Versión, nombre y ruta para un sello: la versión ya registrada con ese sello, o la siguiente
+-- Versión, nombre y carpeta para un sello: la versión ya registrada con ese sello, o la siguiente. La ruta = carpeta || 16 primeros del sha256 del PDF || '/' || nombre.
 create function campo.f_ran_destino(p_id uuid, p_sello text) returns jsonb
 language plpgsql stable security definer set search_path = public, campo, pg_temp as $$
 declare v_r campo.reportes; v_doc campo.reporte_pdf; v_ver integer; v_nombre text;
@@ -295,7 +296,7 @@ begin
   if v_ver > 99 then perform campo.f_error('Este reporte ya tiene 99 versiones de PDF', '55000'); end if;
   v_nombre := campo.f_nombre_pdf(v_r.registrado_en, 'RAN', lpad(v_r.seq::text, 6, '0'), v_ver);
   return jsonb_build_object('version', v_ver, 'nombre', v_nombre,
-    'ruta', 'campo/' || to_char(v_r.registrado_en at time zone 'America/Bogota', 'YYYY-MM') || '/' || p_id || '/' || v_nombre,
+    'carpeta', 'campo/' || to_char(v_r.registrado_en at time zone 'America/Bogota', 'YYYY-MM') || '/' || p_id || '/',
     'documento', case when v_doc.id is not null then jsonb_build_object('nombre', v_doc.nombre, 'ruta', v_doc.ruta, 'sha256', v_doc.sha256, 'bytes', v_doc.bytes,
                    'version', v_doc.version, 'generado_en', v_doc.generado_en) end);
 end $$;
@@ -361,7 +362,8 @@ begin
   if p_bytes is null or p_bytes < 200 or p_bytes > 26214400 then perform campo.f_error('El tamaño del PDF no es válido'); end if;
   v_dest := campo.f_ran_destino(p_reporte_id, v_sello);
   insert into campo.reporte_pdf (reporte_id, version, sello, nombre, ruta, sha256, bytes, fotos_omitidas, generado_por)
-  values (p_reporte_id, (v_dest ->> 'version')::integer, v_sello, v_dest ->> 'nombre', v_dest ->> 'ruta', p_sha256, p_bytes, greatest(coalesce(p_fotos_omitidas, 0), 0), v_email)
+  values (p_reporte_id, (v_dest ->> 'version')::integer, v_sello, v_dest ->> 'nombre', (v_dest ->> 'carpeta') || left(p_sha256, 16) || '/' || (v_dest ->> 'nombre'), p_sha256, p_bytes,
+          greatest(coalesce(p_fotos_omitidas, 0), 0), v_email)
   on conflict do nothing returning id into v_id;
   select * into v_doc from campo.reporte_pdf where reporte_id = p_reporte_id and sello = v_sello;
   if v_doc.id is null then perform campo.f_error('Otro supervisor generó una versión al mismo tiempo: vuelva a pedirlo', '55000'); end if;
@@ -396,7 +398,7 @@ grant execute on function public.geoportal_campo_ran_datos(text, uuid, text), pu
 do $p1$
 begin
   perform pg_temp.ok('01.01 la huella de campo es la de este cambio; acta y Técnica no cambiaron',
-    (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text collate "C", p.proname, p.oid::regprocedure::text collate "C")) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) = '44bc25ac28ee840c00872a8dba6b21ab' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'acta'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_acta\_%')) = '111506c690249ad3b56ebf572566434c' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.prokind = 'f' and (p.pronamespace = 'tecnica'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_tec\_%'))) = '838b80984e51cc7873a666f85d657195');
+    (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text collate "C", p.proname, p.oid::regprocedure::text collate "C")) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) = '3c92536ff4f21b0f985c31fde0d94c9d' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'acta'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_acta\_%')) = '111506c690249ad3b56ebf572566434c' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.prokind = 'f' and (p.pronamespace = 'tecnica'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_tec\_%'))) = '838b80984e51cc7873a666f85d657195');
   perform pg_temp.ok('01.02 campo.reporte_pdf: RLS sin políticas, sin permisos para la API, SELECT para homelab_lectura',
     (select relrowsecurity from pg_class where oid = 'campo.reporte_pdf'::regclass) and not exists (select 1 from pg_policies where schemaname = 'campo')
     and not has_table_privilege('service_role', 'campo.reporte_pdf', 'select') and not has_table_privilege('authenticated', 'campo.reporte_pdf', 'select')
@@ -488,9 +490,9 @@ do $p6$
 declare A uuid := pg_temp.val('A')::uuid; SUP text := 'ztran.sup@emdupar.gov.co'; ADM text := 'ztran.adm@emdupar.gov.co'; d jsonb; r jsonb;
 begin
   d := pg_temp.datos(SUP, A);
-  perform pg_temp.ok('06.01 primera vez: versión 1, sin documento, nombre AAAAMMDDHHMMSS-RAN-NNNNNN.pdf y ruta en campo/AAAA-MM/<id>/',
+  perform pg_temp.ok('06.01 primera vez: versión 1, sin documento, nombre AAAAMMDDHHMMSS-RAN-NNNNNN.pdf y carpeta campo/AAAA-MM/<id>/',
     (d ->> 'version')::int = 1 and d -> 'documento' = 'null'::jsonb and d ->> 'nombre' ~ '^[0-9]{14}-RAN-[0-9]{6}\.pdf$'
-    and d ->> 'ruta' = 'campo/' || to_char((select registrado_en from campo.reportes where id = A) at time zone 'America/Bogota', 'YYYY-MM') || '/' || A || '/' || (d ->> 'nombre'), d ->> 'ruta');
+    and d ->> 'carpeta' = 'campo/' || to_char((select registrado_en from campo.reportes where id = A) at time zone 'America/Bogota', 'YYYY-MM') || '/' || A || '/', d ->> 'carpeta');
   perform pg_temp.ok('06.02 registrar con un sello viejo: 409 (55000); con huella inválida: 400',
     pg_temp.err(pg_temp.registrar(SUP, A, repeat('0', 64))) = '55000' and pg_temp.err(pg_temp.registrar(SUP, A, d ->> 'sello', 'xyz')) = '22023');
   r := pg_temp.registrar(SUP, A, d ->> 'sello');
@@ -504,8 +506,9 @@ begin
   perform pg_temp.ok('06.05 la siguiente consulta ve el documento y no arma el mapa', (d -> 'documento' ->> 'version')::int = 1 and d -> 'mapa' = 'null'::jsonb);
   r := pg_temp.obtener(SUP, A);
   perform pg_temp.ok('06.06 obtener: el mismo PDF, auditado', (r ->> 'version')::int = 1 and r ->> 'nombre' = d -> 'documento' ->> 'nombre' and pg_temp.audit(SUP, 'campo_ran_pdf_descargar', A::text) = 1, r::text);
-  perform pg_temp.ok('06.07 la fila guarda quién lo generó, el sello, el tamaño y las fotos omitidas',
-    exists (select 1 from campo.reporte_pdf where reporte_id = A and version = 1 and generado_por = SUP and sello = d ->> 'sello' and bytes = 150000 and fotos_omitidas = 0));
+  perform pg_temp.ok('06.07 la fila guarda quién lo generó, el sello, el tamaño, las fotos omitidas y la ruta con el sha256',
+    exists (select 1 from campo.reporte_pdf where reporte_id = A and version = 1 and generado_por = SUP and sello = d ->> 'sello' and bytes = 150000 and fotos_omitidas = 0
+            and ruta = (d ->> 'carpeta') || left(repeat('ab', 32), 16) || '/' || (d ->> 'nombre')));
 end $p6$;
 
 -- ===================== 07. Versión nueva solo si cambia el sello =====================
@@ -517,7 +520,7 @@ begin
   d := pg_temp.datos(SUP, A);
   perform pg_temp.ok('07.02 cambió el sello: versión 2, sin documento, nombre con -v2; el historial lo dice con su nombre',
     d ->> 'sello' <> pg_temp.val('sello_A1') and (d ->> 'version')::int = 2 and d -> 'documento' = 'null'::jsonb and d ->> 'nombre' ~ '-v2\.pdf$'
-    and d -> 'historial' -> 1 ->> 'texto' = 'Cambio de estado → En revisión · [PRUEBA ZTRAN] se revisa en terreno' and d -> 'historial' -> 1 ->> 'quien' = 'ZTRAN Supervisora'
+    and d -> 'historial' -> 1 ->> 'texto' = 'Cambio de estado a En revisión · [PRUEBA ZTRAN] se revisa en terreno' and d -> 'historial' -> 1 ->> 'quien' = 'ZTRAN Supervisora'
     and d ->> 'estado' = 'En revisión', left((d -> 'historial')::text, 400));
   perform pg_temp.ok('07.03 obtener responde 404 hasta generar la versión vigente', pg_temp.err(pg_temp.obtener(SUP, A)) = 'P0002');
   r := pg_temp.registrar(SUP, A, d ->> 'sello', repeat('ef', 32));
@@ -557,7 +560,7 @@ end $p8$;
 do $rev$
 declare r record; v_n bigint;
 begin
-  for r in select * from (values ('campo.f_ran_autorizar(text,uuid)', '2ad5312a05781ae680593c77f3567996'), ('campo.f_ran_persona(text)', '878cb032577259fc99a65a88a895e705'), ('campo.f_ran_contenido(uuid)', '138a1a6e93e156fd095d93f7c4762ae1'), ('campo.f_ran_destino(uuid,text)', 'eb9c139a23c4b36f0e043525f634cd6e'), ('campo.f_ran_mapa(numeric,numeric,numeric,numeric)', 'bb39c53123e8c511bf06315a3b07db1a'), ('public.geoportal_campo_ran_datos(text,uuid,text)', 'b2f192dbd2d9154de9c6708d16d2267b'), ('public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)', '05dccedde2577234ec797581e874e513'), ('public.geoportal_campo_ran_obtener(text,uuid,text)', '0bbe7052f131c80a46acf95c327a0cb5')) x(f, m) loop
+  for r in select * from (values ('campo.f_ran_autorizar(text,uuid)', '2ad5312a05781ae680593c77f3567996'), ('campo.f_ran_persona(text)', '878cb032577259fc99a65a88a895e705'), ('campo.f_ran_contenido(uuid)', '594eb5e7ad35d4db8716574040eb5b61'), ('campo.f_ran_destino(uuid,text)', '535d8c387cc5b9fe4dce88f1845b4dbf'), ('campo.f_ran_mapa(numeric,numeric,numeric,numeric)', 'bb39c53123e8c511bf06315a3b07db1a'), ('public.geoportal_campo_ran_datos(text,uuid,text)', 'b2f192dbd2d9154de9c6708d16d2267b'), ('public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)', 'b4fcc8acd750235599d3ca395b6316f1'), ('public.geoportal_campo_ran_obtener(text,uuid,text)', '0bbe7052f131c80a46acf95c327a0cb5')) x(f, m) loop
     if to_regprocedure(r.f) is null or md5(pg_get_functiondef(to_regprocedure(r.f))) is distinct from r.m then
       raise exception 'La función % no es la de este paquete (sin aplicar o cambiada después): la reversa no la pisa; deténgase y avise', r.f;
     end if;

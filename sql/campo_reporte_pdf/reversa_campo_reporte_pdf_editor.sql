@@ -8,7 +8,7 @@ begin;
 do $rev$
 declare r record; v_n bigint;
 begin
-  for r in select * from (values ('campo.f_ran_autorizar(text,uuid)', '2ad5312a05781ae680593c77f3567996'), ('campo.f_ran_persona(text)', '878cb032577259fc99a65a88a895e705'), ('campo.f_ran_contenido(uuid)', '138a1a6e93e156fd095d93f7c4762ae1'), ('campo.f_ran_destino(uuid,text)', 'eb9c139a23c4b36f0e043525f634cd6e'), ('campo.f_ran_mapa(numeric,numeric,numeric,numeric)', 'bb39c53123e8c511bf06315a3b07db1a'), ('public.geoportal_campo_ran_datos(text,uuid,text)', 'b2f192dbd2d9154de9c6708d16d2267b'), ('public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)', '05dccedde2577234ec797581e874e513'), ('public.geoportal_campo_ran_obtener(text,uuid,text)', '0bbe7052f131c80a46acf95c327a0cb5')) x(f, m) loop
+  for r in select * from (values ('campo.f_ran_autorizar(text,uuid)', '2ad5312a05781ae680593c77f3567996'), ('campo.f_ran_persona(text)', '878cb032577259fc99a65a88a895e705'), ('campo.f_ran_contenido(uuid)', '594eb5e7ad35d4db8716574040eb5b61'), ('campo.f_ran_destino(uuid,text)', '535d8c387cc5b9fe4dce88f1845b4dbf'), ('campo.f_ran_mapa(numeric,numeric,numeric,numeric)', 'bb39c53123e8c511bf06315a3b07db1a'), ('public.geoportal_campo_ran_datos(text,uuid,text)', 'b2f192dbd2d9154de9c6708d16d2267b'), ('public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)', 'b4fcc8acd750235599d3ca395b6316f1'), ('public.geoportal_campo_ran_obtener(text,uuid,text)', '0bbe7052f131c80a46acf95c327a0cb5')) x(f, m) loop
     if to_regprocedure(r.f) is null or md5(pg_get_functiondef(to_regprocedure(r.f))) is distinct from r.m then
       raise exception 'La función % no es la de este paquete (sin aplicar o cambiada después): la reversa no la pisa; deténgase y avise', r.f;
     end if;

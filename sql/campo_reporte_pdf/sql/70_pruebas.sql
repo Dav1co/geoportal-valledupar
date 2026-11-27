@@ -208,9 +208,9 @@ do $p6$
 declare A uuid := pg_temp.val('A')::uuid; SUP text := 'ztran.sup@emdupar.gov.co'; ADM text := 'ztran.adm@emdupar.gov.co'; d jsonb; r jsonb;
 begin
   d := pg_temp.datos(SUP, A);
-  perform pg_temp.ok('06.01 primera vez: versión 1, sin documento, nombre AAAAMMDDHHMMSS-RAN-NNNNNN.pdf y ruta en campo/AAAA-MM/<id>/',
+  perform pg_temp.ok('06.01 primera vez: versión 1, sin documento, nombre AAAAMMDDHHMMSS-RAN-NNNNNN.pdf y carpeta campo/AAAA-MM/<id>/',
     (d ->> 'version')::int = 1 and d -> 'documento' = 'null'::jsonb and d ->> 'nombre' ~ '^[0-9]{14}-RAN-[0-9]{6}\.pdf$'
-    and d ->> 'ruta' = 'campo/' || to_char((select registrado_en from campo.reportes where id = A) at time zone 'America/Bogota', 'YYYY-MM') || '/' || A || '/' || (d ->> 'nombre'), d ->> 'ruta');
+    and d ->> 'carpeta' = 'campo/' || to_char((select registrado_en from campo.reportes where id = A) at time zone 'America/Bogota', 'YYYY-MM') || '/' || A || '/', d ->> 'carpeta');
   perform pg_temp.ok('06.02 registrar con un sello viejo: 409 (55000); con huella inválida: 400',
     pg_temp.err(pg_temp.registrar(SUP, A, repeat('0', 64))) = '55000' and pg_temp.err(pg_temp.registrar(SUP, A, d ->> 'sello', 'xyz')) = '22023');
   r := pg_temp.registrar(SUP, A, d ->> 'sello');
@@ -224,8 +224,9 @@ begin
   perform pg_temp.ok('06.05 la siguiente consulta ve el documento y no arma el mapa', (d -> 'documento' ->> 'version')::int = 1 and d -> 'mapa' = 'null'::jsonb);
   r := pg_temp.obtener(SUP, A);
   perform pg_temp.ok('06.06 obtener: el mismo PDF, auditado', (r ->> 'version')::int = 1 and r ->> 'nombre' = d -> 'documento' ->> 'nombre' and pg_temp.audit(SUP, 'campo_ran_pdf_descargar', A::text) = 1, r::text);
-  perform pg_temp.ok('06.07 la fila guarda quién lo generó, el sello, el tamaño y las fotos omitidas',
-    exists (select 1 from campo.reporte_pdf where reporte_id = A and version = 1 and generado_por = SUP and sello = d ->> 'sello' and bytes = 150000 and fotos_omitidas = 0));
+  perform pg_temp.ok('06.07 la fila guarda quién lo generó, el sello, el tamaño, las fotos omitidas y la ruta con el sha256',
+    exists (select 1 from campo.reporte_pdf where reporte_id = A and version = 1 and generado_por = SUP and sello = d ->> 'sello' and bytes = 150000 and fotos_omitidas = 0
+            and ruta = (d ->> 'carpeta') || left(repeat('ab', 32), 16) || '/' || (d ->> 'nombre')));
 end $p6$;
 
 -- ===================== 07. Versión nueva solo si cambia el sello =====================
@@ -237,7 +238,7 @@ begin
   d := pg_temp.datos(SUP, A);
   perform pg_temp.ok('07.02 cambió el sello: versión 2, sin documento, nombre con -v2; el historial lo dice con su nombre',
     d ->> 'sello' <> pg_temp.val('sello_A1') and (d ->> 'version')::int = 2 and d -> 'documento' = 'null'::jsonb and d ->> 'nombre' ~ '-v2\.pdf$'
-    and d -> 'historial' -> 1 ->> 'texto' = 'Cambio de estado → En revisión · [PRUEBA ZTRAN] se revisa en terreno' and d -> 'historial' -> 1 ->> 'quien' = 'ZTRAN Supervisora'
+    and d -> 'historial' -> 1 ->> 'texto' = 'Cambio de estado a En revisión · [PRUEBA ZTRAN] se revisa en terreno' and d -> 'historial' -> 1 ->> 'quien' = 'ZTRAN Supervisora'
     and d ->> 'estado' = 'En revisión', left((d -> 'historial')::text, 400));
   perform pg_temp.ok('07.03 obtener responde 404 hasta generar la versión vigente', pg_temp.err(pg_temp.obtener(SUP, A)) = 'P0002');
   r := pg_temp.registrar(SUP, A, d ->> 'sello', repeat('ef', 32));

@@ -26,7 +26,7 @@ language sql stable security definer set search_path = public, campo, pg_temp as
   select coalesce((select nullif(btrim(b.nombre), '') from public.geoportal_lista_blanca b where b.email = lower(btrim(p_email)) limit 1), lower(btrim(p_email)))
 $$;
 
--- Todo lo que va al PDF (menos el mapa y el pie de generación). Su sha256 es el sello: si cambia (estado, historial, datos), hay versión nueva.
+-- Todo lo que va al PDF (menos el mapa y el pie de generación). Solo caracteres de WinAnsi (el escritor del PDF no tiene «→»). Su sha256 es el sello: si cambia (estado, historial, datos), hay versión nueva.
 -- NUNCA lee campo.reporte_datos_sensibles. Las rutas de las fotos van solo para que la Edge las lea; el PDF no las imprime.
 create function campo.f_ran_contenido(p_id uuid) returns jsonb
 language plpgsql stable security definer set search_path = public, campo, acta, pg_temp as $$
@@ -66,7 +66,7 @@ begin
     'historial', jsonb_build_array(jsonb_build_object('fecha', to_char(v.registrado_en at time zone 'America/Bogota', f_hora), 'texto', 'Reportado', 'quien', campo.f_ran_persona(v.autor)))
       || coalesce((select jsonb_agg(jsonb_build_object('fecha', to_char(e.creado_en at time zone 'America/Bogota', f_hora),
                      'texto', case e.tipo_evento
-                                when 'cambio_estado' then 'Cambio de estado → ' || coalesce((select x.nombre from campo.estados_reporte x where x.codigo = e.estado_nuevo), e.estado_nuevo)
+                                when 'cambio_estado' then 'Cambio de estado a ' || coalesce((select x.nombre from campo.estados_reporte x where x.codigo = e.estado_nuevo), e.estado_nuevo)
                                 when 'ocultar' then 'Se ocultó el reporte'
                                 when 'reincluir' then 'Se reincluyó el reporte'
                                 when 'vincular_duplicado' then 'Se vinculó como duplicado de ' || coalesce((select 'RAN-' || lpad(o.seq::text, 6, '0') from campo.reportes o where o.id = e.reporte_original_id), 'otro reporte')
@@ -82,7 +82,7 @@ begin
   return r;
 end $$;
 
--- Versión, nombre y ruta para un sello: la versión ya registrada con ese sello, o la siguiente
+-- Versión, nombre y carpeta para un sello: la versión ya registrada con ese sello, o la siguiente. La ruta = carpeta || 16 primeros del sha256 del PDF || '/' || nombre.
 create function campo.f_ran_destino(p_id uuid, p_sello text) returns jsonb
 language plpgsql stable security definer set search_path = public, campo, pg_temp as $$
 declare v_r campo.reportes; v_doc campo.reporte_pdf; v_ver integer; v_nombre text;
@@ -93,7 +93,7 @@ begin
   if v_ver > 99 then perform campo.f_error('Este reporte ya tiene 99 versiones de PDF', '55000'); end if;
   v_nombre := campo.f_nombre_pdf(v_r.registrado_en, 'RAN', lpad(v_r.seq::text, 6, '0'), v_ver);
   return jsonb_build_object('version', v_ver, 'nombre', v_nombre,
-    'ruta', 'campo/' || to_char(v_r.registrado_en at time zone 'America/Bogota', 'YYYY-MM') || '/' || p_id || '/' || v_nombre,
+    'carpeta', 'campo/' || to_char(v_r.registrado_en at time zone 'America/Bogota', 'YYYY-MM') || '/' || p_id || '/',
     'documento', case when v_doc.id is not null then jsonb_build_object('nombre', v_doc.nombre, 'ruta', v_doc.ruta, 'sha256', v_doc.sha256, 'bytes', v_doc.bytes,
                    'version', v_doc.version, 'generado_en', v_doc.generado_en) end);
 end $$;
@@ -159,7 +159,8 @@ begin
   if p_bytes is null or p_bytes < 200 or p_bytes > 26214400 then perform campo.f_error('El tamaño del PDF no es válido'); end if;
   v_dest := campo.f_ran_destino(p_reporte_id, v_sello);
   insert into campo.reporte_pdf (reporte_id, version, sello, nombre, ruta, sha256, bytes, fotos_omitidas, generado_por)
-  values (p_reporte_id, (v_dest ->> 'version')::integer, v_sello, v_dest ->> 'nombre', v_dest ->> 'ruta', p_sha256, p_bytes, greatest(coalesce(p_fotos_omitidas, 0), 0), v_email)
+  values (p_reporte_id, (v_dest ->> 'version')::integer, v_sello, v_dest ->> 'nombre', (v_dest ->> 'carpeta') || left(p_sha256, 16) || '/' || (v_dest ->> 'nombre'), p_sha256, p_bytes,
+          greatest(coalesce(p_fotos_omitidas, 0), 0), v_email)
   on conflict do nothing returning id into v_id;
   select * into v_doc from campo.reporte_pdf where reporte_id = p_reporte_id and sello = v_sello;
   if v_doc.id is null then perform campo.f_error('Otro supervisor generó una versión al mismo tiempo: vuelva a pedirlo', '55000'); end if;

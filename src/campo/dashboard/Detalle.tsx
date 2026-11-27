@@ -1,6 +1,6 @@
 import type { DireccionContratoDetalle } from "./apiRevision";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiRev, textoError, type Cercano, type DetalleResp, type EventoRep, type FilaReporte, type FormularioRev, type SensiblesResp } from "./apiRevision";
+import { apiRev, textoError, type Cercano, type DetalleResp, type EventoRep, type FilaReporte, type FormularioRev, type PdfReporte, type SensiblesResp } from "./apiRevision";
 import { columnasBase, paresDeDatos, textoDeDato, textoInicio, textoDuracion, type Contexto } from "./columnas";
 import { fmtInstante, fmtNumero } from "./formatoRevision";
 import { ErrorCampo } from "../apiCampo";
@@ -159,6 +159,35 @@ function FotoVisor({ id, orden, rotulo }: { id: string; orden: number; rotulo: s
   );
 }
 
+// ---------- PDF de «Reportar anomalía» (27-nov) ----------
+/** Los reportes de «Reportar anomalía» (tipo general): sin consecutivo, sin resultado, sin campos ni fotos propios del tipo. Los formatos tienen su propio PDF.
+ *  El servidor lo vuelve a decidir (rechaza los formatos); aquí solo se evita ofrecer el botón donde no aplica. */
+export function esReporteGeneral(d: DetalleResp, def: FormularioRev): boolean {
+  const r = d.reporte;
+  const fotosTipo = def.definiciones?.find((x) => x.tipo === r.tipo.codigo)?.fotos ?? [];
+  return !r.consecutivo && (r.resultado === null || r.resultado === undefined) && !d.campos.some((c) => c.activo !== false) && !fotosTipo.some((f) => f.activo !== false);
+}
+const kb = (b: number) => (b >= 1048576 ? `${(b / 1048576).toLocaleString("es-CO", { maximumFractionDigits: 1 })} MB` : `${Math.max(1, Math.round(b / 1024)).toLocaleString("es-CO")} KB`);
+/** Dos pasos (Safari no abre ventanas después de una espera): «Descargar PDF del reporte» lo prepara; «Abrir el PDF» lo abre con la URL firmada (5 min). */
+function PdfDelReporte({ id }: { id: string }) {
+  const [pdf, setPdf] = useState<PdfReporte | null>(null); const [cargando, setCargando] = useState(false); const [error, setError] = useState<string | null>(null);
+  useEffect(() => { setPdf(null); setError(null); }, [id]);
+  const pedirPdf = async () => {
+    setCargando(true); setError(null); setPdf(null);
+    try { setPdf(await apiRev.ranPdf(id)); } catch (e) { setError(textoError(e).texto); } finally { setCargando(false); }
+  };
+  return (
+    <div className="rv-pdf" data-ran-pdf>
+      <button type="button" className="rv-boton-sec" disabled={cargando} onClick={() => void pedirPdf()}>{cargando ? "Preparando el PDF…" : "Descargar PDF del reporte"}</button>
+      {pdf ? <p className="rv-sub" role="status" data-ran-pdf-listo>
+        PDF listo: <span className="rv-pdf-nombre">{pdf.nombre}</span> ({kb(pdf.bytes)}{pdf.version > 1 ? `, versión ${pdf.version}` : ""}).{" "}
+        <a className="rv-enlace" href={pdf.url} target="_blank" rel="noopener noreferrer" data-ran-pdf-abrir>Abrir el PDF</a>
+      </p> : null}
+      {error ? <p className="rv-aviso rv-aviso-error" role="alert" data-ran-pdf-error>{error}</p> : null}
+    </div>
+  );
+}
+
 // ---------- Acciones del supervisor ----------
 type Accion = "estado" | "ocultar" | "reincluir" | "duplicado";
 function Acciones({ d, def, accion, setAccion, onHecho, refrescar }: {
@@ -192,6 +221,7 @@ function Acciones({ d, def, accion, setAccion, onHecho, refrescar }: {
       <button type="button" className="rv-boton-sec" disabled={estados.length === 0} onClick={() => setAccion("estado")}>Cambiar estado</button>
       {r.oculto ? <button type="button" className="rv-boton-sec" onClick={() => setAccion("reincluir")}>Reincluir</button> : <button type="button" className="rv-boton-sec" onClick={() => setAccion("ocultar")}>Ocultar</button>}
       <button type="button" className="rv-boton-sec" disabled={!puedeDuplicar} onClick={() => setAccion("duplicado")}>Vincular como duplicado</button>
+      {esReporteGeneral(d, def) ? <PdfDelReporte id={r.id} /> : null}
       {accion ? (
         <ModalAccion
           titulo={accion === "estado" ? "Cambiar estado" : accion === "ocultar" ? "Ocultar el reporte" : accion === "reincluir" ? "Reincluir el reporte" : "Vincular como duplicado"}

@@ -58,6 +58,7 @@ export type EventoRep = { id: number; tipo_evento: string; estado_nuevo: string 
 export type FotoRep = { orden: number; tamano_bytes: number; tipo_mime: string; registrada_en: string; etiqueta?: string | null; etiqueta_nombre?: string | null; origen?: "camara" | "galeria" | "archivo" };
 export type Cercano = { id: string; distancia_m: number; registrado_en: string; estado: string };
 export type DetalleResp = { reporte: FilaReporte; campos: CampoDef[]; fotos: FotoRep[]; eventos: EventoRep[]; cercanos: Cercano[]; distancia_duplicados_m: number };
+export type PdfReporte = { nombre: string; version: number; bytes: number; sha256: string; url: string; nuevo: boolean };
 export type SensiblesResp = { reporte_id: string; datos: Record<string, unknown>; campos: CampoDef[] };
 
 export type IndicadoresResp = {
@@ -131,6 +132,8 @@ export const apiRev = {
   reporte: (id: string) => pedir<DetalleResp>("reporte", { qs: { id } }),
   foto: (id: string, orden: number) => pedir<{ url: string; expira_en: string }>("foto", { qs: { id, orden: String(orden) } }),
   sensibles: (id: string) => pedir<SensiblesResp>("datos_sensibles", { qs: { id } }),
+  /** PDF de «Reportar anomalía» (27-nov): lo genera la Edge la primera vez (o si el reporte cambió: versión nueva); si no, entrega el mismo. URL firmada de 5 min. */
+  ranPdf: (id: string) => pedir<PdfReporte>("ran_pdf", { cuerpo: { reporte_id: id }, timeoutMs: 90000 }),
   estado: (id: string, estado: string, motivo: string) => pedir<{ id: string; estado: string; estado_anterior: string }>("estado", { cuerpo: { id, estado, motivo } }),
   ocultar: (id: string, motivo: string) => pedir<{ id: string; oculto: boolean }>("ocultar", { cuerpo: { id, motivo } }),
   reincluir: (id: string, motivo: string) => pedir<{ id: string; oculto: boolean }>("reincluir", { cuerpo: { id, motivo } }),

@@ -57,7 +57,7 @@ def main():
     rid = con.execute("insert into campo.reportes (id, tipo_id, descripcion, lat, lon, precision_m, origen, autor) select gen_random_uuid(), t.id, '[PRUEBA ZTRAN] local', 10.47, -73.25, 5, 'campo', 'ztran.local@emdupar.gov.co' "
                       "from campo.tipos_reporte t where t.codigo = 'otro' returning id").fetchone()[0]
     con.execute("insert into campo.reporte_pdf (reporte_id, version, sello, nombre, ruta, sha256, bytes, generado_por) values (%s, 1, repeat('a', 64), '20261127120000-RAN-000001.pdf', "
-                "'campo/2026-11/' || %s || '/20261127120000-RAN-000001.pdf', repeat('b', 64), 5000, 'ztran.local@emdupar.gov.co')", (rid, str(rid)))
+                "'campo/2026-11/' || %s || '/bbbbbbbbbbbbbbbb/20261127120000-RAN-000001.pdf', repeat('b', 64), 5000, 'ztran.local@emdupar.gov.co')", (rid, str(rid)))
     e = revertir(con); ok("10 reversa", e is None, e)
     ok("11 la huella vuelve a la de partida y la tabla queda con su fila (nada se borra)", huella(con) == gn.PUBLICADA["campo"] and filas_pdf(con) == 1)
     e = revertir(con); ok("12 repetir la reversa: se rechaza", e is not None and "no es la de este paquete" in e, e)

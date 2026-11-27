@@ -7,7 +7,7 @@ OK    03 el ensayo no dejó nada (huella de partida, sin la tabla, sin correos Z
 OK    04 migración (0.0 s)
 OK    05 verificación 9 de 9
 OK    06 huellas DESPUÉS: campo «CON ESTE CAMBIO», acta y Técnica sin cambio
-OK    07 huella de campo nueva = 44bc25ac28ee840c00872a8dba6b21ab
+OK    07 huella de campo nueva = 3c92536ff4f21b0f985c31fde0d94c9d
 OK    08 repetir la migración: la guardia la rechaza
 OK    09 el ensayo sobre la base ya migrada se detiene en la guardia
 OK    10 reversa

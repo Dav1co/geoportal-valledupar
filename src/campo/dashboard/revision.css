@@ -93,6 +93,9 @@
 .rv-detalle-cab h2 { font-size: 18px; margin: 0; color: var(--t-titulo, #0a2540); overflow-wrap: anywhere; }
 .rv-marcas { display: flex; flex-wrap: wrap; gap: 6px; }
 .rv-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+/* PDF de «Reportar anomalía» (27-nov): su propio renglón dentro de las acciones; el nombre del archivo puede partirse en el celular */
+.rv-pdf { flex-basis: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.rv-pdf .rv-sub { margin: 0; } .rv-pdf-nombre { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .rv-dl { display: grid; grid-template-columns: minmax(110px, 34%) 1fr; gap: 6px 10px; margin: 0; font-size: 14px; }
 .rv-dl dt { font-weight: 700; color: var(--t-texto-2, #52626f); } .rv-dl dd { margin: 0; overflow-wrap: anywhere; }
 .rv-descripcion { white-space: pre-wrap; }
