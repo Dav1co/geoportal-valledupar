@@ -25,9 +25,11 @@ Con el token de un supervisor de Técnica: `GET /functions/v1/geoportal-analisis
 ## md5 de los archivos `_editor`
 
 - `huellas_solo_lectura_analisis_cuadernos_editor.sql` · `6578b3105154e78c844ca18a70fb6325`
-- `ensayo_en_transaccion_analisis_cuadernos_editor.sql` · `9837a47d90c976b27f4bc34557fcfe6c`
+- `ensayo_en_transaccion_analisis_cuadernos_editor.sql` · `ab9c32415fa3fdc304422512a0f78820` (cambió el 26-nov; el anterior, `9837a47d…`, ya no se usa)
 - `migracion_analisis_cuadernos_editor.sql` · `24b679e0254d7088225e12178b31de7c`
 - `verificacion_analisis_cuadernos_editor.sql` · `7bd4546355e4e96e6de4225612f27561`
 - `reversa_analisis_cuadernos_editor.sql` · `cb2c28e4f4997e0d5c49a6dfb924528f`
+
+Corrección del 26-nov: el primer ensayo falló en producción sin dejar nada (`42702`, `zona` ambigua: `catastro_valledupar` tiene una columna `zona` y una variable del ensayo se llamaba igual). Solo cambió el archivo del ensayo: las variables son ahora `v_zona_geojson` y `v_zona2_geojson`, y las lecturas del catastro van con alias (`c.geom`, `c.cod_usuario`). La migración, la verificación, la reversa y las huellas son las mismas (mismos md5). El doble local del catastro lleva ahora las 72 columnas reales, y `generar.py` se niega si alguna variable o parámetro del paquete se llama como una columna real de `catastro_valledupar`, `redes.v_activo_vigente`, `storage.buckets` o `storage.objects`.
 
 Huella de análisis después de migrar: `c8a803aae851e77c9cdf010535dec090` (28 funciones: 12 RPC y 16 internas).

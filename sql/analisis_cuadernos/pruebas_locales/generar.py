@@ -36,6 +36,23 @@ N_RPC = 12
 LOCAL = os.path.join(AQUI, 'local')
 RES = os.path.join(RAIZ, 'resultados')
 
+# Columnas REALES de producción de lo que el paquete solo lee (26-nov: el ensayo falló en producción con 42702 porque catastro_valledupar tiene una columna
+# «zona» que el doble local no tenía, y una variable del ensayo se llamaba igual). El doble las lleva TODAS, y ninguna variable ni parámetro del paquete
+# puede llamarse como una de ellas. Catastro: de la exploración del 2-nov (geoportal-consultas/exploracion_mapa_calor_cartera/salida_propietario.txt);
+# de las que el doble no tenía se conoce el nombre y no el tipo: se agregan como text (zona es text en producción). Storage: las del esquema de Supabase.
+COLS_CATASTRO = ('id cod_usuario geom direccion barrio otro_barrio comuna sector manzana predio zona departamento municipio codigo_catastral cod_igac cod_predio '
+                 'matricula_inmobiliaria nom_edificio ubicm tipo_predio esta_predio estrato clase_uso act_eco unih uninh nro_habitantes nombre apel1 nombre_propie '
+                 'apellido_propie tipo_identicacion_propie identicacion_propie email email_propie telefono telefono_propie tip_serv tipconex posee_serv serv_alc '
+                 'destp_servalc factura registra des_verttim des_ptohidra nro_med desc_marca elemento_medicion diam_med diam_acom pesee_med estpto_med est_caja lectura '
+                 'an_med codanommed posee_llave_pas posee_reg_cort posee_serv_ener med_energ nic_ener sector_hidra subsector_hidra unidad_hidra an_nosus anom_general '
+                 'despos_fraude mantenimiento re_pr hayatencion direccion_norm').split()
+COLS_STORAGE = {'buckets': {'owner': 'uuid', 'updated_at': 'timestamptz default now()', 'avif_autodetection': 'boolean default false', 'owner_id': 'text', 'type': 'text'},
+                'objects': {'updated_at': 'timestamptz default now()', 'last_accessed_at': 'timestamptz default now()',
+                            'path_tokens': "text[] generated always as (string_to_array(name, '/')) stored", 'version': 'text', 'owner_id': 'text', 'user_metadata': 'jsonb',
+                            'level': 'integer'}}
+# Nombres declarados que coinciden con una columna real y se dejan, con su porqué.
+NOMBRES_PERMITIDOS = {('20_funciones.sql', 'email'): 'parámetro OUT de analisis.f_acceso, que no lee el catastro (solo llama a redes.f_geovisor_acceso)'}
+
 
 def q(sql, db):
     return subprocess.run([PSQL, '-d', db, '-AtX', '-c', sql], check=True, capture_output=True, text=True).stdout.strip()
@@ -78,7 +95,58 @@ def preparar_base():
     copia(BASE, ORIGEN)
     q("insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values ('analisis-capturas', 'analisis-capturas', false, 614400, array['image/jpeg'])", BASE)
     assert q("select count(*) from pg_namespace where nspname = 'analisis'", BASE) == '0'
+    # el doble con TODAS las columnas reales (solo se agregan; BASE es una copia que crea este guion)
+    for c in COLS_CATASTRO:
+        q(f'alter table public.catastro_valledupar add column if not exists {c} text', BASE)
+    for tabla, cols in COLS_STORAGE.items():
+        for c, tipo in cols.items():
+            q(f'alter table storage.{tabla} add column if not exists {c} {tipo}', BASE)
+    assert q("select string_agg(attname, ' ' order by attname) from pg_attribute where attrelid = 'public.catastro_valledupar'::regclass and attnum > 0 and not attisdropped", BASE) \
+        == ' '.join(sorted(COLS_CATASTRO)), 'el doble del catastro no tiene las mismas columnas que producción'
+    assert q("select format_type(atttypid, atttypmod) from pg_attribute where attrelid = 'public.catastro_valledupar'::regclass and attname = 'zona'", BASE) == 'text'
+    assert q(HUELLA_REDES, BASE) == MD5_REDES
+    # el doble reproduce el caso de producción: una variable «zona» sin calificar sobre el catastro da 42702
+    p = subprocess.run([PSQL, '-d', BASE, '-X', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose', '-c',
+                        "do $$ declare zona text := '{\"type\":\"Point\",\"coordinates\":[-73.25,10.46]}'; n integer; begin "
+                        "select count(*) into n from public.catastro_valledupar where st_intersects(geom, st_setsrid(st_geomfromgeojson(zona), 4326)); end $$"],
+                       capture_output=True, text=True)
+    assert p.returncode != 0 and '42702' in p.stderr, 'el doble del catastro no reproduce el 42702 de producción: ' + p.stderr
     return q(HUELLA_TEC, BASE)
+
+
+def nombres_reales():
+    """Columnas reales de lo que el paquete lee: catastro, redes.v_activo_vigente (la vista es de los paquetes de redes: la local es la de producción) y storage."""
+    cols = "select string_agg(attname, ' ') from pg_attribute where attrelid = '%s'::regclass and attnum > 0 and not attisdropped"
+    return {'public.catastro_valledupar': set(COLS_CATASTRO), 'redes.v_activo_vigente': set(q(cols % 'redes.v_activo_vigente', BASE).split()),
+            'storage.buckets': set(q(cols % 'storage.buckets', BASE).split()), 'storage.objects': set(q(cols % 'storage.objects', BASE).split())}
+
+
+def auditar_nombres():
+    """Ninguna variable, parámetro ni variable de bucle del paquete se llama como una columna real de esas tablas (42702 en producción, 26-nov)."""
+    reales = nombres_reales()
+    archivos = [os.path.join(RAIZ, 'sql', n) for n in ('20_funciones.sql', '26_rpc.sql', '70_pruebas.sql')] + \
+               [os.path.join(AQUI, 'plantillas', n) for n in sorted(os.listdir(os.path.join(AQUI, 'plantillas')))]
+    choques, vistos = [], 0
+    for ruta in archivos:
+        t = re.sub(r'--[^\n]*', '', leer(ruta))
+        decl = set()
+        for m in re.finditer(r'create (?:or replace )?function\s+[\w.]+\s*\((.*?)\)\s*returns', t, re.S | re.I):
+            for p in m.group(1).split(','):
+                w = p.split()
+                if w:
+                    decl.add(w[1] if w[0].lower() in ('out', 'in', 'inout') else w[0])
+        for m in re.finditer(r'\bdeclare\b(.*?)\bbegin\b', t, re.S | re.I):
+            decl.update(s.split()[0] for s in m.group(1).split(';') if s.split())
+        for m in re.finditer(r'\bfor\s+(\w+)(?:\s*,\s*(\w+))?\s+in\b', t, re.I):
+            decl.update(x for x in m.groups() if x)
+        vistos += len(decl)
+        for d in sorted(decl):
+            donde = [k for k, v in reales.items() if d.lower() in v]
+            if donde and (os.path.basename(ruta), d.lower()) not in NOMBRES_PERMITIDOS:
+                choques.append(f'{os.path.basename(ruta)}: «{d}» es columna de {", ".join(donde)}')
+    assert vistos > 100, vistos
+    assert not choques, 'nombres que chocan con columnas reales:\n' + '\n'.join(choques)
+    return vistos
 
 
 def cuerpo(val):
@@ -93,6 +161,7 @@ def armar(val, carpeta, sufijo):
 
 def main():
     md5_tec_local = preparar_base()
+    n_nombres = auditar_nombres()
     v_prod = {'{{MD5_REDES}}': MD5_REDES, '{{MD5_TECNICA}}': MD5_TECNICA_PROD}
     v_local = {'{{MD5_REDES}}': MD5_REDES, '{{MD5_TECNICA}}': md5_tec_local}
     armar(v_prod, RAIZ, '_editor')
@@ -159,6 +228,8 @@ def main():
     subprocess.run([PSQL, '-qX', '-d', 'postgres', '-c', f'drop database if exists {TMP}'], check=True, capture_output=True)
     resumen = (f'huella de redes {MD5_REDES} (no cambia) · técnica PRODUCCIÓN {MD5_TECNICA_PROD} (guardia del _editor; no cambia) · técnica local {md5_tec_local} (no cambia) · '
                f'huella de análisis {md5_ana} · {len(firmas)} funciones ({N_RPC} RPC y {len(internas)} internas)')
+    informe.insert(0, f'== nombres: {n_nombres} variables y parámetros del paquete revisados contra las columnas REALES de catastro_valledupar ({len(COLS_CATASTRO)}), '
+                      'redes.v_activo_vigente, storage.buckets y storage.objects: ninguno coincide (salvo los permitidos: ' + '; '.join(f'{k[1]} — {v}' for k, v in NOMBRES_PERMITIDOS.items()) + ')')
     informe.insert(0, resumen)
     escribir(os.path.join(RES, 'sql_local.txt'), '\n'.join(informe) + '\n')
     print(resumen)

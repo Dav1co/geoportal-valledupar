@@ -867,8 +867,8 @@ declare
   llamadas text[]; t text; q text; quien text; i integer;
   j jsonb; m jsonb; v_id uuid; v_id2 uuid; v_adm uuid; v_cap uuid; v_cap2 uuid; v_ruta text; v_n integer; v_n2 integer; v_txt text; v_act text;
   m_prob uuid; m_act uuid; m_ref uuid; m_post uuid; m_mano uuid; m_circ uuid; m_lin uuid; m_zona uuid;
-  zona text := pg_temp.cuadro(-73.2560, 10.4640, 0.0060);            -- ~0,44 km² dentro de la ciudad
-  zona2 text := pg_temp.cuadro(-73.2500, 10.4700, 0.0040);
+  v_zona_geojson text := pg_temp.cuadro(-73.2560, 10.4640, 0.0060);            -- ~0,44 km² dentro de la ciudad
+  v_zona2_geojson text := pg_temp.cuadro(-73.2500, 10.4700, 0.0040);
   mano text; v_total integer; v_bien integer; v_fallas text;
 begin
   -- ---------- personas de prueba: los 5 perfiles (y un segundo supervisor, un operador sin la casilla y alguien fuera de la lista) ----------
@@ -962,7 +962,7 @@ begin
   llamadas := array[
     'geoportal_analisis_perfil(%L)', 'geoportal_analisis_cuadernos(%L)', format('geoportal_analisis_cuaderno(%%L, %L)', v_id), 'geoportal_analisis_cuaderno_crear(%L, ''ZTCUAD no debe crearse'')',
     format('geoportal_analisis_cuaderno_guardar(%%L, %L, 1, ''ZTCUAD x'')', v_id), format('geoportal_analisis_cuaderno_estado(%%L, %L, ''archivar'', ''ZTCUAD motivo'')', v_id),
-    format('geoportal_analisis_zona(%%L, %L::jsonb)', zona),
+    format('geoportal_analisis_zona(%%L, %L::jsonb)', v_zona_geojson),
     format('geoportal_analisis_captura_firmar(%%L, %L, ''ZTCUAD captura'', -73.26, 10.46, -73.25, 10.47, 800, 600, 1000, %L)', v_id, repeat('a', 64)),
     format('geoportal_analisis_captura_confirmar(%%L, %L)', v_id), format('geoportal_analisis_captura_anular(%%L, %L, ''ZTCUAD motivo'')', v_id), format('geoportal_analisis_captura_ruta(%%L, %L)', v_id), format('geoportal_analisis_cuaderno_exportar(%%L, %L)', v_id)];
   for i in 1 .. array_length(llamadas, 1) loop
@@ -1010,7 +1010,7 @@ begin
     {"op":"nueva","marca_id":"%s","tipo":"linea","categoria":"obra","geom":{"type":"LineString","coordinates":[[-73.2550,10.4650],[-73.2540,10.4660]]}},
     {"op":"nueva","marca_id":"%s","tipo":"zona","nota":"ZTCUAD zona afectada","geom":%s}]$j$,
     m_prob, pg_temp.pt(-73.2530, 10.4660), v_act, m_act, pg_temp.pt(-73.2535, 10.4665), m_ref, pg_temp.pt(-73.2540, 10.4670), m_post, pg_temp.pt(-73.2545, 10.4675),
-    m_mano, mano, m_circ, pg_temp.pt(-73.2520, 10.4655), m_lin, m_zona, zona)::jsonb);
+    m_mano, mano, m_circ, pg_temp.pt(-73.2520, 10.4655), m_lin, m_zona, v_zona_geojson)::jsonb);
   perform pg_temp.reg('03.01 guardar: versión 2 con las 8 marcas (una de cada tipo)',
     (j ->> 'version')::integer = 2 and jsonb_array_length(j -> 'marcas') = 8
     and (select count(distinct x ->> 'tipo') from jsonb_array_elements(j -> 'marcas') x) = 8 and (select count(*) from analisis.marcas where cuaderno_id = v_id and creada_en_version = 2) = 8);
@@ -1033,8 +1033,8 @@ begin
   select x into m from jsonb_array_elements(j -> 'marcas') x where x ->> 'id' = m_circ::text;
   perform pg_temp.reg('03.06 el círculo: un punto con su radio en metros (un decimal)', (m ->> 'radio_m')::numeric = 150.3 and m -> 'geom' ->> 'type' = 'Point');
   select x into m from jsonb_array_elements(j -> 'marcas') x where x ->> 'id' = m_zona::text;
-  select count(*), count(distinct cod_usuario) filter (where btrim(coalesce(cod_usuario, '')) <> '') into v_n, v_n2
-    from public.catastro_valledupar where st_intersects(geom, st_setsrid(st_geomfromgeojson(zona), 4326));
+  select count(*), count(distinct c.cod_usuario) filter (where btrim(coalesce(c.cod_usuario, '')) <> '') into v_n, v_n2
+    from public.catastro_valledupar c where st_intersects(c.geom, st_setsrid(st_geomfromgeojson(v_zona_geojson), 4326));
   perform pg_temp.reg('03.07 la zona: los predios y los contratos los cuenta el servidor (iguales al catastro)',
     (m ->> 'conteo_predios')::integer = v_n and (m ->> 'conteo_contratos')::integer = v_n2 and v_n > 0, v_n || ' predios · ' || v_n2 || ' contratos');
   perform pg_temp.reg('03.08 las demás marcas no llevan conteos ni radio',
@@ -1071,7 +1071,7 @@ begin
   perform pg_temp.mala('03.31 sin figura', sp, v_id, 2, '{"op":"nueva","tipo":"referencia"}', 'figura no es válida');
   perform pg_temp.mala('03.32 figura ilegible', sp, v_id, 2, '{"op":"nueva","tipo":"referencia","geom":{"type":"Point","coordinates":"x"}}', 'figura no es válida');
   perform pg_temp.mala('03.33 un punto con tipo zona', sp, v_id, 2, format('{"op":"nueva","tipo":"zona","geom":%s}', pg_temp.pt(-73.25, 10.46)), 'no corresponde');
-  perform pg_temp.mala('03.34 un polígono con tipo problema', sp, v_id, 2, format('{"op":"nueva","tipo":"problema","subtipo":"fuga_visible","geom":%s}', zona), 'no corresponde');
+  perform pg_temp.mala('03.34 un polígono con tipo problema', sp, v_id, 2, format('{"op":"nueva","tipo":"problema","subtipo":"fuga_visible","geom":%s}', v_zona_geojson), 'no corresponde');
   perform pg_temp.mala('03.35 un punto en Bogotá', sp, v_id, 2, format('{"op":"nueva","tipo":"referencia","geom":%s}', pg_temp.pt(-74.08, 4.60)), 'fuera de Valledupar');
   perform pg_temp.mala('03.36 una zona en corbatín (inválida)', sp, v_id, 2,
     '{"op":"nueva","tipo":"zona","geom":{"type":"Polygon","coordinates":[[[-73.25,10.46],[-73.24,10.47],[-73.24,10.46],[-73.25,10.47],[-73.25,10.46]]]}}', 'figura no es válida');
@@ -1095,7 +1095,7 @@ begin
   j := public.geoportal_analisis_cuaderno_guardar(sp, v_id, 2, 'ZTCUAD Cuaderno del POIR 2027', '', '{"zoom":15}', format($j$[
     {"op":"cambia","marca_id":"%s","tipo":"referencia","nota":"ZTCUAD movida","categoria":"observacion","estilo":{"color":"#0000FF"},"geom":%s},
     {"op":"anula","marca_id":"%s","motivo":"  ZTCUAD se puso por error  "},
-    {"op":"cambia","marca_id":"%s","tipo":"zona","nota":"ZTCUAD la misma zona, otra nota","geom":%s}]$j$, m_ref, pg_temp.pt(-73.2600, 10.4700), m_post, m_zona, zona)::jsonb);
+    {"op":"cambia","marca_id":"%s","tipo":"zona","nota":"ZTCUAD la misma zona, otra nota","geom":%s}]$j$, m_ref, pg_temp.pt(-73.2600, 10.4700), m_post, m_zona, v_zona_geojson)::jsonb);
   perform pg_temp.reg('03.50 versión 3: título nuevo, descripción borrada con «», vista nueva; quedan 7 marcas vigentes',
     (j ->> 'version')::integer = 3 and jsonb_array_length(j -> 'marcas') = 7
     and (select titulo = 'ZTCUAD Cuaderno del POIR 2027' and descripcion is null and vista = '{"zoom":15}' from analisis.cuaderno_versiones where cuaderno_id = v_id and version = 3));
@@ -1171,9 +1171,9 @@ begin
     and jsonb_array_length(public.geoportal_analisis_cuaderno(sp, v_id) -> 'eventos') = 2);
 
   -- ===================== 05. Zona afectada =====================
-  select count(*), count(distinct cod_usuario) filter (where btrim(coalesce(cod_usuario, '')) <> '') into v_n, v_n2
-    from public.catastro_valledupar where st_intersects(geom, st_setsrid(st_geomfromgeojson(zona2), 4326));
-  j := public.geoportal_analisis_zona(sd, zona2::jsonb);
+  select count(*), count(distinct c.cod_usuario) filter (where btrim(coalesce(c.cod_usuario, '')) <> '') into v_n, v_n2
+    from public.catastro_valledupar c where st_intersects(c.geom, st_setsrid(st_geomfromgeojson(v_zona2_geojson), 4326));
+  j := public.geoportal_analisis_zona(sd, v_zona2_geojson::jsonb);
   perform pg_temp.reg('05.01 la zona devuelve SOLO los dos números, iguales al catastro',
     (select array_agg(k order by k) from jsonb_object_keys(j) k) = array['contratos', 'predios'] and (j ->> 'predios')::integer = v_n and (j ->> 'contratos')::integer = v_n2, j::text);
   perform pg_temp.reg('05.02 los contratos nunca son más que los predios, y la respuesta no trae códigos ni direcciones', v_n2 <= v_n and j::text !~ '[A-Za-z]{3,}.*[0-9]{5,}');
@@ -1186,11 +1186,11 @@ begin
   perform pg_temp.err('05.08 un multipolígono no es una zona → 400',
     format('select public.geoportal_analisis_zona(%L, ''{"type":"MultiPolygon","coordinates":[[[[-73.25,10.46],[-73.24,10.46],[-73.24,10.47],[-73.25,10.46]]]]}''::jsonb)', sd), '22023', 'polígono');
   insert into analisis.parametros (clave, valor, motivo, autor) values ('zona_conteos_por_hora', 3, 'ZTCUAD prueba del tope', 'prueba');
-  j := public.geoportal_analisis_zona(sd, zona2::jsonb);            -- la tercera del supervisor de distribución en esta hora
-  perform pg_temp.err('05.09 con el tope en 3 por hora, la cuarta → 429', format('select public.geoportal_analisis_zona(%L, %L::jsonb)', sd, zona2), '54000', 'Demasiados conteos');
-  perform pg_temp.reg('05.10 el tope es por persona: otro supervisor sigue contando', (public.geoportal_analisis_zona(adm, zona2::jsonb) ->> 'predios')::integer = v_n);
+  j := public.geoportal_analisis_zona(sd, v_zona2_geojson::jsonb);            -- la tercera del supervisor de distribución en esta hora
+  perform pg_temp.err('05.09 con el tope en 3 por hora, la cuarta → 429', format('select public.geoportal_analisis_zona(%L, %L::jsonb)', sd, v_zona2_geojson), '54000', 'Demasiados conteos');
+  perform pg_temp.reg('05.10 el tope es por persona: otro supervisor sigue contando', (public.geoportal_analisis_zona(adm, v_zona2_geojson::jsonb) ->> 'predios')::integer = v_n);
   v_id2 := (public.geoportal_analisis_cuaderno_crear(sd, 'ZTCUAD Cuaderno de distribución') ->> 'id')::uuid;
-  perform pg_temp.mala('05.11 el tope también vale para las zonas que cuenta «guardar»', sd, v_id2, 1, format('{"op":"nueva","tipo":"zona","geom":%s}', zona2), 'Demasiados conteos', '54000');
+  perform pg_temp.mala('05.11 el tope también vale para las zonas que cuenta «guardar»', sd, v_id2, 1, format('{"op":"nueva","tipo":"zona","geom":%s}', v_zona2_geojson), 'Demasiados conteos', '54000');
   perform pg_temp.reg('05.12 las consultas rechazadas no cuentan ni quedan a medias: el supervisor de distribución tiene 3', (select count(*) from analisis.zona_consultas where solicitante = sd) = 3);
   insert into analisis.parametros (clave, valor, motivo, autor) values ('zona_conteos_por_hora', 120, 'ZTCUAD vuelve al valor', 'prueba');
   perform pg_temp.reg('05.13 el registro de consultas no guarda la geometría ni nada del predio',
