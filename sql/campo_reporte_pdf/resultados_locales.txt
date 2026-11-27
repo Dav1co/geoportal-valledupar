@@ -1,0 +1,28 @@
+PRUEBAS LOCALES · [Code A] PDF de Reportar anomalía (27-nov) · clúster 55432 · PostGIS real
+Huella de Técnica: en los _editor va la de producción 838b80984e51cc7873a666f85d657195; en local se cambia por la del doble.
+
+OK    01 huellas ANTES: campo «LISTA PARA ESTE CAMBIO»; acta y Técnica «PUBLICADA»
+OK    02 ensayo: termina en ERROR esperado, 47 de 47 (0.2 s)
+OK    03 el ensayo no dejó nada (huella de partida, sin la tabla, sin correos ZTRAN)
+OK    04 migración (0.0 s)
+OK    05 verificación 9 de 9
+OK    06 huellas DESPUÉS: campo «CON ESTE CAMBIO», acta y Técnica sin cambio
+OK    07 huella de campo nueva = 44bc25ac28ee840c00872a8dba6b21ab
+OK    08 repetir la migración: la guardia la rechaza
+OK    09 el ensayo sobre la base ya migrada se detiene en la guardia
+OK    10 reversa
+OK    11 la huella vuelve a la de partida y la tabla queda con su fila (nada se borra)
+OK    12 repetir la reversa: se rechaza
+OK    13 volver a aplicar sobre la tabla que dejó la reversa (con su fila)
+OK    14 verificación otra vez 9 de 9
+
+Guardias (una base nueva cada una):
+OK    15 otra función de campo: la migración se detiene sin cambiar nada
+OK    16 sin el índice GiST de los predios: la migración se detiene sin cambiar nada
+OK    17 una campo.reporte_pdf que no es la del paquete: la migración se detiene
+
+Mutaciones (el ensayo debe fallar):
+OK    18 el contenido lee los datos sensibles: el ensayo falla en 04.01
+OK    19 la autorización de los documentos (deja pasar al autor): el ensayo falla en 02.02
+
+RESULTADO: 19 de 19 — SIN FALLAS
