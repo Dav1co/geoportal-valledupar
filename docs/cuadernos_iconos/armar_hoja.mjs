@@ -17,6 +17,14 @@ const ANCHO = 1800;
 const MARGEN = 40;
 const TINTA = '#1b2430', GRIS = '#5b6673', LINEA = '#d9dee4';
 const FUENTE = 'Helvetica, Arial, sans-serif';
+// Íconos que cambiaron respecto del borrador anterior: llevan la marca «corregido» en su tarjeta.
+const CORREGIDOS = ['tanque', 'sumidero', 'torre', 'planta', 'falla_alcantarillado', 'sin_alcantarillado'];
+const MARCA = '#D97706';
+function corregido(codigo, xDer, ySup) {
+  if (!CORREGIDOS.includes(codigo)) return '';
+  return `<circle cx="${xDer - 62}" cy="${ySup - 3.5}" r="3.5" fill="${MARCA}"/>` +
+    `<text x="${xDer}" y="${ySup}" font-family="${FUENTE}" font-size="10.5" font-weight="700" fill="${MARCA}" text-anchor="end">corregido</text>`;
+}
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // ---------- piezas ----------
@@ -82,7 +90,7 @@ let y = MARGEN;
 
 partes.push(texto(MARGEN, y + 30, 'Cuadernos de análisis — hoja de íconos (para aprobar)', { tam: 34, peso: 700, ancla: 'start' }));
 y += 58;
-partes.push(texto(MARGEN, y, `Fuente: iconos.json · ${datos.version} · cada ícono se muestra grande y a tamaño real, sobre blanco y sobre un fondo que simula la foto satelital.`, { tam: 15, color: GRIS, ancla: 'start' }));
+partes.push(texto(MARGEN, y, `Fuente: iconos.json · ${datos.version} · cada ícono se muestra grande y a tamaño real, sobre blanco y sobre un fondo que simula la foto satelital.${CORREGIDOS.length ? ' · Punto naranja = corregido en este borrador.' : ''}`, { tam: 15, color: GRIS, ancla: 'start' }));
 y += 34;
 
 // ===== A) Activo =====
@@ -105,6 +113,7 @@ A.iconos.forEach((ic, i) => {
   const cx = MARGEN + (i % COLS_A) * CW_A, cy = y + Math.floor(i / COLS_A) * CH_A;
   const m = cx + CW_A / 2;
   partes.push(`<rect x="${cx + 8}" y="${cy + 6}" width="${CW_A - 16}" height="${CH_A - 12}" rx="10" fill="#fff" stroke="${LINEA}"/>`);
+  partes.push(corregido(ic.codigo, cx + CW_A - 18, cy + 24));
   // grandes (72 px)
   partes.push(activo(ic, A.colores[0].color, m - 72 - 18, cy + 26, 72));
   partes.push(activo(ic, A.colores[1].color, m + 18, cy + 26, 72));
@@ -146,6 +155,7 @@ const CW_B = (ANCHO - 2 * MARGEN) / 9, CH_B = 284;
 B.iconos.forEach((ic, i) => {
   const cx = MARGEN + i * CW_B, m = cx + CW_B / 2;
   partes.push(`<rect x="${cx + 6}" y="${y + 6}" width="${CW_B - 12}" height="${CH_B - 12}" rx="10" fill="#fff" stroke="${LINEA}"/>`);
+  partes.push(corregido(ic.codigo, cx + CW_B - 14, y + 22));
   partes.push(pin(ic, m - 36 - 22, y + 24, 72));          // grande: 72 × 92,6
   partes.push(pin(ic, m + 36, y + 24 + 92.6 - 36, 28));     // tamaño real: 28 × 36
   partes.push(texto(m + 50, y + 132, '28×36', { tam: 11, color: GRIS }));
