@@ -189,3 +189,53 @@
 /* 26-nov: con «Diámetro» el selector de temáticas ya no cabe a 390 px: se desliza a lo ancho (ningún botón queda fuera de alcance) */
 .geo-herr .geo-seg { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 .geo-herr .geo-seg button { flex: 0 0 auto; white-space: nowrap; }
+
+/* ===== 27-nov: geovisor compacto y pantalla completa (David). Botones de 36 px con ratón y de 44 px en pantallas táctiles. ===== */
+.geo { --geo-b: 36px; }
+@media (pointer: coarse) { .geo { --geo-b: 44px; } }
+.geo-barra { gap: 6px; padding: 4px 8px; min-height: calc(var(--geo-b) + 8px); position: relative; z-index: 7; }
+.geo-volver { min-width: var(--geo-b); min-height: var(--geo-b); font-size: 18px; border-radius: 8px; }
+.geo-titulo { flex: 0 1 auto; margin-right: 4px; }
+.geo-titulo h1 { font-size: 15px; white-space: nowrap; }
+.geo-titulo span { font-size: 11.5px; display: block; white-space: nowrap; }
+.geo-boton { min-height: var(--geo-b); padding: 0 11px; border-radius: 8px; border-width: 1.5px; font-size: 13.5px; white-space: nowrap; }
+.geo-ic { min-width: var(--geo-b); padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; }
+.geo-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.geo-esp { flex: 1 1 auto; }
+.geo-desp { position: relative; }
+.geo-desp-eti { font-weight: 400; opacity: 0.85; }
+.geo-desp-boton[aria-expanded="true"] { background: #fff; color: var(--geo-color); }
+.geo-desp-panel { position: absolute; left: 0; top: calc(100% + 6px); z-index: 8; background: #fff; color: #22313f; border: 1px solid #c8d3da; border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); padding: 6px; min-width: 190px; }
+.geo-desp-panel[hidden] { display: none; }
+.geo-seg-lista { display: flex; flex-direction: column; border: none; border-radius: 0; overflow: visible; }
+.geo-seg-lista button { min-height: var(--geo-b); border: none; border-radius: 6px; text-align: left; padding: 0 12px; white-space: nowrap; }
+.geo-seg-lista button:last-child { border-right: none; }
+.geo-desp-panel .geo-periodo .geo-seg button { min-height: var(--geo-b); }
+.geo-velo { position: fixed; inset: 0; z-index: 6; }
+.geo-mas { display: contents; }      /* en escritorio sus botones van en la fila; en el celular es el menú «⋯» */
+.geo-solo-movil { display: none; }
+.geo-salir-completa { position: absolute; top: 8px; right: 8px; z-index: 5; width: var(--geo-b); height: var(--geo-b); border-radius: 8px; border: 1px solid #c8d3da; background: #fff; color: #22313f; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+.geo-salir-completa svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* pantalla completa: solo el mapa, la barra flotante del cuaderno y lo esencial (la fila y las franjas vuelven al salir) */
+.geo-completa > .geo-barra, .geo-completa > .geo-velo, .geo-completa > .geo-franja { display: none; }
+.geo:fullscreen { width: 100%; height: 100%; }
+.geo-modo-mapa { position: fixed; inset: 0; z-index: 1000; height: 100%; height: 100dvh; }
+@media (max-width: 600px) {
+  .geo-titulo { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }      /* se lee, no ocupa */
+  .geo-desp-eti { display: none; }
+  .geo-barra { gap: 5px; padding: 3px 6px; }
+  .geo-barra .geo-boton { padding: 0 9px; }
+  .geo-barra .geo-ic { padding: 0; }
+  .geo-solo-movil { display: inline-flex; }
+  .geo-desp { position: static; }
+  .geo-desp-panel { left: 6px; right: 6px; min-width: 0; }
+  .geo-mas { display: none; position: absolute; right: 6px; top: calc(100% + 6px); z-index: 8; flex-direction: column; align-items: stretch; gap: 6px; background: #fff; border: 1px solid #c8d3da; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); padding: 8px; width: min(300px, calc(100vw - 12px)); }
+  .geo-mas.geo-mas-abierto { display: flex; }
+  .geo-mas .geo-boton { color: #22313f; border-color: #b9c6cf; text-align: left; }
+  .geo-mas .geo-esp { display: none; }
+  .geo-mas .geo-desp-boton { width: 100%; text-align: left; }
+  .geo-mas .geo-desp-eti { display: inline; }
+  .geo-desp-plano .geo-desp-panel { position: static; box-shadow: none; border: none; padding: 4px 0 0; }
+}

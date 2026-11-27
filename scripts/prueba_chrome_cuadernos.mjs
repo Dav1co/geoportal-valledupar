@@ -281,7 +281,8 @@ const guardar = async (p) => { await clic(p, "[data-testid=cua-guardar]"); retur
 const aEdge = (p, accion, cuerpo) => p.evaluate(async (accion, cuerpo, puerto) => { const rol = new URLSearchParams(location.search).get("rol");
   const r = await fetch(`http://127.0.0.1:${puerto}/functions/v1/geoportal-analisis?accion=${accion}`, { method: cuerpo ? "POST" : "GET", headers: { Authorization: "Bearer tok-" + rol, ...(cuerpo ? { "Content-Type": "application/json" } : {}) }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
   return r.status; }, accion, cuerpo ?? null, P_EDGE);
-const abrirLista = async (p) => { if (!(await hay(p, "[data-testid=cua-panel]"))) await clic(p, (await p.evaluate(() => window.innerWidth <= 600)) ? "[data-testid=cuadernos-movil]" : "[data-testid=cuadernos]"); await p.waitForSelector("[data-testid=cua-panel]"); await p.waitForFunction(() => !/Cargando…/.test(document.querySelector("[data-testid=cua-panel]").innerText), { timeout: 20000 }); };
+// 27-nov (geovisor compacto): en el celular «Cuadernos» está en el menú «⋯»; en escritorio, en la fila
+const abrirLista = async (p) => { if (!(await hay(p, "[data-testid=cua-panel]"))) { if (await p.evaluate(() => document.querySelector("[data-testid=geo-mas]")?.offsetParent != null)) await clic(p, "[data-testid=geo-mas]"); await clic(p, "[data-testid=cuadernos]"); } await p.waitForSelector("[data-testid=cua-panel]"); await p.waitForFunction(() => !/Cargando…/.test(document.querySelector("[data-testid=cua-panel]").innerText), { timeout: 20000 }); };
 const abrirCuaderno = async (p, id) => { await abrirLista(p); await clic(p, `[data-cuaderno="${id}"]`); await p.waitForFunction((id) => window.__cuaderno?.id === id, { timeout: 20000 }, id); await pausa(300); };
 const herr = async (p, menu, item) => { await clic(p, `[data-testid=cua-h-${menu}]`); if (item) await clic(p, item); };
 /** Arrastra sobre el mapa de (x0, y0) a (x1, y1), en píxeles desde su centro (ratón o dedo, según la pantalla). */
@@ -311,9 +312,23 @@ async function pdfCuaderno(p, nombre) {
   await clicTexto(p, "[data-testid=dialogo-imprimir] button", "Cerrar");
   return r;
 }
+/** Esc suelta la herramienta (27-nov: ya no hay botón «Mover el mapa»; también se suelta tocando la herramienta activa). */
+const soltar = async (p) => { await p.keyboard.press("Escape"); await pausa(150); };
+/** Cuánto de la ventana ocupa el mapa (%). */
+const pctMapa = (p) => p.evaluate(() => { const r = document.querySelector(".geo-cuerpo").getBoundingClientRect(); return Math.round((100 * (Math.min(r.bottom, innerHeight) - Math.max(r.top, 0))) / innerHeight); });
+async function capturaDescargada(p) {
+  await clic(p, "[data-testid=cua-mas]"); await clic(p, "[data-testid=cua-capturar]"); await p.waitForSelector("[data-testid=cua-dialogo-capturar]");
+  await p.evaluate(() => { delete window.__captura; window.__descargas = []; if (!HTMLAnchorElement.prototype.__orig) { HTMLAnchorElement.prototype.__orig = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) window.__descargas.push({ nombre: this.download, href: this.href }); else this.__orig(); }; } });
+  await clic(p, "[data-testid=cua-captura-descargar]");
+  await p.waitForFunction(() => !!document.querySelector("[data-testid=cua-captura-hecho]") || !!document.querySelector("[data-testid=cua-captura-error]"), { timeout: 60000 });
+  const k = await p.evaluate(async () => { const d = window.__descargas[0]; if (!d) return { err: document.querySelector("[data-testid=cua-captura-error]")?.innerText };
+    const b = new Uint8Array(await (await fetch(d.href)).arrayBuffer()); let s = ""; for (let i = 0; i < b.length; i += 32768) s += String.fromCharCode(...b.subarray(i, i + 32768)); return { ...window.__captura, b64: btoa(s) }; });
+  await clic(p, "[data-testid=cua-dialogo-capturar] .geo-cerrar");
+  return k;
+}
 const ids = {};
 
-for (const ancho of [390, 1280]) {
+for (const ancho of (process.env.CUA_ANCHOS ? process.env.CUA_ANCHOS.split(",").map(Number) : [390, 1280])) {      // CUA_ANCHOS=390: solo para depurar
   const tag = `[${ancho}]`, movil = ancho < 500;
   // ===== A. Supervisor de distribución: crea, marca, guarda =====
   let p = await abrir(ancho, "sup");
@@ -348,7 +363,7 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} A09 un toque pone el problema (sin guardar) y abre su ficha`, c.marcas.length === 1 && c.marcas[0].tipo === "problema" && c.marcas[0].subtipo === "baja_presion" && c.pendientes === 1 && (await hay(p, "[data-testid=cua-ficha]")));
   await clic(p, "[data-testid=cua-deshacer-paso]"); const trasDeshacer = await cua(p); await clic(p, "[data-testid=cua-rehacer-paso]"); c = await cua(p);
   ok(`${tag} A09b ↶ deshace la marca recién puesta (queda sin cambios) y ↷ la vuelve a poner`, trasDeshacer.marcas.length === 0 && trasDeshacer.pendientes === 0 && c.marcas.length === 1 && c.pendientes === 1 && c.marcas[0].subtipo === "baja_presion");
-  await clic(p, "[data-testid=cua-soltar]"); await tocar(p, -80, 28);
+  await soltar(p); await tocar(p, -80, 28);
   ok(`${tag} A10 la nota lleva el aviso «No escriba nombres, cédulas ni teléfonos»`, /No escriba nombres, cédulas ni teléfonos/.test(await p.$eval("[data-testid=cua-ficha] [data-testid=cua-aviso-nota]", (e) => e.innerText)));
   await escribir(p, "[data-testid=cua-nota]", "ZTCUA presión baja en las tardes; =SUMA(1)"); await escribir(p, "[data-testid=cua-categoria]", "problema");
   c = await cua(p);
@@ -360,7 +375,7 @@ for (const ancho of [390, 1280]) {
   await clic(p, "[data-testid=cua-ficha] .geo-cerrar");
   ok(`${tag} A12 el pin se pinta en el vidrio, en su lugar`, (await pintado(p, -80, 25)) > 200, await pintado(p, -80, 25));
   // Activo
-  await clic(p, "[data-testid=cua-soltar]"); await clic(p, "[data-testid=cua-h-activo]");
+  await soltar(p); await clic(p, "[data-testid=cua-h-activo]");
   const activos = await p.$$eval("[data-testid=cua-lista-activo] [role=menuitem]", (bs) => bs.map((b) => ({ t: b.innerText.trim(), img: b.querySelector("img")?.naturalWidth > 0 })));
   ok(`${tag} A13 «Activo» despliega los 12 pictogramas y el interruptor Acueducto / Alcantarillado; avisa que es una propuesta`, activos.length === 12 && activos.every((x) => x.img) && (await p.$$eval("[data-testid=cua-lista-activo] [data-sistema]", (b) => b.length)) === 2
     && /no crea un activo en la red/.test(await p.$eval("[data-testid=cua-lista-activo]", (e) => e.innerText)), JSON.stringify(activos));
@@ -378,7 +393,7 @@ for (const ancho of [390, 1280]) {
   await escribir(p, "#cua-postit", "ZTCUA revisar con el macromedidor"); await clic(p, "[data-testid=cua-postit-poner]");
   c = await cua(p);
   ok(`${tag} A16 quedan el punto de referencia (con color) y el post-it (con su texto)`, c.marcas.length === 4 && c.marcas.some((m) => m.tipo === "referencia" && /^#[0-9A-F]{6}$/i.test(m.estilo?.color ?? "")) && c.marcas.some((m) => m.tipo === "postit" && m.nota === "ZTCUA revisar con el macromedidor"));
-  await clic(p, "[data-testid=cua-ficha] .geo-cerrar"); await clic(p, "[data-testid=cua-soltar]");
+  await clic(p, "[data-testid=cua-ficha] .geo-cerrar"); await soltar(p);
   let esperadas = 4;
   if (movil) {
     ok(`${tag} A17 en el celular: Problema, Activo, Referencia y Post-it; «Dibujo» y las medidas quedan para escritorio`, await p.evaluate(() => { const v = (s) => { const e = document.querySelector(s); return !!e && e.offsetParent !== null; };
@@ -406,7 +421,7 @@ for (const ancho of [390, 1280]) {
     const centroDespues = await enMapa(p, "return [m.getCenter().lng, m.getCenter().lat];");
     const mano = c.marcas.find((m) => m.tipo === "mano");
     ok(`${tag} A20 la mano alzada traza con el arrastre (el mapa no se mueve) y el trazo llega aligerado`, !!mano && mano.geom.coordinates.length >= 3 && mano.geom.coordinates.length <= 26 && centroAntes[0] === centroDespues[0] && centroAntes[1] === centroDespues[1], JSON.stringify(mano?.geom.coordinates.length));
-    await clic(p, "[data-testid=cua-ficha] .geo-cerrar"); await clic(p, "[data-testid=cua-soltar]");
+    await clic(p, "[data-testid=cua-ficha] .geo-cerrar"); await soltar(p);
     ok(`${tag} A21 al soltar la herramienta el mapa vuelve a moverse`, await enMapa(p, "return m.dragPan.isEnabled() && m.doubleClickZoom.isEnabled();"));
     // medir (de pantalla)
     await clic(p, "[data-testid=cua-mas]"); await clic(p, "[data-testid=cua-medir-d]"); await tocar(p, -100, 200); await tocar(p, 100, 200);
@@ -421,16 +436,29 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} A24 mientras se edita hay un borrador en el dispositivo`, await p.evaluate((id) => Object.keys(localStorage).some((k) => k.includes(id) && JSON.parse(localStorage.getItem(k)).version_base === 1), ids[ancho]));
   await p.screenshot({ path: join(CAP, `a24_editando_${ancho}.png`) });
   ok(`${tag} A25 la pantalla no se desborda`, await sinDesborde(p));
-  ok(`${tag} A25b la barra del geovisor no se sale de la pantalla (en el celular «Cuadernos» va en la fila de herramientas) y los desplegables caben`, await p.evaluate(async () => {
-    const dentro = (e) => { const r = e.getBoundingClientRect(); return r.left >= -1 && r.right <= window.innerWidth + 1; };
-    const barra = [...document.querySelectorAll(".geo-barra button")].filter((b) => b.offsetParent !== null).every(dentro);
+  ok(`${tag} A25b la fila del geovisor es una sola y no se sale de la pantalla; los menús de Problema, Activo y «Más» caben`, await p.evaluate(async () => {
+    const dentro = (e) => { const r = e.getBoundingClientRect(); return r.left >= -1 && r.right <= window.innerWidth + 1 && r.bottom <= window.innerHeight + 1; };
+    const vis = [...document.querySelectorAll(".geo-barra button")].filter((b) => b.offsetParent !== null), tops = new Set(vis.map((b) => Math.round(b.getBoundingClientRect().top)));
+    const barra = vis.every(dentro) && tops.size === 1 && document.querySelector(".geo-barra").getBoundingClientRect().height <= (window.innerWidth < 500 ? 54 : 46);
+    document.querySelector("[data-testid=cua-h-problema]").click(); await new Promise((r) => setTimeout(r, 150));
+    const pr = document.querySelector("[data-testid=cua-lista-problema]"), bienP = !!pr && [...pr.querySelectorAll("[role=menuitem]")].every(dentro);
+    document.querySelector("[data-testid=cua-h-problema]").click(); await new Promise((r) => setTimeout(r, 100));
     document.querySelector("[data-testid=cua-h-activo]").click(); await new Promise((r) => setTimeout(r, 150));
     const d = document.querySelector("[data-testid=cua-lista-activo]"), bien = !!d && dentro(d) && [...d.querySelectorAll("[role=menuitem]")].every(dentro);
     document.querySelector("[data-testid=cua-h-activo]").click(); await new Promise((r) => setTimeout(r, 100));
     document.querySelector("[data-testid=cua-mas]").click(); await new Promise((r) => setTimeout(r, 150));
     const m = document.querySelector(".cua-desplegable-der"), bien2 = !!m && dentro(m);
     document.querySelector("[data-testid=cua-mas]").click();
-    return barra && bien && bien2; }));
+    return barra && bienP && bien && bien2; }));
+  const pct = await pctMapa(p), alturas = await p.evaluate(() => [".geo-barra", "[data-testid=cua-barra]"].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height)));
+  ok(`${tag} A25c con el cuaderno en Editar el mapa ocupa ${pct} % de la altura (fila ${alturas[0]} px, franja ${alturas[1]} px; antes ${movil ? "28" : "57"} %)`, movil ? pct >= 75 : pct >= 80, pct);
+  const botones = await p.evaluate(() => [...document.querySelectorAll(".geo-barra button, [data-testid=cua-barra] button, [data-testid=cua-herr] .cua-h")].filter((b) => b.offsetParent !== null).map((b) => Math.round(b.getBoundingClientRect().height)));
+  ok(`${tag} A25d botones de ${movil ? "44 px (táctil)" : "36 px (ratón)"}: ${Math.min(...botones)} a ${Math.max(...botones)} px`, botones.every((h) => (movil ? h >= 44 && h <= 46 : h >= 36 && h <= 38)), JSON.stringify(botones));
+  await clic(p, "[data-testid=cua-h-referencia]"); const conRef = await p.$eval("[data-testid=cua-h-referencia]", (b) => b.getAttribute("aria-pressed"));
+  const ayudaYa = await p.$eval("[data-testid=cua-ayuda]", (e) => e.innerText).catch(() => ""); await pausa(4400); const ayudaLuego = await hay(p, "[data-testid=cua-ayuda]");
+  await clic(p, "[data-testid=cua-h-referencia]");
+  ok(`${tag} A25e la ayuda sale como aviso pequeño y se va sola; tocar la herramienta activa la suelta`, conRef === "true" && /Punto de referencia · Toque el mapa/.test(ayudaYa) && !ayudaLuego && (await p.$eval("[data-testid=cua-h-referencia]", (b) => b.getAttribute("aria-pressed"))) === "false", ayudaYa);
+  await p.screenshot({ path: join(CAP, `a25_compacto_${ancho}.png`) });
   const t0 = Date.now();
   ok(`${tag} A26 «Guardar» deja la versión 2 con las ${esperadas} marcas y nada pendiente (${Date.now() - t0} ms)`, (await guardar(p)) && (c = await cua(p)).version === 2 && c.marcas.length === esperadas && c.marcas.every((m) => m.version === 2));
   ok(`${tag} A27 en la base: ${esperadas} marcas en la versión 2 y ninguna fila con datos personales`, sqlq(`select count(*) from analisis.marca_versiones where cuaderno_id = '${ids[ancho]}' and version = 2 and not anulada`) === String(esperadas));
@@ -456,9 +484,9 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} A32 tocar una marca guardada abre su ficha (versión 2${movil ? "" : ", con su sector"})`, /Guardada en la versión 2/.test(await p.$eval("[data-testid=cua-ficha]", (e) => e.innerText).catch(() => "")) && (await p.$eval("[data-testid=cua-ficha]", (e) => e.dataset.tipo)) === "problema");
   const antesMover = (await cua(p)).marcas.find((m) => m.tipo === "problema").geom.coordinates;
   await clic(p, "[data-testid=cua-mover]");
-  ok(`${tag} A33 «Mover» deja la marca elegida y esconde la ficha para poder arrastrarla`, !(await hay(p, "[data-testid=cua-ficha]")) && /Elegida: Baja presión/.test(await p.$eval("[data-testid=cua-activa]", (e) => e.innerText)) && (await p.$eval("[data-testid=cua-h-mover]", (b) => b.getAttribute("aria-pressed"))) === "true");
+  ok(`${tag} A33 «Mover» deja la marca elegida y esconde la ficha para poder arrastrarla`, !(await hay(p, "[data-testid=cua-ficha]")) && /Elegida: Baja presión/.test(await p.$eval("[data-testid=cua-ayuda]", (e) => e.innerText).catch(() => "")) && (await p.$eval("[data-testid=cua-h-mover]", (b) => b.getAttribute("aria-pressed"))) === "true");
   const centroM = await enMapa(p, "return [m.getCenter().lng, m.getCenter().lat];");
-  await arrastrar(p, -80, 24, -140, 84);
+  await arrastrar(p, -80, 24, -120, 84);
   c = await cua(p); const trasMover = c.marcas.find((m) => m.tipo === "problema").geom.coordinates, centroM2 = await enMapa(p, "return [m.getCenter().lng, m.getCenter().lat];");
   ok(`${tag} A33b arrastrar la marca la mueve (60 px al oeste y al sur), sin mover el mapa, y queda UN cambio pendiente`, c.pendientes === 1 && trasMover[0] < antesMover[0] && trasMover[1] < antesMover[1] && centroM[0] === centroM2[0] && centroM[1] === centroM2[1], JSON.stringify([antesMover, trasMover]));
   await clic(p, "[data-testid=cua-deshacer-paso]"); const vuelta = await cua(p); await clic(p, "[data-testid=cua-rehacer-paso]"); c = await cua(p);
@@ -477,9 +505,9 @@ for (const ancho of [390, 1280]) {
     await clic(p, "[data-testid=cua-deshacer-paso]");      // la línea vuelve; la zona movida se guarda más abajo
   }
   // la goma
-  await clic(p, "[data-testid=cua-h-referencia]"); await tocar(p, 40, 140); await clic(p, "[data-testid=cua-ficha] .geo-cerrar");
+  await clic(p, "[data-testid=cua-h-referencia]"); await tocar(p, 40, -150); await clic(p, "[data-testid=cua-ficha] .geo-cerrar");
   const antesGoma = await cua(p);
-  await clic(p, "[data-testid=cua-h-goma]"); await arrastrar(p, -30, 140, 100, 140); await arrastrar(p, -40, -90, 40, -90);
+  await clic(p, "[data-testid=cua-h-goma]"); await arrastrar(p, -30, -150, 100, -150); await arrastrar(p, -40, -90, 40, -90);
   c = await cua(p);
   const refGuardada = antesGoma.marcas.find((m) => m.tipo === "referencia" && m.version === 2);
   ok(`${tag} A33g la goma quita lo que toca: la marca sin guardar desaparece sin más y la guardada queda por anular`, c.marcas.length === antesGoma.marcas.length - 2 && !c.marcas.some((m) => m.tipo === "referencia") && c.pendientes === antesGoma.pendientes, JSON.stringify([antesGoma.marcas.length, c.marcas.length, antesGoma.pendientes, c.pendientes]));
@@ -487,8 +515,8 @@ for (const ancho of [390, 1280]) {
   await clic(p, "[data-testid=cua-deshacer-paso]"); await clic(p, "[data-testid=cua-deshacer-paso]"); await clic(p, "[data-testid=cua-deshacer-paso]");
   c = await cua(p);
   ok(`${tag} A33i ↶ deshace las dos pasadas de la goma y la marca de prueba: vuelve la referencia guardada`, c.marcas.length === antesGoma.marcas.length - 1 && c.marcas.some((m) => m.id === refGuardada.id) && c.pendientes === antesGoma.pendientes - 1, JSON.stringify([c.marcas.length, c.pendientes]));
-  await clic(p, "[data-testid=cua-soltar]");
-  await tocar(p, -140, 88);
+  await soltar(p);
+  await tocar(p, -120, 88);
   ok(`${tag} A34 «Anular» pide un motivo (la marca no se borra)`, (await clic(p, "[data-testid=cua-quitar]")) && (await hay(p, "[data-testid=cua-motivo]")) && (await p.$eval("[data-testid=cua-anular]", (b) => b.disabled)));
   await escribir(p, "[data-testid=cua-motivo]", "ZTCUA era otro punto"); await clic(p, "[data-testid=cua-anular]");
   c = await cua(p);
@@ -598,7 +626,7 @@ for (const ancho of [390, 1280]) {
   ok(`${tag} B12 archivar pide motivo`, await p.$eval("[data-testid=cua-estado-si]", (b) => b.disabled));
   await escribir(p, "[data-testid=cua-estado-motivo]", "ZTCUA ya se atendió"); await clic(p, "[data-testid=cua-estado-si]");
   await p.waitForFunction(() => window.__cuaderno && !window.__cuaderno.puede_editar && !document.querySelector("[data-testid=cua-dialogo-estado]"), { timeout: 20000 }).catch(() => {});
-  ok(`${tag} B13 archivado: no se borra, queda solo lectura y pasa a «Archivados»`, !(await cua(p)).puede_editar && /archivado/.test(await p.$eval("[data-testid=cua-barra]", (e) => e.innerText)));
+  ok(`${tag} B13 archivado: no se borra, queda solo lectura y pasa a «Archivados»`, !(await cua(p)).puede_editar && /archivado/i.test(await p.$eval("[data-testid=cua-barra]", (e) => e.innerText)));
   await abrirLista(p); const vig = await p.$eval("[data-testid=cua-panel]", (e) => e.innerText); await clic(p, "[data-testid=cua-archivados]"); await p.waitForFunction(() => !/Cargando…/.test(document.querySelector("[data-testid=cua-panel]").innerText)); await pausa(400);
   ok(`${tag} B14 la lista: fuera de «Vigentes» y dentro de «Archivados»`, !vig.includes(`ZTCUA Baja presión ${ancho}`) && (await p.$eval("[data-testid=cua-panel]", (e) => e.innerText)).includes(`ZTCUA Baja presión ${ancho}`));
   await clic(p, "[data-testid=cua-panel] .geo-cerrar");
@@ -609,6 +637,38 @@ for (const ancho of [390, 1280]) {
   await clic(p, "[data-testid=cua-cerrar]");
   ok(`${tag} B16 «Cerrar» el cuaderno: el vidrio queda limpio y el geovisor sigue igual (leyenda de la red y botón «Capas»)`, (await cua(p)) === null && (await pintado(p, 0, 0, 150)) === 0 && (await hay(p, ".geo-leyenda")) && !(await hay(p, "[data-testid=cua-barra]")));
   ok(`${tag} B17 la pantalla no se desborda`, await sinDesborde(p));
+  // ===== P. Pantalla completa (escritorio: la del navegador) y «modo mapa» (iPhone: sin la API) =====
+  await abrirCuaderno(p, ids[ancho]); await clic(p, "[data-testid=cua-modo] button:last-child");
+  if (movil) await p.evaluate(() => { for (const k of ["requestFullscreen", "webkitRequestFullscreen"]) { try { Object.defineProperty(Element.prototype, k, { value: undefined, configurable: true }); } catch { /* nada */ } }
+    Object.defineProperty(document, "fullscreenEnabled", { value: false, configurable: true }); });      // como en el iPhone
+  await clic(p, "[data-testid=pantalla-completa]"); await pausa(900);
+  const modoC = await p.evaluate(() => document.querySelector(".geo").dataset.completa ?? ""), pctC = await pctMapa(p);
+  const api = await p.evaluate(() => document.fullscreenElement === document.querySelector(".geo"));
+  ok(`${tag} P01 ⛶ ${movil ? "sin la API (iPhone): «modo mapa»" : "usa la pantalla completa del navegador"}; el mapa ocupa ${pctC} % y no se ven la barra azul ni la fila`,
+    (movil ? modoC === "mapa" : modoC === "api" && api) && pctC >= 97 && !(await p.evaluate(() => document.querySelector(".geo-barra").offsetParent !== null)) && (movil ? (await p.evaluate(() => { const r = document.querySelector(".geo").getBoundingClientRect(); return r.top === 0 && Math.abs(r.height - innerHeight) <= 1; })) : true), JSON.stringify({ modoC, api, pctC }));
+  ok(`${tag} P02 en pantalla completa siguen la barra de herramientas, la franja del cuaderno (título, Guardar, Más y Cerrar) y el botón de salir`,
+    await p.evaluate(() => ["[data-testid=cua-herr]", "[data-testid=cua-titulo]", "[data-testid=cua-guardar]", "[data-testid=cua-mas]", "[data-testid=salir-completa]"].every((s) => document.querySelector(s)?.offsetParent != null)));
+  await p.screenshot({ path: join(CAP, `p02_completa_${ancho}.png`) });
+  await clic(p, "[data-testid=cua-h-postit]"); await soltar(p);
+  const sigue = await p.evaluate(() => document.querySelector(".geo").dataset.completa ?? "");
+  ok(`${tag} P03 el primer Esc suelta la herramienta y sigue en pantalla completa`, (await p.$eval("[data-testid=cua-h-postit]", (b) => b.getAttribute("aria-pressed"))) === "false" && sigue === modoC);
+  await soltar(p); await pausa(500);
+  ok(`${tag} P04 el segundo Esc sale de la pantalla completa y vuelve la fila`, !(await p.evaluate(() => document.querySelector(".geo").dataset.completa)) && !(await p.evaluate(() => document.fullscreenElement)) && (await p.evaluate(() => document.querySelector(".geo-barra").offsetParent != null)));
+  await clic(p, "[data-testid=pantalla-completa]"); await pausa(900);
+  await clic(p, "[data-testid=cua-h-referencia]"); await tocar(p, 60, -160); await clic(p, "[data-testid=cua-ficha] .geo-cerrar");
+  const p05 = { pend: (await cua(p)).pendientes, borr: await p.evaluate((id) => Object.keys(localStorage).some((k) => k.includes("cuaderno.borrador") && k.includes(id)), ids[ancho]), txt: (await texto(p)).slice(0, 300) };
+  ok(`${tag} P05 en pantalla completa se editan marcas y el borrador del dispositivo sigue guardándose`, p05.pend === 1 && p05.borr, JSON.stringify(p05));
+  { const r = await pdfCuaderno(p, `completa_${ancho}`);
+    ok(`${tag} P06 «Imprimir / PDF» en pantalla completa: 3 páginas con mapa (${r.variedad.join(", ")} colores)`, !!r.b64 && r.info?.paginas === 3 && r.variedad.length === 3 && r.variedad.every((v) => v > 25), r.err ?? ""); }
+  { const k = await capturaDescargada(p), v = k.b64 ? await variedad(p, k.b64) : 0;
+    if (k.b64) writeFileSync(join(CAP, `captura_completa_${ancho}.jpg`), Buffer.from(k.b64, "base64"));
+    ok(`${tag} P07 la captura en pantalla completa no sale vacía (${v} colores, ${k.ancho} × ${k.alto} px)`, v > 25, JSON.stringify({ ...k, b64: undefined })); }
+  ok(`${tag} P08 sigue en pantalla completa después de imprimir y capturar`, (await p.evaluate(() => document.querySelector(".geo").dataset.completa ?? "")) === modoC);
+  await clic(p, "[data-testid=salir-completa]"); await pausa(600); await clic(p, ".geo-volver");
+  ok(`${tag} P09 al salir con el cambio pendiente sigue el aviso: Guardar, Salir sin guardar o Cancelar`, await hay(p, "[data-testid=cua-dialogo-salir]"), (await texto(p)).slice(0, 300));
+  await clic(p, "[data-testid=cua-salir-cancelar]"); await clic(p, "[data-testid=cua-guardar]");
+  await p.waitForFunction(() => window.__cuaderno?.pendientes === 0, { timeout: 30000 }).catch(() => {});
+  esperadas += 1;      // el punto de referencia de la prueba de pantalla completa
   await p.close();
 
   // ===== C. Dual (Comercial y supervisor de planta): ve el cuaderno del equipo, solo lectura =====

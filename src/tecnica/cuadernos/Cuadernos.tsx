@@ -22,6 +22,8 @@ import "./cuadernos.css";
 export type PuenteCuaderno = {
   /** Un toque en el mapa: true si el cuaderno se quedó con él (puso una marca, eligió una, etc.). */
   clic: (ev: { point: { x: number; y: number }; lngLat: { lng: number; lat: number } }) => boolean;
+  /** Tecla Esc: suelta la herramienta o cierra el menú del cuaderno. true si hizo algo (entonces no sale de la pantalla completa). */
+  escape: () => boolean;
   /** Salir del geovisor: si hay cambios sin guardar pregunta (Guardar, Salir sin guardar o Cancelar) y solo entonces sigue. */
   salir: (seguir: () => void) => void;
   /** Las marcas y su leyenda para el PDF de 2 páginas (undefined si no hay cuaderno abierto). */
@@ -80,8 +82,8 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
   const decir = (texto: string, error = false) => setAviso({ texto, error });
 
   // lo último de cada cosa, para los manejadores del mapa (que se registran una vez)
-  const E = useRef({ cuad, pend, visibles, herr, curso, editable, color, grosor, sel, perfil, nPend });
-  E.current = { cuad, pend, visibles, herr, curso, editable, color, grosor, sel, perfil, nPend };
+  const E = useRef({ cuad, pend, visibles, herr, curso, editable, color, grosor, sel, perfil, nPend, menu });
+  E.current = { cuad, pend, visibles, herr, curso, editable, color, grosor, sel, perfil, nPend, menu };
 
   // ---------- el vidrio: un lienzo dentro del mapa, debajo de sus controles ----------
   const pintar = useCallback(() => {
@@ -223,6 +225,11 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
       return e.editable;      // en edición, un toque en vacío no abre tarjetas del geovisor; en exploración, sí
     },
     salir: (seguir) => conCambiosPendientes(() => { seguir(); }),
+    escape: () => {
+      if (E.current.menu) { setMenu(""); return true; }
+      if (E.current.herr) { setHerr(null); setCurso([]); setMenu(""); return true; }
+      return false;
+    },
     sobre: () => {
       const e = E.current; if (!e.cuad) return undefined;
       const marcas = e.visibles, caja = encuadre(marcas);
@@ -285,6 +292,10 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
       mapa.dragPan.enable(); mapa.touchZoomRotate.enable(); mapa.doubleClickZoom.enable(); };
   }, [mapa, editable, herr]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!editable && herr && herr.t !== "medir") { setHerr(null); setCurso([]); } }, [editable, herr]);
+  // 27-nov: la ayuda de la herramienta es un aviso pequeño sobre el mapa que se va solo a los 4 s (vuelve al cambiar de herramienta o de paso)
+  const [ayudaVisible, setAyudaVisible] = useState(false);
+  useEffect(() => { if (!herr) { setAyudaVisible(false); return; } setAyudaVisible(true); const r = window.setTimeout(() => setAyudaVisible(false), 4000); return () => window.clearTimeout(r); },
+    [herr, curso.length > 0, sel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!perfil) return null;
 
@@ -298,19 +309,23 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
     : herr.t === "medir" ? (herr.que === "distancia" ? "Medir distancia" : "Medir área") : herr.t === "mover" ? "Seleccionar y mover" : herr.t === "goma" ? "Borrador" : NOMBRE_HERR[herr.t];
   const conEstilo = herr && (herr.t === "referencia" || herr.t === "mano" || herr.t === "linea" || herr.t === "circulo");
 
+  // 27-nov (geovisor compacto): la franja del cuaderno es una sola fila (título, modo, Guardar, Más y Cerrar); las herramientas van en una barra
+  // vertical flotante a la izquierda del mapa; la ayuda, en un aviso pequeño que se va solo; las opciones de la herramienta (color, grosor, Terminar,
+  // la medida) en un recuadro junto a la barra; los avisos de guardado, sobre el mapa.
   const barra = cuad ? (
     <div className="cua-barra" data-testid="cua-barra" data-modo={modo}>
       <div className="cua-cab">
         <div className="cua-titulo"><strong data-testid="cua-titulo">{cuad.titulo}</strong>
           <span>{cuad.es_mio ? "Mío" : `De ${cuad.autor_nombre ?? cuad.autor}`} · versión {cuad.version}{cuad.version !== cuad.ultima_version ? ` de ${cuad.ultima_version} (anterior, solo lectura)` : ""}{cuad.archivado ? " · archivado" : ""} · {miles(visibles.length)} {visibles.length === 1 ? "marca" : "marcas"}</span></div>
+        {cuad.archivado ? <span className="cua-chip cua-solo-movil-chip" data-testid="cua-chip">Archivado</span> : cuad.version !== cuad.ultima_version ? <span className="cua-chip cua-solo-movil-chip">Versión {cuad.version}</span> : null}
         {cuad.puede_editar ? (
           <div className="geo-seg" role="group" aria-label="Modo del cuaderno" data-testid="cua-modo">
-            <button type="button" aria-pressed={modo === "explorar"} onClick={() => { setModo("explorar"); setHerr(null); setCurso([]); setMenu(""); }}>Explorar</button>
+            <button type="button" aria-pressed={modo === "explorar"} onClick={() => { setModo("explorar"); setHerr(null); setCurso([]); setMenu(""); }}><span className="geo-largo">Explorar</span><span className="geo-corto">Ver</span></button>
             <button type="button" aria-pressed={modo === "editar"} onClick={() => setModo("editar")}>Editar</button>
           </div>) : <span className="cua-lectura" data-testid="cua-lectura">Solo lectura</span>}
         {cuad.puede_editar ? <button type="button" className="tec-boton cua-guardar" data-testid="cua-guardar" disabled={!nPend || !!ocupado} onClick={() => { void guardar(); }}>{nPend ? `Guardar (${nPend})` : "Guardado"}</button> : null}
         <div className="cua-menu">
-          <button type="button" className="tec-boton-sec" aria-expanded={menu === "mas"} data-testid="cua-mas" onClick={() => setMenu(menu === "mas" ? "" : "mas")}>Más…</button>
+          <button type="button" className="tec-boton-sec" aria-expanded={menu === "mas"} aria-label="Más opciones del cuaderno" data-testid="cua-mas" onClick={() => setMenu(menu === "mas" ? "" : "mas")}><span className="geo-largo">Más…</span><span className="geo-corto" aria-hidden="true">⋯</span></button>
           {menu === "mas" ? (
             <div className="cua-desplegable cua-desplegable-der" role="menu">
               <button type="button" role="menuitem" data-testid="cua-capturar" onClick={() => { setMenu(""); setDialogo({ d: "capturar" }); }}>Captura de la vista…</button>
@@ -325,55 +340,65 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
         </div>
         <button type="button" className="tec-boton-sec" data-testid="cua-cerrar" aria-label="Cerrar el cuaderno" onClick={() => conCambiosPendientes(cerrar)}><span className="geo-largo">Cerrar</span><span className="geo-corto" aria-hidden="true">✕</span></button>
       </div>
-      {editable ? (
-        <div className="cua-herr" role="toolbar" aria-label="Herramientas del cuaderno" data-testid="cua-herr">
-          <div className="cua-menu">
-            <button type="button" className="cua-h" aria-expanded={menu === "problema"} aria-pressed={herr?.t === "problema"} data-testid="cua-h-problema" onClick={() => setMenu(menu === "problema" ? "" : "problema")}>Problema</button>
-            {menu === "problema" ? (
-              <div className="cua-desplegable" role="menu" data-testid="cua-lista-problema">
-                {ICONOS_PROBLEMA.map((i) => <button key={i.codigo} type="button" role="menuitem" data-sub={i.codigo} onClick={() => elegir({ t: "problema", sub: i.codigo })}><img src={urlProblema(i.codigo)} alt="" width={21} height={27} />{i.nombre}</button>)}
-              </div>) : null}
-          </div>
-          <div className="cua-menu">
-            <button type="button" className="cua-h" aria-expanded={menu === "activo"} aria-pressed={herr?.t === "activo"} data-testid="cua-h-activo" onClick={() => setMenu(menu === "activo" ? "" : "activo")}>Activo</button>
-            {menu === "activo" ? (
-              <div className="cua-desplegable" role="menu" data-testid="cua-lista-activo">
-                <div className="geo-seg cua-sistema" role="group" aria-label="Sistema del activo">
-                  {(["acueducto", "alcantarillado"] as const).map((s) => <button key={s} type="button" aria-pressed={sistema === s} data-sistema={s} onClick={() => setSistema(s)}>{s === "acueducto" ? "Acueducto" : "Alcantarillado"}</button>)}
-                </div>
-                <p className="cua-nota">Es una propuesta: no crea un activo en la red.</p>
-                <div className="cua-rejilla">
-                  {ICONOS_ACTIVO.map((i) => <button key={i.codigo} type="button" role="menuitem" data-sub={i.codigo} onClick={() => elegir({ t: "activo", sub: i.codigo, sistema })}><img src={urlActivo(i.codigo, sistema)} alt="" width={30} height={30} />{i.nombre}</button>)}
-                </div>
-              </div>) : null}
-          </div>
-          <button type="button" className="cua-h" aria-pressed={herr?.t === "referencia"} data-testid="cua-h-referencia" onClick={() => elegir(herr?.t === "referencia" ? null : { t: "referencia" })}>Referencia</button>
-          <button type="button" className="cua-h" aria-pressed={herr?.t === "postit"} data-testid="cua-h-postit" onClick={() => elegir(herr?.t === "postit" ? null : { t: "postit" })}>Post-it</button>
-          <div className="cua-menu cua-solo-escritorio">
-            <button type="button" className="cua-h" aria-expanded={menu === "dibujo"} aria-pressed={!!herr && ["mano", "circulo", "linea", "zona"].includes(herr.t)} data-testid="cua-h-dibujo" onClick={() => setMenu(menu === "dibujo" ? "" : "dibujo")}>Dibujo</button>
-            {menu === "dibujo" ? (
-              <div className="cua-desplegable" role="menu" data-testid="cua-lista-dibujo">
-                {(["mano", "circulo", "linea", "zona"] as const).map((t) => <button key={t} type="button" role="menuitem" data-dibujo={t} onClick={() => elegir({ t })}>{NOMBRE_HERR[t]}</button>)}
-              </div>) : null}
-          </div>
-          <button type="button" className="cua-h" aria-pressed={herr?.t === "mover"} data-testid="cua-h-mover" onClick={() => { const s = sel; elegir(herr?.t === "mover" ? null : { t: "mover" }); if (herr?.t !== "mover") setSel(s); }}>Mover</button>
-          <button type="button" className="cua-h" aria-pressed={herr?.t === "goma"} data-testid="cua-h-goma" onClick={() => elegir(herr?.t === "goma" ? null : { t: "goma" })}>Borrador</button>
-          <span className="cua-pasos" role="group" aria-label="Deshacer y rehacer">
-            <button type="button" className="cua-h" data-testid="cua-deshacer-paso" aria-label="Deshacer" title="Deshacer" disabled={!hist.current.pasado.length} onClick={irAtras}>↶</button>
-            <button type="button" className="cua-h" data-testid="cua-rehacer-paso" aria-label="Rehacer" title="Rehacer" disabled={!hist.current.futuro.length} onClick={irAdelante}>↷</button>
-          </span>
-          {herr ? <button type="button" className="cua-h cua-soltar" data-testid="cua-soltar" onClick={() => elegir(null)}>Mover el mapa</button> : null}
-        </div>) : null}
-      {herr ? (
-        <div className="cua-activa" role="status" data-testid="cua-activa">
-          <strong>{nombreHerr}</strong><span>{ayuda}</span>
-          {conEstilo ? <span className="cua-colores" role="group" aria-label="Color">{COLORES_LIBRES.map((c) => <button key={c} type="button" aria-pressed={color === c} aria-label={`Color ${c}`} style={{ background: c }} onClick={() => setColor(c)} />)}</span> : null}
-          {herr.t === "mano" || herr.t === "linea" || herr.t === "circulo" ? <label className="cua-grosor">Grosor <input type="range" min={2} max={herr.t === "mano" ? 12 : 8} value={Math.min(grosor, herr.t === "mano" ? 12 : 8)} onChange={(ev) => setGrosor(Number(ev.target.value))} /></label> : null}
-          {medida ? <strong data-testid="cua-medida">{medida}</strong> : null}
-          {(herr.t === "linea" && curso.length >= 2) || (herr.t === "zona" && curso.length >= 3) ? <button type="button" className="tec-boton" data-testid="cua-terminar" onClick={terminar}>Terminar</button> : null}
-          {curso.length && herr.t !== "mano" ? <button type="button" className="tec-boton-sec" data-testid="cua-deshacer" onClick={() => setCurso(curso.slice(0, -1))}>Quitar el último punto</button> : null}
-          {herr.t === "medir" ? <button type="button" className="tec-boton-sec" data-testid="cua-medir-fin" onClick={() => elegir(null)}>Dejar de medir</button> : null}
-        </div>) : null}
+    </div>) : null;
+
+  /** Botón de la barra vertical: ícono, y el nombre al pasar el ratón (y para los lectores de pantalla). Tocar la herramienta activa la suelta. */
+  const B = ({ id, nombre, icono, activo, abierto, onClick, deshabilitado, clase }: { id: string; nombre: string; icono: keyof typeof ICONO; activo?: boolean; abierto?: boolean; onClick: () => void; deshabilitado?: boolean; clase?: string }) => (
+    <button type="button" className={`cua-h${clase ? ` ${clase}` : ""}`} data-testid={id} aria-label={nombre} data-nombre={nombre} aria-pressed={activo === undefined ? undefined : activo}
+      aria-expanded={abierto === undefined ? undefined : abierto} disabled={deshabilitado} onClick={onClick}><Icono n={icono} /></button>);
+  const grupo = (m: "problema" | "activo" | "dibujo", activo: boolean) => () => { if (activo && menu !== m) { elegir(null); return; } setMenu(menu === m ? "" : m); };
+  const esDibujo = !!herr && ["mano", "circulo", "linea", "zona"].includes(herr.t);
+  const vertical = cuad && editable ? (
+    <div className="cua-vertical" role="toolbar" aria-orientation="vertical" aria-label="Herramientas del cuaderno" data-testid="cua-herr">
+      <div className="cua-menu">
+        <B id="cua-h-problema" nombre="Problema" icono="problema" activo={herr?.t === "problema"} abierto={menu === "problema"} onClick={grupo("problema", herr?.t === "problema")} />
+        {menu === "problema" ? (
+          <div className="cua-desplegable" role="menu" data-testid="cua-lista-problema">
+            {ICONOS_PROBLEMA.map((i) => <button key={i.codigo} type="button" role="menuitem" data-sub={i.codigo} onClick={() => elegir({ t: "problema", sub: i.codigo })}><img src={urlProblema(i.codigo)} alt="" width={21} height={27} />{i.nombre}</button>)}
+          </div>) : null}
+      </div>
+      <div className="cua-menu">
+        <B id="cua-h-activo" nombre="Activo" icono="activo" activo={herr?.t === "activo"} abierto={menu === "activo"} onClick={grupo("activo", herr?.t === "activo")} />
+        {menu === "activo" ? (
+          <div className="cua-desplegable" role="menu" data-testid="cua-lista-activo">
+            <div className="geo-seg cua-sistema" role="group" aria-label="Sistema del activo">
+              {(["acueducto", "alcantarillado"] as const).map((s) => <button key={s} type="button" aria-pressed={sistema === s} data-sistema={s} onClick={() => setSistema(s)}>{s === "acueducto" ? "Acueducto" : "Alcantarillado"}</button>)}
+            </div>
+            <p className="cua-nota">Es una propuesta: no crea un activo en la red.</p>
+            <div className="cua-rejilla">
+              {ICONOS_ACTIVO.map((i) => <button key={i.codigo} type="button" role="menuitem" data-sub={i.codigo} onClick={() => elegir({ t: "activo", sub: i.codigo, sistema })}><img src={urlActivo(i.codigo, sistema)} alt="" width={30} height={30} />{i.nombre}</button>)}
+            </div>
+          </div>) : null}
+      </div>
+      <B id="cua-h-referencia" nombre="Punto de referencia" icono="referencia" activo={herr?.t === "referencia"} onClick={() => elegir(herr?.t === "referencia" ? null : { t: "referencia" })} />
+      <B id="cua-h-postit" nombre="Post-it" icono="postit" activo={herr?.t === "postit"} onClick={() => elegir(herr?.t === "postit" ? null : { t: "postit" })} />
+      <div className="cua-menu cua-solo-escritorio">
+        <B id="cua-h-dibujo" nombre="Dibujo" icono="dibujo" activo={esDibujo} abierto={menu === "dibujo"} onClick={grupo("dibujo", esDibujo)} />
+        {menu === "dibujo" ? (
+          <div className="cua-desplegable" role="menu" data-testid="cua-lista-dibujo">
+            {(["mano", "circulo", "linea", "zona"] as const).map((x) => <button key={x} type="button" role="menuitem" data-dibujo={x} onClick={() => elegir({ t: x })}>{NOMBRE_HERR[x]}</button>)}
+          </div>) : null}
+      </div>
+      <B id="cua-h-mover" nombre="Seleccionar y mover" icono="mover" activo={herr?.t === "mover"} onClick={() => { const s = sel; elegir(herr?.t === "mover" ? null : { t: "mover" }); if (herr?.t !== "mover") setSel(s); }} />
+      <B id="cua-h-goma" nombre="Borrador" icono="goma" activo={herr?.t === "goma"} onClick={() => elegir(herr?.t === "goma" ? null : { t: "goma" })} />
+      <span className="cua-sep" aria-hidden="true" />
+      <B id="cua-deshacer-paso" nombre="Deshacer" icono="deshacer" deshabilitado={!hist.current.pasado.length} onClick={irAtras} />
+      <B id="cua-rehacer-paso" nombre="Rehacer" icono="rehacer" deshabilitado={!hist.current.futuro.length} onClick={irAdelante} />
+    </div>) : null;
+  const tieneOpciones = !!herr && (!!conEstilo || herr.t === "medir" || curso.length > 0);
+  const opciones = herr && tieneOpciones ? (
+    <div className={`cua-opciones${editable ? "" : " cua-opciones-sola"}`} role="group" aria-label={`Opciones: ${nombreHerr}`} data-testid="cua-activa">
+      <strong>{nombreHerr}</strong>
+      {conEstilo ? <span className="cua-colores" role="group" aria-label="Color">{COLORES_LIBRES.map((c) => <button key={c} type="button" aria-pressed={color === c} aria-label={`Color ${c}`} style={{ background: c }} onClick={() => setColor(c)} />)}</span> : null}
+      {herr.t === "mano" || herr.t === "linea" || herr.t === "circulo" ? <label className="cua-grosor">Grosor <input type="range" min={2} max={herr.t === "mano" ? 12 : 8} value={Math.min(grosor, herr.t === "mano" ? 12 : 8)} onChange={(ev) => setGrosor(Number(ev.target.value))} /></label> : null}
+      {medida ? <strong data-testid="cua-medida">{medida}</strong> : null}
+      {(herr.t === "linea" && curso.length >= 2) || (herr.t === "zona" && curso.length >= 3) ? <button type="button" className="tec-boton" data-testid="cua-terminar" onClick={terminar}>Terminar</button> : null}
+      {curso.length && herr.t !== "mano" ? <button type="button" className="tec-boton-sec" data-testid="cua-deshacer" onClick={() => setCurso(curso.slice(0, -1))}>Quitar el último punto</button> : null}
+      {herr.t === "medir" ? <button type="button" className="tec-boton-sec" data-testid="cua-medir-fin" onClick={() => elegir(null)}>Dejar de medir</button> : null}
+    </div>) : null;
+  const avisos = cuad && (aviso || ocupado || (herr && ayudaVisible)) ? (
+    <div className="cua-avisos">
+      {herr && ayudaVisible ? <p className="cua-ayuda" role="status" data-testid="cua-ayuda"><b>{nombreHerr}</b> · {ayuda}</p> : null}
       {aviso ? <p className={aviso.error ? "cua-aviso cua-aviso-error" : "cua-aviso"} role={aviso.error ? "alert" : "status"} data-testid="cua-aviso">{aviso.texto}<button type="button" className="cua-x" aria-label="Cerrar el aviso" onClick={() => setAviso(null)}>✕</button></p> : null}
       {ocupado ? <p className="cua-aviso" role="status" data-testid="cua-ocupado">{ocupado}</p> : null}
     </div>) : null;
@@ -381,6 +406,7 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
   return (
     <>
       {barra && ranura ? createPortal(barra, ranura) : null}
+      {vertical}{opciones}{avisos}
       {!cuad && (aviso || ocupado) && !lista ? <p className={aviso?.error ? "cua-flotante cua-aviso-error" : "cua-flotante"} role="status">{ocupado || aviso?.texto}</p> : null}
       {lista ? <ListaCuadernos perfil={perfil} abierto={cuad?.id ?? null} onCerrar={() => onLista(false)} onAbrir={(id) => conCambiosPendientes(() => { void abrir(id); })} onNuevo={() => conCambiosPendientes(() => setDialogo({ d: "nuevo" }))} /> : null}
       {marcaSel && cuad && !dialogo && herr?.t !== "mover" && herr?.t !== "goma" ? <FichaMarca key={marcaSel.id} m={marcaSel} editable={editable} guardada={cuad.marcas.some((x) => x.id === marcaSel.id)} categorias={perfil.categorias}
@@ -423,6 +449,22 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
         </Caja>) : null}
     </>
   );
+}
+
+// 27-nov: íconos de línea en SVG (las flechas ↶ ↷ de texto salían como ganchos en Safari)
+const ICONO = {
+  problema: "M12 21s-7-7.2-7-12a7 7 0 0 1 14 0c0 4.8-7 12-7 12zM12 6.5v4M12 13.2v.3",
+  activo: "M5 10.5V6a7 2.8 0 0 1 14 0v4.5zM7 10.5 5.8 20M17 10.5l1.2 9.5M12 10.5V20",
+  referencia: "M12 7.5a4.5 4.5 0 1 0 .01 0zM12 3.5a8.5 8.5 0 1 0 .01 0z",
+  postit: "M5 4h14v11l-5 5H5zM14 20v-5h5M8 9h8M8 12.5h5",
+  dibujo: "M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19zM14.5 6.5l3 3",
+  mover: "M12 3v18M3 12h18M12 3 9.5 5.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l-2.5 2.5",
+  goma: "M8.5 20H20M4.6 15.4l9.9-9.9a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L11 19H8zM9.2 10.8l4 4",
+  deshacer: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
+  rehacer: "m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13",
+};
+function Icono({ n }: { n: keyof typeof ICONO }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" className={n === "referencia" ? "cua-ic-ref" : undefined}><path d={ICONO[n]} /></svg>;
 }
 
 const nombreArchivo = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) || "cuaderno";

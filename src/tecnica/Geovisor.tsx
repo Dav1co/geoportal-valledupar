@@ -163,7 +163,47 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
   const cuadPuente = useRef<PuenteCuaderno | null>(null);
   const [cuadRanura, setCuadRanura] = useState<HTMLDivElement | null>(null);
   const salir = () => (cuadPuente.current ? cuadPuente.current.salir(onVolver) : onVolver());
-  const [imprimir, setImprimir] = useState(false);      // Corte 1 (26-nov): «Imprimir / PDF»
+  const [imprimir, setImprimir] = useState(false);
+  const [menuBarra, setMenuBarra] = useState("");      // 27-nov: el menú abierto de la fila (tematica, fondo, fecha, hora o mas)
+  // 27-nov: pantalla completa. «api»: la del navegador sobre el geovisor (no toca la barra de la app). «mapa»: donde no la hay (iPhone), el geovisor tapa la página.
+  const raiz = useRef<HTMLDivElement>(null);
+  const [completa, setCompleta] = useState<"" | "api" | "mapa">("");
+  const completaRef = useRef(completa); completaRef.current = completa;
+  const conmutarCompleta = (salirSolo = false) => {
+    const el = raiz.current as (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void }) | null;
+    const d = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void };
+    if (completaRef.current === "api" || d.fullscreenElement || d.webkitFullscreenElement) {
+      try { (navigator as Navigator & { keyboard?: { unlock?: () => void } }).keyboard?.unlock?.(); } catch { /* no hay Keyboard Lock */ }
+      if (d.exitFullscreen) void d.exitFullscreen().catch(() => setCompleta("")); else d.webkitExitFullscreen?.();
+      return;
+    }
+    if (completaRef.current === "mapa") { setCompleta(""); return; }
+    if (salirSolo || !el) return;
+    const pedir = el.requestFullscreen ? () => el.requestFullscreen() : el.webkitRequestFullscreen ? () => el.webkitRequestFullscreen!() : null;
+    if (!pedir || !(document.fullscreenEnabled ?? (document as Document & { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled)) { setCompleta("mapa"); return; }
+    try {
+      Promise.resolve(pedir()).then(() => {
+        // En Chrome, con la pantalla completa se puede pedir la tecla Esc: el primer Esc suelta la herramienta y el segundo sale (si no, Esc sale de una vez).
+        try { void (navigator as Navigator & { keyboard?: { lock?: (k: string[]) => Promise<void> } }).keyboard?.lock?.(["Escape"])?.catch(() => {}); } catch { /* sin Keyboard Lock */ }
+      }).catch(() => setCompleta("mapa"));
+    } catch { setCompleta("mapa"); }
+  };
+  useEffect(() => {
+    const cambio = () => { const d = document as Document & { webkitFullscreenElement?: Element | null }; const en = (d.fullscreenElement ?? d.webkitFullscreenElement) === raiz.current;
+      setCompleta((c) => (en ? "api" : c === "api" ? "" : c)); };
+    document.addEventListener("fullscreenchange", cambio); document.addEventListener("webkitfullscreenchange", cambio);
+    return () => { document.removeEventListener("fullscreenchange", cambio); document.removeEventListener("webkitfullscreenchange", cambio); };
+  }, []);
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (menuBarra) { setMenuBarra(""); return; }
+      if (cuadPuente.current?.escape()) { e.preventDefault(); return; }      // el primer Esc suelta la herramienta del cuaderno
+      if (completaRef.current) conmutarCompleta(true);      // el siguiente sale de la pantalla completa
+    };
+    window.addEventListener("keydown", tecla); return () => window.removeEventListener("keydown", tecla);
+  }, [menuBarra]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const m = mapa.current; if (!m) return; m.resize(); const r = window.setTimeout(() => m.resize(), 250); return () => window.clearTimeout(r); }, [completa]);      // Corte 1 (26-nov): «Imprimir / PDF»
   const [fondo, setFondo] = useState<"calles" | "satelite">("calles");      // Corte 1: selector «Calles / Satélite» (no se guarda)
   const [verSec, setVerSec] = useState<VerSectores>(VER_SECTORES_INICIAL);      // Corte 1: interruptores de la leyenda de sectores
   const [avisoAbierto, setAvisoAbierto] = useState<string | null>(avisoInicial ?? (inicial ? [
@@ -605,32 +645,44 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
     .filter((x) => x.d && (x.d === "cargando" || "error" in x.d || x.d.recortada));
 
   return (
-    <div className="geo" data-perfil={cfg.perfil}>
+    <div ref={raiz} className={`geo${completa ? " geo-completa" : ""}${completa === "mapa" ? " geo-modo-mapa" : ""}`} data-perfil={cfg.perfil} data-completa={completa || undefined}>
+      {/* 27-nov (geovisor compacto): una sola fila. Temática, Fondo y Fecha son menús; en el celular Fecha, Hora, Cuadernos, PDF y Compartir van en «⋯».
+          Los menús quedan en la página aunque estén cerrados (atributo hidden), con los mismos data-* de siempre. */}
       <header className="geo-barra">
         <button type="button" className="geo-volver" onClick={salir} aria-label="Volver a Técnica">←</button>
         <div className="geo-titulo"><h1>Geovisor técnico</h1><span>{cfg.completo ? (cfg.perfil === "admin" ? "Administrador" : "Supervisor") : "Solo lectura"}</span></div>
-        {cfg.compartir ? <button type="button" className="geo-boton geo-boton-sec" onClick={() => setCompartir(true)}>Compartir</button> : null}
-        {cuadOk ? <button type="button" className="geo-boton geo-boton-sec cua-en-barra" data-testid="cuadernos" aria-expanded={panel === "cuadernos"} onClick={() => setPanel((p) => (p === "cuadernos" ? "" : "cuadernos"))}>Cuadernos</button> : null}
-        <button type="button" className="geo-boton geo-boton-sec" data-testid="imprimir" aria-label={TEXTOS_IMPRESION.boton} onClick={() => setImprimir(true)}><span className="geo-largo">{TEXTOS_IMPRESION.boton}</span><span className="geo-corto" aria-hidden="true">PDF</span></button>
-        <button type="button" className="geo-boton" aria-expanded={panel === "capas"} onClick={() => setPanel((p) => (p === "capas" ? "" : "capas"))}>Capas</button>
+        <Desplegable id="tematica" abierto={menuBarra} onAbrir={setMenuBarra} etiqueta="Temática" valor={NOMBRE_COLORES[colores]}>
+          <div className="geo-seg geo-seg-lista" role="group" aria-label="Colores de la red">
+            {(["tipo", "material", "edad", "diametro", "afectaciones", ...(cfg.remuneracion ? ["remuneracion"] : [])] as Colores[]).map((k) => <button key={k} type="button" aria-pressed={colores === k} data-colores={k} onClick={() => { setColores(k); setMenuBarra(""); }}>{NOMBRE_COLORES[k]}</button>)}
+          </div>
+        </Desplegable>
+        <Desplegable id="fondo" abierto={menuBarra} onAbrir={setMenuBarra} etiqueta="Fondo" valor={fondo === "calles" ? "Calles" : "Satélite"}>
+          <div className="geo-seg geo-seg-lista" role="group" aria-label="Mapa de fondo" data-testid="fondo">
+            <button type="button" aria-pressed={fondo === "calles"} data-fondo="calles" onClick={() => { setFondo("calles"); setMenuBarra(""); }}>Calles</button>
+            <button type="button" aria-pressed={fondo === "satelite"} data-fondo="satelite" onClick={() => { setFondo("satelite"); setMenuBarra(""); }}>Satélite</button>
+          </div>
+        </Desplegable>
+        <button type="button" className="geo-boton geo-boton-sec geo-solo-movil geo-ic" aria-label="Más opciones" aria-expanded={menuBarra === "mas"} data-testid="geo-mas" onClick={() => setMenuBarra((m) => (m === "mas" ? "" : "mas"))}>⋯</button>
+        <div className={`geo-mas${menuBarra === "mas" ? " geo-mas-abierto" : ""}`} data-testid="geo-mas-panel">
+          {hayPorFecha ? <Desplegable id="fecha" abierto={menuBarra} onAbrir={setMenuBarra} etiqueta="Fecha" valor={periodo.modo === "hoy" ? "Hoy" : periodo.modo === "semana" ? "7 días" : "Rango"} plano={menuBarra === "mas"}>
+            <SelectorPeriodo cfg={cfg} periodo={periodo} onCambiar={(p) => { setPeriodo(p); if (p.modo !== "rango" || p.desde !== periodo.desde || p.hasta !== periodo.hasta) setMenuBarra(""); }} />
+          </Desplegable> : null}
+          {flujoOn ? <Desplegable id="hora" abierto={menuBarra} onAbrir={setMenuBarra} etiqueta="Hora" valor={horaFlujo === "mayor" ? "17:00" : "23:00"} plano={menuBarra === "mas"}>
+            <div className="geo-seg geo-seg-lista" role="group" aria-label="Hora del flujo del modelo" data-testid="hora-flujo">
+              {(["mayor", "menor"] as const).map((h) => <button key={h} type="button" aria-pressed={horaFlujo === h} onClick={() => { setHoraFlujo(h); setMenuBarra(""); }}>
+                {flujo?.horas.find((x) => x.cual === h)?.texto ?? (h === "mayor" ? "Hora de mayor consumo (17:00)" : "Hora de menor consumo (23:00)")}</button>)}
+            </div>
+          </Desplegable> : null}
+          <span className="geo-esp" />
+          {cuadOk ? <button type="button" className="geo-boton geo-boton-sec" data-testid="cuadernos" aria-expanded={panel === "cuadernos"} onClick={() => { setMenuBarra(""); setPanel((p) => (p === "cuadernos" ? "" : "cuadernos")); }}>Cuadernos</button> : null}
+          <button type="button" className="geo-boton geo-boton-sec" data-testid="imprimir" aria-label={TEXTOS_IMPRESION.boton} onClick={() => { setMenuBarra(""); setImprimir(true); }}>{TEXTOS_IMPRESION.boton}</button>
+          {cfg.compartir ? <button type="button" className="geo-boton geo-boton-sec" onClick={() => { setMenuBarra(""); setCompartir(true); }}>Compartir</button> : null}
+        </div>
+        <button type="button" className="geo-boton" aria-expanded={panel === "capas"} onClick={() => { setMenuBarra(""); setPanel((p) => (p === "capas" ? "" : "capas")); }}>Capas</button>
+        <button type="button" className="geo-boton geo-boton-sec geo-ic" data-testid="pantalla-completa" aria-label="Pantalla completa" title="Pantalla completa" aria-pressed={!!completa} onClick={() => conmutarCompleta()}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">{completa ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /> : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}</svg></button>
       </header>
-
-      <div className="geo-herr">
-        <div className="geo-seg" role="group" aria-label="Colores de la red">
-          {(["tipo", "material", "edad", "diametro", "afectaciones", ...(cfg.remuneracion ? ["remuneracion"] : [])] as Colores[]).map((k) => <button key={k} type="button" aria-pressed={colores === k} data-colores={k} onClick={() => setColores(k)}>{k === "tipo" ? "Tipo" : k === "material" ? "Material" : k === "edad" ? "Edad" : k === "diametro" ? "Diámetro" : k === "afectaciones" ? "Afectaciones" : "Remuneración"}</button>)}
-        </div>
-        <div className="geo-seg" role="group" aria-label="Mapa de fondo" data-testid="fondo">
-          <button type="button" aria-pressed={fondo === "calles"} data-fondo="calles" onClick={() => setFondo("calles")}>Calles</button>
-          <button type="button" aria-pressed={fondo === "satelite"} data-fondo="satelite" onClick={() => setFondo("satelite")}>Satélite</button>
-        </div>
-        {hayPorFecha ? <SelectorPeriodo cfg={cfg} periodo={periodo} onCambiar={setPeriodo} /> : null}
-        {cuadOk ? <div className="geo-seg cua-en-herr"><button type="button" data-testid="cuadernos-movil" aria-pressed={panel === "cuadernos"} onClick={() => setPanel((p) => (p === "cuadernos" ? "" : "cuadernos"))}>Cuadernos</button></div> : null}
-        {flujoOn ? (
-          <div className="geo-seg" role="group" aria-label="Hora del flujo del modelo" data-testid="hora-flujo">
-            {(["mayor", "menor"] as const).map((h) => <button key={h} type="button" aria-pressed={horaFlujo === h} onClick={() => setHoraFlujo(h)}>
-              {flujo?.horas.find((x) => x.cual === h)?.texto ?? (h === "mayor" ? "Hora de mayor consumo (17:00)" : "Hora de menor consumo (23:00)")}</button>)}
-          </div>) : null}
-      </div>
+      {menuBarra ? <div className="geo-velo" aria-hidden="true" onClick={() => setMenuBarra("")} /> : null}
 
       {abiertos.length ? (
         <div className="geo-franja geo-franja-evento" role="status" data-testid="franja-eventos">
@@ -654,6 +706,8 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
 
       <div ref={setCuadRanura} className="cua-ranura" />
       <div className="geo-cuerpo">
+        {completa ? <button type="button" className="geo-salir-completa" data-testid="salir-completa" aria-label="Salir de pantalla completa (Esc)" title="Salir de pantalla completa (Esc)" onClick={() => conmutarCompleta(true)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg></button> : null}
         <div ref={cont} className="geo-mapa" role="application" aria-label="Mapa del geovisor técnico" data-zoom={zoom.toFixed(1)} />
         {zoom < cfg.zoom.min ? <div className="geo-aviso" role="status">Acerque el mapa para ver la red</div>
           : zoom < cfg.zoom.red_completa ? <div className="geo-aviso geo-aviso-suave" role="status">Red principal · acerque para ver todos los tramos</div> : null}
@@ -744,6 +798,19 @@ function FilaCapa({ c, encendida, onConmutar, atenuada, onAtenuar, corte }: { c:
     {atenuada !== undefined && encendida ? <button type="button" className="geo-atenuar" aria-pressed={atenuada} onClick={onAtenuar} data-atenuar={c.codigo}>{atenuada ? "Atenuada" : "Atenuar"}</button> : null}
     </div>
   );
+}
+
+const NOMBRE_COLORES: Record<Colores, string> = { tipo: "Tipo", material: "Material", edad: "Edad", diametro: "Diámetro", afectaciones: "Afectaciones", remuneracion: "Remuneración" };
+
+/** 27-nov: un menú compacto de la fila: «Temática: Tipo ▾». El contenido queda en la página cerrado (hidden). `plano`: dentro de «⋯» se abre en el sitio. */
+function Desplegable({ id, abierto, onAbrir, etiqueta, valor, plano, children }: { id: string; abierto: string; onAbrir: (m: string) => void; etiqueta: string; valor: string; plano?: boolean; children: React.ReactNode }) {
+  const esta = abierto === id || (plano === true && abierto === "mas");
+  return (
+    <div className={`geo-desp${plano ? " geo-desp-plano" : ""}`} data-menu={id}>
+      <button type="button" className="geo-boton geo-boton-sec geo-desp-boton" aria-expanded={abierto === id} aria-haspopup="true" data-testid={`menu-${id}`}
+        onClick={() => onAbrir(abierto === id ? (plano ? "mas" : "") : id)}><span className="geo-desp-eti">{etiqueta}:</span> {valor} <span aria-hidden="true">▾</span></button>
+      <div className="geo-desp-panel" hidden={!esta}>{children}</div>
+    </div>);
 }
 
 function SelectorPeriodo({ cfg, periodo, onCambiar }: { cfg: ConfigGeovisor; periodo: Periodo; onCambiar: (p: Periodo) => void }) {

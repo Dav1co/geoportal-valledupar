@@ -8,7 +8,6 @@
 .cua-titulo span { color: #52626f; font-size: 12.5px; }
 .cua-lectura { background: #eef2f5; border-radius: 8px; padding: 6px 10px; font-weight: 600; color: #3c4b57; }
 .cua-barra .tec-boton, .cua-barra .tec-boton-sec { min-height: 40px; padding: 0 12px; font-size: 14px; }
-.cua-herr { display: flex; flex-wrap: wrap; gap: 6px; }
 .cua-h { min-height: 40px; padding: 0 12px; border: 1px solid #b9c6cf; border-radius: 8px; background: #fff; color: #22313f; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .cua-h[aria-pressed="true"] { background: var(--geo-color, #0a4f7a); color: #fff; border-color: transparent; }
 .cua-soltar { border-style: dashed; }
@@ -26,8 +25,6 @@
 .cua-rejilla { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
 .cua-sistema { align-self: flex-start; }
 .cua-nota { margin: 2px 4px; font-size: 12.5px; color: #52626f; }
-.cua-activa { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #fff; border: 1px solid #e2c044; border-radius: 8px; padding: 6px 8px; }
-.cua-activa > span:first-of-type { color: #3c4b57; }
 .cua-colores { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .cua-colores button { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #9aa8b3; cursor: pointer; padding: 0; }
 .cua-colores button[aria-pressed="true"] { box-shadow: 0 0 0 3px #1b2733; }
@@ -56,16 +53,72 @@
 .cua-fila-acc { display: inline-flex; gap: 6px; }
 .cua-ancho { flex: 1 1 100%; }
 @media (min-width: 900px) { .cua-ficha { left: auto; right: 12px; width: 380px; } }
-.cua-en-herr { display: none; }
 /* Celular: ver cuadernos y poner problemas, activos, referencias y post-its. La mano alzada, los polígonos y las medidas quedan para escritorio. */
 @media (max-width: 700px) {
   .cua-solo-escritorio { display: none !important; }
-  .cua-titulo { flex-basis: 100%; }
-  .cua-barra { padding: 4px 8px; gap: 4px; }
-  .cua-cab, .cua-herr { gap: 5px; position: relative; }
-  .cua-barra .tec-boton, .cua-barra .tec-boton-sec, .cua-h, .cua-barra .geo-seg button { padding: 0 9px; font-size: 13.5px; }
-  .cua-menu { position: static; }      /* los desplegables se anclan a la fila, no al botón: así nunca se salen de la pantalla */
-  .cua-desplegable, .cua-desplegable-der { left: 0; right: 0; width: auto; max-width: none; max-height: 55vh; }
-  .cua-activa > span:first-of-type { font-size: 13px; }
+  .cua-barra .tec-boton, .cua-barra .tec-boton-sec, .cua-barra .geo-seg button { padding: 0 9px; }
+  .cua-cab { position: relative; }
+  .cua-cab > .cua-menu { position: static; }      /* el menú «Más» se ancla a la franja, no al botón: así no se sale de la pantalla */
+  .cua-desplegable-der { left: 0; right: 0; width: auto; max-width: none; max-height: 55vh; }
 }
-@media (max-width: 600px) { .cua-en-barra { display: none; } .cua-en-herr { display: inline-flex; } }
+
+/* ===== 27-nov: geovisor compacto. Franja de una fila, barra vertical flotante, ayuda que se va sola. Botones de 36 px (44 px en táctil). ===== */
+.cua-barra { --cua-b: var(--geo-b, 36px); padding: 2px 8px; gap: 0; }
+.cua-cab { flex-wrap: nowrap; gap: 6px; min-height: calc(var(--cua-b) + 2px); }
+.cua-titulo { flex: 1 1 auto; flex-direction: row; align-items: baseline; gap: 8px; overflow: hidden; white-space: nowrap; }
+.cua-titulo strong { font-size: 14.5px; flex: 0 1 auto; min-width: 0; }
+.cua-titulo span { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cua-barra .tec-boton, .cua-barra .tec-boton-sec, .cua-barra .geo-seg button { min-height: var(--cua-b); height: var(--cua-b); padding: 0 11px; font-size: 13.5px; white-space: nowrap; }
+.cua-barra .geo-seg { flex: 0 0 auto; }
+.cua-lectura { padding: 4px 10px; white-space: nowrap; }
+/* barra vertical flotante, arriba a la izquierda del mapa */
+.cua-vertical { position: absolute; left: 8px; top: 8px; z-index: 4; display: flex; flex-direction: column; gap: 3px; background: rgba(255, 255, 255, 0.96); border: 1px solid #c8d3da; border-radius: 12px;
+  padding: 4px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2); max-height: calc(100% - 16px); }
+.cua-vertical .cua-h { width: var(--geo-b, 36px); height: var(--geo-b, 36px); min-height: 0; padding: 0; border: none; border-radius: 8px; background: transparent; display: inline-flex; align-items: center; justify-content: center; position: relative; color: #22313f; }
+.cua-vertical .cua-h[aria-pressed="true"] { background: var(--geo-color, #6b6258); color: #fff; }
+.cua-vertical .cua-h:hover:not(:disabled):not([aria-pressed="true"]) { background: #eef2f5; }
+.cua-vertical .cua-h svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cua-vertical .cua-h svg.cua-ic-ref { fill: none; }
+.cua-sep { height: 1px; background: #dbe3e8; margin: 2px 4px; }
+@media (hover: hover) {
+  .cua-vertical .cua-h[data-nombre]:hover::after { content: attr(data-nombre); position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); background: #1b2733; color: #fff;
+    font-size: 12.5px; font-weight: 600; padding: 4px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; z-index: 9; }
+}
+.cua-vertical .cua-menu { position: relative; }
+.cua-vertical .cua-desplegable { left: calc(100% + 10px); top: 0; }
+/* opciones de la herramienta (color, grosor, Terminar, la medida): junto a la barra */
+.cua-opciones { position: absolute; left: calc(var(--geo-b, 36px) + 28px); top: 8px; z-index: 4; max-width: calc(100% - var(--geo-b, 36px) - 90px); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+  background: rgba(255, 255, 255, 0.96); border: 1px solid #e2c044; border-radius: 10px; padding: 5px 8px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); font-size: 13.5px; }
+.cua-opciones-sola { left: 8px; }
+.cua-opciones .tec-boton, .cua-opciones .tec-boton-sec { min-height: var(--geo-b, 36px); padding: 0 10px; font-size: 13.5px; }
+.cua-opciones .cua-colores button { width: 26px; height: 26px; }
+@media (pointer: coarse) { .cua-opciones .cua-colores button { width: 32px; height: 32px; } }
+/* avisos sobre el mapa: la ayuda (se va sola) y los de guardado */
+.cua-avisos { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 6px; width: max-content; max-width: min(560px, calc(100% - 140px)); pointer-events: none; }
+.cua-avisos > p { pointer-events: auto; margin: 0; }
+.cua-ayuda { background: rgba(27, 39, 51, 0.9); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 16px; animation: cua-entra 0.2s ease-out; }
+.cua-ayuda b { color: #ffe066; }
+.cua-avisos .cua-aviso { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); font-size: 13.5px; padding: 4px 4px 4px 12px; }
+@keyframes cua-entra { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+/* pantalla completa: la franja del cuaderno flota arriba, a la derecha de la barra de herramientas */
+.geo-completa .cua-ranura { position: absolute; z-index: 5; top: 8px; left: calc(var(--geo-b, 36px) + 28px); right: calc(var(--geo-b, 36px) + 20px); pointer-events: none; display: flex; }
+.geo-completa .cua-ranura .cua-barra { pointer-events: auto; border: 1px solid #e2c044; border-radius: 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2); max-width: 100%; }
+.geo-completa .cua-ranura:has(.cua-barra) ~ .geo-cuerpo .cua-opciones { top: calc(var(--geo-b, 36px) + 22px); }
+.geo-completa .cua-ranura:has(.cua-barra) ~ .geo-cuerpo .cua-avisos { top: calc(var(--geo-b, 36px) + 22px); }
+.geo-completa .maplibregl-ctrl-top-right { top: calc(var(--geo-b, 36px) + 10px); }
+.geo-completa [data-testid=cua-cerrar] { display: none; }      /* en pantalla completa, lo esencial: título, modo, Guardar y «Más» */
+.cua-solo-movil-chip { display: none; }
+@media (max-width: 700px) { .cua-solo-movil-chip { display: inline-block; } }
+.cua-chip { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: #eef2f5; color: #3c4b57; white-space: nowrap; }
+@media (max-width: 700px) {
+  .cua-titulo span { display: none; }
+  .cua-avisos { top: auto; bottom: 56px; left: calc(var(--geo-b, 44px) + 20px); right: 8px; transform: none; width: auto; max-width: none; align-items: stretch; }
+  .cua-ayuda { border-radius: 10px; }
+  .cua-opciones { top: auto; bottom: 56px; left: calc(var(--geo-b, 44px) + 20px); right: 8px; max-width: none; }
+  .geo-completa .cua-ranura { left: 8px; right: calc(var(--geo-b, 44px) + 16px); }
+  .geo-completa .cua-titulo { min-width: 48px; }
+  .geo-completa .cua-ranura:has(.cua-barra) ~ .geo-cuerpo .cua-opciones, .geo-completa .cua-ranura:has(.cua-barra) ~ .geo-cuerpo .cua-avisos { top: auto; }      /* abajo, como fuera de pantalla completa */
+  .geo-completa .cua-ranura:has(.cua-barra) ~ .geo-cuerpo .cua-vertical { top: calc(var(--geo-b, 44px) + 20px); max-height: calc(100% - var(--geo-b, 44px) - 90px); overflow-y: auto; }
+  .cua-vertical .cua-desplegable { position: fixed; left: calc(var(--geo-b, 44px) + 24px); right: 8px; top: auto; width: auto; max-width: none; max-height: 60vh; }
+}
+.cua-avisos > .cua-ayuda { pointer-events: none; }      /* la ayuda no estorba los toques sobre el mapa */
