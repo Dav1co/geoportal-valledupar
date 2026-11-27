@@ -18,8 +18,8 @@ select k, valor, case when ok then 'OK' else 'REVISAR' end as estado from (
          (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p
            where p.prokind = 'f' and (p.pronamespace = 'tecnica'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_tec\_%'))) = '{{MD5_TECNICA}}'
   union all
-  select 3, '3 huella de análisis', (select md5(string_agg(md5(pg_get_functiondef(fn.oid)), '' order by fn.firma)) from fn),
-         (select md5(string_agg(md5(pg_get_functiondef(fn.oid)), '' order by fn.firma)) from fn) = '{{MD5_ANALISIS}}'
+  select 3, '3 huella de análisis', (select md5(string_agg(md5(pg_get_functiondef(fn.oid)), '' order by fn.firma collate "C")) from fn),
+         (select md5(string_agg(md5(pg_get_functiondef(fn.oid)), '' order by fn.firma collate "C")) from fn) = '{{MD5_ANALISIS}}'
   union all
   select 4, '4 las {{N_FUNC}} funciones son las del paquete, una por una', (select count(*)::text from fn where fn.firma in ({{FIRMAS}})),
          (select count(*) from fn) = {{N_FUNC}} and (select count(*) from fn where fn.firma in ({{FIRMAS}}) and md5(pg_get_functiondef(fn.oid)) = case fn.firma {{CASOS}} end) = {{N_FUNC}}

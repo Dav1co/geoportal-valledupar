@@ -14,7 +14,7 @@ select k, valor, esperado_antes, esperado_despues from (
          '{{MD5_TECNICA}}', '{{MD5_TECNICA}}'
   union all
   select 3, '3 huella de análisis (esquema analisis y geoportal_analisis_*)',
-         coalesce((select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.oid::regprocedure::text)) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+         coalesce((select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.oid::regprocedure::text collate "C")) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where p.prokind = 'f' and (n.nspname = 'analisis' or (n.nspname = 'public' and p.proname like 'geoportal\_analisis\_%'))), '(sin funciones)'),
          '(sin funciones)', '{{MD5_ANALISIS}}'
   union all

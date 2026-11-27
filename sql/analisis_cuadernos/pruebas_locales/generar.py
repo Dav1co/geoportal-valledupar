@@ -31,7 +31,7 @@ HUELLA_REDES = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order 
 HUELLA_TEC = ("select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p "
               "where p.prokind = 'f' and (p.pronamespace = 'tecnica'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\\_tec\\_%'))")
 FN = ("pg_proc p join pg_namespace n on n.oid = p.pronamespace where p.prokind = 'f' and (n.nspname = 'analisis' or (n.nspname = 'public' and p.proname like 'geoportal\\_analisis\\_%'))")
-HUELLA_ANA = f"select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.oid::regprocedure::text)) from {FN}"
+HUELLA_ANA = f"select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.oid::regprocedure::text collate \"C\")) from {FN}"
 N_RPC = 12
 LOCAL = os.path.join(AQUI, 'local')
 RES = os.path.join(RAIZ, 'resultados')
@@ -175,7 +175,7 @@ def main():
     if p.returncode != 0:
         raise SystemExit('La migración local falló:\n' + p.stderr[-3000:])
     assert q(HUELLA_REDES, TMP) == MD5_REDES and q(HUELLA_TEC, TMP) == md5_tec_local, 'el paquete no debe cambiar las huellas de redes ni de técnica'
-    firmas = q(f"select string_agg(p.oid::regprocedure::text, '|' order by p.oid::regprocedure::text) from {FN}", TMP).split('|')
+    firmas = q(f"select string_agg(p.oid::regprocedure::text, '|' order by p.oid::regprocedure::text collate \"C\") from {FN}", TMP).split('|')
     rpc = [f for f in firmas if f.startswith('geoportal_analisis_')]
     internas = [f for f in firmas if f.startswith('analisis.')]
     assert len(rpc) == N_RPC and len(rpc) + len(internas) == len(firmas), firmas
