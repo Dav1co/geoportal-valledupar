@@ -19,6 +19,8 @@ export type LeyendaImpresion = { tematica: { titulo: string; items: ItemImpresio
 export type SobreImpresion = {
   dibujar: (x: CanvasRenderingContext2D, aHoja: (lon: number, lat: number) => [number, number], k: number, mpp: number) => void;
   leyenda?: { titulo: string; items: { texto: string; dibujar: (x: CanvasRenderingContext2D, cx: number, cy: number, lado: number) => void }[] };
+  /** Páginas que se agregan DESPUÉS de Total y Urbano (el «Detalle del cuaderno»). */
+  paginas?: PaginaImpresion[];
 };
 /** Lo que queda de cada página para las pruebas (no se usa en la app). */
 export type MedidaPagina = { clave: string; zoom: number; extension: Extension; vista: Extension; metrosPorPunto: number; escala: number; fondo: "calles" | "satelite"; mapaPx: [number, number]; notas: string[] };
@@ -47,16 +49,28 @@ const mercX = (lon: number) => (lon * Math.PI / 180) * R_TIERRA;
 const mppZoom = (z: number, lat: number) => (2 * Math.PI * R_TIERRA * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** z);
 const bonito = (n: number) => { const p = 10 ** Math.floor(Math.log10(n)); const f = n / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; };
 const miles = (n: number) => new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(n);
-const grados = (v: number, eje: "lon" | "lat") => `${Math.abs(v).toFixed(2).replace(".", ",")}° ${eje === "lon" ? (v < 0 ? "O" : "E") : v < 0 ? "S" : "N"}`;
+const grados = (v: number, eje: "lon" | "lat", dec = 2) => `${Math.abs(v).toFixed(dec).replace(".", ",")}° ${eje === "lon" ? (v < 0 ? "O" : "E") : v < 0 ? "S" : "N"}`;
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function cargarImagen(src: string): Promise<HTMLImageElement> {
   return new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => mal(new Error("imagen")); i.src = src; });
 }
 
+/** ¿El lienzo quedó sin pintar? (todo transparente o de un solo color). Se mira una rejilla de puntos, no todos los píxeles. */
+export function lienzoVacio(c: HTMLCanvasElement): boolean {
+  const x = c.getContext("2d", { willReadFrequently: true }); if (!x || !c.width || !c.height) return true;
+  const vistos = new Set<number>();
+  for (let i = 1; i < 24; i++) for (let j = 1; j < 24; j++) {
+    const d = x.getImageData(Math.floor((c.width * i) / 24), Math.floor((c.height * j) / 24), 1, 1).data;
+    vistos.add(d[3] === 0 ? -1 : (d[0] << 16) | (d[1] << 8) | d[2]);
+    if (vistos.size > 3) return false;
+  }
+  return true;
+}
+
 /** Dibuja el mapa de una página en un contenedor oculto y devuelve el lienzo del mapa y cómo proyectar sobre él. */
 async function dibujarMapa(estilo: maplibregl.StyleSpecification, pag: PaginaImpresion, fondo: "calles" | "satelite", subsectores: boolean, token: string | null,
-  aspecto: number): Promise<{ lienzo: HTMLCanvasElement; proyectar: (lon: number, lat: number) => [number, number]; ancho: number; alto: number; mpp: number; vista: Extension; fallo: boolean; sinInstalacion: boolean }> {
+  aspecto: number): Promise<{ lienzo: HTMLCanvasElement; proyectar: (lon: number, lat: number) => [number, number]; ancho: number; alto: number; mpp: number; vista: Extension; fallo: boolean; sinInstalacion: boolean; incompleto: boolean }> {
   const e = conMargen(pag.extension);
   const latC = (e.sur + e.norte) / 2, lonC = (e.oeste + e.este) / 2;
   const mpp = mppZoom(pag.zoom, latC);
@@ -83,13 +97,23 @@ async function dibujarMapa(estilo: maplibregl.StyleSpecification, pag: PaginaImp
   if (s.sources.sel) s.sources.sel = { type: "geojson", data: { type: "FeatureCollection", features: [] } };      // sin lo elegido en pantalla
   let fallo = false;
   const m = new maplibregl.Map({ container: cont, style: s, center: [lonC, latC], zoom: pag.zoom, interactive: false, attributionControl: false, fadeDuration: 0,
-    pixelRatio: 1, canvasContextAttributes: { preserveDrawingBuffer: true },
+    pixelRatio: 1, preserveDrawingBuffer: true, canvasContextAttributes: { preserveDrawingBuffer: true },      // MapLibre 4 lee la primera; MapLibre 5, la segunda
     transformRequest: (url) => (url.includes("accion=geovisor_tesela") && token ? { url, headers: { Authorization: `Bearer ${token}` } } : { url }) } as maplibregl.MapOptions);
   m.on("error", (ev) => { const id = (ev as unknown as { sourceId?: string }).sourceId; if (id === "base-sat" || id === "base") fallo = true; });
-  await new Promise<void>((ok) => { let listo = false; const fin = () => { if (!listo) { listo = true; ok(); } }; m.once("idle", fin); setTimeout(fin, 90000); });
-  await esperar(150);
+  // Corrección del 26-nov (el PDF salía con el mapa VACÍO en el Chrome de David): antes se esperaba el evento «idle» y se copiaba el lienzo 150 ms después.
+  // · Con la pestaña oculta o la ventana tapada el navegador no da cuadros de animación: MapLibre no pinta, «idle» no llega y a los 90 s se copiaba un lienzo
+  //   que nunca se pintó. Ahora se le OBLIGA a pintar (redraw, que no depende de los cuadros) hasta que el estilo y todas las teselas estén cargados.
+  // · El lienzo se copia en el MISMO turno del último redraw: así no depende de preserveDrawingBuffer (que con MapLibre 4 no se estaba activando).
+  let incompleto = true; const limite = Date.now() + 90000;
+  for (let quietos = 0; Date.now() < limite;) {
+    m.redraw();
+    if (m.loaded() && m.areTilesLoaded()) { if (++quietos >= 4) { incompleto = false; break; } } else quietos = 0;      // unas vueltas más: las etiquetas se colocan en varios pasos
+    await esperar(quietos ? 80 : 250);
+  }
+  m.redraw();
   const lienzo = document.createElement("canvas"); lienzo.width = m.getCanvas().width; lienzo.height = m.getCanvas().height;
   lienzo.getContext("2d")!.drawImage(m.getCanvas(), 0, 0);
+  if (lienzoVacio(lienzo)) { m.remove(); cont.remove(); throw new Error("El mapa no se pudo dibujar. Deje esta pestaña a la vista y vuelva a intentarlo."); }
   const b = m.getBounds();
   const vista = { oeste: b.getWest(), sur: b.getSouth(), este: b.getEast(), norte: b.getNorth() };
   const proy = (lon: number, lat: number): [number, number] => { const p = m.project([lon, lat]); return [p.x, p.y]; };
@@ -99,7 +123,7 @@ async function dibujarMapa(estilo: maplibregl.StyleSpecification, pag: PaginaImp
     y0 + ((mercY(vista.norte) - mercY(lat)) / (mercY(vista.norte) - mercY(vista.sur))) * (y1 - y0)];
   const ti = tramosConInstalacion(m), sinInstalacion = ti.tramos > 0 && ti.conInstalacion === 0;
   m.remove(); cont.remove();
-  return { lienzo, proyectar, ancho, alto, mpp, vista, fallo, sinInstalacion };
+  return { lienzo, proyectar, ancho, alto, mpp, vista, fallo, sinInstalacion, incompleto };
 }
 
 type Composicion = { titulo: string; usuario: string; fecha: string; leyenda: LeyendaImpresion; logo: HTMLImageElement; aviso: string | null; fondo: "calles" | "satelite"; sobre?: SobreImpresion };
@@ -135,18 +159,18 @@ function componer(pag: PaginaImpresion, mapa: Awaited<ReturnType<typeof dibujarM
   }
   // ----- marco con las coordenadas en grados en el borde -----
   x.save(); x.strokeStyle = "#1b2733"; x.lineWidth = P(1.2); x.strokeRect(fx, fy, fw, fh);
-  const v = mapa.vista, paso = pag.pasoGrados;
+  const v = mapa.vista, paso = pag.pasoGrados, dec = paso >= 0.01 ? 2 : paso >= 0.001 ? 3 : 4;
   x.lineWidth = P(0.6);
   for (let lon = Math.ceil(v.oeste / paso) * paso; lon <= v.este; lon += paso) {
     const [px] = aHoja(lon, v.norte); if (px < fx + P(4) || px > fx + fw - P(4)) continue;
     x.beginPath(); x.moveTo(px, fy); x.lineTo(px, fy - P(4)); x.moveTo(px, fy + fh); x.lineTo(px, fy + fh + P(4)); x.stroke();
-    txt(grados(lon, "lon"), px, fy - P(6), 6.5, { alinear: "center" }); txt(grados(lon, "lon"), px, fy + fh + P(12), 6.5, { alinear: "center" });
+    txt(grados(lon, "lon", dec), px, fy - P(6), 6.5, { alinear: "center" }); txt(grados(lon, "lon", dec), px, fy + fh + P(12), 6.5, { alinear: "center" });
   }
   for (let lat = Math.ceil(v.sur / paso) * paso; lat <= v.norte; lat += paso) {
     const [, py] = aHoja(v.oeste, lat); if (py < fy + P(4) || py > fy + fh - P(4)) continue;
     x.beginPath(); x.moveTo(fx, py); x.lineTo(fx - P(4), py); x.moveTo(fx + fw, py); x.lineTo(fx + fw + P(4), py); x.stroke();
     for (const [lx, giro] of [[fx - P(7), -Math.PI / 2], [fx + fw + P(7), Math.PI / 2]] as const) {
-      x.save(); x.translate(lx, py); x.rotate(giro); txt(grados(lat, "lat"), 0, 0, 6.5, { alinear: "center", base: "middle" }); x.restore();
+      x.save(); x.translate(lx, py); x.rotate(giro); txt(grados(lat, "lat", dec), 0, 0, 6.5, { alinear: "center", base: "middle" }); x.restore();
     }
   }
   x.restore();
@@ -238,12 +262,15 @@ export function ImprimirMapa({ mapa, titulo, leyenda, fondo, onCerrar, sobre }: 
         let usado: "calles" | "satelite" = fondo, aviso: string | null = null;
         const jpgs: Uint8Array[] = [], medidas: MedidaPagina[] = [];
         let ubic: { lienzo: HTMLCanvasElement; proyectar: (lon: number, lat: number) => [number, number] } | null = null;
-        for (let i = 0; i < PAGINAS.length; i++) {
-          const pag = PAGINAS[i];
-          if (vivo) setEstado({ fase: "trabajando", texto: `Preparando la página ${i + 1} de ${PAGINAS.length} (${pag.nombre})…` });
+        const paginas = [...PAGINAS, ...(sobre?.paginas ?? [])];
+        let incompleto = false;
+        for (let i = 0; i < paginas.length; i++) {
+          const pag = paginas[i];
+          if (vivo) setEstado({ fase: "trabajando", texto: `Preparando la página ${i + 1} de ${paginas.length} (${pag.nombre})…` });
           let m = await dibujarMapa(estilo, pag, usado, leyenda.subsectores, token, MARCO.w / MARCO.h);
           if (m.fallo && usado === "satelite") { usado = "calles"; aviso = TEXTOS_IMPRESION.sinSatelital; m = await dibujarMapa(estilo, pag, usado, leyenda.subsectores, token, MARCO.w / MARCO.h); }
           if (!vivo) return;
+          incompleto = incompleto || m.incompleto;
           let caja: [number, number, number, number] | null = null;
           if (pag.ubicacion && ubic) { const e = pag.extension; const [a, b] = ubic.proyectar(e.oeste, e.norte), [c2, d] = ubic.proyectar(e.este, e.sur); caja = [a, b, c2, d]; }
           const { hoja, metrosPorPunto, escala, notas } = componer(pag, m, { titulo, usuario, fecha, leyenda, logo, aviso, fondo: usado, sobre }, pag.ubicacion && ubic && caja ? { lienzo: ubic.lienzo, caja } : null);
@@ -251,12 +278,13 @@ export function ImprimirMapa({ mapa, titulo, leyenda, fondo, onCerrar, sobre }: 
           jpgs.push(await aJpeg(hoja, 0.85));
           medidas.push({ clave: pag.clave, zoom: pag.zoom, extension: pag.extension, vista: m.vista, metrosPorPunto, escala, fondo: usado, mapaPx: [m.ancho, m.alto], notas });
         }
+        if (incompleto) aviso = [aviso, "El mapa no terminó de cargar en el tiempo previsto: revise el PDF y, si falta algo, vuelva a generarlo con esta pestaña a la vista."].filter(Boolean).join(" ");
         const pdf = pdfDeImagenes(jpgs, titulo);
         const blob = new Blob([pdf as Uint8Array<ArrayBuffer>], { type: "application/pdf" });
         const url = URL.createObjectURL(blob); urlRef.current = url;
         const hoy = new Date().toISOString().slice(0, 10);
         const nombre = `geovisor_${titulo.split(" — ").pop()!.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "_")}_${hoy}.pdf`;
-        (window as unknown as { __impresion?: unknown }).__impresion = { medidas, bytes: pdf.length, paginas: jpgs.length, nombre, titulo, marco: MARCO, cajetin: M.cajetin };      // para las pruebas en Chrome
+        (window as unknown as { __impresion?: unknown }).__impresion = { medidas, bytes: pdf.length, paginas: jpgs.length, nombre, titulo, marco: MARCO, cajetin: M.cajetin, incompleto, ...(sobre?.leyenda ? { leyendaCuaderno: sobre.leyenda.items.map((it) => it.texto) } : {}) };      // para las pruebas en Chrome
         if (vivo) setEstado({ fase: "listo", url, nombre, kb: Math.round(pdf.length / 1024), aviso });
       } catch (e) {
         if (vivo) setEstado({ fase: "error", texto: e instanceof Error ? e.message : "No se pudo preparar el PDF." });
@@ -268,7 +296,7 @@ export function ImprimirMapa({ mapa, titulo, leyenda, fondo, onCerrar, sobre }: 
     <div className="geo-imprimir" role="dialog" aria-modal="true" aria-label="Imprimir o guardar en PDF" data-testid="dialogo-imprimir">
       <div className="geo-imprimir-caja">
         <h2>{TEXTOS_IMPRESION.boton}</h2>
-        <p>{titulo}. Dos páginas en carta vertical: 1) Total y 2) Urbano, con las capas encendidas ahora.</p>
+        <p>{titulo}. {sobre?.paginas?.length ? "Tres páginas en carta vertical: 1) Total, 2) Urbano y 3) el detalle del cuaderno" : "Dos páginas en carta vertical: 1) Total y 2) Urbano"}, con las capas encendidas ahora.</p>
         {estado.fase === "trabajando" ? <p role="status" data-testid="imprimir-estado">{estado.texto}</p> : null}
         {estado.fase === "error" ? <p className="tec-error-caja" role="alert">{estado.texto}</p> : null}
         {estado.fase === "listo" ? <>

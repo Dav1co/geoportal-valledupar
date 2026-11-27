@@ -8,12 +8,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObjec
 import { createPortal } from "react-dom";
 import type maplibregl from "maplibre-gl";
 import { ErrorTec } from "../apiTecnica";
-import type { SobreImpresion } from "../impresion/ImprimirMapa";
+import { lienzoVacio, type SobreImpresion } from "../impresion/ImprimirMapa";
 import { apiAnalisis, exportarCsv, subirCaptura, type Cambio, type Categoria, type Cuaderno, type CuadernoLista, type Marca, type PerfilAnalisis, type Sistema } from "./apiAnalisis";
 import { cargarIconos, urlActivo, urlProblema } from "./iconos";
 import { ICONOS_ACTIVO, ICONOS_PROBLEMA } from "./iconos_datos";
-import { AVISO_NOTA, COLORES_LIBRES, NOMBRE_CATEGORIA, NOTA_MAX, aligerar, area, borrarBorrador, cambiosParaGuardar, conAnulacion, conCambio, dentro, distancia, escribirBorrador, largo, leerBorrador,
-  linea, marcaNueva, marcasVisibles, miles, poligono, punto, textoArea, textoDistancia, type Borrador, type Pendientes } from "./modelo";
+import { AVISO_NOTA, COLORES_LIBRES, MOTIVO_GOMA, NOMBRE_CATEGORIA, NOTA_MAX, aligerar, anotar, area, borrarBorrador, cambiosParaGuardar, conAnulacion, conCambio, dentro, deshacer, distancia, encuadre,
+  escribirBorrador, figuraDentro, historiaVacia, largo, leerBorrador, linea, marcaNueva, marcasVisibles, miles, pasoDeEncuadre, poligono, punto, rehacer, textoArea, textoDistancia, trasladar, zoomDeEncuadre,
+  type Borrador, type Pendientes } from "./modelo";
 import { leyendaCuaderno, marcaEn, pintarMarcas, rotulo, type Lienzo } from "./pintar";
 import "./cuadernos.css";
 
@@ -28,13 +29,16 @@ export type PuenteCuaderno = {
 };
 
 type Herr = null | { t: "problema"; sub: string } | { t: "activo"; sub: string; sistema: Sistema } | { t: "referencia" } | { t: "postit" } | { t: "mano" } | { t: "circulo" } | { t: "linea" } | { t: "zona" }
-  | { t: "medir"; que: "distancia" | "area" } | { t: "mover"; id: string };
+  | { t: "medir"; que: "distancia" | "area" } | { t: "mover" } | { t: "goma" };
 type Dialogo = null | { d: "nuevo" } | { d: "salir"; seguir: () => void } | { d: "capturas" } | { d: "capturar" } | { d: "estado" } | { d: "borrador"; b: Borrador } | { d: "postit"; lon: number; lat: number } | { d: "datos" };
 
 const fecha = (v: string) => new Date(v).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Bogota" });
 const mensaje = (e: unknown, omision: string) => (e instanceof Error && e.message ? e.message : omision);
 const R_TIERRA = 6378137;
 const mppMapa = (m: maplibregl.Map, lat: number) => (2 * Math.PI * R_TIERRA * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** m.getZoom());
+/** Evita el gesto del navegador solo si se puede (los toques llegan por escuchas pasivas, donde no se puede ni hace falta). */
+const noPorOmision = (ev: Event) => { if (ev.cancelable) ev.preventDefault(); };
+const ASPECTO_HOJA = (612 - 80) / (792 - 34 - 24 - 120 - 14);      // el marco del mapa en la hoja carta (ImprimirMapa)
 const NOMBRE_HERR: Record<string, string> = { referencia: "Punto de referencia", postit: "Post-it", mano: "Mano alzada", circulo: "Círculo", linea: "Flecha o línea", zona: "Zona afectada" };
 
 export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranura, alDisponer, onImprimir }: {
@@ -57,6 +61,8 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
   const [ocupado, setOcupado] = useState("");
   const [iconos, setIconos] = useState(false);
   const lienzo = useRef<HTMLCanvasElement | null>(null);
+  const hist = useRef(historiaVacia());
+  const [, setPaso] = useState(0);      // solo para repintar los botones ↶ ↷
 
   // ---------- acceso: lo decide el servidor ----------
   useEffect(() => {
@@ -117,20 +123,30 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
     window.addEventListener("beforeunload", antes); return () => window.removeEventListener("beforeunload", antes);
   }, [nPend]);
 
+  // ---------- cambios pendientes, con deshacer y rehacer (solo de pantalla: nada de esto llega al servidor hasta «Guardar») ----------
+  /** Todo cambio pasa por aquí. Con la misma `clave` que el anterior es el mismo gesto (escribir una nota, arrastrar, una pasada de la goma) y cuenta como un solo paso. */
+  const aplicar = (f: (p: Pendientes) => Pendientes, clave = "") => {
+    const antes = E.current.pend, despues = f(antes); if (despues === antes) return;
+    anotar(hist.current, antes, clave); E.current.pend = despues; setPend(despues); setPaso((n) => n + 1);
+  };
+  const sinHistoria = (p: Pendientes) => { hist.current = historiaVacia(); E.current.pend = p; setPend(p); setPaso((n) => n + 1); };
+  const irAtras = () => { const p = deshacer(hist.current, E.current.pend); if (p) { E.current.pend = p; setPend(p); setSel(null); setCurso([]); setPaso((n) => n + 1); } };
+  const irAdelante = () => { const p = rehacer(hist.current, E.current.pend); if (p) { E.current.pend = p; setPend(p); setSel(null); setPaso((n) => n + 1); } };
+
   // ---------- abrir, cerrar, guardar ----------
   const soltar = () => { setHerr(null); setCurso([]); setSel(null); setMenu(""); };
   const abrir = async (id: string, version?: number) => {
     setOcupado("Abriendo el cuaderno…"); setAviso(null);
     try {
       const c = await apiAnalisis.cuaderno(id, version);
-      setCuad(c); setPend({}); soltar(); setModo("explorar"); onLista(false);
+      setCuad(c); sinHistoria({}); soltar(); setModo("explorar"); onLista(false);
       if (mapa && !version && c.vista && typeof c.vista.lon === "number" && typeof c.vista.lat === "number" && dentro(c.vista.lon, c.vista.lat)) mapa.jumpTo({ center: [c.vista.lon, c.vista.lat], zoom: typeof c.vista.zoom === "number" ? c.vista.zoom : mapa.getZoom() });
       const b = c.puede_editar && perfil ? leerBorrador(perfil.email, c.id) : null;
       if (b) setDialogo({ d: "borrador", b });
     } catch (e) { decir(mensaje(e, "No se pudo abrir el cuaderno."), true); }
     setOcupado("");
   };
-  const cerrar = () => { setCuad(null); setPend({}); soltar(); setModo("explorar"); setAviso(null); };
+  const cerrar = () => { setCuad(null); sinHistoria({}); soltar(); setModo("explorar"); setAviso(null); };
   const guardar = async (): Promise<boolean> => {
     const e = E.current; if (!e.cuad || !e.nPend) return true;
     setOcupado("Guardando…"); setAviso(null);
@@ -139,7 +155,7 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
       const r = await apiAnalisis.guardar(e.cuad.id, e.cuad.version, cambiosParaGuardar(e.pend), c && mapa ? { lon: Number(c.lng.toFixed(6)), lat: Number(c.lat.toFixed(6)), zoom: Number(mapa.getZoom().toFixed(2)) } : null);
       if (e.perfil) borrarBorrador(e.perfil.email, e.cuad.id);
       setCuad((p) => (p ? { ...p, version: r.version, ultima_version: r.version, marcas: r.marcas, guardado_en: new Date().toISOString(), versiones: [{ version: r.version, creado_en: new Date().toISOString(), titulo: p.titulo }, ...p.versiones] } : p));
-      setPend({}); setSel(null); setHerr(null); setCurso([]);
+      sinHistoria({}); setSel(null); setHerr(null); setCurso([]);
       decir(`Guardado: versión ${r.version}.`); setOcupado(""); return true;
     } catch (err) {
       setOcupado("");
@@ -154,9 +170,12 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
   const agregar = (c: Cambio) => {
     const e = E.current;
     if (e.visibles.length >= (e.perfil?.topes.marcas_por_cuaderno ?? 500)) { decir(`El cuaderno ya tiene sus ${e.perfil?.topes.marcas_por_cuaderno ?? 500} marcas.`, true); return; }
-    setPend((p) => ({ ...p, [c.marca_id]: c })); setSel(c.marca_id); setAviso(null);
+    aplicar((p) => ({ ...p, [c.marca_id]: c })); setSel(c.marca_id); setAviso(null);
   };
-  const cambiar = (id: string, d: Parameters<typeof conCambio>[3]) => setPend((p) => (E.current.cuad ? conCambio(E.current.cuad.marcas, p, id, d) : p));
+  const cambiar = (id: string, d: Parameters<typeof conCambio>[3], clave = "") => aplicar((p) => (E.current.cuad ? conCambio(E.current.cuad.marcas, p, id, d) : p), clave);
+  /** La goma: la marca sin guardar se quita sin más; la guardada queda anulada con el motivo automático (se anula al guardar). */
+  const borrar = (id: string, clave: string) => aplicar((p) => (E.current.cuad ? conAnulacion(E.current.cuad.marcas, p, id, MOTIVO_GOMA) : p), clave);
+  const lienzoMapa = (): Lienzo | null => (mapa && lienzo.current ? { x: lienzo.current.getContext("2d")!, proy: (a, b) => { const q = mapa.project([a, b]); return [q.x, q.y]; }, k: 1, mpp: (la) => mppMapa(mapa, la) } : null);
   const terminar = () => {
     const e = E.current; if (!e.herr) return;
     if (e.herr.t === "linea" && e.curso.length >= 2) agregar(marcaNueva({ tipo: "linea", geom: linea(e.curso), estilo: { color: e.color, grosor: Math.min(e.grosor, 8) } }));
@@ -176,12 +195,16 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
       if (h && h.t === "medir") { setCurso([...e.curso, [lon, lat]]); return true; }      // medir es de pantalla: vale en exploración y en edición
       if (e.editable && h) {
         if (h.t === "mano") return true;      // la mano alzada va con arrastre
-        if (!dentro(lon, lat)) { decir("Ese punto está fuera de Valledupar.", true); return true; }
+        if (h.t !== "mover" && h.t !== "goma" && !dentro(lon, lat)) { decir("Ese punto está fuera de Valledupar.", true); return true; }
         if (h.t === "problema") agregar(marcaNueva({ tipo: "problema", subtipo: h.sub, geom: punto(lon, lat) }));
         else if (h.t === "activo") agregar(marcaNueva({ tipo: "activo", subtipo: h.sub, sistema: h.sistema, geom: punto(lon, lat) }));
         else if (h.t === "referencia") agregar(marcaNueva({ tipo: "referencia", geom: punto(lon, lat), estilo: { color: e.color } }));
         else if (h.t === "postit") setDialogo({ d: "postit", lon, lat });
-        else if (h.t === "mover") { cambiar(h.id, { geom: punto(lon, lat) }); setHerr(null); setSel(h.id); }
+        else if (h.t === "mover" || h.t === "goma") {      // un toque sin arrastre: elegir (mover) o borrar (goma) la marca tocada
+          const l0 = lienzoMapa(), toc = l0 ? marcaEn(l0, e.visibles, ev.point.x, ev.point.y) : null;
+          if (h.t === "mover") setSel(toc ? toc.id : null); else if (toc) { borrar(toc.id, ""); setSel(null); }
+          return true;
+        }
         else if (h.t === "circulo") {
           if (!e.curso.length) setCurso([[lon, lat]]);
           else {
@@ -202,8 +225,9 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
     salir: (seguir) => conCambiosPendientes(() => { seguir(); }),
     sobre: () => {
       const e = E.current; if (!e.cuad) return undefined;
-      const marcas = e.visibles;
+      const marcas = e.visibles, caja = encuadre(marcas);
       return {
+        paginas: caja ? [{ clave: "detalle" as const, nombre: "Detalle del cuaderno", extension: caja, zoom: zoomDeEncuadre(caja, ASPECTO_HOJA), etiquetas: { sectores: true, subsectores: true }, pasoGrados: pasoDeEncuadre(caja), ubicacion: true }] : [],
         dibujar: (x, aHoja, k, mpp) => pintarMarcas({ x, proy: aHoja, k: k * 0.62, mpp: () => mpp }, marcas),
         leyenda: { titulo: `Cuaderno: ${e.cuad.titulo.slice(0, 38)}`, items: leyendaCuaderno(marcas) },
       };
@@ -211,27 +235,53 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
   };
   useEffect(() => () => { puente.current = null; }, [puente]);
 
-  // ---------- mano alzada (arrastre) y el mapa mientras se dibuja ----------
+  // ---------- gestos de arrastre: mano alzada, goma y mover ----------
+  const gesto = useRef(0);
   useEffect(() => {
     if (!mapa || !editable || !herr) return;
     const dibuja = herr.t === "linea" || herr.t === "zona" || herr.t === "circulo" || herr.t === "mano";
     if (dibuja) mapa.doubleClickZoom.disable();
-    if (herr.t !== "mano") return () => { mapa.doubleClickZoom.enable(); };
-    mapa.dragPan.disable(); mapa.touchZoomRotate.disable();
-    let pts: [number, number][] | null = null;
-    type Ev = { lngLat: { lng: number; lat: number }; originalEvent: Event };
-    const ini = (ev: Ev) => { ev.originalEvent.preventDefault(); pts = [[ev.lngLat.lng, ev.lngLat.lat]]; setCurso(pts); };
-    const mov = (ev: Ev) => { if (!pts) return; ev.originalEvent.preventDefault(); pts = [...pts, [ev.lngLat.lng, ev.lngLat.lat]]; setCurso(pts); };
-    const fin = () => {
-      if (!pts) return; const c = aligerar(pts); pts = null; setCurso([]);
-      const e = E.current, max = e.perfil?.topes.mano_vertices_max ?? 500;
-      if (c.length < 2) return;
-      if (c.some(([lon, lat]) => !dentro(lon, lat))) { decir("El trazo se sale de Valledupar.", true); return; }
-      if (c.length > max) { decir("El trazo es demasiado largo: divídalo en dos.", true); return; }
-      agregar(marcaNueva({ tipo: "mano", geom: linea(c), estilo: { color: e.color, grosor: e.grosor } }));
+    if (herr.t !== "mano" && herr.t !== "goma" && herr.t !== "mover") return () => { mapa.doubleClickZoom.enable(); };
+    type Ev = { point: { x: number; y: number }; lngLat: { lng: number; lat: number }; originalEvent: Event; preventDefault: () => void };
+    const fijo = herr.t !== "mover";      // mano y goma: el mapa quieto todo el tiempo; mover: solo mientras se arrastra una marca
+    if (fijo) { mapa.dragPan.disable(); mapa.touchZoomRotate.disable(); }
+    let pts: [number, number][] | null = null, clave = "";
+    let mov: { id: string; lon: number; lat: number; geom: Marca["geom"]; movio: boolean } | null = null;
+    const tocada = (ev: Ev) => { const l0 = lienzoMapa(); return l0 ? marcaEn(l0, E.current.visibles, ev.point.x, ev.point.y) : null; };
+    const ini = (ev: Ev) => {
+      if (herr.t === "mano") { noPorOmision(ev.originalEvent); pts = [[ev.lngLat.lng, ev.lngLat.lat]]; setCurso(pts); return; }
+      clave = `${herr.t}:${++gesto.current}`;
+      if (herr.t === "goma") { noPorOmision(ev.originalEvent); pts = []; const m = tocada(ev); if (m) borrar(m.id, clave); return; }
+      const m = tocada(ev);
+      if (!m) { setSel(null); return; }      // en vacío: el mapa se mueve como siempre
+      ev.preventDefault(); noPorOmision(ev.originalEvent); mapa.dragPan.disable(); mapa.touchZoomRotate.disable();
+      setSel(m.id); mov = { id: m.id, lon: ev.lngLat.lng, lat: ev.lngLat.lat, geom: m.geom, movio: false };
     };
-    mapa.on("mousedown", ini); mapa.on("mousemove", mov); mapa.on("mouseup", fin); mapa.on("touchstart", ini); mapa.on("touchmove", mov); mapa.on("touchend", fin);
-    return () => { mapa.off("mousedown", ini); mapa.off("mousemove", mov); mapa.off("mouseup", fin); mapa.off("touchstart", ini); mapa.off("touchmove", mov); mapa.off("touchend", fin);
+    const mover = (ev: Ev) => {
+      if (herr.t === "mano") { if (!pts) return; noPorOmision(ev.originalEvent); pts = [...pts, [ev.lngLat.lng, ev.lngLat.lat]]; setCurso(pts); return; }
+      if (herr.t === "goma") { if (!pts) return; noPorOmision(ev.originalEvent); const m = tocada(ev); if (m) borrar(m.id, clave); return; }
+      if (!mov) return; noPorOmision(ev.originalEvent);
+      const a = mapa.project([mov.lon, mov.lat]); if (!mov.movio && Math.hypot(ev.point.x - a.x, ev.point.y - a.y) < 4) return;      // un toque no es un arrastre
+      mov.movio = true; cambiar(mov.id, { geom: trasladar(mov.geom, ev.lngLat.lng - mov.lon, ev.lngLat.lat - mov.lat) }, clave);
+    };
+    const fin = () => {
+      if (herr.t === "mano") {
+        if (!pts) return; const c = aligerar(pts); pts = null; setCurso([]);
+        const e = E.current, max = e.perfil?.topes.mano_vertices_max ?? 500;
+        if (c.length < 2) return;
+        if (c.some(([lon, lat]) => !dentro(lon, lat))) { decir("El trazo se sale de Valledupar.", true); return; }
+        if (c.length > max) { decir("El trazo es demasiado largo: divídalo en dos.", true); return; }
+        agregar(marcaNueva({ tipo: "mano", geom: linea(c), estilo: { color: e.color, grosor: e.grosor } }));
+        return;
+      }
+      if (herr.t === "goma") { pts = null; return; }
+      if (!mov) return; const m0 = mov; mov = null; mapa.dragPan.enable(); mapa.touchZoomRotate.enable();
+      if (!m0.movio) return;
+      const ahora = E.current.visibles.find((x) => x.id === m0.id);
+      if (ahora && !figuraDentro(ahora.geom)) { irAtras(); setSel(m0.id); decir("La marca no puede quedar fuera de Valledupar: volvió a su lugar.", true); }
+    };
+    mapa.on("mousedown", ini); mapa.on("mousemove", mover); mapa.on("mouseup", fin); mapa.on("touchstart", ini); mapa.on("touchmove", mover); mapa.on("touchend", fin);
+    return () => { mapa.off("mousedown", ini); mapa.off("mousemove", mover); mapa.off("mouseup", fin); mapa.off("touchstart", ini); mapa.off("touchmove", mover); mapa.off("touchend", fin);
       mapa.dragPan.enable(); mapa.touchZoomRotate.enable(); mapa.doubleClickZoom.enable(); };
   }, [mapa, editable, herr]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!editable && herr && herr.t !== "medir") { setHerr(null); setCurso([]); } }, [editable, herr]);
@@ -242,9 +292,10 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
   const medida = herr?.t === "medir" && curso.length > 1 ? (herr.que === "distancia" ? `Distancia: ${textoDistancia(largo(curso))}` : curso.length > 2 ? `Área: ${textoArea(area(curso))} · perímetro ${textoDistancia(largo([...curso, curso[0]]))}` : "Marque al menos 3 puntos") : null;
   const ayuda = !herr ? null : herr.t === "mano" ? "Arrastre sobre el mapa para trazar." : herr.t === "circulo" ? (curso.length ? "Toque hasta dónde llega el círculo." : "Toque el centro del círculo.")
     : herr.t === "linea" ? "Toque los puntos de la línea; la flecha queda en el último. Luego «Terminar»." : herr.t === "zona" ? "Toque las esquinas de la zona. Luego «Terminar»: al guardar se cuentan los predios y los contratos."
-    : herr.t === "medir" ? "Toque los puntos a medir. La medida es de pantalla: no se guarda." : herr.t === "mover" ? "Toque el nuevo lugar de la marca." : "Toque el mapa donde va la marca.";
+    : herr.t === "medir" ? "Toque los puntos a medir. La medida es de pantalla: no se guarda." : herr.t === "mover" ? (marcaSel ? `Elegida: ${rotulo(marcaSel)}. Arrástrela a su nuevo lugar.` : "Toque una marca para elegirla y arrástrela completa a su nuevo lugar.")
+    : herr.t === "goma" ? "Pase la goma sobre las marcas que quiere quitar. Las ya guardadas se anulan al guardar. Se puede deshacer con ↶." : "Toque el mapa donde va la marca.";
   const nombreHerr = !herr ? "" : herr.t === "problema" ? ICONOS_PROBLEMA.find((i) => i.codigo === herr.sub)?.nombre ?? "" : herr.t === "activo" ? `${ICONOS_ACTIVO.find((i) => i.codigo === herr.sub)?.nombre} · ${herr.sistema === "acueducto" ? "Acueducto" : "Alcantarillado"}`
-    : herr.t === "medir" ? (herr.que === "distancia" ? "Medir distancia" : "Medir área") : herr.t === "mover" ? "Mover la marca" : NOMBRE_HERR[herr.t];
+    : herr.t === "medir" ? (herr.que === "distancia" ? "Medir distancia" : "Medir área") : herr.t === "mover" ? "Seleccionar y mover" : herr.t === "goma" ? "Borrador" : NOMBRE_HERR[herr.t];
   const conEstilo = herr && (herr.t === "referencia" || herr.t === "mano" || herr.t === "linea" || herr.t === "circulo");
 
   const barra = cuad ? (
@@ -305,6 +356,12 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
                 {(["mano", "circulo", "linea", "zona"] as const).map((t) => <button key={t} type="button" role="menuitem" data-dibujo={t} onClick={() => elegir({ t })}>{NOMBRE_HERR[t]}</button>)}
               </div>) : null}
           </div>
+          <button type="button" className="cua-h" aria-pressed={herr?.t === "mover"} data-testid="cua-h-mover" onClick={() => { const s = sel; elegir(herr?.t === "mover" ? null : { t: "mover" }); if (herr?.t !== "mover") setSel(s); }}>Mover</button>
+          <button type="button" className="cua-h" aria-pressed={herr?.t === "goma"} data-testid="cua-h-goma" onClick={() => elegir(herr?.t === "goma" ? null : { t: "goma" })}>Borrador</button>
+          <span className="cua-pasos" role="group" aria-label="Deshacer y rehacer">
+            <button type="button" className="cua-h" data-testid="cua-deshacer-paso" aria-label="Deshacer" title="Deshacer" disabled={!hist.current.pasado.length} onClick={irAtras}>↶</button>
+            <button type="button" className="cua-h" data-testid="cua-rehacer-paso" aria-label="Rehacer" title="Rehacer" disabled={!hist.current.futuro.length} onClick={irAdelante}>↷</button>
+          </span>
           {herr ? <button type="button" className="cua-h cua-soltar" data-testid="cua-soltar" onClick={() => elegir(null)}>Mover el mapa</button> : null}
         </div>) : null}
       {herr ? (
@@ -326,9 +383,9 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
       {barra && ranura ? createPortal(barra, ranura) : null}
       {!cuad && (aviso || ocupado) && !lista ? <p className={aviso?.error ? "cua-flotante cua-aviso-error" : "cua-flotante"} role="status">{ocupado || aviso?.texto}</p> : null}
       {lista ? <ListaCuadernos perfil={perfil} abierto={cuad?.id ?? null} onCerrar={() => onLista(false)} onAbrir={(id) => conCambiosPendientes(() => { void abrir(id); })} onNuevo={() => conCambiosPendientes(() => setDialogo({ d: "nuevo" }))} /> : null}
-      {marcaSel && cuad && !dialogo ? <FichaMarca key={marcaSel.id} m={marcaSel} editable={editable} guardada={cuad.marcas.some((x) => x.id === marcaSel.id)} categorias={perfil.categorias}
-        onCerrar={() => setSel(null)} onCambiar={(d) => cambiar(marcaSel.id, d)} onMover={() => { setHerr({ t: "mover", id: marcaSel.id }); setMenu(""); setSel(null); }}
-        onQuitar={(motivo) => { setPend((p) => conAnulacion(cuad.marcas, p, marcaSel.id, motivo)); setSel(null); }} /> : null}
+      {marcaSel && cuad && !dialogo && herr?.t !== "mover" && herr?.t !== "goma" ? <FichaMarca key={marcaSel.id} m={marcaSel} editable={editable} guardada={cuad.marcas.some((x) => x.id === marcaSel.id)} categorias={perfil.categorias}
+        onCerrar={() => setSel(null)} onCambiar={(d) => cambiar(marcaSel.id, d, "nota" in d ? `nota:${marcaSel.id}` : "")} onMover={() => { setHerr({ t: "mover" }); setCurso([]); setMenu(""); }}
+        onQuitar={(motivo) => { aplicar((p) => conAnulacion(cuad.marcas, p, marcaSel.id, motivo)); setSel(null); }} /> : null}
       {dialogo?.d === "nuevo" ? <Nuevo mapa={mapa} onCerrar={() => setDialogo(null)} onCreado={(id) => { setDialogo(null); void abrir(id).then(() => setModo("editar")); }} /> : null}
       {dialogo?.d === "postit" ? <TextoPostit onCerrar={() => setDialogo(null)} onListo={(t) => { agregar(marcaNueva({ tipo: "postit", geom: punto(dialogo.lon, dialogo.lat), nota: t })); setDialogo(null); }} /> : null}
       {dialogo?.d === "salir" ? (
@@ -336,7 +393,7 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
           <p>El cuaderno «{cuad?.titulo}» tiene {nPend} {nPend === 1 ? "cambio" : "cambios"} sin guardar.</p>
           <div className="geo-imprimir-acciones">
             <button type="button" className="tec-boton-sec" data-testid="cua-salir-cancelar" onClick={() => setDialogo(null)}>Cancelar</button>
-            <button type="button" className="tec-boton-sec" data-testid="cua-salir-sin" onClick={() => { const s = dialogo.seguir; if (cuad) borrarBorrador(perfil.email, cuad.id); setPend({}); E.current.nPend = 0; setDialogo(null); s(); }}>Salir sin guardar</button>
+            <button type="button" className="tec-boton-sec" data-testid="cua-salir-sin" onClick={() => { const s = dialogo.seguir; if (cuad) borrarBorrador(perfil.email, cuad.id); sinHistoria({}); E.current.nPend = 0; setDialogo(null); s(); }}>Salir sin guardar</button>
             <button type="button" className="tec-boton" data-testid="cua-salir-guardar" disabled={!!ocupado} onClick={() => { const s = dialogo.seguir; void guardar().then((bien) => { if (bien) { setDialogo(null); s(); } else setDialogo(null); }); }}>Guardar</button>
           </div>
         </Caja>) : null}
@@ -346,7 +403,7 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
           {dialogo.b.version_base !== cuad.version ? <p className="geo-imprimir-aviso">El borrador se hizo sobre la versión {dialogo.b.version_base} y el cuaderno ya va en la {cuad.version}: revise las marcas antes de guardar.</p> : null}
           <div className="geo-imprimir-acciones">
             <button type="button" className="tec-boton-sec" data-testid="cua-borrador-descartar" onClick={() => { borrarBorrador(perfil.email, cuad.id); setDialogo(null); }}>Descartar el borrador</button>
-            <button type="button" className="tec-boton" data-testid="cua-borrador-recuperar" onClick={() => { setPend(dialogo.b.pend); setModo("editar"); setDialogo(null); }}>Recuperar</button>
+            <button type="button" className="tec-boton" data-testid="cua-borrador-recuperar" onClick={() => { sinHistoria(dialogo.b.pend); setModo("editar"); setDialogo(null); }}>Recuperar</button>
           </div>
         </Caja>) : null}
       {dialogo?.d === "capturar" && cuad && mapa ? <Capturar cuad={cuad} mapa={mapa} marcas={visibles} perfil={perfil} onCerrar={() => setDialogo(null)}
@@ -355,7 +412,7 @@ export function Cuadernos({ mapa, listo, completo, lista, onLista, puente, ranur
       {dialogo?.d === "estado" && cuad ? <Estado cuad={cuad} onCerrar={() => setDialogo(null)} onHecho={() => { setDialogo(null); void abrir(cuad.id); }} /> : null}
       {dialogo?.d === "datos" && cuad ? (
         <Caja titulo="Versiones y datos del cuaderno" testid="cua-dialogo-datos" onCerrar={() => setDialogo(null)}>
-          <p><strong>{cuad.titulo}</strong>{cuad.descripcion ? ` — ${cuad.descripcion}` : ""}</p>
+          {cuad.puede_editar ? <Renombrar cuad={cuad} bloqueado={!!nPend} onHecho={() => { setDialogo(null); void abrir(cuad.id); }} /> : <p><strong>{cuad.titulo}</strong>{cuad.descripcion ? ` — ${cuad.descripcion}` : ""}</p>}
           <p>Autor: {cuad.autor_nombre ?? cuad.autor}. Creado el {fecha(cuad.creado_en)}.</p>
           {cuad.eventos.length ? <ul className="cua-lista-simple">{cuad.eventos.map((e, i) => <li key={i}>{e.tipo === "archivar" ? "Archivado" : "Reabierto"} el {fecha(e.creado_en)}: {e.motivo}</li>)}</ul> : null}
           {nPend ? <p className="geo-imprimir-aviso">Guarde los cambios antes de abrir otra versión.</p> : null}
@@ -449,7 +506,6 @@ function FichaMarca({ m, editable, guardada, categorias, onCerrar, onCambiar, on
   const [quitar, setQuitar] = useState(false); const [motivo, setMotivo] = useState("");
   const [conteo, setConteo] = useState<{ predios: number; contratos: number } | string | null>(null);
   const conColor = m.tipo === "referencia" || m.tipo === "mano" || m.tipo === "linea" || m.tipo === "circulo" || m.tipo === "zona";
-  const esPunto = m.geom.type === "Point";
   const c = m.geom.type === "LineString" ? m.geom.coordinates : m.geom.type === "Polygon" ? m.geom.coordinates[0] : null;
   return (
     <div className="geo-tarjeta cua-ficha" role="dialog" aria-label={`Marca: ${rotulo(m)}`} data-testid="cua-ficha" data-tipo={m.tipo}>
@@ -474,7 +530,7 @@ function FichaMarca({ m, editable, guardada, categorias, onCerrar, onCambiar, on
       </> : m.nota ? <p className="cua-nota-leida" data-testid="cua-nota-leida">{m.nota}</p> : null}
       {editable && !quitar ? (
         <div className="geo-tarjeta-acc">
-          {esPunto ? <button type="button" className="tec-boton-sec" data-testid="cua-mover" onClick={onMover}>Mover</button> : null}
+          <button type="button" className="tec-boton-sec" data-testid="cua-mover" onClick={onMover}>Mover</button>
           {m.tipo === "zona" && m.conteo_predios === null ? <button type="button" className="tec-boton-sec" data-testid="cua-contar" disabled={conteo === "Contando…"}
             onClick={() => { setConteo("Contando…"); apiAnalisis.zona(m.geom).then(setConteo).catch((e) => setConteo(mensaje(e, "No se pudo contar."))); }}>Contar ahora</button> : null}
           <button type="button" className="tec-boton-sec" data-testid="cua-quitar" onClick={() => (guardada ? setQuitar(true) : onQuitar(""))}>{guardada ? "Anular…" : "Quitar"}</button>
@@ -489,10 +545,12 @@ function FichaMarca({ m, editable, guardada, categorias, onCerrar, onCambiar, on
 
 /** La vista con las marcas, en JPEG: lado mayor de hasta `lado` px y peso bajo `maxBytes` (se baja la calidad y, si no alcanza, el tamaño). */
 async function capturarVista(mapa: maplibregl.Map, marcas: Marca[], titulo: string, lado: number, maxBytes: number): Promise<{ blob: Blob; ancho: number; alto: number; extension: [number, number, number, number] }> {
-  const origen = await new Promise<HTMLCanvasElement>((ok) => {      // el lienzo del mapa solo se puede copiar justo al terminar de pintarse
-    mapa.once("render", () => { const o = mapa.getCanvas(), c = document.createElement("canvas"); c.width = o.width; c.height = o.height; c.getContext("2d")!.drawImage(o, 0, 0); ok(c); });
-    mapa.triggerRepaint();
-  });
+  // El lienzo del mapa (WebGL, sin preserveDrawingBuffer) solo se puede copiar en el MISMO turno en que se pinta: se le obliga a pintar y se copia enseguida.
+  // Antes se espera (hasta 8 s) a que las teselas de la vista estén cargadas, para que no salga a medias.
+  for (let fin = Date.now() + 8000; Date.now() < fin && !(mapa.loaded() && mapa.areTilesLoaded());) { mapa.redraw(); await new Promise((r) => setTimeout(r, 150)); }
+  mapa.redraw();
+  const o = mapa.getCanvas(), origen = document.createElement("canvas"); origen.width = o.width; origen.height = o.height; origen.getContext("2d")!.drawImage(o, 0, 0);
+  if (lienzoVacio(origen)) throw new Error("El mapa no se pudo copiar. Deje esta pestaña a la vista y vuelva a intentarlo.");
   const cont = mapa.getContainer(), w = cont.clientWidth, h = cont.clientHeight, b = mapa.getBounds();
   const extension: [number, number, number, number] = [Number(b.getWest().toFixed(6)), Number(b.getSouth().toFixed(6)), Number(b.getEast().toFixed(6)), Number(b.getNorth().toFixed(6))];
   let s = Math.min(lado / Math.max(w, h), 2);
@@ -569,6 +627,19 @@ function Capturas({ cuad, tope, onCerrar, onAnulada }: { cuad: Cuaderno; tope: n
                 onClick={() => { setOcupado(true); setError(null); apiAnalisis.capturaAnular(k.id, motivo.trim()).then(() => { onAnulada(k.id); setAnular(null); }).catch((e) => setError(mensaje(e, "No se pudo anular."))).finally(() => setOcupado(false)); }}>Anular la captura</button></div></div> : null}
         </li>))}</ul> : <p>Este cuaderno aún no tiene capturas guardadas.</p>}
     </Caja>);
+}
+
+function Renombrar({ cuad, bloqueado, onHecho }: { cuad: Cuaderno; bloqueado: boolean; onHecho: () => void }) {
+  const [titulo, setTitulo] = useState(cuad.titulo); const [desc, setDesc] = useState(cuad.descripcion ?? ""); const [error, setError] = useState<string | null>(null); const [ocupado, setOcupado] = useState(false);
+  const igual = titulo.trim() === cuad.titulo && desc.trim() === (cuad.descripcion ?? "");
+  return (
+    <div className="cua-renombrar" data-testid="cua-renombrar">
+      <div className="tec-campo"><label htmlFor="cua-r-titulo">Título</label><input id="cua-r-titulo" data-testid="cua-r-titulo" value={titulo} maxLength={120} onChange={(e) => setTitulo(e.target.value)} /></div>
+      <div className="tec-campo"><label htmlFor="cua-r-desc">Descripción</label><textarea id="cua-r-desc" data-testid="cua-r-desc" rows={2} value={desc} maxLength={1000} onChange={(e) => setDesc(e.target.value)} /><small className="cua-aviso-nota">{AVISO_NOTA}.</small></div>
+      {error ? <p className="tec-error-caja" role="alert">{error}</p> : null}
+      <div className="geo-imprimir-acciones"><button type="button" className="tec-boton" data-testid="cua-r-guardar" disabled={ocupado || bloqueado || igual || titulo.trim().length < 3}
+        onClick={() => { setOcupado(true); setError(null); apiAnalisis.renombrar(cuad.id, cuad.version, titulo.trim(), desc.trim()).then(onHecho).catch((e) => { setError(mensaje(e, "No se pudo cambiar el nombre.")); setOcupado(false); }); }}>Guardar el nombre (versión nueva)</button></div>
+    </div>);
 }
 
 function Estado({ cuad, onCerrar, onHecho }: { cuad: Cuaderno; onCerrar: () => void; onHecho: () => void }) {

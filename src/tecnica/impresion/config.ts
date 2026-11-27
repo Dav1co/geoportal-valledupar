@@ -4,7 +4,7 @@
 
 export type Extension = { oeste: number; sur: number; este: number; norte: number };
 export type PaginaImpresion = {
-  clave: "total" | "urbano";
+  clave: "total" | "urbano" | "detalle";      // «detalle» (Corte 2): la página extra de un cuaderno, encuadrada en sus marcas; no está en PAGINAS
   nombre: string;                 // va al final del título: «… — Total»
   extension: Extension;
   /** Zoom del mapa con que se dibuja la página (la tesela de la red: completa desde z14, nodos desde z15). */

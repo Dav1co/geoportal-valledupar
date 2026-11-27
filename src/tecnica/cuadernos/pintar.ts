@@ -29,13 +29,49 @@ function renglones(x: CanvasRenderingContext2D, t: string, ancho: number, max: n
   else if (res.length === max && act) res[max - 1] = res[max - 1].replace(/.{0,2}$/, "…");
   return res.map((r) => { let s = r; while (s.length > 1 && x.measureText(s).width > ancho) s = s.slice(0, -2) + "…"; return s; });
 }
-/** La caja del post-it (arriba del punto, con una colita): la misma cuenta para pintarlo y para saber si se tocó. */
-function cajaPostit(l: Lienzo, m: Marca): { cx: number; cy: number; x0: number; y0: number; w: number; h: number; lineas: string[]; tam: number } {
-  const [cx, cy] = l.proy(m.geom.coordinates[0] as number, m.geom.coordinates[1] as number), tam = 12 * l.k;
-  l.x.font = `400 ${tam}px ${FUENTE}`;
+type Caja = { x0: number; y0: number; w: number; h: number };
+type CajaPostit = Caja & { cx: number; cy: number; lineas: string[]; tam: number };
+const chocan = (a: Caja, b: Caja, m = 0) => a.x0 < b.x0 + b.w + m && a.x0 + a.w + m > b.x0 && a.y0 < b.y0 + b.h + m && a.y0 + a.h + m > b.y0;
+function textoPostit(l: Lienzo, m: Marca): { w: number; h: number; lineas: string[]; tam: number } {
+  const tam = 12 * l.k; l.x.font = `400 ${tam}px ${FUENTE}`;
   const lineas = renglones(l.x, m.nota ?? "", 150 * l.k, 5);
-  const w = Math.max(40 * l.k, ...lineas.map((t) => l.x.measureText(t).width)) + 14 * l.k, h = lineas.length * tam * 1.25 + 12 * l.k;
-  return { cx, cy, x0: cx - w / 2, y0: cy - 8 * l.k - h, w, h, lineas, tam };
+  return { w: Math.max(40 * l.k, ...lineas.map((t) => l.x.measureText(t).width)) + 14 * l.k, h: lineas.length * tam * 1.25 + 12 * l.k, lineas, tam };
+}
+/** Lo que un post-it NO debe tapar: los pines, los íconos de activo, los puntos de referencia y la etiqueta de conteo de cada zona. */
+function obstaculos(l: Lienzo, marcas: Marca[]): Caja[] {
+  const k = l.k, res: Caja[] = [];
+  for (const m of marcas) {
+    if (m.geom.type === "Point" && m.tipo !== "postit" && m.tipo !== "circulo") {
+      const [cx, cy] = l.proy(m.geom.coordinates[0], m.geom.coordinates[1]);
+      res.push(m.tipo === "problema" ? { x0: cx - 15 * k, y0: cy - 37 * k, w: 30 * k, h: 38 * k } : m.tipo === "activo" ? { x0: cx - 16 * k, y0: cy - 16 * k, w: 32 * k, h: 32 * k } : { x0: cx - 9 * k, y0: cy - 9 * k, w: 18 * k, h: 18 * k });
+    } else if (m.geom.type === "Polygon" && m.conteo_predios !== null && m.conteo_predios !== undefined) {
+      const e = etiquetaZona(l, m); res.push({ x0: e.mx - e.w / 2, y0: e.my - 10 * k, w: e.w, h: 20 * k });
+    }
+  }
+  return res;
+}
+function etiquetaZona(l: Lienzo, m: Marca): { mx: number; my: number; w: number; t: string } {
+  const c = (m.geom.coordinates as [number, number][][])[0], p = c.slice(0, -1).map(([lon, lat]) => l.proy(lon, lat));
+  const t = `${miles(m.conteo_predios ?? 0)} predios · ${miles(m.conteo_contratos ?? 0)} contratos`;
+  l.x.font = `700 ${12 * l.k}px ${FUENTE}`;
+  return { mx: p.reduce((s, q) => s + q[0], 0) / p.length, my: p.reduce((s, q) => s + q[1], 0) / p.length, w: l.x.measureText(t).width + 12 * l.k, t };
+}
+/** Dónde va cada post-it: se prueba arriba del punto (lo de siempre) y, si ahí tapa un pin, una etiqueta u otro post-it, a los lados, abajo y más lejos. Una línea
+ *  guía lo une siempre a su punto. Es la misma cuenta para pintarlo y para saber si se tocó. */
+export function disponerPostits(l: Lienzo, marcas: Marca[]): Map<string, CajaPostit> {
+  const res = new Map<string, CajaPostit>(), obs = obstaculos(l, marcas), k = l.k;
+  for (const m of marcas) {
+    if (m.tipo !== "postit" || m.geom.type !== "Point") continue;
+    const [cx, cy] = l.proy(m.geom.coordinates[0], m.geom.coordinates[1]), t = textoPostit(l, m);
+    const propio: Caja = { x0: cx - 4 * k, y0: cy - 4 * k, w: 8 * k, h: 8 * k };
+    const cand: [number, number][] = [];
+    for (const d of [10, 34, 62, 96]) cand.push([cx - t.w / 2, cy - d * k - t.h], [cx + d * k, cy - d * k - t.h], [cx - d * k - t.w, cy - d * k - t.h], [cx + (d + 6) * k, cy - t.h / 2], [cx - (d + 6) * k - t.w, cy - t.h / 2],
+      [cx - t.w / 2, cy + d * k], [cx + d * k, cy + d * k], [cx - d * k - t.w, cy + d * k]);
+    let caja: Caja = { x0: cand[0][0], y0: cand[0][1], w: t.w, h: t.h };
+    for (const [x0, y0] of cand) { const c = { x0, y0, w: t.w, h: t.h }; if (![...obs, ...res.values()].some((o) => chocan(c, o, 3 * k)) && !chocan(c, propio)) { caja = c; break; } }
+    res.set(m.id, { ...caja, cx, cy, lineas: t.lineas, tam: t.tam });
+  }
+  return res;
 }
 
 function trazo(l: Lienzo, c: [number, number][], cerrar = false) {
@@ -44,7 +80,7 @@ function trazo(l: Lienzo, c: [number, number][], cerrar = false) {
   if (cerrar) l.x.closePath();
 }
 
-export function pintarMarca(l: Lienzo, m: Marca, elegida = false): void {
+export function pintarMarca(l: Lienzo, m: Marca, elegida = false, postit?: CajaPostit): void {
   const x = l.x, k = l.k, color = colorDe(m);
   x.save(); x.lineJoin = "round"; x.lineCap = "round";
   if (m.geom.type === "Point") {
@@ -63,11 +99,15 @@ export function pintarMarca(l: Lienzo, m: Marca, elegida = false): void {
       x.fillStyle = color; x.strokeStyle = "#fff"; x.lineWidth = 2.5 * k; x.beginPath(); x.arc(cx, cy, 7 * k, 0, 2 * Math.PI); x.fill(); x.stroke();
       if (elegida) { x.strokeStyle = SEL; x.lineWidth = 3 * k; x.beginPath(); x.arc(cx, cy, 13 * k, 0, 2 * Math.PI); x.stroke(); }
     } else if (m.tipo === "postit") {
-      const c = cajaPostit(l, m);
+      const c = postit ?? disponerPostits(l, [m]).get(m.id)!;
+      // línea guía del punto al borde más cercano de la nota, y el punto de anclaje
+      const bx = Math.max(c.x0, Math.min(cx, c.x0 + c.w)), by = Math.max(c.y0, Math.min(cy, c.y0 + c.h));
+      x.strokeStyle = "#fff"; x.lineWidth = 3.5 * k; x.beginPath(); x.moveTo(cx, cy); x.lineTo(bx, by); x.stroke();
+      x.strokeStyle = "#8a6d00"; x.lineWidth = 1.5 * k; x.beginPath(); x.moveTo(cx, cy); x.lineTo(bx, by); x.stroke();
+      x.fillStyle = "#8a6d00"; x.strokeStyle = "#fff"; x.lineWidth = 1.5 * k; x.beginPath(); x.arc(cx, cy, 3.5 * k, 0, 2 * Math.PI); x.fill(); x.stroke();
       x.fillStyle = COLOR_POSTIT; x.strokeStyle = elegida ? SEL : "#8a6d00"; x.lineWidth = (elegida ? 3 : 1.2) * k;
       x.shadowColor = "rgba(0,0,0,0.25)"; x.shadowBlur = 5 * k; x.shadowOffsetY = 2 * k;
-      x.beginPath(); x.moveTo(c.x0, c.y0); x.lineTo(c.x0 + c.w, c.y0); x.lineTo(c.x0 + c.w, c.y0 + c.h); x.lineTo(c.cx + 6 * k, c.y0 + c.h); x.lineTo(c.cx, c.cy); x.lineTo(c.cx - 6 * k, c.y0 + c.h);
-      x.lineTo(c.x0, c.y0 + c.h); x.closePath(); x.fill(); x.shadowColor = "transparent"; x.stroke();
+      x.fillRect(c.x0, c.y0, c.w, c.h); x.shadowColor = "transparent"; x.strokeRect(c.x0, c.y0, c.w, c.h);
       x.fillStyle = "#1b2733"; x.font = `400 ${c.tam}px ${FUENTE}`; x.textBaseline = "top"; x.textAlign = "left";
       c.lineas.forEach((t, i) => x.fillText(t, c.x0 + 7 * k, c.y0 + 6 * k + i * c.tam * 1.25));
     } else if (m.tipo === "circulo") {
@@ -97,11 +137,9 @@ export function pintarMarca(l: Lienzo, m: Marca, elegida = false): void {
     x.strokeStyle = "#fff"; x.lineWidth = 4.5 * k; trazo(l, c, true); x.stroke();
     x.strokeStyle = color; x.lineWidth = 2.5 * k; x.setLineDash([8 * k, 5 * k]); trazo(l, c, true); x.stroke(); x.setLineDash([]);
     if (m.conteo_predios !== null && m.conteo_predios !== undefined) {
-      const p = c.slice(0, -1).map(([lon, lat]) => l.proy(lon, lat)), mx = p.reduce((s, q) => s + q[0], 0) / p.length, my = p.reduce((s, q) => s + q[1], 0) / p.length;
-      const t = `${miles(m.conteo_predios)} predios · ${miles(m.conteo_contratos ?? 0)} contratos`;
+      const e = etiquetaZona(l, m);
       x.font = `700 ${12 * k}px ${FUENTE}`; x.textAlign = "center"; x.textBaseline = "middle";
-      const w = x.measureText(t).width + 12 * k;
-      x.fillStyle = "rgba(255,255,255,0.92)"; x.fillRect(mx - w / 2, my - 10 * k, w, 20 * k); x.fillStyle = "#1b2733"; x.fillText(t, mx, my);
+      x.fillStyle = "rgba(255,255,255,0.92)"; x.fillRect(e.mx - e.w / 2, e.my - 10 * k, e.w, 20 * k); x.fillStyle = "#1b2733"; x.fillText(e.t, e.mx, e.my);
     }
   }
   x.restore();
@@ -110,7 +148,8 @@ export function pintarMarca(l: Lienzo, m: Marca, elegida = false): void {
 /** Todas las marcas: primero las áreas, luego los trazos y encima los puntos (así un pin nunca queda tapado por una zona). */
 export function pintarMarcas(l: Lienzo, marcas: Marca[], elegida?: string | null): void {
   const orden = (m: Marca) => (m.geom.type === "Polygon" ? 0 : m.tipo === "circulo" ? 1 : m.geom.type === "LineString" ? 2 : m.tipo === "postit" ? 4 : 3);
-  for (const m of [...marcas].sort((a, b) => orden(a) - orden(b))) pintarMarca(l, m, m.id === elegida);
+  const notas = disponerPostits(l, marcas);
+  for (const m of [...marcas].sort((a, b) => orden(a) - orden(b))) pintarMarca(l, m, m.id === elegida, notas.get(m.id));
 }
 
 const aSegmento = (px: number, py: number, a: [number, number], b: [number, number]) => {
@@ -121,10 +160,11 @@ const aSegmento = (px: number, py: number, a: [number, number], b: [number, numb
 export function marcaEn(l: Lienzo, marcas: Marca[], px: number, py: number, tol = 14): Marca | null {
   let mejor: { m: Marca; d: number; nivel: number } | null = null;
   const probar = (m: Marca, d: number, nivel: number) => { if (!mejor || nivel > mejor.nivel || (nivel === mejor.nivel && d < mejor.d)) mejor = { m, d, nivel }; };
+  const notas = disponerPostits(l, marcas);
   for (const m of marcas) {
     if (m.geom.type === "Point") {
       const [lon, lat] = m.geom.coordinates, [cx, cy] = l.proy(lon, lat);
-      if (m.tipo === "postit") { const c = cajaPostit(l, m); if (px >= c.x0 - 4 && px <= c.x0 + c.w + 4 && py >= c.y0 - 4 && py <= c.cy + 4) probar(m, Math.hypot(px - cx, py - cy), 3); }
+      if (m.tipo === "postit") { const c = notas.get(m.id)!; if ((px >= c.x0 - 4 && px <= c.x0 + c.w + 4 && py >= c.y0 - 4 && py <= c.y0 + c.h + 4) || Math.hypot(px - cx, py - cy) <= 10 * l.k) probar(m, Math.hypot(px - cx, py - cy), 3); }
       else if (m.tipo === "problema") { if (Math.abs(px - cx) <= 16 * l.k + tol / 2 && py >= cy - 38 * l.k - tol / 2 && py <= cy + tol / 2) probar(m, Math.hypot(px - cx, py - (cy - 20 * l.k)), 3); }
       else if (m.tipo === "circulo") { const r = (m.radio_m ?? 0) / l.mpp(lat), d = Math.hypot(px - cx, py - cy); if (d <= r + tol) probar(m, Math.abs(d - r), Math.abs(d - r) <= tol ? 2 : 1); }
       else { const d = Math.hypot(px - cx, py - cy); if (d <= 15 * l.k + tol / 2) probar(m, d, 3); }

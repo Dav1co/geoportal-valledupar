@@ -3,12 +3,14 @@ OK    [390] A02 sin cuaderno abierto, el vidrio está vacío y un toque en la re
 OK    [390] A03 la lista: «Míos» y «Del equipo», «Nuevo cuaderno» y el filtro de archivados
 OK    [390] A04 «Crear» pide un título de 3 letras o más
 OK    [390] A05 el cuaderno nace en la versión 1, sin marcas, y queda en modo edición con su barra
-OK    [390] A06 «Guardar» está apagado sin cambios
+OK    [390] A06 «Guardar», ↶ y ↷ están apagados sin cambios
 OK    [390] A07 modo exploración: no hay herramientas y un toque no pone marcas
 OK    [390] A08 «Problema» despliega los 9 puntos tipo, cada uno con su ícono
 OK    [390] A09 un toque pone el problema (sin guardar) y abre su ficha
+OK    [390] A09b ↶ deshace la marca recién puesta (queda sin cambios) y ↷ la vuelve a poner
 OK    [390] A10 la nota lleva el aviso «No escriba nombres, cédulas ni teléfonos»
 OK    [390] A11 la nota y la categoría quedan en la marca
+OK    [390] A11b varios pasos atrás: ↶ quita la categoría, otro ↶ quita la nota entera (escribirla es un solo paso) y ↷ ↷ las devuelve
 OK    [390] A12 el pin se pinta en el vidrio, en su lugar
 OK    [390] A13 «Activo» despliega los 12 pictogramas y el interruptor Acueducto / Alcantarillado; avisa que es una propuesta
 OK    [390] A14 el ícono de activo queda con su sistema (pozo de alcantarillado) y no enlaza un activo real
@@ -23,10 +25,20 @@ OK    [390] A26 «Guardar» deja la versión 2 con las 4 marcas y nada pendiente
 OK    [390] A27 en la base: 4 marcas en la versión 2 y ninguna fila con datos personales
 OK    [390] A28 guardado: el borrador del dispositivo se quita
 OK    [390] A29 el servidor anotó el sector de las marcas
+OK    [390] A31b PDF del cuaderno: 3 páginas (Total, Urbano y «Detalle del cuaderno»), menos de 10 MB
+OK    [390] A31c la leyenda del cuaderno lista TODOS los tipos usados (4), con el pin «Baja presión»
+OK    [390] A31d ningún mapa del PDF sale vacío: variedad de colores dentro del marco en las 3 páginas (1092, 1402, 982)
+OK    [390] A31e el detalle encuadra las marcas con margen (a zoom 18; el Urbano va a 15)
 OK    [390] A32 tocar una marca guardada abre su ficha (versión 2)
-OK    [390] A33 «Mover» cambia el punto de la marca y queda como cambio pendiente
+OK    [390] A33 «Mover» deja la marca elegida y esconde la ficha para poder arrastrarla
+OK    [390] A33b arrastrar la marca la mueve (60 px al oeste y al sur), sin mover el mapa, y queda UN cambio pendiente
+OK    [390] A33c ↶ devuelve la marca a su lugar (todo el arrastre es un paso) y ↷ la vuelve a mover
+OK    [390] A33d con «Mover», arrastrar en vacío mueve el mapa como siempre
+OK    [390] A33g la goma quita lo que toca: la marca sin guardar desaparece sin más y la guardada queda por anular
+OK    [390] A33h la guardada lleva el motivo automático «Borrado con el borrador» (se anula al guardar)
+OK    [390] A33i ↶ deshace las dos pasadas de la goma y la marca de prueba: vuelve la referencia guardada
 OK    [390] A34 «Anular» pide un motivo (la marca no se borra)
-OK    [390] A35 anulada: sale del vidrio y queda 1 cambio por guardar
+OK    [390] A35 anulada: sale del vidrio y queda por guardar
 OK    [390] A36 al guardar queda la versión 3; en la base la marca sigue, anulada y con su motivo
 OK    [390] A36b queda un cambio sin guardar antes de cerrar la pestaña
 OK    [390] A37 la lista muestra el cuaderno en «Míos», con su versión y sus marcas
@@ -37,17 +49,22 @@ OK    [390] A41 «Cancelar» deja todo como estaba
 OK    [390] A42 cambiar capas o el mapa de fondo no dispara el aviso ni pierde las marcas (foto satelital encendida)
 OK    [390] A43 «Guardar» desde el aviso de salida guarda y sale
 OK    [390] B01 el cuaderno abre en exploración, en la versión 4, con sus 4 marcas pintadas
-OK    [390] B02 captura con la foto satelital: «Descargar» baja un JPEG de 780 × 972 px y 69 KB (lado ≤ 1.600 px, ≤ 600 KB)
-OK    [390] B02 captura con calles: «Descargar» baja un JPEG de 780 × 972 px y 92 KB (lado ≤ 1.600 px, ≤ 600 KB)
+OK    [390] B02b la captura con la foto satelital no sale vacía: lleva el mapa y las marcas (1233 colores distintos)
+OK    [390] B02 captura con la foto satelital: «Descargar» baja un JPEG de 780 × 972 px y 70 KB (lado ≤ 1.600 px, ≤ 600 KB)
+OK    [390] B02b la captura con calles no sale vacía: lleva el mapa y las marcas (1425 colores distintos)
+OK    [390] B02 captura con calles: «Descargar» baja un JPEG de 780 × 972 px y 93 KB (lado ≤ 1.600 px, ≤ 600 KB)
 OK    [390] B03 el cupo se ve: «Capturas guardadas: 0 de 20»
 OK    [390] B04 «Guardar en el cuaderno»: sube al almacenamiento (JPEG) y el servidor la confirma con su tamaño real
 OK    [390] B05 «Capturas guardadas» la lista con título, tamaño y fecha
 OK    [390] B06 «Ver» abre la imagen con una dirección firmada de corta vida
 OK    [390] B07 anular la captura (con motivo): deja de verse y de contar; ni la fila ni el archivo se borran
 OK    [390] B08 «Exportar las marcas (CSV)»: una fila por marca, con «;», y las notas tal cual (las fórmulas, neutralizadas)
-OK    [390] B09 «Imprimir / PDF con las marcas»: el PDF de 2 páginas (Total y Urbano) del Corte 1, de menos de 10 MB
+OK    [390] B09 «Imprimir / PDF con las marcas»: Total, Urbano y el detalle, sin mapas vacíos (1052, 1441, 955 colores), de menos de 10 MB
 OK    [390] B10 «Versiones»: las 4, con su fecha; la abierta está señalada
 OK    [390] B11 una versión anterior se ve tal como era (4 marcas, con el problema que luego se anuló) y es solo lectura
+OK    [390] B11b «Versiones y datos»: el autor puede cambiar el título y la descripción; sin cambios, el botón está apagado
+OK    [390] B11c renombrado: queda la versión 5 con el título nuevo y las mismas marcas
+OK    [390] B11d la goma sobre una marca guardada y «Guardar»: versión 6; en la base queda anulada con «Borrado con el borrador»
 OK    [390] B12 archivar pide motivo
 OK    [390] B13 archivado: no se borra, queda solo lectura y pasa a «Archivados»
 OK    [390] B14 la lista: fuera de «Vigentes» y dentro de «Archivados»
@@ -74,12 +91,14 @@ OK    [1280] A02 sin cuaderno abierto, el vidrio está vacío y un toque en la r
 OK    [1280] A03 la lista: «Míos» y «Del equipo», «Nuevo cuaderno» y el filtro de archivados
 OK    [1280] A04 «Crear» pide un título de 3 letras o más
 OK    [1280] A05 el cuaderno nace en la versión 1, sin marcas, y queda en modo edición con su barra
-OK    [1280] A06 «Guardar» está apagado sin cambios
+OK    [1280] A06 «Guardar», ↶ y ↷ están apagados sin cambios
 OK    [1280] A07 modo exploración: no hay herramientas y un toque no pone marcas
 OK    [1280] A08 «Problema» despliega los 9 puntos tipo, cada uno con su ícono
 OK    [1280] A09 un toque pone el problema (sin guardar) y abre su ficha
+OK    [1280] A09b ↶ deshace la marca recién puesta (queda sin cambios) y ↷ la vuelve a poner
 OK    [1280] A10 la nota lleva el aviso «No escriba nombres, cédulas ni teléfonos»
 OK    [1280] A11 la nota y la categoría quedan en la marca
+OK    [1280] A11b varios pasos atrás: ↶ quita la categoría, otro ↶ quita la nota entera (escribirla es un solo paso) y ↷ ↷ las devuelve
 OK    [1280] A12 el pin se pinta en el vidrio, en su lugar
 OK    [1280] A13 «Activo» despliega los 12 pictogramas y el interruptor Acueducto / Alcantarillado; avisa que es una propuesta
 OK    [1280] A14 el ícono de activo queda con su sistema (pozo de alcantarillado) y no enlaza un activo real
@@ -101,11 +120,24 @@ OK    [1280] A28 guardado: el borrador del dispositivo se quita
 OK    [1280] A29 el servidor anotó el sector de las marcas
 OK    [1280] A30 la zona guardada trae los predios y contratos que cuenta el servidor (256 · 256), iguales al catastro
 OK    [1280] A31 el círculo guarda su radio en metros y la línea su flecha
+OK    [1280] A31b PDF del cuaderno: 3 páginas (Total, Urbano y «Detalle del cuaderno»), menos de 10 MB
+OK    [1280] A31c la leyenda del cuaderno lista TODOS los tipos usados (8), con el pin «Baja presión»
+OK    [1280] A31d ningún mapa del PDF sale vacío: variedad de colores dentro del marco en las 3 páginas (1109, 1440, 1473)
+OK    [1280] A31e el detalle encuadra las marcas con margen (a zoom 16.75; el Urbano va a 15)
 OK    [1280] A32 tocar una marca guardada abre su ficha (versión 2, con su sector)
-OK    [1280] A33 «Mover» cambia el punto de la marca y queda como cambio pendiente
+OK    [1280] A33 «Mover» deja la marca elegida y esconde la ficha para poder arrastrarla
+OK    [1280] A33b arrastrar la marca la mueve (60 px al oeste y al sur), sin mover el mapa, y queda UN cambio pendiente
+OK    [1280] A33c ↶ devuelve la marca a su lugar (todo el arrastre es un paso) y ↷ la vuelve a mover
+OK    [1280] A33d con «Mover», arrastrar en vacío mueve el mapa como siempre
+OK    [1280] A33e una zona se mueve completa arrastrándola: conserva su forma y pierde el conteo hasta guardar
+OK    [1280] A33f una línea (y lo mismo un trazo o un círculo) se mueve completa
+OK    [1280] A33g la goma quita lo que toca: la marca sin guardar desaparece sin más y la guardada queda por anular
+OK    [1280] A33h la guardada lleva el motivo automático «Borrado con el borrador» (se anula al guardar)
+OK    [1280] A33i ↶ deshace las dos pasadas de la goma y la marca de prueba: vuelve la referencia guardada
 OK    [1280] A34 «Anular» pide un motivo (la marca no se borra)
-OK    [1280] A35 anulada: sale del vidrio y queda 1 cambio por guardar
+OK    [1280] A35 anulada: sale del vidrio y queda por guardar junto con la zona movida
 OK    [1280] A36 al guardar queda la versión 3; en la base la marca sigue, anulada y con su motivo
+OK    [1280] A36c la zona que se movió: el servidor la volvió a contar al guardar (245 predios en su nuevo lugar)
 OK    [1280] A36b queda un cambio sin guardar antes de cerrar la pestaña
 OK    [1280] A37 la lista muestra el cuaderno en «Míos», con su versión y sus marcas
 OK    [1280] A38 al reabrir, ofrece recuperar el borrador que quedó en el dispositivo
@@ -115,7 +147,9 @@ OK    [1280] A41 «Cancelar» deja todo como estaba
 OK    [1280] A42 cambiar capas o el mapa de fondo no dispara el aviso ni pierde las marcas (foto satelital encendida)
 OK    [1280] A43 «Guardar» desde el aviso de salida guarda y sale
 OK    [1280] B01 el cuaderno abre en exploración, en la versión 4, con sus 8 marcas pintadas
-OK    [1280] B02 captura con la foto satelital: «Descargar» baja un JPEG de 1600 × 844 px y 147 KB (lado ≤ 1.600 px, ≤ 600 KB)
+OK    [1280] B02b la captura con la foto satelital no sale vacía: lleva el mapa y las marcas (1179 colores distintos)
+OK    [1280] B02 captura con la foto satelital: «Descargar» baja un JPEG de 1600 × 844 px y 148 KB (lado ≤ 1.600 px, ≤ 600 KB)
+OK    [1280] B02b la captura con calles no sale vacía: lleva el mapa y las marcas (1373 colores distintos)
 OK    [1280] B02 captura con calles: «Descargar» baja un JPEG de 1600 × 844 px y 206 KB (lado ≤ 1.600 px, ≤ 600 KB)
 OK    [1280] B03 el cupo se ve: «Capturas guardadas: 0 de 20»
 OK    [1280] B04 «Guardar en el cuaderno»: sube al almacenamiento (JPEG) y el servidor la confirma con su tamaño real
@@ -123,9 +157,12 @@ OK    [1280] B05 «Capturas guardadas» la lista con título, tamaño y fecha
 OK    [1280] B06 «Ver» abre la imagen con una dirección firmada de corta vida
 OK    [1280] B07 anular la captura (con motivo): deja de verse y de contar; ni la fila ni el archivo se borran
 OK    [1280] B08 «Exportar las marcas (CSV)»: una fila por marca, con «;», y las notas tal cual (las fórmulas, neutralizadas)
-OK    [1280] B09 «Imprimir / PDF con las marcas»: el PDF de 2 páginas (Total y Urbano) del Corte 1, de menos de 10 MB
+OK    [1280] B09 «Imprimir / PDF con las marcas»: Total, Urbano y el detalle, sin mapas vacíos (1096, 1428, 1449 colores), de menos de 10 MB
 OK    [1280] B10 «Versiones»: las 4, con su fecha; la abierta está señalada
 OK    [1280] B11 una versión anterior se ve tal como era (8 marcas, con el problema que luego se anuló) y es solo lectura
+OK    [1280] B11b «Versiones y datos»: el autor puede cambiar el título y la descripción; sin cambios, el botón está apagado
+OK    [1280] B11c renombrado: queda la versión 5 con el título nuevo y las mismas marcas
+OK    [1280] B11d la goma sobre una marca guardada y «Guardar»: versión 6; en la base queda anulada con «Borrado con el borrador»
 OK    [1280] B12 archivar pide motivo
 OK    [1280] B13 archivado: no se borra, queda solo lectura y pasa a «Archivados»
 OK    [1280] B14 la lista: fuera de «Vigentes» y dentro de «Archivados»
@@ -150,7 +187,8 @@ OK    [1280] F02 sin permisos asignados: no ve el geovisor ni los cuadernos, y e
 OK    G01 nada personal en las tablas de análisis: las zonas guardan solo números
 OK    G02 pg-safeupdate: ninguna función del paquete con DELETE/UPDATE sin WHERE
 RPC simuladas no conocidas: geoportal_tec_ptar_perfil
+Errores de página: 390 sup consola: Unable to preventDefault inside passive event listener invocation. | 390 sup consola: Unable to preventDefault inside passive event listener invocation. | 390 sup consola: Unable to preventDefault inside passive event listener invocation. | 390 sup consola: Unable to preventDefault inside passive event listener invocation.
 
 Capturas y PDF: <carpeta de capturas>
 
-RESULTADO: 151 de 151 — SIN FALLAS
+RESULTADO: 188 de 188 — SIN FALLAS

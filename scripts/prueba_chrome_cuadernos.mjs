@@ -284,6 +284,33 @@ const aEdge = (p, accion, cuerpo) => p.evaluate(async (accion, cuerpo, puerto) =
 const abrirLista = async (p) => { if (!(await hay(p, "[data-testid=cua-panel]"))) await clic(p, (await p.evaluate(() => window.innerWidth <= 600)) ? "[data-testid=cuadernos-movil]" : "[data-testid=cuadernos]"); await p.waitForSelector("[data-testid=cua-panel]"); await p.waitForFunction(() => !/Cargando…/.test(document.querySelector("[data-testid=cua-panel]").innerText), { timeout: 20000 }); };
 const abrirCuaderno = async (p, id) => { await abrirLista(p); await clic(p, `[data-cuaderno="${id}"]`); await p.waitForFunction((id) => window.__cuaderno?.id === id, { timeout: 20000 }, id); await pausa(300); };
 const herr = async (p, menu, item) => { await clic(p, `[data-testid=cua-h-${menu}]`); if (item) await clic(p, item); };
+/** Arrastra sobre el mapa de (x0, y0) a (x1, y1), en píxeles desde su centro (ratón o dedo, según la pantalla). */
+async function arrastrar(p, x0, y0, x1, y1, pasos = 12) {
+  const r = await p.evaluate(() => { const r = document.querySelector(".geo-mapa").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  const tactil = await p.evaluate(() => navigator.maxTouchPoints > 0);
+  if (tactil) { await p.touchscreen.touchStart(r.x + x0, r.y + y0); for (let i = 1; i <= pasos; i++) await p.touchscreen.touchMove(r.x + x0 + ((x1 - x0) * i) / pasos, r.y + y0 + ((y1 - y0) * i) / pasos); await p.touchscreen.touchEnd(); }
+  else { await p.mouse.move(r.x + x0, r.y + y0); await p.mouse.down(); for (let i = 1; i <= pasos; i++) await p.mouse.move(r.x + x0 + ((x1 - x0) * i) / pasos, r.y + y0 + ((y1 - y0) * i) / pasos); await p.mouse.up(); }
+  await pausa(300);
+}
+/** Variedad de colores de una imagen (JPEG en base64) dentro de un recuadro dado en fracciones [x0, y0, x1, y1]: un mapa vacío da 1 o 2. */
+const variedad = (p, b64, caja = [0, 0, 1, 1]) => p.evaluate(async (b64, caja) => { const bm = await createImageBitmap(await (await fetch("data:image/jpeg;base64," + b64)).blob());
+  const c = document.createElement("canvas"); c.width = 160; c.height = 160; const x = c.getContext("2d");
+  x.drawImage(bm, bm.width * caja[0], bm.height * caja[1], bm.width * (caja[2] - caja[0]), bm.height * (caja[3] - caja[1]), 0, 0, 160, 160);
+  const d = x.getImageData(0, 0, 160, 160).data, s = new Set(); for (let i = 0; i < d.length; i += 4) s.add((d[i] >> 3 << 10) | (d[i + 1] >> 3 << 5) | (d[i + 2] >> 3)); return s.size; }, b64, caja);
+const MARCO_HOJA = [0.09, 0.06, 0.91, 0.78];      // el marco del mapa dentro de la hoja carta
+async function pdfCuaderno(p, nombre) {
+  await p.evaluate(() => { delete window.__impresion; });
+  await clic(p, "[data-testid=cua-mas]"); await clic(p, "[data-testid=cua-pdf]");
+  await p.waitForFunction(() => !!document.querySelector("[data-testid=imprimir-listo]") || !!document.querySelector("[data-testid=dialogo-imprimir] [role=alert]"), { timeout: 600000 });
+  const r = await p.evaluate(async () => { const a = document.querySelector("[data-testid=imprimir-descargar]"); if (!a) return { err: document.querySelector("[data-testid=dialogo-imprimir]").innerText };
+    const b = new Uint8Array(await (await fetch(a.href)).arrayBuffer()); let s = ""; for (let i = 0; i < b.length; i += 32768) s += String.fromCharCode(...b.subarray(i, i + 32768)); return { b64: btoa(s), info: window.__impresion }; });
+  r.jpgs = [];
+  if (r.b64) { const b = Buffer.from(r.b64, "base64"); writeFileSync(join(CAP, `${nombre}.pdf`), b); let k = 0, desde = 0;
+    for (;;) { const i = b.indexOf(Buffer.from([0xff, 0xd8, 0xff]), desde); if (i < 0) break; const fin = b.indexOf(Buffer.from("\nendstream"), i); const jp = b.subarray(i, fin); r.jpgs.push(jp); writeFileSync(join(CAP, `${nombre}_pagina${++k}.jpg`), jp); desde = fin; } }
+  r.variedad = []; for (const jp of r.jpgs) r.variedad.push(await variedad(p, jp.toString("base64"), MARCO_HOJA));
+  await clicTexto(p, "[data-testid=dialogo-imprimir] button", "Cerrar");
+  return r;
+}
 const ids = {};
 
 for (const ancho of [390, 1280]) {
@@ -303,7 +330,7 @@ for (const ancho of [390, 1280]) {
   await p.waitForFunction(() => window.__cuaderno?.modo === "editar", { timeout: 20000 });
   let c = await cua(p); ids[ancho] = c.id;
   ok(`${tag} A05 el cuaderno nace en la versión 1, sin marcas, y queda en modo edición con su barra`, c.version === 1 && c.marcas.length === 0 && c.puede_editar && (await hay(p, "[data-testid=cua-herr]")) && /ZTCUA Baja presión/.test(await p.$eval("[data-testid=cua-titulo]", (e) => e.innerText)));
-  ok(`${tag} A06 «Guardar» está apagado sin cambios`, await p.$eval("[data-testid=cua-guardar]", (b) => b.disabled));
+  ok(`${tag} A06 «Guardar», ↶ y ↷ están apagados sin cambios`, (await p.$eval("[data-testid=cua-guardar]", (b) => b.disabled)) && (await p.$eval("[data-testid=cua-deshacer-paso]", (b) => b.disabled)) && (await p.$eval("[data-testid=cua-rehacer-paso]", (b) => b.disabled)));
   // modo exploración: no se pinta
   await clic(p, "[data-testid=cua-modo] button:first-child");
   await tocar(p, 60, 60);
@@ -319,10 +346,16 @@ for (const ancho of [390, 1280]) {
   await tocar(p, -80, 40);
   c = await cua(p);
   ok(`${tag} A09 un toque pone el problema (sin guardar) y abre su ficha`, c.marcas.length === 1 && c.marcas[0].tipo === "problema" && c.marcas[0].subtipo === "baja_presion" && c.pendientes === 1 && (await hay(p, "[data-testid=cua-ficha]")));
+  await clic(p, "[data-testid=cua-deshacer-paso]"); const trasDeshacer = await cua(p); await clic(p, "[data-testid=cua-rehacer-paso]"); c = await cua(p);
+  ok(`${tag} A09b ↶ deshace la marca recién puesta (queda sin cambios) y ↷ la vuelve a poner`, trasDeshacer.marcas.length === 0 && trasDeshacer.pendientes === 0 && c.marcas.length === 1 && c.pendientes === 1 && c.marcas[0].subtipo === "baja_presion");
+  await clic(p, "[data-testid=cua-soltar]"); await tocar(p, -80, 28);
   ok(`${tag} A10 la nota lleva el aviso «No escriba nombres, cédulas ni teléfonos»`, /No escriba nombres, cédulas ni teléfonos/.test(await p.$eval("[data-testid=cua-ficha] [data-testid=cua-aviso-nota]", (e) => e.innerText)));
   await escribir(p, "[data-testid=cua-nota]", "ZTCUA presión baja en las tardes; =SUMA(1)"); await escribir(p, "[data-testid=cua-categoria]", "problema");
   c = await cua(p);
   ok(`${tag} A11 la nota y la categoría quedan en la marca`, c.marcas[0].nota.startsWith("ZTCUA presión baja") && c.marcas[0].categoria === "problema");
+  await clic(p, "[data-testid=cua-deshacer-paso]"); const sinCat = await cua(p); await clic(p, "[data-testid=cua-deshacer-paso]"); const sinNota = await cua(p); await clic(p, "[data-testid=cua-rehacer-paso]"); await clic(p, "[data-testid=cua-rehacer-paso]"); c = await cua(p);
+  ok(`${tag} A11b varios pasos atrás: ↶ quita la categoría, otro ↶ quita la nota entera (escribirla es un solo paso) y ↷ ↷ las devuelve`, sinCat.marcas[0].categoria === null && sinCat.marcas[0].nota !== null && sinNota.marcas[0].nota === null && c.marcas[0].categoria === "problema" && c.marcas[0].nota.startsWith("ZTCUA"), JSON.stringify([sinCat.marcas[0], sinNota.marcas[0]]));
+  await tocar(p, -80, 28);
   await p.screenshot({ path: join(CAP, `a11_ficha_${ancho}.png`) });
   await clic(p, "[data-testid=cua-ficha] .geo-cerrar");
   ok(`${tag} A12 el pin se pinta en el vidrio, en su lugar`, (await pintado(p, -80, 25)) > 200, await pintado(p, -80, 25));
@@ -410,19 +443,63 @@ for (const ancho of [390, 1280]) {
     ok(`${tag} A31 el círculo guarda su radio en metros y la línea su flecha`, c.marcas.some((m) => m.tipo === "circulo" && m.radio_m > 5) && c.marcas.some((m) => m.tipo === "linea" && m.geom.coordinates.length === 3));
   }
   await p.screenshot({ path: join(CAP, `a31_guardado_${ancho}.png`) });
+  { const r = await pdfCuaderno(p, `cuaderno_v2_${ancho}`);
+    const usados = [...new Set(c.marcas.map((m) => m.tipo === "problema" ? "Baja presión" : m.tipo === "activo" ? "Pozo · Alcantarillado" : { referencia: "Punto de referencia", postit: "Post-it", mano: "Trazo a mano", circulo: "Círculo", linea: "Línea o flecha", zona: "Zona afectada" }[m.tipo]))];
+    ok(`${tag} A31b PDF del cuaderno: 3 páginas (Total, Urbano y «Detalle del cuaderno»), menos de 10 MB`, !!r.b64 && r.info?.paginas === 3 && r.info.medidas.map((m) => m.clave).join() === "total,urbano,detalle" && r.info.bytes < 10 * 1048576, r.err ?? JSON.stringify(r.info?.medidas?.map((m) => m.clave)));
+    ok(`${tag} A31c la leyenda del cuaderno lista TODOS los tipos usados (${usados.length}), con el pin «Baja presión»`, r.info?.leyendaCuaderno?.length === usados.length && usados.every((u) => r.info.leyendaCuaderno.includes(u)), JSON.stringify(r.info?.leyendaCuaderno));
+    ok(`${tag} A31d ningún mapa del PDF sale vacío: variedad de colores dentro del marco en las 3 páginas (${r.variedad.join(", ")})`, r.variedad.length === 3 && r.variedad.every((v) => v > 25) && !r.info.incompleto);
+    const d = r.info?.medidas?.[2], lons = c.marcas.flatMap((m) => (m.geom.type === "Point" ? [m.geom.coordinates] : m.geom.type === "LineString" ? m.geom.coordinates : m.geom.coordinates[0])).map((q) => q[0]);
+    ok(`${tag} A31e el detalle encuadra las marcas con margen (a zoom ${d?.zoom}; el Urbano va a 15)`, !!d && d.vista.oeste < Math.min(...lons) && d.vista.este > Math.max(...lons) && d.zoom > 15 && (d.vista.este - d.vista.oeste) < 0.03, JSON.stringify(d?.vista)); }
   // elegir, mover y anular
   await clic(p, "[data-testid=cua-aviso] .cua-x");
   await tocar(p, -80, 28);
   ok(`${tag} A32 tocar una marca guardada abre su ficha (versión 2${movil ? "" : ", con su sector"})`, /Guardada en la versión 2/.test(await p.$eval("[data-testid=cua-ficha]", (e) => e.innerText).catch(() => "")) && (await p.$eval("[data-testid=cua-ficha]", (e) => e.dataset.tipo)) === "problema");
-  await clic(p, "[data-testid=cua-mover]"); await tocar(p, -140, 100);
+  const antesMover = (await cua(p)).marcas.find((m) => m.tipo === "problema").geom.coordinates;
+  await clic(p, "[data-testid=cua-mover]");
+  ok(`${tag} A33 «Mover» deja la marca elegida y esconde la ficha para poder arrastrarla`, !(await hay(p, "[data-testid=cua-ficha]")) && /Elegida: Baja presión/.test(await p.$eval("[data-testid=cua-activa]", (e) => e.innerText)) && (await p.$eval("[data-testid=cua-h-mover]", (b) => b.getAttribute("aria-pressed"))) === "true");
+  const centroM = await enMapa(p, "return [m.getCenter().lng, m.getCenter().lat];");
+  await arrastrar(p, -80, 24, -140, 84);
+  c = await cua(p); const trasMover = c.marcas.find((m) => m.tipo === "problema").geom.coordinates, centroM2 = await enMapa(p, "return [m.getCenter().lng, m.getCenter().lat];");
+  ok(`${tag} A33b arrastrar la marca la mueve (60 px al oeste y al sur), sin mover el mapa, y queda UN cambio pendiente`, c.pendientes === 1 && trasMover[0] < antesMover[0] && trasMover[1] < antesMover[1] && centroM[0] === centroM2[0] && centroM[1] === centroM2[1], JSON.stringify([antesMover, trasMover]));
+  await clic(p, "[data-testid=cua-deshacer-paso]"); const vuelta = await cua(p); await clic(p, "[data-testid=cua-rehacer-paso]"); c = await cua(p);
+  ok(`${tag} A33c ↶ devuelve la marca a su lugar (todo el arrastre es un paso) y ↷ la vuelve a mover`, vuelta.pendientes === 0 && JSON.stringify(vuelta.marcas.find((m) => m.tipo === "problema").geom.coordinates) === JSON.stringify(antesMover) && c.pendientes === 1 && JSON.stringify(c.marcas.find((m) => m.tipo === "problema").geom.coordinates) === JSON.stringify(trasMover));
+  await arrastrar(p, 80, 60, 20, 10);
+  ok(`${tag} A33d con «Mover», arrastrar en vacío mueve el mapa como siempre`, (await enMapa(p, "return m.getCenter().lng;")) !== centroM[0] && (await cua(p)).pendientes === 1);
+  await irA(p, CENTRO[0], CENTRO[1], 16);
+  if (!movil) {
+    const z0 = (await cua(p)).marcas.find((m) => m.tipo === "zona");
+    await arrastrar(p, 240, -120, 200, -100);
+    const z1 = (await cua(p)).marcas.find((m) => m.tipo === "zona"), l0 = (await cua(p)).marcas.find((m) => m.tipo === "linea");
+    ok(`${tag} A33e una zona se mueve completa arrastrándola: conserva su forma y pierde el conteo hasta guardar`, z1.geom.coordinates[0].length === z0.geom.coordinates[0].length && z1.geom.coordinates[0][0][0] < z0.geom.coordinates[0][0][0] && z1.conteo_predios === null && z0.conteo_predios > 0, JSON.stringify([z0.geom.coordinates[0][0], z1.geom.coordinates[0][0], z1.conteo_predios]));
+    await arrastrar(p, -160, -160, -160, -200);
+    const l1 = (await cua(p)).marcas.find((m) => m.tipo === "linea");
+    ok(`${tag} A33f una línea (y lo mismo un trazo o un círculo) se mueve completa`, l1.geom.coordinates.length === 3 && l1.geom.coordinates.every((q, i) => q[1] > l0.geom.coordinates[i][1] && Math.abs(q[0] - l0.geom.coordinates[i][0]) < 1e-5), JSON.stringify([l0.geom.coordinates, l1.geom.coordinates]));
+    await clic(p, "[data-testid=cua-deshacer-paso]");      // la línea vuelve; la zona movida se guarda más abajo
+  }
+  // la goma
+  await clic(p, "[data-testid=cua-h-referencia]"); await tocar(p, 40, 140); await clic(p, "[data-testid=cua-ficha] .geo-cerrar");
+  const antesGoma = await cua(p);
+  await clic(p, "[data-testid=cua-h-goma]"); await arrastrar(p, -30, 140, 100, 140); await arrastrar(p, -40, -90, 40, -90);
   c = await cua(p);
-  ok(`${tag} A33 «Mover» cambia el punto de la marca y queda como cambio pendiente`, c.pendientes === 1 && c.marcas.filter((m) => m.tipo === "problema").length === 1);
+  const refGuardada = antesGoma.marcas.find((m) => m.tipo === "referencia" && m.version === 2);
+  ok(`${tag} A33g la goma quita lo que toca: la marca sin guardar desaparece sin más y la guardada queda por anular`, c.marcas.length === antesGoma.marcas.length - 2 && !c.marcas.some((m) => m.tipo === "referencia") && c.pendientes === antesGoma.pendientes, JSON.stringify([antesGoma.marcas.length, c.marcas.length, antesGoma.pendientes, c.pendientes]));
+  ok(`${tag} A33h la guardada lleva el motivo automático «Borrado con el borrador» (se anula al guardar)`, await p.evaluate((id) => Object.keys(localStorage).filter((k) => k.includes("cuaderno.borrador")).some((k) => { const b = JSON.parse(localStorage.getItem(k)); return b?.pend?.[id]?.op === "anula" && b.pend[id].motivo === "Borrado con el borrador"; }), refGuardada.id));
+  await clic(p, "[data-testid=cua-deshacer-paso]"); await clic(p, "[data-testid=cua-deshacer-paso]"); await clic(p, "[data-testid=cua-deshacer-paso]");
+  c = await cua(p);
+  ok(`${tag} A33i ↶ deshace las dos pasadas de la goma y la marca de prueba: vuelve la referencia guardada`, c.marcas.length === antesGoma.marcas.length - 1 && c.marcas.some((m) => m.id === refGuardada.id) && c.pendientes === antesGoma.pendientes - 1, JSON.stringify([c.marcas.length, c.pendientes]));
+  await clic(p, "[data-testid=cua-soltar]");
+  await tocar(p, -140, 88);
   ok(`${tag} A34 «Anular» pide un motivo (la marca no se borra)`, (await clic(p, "[data-testid=cua-quitar]")) && (await hay(p, "[data-testid=cua-motivo]")) && (await p.$eval("[data-testid=cua-anular]", (b) => b.disabled)));
   await escribir(p, "[data-testid=cua-motivo]", "ZTCUA era otro punto"); await clic(p, "[data-testid=cua-anular]");
   c = await cua(p);
-  ok(`${tag} A35 anulada: sale del vidrio y queda 1 cambio por guardar`, c.marcas.length === esperadas - 1 && c.pendientes === 1);
+  ok(`${tag} A35 anulada: sale del vidrio y queda por guardar${movil ? "" : " junto con la zona movida"}`, c.marcas.length === esperadas - 1 && c.pendientes === (movil ? 1 : 2));
   ok(`${tag} A36 al guardar queda la versión 3; en la base la marca sigue, anulada y con su motivo`, (await guardar(p)) && (await cua(p)).version === 3
     && sqlq(`select count(*) || '|' || count(*) filter (where anulada and motivo = 'ZTCUA era otro punto') from analisis.marca_versiones where cuaderno_id = '${ids[ancho]}' and tipo = 'problema'`) === "2|1");
+  if (!movil) {
+    const z = (await cua(p)).marcas.find((m) => m.tipo === "zona");
+    const np = Number(sqlq(`select count(*) from public.catastro_valledupar k, analisis.marca_versiones mv where mv.marca_id = '${z.id}' and mv.version = 3 and st_intersects(k.geom, mv.geom)`));
+    ok(`${tag} A36c la zona que se movió: el servidor la volvió a contar al guardar (${np} predios en su nuevo lugar)`, z.version === 3 && z.conteo_predios === np && sqlq(`select count(*) from analisis.zona_consultas`) !== "0", JSON.stringify([z.conteo_predios, np]));
+  }
   // borrador: recargar con cambios sin guardar
   await clic(p, "[data-testid=cua-h-referencia]"); await tocar(p, 90, 40); ok(`${tag} A36b queda un cambio sin guardar antes de cerrar la pestaña`, (await cua(p)).pendientes === 1); await clic(p, "[data-testid=cua-ficha] .geo-cerrar");
   await p.close();      // se cierra la pestaña con un cambio sin guardar
@@ -460,6 +537,8 @@ for (const ancho of [390, 1280]) {
     const k = await p.evaluate(async () => { const d = window.__descargas[0]; if (!d) return { err: document.querySelector("[data-testid=cua-captura-error]")?.innerText };
       const b = new Uint8Array(await (await fetch(d.href)).arrayBuffer()); let s = ""; for (let i = 0; i < b.length; i += 32768) s += String.fromCharCode(...b.subarray(i, i + 32768)); return { ...window.__captura, nombre: d.nombre, b64: btoa(s) }; });
     if (k.b64) writeFileSync(join(CAP, `captura_${fondo}_${ancho}.jpg`), Buffer.from(k.b64, "base64"));
+    const vk = k.b64 ? await variedad(p, k.b64) : 0;
+    ok(`${tag} B02b la captura con ${fondo === "satelite" ? "la foto satelital" : "calles"} no sale vacía: lleva el mapa y las marcas (${vk} colores distintos)`, vk > 25, vk);
     ok(`${tag} B02 captura con ${fondo === "satelite" ? "la foto satelital" : "calles"}: «Descargar» baja un JPEG de ${k.ancho} × ${k.alto} px y ${Math.round((k.bytes ?? 0) / 1024)} KB (lado ≤ 1.600 px, ≤ 600 KB)`,
       !!k.b64 && Buffer.from(k.b64, "base64").subarray(0, 3).toString("hex") === "ffd8ff" && Math.max(k.ancho, k.alto) <= 1600 && k.bytes <= 614400 && /\.jpg$/.test(k.nombre), JSON.stringify({ ...k, b64: undefined }));
     if (fondo === "calles") {
@@ -491,23 +570,29 @@ for (const ancho of [390, 1280]) {
   const csv = await p.evaluate(async () => { const d = window.__descargas[0]; return d ? { nombre: d.nombre, t: await (await fetch(d.href)).text() } : null; });
   ok(`${tag} B08 «Exportar las marcas (CSV)»: una fila por marca, con «;», y las notas tal cual (las fórmulas, neutralizadas)`, csv && /\.csv$/.test(csv.nombre) && csv.t.includes("N.º;Tipo;Problema o activo") && csv.t.includes("ZTCUA revisar con el macromedidor")
     && csv.t.split("\r\n").filter((l) => /^\d+;/.test(l)).length === esperadas && !/;=/.test(csv.t) && !/tel[eé]fono|nombre del suscriptor/i.test(csv.t), csv?.t.slice(0, 300));
-  // PDF de 2 páginas con las marcas (el componente de impresión del Corte 1)
-  await p.evaluate(() => { delete window.__impresion; });
-  await clic(p, "[data-testid=cua-mas]"); await clic(p, "[data-testid=cua-pdf]");
-  await p.waitForFunction(() => !!document.querySelector("[data-testid=imprimir-listo]") || !!document.querySelector("[data-testid=dialogo-imprimir] [role=alert]"), { timeout: 600000 });
-  const pdf = await p.evaluate(async () => { const a = document.querySelector("[data-testid=imprimir-descargar]"); if (!a) return { err: document.querySelector("[data-testid=dialogo-imprimir]").innerText };
-    const b = new Uint8Array(await (await fetch(a.href)).arrayBuffer()); let s = ""; for (let i = 0; i < b.length; i += 32768) s += String.fromCharCode(...b.subarray(i, i + 32768)); return { b64: btoa(s), info: window.__impresion }; });
-  if (pdf.b64) { const b = Buffer.from(pdf.b64, "base64"); writeFileSync(join(CAP, `cuaderno_${ancho}.pdf`), b); let k = 0, desde = 0;
-    for (;;) { const i = b.indexOf(Buffer.from([0xff, 0xd8, 0xff]), desde); if (i < 0) break; const fin = b.indexOf(Buffer.from("\nendstream"), i); writeFileSync(join(CAP, `cuaderno_${ancho}_pagina${++k}.jpg`), b.subarray(i, fin)); desde = fin; } }
-  ok(`${tag} B09 «Imprimir / PDF con las marcas»: el PDF de 2 páginas (Total y Urbano) del Corte 1, de menos de 10 MB`, !!pdf.b64 && pdf.info?.paginas === 2 && pdf.info.medidas[0].clave === "total" && pdf.info.medidas[1].clave === "urbano" && pdf.info.bytes < 10 * 1048576, pdf.err ?? JSON.stringify(pdf.info).slice(0, 200));
-  await clicTexto(p, "[data-testid=dialogo-imprimir] button", "Cerrar");
+  // PDF con las marcas (el componente de impresión del Corte 1, más la página de detalle)
+  { const r = await pdfCuaderno(p, `cuaderno_${ancho}`);
+    ok(`${tag} B09 «Imprimir / PDF con las marcas»: Total, Urbano y el detalle, sin mapas vacíos (${r.variedad.join(", ")} colores), de menos de 10 MB`, !!r.b64 && r.info?.paginas === 3 && r.info.medidas[0].clave === "total" && r.info.medidas[1].clave === "urbano" && r.info.medidas[2].clave === "detalle"
+      && r.info.bytes < 10 * 1048576 && r.variedad.every((v) => v > 25), r.err ?? JSON.stringify(r.info).slice(0, 200)); }
   // versiones
   await clic(p, "[data-testid=cua-mas]"); await clic(p, "[data-testid=cua-datos]"); await p.waitForSelector("[data-testid=cua-versiones]");
   ok(`${tag} B10 «Versiones»: las 4, con su fecha; la abierta está señalada`, (await p.$$eval("[data-testid=cua-versiones] li", (l) => l.length)) === 4 && /Versión 4[\s\S]*abierta/.test(await p.$eval("[data-testid=cua-versiones]", (e) => e.innerText)));
   await clic(p, "[data-testid=cua-versiones] [data-version='2']"); await p.waitForFunction(() => window.__cuaderno?.version === 2, { timeout: 20000 });
   c = await cua(p);
   ok(`${tag} B11 una versión anterior se ve tal como era (${esperadas} marcas, con el problema que luego se anuló) y es solo lectura`, c.marcas.length === esperadas && c.marcas.some((m) => m.tipo === "problema") && !c.puede_editar && (await hay(p, "[data-testid=cua-lectura]")) && !(await hay(p, "[data-testid=cua-guardar]")));
-  await clic(p, "[data-testid=cua-mas]"); await clic(p, "[data-testid=cua-datos]"); await clic(p, "[data-testid=cua-versiones] [data-version='4']"); await p.waitForFunction(() => window.__cuaderno?.version === 4, { timeout: 20000 });
+  await clic(p, "[data-testid=cua-mas]"); await clic(p, "[data-testid=cua-datos]"); await clic(p, "[data-testid=cua-versiones] [data-version='4']"); await p.waitForFunction(() => window.__cuaderno?.version === 4 && window.__cuaderno.puede_editar, { timeout: 20000 });
+  // renombrar (versión nueva) y la goma con guardado
+  await clic(p, "[data-testid=cua-mas]"); await clic(p, "[data-testid=cua-datos]"); await p.waitForSelector("[data-testid=cua-renombrar]");
+  ok(`${tag} B11b «Versiones y datos»: el autor puede cambiar el título y la descripción; sin cambios, el botón está apagado`, await p.$eval("[data-testid=cua-r-guardar]", (b) => b.disabled));
+  await escribir(p, "[data-testid=cua-r-titulo]", `ZTCUA Baja presión ${ancho} (rev)`); await escribir(p, "[data-testid=cua-r-desc]", "ZTCUA descripción nueva"); await clic(p, "[data-testid=cua-r-guardar]");
+  await p.waitForFunction(() => window.__cuaderno?.version === 5, { timeout: 20000 }).catch(() => {});
+  ok(`${tag} B11c renombrado: queda la versión 5 con el título nuevo y las mismas marcas`, (c = await cua(p)).version === 5 && c.marcas.length === esperadas && /\(rev\)/.test(await p.$eval("[data-testid=cua-titulo]", (e) => e.innerText))
+    && sqlq(`select titulo || '|' || descripcion from analisis.cuaderno_versiones where cuaderno_id = '${ids[ancho]}' and version = 5`) === `ZTCUA Baja presión ${ancho} (rev)|ZTCUA descripción nueva`);
+  await clic(p, "[data-testid=cua-modo] button:last-child"); await clic(p, "[data-testid=cua-h-goma]"); await arrastrar(p, -40, -90, 40, -90);
+  ok(`${tag} B11d la goma sobre una marca guardada y «Guardar»: versión 6; en la base queda anulada con «Borrado con el borrador»`, (await cua(p)).pendientes === 1 && (await guardar(p)) && (c = await cua(p)).version === 6 && c.marcas.length === esperadas - 1
+    && sqlq(`select count(*) from analisis.marca_versiones where cuaderno_id = '${ids[ancho]}' and version = 6 and anulada and motivo = 'Borrado con el borrador'`) === "1");
+  esperadas -= 1;
+  await clic(p, "[data-testid=cua-modo] button:first-child");
   // archivar y reabrir
   await clic(p, "[data-testid=cua-mas]"); await clic(p, "[data-testid=cua-estado]"); await p.waitForSelector("[data-testid=cua-dialogo-estado]");
   ok(`${tag} B12 archivar pide motivo`, await p.$eval("[data-testid=cua-estado-si]", (b) => b.disabled));
@@ -535,7 +620,7 @@ for (const ancho of [390, 1280]) {
   await clic(p, `[data-cuaderno="${ids[ancho]}"]`); await p.waitForFunction((id) => window.__cuaderno?.id === id, { timeout: 20000 }, ids[ancho]); await pausa(300);
   c = await cua(p);
   ok(`${tag} C03 lo abre en solo lectura: sin «Editar», sin «Guardar», sin herramientas`, !c.puede_editar && c.marcas.length === esperadas && (await hay(p, "[data-testid=cua-lectura]")) && !(await hay(p, "[data-testid=cua-modo]")) && !(await hay(p, "[data-testid=cua-guardar]")) && !(await hay(p, "[data-testid=cua-herr]")));
-  await tocar(p, -20, 95);
+  await tocar(p, -20, 108);
   const ficha = await p.$eval("[data-testid=cua-ficha]", (e) => ({ t: e.innerText, campos: e.querySelectorAll("textarea, select, input").length, botones: [...e.querySelectorAll("button")].map((b) => b.innerText.trim()) })).catch(() => null);
   ok(`${tag} C04 la ficha de una marca ajena se lee (el texto del post-it) pero no se puede cambiar, mover ni anular`, ficha && /ZTCUA revisar con el macromedidor/.test(ficha.t) && ficha.campos === 0 && !ficha.botones.some((b) => /Mover|Anular|Quitar/.test(b)), JSON.stringify(ficha));
   await p.screenshot({ path: join(CAP, `c04_lectura_${ancho}.png`) });

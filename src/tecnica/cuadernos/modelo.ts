@@ -142,3 +142,57 @@ export function escribirBorrador(correo: string, id: string, version_base: numbe
   } catch { /* sin espacio o sin permiso: el borrador es una ayuda, no bloquea */ }
 }
 export function borrarBorrador(correo: string, id: string): void { try { localStorage.removeItem(clave(correo, id)); } catch { /* nada */ } }
+
+// ---------- mover una marca completa ----------
+/** La misma figura corrida (dLon, dLat) grados. */
+export function trasladar(g: GeomMarca, dLon: number, dLat: number): GeomMarca {
+  const p = ([a, b]: [number, number]): [number, number] => [r7(a + dLon), r7(b + dLat)];
+  if (g.type === "Point") return { type: "Point", coordinates: p(g.coordinates) };
+  if (g.type === "LineString") return { type: "LineString", coordinates: g.coordinates.map(p) };
+  return { type: "Polygon", coordinates: g.coordinates.map((anillo) => anillo.map(p)) };
+}
+export const vertices = (g: GeomMarca): [number, number][] => (g.type === "Point" ? [g.coordinates] : g.type === "LineString" ? g.coordinates : g.coordinates[0]);
+export const figuraDentro = (g: GeomMarca) => vertices(g).every(([lon, lat]) => dentro(lon, lat));
+export const MOTIVO_GOMA = "Borrado con el borrador";
+
+// ---------- deshacer y rehacer (solo de pantalla, sobre los cambios pendientes) ----------
+export type Historia = { pasado: Pendientes[]; futuro: Pendientes[]; clave: string };
+export const historiaVacia = (): Historia => ({ pasado: [], futuro: [], clave: "" });
+/** Anota un paso. Con la misma `clave` que el paso anterior (escribir una nota, arrastrar una marca, una pasada de la goma) no suma otro: es el mismo gesto. */
+export function anotar(h: Historia, antes: Pendientes, clave = ""): void {
+  if (!(clave && clave === h.clave)) { h.pasado.push(antes); if (h.pasado.length > 200) h.pasado.shift(); }
+  h.futuro = []; h.clave = clave;
+}
+export function deshacer(h: Historia, actual: Pendientes): Pendientes | null {
+  const p = h.pasado.pop(); if (!p) return null;
+  h.futuro.push(actual); h.clave = ""; return p;
+}
+export function rehacer(h: Historia, actual: Pendientes): Pendientes | null {
+  const p = h.futuro.pop(); if (!p) return null;
+  h.pasado.push(actual); h.clave = ""; return p;
+}
+
+// ---------- página «Detalle del cuaderno» del PDF: el encuadre de las marcas, con margen ----------
+/** Caja de todas las marcas (los círculos, con su radio), con 12 % de margen por lado y al menos ~250 m de lado. null si no hay marcas. */
+export function encuadre(marcas: { geom: GeomMarca; radio_m: number | null }[]): { oeste: number; sur: number; este: number; norte: number } | null {
+  let o = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+  for (const m of marcas) {
+    const lat0 = vertices(m.geom)[0][1], dy = (m.radio_m ?? 0) / 111320, dx = dy / Math.cos(rad(lat0));
+    for (const [lon, lat] of vertices(m.geom)) { o = Math.min(o, lon - dx); e = Math.max(e, lon + dx); s = Math.min(s, lat - dy); n = Math.max(n, lat + dy); }
+  }
+  if (!Number.isFinite(o)) return null;
+  const min = 0.00225, cx = (o + e) / 2, cy = (s + n) / 2, w = Math.max(e - o, min) * 1.24, h = Math.max(n - s, min) * 1.24;
+  return { oeste: r7(cx - w / 2), sur: r7(cy - h / 2), este: r7(cx + w / 2), norte: r7(cy + h / 2) };
+}
+/** Zoom con el que el encuadre ocupa ~`px` píxeles en su lado más exigente (proporción del marco de la hoja: ancho/alto), entre 14 y 18. */
+export function zoomDeEncuadre(c: { oeste: number; sur: number; este: number; norte: number }, aspecto: number, px = 1500): number {
+  const lat = (c.sur + c.norte) / 2, wM = distancia([c.oeste, lat], [c.este, lat]), hM = distancia([c.oeste, c.sur], [c.oeste, c.norte]);
+  const altoM = Math.max(hM, wM / aspecto);      // metros que debe cubrir el alto del mapa
+  const z = Math.log2((2 * Math.PI * 6378137 * Math.cos(rad(lat)) * px) / (512 * altoM));
+  return Math.max(14, Math.min(18, Math.round(z * 4) / 4));
+}
+/** Paso «bonito» de la cuadrícula de coordenadas para ese ancho (unas 4 a 7 marcas). */
+export function pasoDeEncuadre(c: { oeste: number; este: number }): number {
+  const w = c.este - c.oeste;
+  return [0.02, 0.01, 0.005, 0.002, 0.001, 0.0005, 0.0002].find((p) => w / p >= 4) ?? 0.0002;
+}

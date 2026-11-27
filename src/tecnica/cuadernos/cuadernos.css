@@ -12,6 +12,10 @@
 .cua-h { min-height: 40px; padding: 0 12px; border: 1px solid #b9c6cf; border-radius: 8px; background: #fff; color: #22313f; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .cua-h[aria-pressed="true"] { background: var(--geo-color, #0a4f7a); color: #fff; border-color: transparent; }
 .cua-soltar { border-style: dashed; }
+.cua-h:disabled { color: #9aa8b3; cursor: not-allowed; }
+.cua-pasos { display: inline-flex; gap: 4px; }
+.cua-pasos .cua-h { min-width: 40px; padding: 0 8px; font-size: 18px; }
+.cua-renombrar { display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid #e3e9ed; padding-bottom: 10px; }
 .cua-menu { position: relative; }
 .cua-desplegable { position: absolute; left: 0; top: calc(100% + 4px); z-index: 7; background: #fff; border: 1px solid #c8d3da; border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); padding: 6px;
   display: flex; flex-direction: column; gap: 2px; width: max-content; max-width: min(340px, calc(100vw - 20px)); max-height: 70vh; overflow: auto; }
