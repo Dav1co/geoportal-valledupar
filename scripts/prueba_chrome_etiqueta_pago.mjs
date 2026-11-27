@@ -5,6 +5,7 @@
 // Perfiles (5): administrador, supervisor de Comercial, operador de campo (sin Análisis), dual (campo y Análisis) y sin permisos.
 // Contratos de prueba 9918000001NN (solo en la base local): 101 pago por cupones (corte 202610), 102 pago de la cartera mensual (corte 202609), 103 sin pago.
 //   node scripts/prueba_chrome_etiqueta_pago.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> [capturas]
+//   --revision  no corre las pruebas: deja arriba la revisión local (http://127.0.0.1:55971/?rol=dual, base CON el paquete; ?rol=antes, la base de antes) hasta Ctrl-C.
 //   -h | --help  este uso. Cualquier otra opción que empiece con «-» es un error.
 // Puertos 55971 (app, Auth, PostgREST) y 55972 (Edge).
 import { createRequire } from "node:module";
@@ -14,8 +15,9 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, execFileSync } from "node:child_process";
 import http from "node:http";
-const USO = "Uso: node scripts/prueba_chrome_etiqueta_pago.mjs <chrome> <puppeteer-core> <deno> <supabase/functions> [capturas]";
-const args = process.argv.slice(2);
+const USO = "Uso: node scripts/prueba_chrome_etiqueta_pago.mjs [--revision] <chrome> <puppeteer-core> <deno> <supabase/functions> [capturas]";
+const REVISION = process.argv.includes("--revision");
+const args = process.argv.slice(2).filter((a) => a !== "--revision");
 if (args.some((a) => a === "-h" || a === "--help")) { console.log(USO); process.exit(0); }
 const rara = args.find((a) => a.startsWith("-")); if (rara) { console.error(`Opción desconocida: ${rara}\n${USO}`); process.exit(2); }
 const [CHROME, PUP, DENO, FUNCIONES, CAP_ARG] = args;
@@ -31,7 +33,7 @@ const PSQL = "/opt/homebrew/opt/postgresql@17/bin/psql";
 const pgenv = () => ({ ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: "55432", PGUSER: "postgres", PGDATABASE: DB, PGOPTIONS: "-c client_min_messages=warning" });
 const sqlq = (s) => execFileSync(PSQL, ["-AtX", "-v", "ON_ERROR_STOP=1", "-c", s], { env: pgenv(), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trim();
 const lit = (v) => (v === null || v === undefined ? "null" : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : typeof v === "object" ? `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb` : `'${String(v).replace(/'/g, "''")}'`);
-const E = { adm: "ztpag.adm@emdupar.gov.co", sup: "ztpag.sup@emdupar.gov.co", op: "ztpag.op@emdupar.gov.co", dual: "ztpag.dual@emdupar.gov.co", sin: "ztpag.sin@emdupar.gov.co" };
+const E = { adm: "ztpag.adm@emdupar.gov.co", sup: "ztpag.sup@emdupar.gov.co", op: "ztpag.op@emdupar.gov.co", dual: "ztpag.dual@emdupar.gov.co", sin: "ztpag.sin@emdupar.gov.co", antes: "ztpag.antes@emdupar.gov.co" };
 
 // ---------- 1. Las dos bases ----------
 const MESES = JSON.stringify(["202604", "202605", "202606", "202607", "202608", "202609"].map((p, k) => ({ periodo: p, sin_dato: false, m3: 10 + k, metodo: "lectura", lectura_real: true, causal: "99 LECTURA NORMAL" })));
@@ -43,7 +45,8 @@ for (const [modo, db] of Object.entries(BASES)) {
     ('${E.sup}', 'ZTPAG Supervisora', 'consulta', true, 'sin_restriccion', 'todos', false, true, true, false, false),
     ('${E.op}', 'ZTPAG Operario sin Análisis', 'consulta', true, 'sin_restriccion', 'todos', false, true, false, false, false),
     ('${E.dual}', 'ZTPAG Dual', 'consulta', true, 'sin_restriccion', 'todos', false, true, false, false, true),
-    ('${E.sin}', 'ZTPAG Sin permisos', 'consulta', true, 'sin_restriccion', 'todos', false, false, false, false, false);
+    ('${E.sin}', 'ZTPAG Sin permisos', 'consulta', true, 'sin_restriccion', 'todos', false, false, false, false, false),
+    ('${E.antes}', 'ZTPAG Dual (revisión con la base de antes)', 'consulta', true, 'sin_restriccion', 'todos', false, true, false, false, true);
     insert into public.cartera_suscripcion (contrato, estado, nombre, telefono, direccion, barrio, deuda_total, periodo_carga, categoria, subcategoria, ciclo) values
       ('991800000101', 'ACTIVO', 'ZTPAG PERSONA UNO', '3001112233', 'CRA 9 # 12-30', 'CENTRO', 45000, '20261123', '1 - Residencial', '2', '15'),
       ('991800000102', 'ACTIVO', 'ZTPAG PERSONA DOS', '3002223344', 'CLL 5 # 3-10', 'LOS MAYALES', 0, '20261123', '1 - Residencial', '2', '15'),
@@ -106,6 +109,7 @@ const srv = http.createServer((req, res) => {
     if (p === "/auth/v1/user") { const rol = tok.replace(/^tok-/, ""); return E[rol] ? json(200, { id: "u-" + rol, email: E[rol] }) : json(401, {}); }
     if (p.startsWith("/rest/v1/rpc/")) {
       const fn = p.slice(13), a = JSON.parse(cuerpo.toString() || "{}");
+      if (REVISION) DB = a.p_solicitante === E.antes ? BASES.sin : BASES.con;   // revisión: «antes» consulta la base sin el paquete
       if (fn === "geoportal_log") return json(200, null);
       if (fn === "geoportal_estado_acceso" || fn.startsWith("geoportal_campo_")) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
       return json(404, { code: "PGRST202", message: "no existe" });
@@ -132,6 +136,7 @@ const llamar = async (rol, contrato) => {
   const r = await fetch(`http://127.0.0.1:${P_EDGE}/functions/v1/geoportal-campo?accion=analisis_contrato&contrato=${contrato}`, { headers: { Authorization: `Bearer tok-${rol}` } });
   let j = null; try { j = await r.json(); } catch { /* sin cuerpo */ } return { s: r.status, j };
 };
+if (REVISION) { console.log(`revisión local: http://127.0.0.1:${P_BASE}/?rol=dual (con el paquete) · http://127.0.0.1:${P_BASE}/?rol=antes (la base de antes) · contratos 991800000101, 102, 103`); await new Promise(() => {}); }
 console.log("— Edge por llamada directa (base CON el paquete) —");
 {
   let r = await llamar("dual", "991800000101");
