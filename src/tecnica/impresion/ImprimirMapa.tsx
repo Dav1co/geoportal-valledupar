@@ -14,6 +14,12 @@ import logoUrl from "../membrete_logo.png";
 
 export type ItemImpresion = { color: string; texto: string; forma: "linea" | "punto" | "area" };
 export type LeyendaImpresion = { tematica: { titulo: string; items: ItemImpresion[]; notas?: string[]; notaSinInstalacion?: string }; sectores: { color: string; texto: string }[]; subsectores: boolean };
+/** Corte 2 (Cuadernos de análisis), OPCIONAL: lo que se pinta ENCIMA del mapa de cada página (las marcas del cuaderno) y su leyenda propia. Sin esto, la
+ *  impresión es exactamente la del Corte 1. `aHoja` proyecta a píxeles de la hoja; `k`, píxeles de hoja por punto; `mpp`, metros por píxel de hoja. */
+export type SobreImpresion = {
+  dibujar: (x: CanvasRenderingContext2D, aHoja: (lon: number, lat: number) => [number, number], k: number, mpp: number) => void;
+  leyenda?: { titulo: string; items: { texto: string; dibujar: (x: CanvasRenderingContext2D, cx: number, cy: number, lado: number) => void }[] };
+};
 /** Lo que queda de cada página para las pruebas (no se usa en la app). */
 export type MedidaPagina = { clave: string; zoom: number; extension: Extension; vista: Extension; metrosPorPunto: number; escala: number; fondo: "calles" | "satelite"; mapaPx: [number, number]; notas: string[] };
 
@@ -96,7 +102,7 @@ async function dibujarMapa(estilo: maplibregl.StyleSpecification, pag: PaginaImp
   return { lienzo, proyectar, ancho, alto, mpp, vista, fallo, sinInstalacion };
 }
 
-type Composicion = { titulo: string; usuario: string; fecha: string; leyenda: LeyendaImpresion; logo: HTMLImageElement; aviso: string | null; fondo: "calles" | "satelite" };
+type Composicion = { titulo: string; usuario: string; fecha: string; leyenda: LeyendaImpresion; logo: HTMLImageElement; aviso: string | null; fondo: "calles" | "satelite"; sobre?: SobreImpresion };
 
 /** Compone la hoja: el mapa en el marco y la plantilla alrededor. Devuelve el JPEG y las medidas. */
 function componer(pag: PaginaImpresion, mapa: Awaited<ReturnType<typeof dibujarMapa>>, c: Composicion, ubicacion: { lienzo: HTMLCanvasElement; caja: [number, number, number, number] } | null) {
@@ -112,6 +118,21 @@ function componer(pag: PaginaImpresion, mapa: Awaited<ReturnType<typeof dibujarM
     x.font = `${o.peso ?? "400"} ${P(tam)}px ${FUENTE}`; x.fillStyle = o.color ?? "#1b2733"; x.textAlign = o.alinear ?? "left"; x.textBaseline = o.base ?? "alphabetic";
     x.fillText(t, px, py, o.max);
   };
+  if (c.sobre) {      // Corte 2: las marcas del cuaderno, recortadas al marco
+    x.save(); x.beginPath(); x.rect(fx, fy, fw, fh); x.clip();
+    c.sobre.dibujar(x, aHoja, K, (mapa.mpp * mapa.ancho) / fw);
+    x.restore();
+  }
+  if (c.sobre?.leyenda?.items.length) {      // Corte 2: la leyenda del cuaderno (solo lo que usa), en un recuadro dentro del mapa, abajo a la derecha
+    const todos = c.sobre.leyenda.items, its = todos.slice(0, 14), mas = todos.length - its.length, fila = P(11);
+    x.font = `700 ${P(7.5)}px ${FUENTE}`; let w = x.measureText(c.sobre.leyenda.titulo).width;
+    x.font = `400 ${P(6.5)}px ${FUENTE}`; for (const it of its) w = Math.max(w, P(18) + x.measureText(it.texto).width);
+    w = Math.min(w + P(14), fw * 0.45); const h = P(16) + (its.length + (mas > 0 ? 1 : 0)) * fila + P(4), bx = fx + fw - w - P(8), by = fy + fh - h - P(8);
+    x.save(); x.fillStyle = "rgba(255,255,255,0.93)"; x.fillRect(bx, by, w, h); x.strokeStyle = "#1b2733"; x.lineWidth = P(0.6); x.strokeRect(bx, by, w, h); x.restore();
+    txt(c.sobre.leyenda.titulo, bx + P(7), by + P(11), 7.5, { peso: "700", max: w - P(14) });
+    its.forEach((it, i) => { const ly = by + P(16) + (i + 0.75) * fila; it.dibujar(x, bx + P(13), ly - P(2.5), P(9.5)); txt(it.texto, bx + P(25), ly, 6.5, { max: w - P(32) }); });
+    if (mas > 0) txt(`y ${mas} más`, bx + P(25), by + P(16) + (its.length + 0.75) * fila, 6, { color: "#52626f" });
+  }
   // ----- marco con las coordenadas en grados en el borde -----
   x.save(); x.strokeStyle = "#1b2733"; x.lineWidth = P(1.2); x.strokeRect(fx, fy, fw, fh);
   const v = mapa.vista, paso = pag.pasoGrados;
@@ -200,7 +221,8 @@ function componer(pag: PaginaImpresion, mapa: Awaited<ReturnType<typeof dibujarM
 
 const aJpeg = (c: HTMLCanvasElement, q: number): Promise<Uint8Array> => new Promise((ok, mal) => c.toBlob((b) => (b ? b.arrayBuffer().then((a) => ok(new Uint8Array(a)), mal) : mal(new Error("jpeg"))), "image/jpeg", q));
 
-export function ImprimirMapa({ mapa, titulo, leyenda, fondo, onCerrar }: { mapa: maplibregl.Map | null; titulo: string; leyenda: LeyendaImpresion; fondo: "calles" | "satelite"; onCerrar: () => void }) {
+export function ImprimirMapa({ mapa, titulo, leyenda, fondo, onCerrar, sobre }: { mapa: maplibregl.Map | null; titulo: string; leyenda: LeyendaImpresion; fondo: "calles" | "satelite"; onCerrar: () => void;
+  sobre?: SobreImpresion }) {
   const [estado, setEstado] = useState<{ fase: "trabajando"; texto: string } | { fase: "listo"; url: string; nombre: string; kb: number; aviso: string | null } | { fase: "error"; texto: string }>({ fase: "trabajando", texto: "Preparando la página 1 de 2 (Total)…" });
   const urlRef = useRef<string | null>(null);
   useEffect(() => {
@@ -224,7 +246,7 @@ export function ImprimirMapa({ mapa, titulo, leyenda, fondo, onCerrar }: { mapa:
           if (!vivo) return;
           let caja: [number, number, number, number] | null = null;
           if (pag.ubicacion && ubic) { const e = pag.extension; const [a, b] = ubic.proyectar(e.oeste, e.norte), [c2, d] = ubic.proyectar(e.este, e.sur); caja = [a, b, c2, d]; }
-          const { hoja, metrosPorPunto, escala, notas } = componer(pag, m, { titulo, usuario, fecha, leyenda, logo, aviso, fondo: usado }, pag.ubicacion && ubic && caja ? { lienzo: ubic.lienzo, caja } : null);
+          const { hoja, metrosPorPunto, escala, notas } = componer(pag, m, { titulo, usuario, fecha, leyenda, logo, aviso, fondo: usado, sobre }, pag.ubicacion && ubic && caja ? { lienzo: ubic.lienzo, caja } : null);
           if (i === 0) ubic = { lienzo: m.lienzo, proyectar: m.proyectar };
           jpgs.push(await aJpeg(hoja, 0.85));
           medidas.push({ clave: pag.clave, zoom: pag.zoom, extension: pag.extension, vista: m.vista, metrosPorPunto, escala, fondo: usado, mapaPx: [m.ancho, m.alto], notas });

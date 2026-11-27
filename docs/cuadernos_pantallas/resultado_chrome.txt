@@ -1,0 +1,156 @@
+OK    [390] A01 el supervisor abre el geovisor y ve el botón «Cuadernos»
+OK    [390] A02 sin cuaderno abierto, el vidrio está vacío y un toque en la red abre la tarjeta del geovisor de siempre
+OK    [390] A03 la lista: «Míos» y «Del equipo», «Nuevo cuaderno» y el filtro de archivados
+OK    [390] A04 «Crear» pide un título de 3 letras o más
+OK    [390] A05 el cuaderno nace en la versión 1, sin marcas, y queda en modo edición con su barra
+OK    [390] A06 «Guardar» está apagado sin cambios
+OK    [390] A07 modo exploración: no hay herramientas y un toque no pone marcas
+OK    [390] A08 «Problema» despliega los 9 puntos tipo, cada uno con su ícono
+OK    [390] A09 un toque pone el problema (sin guardar) y abre su ficha
+OK    [390] A10 la nota lleva el aviso «No escriba nombres, cédulas ni teléfonos»
+OK    [390] A11 la nota y la categoría quedan en la marca
+OK    [390] A12 el pin se pinta en el vidrio, en su lugar
+OK    [390] A13 «Activo» despliega los 12 pictogramas y el interruptor Acueducto / Alcantarillado; avisa que es una propuesta
+OK    [390] A14 el ícono de activo queda con su sistema (pozo de alcantarillado) y no enlaza un activo real
+OK    [390] A15 el post-it pide su texto (con el aviso de no escribir datos personales)
+OK    [390] A16 quedan el punto de referencia (con color) y el post-it (con su texto)
+OK    [390] A17 en el celular: Problema, Activo, Referencia y Post-it; «Dibujo» y las medidas quedan para escritorio
+OK    [390] A23 hay 4 marcas sin guardar y «Guardar» las cuenta
+OK    [390] A24 mientras se edita hay un borrador en el dispositivo
+OK    [390] A25 la pantalla no se desborda
+OK    [390] A25b la barra del geovisor no se sale de la pantalla (en el celular «Cuadernos» va en la fila de herramientas) y los desplegables caben
+OK    [390] A26 «Guardar» deja la versión 2 con las 4 marcas y nada pendiente (0 ms)
+OK    [390] A27 en la base: 4 marcas en la versión 2 y ninguna fila con datos personales
+OK    [390] A28 guardado: el borrador del dispositivo se quita
+OK    [390] A29 el servidor anotó el sector de las marcas
+OK    [390] A32 tocar una marca guardada abre su ficha (versión 2)
+OK    [390] A33 «Mover» cambia el punto de la marca y queda como cambio pendiente
+OK    [390] A34 «Anular» pide un motivo (la marca no se borra)
+OK    [390] A35 anulada: sale del vidrio y queda 1 cambio por guardar
+OK    [390] A36 al guardar queda la versión 3; en la base la marca sigue, anulada y con su motivo
+OK    [390] A36b queda un cambio sin guardar antes de cerrar la pestaña
+OK    [390] A37 la lista muestra el cuaderno en «Míos», con su versión y sus marcas
+OK    [390] A38 al reabrir, ofrece recuperar el borrador que quedó en el dispositivo
+OK    [390] A39 recuperado: vuelve el cambio pendiente, en modo edición
+OK    [390] A40 salir con cambios sin guardar: Guardar, Salir sin guardar o Cancelar
+OK    [390] A41 «Cancelar» deja todo como estaba
+OK    [390] A42 cambiar capas o el mapa de fondo no dispara el aviso ni pierde las marcas (foto satelital encendida)
+OK    [390] A43 «Guardar» desde el aviso de salida guarda y sale
+OK    [390] B01 el cuaderno abre en exploración, en la versión 4, con sus 4 marcas pintadas
+OK    [390] B02 captura con la foto satelital: «Descargar» baja un JPEG de 780 × 972 px y 69 KB (lado ≤ 1.600 px, ≤ 600 KB)
+OK    [390] B02 captura con calles: «Descargar» baja un JPEG de 780 × 972 px y 92 KB (lado ≤ 1.600 px, ≤ 600 KB)
+OK    [390] B03 el cupo se ve: «Capturas guardadas: 0 de 20»
+OK    [390] B04 «Guardar en el cuaderno»: sube al almacenamiento (JPEG) y el servidor la confirma con su tamaño real
+OK    [390] B05 «Capturas guardadas» la lista con título, tamaño y fecha
+OK    [390] B06 «Ver» abre la imagen con una dirección firmada de corta vida
+OK    [390] B07 anular la captura (con motivo): deja de verse y de contar; ni la fila ni el archivo se borran
+OK    [390] B08 «Exportar las marcas (CSV)»: una fila por marca, con «;», y las notas tal cual (las fórmulas, neutralizadas)
+OK    [390] B09 «Imprimir / PDF con las marcas»: el PDF de 2 páginas (Total y Urbano) del Corte 1, de menos de 10 MB
+OK    [390] B10 «Versiones»: las 4, con su fecha; la abierta está señalada
+OK    [390] B11 una versión anterior se ve tal como era (4 marcas, con el problema que luego se anuló) y es solo lectura
+OK    [390] B12 archivar pide motivo
+OK    [390] B13 archivado: no se borra, queda solo lectura y pasa a «Archivados»
+OK    [390] B14 la lista: fuera de «Vigentes» y dentro de «Archivados»
+OK    [390] B15 reabierto: se puede editar otra vez
+OK    [390] B16 «Cerrar» el cuaderno: el vidrio queda limpio y el geovisor sigue igual (leyenda de la red y botón «Capas»)
+OK    [390] B17 la pantalla no se desborda
+OK    [390] C01 el dual (supervisor de planta) abre el geovisor y ve «Cuadernos»
+OK    [390] C02 ve el cuaderno del supervisor en «Del equipo», con el nombre del autor
+OK    [390] C03 lo abre en solo lectura: sin «Editar», sin «Guardar», sin herramientas
+OK    [390] C04 la ficha de una marca ajena se lee (el texto del post-it) pero no se puede cambiar, mover ni anular
+OK    [390] C05 puede capturar (solo descargar), imprimir y exportar; no puede archivar
+OK    [390] C06 en la captura solo tiene «Descargar»
+OK    [390] C07 el servidor decide: guardar en un cuaderno ajeno da 403, también para el dual
+OK    [390] D01 el administrador abre el geovisor y ve «Cuadernos»
+OK    [390] D02 abre el cuaderno del supervisor en solo lectura (edita solo el autor, también frente al administrador)
+OK    [390] D03 puede crear el suyo
+OK    [390] E01 el operador abre el geovisor en solo lectura y NO ve «Cuadernos»
+OK    [390] E02 el servidor decide: perfil, lista, cuaderno y exportación dan 403 al operador
+OK    [390] E03 su geovisor sigue igual: imprime y no tiene vidrio pintado
+OK    [390] F01 el operador sin la casilla no abre el geovisor ni los cuadernos (403 en el servidor)
+OK    [390] F02 sin permisos asignados: no ve el geovisor ni los cuadernos, y el servidor responde 403
+OK    [1280] A01 el supervisor abre el geovisor y ve el botón «Cuadernos»
+OK    [1280] A02 sin cuaderno abierto, el vidrio está vacío y un toque en la red abre la tarjeta del geovisor de siempre
+OK    [1280] A03 la lista: «Míos» y «Del equipo», «Nuevo cuaderno» y el filtro de archivados
+OK    [1280] A04 «Crear» pide un título de 3 letras o más
+OK    [1280] A05 el cuaderno nace en la versión 1, sin marcas, y queda en modo edición con su barra
+OK    [1280] A06 «Guardar» está apagado sin cambios
+OK    [1280] A07 modo exploración: no hay herramientas y un toque no pone marcas
+OK    [1280] A08 «Problema» despliega los 9 puntos tipo, cada uno con su ícono
+OK    [1280] A09 un toque pone el problema (sin guardar) y abre su ficha
+OK    [1280] A10 la nota lleva el aviso «No escriba nombres, cédulas ni teléfonos»
+OK    [1280] A11 la nota y la categoría quedan en la marca
+OK    [1280] A12 el pin se pinta en el vidrio, en su lugar
+OK    [1280] A13 «Activo» despliega los 12 pictogramas y el interruptor Acueducto / Alcantarillado; avisa que es una propuesta
+OK    [1280] A14 el ícono de activo queda con su sistema (pozo de alcantarillado) y no enlaza un activo real
+OK    [1280] A15 el post-it pide su texto (con el aviso de no escribir datos personales)
+OK    [1280] A16 quedan el punto de referencia (con color) y el post-it (con su texto)
+OK    [1280] A17 la línea se arma punto a punto y «Terminar» aparece con 2 o más
+OK    [1280] A18 la zona sin guardar dice que se cuenta al guardar y ofrece «Contar ahora»
+OK    [1280] A19 «Contar ahora» muestra SOLO dos números (predios y contratos)
+OK    [1280] A20 la mano alzada traza con el arrastre (el mapa no se mueve) y el trazo llega aligerado
+OK    [1280] A21 al soltar la herramienta el mapa vuelve a moverse
+OK    [1280] A22 «Medir distancia» da la distancia real (±1 %) y no agrega marcas
+OK    [1280] A23 hay 8 marcas sin guardar y «Guardar» las cuenta
+OK    [1280] A24 mientras se edita hay un borrador en el dispositivo
+OK    [1280] A25 la pantalla no se desborda
+OK    [1280] A25b la barra del geovisor no se sale de la pantalla (en el celular «Cuadernos» va en la fila de herramientas) y los desplegables caben
+OK    [1280] A26 «Guardar» deja la versión 2 con las 8 marcas y nada pendiente (0 ms)
+OK    [1280] A27 en la base: 8 marcas en la versión 2 y ninguna fila con datos personales
+OK    [1280] A28 guardado: el borrador del dispositivo se quita
+OK    [1280] A29 el servidor anotó el sector de las marcas
+OK    [1280] A30 la zona guardada trae los predios y contratos que cuenta el servidor (256 · 256), iguales al catastro
+OK    [1280] A31 el círculo guarda su radio en metros y la línea su flecha
+OK    [1280] A32 tocar una marca guardada abre su ficha (versión 2, con su sector)
+OK    [1280] A33 «Mover» cambia el punto de la marca y queda como cambio pendiente
+OK    [1280] A34 «Anular» pide un motivo (la marca no se borra)
+OK    [1280] A35 anulada: sale del vidrio y queda 1 cambio por guardar
+OK    [1280] A36 al guardar queda la versión 3; en la base la marca sigue, anulada y con su motivo
+OK    [1280] A36b queda un cambio sin guardar antes de cerrar la pestaña
+OK    [1280] A37 la lista muestra el cuaderno en «Míos», con su versión y sus marcas
+OK    [1280] A38 al reabrir, ofrece recuperar el borrador que quedó en el dispositivo
+OK    [1280] A39 recuperado: vuelve el cambio pendiente, en modo edición
+OK    [1280] A40 salir con cambios sin guardar: Guardar, Salir sin guardar o Cancelar
+OK    [1280] A41 «Cancelar» deja todo como estaba
+OK    [1280] A42 cambiar capas o el mapa de fondo no dispara el aviso ni pierde las marcas (foto satelital encendida)
+OK    [1280] A43 «Guardar» desde el aviso de salida guarda y sale
+OK    [1280] B01 el cuaderno abre en exploración, en la versión 4, con sus 8 marcas pintadas
+OK    [1280] B02 captura con la foto satelital: «Descargar» baja un JPEG de 1600 × 844 px y 147 KB (lado ≤ 1.600 px, ≤ 600 KB)
+OK    [1280] B02 captura con calles: «Descargar» baja un JPEG de 1600 × 844 px y 206 KB (lado ≤ 1.600 px, ≤ 600 KB)
+OK    [1280] B03 el cupo se ve: «Capturas guardadas: 0 de 20»
+OK    [1280] B04 «Guardar en el cuaderno»: sube al almacenamiento (JPEG) y el servidor la confirma con su tamaño real
+OK    [1280] B05 «Capturas guardadas» la lista con título, tamaño y fecha
+OK    [1280] B06 «Ver» abre la imagen con una dirección firmada de corta vida
+OK    [1280] B07 anular la captura (con motivo): deja de verse y de contar; ni la fila ni el archivo se borran
+OK    [1280] B08 «Exportar las marcas (CSV)»: una fila por marca, con «;», y las notas tal cual (las fórmulas, neutralizadas)
+OK    [1280] B09 «Imprimir / PDF con las marcas»: el PDF de 2 páginas (Total y Urbano) del Corte 1, de menos de 10 MB
+OK    [1280] B10 «Versiones»: las 4, con su fecha; la abierta está señalada
+OK    [1280] B11 una versión anterior se ve tal como era (8 marcas, con el problema que luego se anuló) y es solo lectura
+OK    [1280] B12 archivar pide motivo
+OK    [1280] B13 archivado: no se borra, queda solo lectura y pasa a «Archivados»
+OK    [1280] B14 la lista: fuera de «Vigentes» y dentro de «Archivados»
+OK    [1280] B15 reabierto: se puede editar otra vez
+OK    [1280] B16 «Cerrar» el cuaderno: el vidrio queda limpio y el geovisor sigue igual (leyenda de la red y botón «Capas»)
+OK    [1280] B17 la pantalla no se desborda
+OK    [1280] C01 el dual (supervisor de planta) abre el geovisor y ve «Cuadernos»
+OK    [1280] C02 ve el cuaderno del supervisor en «Del equipo», con el nombre del autor
+OK    [1280] C03 lo abre en solo lectura: sin «Editar», sin «Guardar», sin herramientas
+OK    [1280] C04 la ficha de una marca ajena se lee (el texto del post-it) pero no se puede cambiar, mover ni anular
+OK    [1280] C05 puede capturar (solo descargar), imprimir y exportar; no puede archivar
+OK    [1280] C06 en la captura solo tiene «Descargar»
+OK    [1280] C07 el servidor decide: guardar en un cuaderno ajeno da 403, también para el dual
+OK    [1280] D01 el administrador abre el geovisor y ve «Cuadernos»
+OK    [1280] D02 abre el cuaderno del supervisor en solo lectura (edita solo el autor, también frente al administrador)
+OK    [1280] D03 puede crear el suyo
+OK    [1280] E01 el operador abre el geovisor en solo lectura y NO ve «Cuadernos»
+OK    [1280] E02 el servidor decide: perfil, lista, cuaderno y exportación dan 403 al operador
+OK    [1280] E03 su geovisor sigue igual: imprime y no tiene vidrio pintado
+OK    [1280] F01 el operador sin la casilla no abre el geovisor ni los cuadernos (403 en el servidor)
+OK    [1280] F02 sin permisos asignados: no ve el geovisor ni los cuadernos, y el servidor responde 403
+OK    G01 nada personal en las tablas de análisis: las zonas guardan solo números
+OK    G02 pg-safeupdate: ninguna función del paquete con DELETE/UPDATE sin WHERE
+RPC simuladas no conocidas: geoportal_tec_ptar_perfil
+
+Capturas y PDF: <carpeta de capturas>
+
+RESULTADO: 151 de 151 — SIN FALLAS

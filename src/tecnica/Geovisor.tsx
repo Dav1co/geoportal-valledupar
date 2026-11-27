@@ -15,6 +15,7 @@ import { EventosSuspension } from "./EventosSuspension";
 import { ESTILO_SECTOR, NOTAS_EDAD, TEMATICA, TEXTOS_IMPRESION, ZOOM_ETIQUETA } from "./impresion/config";      // Corte 1 del geovisor único (26-nov)
 import { colorSector, etiquetasSectores, exprColorSector, fichaSector, NOMBRES_SECTORES, nombresOcultos, SOLO_SECTORES, subsectoresDe, VER_SECTORES_INICIAL, type VerSectores } from "./sectores";
 import { ImprimirMapa, tramosConInstalacion, type LeyendaImpresion } from "./impresion/ImprimirMapa";
+import { Cuadernos, type PuenteCuaderno } from "./cuadernos/Cuadernos";
 
 // Geovisor técnico (Técnica fase 1, Corte 6a; 01 sección D, N-11, N-13 y N-14).
 // · Interruptores por grupo, encendidos al abrir según el perfil (lo decide el servidor) y «Volver a la vista por omisión». Encender o apagar no se guarda.
@@ -157,6 +158,11 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
   const [atenuadas, setAtenuadas] = useState<Set<string>>(new Set(inicial?.atenuadas ?? []));
   const [compartir, setCompartir] = useState(false);
   const [sinInstalacion, setSinInstalacion] = useState(false);      // 26-nov (David): en «Edad», si ningún tramo a la vista tiene fecha de instalación, la leyenda lo dice
+  // Corte 2 (26-nov): «Cuadernos de análisis». Todo vive en cuadernos/Cuadernos.tsx; aquí solo el botón, la ranura de su barra y el puente (toques, salir e impresión).
+  const [cuadOk, setCuadOk] = useState(false);
+  const cuadPuente = useRef<PuenteCuaderno | null>(null);
+  const [cuadRanura, setCuadRanura] = useState<HTMLDivElement | null>(null);
+  const salir = () => (cuadPuente.current ? cuadPuente.current.salir(onVolver) : onVolver());
   const [imprimir, setImprimir] = useState(false);      // Corte 1 (26-nov): «Imprimir / PDF»
   const [fondo, setFondo] = useState<"calles" | "satelite">("calles");      // Corte 1: selector «Calles / Satélite» (no se guarda)
   const [verSec, setVerSec] = useState<VerSectores>(VER_SECTORES_INICIAL);      // Corte 1: interruptores de la leyenda de sectores
@@ -164,7 +170,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
     "Vista compartida.",
     inicial.omitidas.length ? `No se muestran ${inicial.omitidas.join(", ")}: no tiene permiso para esas capas.` : "",
     inicial.fechas_cambiadas ? "Se muestran las actividades de hoy (su geovisor es de solo lectura)." : ""].filter(Boolean).join(" ") : null));
-  const [panel, setPanel] = useState<"" | "capas" | "omision">("");
+  const [panel, setPanel] = useState<"" | "capas" | "omision" | "cuadernos">("");
   const [tarjeta, setTarjeta] = useState<Tarjeta | null>(null);
   const [cortes, setCortes] = useState<CortesVigentes | null>(null);      // Corte 9b: las afectaciones vigentes (franja, tarjetas y leyenda)
   const [corteSel, setCorteSel] = useState<CorteSel | null>(null);
@@ -360,6 +366,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
       m.on("zoomend", () => setZoom(m!.getZoom()));
       m.on("click", (ev) => {
         if (!m) return;
+        if (cuadPuente.current?.clic(ev)) return;      // Corte 2: el cuaderno abierto se queda con el toque (poner o elegir una marca)
         const caja: [maplibregl.PointLike, maplibregl.PointLike] = [[ev.point.x - 14, ev.point.y - 14], [ev.point.x + 14, ev.point.y + 14]];
         // Entre varios PUNTOS de una misma capa que caben en el toque gana el más cercano al dedo. Antes ganaba el primero que trajera la tesela (un orden
         // que no significa nada): al tocar una válvula con un codo a medio metro podía salir la tarjeta del codo, sin «Marcar válvula cerrada» (19-nov).
@@ -600,9 +607,10 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
   return (
     <div className="geo" data-perfil={cfg.perfil}>
       <header className="geo-barra">
-        <button type="button" className="geo-volver" onClick={onVolver} aria-label="Volver a Técnica">←</button>
+        <button type="button" className="geo-volver" onClick={salir} aria-label="Volver a Técnica">←</button>
         <div className="geo-titulo"><h1>Geovisor técnico</h1><span>{cfg.completo ? (cfg.perfil === "admin" ? "Administrador" : "Supervisor") : "Solo lectura"}</span></div>
         {cfg.compartir ? <button type="button" className="geo-boton geo-boton-sec" onClick={() => setCompartir(true)}>Compartir</button> : null}
+        {cuadOk ? <button type="button" className="geo-boton geo-boton-sec cua-en-barra" data-testid="cuadernos" aria-expanded={panel === "cuadernos"} onClick={() => setPanel((p) => (p === "cuadernos" ? "" : "cuadernos"))}>Cuadernos</button> : null}
         <button type="button" className="geo-boton geo-boton-sec" data-testid="imprimir" aria-label={TEXTOS_IMPRESION.boton} onClick={() => setImprimir(true)}><span className="geo-largo">{TEXTOS_IMPRESION.boton}</span><span className="geo-corto" aria-hidden="true">PDF</span></button>
         <button type="button" className="geo-boton" aria-expanded={panel === "capas"} onClick={() => setPanel((p) => (p === "capas" ? "" : "capas"))}>Capas</button>
       </header>
@@ -616,6 +624,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
           <button type="button" aria-pressed={fondo === "satelite"} data-fondo="satelite" onClick={() => setFondo("satelite")}>Satélite</button>
         </div>
         {hayPorFecha ? <SelectorPeriodo cfg={cfg} periodo={periodo} onCambiar={setPeriodo} /> : null}
+        {cuadOk ? <div className="geo-seg cua-en-herr"><button type="button" data-testid="cuadernos-movil" aria-pressed={panel === "cuadernos"} onClick={() => setPanel((p) => (p === "cuadernos" ? "" : "cuadernos"))}>Cuadernos</button></div> : null}
         {flujoOn ? (
           <div className="geo-seg" role="group" aria-label="Hora del flujo del modelo" data-testid="hora-flujo">
             {(["mayor", "menor"] as const).map((h) => <button key={h} type="button" aria-pressed={horaFlujo === h} onClick={() => setHoraFlujo(h)}>
@@ -643,6 +652,7 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
           <button type="button" className="geo-franja-ver" onClick={() => verAfectaciones()}>Ver afectaciones</button>
         </div>) : null}
 
+      <div ref={setCuadRanura} className="cua-ranura" />
       <div className="geo-cuerpo">
         <div ref={cont} className="geo-mapa" role="application" aria-label="Mapa del geovisor técnico" data-zoom={zoom.toFixed(1)} />
         {zoom < cfg.zoom.min ? <div className="geo-aviso" role="status">Acerque el mapa para ver la red</div>
@@ -661,7 +671,9 @@ function GeovisorMapa({ cfg, inicial, avisoInicial, onVolver, onReportarDano, on
         {avisoAbierto ? <div className="geo-vista-aviso" role="status"><span>{avisoAbierto}</span><button type="button" className="geo-cerrar" onClick={() => setAvisoAbierto(null)} aria-label="Cerrar el aviso">✕</button></div> : null}
         {compartir ? <Compartir cfg={cfg} mapa={mapa.current} on={on} colores={colores === "afectaciones" || colores === "remuneracion" || colores === "diametro" ? "tipo" : colores} periodo={periodo} atenuadas={atenuadas} onCerrar={() => setCompartir(false)} /> : null}
         {imprimir ? <ImprimirMapa mapa={mapa.current} titulo={tituloImpresion(cfg, on, colores)} leyenda={leyendaImpresion(colores, materiales, cfg.tipos, secOn ? verSec : null, cfg.edad_ref === true)}
-          fondo={fondo} onCerrar={() => setImprimir(false)} /> : null}
+          fondo={fondo} onCerrar={() => setImprimir(false)} sobre={cuadPuente.current?.sobre()} /> : null}
+        <Cuadernos mapa={mapa.current} listo={listo} completo={cfg.completo} lista={panel === "cuadernos"} onLista={(a) => setPanel(a ? "cuadernos" : "")} puente={cuadPuente} ranura={cuadRanura}
+          alDisponer={setCuadOk} onImprimir={() => setImprimir(true)} />
         {remSel && colores === "remuneracion" ? <TarjetaRemuneracion codigo={remSel} onCerrar={() => setRemSel(null)} onVerFicha={cfg.ficha ? (c) => setFicha([c]) : undefined} /> : null}
         {tarjeta && tarjeta.capa === "flujo" ? <TarjetaFlujo codigo={String(tarjeta.props.codigo)} onCerrar={() => setTarjeta(null)} />
           : tarjeta ? <TarjetaElemento t={tarjeta} cfg={cfg} onCerrar={() => setTarjeta(null)} onVerFicha={(c) => setFicha([c])}
