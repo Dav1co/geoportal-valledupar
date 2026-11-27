@@ -3,14 +3,14 @@
   "HUELLA_CAMPO": "9f8b8ec55fc7e1c56fdf74a5f4e7f3c4"
  },
  "nuevas": {
-  "HUELLA_CAMPO_NUEVA": "1d714894930808b61159d8a1f5689f96",
+  "HUELLA_CAMPO_NUEVA": "f31dfae9418f6fc7aebc507d41d583e2",
   "FUNCIONES_NUEVAS": {
    "campo.f_ran_numerar(uuid)": "0898fb8ef37395807d1840793995f410",
    "campo.f_ran_autorizar(text,uuid)": "2ad5312a05781ae680593c77f3567996",
    "campo.f_ran_persona(text)": "878cb032577259fc99a65a88a895e705",
    "campo.f_ran_contenido(uuid)": "b579de2d574bd050875d0f80d1129db0",
    "campo.f_ran_destino(uuid,text)": "13b97f29ab83affef654dc8dfa662ba3",
-   "campo.f_ran_mapa(numeric,numeric,numeric,numeric)": "bb39c53123e8c511bf06315a3b07db1a",
+   "campo.f_ran_mapa(numeric,numeric,numeric,numeric)": "74bdf83254eb84d72fa724ed9b9548b3",
    "public.geoportal_campo_ran_datos(text,uuid,text)": "9930d5e29c50156477392e6023319068",
    "public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)": "e74aa08891b6578297c9ce365b1e94ee",
    "public.geoportal_campo_ran_obtener(text,uuid,text)": "c131b87deffb9c5f32df5a61ba548f95"

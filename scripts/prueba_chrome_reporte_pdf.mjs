@@ -187,6 +187,11 @@ const R4 = crearReporte(E.sup, "fraude", [{ bytes: fotoChica }, { bytes: fotosGr
 const R5 = crearReporte(E.op, "tapa_manhole", [{ bytes: fotoChica }], { desc: "[PRUEBA ZTRP-ALC] Tapa de manhole hundida en la vía." });
 const R6 = crearReporte(E.op, "fuga_acometida", [{ bytes: fotoChica }], { lat: 10.58, lon: -73.25, desc: "[PRUEBA ZTRP-ACU] Fuga en acometida, fuera de la zona." });
 const R7 = crearReporte(E.op, "dano_obra_terceros", [{ bytes: fotoChica }], { contrato: "991800000301", desc: "[PRUEBA ZTRP-TER] Retroexcavadora rompió la red." });
+// R8: en la zona DENSA del centro (la celda de 120 × 60 m con más predios a 1,5 km de la plaza; base_chrome la deja con terrenos, barrio y elementos de Técnica)
+const [LAT_D, LON_D] = sqlq("select round(st_y(c)::numeric, 6) || ' ' || round(st_x(c)::numeric, 6) from (select st_transform(st_setsrid(st_makepoint(st_x(k) + 60, st_y(k) + 30), 3116), 4326) as c from "
+  + "(select st_snaptogrid(st_transform(geom, 3116), 120, 60) as k, count(*) as n from public.predios_comercial where geom is not null and st_dwithin(st_transform(geom, 3116), "
+  + "st_transform(st_setsrid(st_makepoint(-73.2489, 10.4772), 4326), 3116), 1500) group by 1 order by n desc limit 1) q) z").split(" ").map(Number);
+const R8 = crearReporte(E.op, "otro", [{ bytes: fotoChica }], { lat: LAT_D, lon: LON_D, desc: "[PRUEBA ZTRP-DENSO] Zona densa del centro." });
 // R3: un formato (revisión previa), registrado de verdad (reserva, firma del operario, registro): aparece en «Actas registradas» con su PDF pendiente
 const R3 = crearReporte(E.op, "revision_previa", [{ bytes: fotoChica, etiqueta: "fachada_predio" }], { contrato: "991800000301", resultado: "inefectivo", causal: "nadie_atiende", firma: await jpeg(99, 300, 120, 0.5) });
 const CONS3 = sqlq(`select consecutivo from campo.reportes where id = '${R3}'`);
@@ -257,6 +262,34 @@ try {
   const maxRpc = Math.max(...rpcs.filter((x) => x.fn.startsWith("geoportal_campo_ran_")).map((x) => x.ms));
   ok(`E24 cada RPC del PDF (con psql) tarda menos de 2 s (máx ${maxRpc} ms)`, maxRpc < 2000);
 
+  // ---------- Los dos mapas en la zona densa del centro ----------
+  {
+    const r = await llamar("sup", "ran_pdf", { reporte_id: R8 });
+    const pdf = r.s === 200 ? await bajar(r.j.url) : Buffer.alloc(0); writeFileSync(join(CAP, "R8_denso.pdf"), pdf);
+    const tx = textoPdf(pdf);
+    const dat = { mapa: JSON.parse(sqlq(`select campo.f_ran_mapa(${LAT_D}, ${LON_D})::text`)) };   // la misma función que usó la Edge (ya hay documento: ran_datos no lo vuelve a armar)
+    const cer = dat.mapa?.cercano ?? {}, ctx = dat.mapa?.contexto ?? {};
+    const conNum = (cer.predios ?? []).filter((q) => !q.sin && q.cod), sinNum = (cer.predios ?? []).filter((q) => q.sin);
+    const rotulados = conNum.filter((q) => tx.includes(`(${q.cod}) Tj`));
+    ok(`M01 zona densa: el mapa cercano trae ${(cer.predios ?? []).length} predios, ${(cer.terrenos ?? []).length} terrenos y ${(cer.elementos ?? []).length} elementos activos`,
+      (cer.predios ?? []).length >= 20 && (cer.terrenos ?? []).length >= 10 && (cer.elementos ?? []).length === 4, JSON.stringify({ p: (cer.predios ?? []).length, t: (cer.terrenos ?? []).length, e: (cer.elementos ?? []).length }));
+    ok(`M02 los números de contrato van donde caben (${rotulados.length} de ${conNum.length}) y el resto se cuenta en la nota`, rotulados.length > 0
+      && (rotulados.length === conNum.length || /no caben? sin montarse sobre otros/.test(tx)), `${rotulados.length}/${conNum.length}`);
+    ok(`M03 los ${sinNum.length} predios sin contrato no llevan número y tienen su estilo`, sinNum.every((q) => !q.cod) && (sinNum.length === 0 || tx.includes("0.85 0.45 0.05 RG")));
+    ok("M04 terrenos dibujados sin label (su código predial no aparece)", tx.includes("0.96 0.94 0.89 rg") && !/\(ZT-\d+\)/.test(tx));
+    ok("M05 elementos de Técnica: solo los activos, con su tipo; el inactivo no sale", tx.includes("(valvula) Tj") && tx.includes("(hidrante) Tj") && !tx.includes("valvula inactiva"));
+    ok("M06 el mapa de contexto lleva el nombre del barrio del punto y no lleva números", ctx.barrio === "CENTRO (SINTÉTICO)" && tx.includes("(CENTRO \\(SINT\\311TICO\\)) Tj")
+      && (ctx.predios ?? []).every((q) => q.cod === null), String(ctx.barrio));
+    ok("M07 los dos mapas llevan escala (20 m y 50 m), norte y leyenda", tx.includes("(20 m) Tj") && tx.includes("(50 m) Tj") && (tx.match(/\(N\) Tj/g) ?? []).length === 2
+      && tx.includes("(Terreno) Tj") && tx.includes("(Barrio) Tj") && tx.includes("(Predio sin contrato) Tj"));
+    ok("M08 de predios_comercial nada de deuda, estado ni cartera en la respuesta ni en el PDF", !/deuda|tramo_mora|estado_predio/.test(JSON.stringify(dat.mapa)));
+    // los labels no se montan: se reconstruyen las cajas de los textos de 5,6 y 6 pt del mapa cercano y se comprueba que ninguna pisa a otra
+    const cajas = [...tx.matchAll(/BT 0\.(?:15|05) g 0 Tr \/F([12]) (5\.6|6) Tf ([\d.]+) ([\d.]+) Td \(([^)]*)\) Tj ET/g)].map((mm) => { const tam = Number(mm[2]), ancho = mm[5].length * tam * 0.56;
+      return [Number(mm[3]), Number(mm[4]), Number(mm[3]) + ancho, Number(mm[4]) + tam * 0.72]; });
+    let montados = 0; for (let i = 0; i < cajas.length; i++) for (let j = i + 1; j < cajas.length; j++) { const a = cajas[i], b = cajas[j]; if (a[0] < b[2] - 0.5 && a[2] > b[0] + 0.5 && a[1] < b[3] - 0.5 && a[3] > b[1] + 0.5) montados++; }
+    ok(`M09 ningún label se monta sobre otro (${cajas.length} labels en el mapa cercano)`, cajas.length > 0 && montados === 0, `${montados} cruces`);
+    execFileSync("/opt/homebrew/bin/pdftoppm", ["-png", "-r", "110", join(CAP, "R8_denso.pdf"), join(CAP, "R8_pag")]);
+  }
   // historial completo para R4: cambio de estado, ocultar y reincluir (por la Edge, como la pantalla)
   for (const [acc, cuerpo] of [["estado", { id: R4, estado: "en_revision", motivo: "[PRUEBA ZTRP] se revisa en terreno" }], ["ocultar", { id: R4, motivo: "[PRUEBA ZTRP] se oculta un momento" }],
                                ["reincluir", { id: R4, motivo: "[PRUEBA ZTRP] vuelve a la lista" }]]) {

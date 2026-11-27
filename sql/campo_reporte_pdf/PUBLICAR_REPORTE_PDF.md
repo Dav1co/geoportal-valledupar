@@ -7,12 +7,10 @@ Ramas `campo-reporte-pdf`, sin push:
 - **geoportal-web** (`~/geoportal-web-ranpdf`), sobre `00f9f45`: `a893d81` y el ajuste del número interno en letra pequeña.
 
 Huellas:
-- Campo `9f8b8ec5…` → **`1d714894930808b61159d8a1f5689f96`** (con el contador del RAN y todos los campos del reporte; reemplaza a `68942f69…`).
+- Campo `9f8b8ec5…` → **`f31dfae9418f6fc7aebc507d41d583e2`** (con el contador del RAN, todos los campos y los dos mapas; reemplaza a `1d714894…`).
 - Acta `111506c6…` y Técnica `838b8098…` no cambian.
 
 Sondas: geoportal-campo 50 → 51 (`ran_pdf`); geoportal-acta 16, sin cambio.
-
-> **NO PUBLICAR TODAVÍA (27-nov).** David pidió dos mapas con todas las capas (cercano de 120 × 60 m con labels y de contexto de 400 × 200 m con el barrio). Primero va el paso 0 de solo lectura `~/geoportal-consultas/campo/paquete_reporte_pdf/paso0_capas_mapa_editor.sql` (md5 `44581d05ff5fa7d5317151085cea60c8`): con su resultado se construyen los mapas, la guardia de sus índices y los dobles locales. Cambiarán la huella y los md5.
 
 ## Qué hace
 - En Supervisión, el detalle de un reporte de «Reportar anomalía» tiene el botón **«Descargar PDF del reporte»**, junto a «Cambiar estado», «Ocultar» y «Vincular como duplicado».
@@ -28,7 +26,11 @@ Sondas: geoportal-campo 50 → 51 (`ran_pdf`); geoportal-acta 16, sin cambio.
   - grupo, tipo, subtipo y estado;
   - contrato, dirección base comercial y de catastro, y la dirección, el barrio y la referencia encontrados en terreno;
   - coordenadas, precisión, XY digitado o «sin ubicación del dispositivo»;
-  - **mapa vectorial** de 400 × 200 m con acueducto, alcantarillado, predios, el punto, la precisión, la escala y el norte;
+  - **dos mapas vectoriales** (27-nov):
+    - **cercano** (120 × 60 m): terrenos (solo polígonos, sin label), acueducto y alcantarillado, predios de `predios_comercial` con su número de contrato (`cod_usuario`; los sin contrato con otro estilo y sin número), elementos ACTIVOS de Técnica con su tipo, el punto con su precisión y el XY digitado. Los labels se colocan sin montarse; los que no caben se cuentan en una nota.
+    - **de contexto** (400 × 200 m): barrios con su nombre (el del punto, resaltado), redes y predios sin números, el punto y el XY digitado.
+    - Los dos con escala (20 m y 50 m), norte y leyenda. De `predios_comercial` solo la posición, el contrato y `sin_contrato`: nada de deuda, consumo ni cartera.
+    - Sin diámetro en las tuberías: `redes_acueducto` y `redes_alcantarillado` solo tienen `id` y `geom` en producción.
   - descripción;
   - quién reportó (su **nombre**; el correo solo si no tiene nombre), inicio, fin y duración;
   - fotos con su origen;
@@ -47,21 +49,20 @@ Sondas: geoportal-campo 50 → 51 (`ran_pdf`); geoportal-acta 16, sin cambio.
 Huellas de este paquete, fila 1: debe decir «LISTA PARA ESTE CAMBIO». Si dice «FALTA PUBLICAR la etiqueta del último pago», publique primero esa.
 
 ### 1. SQL (editor de Supabase), cada archivo con su md5
-1. `huellas_solo_lectura_campo_reporte_pdf_editor.sql` (`73356c58249ff4a17860600a94ec9869`): fila 1 «LISTA PARA ESTE CAMBIO»; filas 2 y 3 «PUBLICADA».
-2. `ensayo_en_transaccion_campo_reporte_pdf_editor.sql` (`22f4ee0dc2a46358c10f24dfff39ef13`).
-   - Debe terminar en ERROR con «RESULTADO: 57 de 57 pruebas correctas — SIN FALLAS». No deja nada.
+1. `huellas_solo_lectura_campo_reporte_pdf_editor.sql` (`b560f041f720f249afabd74f013bcc2b`): fila 1 «LISTA PARA ESTE CAMBIO»; filas 2 y 3 «PUBLICADA».
+2. `ensayo_en_transaccion_campo_reporte_pdf_editor.sql` (`ad0fec6ddd38493f7d7dc057e5b2cafe`).
+   - Debe terminar en ERROR con «RESULTADO: 58 de 58 pruebas correctas — SIN FALLAS». No deja nada.
    - Crea y luego deshace 5 correos `ztran.*`, el contrato `991800000201` en cartera, 6 reportes de prueba (con sus objetos en `storage.objects`), los números RAN y un cambio de estado.
    - El mapa se mide con las redes y los predios reales. La prueba 05.04 exige menos de 3 s.
    - Si da otro número, pare y mándeme el texto.
-3. `migracion_campo_reporte_pdf_editor.sql` (`052e8a96286d66fed2e92e555e223102`).
+3. `migracion_campo_reporte_pdf_editor.sql` (`be0227ef6a0016a7f7a5f833ffb72687`).
    - Al final numera los reportes existentes (`select campo.f_ran_numerar(null)`): el resultado de esa línea sale vacío y es lo esperado.
-   - La guardia exige, además, `redes_acueducto` y `redes_alcantarillado` como tablas con `geom` y sus índices GiST `idx_redes_acu_geom` e `idx_redes_alc_geom`.
-   - También exige `predios_comercial` como vista materializada con `geom` y su índice GiST `idx_predcom_geom_n`, el SRID 3116 y el bucket privado `actas-pdf`.
+   - La guardia exige las 7 capas de los mapas con su clase y su índice GiST con la definición EXACTA (paso 0 de David, 27-nov): `idx_redes_acu_geom`, `idx_redes_alc_geom`, `idx_predcom_geom_n` (vista materializada), `idx_catastro_geom`, `terrenos_valledupar_geom_geom_idx`, `idx_barrios_geom` e `ix_elementos_planta_geom`; las columnas `predios_comercial.cod_usuario` y `sin_contrato`, `barrios_valledupar.nombre` y `elementos_planta.tipo`, `codigo` y `activo`; el SRID 3116 y el bucket privado `actas-pdf`.
    - Si se detiene por una capa o un índice, mándeme el texto: puede ser que el índice tenga otra definición en producción.
-4. `verificacion_campo_reporte_pdf_editor.sql` (`3273a74dd10feca59b3a7cbf15474113`): 10 de 10 OK. La fila 10 comprueba que los números van seguidos desde 1.
-5. Huellas otra vez: fila 1 «CON ESTE CAMBIO» (`1d714894…`); filas 2 y 3 «PUBLICADA».
+4. `verificacion_campo_reporte_pdf_editor.sql` (`ba19672cff8e326c3ccd9465418c0710`): 10 de 10 OK. La fila 10 comprueba que los números van seguidos desde 1.
+5. Huellas otra vez: fila 1 «CON ESTE CAMBIO» (`f31dfae9…`); filas 2 y 3 «PUBLICADA».
 
-Reversa, si hiciera falta: `reversa_campo_reporte_pdf_editor.sql` (`c7fb546e111694777112bc842b714545`).
+Reversa, si hiciera falta: `reversa_campo_reporte_pdf_editor.sql` (`a13aaad9596934457234abe973b406cd`).
 - Quita las 9 funciones.
 - Nada se borra: `campo.reporte_pdf` y `campo.reporte_ran` (con sus filas) y los PDF del bucket se quedan.
 - Si se vuelve a aplicar, la numeración sigue desde el último número.
@@ -79,8 +80,8 @@ Reversa, si hiciera falta: `reversa_campo_reporte_pdf_editor.sql` (`c7fb546e1116
 
 ## Pruebas locales (clúster 55432, sin Supabase)
 - **Doble con PostGIS real:** el volcado del doble 4a sin su PostGIS de juguete, más la cadena publicada (Investigación, registro flexible, consultar direcciones, etiqueta del pago), más las capas con el volumen real: 10.578 tramos de acueducto, 9.064 de alcantarillado y 111.651 predios, tomados de `emdupar_b` en solo lectura.
-- `pruebas_locales/correr_local.py`: 20 de 20. Cubre el ensayo (57 de 57), la verificación (10 de 10), la reversa con las tablas y sus filas conservadas, volver a aplicar, 3 guardias y 3 mutaciones (el contenido lee los datos sensibles; la autorización deja pasar al autor; el número RAN en orden de pedidos).
-- `scripts/prueba_chrome_reporte_pdf.mjs`: 78 de 78, con la Edge real en Deno y Chrome real a 390 y 1.280 px, los 5 perfiles, el PDF revisado por dentro y rasterizado con pdftoppm.
+- `pruebas_locales/correr_local.py`: 20 de 20. Cubre el ensayo (58 de 58), la verificación (10 de 10), la reversa con las tablas y sus filas conservadas, volver a aplicar, 3 guardias y 3 mutaciones (el contenido lee los datos sensibles; la autorización deja pasar al autor; el número RAN en orden de pedidos).
+- `scripts/prueba_chrome_reporte_pdf.mjs`: 87 de 87, con la Edge real en Deno y Chrome real a 390 y 1.280 px, los 5 perfiles, el PDF revisado por dentro y rasterizado con pdftoppm.
   - Incluye el PDF del formato en Supervisión (pendiente, «Generar el PDF», «PDF listo», «Descargar el PDF»), con las mismas RPC y la misma auditoría que «Actas registradas».
   - Incluye «Actas registradas» antes y después, porque su marca y su botón ahora son componentes compartidos.
   - En esa base local, `max_fotos` se subió a 6 solo para medir el tamaño con 6 fotos. **Este paquete no toca `max_fotos`**: su cambio a 4 va aparte.

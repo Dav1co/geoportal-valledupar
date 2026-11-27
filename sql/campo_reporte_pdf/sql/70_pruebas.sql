@@ -221,24 +221,35 @@ begin
     position('3009876543' in d::text) = 0 and position('SECRETO' in d::text) = 0 and d ->> 'sello' = pg_temp.val('sello_A1'));
 end $p4$;
 
--- ===================== 05. El mapa (capas reales) =====================
+-- ===================== 05. Los dos mapas (capas reales) =====================
 do $p5$
-declare A uuid := pg_temp.val('A')::uuid; B uuid := pg_temp.val('B')::uuid; d jsonb; m jsonb; t0 timestamptz; v_ms numeric; v_fuera int;
+declare A uuid := pg_temp.val('A')::uuid; B uuid := pg_temp.val('B')::uuid; d jsonb; m jsonb; k jsonb; v_b jsonb; t0 timestamptz; v_ms numeric; v_fuera int;
 begin
   t0 := clock_timestamp(); d := pg_temp.datos('ztran.sup@emdupar.gov.co', A); v_ms := extract(epoch from clock_timestamp() - t0) * 1000;
-  m := d -> 'mapa';
-  perform pg_temp.ok('05.01 el mapa trae red de acueducto alrededor del punto (ventana 400 × 200 m)',
-    (m ->> 'ancho_m')::int = 400 and (m ->> 'alto_m')::int = 200 and (select count(*) from jsonb_array_elements(m -> 'lineas') l where l ->> 'capa' = 'acueducto') > 0, left(m::text, 300));
-  perform pg_temp.ok('05.02 trae predios', jsonb_array_length(m -> 'predios') > 0, jsonb_array_length(m -> 'predios')::text);
+  m := d -> 'mapa' -> 'contexto'; k := d -> 'mapa' -> 'cercano';
+  perform pg_temp.ok('05.01 dos mapas: cercano de 120 × 60 m y de contexto de 400 × 200 m; el de contexto con red de acueducto alrededor del punto',
+    (k ->> 'ancho_m')::int = 120 and (k ->> 'alto_m')::int = 60 and (m ->> 'ancho_m')::int = 400 and (m ->> 'alto_m')::int = 200
+    and (select count(*) from jsonb_array_elements(m -> 'lineas') l where l ->> 'capa' = 'acueducto') > 0, left((d -> 'mapa')::text, 300));
+  perform pg_temp.ok('05.02 el de contexto trae predios y barrios (con el nombre del barrio del punto); el cercano trae sus capas (terrenos, redes, predios, elementos)',
+    jsonb_array_length(m -> 'predios') > 0 and jsonb_typeof(m -> 'barrios') = 'array' and m ? 'barrio'
+    and jsonb_typeof(k -> 'terrenos') = 'array' and jsonb_typeof(k -> 'predios') = 'array' and jsonb_typeof(k -> 'elementos') = 'array', left(m::text, 200));
   select count(*) into v_fuera from jsonb_array_elements(m -> 'lineas') l, jsonb_array_elements(l -> 'p') q where abs((q ->> 0)::numeric) > 200.05 or abs((q ->> 1)::numeric) > 100.05;
-  select v_fuera + count(*) into v_fuera from jsonb_array_elements(m -> 'predios') q where abs((q ->> 0)::numeric) > 200.05 or abs((q ->> 1)::numeric) > 100.05;
-  perform pg_temp.ok('05.03 todo queda recortado dentro de la ventana (metros relativos al punto)', v_fuera = 0, v_fuera::text);
-  perform pg_temp.ok('05.04 la consulta con el mapa tarda menos de 3 s como service_role (con 30 s de tope)', v_ms < 3000, round(v_ms)::text || ' ms');
-  m := pg_temp.datos('ztran.sup@emdupar.gov.co', B) -> 'mapa';
-  perform pg_temp.ok('05.05 con XY digitado, el mapa trae el punto de registro (a unos 40 m)', jsonb_typeof(m -> 'registro') = 'array'
-    and sqrt(power((m -> 'registro' ->> 0)::numeric, 2) + power((m -> 'registro' ->> 1)::numeric, 2)) between 20 and 80, (m -> 'registro')::text);
-  m := campo.f_ran_mapa(4.6, -74.08);
-  perform pg_temp.ok('05.06 un punto lejos de la ciudad: mapa vacío, sin error', jsonb_array_length(m -> 'lineas') = 0 and jsonb_array_length(m -> 'predios') = 0);
+  select v_fuera + count(*) into v_fuera from jsonb_array_elements(m -> 'predios') q where abs((q -> 'p' ->> 0)::numeric) > 200.05 or abs((q -> 'p' ->> 1)::numeric) > 100.05;
+  select v_fuera + count(*) into v_fuera from jsonb_array_elements(k -> 'lineas') l, jsonb_array_elements(l -> 'p') q where abs((q ->> 0)::numeric) > 60.05 or abs((q ->> 1)::numeric) > 30.05;
+  select v_fuera + count(*) into v_fuera from jsonb_array_elements(k -> 'predios') q where abs((q -> 'p' ->> 0)::numeric) > 60.05 or abs((q -> 'p' ->> 1)::numeric) > 30.05;
+  perform pg_temp.ok('05.03 todo queda recortado dentro de su ventana (metros relativos al punto)', v_fuera = 0, v_fuera::text);
+  perform pg_temp.ok('05.04 la consulta con los dos mapas tarda menos de 3 s como service_role (con 30 s de tope)', v_ms < 3000, round(v_ms)::text || ' ms');
+  perform pg_temp.ok('05.05 de predios_comercial solo la posición, el contrato (cod_usuario) y sin_contrato; los sin contrato van sin número; el de contexto sin números',
+    not exists (select 1 from jsonb_array_elements(k -> 'predios') q where (select string_agg(x, ',' order by x) from jsonb_object_keys(q) x) <> 'cod,p,sin')
+    and not exists (select 1 from jsonb_array_elements(k -> 'predios') q where (q ->> 'sin')::boolean and q -> 'cod' <> 'null'::jsonb)
+    and not exists (select 1 from jsonb_array_elements(m -> 'predios') q where q -> 'cod' <> 'null'::jsonb)
+    and position('deuda' in (d -> 'mapa')::text) = 0 and position('tramo' in (d -> 'mapa')::text) = 0);
+  v_b := pg_temp.datos('ztran.sup@emdupar.gov.co', B) -> 'mapa';
+  perform pg_temp.ok('05.06 con XY digitado, los dos mapas traen el punto de registro (a unos 40 m)', jsonb_typeof(v_b -> 'cercano' -> 'registro') = 'array' and jsonb_typeof(v_b -> 'contexto' -> 'registro') = 'array'
+    and sqrt(power((v_b -> 'contexto' -> 'registro' ->> 0)::numeric, 2) + power((v_b -> 'contexto' -> 'registro' ->> 1)::numeric, 2)) between 20 and 80, (v_b -> 'contexto' -> 'registro')::text);
+  v_b := campo.f_ran_mapa(4.6, -74.08);
+  perform pg_temp.ok('05.07 un punto lejos de la ciudad: mapas vacíos, sin error', jsonb_array_length(v_b -> 'contexto' -> 'lineas') = 0 and jsonb_array_length(v_b -> 'contexto' -> 'predios') = 0
+    and jsonb_array_length(v_b -> 'cercano' -> 'terrenos') = 0 and jsonb_array_length(v_b -> 'cercano' -> 'elementos') = 0);
 end $p5$;
 
 -- ===================== 06. Generar, entregar y auditar =====================

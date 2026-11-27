@@ -35,18 +35,31 @@ begin
       raise exception 'La columna %.% no existe o no es %: deténgase y avise', r.t, r.c, r.ty;
     end if;
   end loop;
-  -- capas del mapa: dos tablas y una vista materializada, con geom y su índice GiST
-  for r in select * from (values ('public.redes_acueducto', 'r', 'idx_redes_acu_geom'), ('public.redes_alcantarillado', 'r', 'idx_redes_alc_geom'),
-                                 ('public.predios_comercial', 'm', 'idx_predcom_geom_n')) x(t, k, i) loop
+  -- capas de los dos mapas (paso 0 de producción, David, 27-nov): clase, geometría y su índice GiST con la definición EXACTA
+  for r in select * from (values
+      ('public.redes_acueducto', 'r', 'CREATE INDEX idx_redes_acu_geom ON public.redes_acueducto USING gist (geom)'),
+      ('public.redes_alcantarillado', 'r', 'CREATE INDEX idx_redes_alc_geom ON public.redes_alcantarillado USING gist (geom)'),
+      ('public.predios_comercial', 'm', 'CREATE INDEX idx_predcom_geom_n ON public.predios_comercial USING gist (geom)'),
+      ('public.catastro_valledupar', 'r', 'CREATE INDEX idx_catastro_geom ON public.catastro_valledupar USING gist (geom)'),
+      ('public.terrenos_valledupar', 'r', 'CREATE INDEX terrenos_valledupar_geom_geom_idx ON public.terrenos_valledupar USING gist (geom)'),
+      ('public.barrios_valledupar', 'r', 'CREATE INDEX idx_barrios_geom ON public.barrios_valledupar USING gist (geom)'),
+      ('tecnica.elementos_planta', 'r', 'CREATE INDEX ix_elementos_planta_geom ON tecnica.elementos_planta USING gist (geom)')) x(t, k, i) loop
     if to_regclass(r.t) is null or (select relkind::text from pg_class where oid = to_regclass(r.t)) <> r.k then
       raise exception 'La capa % no existe o no es de la clase esperada (%): deténgase y avise', r.t, r.k;
     end if;
     if not exists (select 1 from pg_attribute a where a.attrelid = to_regclass(r.t) and a.attname = 'geom' and not a.attisdropped and format_type(a.atttypid, a.atttypmod) like 'geometry%') then
       raise exception 'La capa % no tiene la columna geom (geometry): deténgase y avise', r.t;
     end if;
-    if not exists (select 1 from pg_index i join pg_class c on c.oid = i.indexrelid where i.indrelid = to_regclass(r.t) and c.relname = r.i
-                    and pg_get_indexdef(i.indexrelid) ~ 'USING gist \(geom\)') then
-      raise exception 'Falta el índice % (GiST sobre geom) en %: deténgase y avise', r.i, r.t;
+    if not exists (select 1 from pg_index i where i.indrelid = to_regclass(r.t) and pg_get_indexdef(i.indexrelid) = r.i) then
+      raise exception 'Falta el índice GiST de % con la definición «%»: deténgase y avise', r.t, r.i;
+    end if;
+  end loop;
+  -- las columnas de las capas que se leen (de predios_comercial SOLO cod_usuario y sin_contrato)
+  for r in select * from (values ('public.predios_comercial', 'cod_usuario', 'text'), ('public.predios_comercial', 'sin_contrato', 'boolean'),
+                                 ('public.barrios_valledupar', 'nombre', 'text'), ('tecnica.elementos_planta', 'tipo', 'text'),
+                                 ('tecnica.elementos_planta', 'codigo', 'text'), ('tecnica.elementos_planta', 'activo', 'boolean')) x(t, c, ty) loop
+    if not exists (select 1 from pg_attribute a where a.attrelid = to_regclass(r.t) and a.attname = r.c and not a.attisdropped and format_type(a.atttypid, a.atttypmod) = r.ty) then
+      raise exception 'La columna %.% no existe o no es %: deténgase y avise', r.t, r.c, r.ty;
     end if;
   end loop;
   if not exists (select 1 from public.spatial_ref_sys where srid = 3116) then raise exception 'Falta el sistema de referencia 3116 (MAGNA-SIRGAS Bogotá): deténgase y avise'; end if;

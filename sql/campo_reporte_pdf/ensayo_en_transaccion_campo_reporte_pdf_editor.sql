@@ -149,18 +149,31 @@ begin
       raise exception 'La columna %.% no existe o no es %: deténgase y avise', r.t, r.c, r.ty;
     end if;
   end loop;
-  -- capas del mapa: dos tablas y una vista materializada, con geom y su índice GiST
-  for r in select * from (values ('public.redes_acueducto', 'r', 'idx_redes_acu_geom'), ('public.redes_alcantarillado', 'r', 'idx_redes_alc_geom'),
-                                 ('public.predios_comercial', 'm', 'idx_predcom_geom_n')) x(t, k, i) loop
+  -- capas de los dos mapas (paso 0 de producción, David, 27-nov): clase, geometría y su índice GiST con la definición EXACTA
+  for r in select * from (values
+      ('public.redes_acueducto', 'r', 'CREATE INDEX idx_redes_acu_geom ON public.redes_acueducto USING gist (geom)'),
+      ('public.redes_alcantarillado', 'r', 'CREATE INDEX idx_redes_alc_geom ON public.redes_alcantarillado USING gist (geom)'),
+      ('public.predios_comercial', 'm', 'CREATE INDEX idx_predcom_geom_n ON public.predios_comercial USING gist (geom)'),
+      ('public.catastro_valledupar', 'r', 'CREATE INDEX idx_catastro_geom ON public.catastro_valledupar USING gist (geom)'),
+      ('public.terrenos_valledupar', 'r', 'CREATE INDEX terrenos_valledupar_geom_geom_idx ON public.terrenos_valledupar USING gist (geom)'),
+      ('public.barrios_valledupar', 'r', 'CREATE INDEX idx_barrios_geom ON public.barrios_valledupar USING gist (geom)'),
+      ('tecnica.elementos_planta', 'r', 'CREATE INDEX ix_elementos_planta_geom ON tecnica.elementos_planta USING gist (geom)')) x(t, k, i) loop
     if to_regclass(r.t) is null or (select relkind::text from pg_class where oid = to_regclass(r.t)) <> r.k then
       raise exception 'La capa % no existe o no es de la clase esperada (%): deténgase y avise', r.t, r.k;
     end if;
     if not exists (select 1 from pg_attribute a where a.attrelid = to_regclass(r.t) and a.attname = 'geom' and not a.attisdropped and format_type(a.atttypid, a.atttypmod) like 'geometry%') then
       raise exception 'La capa % no tiene la columna geom (geometry): deténgase y avise', r.t;
     end if;
-    if not exists (select 1 from pg_index i join pg_class c on c.oid = i.indexrelid where i.indrelid = to_regclass(r.t) and c.relname = r.i
-                    and pg_get_indexdef(i.indexrelid) ~ 'USING gist \(geom\)') then
-      raise exception 'Falta el índice % (GiST sobre geom) en %: deténgase y avise', r.i, r.t;
+    if not exists (select 1 from pg_index i where i.indrelid = to_regclass(r.t) and pg_get_indexdef(i.indexrelid) = r.i) then
+      raise exception 'Falta el índice GiST de % con la definición «%»: deténgase y avise', r.t, r.i;
+    end if;
+  end loop;
+  -- las columnas de las capas que se leen (de predios_comercial SOLO cod_usuario y sin_contrato)
+  for r in select * from (values ('public.predios_comercial', 'cod_usuario', 'text'), ('public.predios_comercial', 'sin_contrato', 'boolean'),
+                                 ('public.barrios_valledupar', 'nombre', 'text'), ('tecnica.elementos_planta', 'tipo', 'text'),
+                                 ('tecnica.elementos_planta', 'codigo', 'text'), ('tecnica.elementos_planta', 'activo', 'boolean')) x(t, c, ty) loop
+    if not exists (select 1 from pg_attribute a where a.attrelid = to_regclass(r.t) and a.attname = r.c and not a.attisdropped and format_type(a.atttypid, a.atttypmod) = r.ty) then
+      raise exception 'La columna %.% no existe o no es %: deténgase y avise', r.t, r.c, r.ty;
     end if;
   end loop;
   if not exists (select 1 from public.spatial_ref_sys where srid = 3116) then raise exception 'Falta el sistema de referencia 3116 (MAGNA-SIRGAS Bogotá): deténgase y avise'; end if;
@@ -380,36 +393,70 @@ begin
                    'version', v_doc.version, 'generado_en', v_doc.generado_en) end);
 end $$;
 
--- Mapa pequeño, vectorial, en metros (MAGNA-SIRGAS Bogotá, 3116) relativo al punto del reporte: ventana de 400 × 200 m con las redes de acueducto y alcantarillado
--- recortadas y simplificadas (0,5 m) y los predios. Usa los índices GiST de producción (idx_redes_acu_geom, idx_redes_alc_geom, idx_predcom_geom_n) por el filtro &&.
--- Topes: 1.500 trozos de red y 3.000 predios. Sin teselas ni servicios externos.
+-- Los DOS mapas del PDF (David, 27-nov), vectoriales, en metros (MAGNA-SIRGAS Bogotá, 3116) relativos al punto del reporte (x al este, y al norte):
+--   cercano  (120 × 60 m): terrenos (solo polígonos, sin label), redes de acueducto y alcantarillado, predios de predios_comercial con su cod_usuario (= contrato; los
+--            sin_contrato van sin número), elementos ACTIVOS de Técnica con su tipo, el punto y el XY digitado;
+--   contexto (400 × 200 m): barrios (con su nombre), redes y predios sin labels, el punto y el XY digitado.
+-- De predios_comercial SOLO la geometría, cod_usuario y sin_contrato (nada de deuda, consumo ni cartera). Todo por los índices GiST de producción (filtro &&).
+-- Topes por capa para que el PDF no crezca sin control. Sin teselas ni servicios externos.
 create function campo.f_ran_mapa(p_lat numeric, p_lon numeric, p_lat_reg numeric default null, p_lon_reg numeric default null) returns jsonb
-language plpgsql stable security definer set search_path = public, campo, pg_temp as $$
-declare v_c geometry; v_x0 double precision; v_y0 double precision; v_env geometry; v_env_g geometry; v_lin jsonb; v_pred jsonb; v_reg jsonb;
-        c_ax constant double precision := 200; c_ay constant double precision := 100;
+language plpgsql stable security definer set search_path = public, campo, tecnica, pg_temp as $$
+declare v_c geometry; v_x0 double precision; v_y0 double precision; v_reg jsonb; v_cerca jsonb; v_ctx jsonb; v_ax double precision; v_ay double precision; v_env geometry; v_env_g geometry;
+        v_terr jsonb; v_lin jsonb; v_pred jsonb; v_elem jsonb; v_barr jsonb; v_barrio text;
 begin
   if p_lat is null or p_lon is null then return null; end if;
   v_c := st_transform(st_setsrid(st_makepoint(p_lon::double precision, p_lat::double precision), 4326), 3116);
   v_x0 := st_x(v_c); v_y0 := st_y(v_c);
-  v_env := st_makeenvelope(v_x0 - c_ax, v_y0 - c_ay, v_x0 + c_ax, v_y0 + c_ay, 3116);
-  v_env_g := st_transform(v_env, 4326);
-  with l as (
-    select 'acueducto'::text as capa, a.geom from public.redes_acueducto a where a.geom && v_env_g
-    union all
-    select 'alcantarillado', b.geom from public.redes_alcantarillado b where b.geom && v_env_g
-  ), c as (
-    select l.capa, (st_dump(st_collectionextract(st_simplify(st_intersection(st_transform(l.geom, 3116), v_env), 0.5), 2))).geom as g from l
-  )
-  select coalesce(jsonb_agg(jsonb_build_object('capa', x.capa, 'p', st_asgeojson(st_translate(x.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates') order by x.capa), '[]'::jsonb) into v_lin
-    from (select c.capa, c.g from c where not st_isempty(c.g) and st_npoints(c.g) >= 2 limit 1500) x;
-  select coalesce(jsonb_agg(jsonb_build_array(round((st_x(x.t) - v_x0)::numeric, 1), round((st_y(x.t) - v_y0)::numeric, 1))), '[]'::jsonb) into v_pred
-    from (select st_transform(p.geom, 3116) as t from public.predios_comercial p where p.geom && v_env_g limit 3000) x
-   where st_intersects(x.t, v_env);
   if p_lat_reg is not null and p_lon_reg is not null then
     select jsonb_build_array(round((st_x(q) - v_x0)::numeric, 1), round((st_y(q) - v_y0)::numeric, 1)) into v_reg
       from (select st_transform(st_setsrid(st_makepoint(p_lon_reg::double precision, p_lat_reg::double precision), 4326), 3116) as q) z;
   end if;
-  return jsonb_build_object('ancho_m', 2 * c_ax, 'alto_m', 2 * c_ay, 'lineas', v_lin, 'predios', v_pred, 'registro', v_reg);
+  select b.nombre into v_barrio from public.barrios_valledupar b where b.geom && st_transform(v_c, 4326) and st_intersects(b.geom, st_transform(v_c, 4326)) order by b.id limit 1;
+
+  -- ===== cercano: 120 × 60 m =====
+  v_ax := 60; v_ay := 30;
+  v_env := st_makeenvelope(v_x0 - v_ax, v_y0 - v_ay, v_x0 + v_ax, v_y0 + v_ay, 3116); v_env_g := st_transform(v_env, 4326);
+  select coalesce(jsonb_agg(st_asgeojson(st_translate(x.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates'), '[]'::jsonb) into v_terr
+    from (select st_multi(st_collectionextract(st_simplify(st_intersection(st_transform(t.geom, 3116), v_env), 0.2), 3)) as g
+            from public.terrenos_valledupar t where t.geom && v_env_g limit 400) x where not st_isempty(x.g);
+  with l as (select 'acueducto'::text as capa, a.geom from public.redes_acueducto a where a.geom && v_env_g
+             union all select 'alcantarillado', b.geom from public.redes_alcantarillado b where b.geom && v_env_g),
+       c as (select l.capa, (st_dump(st_collectionextract(st_simplify(st_intersection(st_transform(l.geom, 3116), v_env), 0.2), 2))).geom as g from l)
+  select coalesce(jsonb_agg(jsonb_build_object('capa', c.capa, 'p', st_asgeojson(st_translate(c.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates') order by c.capa), '[]'::jsonb) into v_lin
+    from (select * from c where not st_isempty(c.g) and st_npoints(c.g) >= 2 limit 600) c;
+  select coalesce(jsonb_agg(jsonb_build_object('p', jsonb_build_array(round((st_x(x.t) - v_x0)::numeric, 1), round((st_y(x.t) - v_y0)::numeric, 1)),
+                                               'cod', case when x.sin then null else x.cod end, 'sin', x.sin)
+                            order by st_distance(x.t, v_c)), '[]'::jsonb) into v_pred
+    from (select st_transform(p.geom, 3116) as t, nullif(btrim(p.cod_usuario), '') as cod, coalesce(p.sin_contrato, false) as sin
+            from public.predios_comercial p where p.geom && v_env_g limit 1500) x
+   where st_intersects(x.t, v_env);
+  select coalesce(jsonb_agg(jsonb_build_object('tipo', x.tipo, 'g', st_asgeojson(st_translate(x.g, -v_x0, -v_y0), 1)::jsonb,
+                                               'ancla', jsonb_build_array(round((st_x(st_pointonsurface(x.g)) - v_x0)::numeric, 1), round((st_y(st_pointonsurface(x.g)) - v_y0)::numeric, 1)))
+                            order by x.tipo, x.codigo), '[]'::jsonb) into v_elem
+    from (select e.tipo, e.codigo, st_intersection(st_transform(e.geom, 3116), v_env) as g
+            from tecnica.elementos_planta e where e.activo and e.geom && v_env_g limit 300) x where not st_isempty(x.g);
+  v_cerca := jsonb_build_object('ancho_m', 2 * v_ax, 'alto_m', 2 * v_ay, 'terrenos', v_terr, 'lineas', v_lin, 'predios', v_pred, 'elementos', v_elem, 'registro', v_reg);
+
+  -- ===== contexto: 400 × 200 m =====
+  v_ax := 200; v_ay := 100;
+  v_env := st_makeenvelope(v_x0 - v_ax, v_y0 - v_ay, v_x0 + v_ax, v_y0 + v_ay, 3116); v_env_g := st_transform(v_env, 4326);
+  select coalesce(jsonb_agg(jsonb_build_object('nombre', x.nombre, 'propio', x.nombre is not distinct from v_barrio,
+                                               'g', st_asgeojson(st_translate(x.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates',
+                                               'ancla', jsonb_build_array(round((st_x(st_pointonsurface(x.g)) - v_x0)::numeric, 1), round((st_y(st_pointonsurface(x.g)) - v_y0)::numeric, 1)))
+                            order by x.nombre), '[]'::jsonb) into v_barr
+    from (select b.nombre, st_multi(st_collectionextract(st_simplify(st_intersection(st_transform(b.geom, 3116), v_env), 1), 3)) as g
+            from public.barrios_valledupar b where b.geom && v_env_g limit 60) x where not st_isempty(x.g);
+  with l as (select 'acueducto'::text as capa, a.geom from public.redes_acueducto a where a.geom && v_env_g
+             union all select 'alcantarillado', b.geom from public.redes_alcantarillado b where b.geom && v_env_g),
+       c as (select l.capa, (st_dump(st_collectionextract(st_simplify(st_intersection(st_transform(l.geom, 3116), v_env), 0.5), 2))).geom as g from l)
+  select coalesce(jsonb_agg(jsonb_build_object('capa', c.capa, 'p', st_asgeojson(st_translate(c.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates') order by c.capa), '[]'::jsonb) into v_lin
+    from (select * from c where not st_isempty(c.g) and st_npoints(c.g) >= 2 limit 1500) c;
+  select coalesce(jsonb_agg(jsonb_build_object('p', jsonb_build_array(round((st_x(x.t) - v_x0)::numeric, 1), round((st_y(x.t) - v_y0)::numeric, 1)), 'cod', null, 'sin', x.sin)), '[]'::jsonb) into v_pred
+    from (select st_transform(p.geom, 3116) as t, coalesce(p.sin_contrato, false) as sin from public.predios_comercial p where p.geom && v_env_g limit 4000) x
+   where st_intersects(x.t, v_env);
+  v_ctx := jsonb_build_object('ancho_m', 2 * v_ax, 'alto_m', 2 * v_ay, 'barrios', v_barr, 'barrio', v_barrio, 'lineas', v_lin, 'predios', v_pred, 'registro', v_reg);
+
+  return jsonb_build_object('cercano', v_cerca, 'contexto', v_ctx);
 end $$;
 
 -- RPC 1: lo que la Edge necesita para armar el PDF (o para saber que ya existe el de este sello). Lectura: no audita (audita registrar u obtener).
@@ -483,7 +530,7 @@ select campo.f_ran_numerar(null);
 do $p1$
 begin
   perform pg_temp.ok('01.01 la huella de campo es la de este cambio; acta y Técnica no cambiaron',
-    (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text collate "C", p.proname, p.oid::regprocedure::text collate "C")) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) = '1d714894930808b61159d8a1f5689f96' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'acta'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_acta\_%')) = '111506c690249ad3b56ebf572566434c' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.prokind = 'f' and (p.pronamespace = 'tecnica'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_tec\_%'))) = '838b80984e51cc7873a666f85d657195');
+    (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text collate "C", p.proname, p.oid::regprocedure::text collate "C")) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) = 'f31dfae9418f6fc7aebc507d41d583e2' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'acta'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_acta\_%')) = '111506c690249ad3b56ebf572566434c' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.prokind = 'f' and (p.pronamespace = 'tecnica'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_tec\_%'))) = '838b80984e51cc7873a666f85d657195');
   perform pg_temp.ok('01.02 campo.reporte_pdf: RLS sin políticas, sin permisos para la API, SELECT para homelab_lectura',
     (select relrowsecurity from pg_class where oid = 'campo.reporte_pdf'::regclass) and not exists (select 1 from pg_policies where schemaname = 'campo')
     and not has_table_privilege('service_role', 'campo.reporte_pdf', 'select') and not has_table_privilege('authenticated', 'campo.reporte_pdf', 'select')
@@ -588,24 +635,35 @@ begin
     position('3009876543' in d::text) = 0 and position('SECRETO' in d::text) = 0 and d ->> 'sello' = pg_temp.val('sello_A1'));
 end $p4$;
 
--- ===================== 05. El mapa (capas reales) =====================
+-- ===================== 05. Los dos mapas (capas reales) =====================
 do $p5$
-declare A uuid := pg_temp.val('A')::uuid; B uuid := pg_temp.val('B')::uuid; d jsonb; m jsonb; t0 timestamptz; v_ms numeric; v_fuera int;
+declare A uuid := pg_temp.val('A')::uuid; B uuid := pg_temp.val('B')::uuid; d jsonb; m jsonb; k jsonb; v_b jsonb; t0 timestamptz; v_ms numeric; v_fuera int;
 begin
   t0 := clock_timestamp(); d := pg_temp.datos('ztran.sup@emdupar.gov.co', A); v_ms := extract(epoch from clock_timestamp() - t0) * 1000;
-  m := d -> 'mapa';
-  perform pg_temp.ok('05.01 el mapa trae red de acueducto alrededor del punto (ventana 400 × 200 m)',
-    (m ->> 'ancho_m')::int = 400 and (m ->> 'alto_m')::int = 200 and (select count(*) from jsonb_array_elements(m -> 'lineas') l where l ->> 'capa' = 'acueducto') > 0, left(m::text, 300));
-  perform pg_temp.ok('05.02 trae predios', jsonb_array_length(m -> 'predios') > 0, jsonb_array_length(m -> 'predios')::text);
+  m := d -> 'mapa' -> 'contexto'; k := d -> 'mapa' -> 'cercano';
+  perform pg_temp.ok('05.01 dos mapas: cercano de 120 × 60 m y de contexto de 400 × 200 m; el de contexto con red de acueducto alrededor del punto',
+    (k ->> 'ancho_m')::int = 120 and (k ->> 'alto_m')::int = 60 and (m ->> 'ancho_m')::int = 400 and (m ->> 'alto_m')::int = 200
+    and (select count(*) from jsonb_array_elements(m -> 'lineas') l where l ->> 'capa' = 'acueducto') > 0, left((d -> 'mapa')::text, 300));
+  perform pg_temp.ok('05.02 el de contexto trae predios y barrios (con el nombre del barrio del punto); el cercano trae sus capas (terrenos, redes, predios, elementos)',
+    jsonb_array_length(m -> 'predios') > 0 and jsonb_typeof(m -> 'barrios') = 'array' and m ? 'barrio'
+    and jsonb_typeof(k -> 'terrenos') = 'array' and jsonb_typeof(k -> 'predios') = 'array' and jsonb_typeof(k -> 'elementos') = 'array', left(m::text, 200));
   select count(*) into v_fuera from jsonb_array_elements(m -> 'lineas') l, jsonb_array_elements(l -> 'p') q where abs((q ->> 0)::numeric) > 200.05 or abs((q ->> 1)::numeric) > 100.05;
-  select v_fuera + count(*) into v_fuera from jsonb_array_elements(m -> 'predios') q where abs((q ->> 0)::numeric) > 200.05 or abs((q ->> 1)::numeric) > 100.05;
-  perform pg_temp.ok('05.03 todo queda recortado dentro de la ventana (metros relativos al punto)', v_fuera = 0, v_fuera::text);
-  perform pg_temp.ok('05.04 la consulta con el mapa tarda menos de 3 s como service_role (con 30 s de tope)', v_ms < 3000, round(v_ms)::text || ' ms');
-  m := pg_temp.datos('ztran.sup@emdupar.gov.co', B) -> 'mapa';
-  perform pg_temp.ok('05.05 con XY digitado, el mapa trae el punto de registro (a unos 40 m)', jsonb_typeof(m -> 'registro') = 'array'
-    and sqrt(power((m -> 'registro' ->> 0)::numeric, 2) + power((m -> 'registro' ->> 1)::numeric, 2)) between 20 and 80, (m -> 'registro')::text);
-  m := campo.f_ran_mapa(4.6, -74.08);
-  perform pg_temp.ok('05.06 un punto lejos de la ciudad: mapa vacío, sin error', jsonb_array_length(m -> 'lineas') = 0 and jsonb_array_length(m -> 'predios') = 0);
+  select v_fuera + count(*) into v_fuera from jsonb_array_elements(m -> 'predios') q where abs((q -> 'p' ->> 0)::numeric) > 200.05 or abs((q -> 'p' ->> 1)::numeric) > 100.05;
+  select v_fuera + count(*) into v_fuera from jsonb_array_elements(k -> 'lineas') l, jsonb_array_elements(l -> 'p') q where abs((q ->> 0)::numeric) > 60.05 or abs((q ->> 1)::numeric) > 30.05;
+  select v_fuera + count(*) into v_fuera from jsonb_array_elements(k -> 'predios') q where abs((q -> 'p' ->> 0)::numeric) > 60.05 or abs((q -> 'p' ->> 1)::numeric) > 30.05;
+  perform pg_temp.ok('05.03 todo queda recortado dentro de su ventana (metros relativos al punto)', v_fuera = 0, v_fuera::text);
+  perform pg_temp.ok('05.04 la consulta con los dos mapas tarda menos de 3 s como service_role (con 30 s de tope)', v_ms < 3000, round(v_ms)::text || ' ms');
+  perform pg_temp.ok('05.05 de predios_comercial solo la posición, el contrato (cod_usuario) y sin_contrato; los sin contrato van sin número; el de contexto sin números',
+    not exists (select 1 from jsonb_array_elements(k -> 'predios') q where (select string_agg(x, ',' order by x) from jsonb_object_keys(q) x) <> 'cod,p,sin')
+    and not exists (select 1 from jsonb_array_elements(k -> 'predios') q where (q ->> 'sin')::boolean and q -> 'cod' <> 'null'::jsonb)
+    and not exists (select 1 from jsonb_array_elements(m -> 'predios') q where q -> 'cod' <> 'null'::jsonb)
+    and position('deuda' in (d -> 'mapa')::text) = 0 and position('tramo' in (d -> 'mapa')::text) = 0);
+  v_b := pg_temp.datos('ztran.sup@emdupar.gov.co', B) -> 'mapa';
+  perform pg_temp.ok('05.06 con XY digitado, los dos mapas traen el punto de registro (a unos 40 m)', jsonb_typeof(v_b -> 'cercano' -> 'registro') = 'array' and jsonb_typeof(v_b -> 'contexto' -> 'registro') = 'array'
+    and sqrt(power((v_b -> 'contexto' -> 'registro' ->> 0)::numeric, 2) + power((v_b -> 'contexto' -> 'registro' ->> 1)::numeric, 2)) between 20 and 80, (v_b -> 'contexto' -> 'registro')::text);
+  v_b := campo.f_ran_mapa(4.6, -74.08);
+  perform pg_temp.ok('05.07 un punto lejos de la ciudad: mapas vacíos, sin error', jsonb_array_length(v_b -> 'contexto' -> 'lineas') = 0 and jsonb_array_length(v_b -> 'contexto' -> 'predios') = 0
+    and jsonb_array_length(v_b -> 'cercano' -> 'terrenos') = 0 and jsonb_array_length(v_b -> 'cercano' -> 'elementos') = 0);
 end $p5$;
 
 -- ===================== 06. Generar, entregar y auditar =====================
@@ -683,7 +741,7 @@ end $p8$;
 do $rev$
 declare r record; v_n bigint;
 begin
-  for r in select * from (values ('campo.f_ran_numerar(uuid)', '0898fb8ef37395807d1840793995f410'), ('campo.f_ran_autorizar(text,uuid)', '2ad5312a05781ae680593c77f3567996'), ('campo.f_ran_persona(text)', '878cb032577259fc99a65a88a895e705'), ('campo.f_ran_contenido(uuid)', 'b579de2d574bd050875d0f80d1129db0'), ('campo.f_ran_destino(uuid,text)', '13b97f29ab83affef654dc8dfa662ba3'), ('campo.f_ran_mapa(numeric,numeric,numeric,numeric)', 'bb39c53123e8c511bf06315a3b07db1a'), ('public.geoportal_campo_ran_datos(text,uuid,text)', '9930d5e29c50156477392e6023319068'), ('public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)', 'e74aa08891b6578297c9ce365b1e94ee'), ('public.geoportal_campo_ran_obtener(text,uuid,text)', 'c131b87deffb9c5f32df5a61ba548f95')) x(f, m) loop
+  for r in select * from (values ('campo.f_ran_numerar(uuid)', '0898fb8ef37395807d1840793995f410'), ('campo.f_ran_autorizar(text,uuid)', '2ad5312a05781ae680593c77f3567996'), ('campo.f_ran_persona(text)', '878cb032577259fc99a65a88a895e705'), ('campo.f_ran_contenido(uuid)', 'b579de2d574bd050875d0f80d1129db0'), ('campo.f_ran_destino(uuid,text)', '13b97f29ab83affef654dc8dfa662ba3'), ('campo.f_ran_mapa(numeric,numeric,numeric,numeric)', '74bdf83254eb84d72fa724ed9b9548b3'), ('public.geoportal_campo_ran_datos(text,uuid,text)', '9930d5e29c50156477392e6023319068'), ('public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)', 'e74aa08891b6578297c9ce365b1e94ee'), ('public.geoportal_campo_ran_obtener(text,uuid,text)', 'c131b87deffb9c5f32df5a61ba548f95')) x(f, m) loop
     if to_regprocedure(r.f) is null or md5(pg_get_functiondef(to_regprocedure(r.f))) is distinct from r.m then
       raise exception 'La función % no es la de este paquete (sin aplicar o cambiada después): la reversa no la pisa; deténgase y avise', r.f;
     end if;

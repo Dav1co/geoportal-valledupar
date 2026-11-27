@@ -152,36 +152,70 @@ begin
                    'version', v_doc.version, 'generado_en', v_doc.generado_en) end);
 end $$;
 
--- Mapa pequeño, vectorial, en metros (MAGNA-SIRGAS Bogotá, 3116) relativo al punto del reporte: ventana de 400 × 200 m con las redes de acueducto y alcantarillado
--- recortadas y simplificadas (0,5 m) y los predios. Usa los índices GiST de producción (idx_redes_acu_geom, idx_redes_alc_geom, idx_predcom_geom_n) por el filtro &&.
--- Topes: 1.500 trozos de red y 3.000 predios. Sin teselas ni servicios externos.
+-- Los DOS mapas del PDF (David, 27-nov), vectoriales, en metros (MAGNA-SIRGAS Bogotá, 3116) relativos al punto del reporte (x al este, y al norte):
+--   cercano  (120 × 60 m): terrenos (solo polígonos, sin label), redes de acueducto y alcantarillado, predios de predios_comercial con su cod_usuario (= contrato; los
+--            sin_contrato van sin número), elementos ACTIVOS de Técnica con su tipo, el punto y el XY digitado;
+--   contexto (400 × 200 m): barrios (con su nombre), redes y predios sin labels, el punto y el XY digitado.
+-- De predios_comercial SOLO la geometría, cod_usuario y sin_contrato (nada de deuda, consumo ni cartera). Todo por los índices GiST de producción (filtro &&).
+-- Topes por capa para que el PDF no crezca sin control. Sin teselas ni servicios externos.
 create function campo.f_ran_mapa(p_lat numeric, p_lon numeric, p_lat_reg numeric default null, p_lon_reg numeric default null) returns jsonb
-language plpgsql stable security definer set search_path = public, campo, pg_temp as $$
-declare v_c geometry; v_x0 double precision; v_y0 double precision; v_env geometry; v_env_g geometry; v_lin jsonb; v_pred jsonb; v_reg jsonb;
-        c_ax constant double precision := 200; c_ay constant double precision := 100;
+language plpgsql stable security definer set search_path = public, campo, tecnica, pg_temp as $$
+declare v_c geometry; v_x0 double precision; v_y0 double precision; v_reg jsonb; v_cerca jsonb; v_ctx jsonb; v_ax double precision; v_ay double precision; v_env geometry; v_env_g geometry;
+        v_terr jsonb; v_lin jsonb; v_pred jsonb; v_elem jsonb; v_barr jsonb; v_barrio text;
 begin
   if p_lat is null or p_lon is null then return null; end if;
   v_c := st_transform(st_setsrid(st_makepoint(p_lon::double precision, p_lat::double precision), 4326), 3116);
   v_x0 := st_x(v_c); v_y0 := st_y(v_c);
-  v_env := st_makeenvelope(v_x0 - c_ax, v_y0 - c_ay, v_x0 + c_ax, v_y0 + c_ay, 3116);
-  v_env_g := st_transform(v_env, 4326);
-  with l as (
-    select 'acueducto'::text as capa, a.geom from public.redes_acueducto a where a.geom && v_env_g
-    union all
-    select 'alcantarillado', b.geom from public.redes_alcantarillado b where b.geom && v_env_g
-  ), c as (
-    select l.capa, (st_dump(st_collectionextract(st_simplify(st_intersection(st_transform(l.geom, 3116), v_env), 0.5), 2))).geom as g from l
-  )
-  select coalesce(jsonb_agg(jsonb_build_object('capa', x.capa, 'p', st_asgeojson(st_translate(x.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates') order by x.capa), '[]'::jsonb) into v_lin
-    from (select c.capa, c.g from c where not st_isempty(c.g) and st_npoints(c.g) >= 2 limit 1500) x;
-  select coalesce(jsonb_agg(jsonb_build_array(round((st_x(x.t) - v_x0)::numeric, 1), round((st_y(x.t) - v_y0)::numeric, 1))), '[]'::jsonb) into v_pred
-    from (select st_transform(p.geom, 3116) as t from public.predios_comercial p where p.geom && v_env_g limit 3000) x
-   where st_intersects(x.t, v_env);
   if p_lat_reg is not null and p_lon_reg is not null then
     select jsonb_build_array(round((st_x(q) - v_x0)::numeric, 1), round((st_y(q) - v_y0)::numeric, 1)) into v_reg
       from (select st_transform(st_setsrid(st_makepoint(p_lon_reg::double precision, p_lat_reg::double precision), 4326), 3116) as q) z;
   end if;
-  return jsonb_build_object('ancho_m', 2 * c_ax, 'alto_m', 2 * c_ay, 'lineas', v_lin, 'predios', v_pred, 'registro', v_reg);
+  select b.nombre into v_barrio from public.barrios_valledupar b where b.geom && st_transform(v_c, 4326) and st_intersects(b.geom, st_transform(v_c, 4326)) order by b.id limit 1;
+
+  -- ===== cercano: 120 × 60 m =====
+  v_ax := 60; v_ay := 30;
+  v_env := st_makeenvelope(v_x0 - v_ax, v_y0 - v_ay, v_x0 + v_ax, v_y0 + v_ay, 3116); v_env_g := st_transform(v_env, 4326);
+  select coalesce(jsonb_agg(st_asgeojson(st_translate(x.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates'), '[]'::jsonb) into v_terr
+    from (select st_multi(st_collectionextract(st_simplify(st_intersection(st_transform(t.geom, 3116), v_env), 0.2), 3)) as g
+            from public.terrenos_valledupar t where t.geom && v_env_g limit 400) x where not st_isempty(x.g);
+  with l as (select 'acueducto'::text as capa, a.geom from public.redes_acueducto a where a.geom && v_env_g
+             union all select 'alcantarillado', b.geom from public.redes_alcantarillado b where b.geom && v_env_g),
+       c as (select l.capa, (st_dump(st_collectionextract(st_simplify(st_intersection(st_transform(l.geom, 3116), v_env), 0.2), 2))).geom as g from l)
+  select coalesce(jsonb_agg(jsonb_build_object('capa', c.capa, 'p', st_asgeojson(st_translate(c.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates') order by c.capa), '[]'::jsonb) into v_lin
+    from (select * from c where not st_isempty(c.g) and st_npoints(c.g) >= 2 limit 600) c;
+  select coalesce(jsonb_agg(jsonb_build_object('p', jsonb_build_array(round((st_x(x.t) - v_x0)::numeric, 1), round((st_y(x.t) - v_y0)::numeric, 1)),
+                                               'cod', case when x.sin then null else x.cod end, 'sin', x.sin)
+                            order by st_distance(x.t, v_c)), '[]'::jsonb) into v_pred
+    from (select st_transform(p.geom, 3116) as t, nullif(btrim(p.cod_usuario), '') as cod, coalesce(p.sin_contrato, false) as sin
+            from public.predios_comercial p where p.geom && v_env_g limit 1500) x
+   where st_intersects(x.t, v_env);
+  select coalesce(jsonb_agg(jsonb_build_object('tipo', x.tipo, 'g', st_asgeojson(st_translate(x.g, -v_x0, -v_y0), 1)::jsonb,
+                                               'ancla', jsonb_build_array(round((st_x(st_pointonsurface(x.g)) - v_x0)::numeric, 1), round((st_y(st_pointonsurface(x.g)) - v_y0)::numeric, 1)))
+                            order by x.tipo, x.codigo), '[]'::jsonb) into v_elem
+    from (select e.tipo, e.codigo, st_intersection(st_transform(e.geom, 3116), v_env) as g
+            from tecnica.elementos_planta e where e.activo and e.geom && v_env_g limit 300) x where not st_isempty(x.g);
+  v_cerca := jsonb_build_object('ancho_m', 2 * v_ax, 'alto_m', 2 * v_ay, 'terrenos', v_terr, 'lineas', v_lin, 'predios', v_pred, 'elementos', v_elem, 'registro', v_reg);
+
+  -- ===== contexto: 400 × 200 m =====
+  v_ax := 200; v_ay := 100;
+  v_env := st_makeenvelope(v_x0 - v_ax, v_y0 - v_ay, v_x0 + v_ax, v_y0 + v_ay, 3116); v_env_g := st_transform(v_env, 4326);
+  select coalesce(jsonb_agg(jsonb_build_object('nombre', x.nombre, 'propio', x.nombre is not distinct from v_barrio,
+                                               'g', st_asgeojson(st_translate(x.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates',
+                                               'ancla', jsonb_build_array(round((st_x(st_pointonsurface(x.g)) - v_x0)::numeric, 1), round((st_y(st_pointonsurface(x.g)) - v_y0)::numeric, 1)))
+                            order by x.nombre), '[]'::jsonb) into v_barr
+    from (select b.nombre, st_multi(st_collectionextract(st_simplify(st_intersection(st_transform(b.geom, 3116), v_env), 1), 3)) as g
+            from public.barrios_valledupar b where b.geom && v_env_g limit 60) x where not st_isempty(x.g);
+  with l as (select 'acueducto'::text as capa, a.geom from public.redes_acueducto a where a.geom && v_env_g
+             union all select 'alcantarillado', b.geom from public.redes_alcantarillado b where b.geom && v_env_g),
+       c as (select l.capa, (st_dump(st_collectionextract(st_simplify(st_intersection(st_transform(l.geom, 3116), v_env), 0.5), 2))).geom as g from l)
+  select coalesce(jsonb_agg(jsonb_build_object('capa', c.capa, 'p', st_asgeojson(st_translate(c.g, -v_x0, -v_y0), 1)::jsonb -> 'coordinates') order by c.capa), '[]'::jsonb) into v_lin
+    from (select * from c where not st_isempty(c.g) and st_npoints(c.g) >= 2 limit 1500) c;
+  select coalesce(jsonb_agg(jsonb_build_object('p', jsonb_build_array(round((st_x(x.t) - v_x0)::numeric, 1), round((st_y(x.t) - v_y0)::numeric, 1)), 'cod', null, 'sin', x.sin)), '[]'::jsonb) into v_pred
+    from (select st_transform(p.geom, 3116) as t, coalesce(p.sin_contrato, false) as sin from public.predios_comercial p where p.geom && v_env_g limit 4000) x
+   where st_intersects(x.t, v_env);
+  v_ctx := jsonb_build_object('ancho_m', 2 * v_ax, 'alto_m', 2 * v_ay, 'barrios', v_barr, 'barrio', v_barrio, 'lineas', v_lin, 'predios', v_pred, 'registro', v_reg);
+
+  return jsonb_build_object('cercano', v_cerca, 'contexto', v_ctx);
 end $$;
 
 -- RPC 1: lo que la Edge necesita para armar el PDF (o para saber que ya existe el de este sello). Lectura: no audita (audita registrar u obtener).

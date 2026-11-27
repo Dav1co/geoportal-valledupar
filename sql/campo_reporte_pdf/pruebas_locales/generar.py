@@ -78,15 +78,61 @@ create table public.redes_acueducto (id bigint primary key, geom geometry(MultiL
 create table public.redes_alcantarillado (id bigint primary key, geom geometry(MultiLineString, 4326));
 create index idx_redes_acu_geom on public.redes_acueducto using gist (geom);
 create index idx_redes_alc_geom on public.redes_alcantarillado using gist (geom);
-alter table public.predios_comercial_fuente_local add column geom geometry(Point, 4326);
+alter table public.predios_comercial_fuente_local add column geom geometry(Point, 4326), add column sin_contrato boolean;
+-- Capas de los dos mapas con la estructura de producción (paso 0 de David, 27-nov): clase, columnas, geometría e índice GiST con su nombre y definición exactos
+alter table public.catastro_valledupar alter column geom type geometry(Point, 4326) using st_setsrid(geom, 4326);
+create index idx_catastro_geom on public.catastro_valledupar using gist (geom);
+alter table public.barrios_valledupar add column geom geometry(MultiPolygon, 4326);
+create index idx_barrios_geom on public.barrios_valledupar using gist (geom);
+create table public.terrenos_valledupar (ogc_fid serial primary key, codigo character varying(30), matricula character varying, geom geometry(MultiPolygon, 4326));
+create index terrenos_valledupar_geom_geom_idx on public.terrenos_valledupar using gist (geom);
+create table tecnica.elementos_planta (id bigint generated always as identity primary key, codigo text not null, instalacion_id bigint, tipo text not null, nombre text, orden smallint,
+  geom geometry(Geometry, 4326), punto_id bigint, desde_id bigint, hasta_id bigint, activo_codigo text, atributos jsonb, origen text, activo boolean not null default true,
+  motivo_inactivo text, inactivado_en timestamp with time zone, reemplaza_id bigint, creado_por text, creado_en timestamp with time zone not null default now());
+create index ix_elementos_planta_geom on tecnica.elementos_planta using gist (geom);
 """
 PREDIOS_SQL = """
 drop materialized view public.predios_comercial;   -- solo en esta base, recién creada por este guion: se rehace con geom (misma clase: vista materializada)
-create materialized view public.predios_comercial as select id, cod_usuario, deuda_total, barrio, estado_predio, tramo_mora, geom from public.predios_comercial_fuente_local;
+create materialized view public.predios_comercial as select id, cod_usuario, deuda_total, barrio, estado_predio, tramo_mora, geom, sin_contrato from public.predios_comercial_fuente_local;
 create unique index predios_comercial_id_key on public.predios_comercial using btree (id);
 create index idx_predcom_geom_n on public.predios_comercial using gist (geom);
 analyze public.redes_acueducto; analyze public.redes_alcantarillado; analyze public.predios_comercial;
 """
+# Datos SINTÉTICOS de las capas que no hay en local (David, 27-nov): terrenos alrededor de cada predio del centro y de los puntos de prueba, barrios en cuadrícula de
+# 500 m (la celda más densa se llama «CENTRO (SINTÉTICO)»), elementos de Técnica cerca de los puntos de prueba (uno inactivo, que no debe salir) y 1 de cada 9 predios
+# «sin contrato». PUNTOS_PRUEBA: el de los reportes de prueba y el más denso del centro (celda de 120 × 60 m con más predios).
+PUNTOS_PRUEBA = [(10.476071, -73.251529)]
+SINTETICOS_SQL = """
+update public.predios_comercial_fuente_local set sin_contrato = (id % 9 = 0) where true;
+refresh materialized view public.predios_comercial;
+insert into public.terrenos_valledupar (codigo, matricula, geom)
+select 'ZT-' || p.id, null, st_multi(st_transform(st_expand(st_transform(p.geom, 3116), 4.4), 4326))
+  from public.predios_comercial p
+ where p.geom is not null and exists (select 1 from (values {{PUNTOS}}) z(lat, lon)
+         where st_dwithin(st_transform(p.geom, 3116), st_transform(st_setsrid(st_makepoint(z.lon, z.lat), 4326), 3116), 700));
+with c as (select st_transform(st_setsrid(st_makepoint({{LON_DENSO}}, {{LAT_DENSO}}), 4326), 3116) as d),
+     g as (select i, j, st_makeenvelope(1060000 + i * 500, 1640000 + j * 500, 1060000 + (i + 1) * 500, 1640000 + (j + 1) * 500, 3116) as e
+             from generate_series(-60, 60) i, generate_series(-60, 60) j)
+insert into public.barrios_valledupar (id, nombre, buscable, geom)
+select 900000 + row_number() over (order by g.i, g.j), case when st_intersects(g.e, c.d) then 'CENTRO (SINTÉTICO)' else 'ZTRP BARRIO ' || g.i || '/' || g.j end, true,
+       st_multi(st_transform(g.e, 4326))
+  from g, c
+ where st_intersects(st_transform(g.e, 4326), st_makeenvelope(-73.36, 10.35, -73.18, 10.56, 4326));
+insert into tecnica.elementos_planta (codigo, tipo, nombre, geom, activo, origen)
+select 'ZTRP-E' || n || '-' || k, tipo, 'ZTRP elemento ' || n, geom, activo, 'prueba'
+  from (select v.lat, v.lon, row_number() over () as k from (values {{PUNTOS}}) v(lat, lon)) z,
+       lateral (values (1, 'valvula', st_setsrid(st_makepoint(z.lon + 0.00012, z.lat + 0.00008), 4326), true),
+                       (2, 'hidrante', st_setsrid(st_makepoint(z.lon - 0.00020, z.lat - 0.00005), 4326), true),
+                       (3, 'macromedidor', st_setsrid(st_makepoint(z.lon + 0.00030, z.lat - 0.00012), 4326), true),
+                       (4, 'tuberia_planta', st_setsrid(st_makeline(st_makepoint(z.lon - 0.0004, z.lat + 0.0001), st_makepoint(z.lon + 0.0004, z.lat + 0.00015)), 4326), true),
+                       (5, 'valvula_inactiva', st_setsrid(st_makepoint(z.lon + 0.00005, z.lat - 0.00003), 4326), false)) e(n, tipo, geom, activo);
+analyze public.terrenos_valledupar; analyze public.barrios_valledupar; analyze tecnica.elementos_planta; analyze public.predios_comercial;
+"""
+def punto_denso(con):
+    """El centro de la celda de 120 × 60 m con más predios a 1,5 km o menos de la plaza Alfonso López (la zona densa del centro, donde los números se amontonan)."""
+    return con.execute("select st_y(c), st_x(c) from (select st_transform(st_setsrid(st_makepoint(st_x(k) + 60, st_y(k) + 30), 3116), 4326) as c from "
+                       "(select st_snaptogrid(st_transform(geom, 3116), 120, 60) as k, count(*) as n from public.predios_comercial where geom is not null "
+                       "and st_dwithin(st_transform(geom, 3116), st_transform(st_setsrid(st_makepoint(-73.2489, 10.4772), 4326), 3116), 1500) group by 1 order by n desc limit 1) q) z").fetchone()
 
 def rehacer(db):
     """Rehace `db` (emdupar_a_rf_*) como copia de producción con PostGIS real y la etiqueta del pago publicada. Devuelve una conexión."""
@@ -117,6 +163,9 @@ def rehacer(db):
                                      "from public.catastro_valledupar where geom is not null and cod_usuario is not null order by cod_usuario, id) x) to stdout")
     psql(db, "-c", "copy public.predios_comercial_fuente_local (id, cod_usuario, geom) from stdin", entrada=datos)
     con.execute(PREDIOS_SQL)
+    lat_d, lon_d = punto_denso(con)
+    puntos = ", ".join(f"({lat}::double precision, {lon}::double precision)" for lat, lon in [*PUNTOS_PRUEBA, (lat_d, lon_d)])
+    con.execute(SINTETICOS_SQL.replace("{{PUNTOS}}", puntos).replace("{{LAT_DENSO}}", str(lat_d)).replace("{{LON_DENSO}}", str(lon_d)))
     return con
 
 def valores(con):
