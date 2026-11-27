@@ -168,35 +168,64 @@ end $$;
 -- NUNCA lee campo.reporte_datos_sensibles. Las rutas de las fotos van solo para que la Edge las lea; el PDF no las imprime.
 create function campo.f_ran_contenido(p_id uuid) returns jsonb
 language plpgsql stable security definer set search_path = public, campo, acta, pg_temp as $$
-declare v campo.v_reportes_estado%rowtype; v_rr campo.reporte_registro; v_dc campo.reporte_direccion_contrato; r jsonb;
+declare v campo.v_reportes_estado%rowtype; v_rr campo.reporte_registro; v_dc campo.reporte_direccion_contrato; r jsonb; v_resp jsonb;
         f_hora constant text := 'DD/MM/YYYY HH24:MI';
 begin
   select * into v from campo.v_reportes_estado where id = p_id;
   if not found then perform campo.f_error('El reporte no existe', 'P0002'); end if;
   select * into v_rr from campo.reporte_registro where reporte_id = p_id;
   select * into v_dc from campo.reporte_direccion_contrato where reporte_id = p_id;
+  -- Respuestas propias del tipo (27-nov, David: «todo lo que el operario registró»): las mismas que el detalle de Supervisión y el Excel (campo.tipo_campos, en el orden
+  -- del formulario, con su etiqueta), las activas siempre (con «—» si no hay respuesta) y las inactivas si tienen respuesta; las claves de `datos` sin definición van al final
+  -- con su código. NUNCA las sensibles (ni su definición ni campo.reporte_datos_sensibles). Hoy los tipos de «Reportar anomalía» no tienen preguntas propias: sale vacío.
+  with c as (
+    select c.codigo, c.nombre, c.unidad, c.tipo_dato, c.opciones, c.orden, c.id, c.activo, v.datos -> c.codigo as val
+      from campo.tipo_campos c where c.tipo_id = v.tipo_id and not coalesce(c.sensible, false) and (c.activo or v.datos ? c.codigo)
+  )
+  select coalesce(jsonb_agg(x.par order by x.o1, x.o2, x.o3), '[]'::jsonb) into v_resp from (
+    select 0 as o1, c.orden as o2, c.id::text as o3, jsonb_build_array(c.nombre || coalesce(' (' || c.unidad || ')', ''),
+             case when c.val is null or c.val = 'null'::jsonb or c.val = '""'::jsonb then '—'
+                  when c.tipo_dato = 'si_no' then case when c.val = 'true'::jsonb then 'Sí' when c.val = 'false'::jsonb then 'No' else c.val #>> '{}' end
+                  when c.tipo_dato = 'opcion' then coalesce((select o ->> 'nombre' from jsonb_array_elements(c.opciones) o where o ->> 'codigo' = c.val #>> '{}'), c.val #>> '{}')
+                  when c.tipo_dato = 'opciones' then coalesce((select string_agg(coalesce((select o ->> 'nombre' from jsonb_array_elements(c.opciones) o where o ->> 'codigo' = e), e), '; ')
+                                                               from jsonb_array_elements_text(case when jsonb_typeof(c.val) = 'array' then c.val else '[]'::jsonb end) e), '—')
+                  when c.tipo_dato = 'dia_hora' then replace(c.val #>> '{}', 'T', ' ')
+                  when c.tipo_dato in ('entero', 'decimal') then replace(c.val #>> '{}', '.', ',')
+                  else c.val #>> '{}' end) as par
+      from c
+    union all
+    select 1, 0, k.key, jsonb_build_array(k.key, coalesce(k.value #>> '{}', '—'))
+      from jsonb_each(coalesce(v.datos, '{}'::jsonb)) k
+     where not exists (select 1 from campo.tipo_campos c where c.tipo_id = v.tipo_id and c.codigo = k.key)
+  ) x;
   select jsonb_build_object(
     'identificador', (select 'RAN-' || case when n.numero < 1000000 then lpad(n.numero::text, 6, '0') else n.numero::text end from campo.reporte_ran n where n.reporte_id = p_id),
     'numero_interno', v.seq,
     'grupo', g.nombre, 'tipo', t.nombre, 'subtipo', s.nombre,
     'estado', coalesce((select e.nombre from campo.estados_reporte e where e.codigo = v.estado), v.estado),
     'oculto', v.oculto, 'riesgo_inmediato', v.riesgo_inmediato, 'fuera_de_zona', v.fuera_de_zona,
+    'resultado', case v.resultado when 'efectivo' then 'Efectivo' when 'inefectivo' then 'Inefectivo' else v.resultado end
+                 || coalesce(' · ' || (select ca.nombre from campo.causales ca where ca.id = v.causal_id), ''),
+    'origen', case v.origen when 'campo' then 'Campo' when 'escritorio' then 'Escritorio' else v.origen end,
+    'orden_trabajo_id', v.orden_trabajo_id,
     'contrato', v.contrato, 'contrato_verificado', v.contrato_verificado,
     'direccion_contrato', case when v_dc.reporte_id is not null then jsonb_build_object(
         'comercial', v_dc.direccion_comercial, 'barrio_comercial', v_dc.barrio_comercial, 'catastro', v_dc.direccion_catastro, 'barrio_catastro', v_dc.barrio_catastro) end,
     'terreno', case when v_rr.reporte_id is not null and coalesce(v_rr.direccion, v_rr.barrio, v_rr.referencia) is not null then jsonb_build_object(
         'direccion', v_rr.direccion, 'barrio', v_rr.barrio, 'referencia', v_rr.referencia) end,
     'ubicacion', jsonb_build_object('lat', v.lat, 'lon', v.lon, 'precision_m', v.precision_m,
+        'registro', case when v_rr.reporte_id is null then null when v_rr.xy_manual then 'XY digitado — registrado desde otro punto' else 'En el sitio (GPS)' end
+                    || case when v_rr.reporte_id is not null and v_rr.lat_registro is null then ' · sin ubicación del dispositivo' else '' end,
         'xy_digitado', coalesce(v_rr.xy_manual, false), 'sin_ubicacion_dispositivo', v_rr.reporte_id is not null and v_rr.lat_registro is null,
-        'lat_registro', v_rr.lat_registro, 'lon_registro', v_rr.lon_registro, 'precision_registro_m', v_rr.precision_registro_m),
+        'lat_registro', v_rr.lat_registro, 'lon_registro', v_rr.lon_registro, 'precision_registro_m', v_rr.precision_registro_m,
+        'distancia_registro_m', case when v_rr.lat_registro is not null then round(st_distance(v.geom::geography,
+                                  st_setsrid(st_makepoint(v_rr.lon_registro::double precision, v_rr.lat_registro::double precision), 4326)::geography)::numeric, 1) end),
     'descripcion', v.descripcion,
+    'respuestas', v_resp,
     'reporto', campo.f_ran_persona(v.autor),
-    'inicio', to_char(v.inicio_en at time zone 'America/Bogota', f_hora) || case v.inicio_origen when 'dispositivo' then ' (celular)' when 'servidor' then ' (hora del servidor)' else '' end,
+    'inicio', to_char(v.inicio_en at time zone 'America/Bogota', f_hora) || case v.inicio_origen when 'dispositivo' then ' (celular)' else '' end,   -- como textoInicio del detalle
     'fin', to_char(v.registrado_en at time zone 'America/Bogota', f_hora),
-    'duracion', case when v.inicio_en is null or v.registrado_en < v.inicio_en then null
-                     else (select case when s < 60 then s || ' s' when s < 3600 then (s / 60) || ' min'
-                                       else (s / 3600) || ' h ' || lpad(((s % 3600) / 60)::text, 2, '0') || ' min' end
-                             from (select floor(extract(epoch from v.registrado_en - v.inicio_en))::bigint as s) q) end,
+    'duracion_s', case when v.inicio_en is not null then round(extract(epoch from v.registrado_en - v.inicio_en)::numeric, 1) end,   -- la Edge la escribe como el detalle (fmtDuracion)
     'fotos', coalesce((select jsonb_agg(jsonb_build_object('orden', f.orden, 'ruta', f.ruta_storage, 'bytes', f.tamano_bytes,
                          'etiqueta', coalesce(case when f.etiqueta = 'adicional' then 'Adicional' else (select tf.nombre from campo.tipo_fotos tf where tf.tipo_id = v.tipo_id and tf.codigo = f.etiqueta) end,
                                               'Foto ' || f.orden)

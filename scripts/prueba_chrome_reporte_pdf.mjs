@@ -4,7 +4,7 @@
 //   migrado (base_chrome.py). Cada RPC como service_role con 30 s y 8 s. A 390 px (táctil) y 1280 px. El PDF se revisa por dentro y se rasteriza con pdftoppm.
 // Perfiles (5): administrador, supervisora de Comercial, operario de campo, dual (operario de campo y de Técnica, sin supervisión) y sin permisos.
 //   node scripts/prueba_chrome_reporte_pdf.mjs [--revision] <chrome> <puppeteer-core> <deno> <supabase/functions> [capturas]
-//   --revision  no corre las pruebas: deja arriba la revisión local (http://127.0.0.1:55985/?rol=sup, base emdupar_a_rf_ranrev) hasta Ctrl-C.
+//   --revision  no corre las pruebas: deja arriba la revisión local (http://127.0.0.1:55987/?rol=sup; otro puerto con ZTRP_PUERTO_REVISION) hasta Ctrl-C.
 //   -h | --help  este uso. Cualquier otra opción que empiece con «-» es un error.
 // Puertos: pruebas 55983 (app, Auth, PostgREST, Storage) y 55984 (Edge); revisión 55985 y 55986. No chocan con una revisión anterior que siga arriba.
 import { createRequire } from "node:module";
@@ -25,7 +25,9 @@ const aqui = dirname(fileURLToPath(import.meta.url)), raiz = join(aqui, "..");
 const CAP = resolve(CAP_ARG || join(tmpdir(), "capturas_reporte_pdf")); mkdirSync(CAP, { recursive: true });
 const puppeteer = createRequire(import.meta.url)(PUP);
 const { build } = createRequire(join(raiz, "package.json"))("esbuild");
-const P_BASE = REVISION ? 55985 : 55983, P_EDGE = REVISION ? 55986 : 55984, DB = REVISION ? "emdupar_a_rf_ranrev" : "emdupar_a_rf_ranchrome";
+// la revisión toma el primer par libre desde 55987 (las anteriores siguen arriba hasta que David avise); la base de revisión lleva el número del puerto
+const PUERTO_REV = Number(process.env.ZTRP_PUERTO_REVISION || 55987);
+const P_BASE = REVISION ? PUERTO_REV : 55983, P_EDGE = REVISION ? PUERTO_REV + 1 : 55984, DB = REVISION ? `emdupar_a_rf_ranrev${PUERTO_REV}` : "emdupar_a_rf_ranchrome";
 const PSQL = "/opt/homebrew/opt/postgresql@17/bin/psql";
 const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: "55432", PGUSER: "postgres", PGDATABASE: DB, PGOPTIONS: "-c client_min_messages=warning" };
 const sqlq = (s) => execFileSync(PSQL, ["-AtX", "-v", "ON_ERROR_STOP=1", "-c", s], { env: PGENV, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trim();
@@ -63,7 +65,7 @@ function rpcBase(fn, a) {
 const objetos = new Map();   // "bucket/ruta" → { bytes, tipo }
 const subidas = [];
 // Registra un reporte como lo hace la Edge: reserva, «sube» cada foto (bytes reales en memoria) y crea
-function crearReporte(quien, tipo, fotos, { registro = null, contrato = null, lat = LAT, lon = LON, prec = 6, desc, resultado = null, causal = null, firma = null } = {}) {
+function crearReporte(quien, tipo, fotos, { registro = null, contrato = null, lat = LAT, lon = LON, prec = 6, desc, resultado = null, causal = null, firma = null, subtipo = null, riesgo = false, inicio = null } = {}) {
   const p = rpcBase("geoportal_campo_preparar_subida", { p_solicitante: quien, p_cantidad: fotos.length, p_origen: "campo", p_ip: null, p_tipo: tipo });
   if (p.status !== 200) throw new Error("preparar: " + JSON.stringify(p.cuerpo));
   const id = p.cuerpo.reporte_id, lista = [];
@@ -77,8 +79,8 @@ function crearReporte(quien, tipo, fotos, { registro = null, contrato = null, la
       p_imagen: firma.toString("base64"), p_ip: null });
     if (fi.status !== 200) throw new Error("firma: " + JSON.stringify(fi.cuerpo));
   }
-  const c = rpcBase("geoportal_campo_crear_reporte", { p_solicitante: quien, p_id: id, p_tipo: tipo, p_subtipo: null, p_descripcion: desc ?? `[PRUEBA ZTRP] ${tipo}`, p_contrato: contrato,
-    p_lat: lat, p_lon: lon, p_precision_m: prec, p_riesgo_inmediato: false, p_origen: "campo", p_fotos: lista, p_ip: null, p_registro: registro, p_resultado: resultado, p_causal: causal });
+  const c = rpcBase("geoportal_campo_crear_reporte", { p_solicitante: quien, p_id: id, p_tipo: tipo, p_subtipo: subtipo, p_descripcion: desc ?? `[PRUEBA ZTRP] ${tipo}`, p_contrato: contrato,
+    p_lat: lat, p_lon: lon, p_precision_m: prec, p_riesgo_inmediato: riesgo, p_origen: "campo", p_fotos: lista, p_ip: null, p_registro: registro, p_resultado: resultado, p_causal: causal, p_inicio_dispositivo: inicio });
   if (c.status !== 200) throw new Error("crear: " + JSON.stringify(c.cuerpo));
   return id;
 }
@@ -173,6 +175,18 @@ const R1 = crearReporte(E.op, "otro", [{ bytes: fotoChica }], { contrato: "99180
   desc: "[PRUEBA ZTRP] Sigue suspendido, tienen agua. Se ve una conexión directa antes del medidor." });
 const R2 = crearReporte(E.sup, "otro", fotosGrandes.map((b) => ({ bytes: b, origen: "galeria" })), { registro: { xy_manual: true, lat_registro: 10.4762, lon_registro: -73.2512, precision_registro_m: 9 }, prec: null });
 sqlq(`insert into campo.reporte_datos_sensibles (reporte_id, datos, registrado_en) values ('${R1}', '{"telefono_contacto": "3009876543", "nombre_contacto": "ZTRP CONTACTO SECRETO"}', now())`);
+// R4: un reporte con TODOS los campos llenos (Comercial y pérdidas · Posible fraude · subtipo; contrato con dirección comercial y de catastro; dirección, barrio y referencia
+// en terreno; riesgo inmediato; XY digitado; inicio del celular; fotos de cámara, galería y archivo). R5–R7: uno de cada grupo restante de «Reportar anomalía»
+// (Alcantarillado, Red de acueducto fuera de la zona, Terceros); R1 es «Otros». Facturación solo tiene «Revisiones generales», que es un formato (su PDF es el de Actas).
+sqlq(`insert into public.catastro_valledupar (cod_usuario, direccion, barrio, clase_uso) values ('991800000301', 'CARRERA 9 12 30 INTERIOR 2', 'CENTRO HISTORICO', 'RESIDENCIAL')`);
+const SUB = sqlq("select s.codigo from campo.subtipos_reporte s join campo.tipos_reporte t on t.id = s.tipo_id where t.codigo = 'fraude' and s.activo order by s.orden limit 1");
+const R4 = crearReporte(E.sup, "fraude", [{ bytes: fotoChica }, { bytes: fotosGrandes[0], origen: "galeria" }, { bytes: fotoChica, origen: "archivo" }], { subtipo: SUB, contrato: "991800000301", riesgo: true, prec: null,
+  inicio: new Date(Date.now() - 7 * 60000 - 20000).toISOString(),
+  registro: { xy_manual: true, lat_registro: 10.4762, lon_registro: -73.2512, precision_registro_m: 9, direccion: "[PRUEBA ZTRP] CLL 16 # 9-40 PISO 2", barrio: "LOPERENA", referencia: "Frente al parque, reja negra" },
+  desc: "[PRUEBA ZTRP-COMPLETO] Conexión directa antes del medidor, con manguera negra enterrada." });
+const R5 = crearReporte(E.op, "tapa_manhole", [{ bytes: fotoChica }], { desc: "[PRUEBA ZTRP-ALC] Tapa de manhole hundida en la vía." });
+const R6 = crearReporte(E.op, "fuga_acometida", [{ bytes: fotoChica }], { lat: 10.58, lon: -73.25, desc: "[PRUEBA ZTRP-ACU] Fuga en acometida, fuera de la zona." });
+const R7 = crearReporte(E.op, "dano_obra_terceros", [{ bytes: fotoChica }], { contrato: "991800000301", desc: "[PRUEBA ZTRP-TER] Retroexcavadora rompió la red." });
 // R3: un formato (revisión previa), registrado de verdad (reserva, firma del operario, registro): aparece en «Actas registradas» con su PDF pendiente
 const R3 = crearReporte(E.op, "revision_previa", [{ bytes: fotoChica, etiqueta: "fachada_predio" }], { contrato: "991800000301", resultado: "inefectivo", causal: "nadie_atiende", firma: await jpeg(99, 300, 120, 0.5) });
 const CONS3 = sqlq(`select consecutivo from campo.reportes where id = '${R3}'`);
@@ -209,7 +223,7 @@ try {
   const t1 = textoPdf(pdf1);
   ok("E08 el PDF es un PDF, del tamaño y sha256 registrados", t1.startsWith("%PDF-1.4") && pdf1.length === r.j.bytes && execFileSync("shasum", ["-a", "256", join(CAP, "R1_v1.pdf")]).toString().startsWith(sha1));
   ok("E09 título, número, versión, tipo, estado, contrato, direcciones y referencia", t1.includes("(Reporte de anomal\\355a)") && t1.includes(`N.\\272 RAN-`) && t1.includes("versi\\363n 1")
-    && t1.includes("(Reportado)") && t1.includes("(991800000301 \\(sin verificar\\))") && t1.includes("[PRUEBA ZTRP] CRA 9 # 12-32") && t1.includes("(Casa de rejas verdes)") && t1.includes("Direcci\\363n base comercial"));
+    && t1.includes("(Reportado)") && t1.includes("(991800000301 \\(no verificado\\))") && t1.includes("[PRUEBA ZTRP] CRA 9 # 12-32") && t1.includes("(Casa de rejas verdes)") && t1.includes("Direcci\\363n base comercial"));
   ok("E09b número RAN seguido (RAN-000001 es el primero) y el número interno aparte, en letra pequeña", /N\.\\272 RAN-000001 /.test(t1)
     && t1.includes(`(N\\372mero interno del reporte en el Geoportal: ${sqlq(`select seq from campo.reportes where id = '${R1}'`)})`) && t1.includes("/F1 7.5 Tf"));
   ok("E10 el nombre del operario (no su correo); quien generó, por nombre", t1.includes("ZTRP Operario") && !t1.includes("ztrp.op@") && t1.includes("por ZTRP Supervisora"));
@@ -238,11 +252,16 @@ try {
   ok(`E21 6 fotos de la galería (${Math.round(pesoFotos / 1024)} KB): PDF de ${Math.round(pdf2.length / 1024)} KB < 2 MB en ${ms2} ms`, r.s === 200 && pdf2.length < 2 * 1024 * 1024, `${r.s} ${JSON.stringify(r.j)}`);
   const omit = (t3.match(/Foto omitida por tama\\361o; disponible en el/g) ?? []).length;
   ok(`E22 las que no caben llevan la nota (${omit}) y quedan contadas en la fila`, omit >= 1 && Number(sqlq(`select fotos_omitidas from campo.reporte_pdf where reporte_id = '${R2}'`)) === omit);
-  ok("E23 galería y XY digitado: «adjuntada desde la galería», «XY digitado» y el punto de registro en el mapa", t3.includes("adjuntada desde la galer\\355a") && t3.includes("(XY digitado)") && t3.includes("(Registrado desde \\(XY digitado\\))"));
+  ok("E23 galería y XY digitado: «adjuntada desde la galería», «XY digitado» y el punto de registro en el mapa", t3.includes("adjuntada desde la galer\\355a") && t3.includes("XY digitado \\227 registrado desde otro punto") && t3.includes("(Registrado desde \\(XY digitado\\))"));
   pdftoppm(join(CAP, "R2.pdf"), join(CAP, "R2"));
   const maxRpc = Math.max(...rpcs.filter((x) => x.fn.startsWith("geoportal_campo_ran_")).map((x) => x.ms));
   ok(`E24 cada RPC del PDF (con psql) tarda menos de 2 s (máx ${maxRpc} ms)`, maxRpc < 2000);
 
+  // historial completo para R4: cambio de estado, ocultar y reincluir (por la Edge, como la pantalla)
+  for (const [acc, cuerpo] of [["estado", { id: R4, estado: "en_revision", motivo: "[PRUEBA ZTRP] se revisa en terreno" }], ["ocultar", { id: R4, motivo: "[PRUEBA ZTRP] se oculta un momento" }],
+                               ["reincluir", { id: R4, motivo: "[PRUEBA ZTRP] vuelve a la lista" }]]) {
+    const x = await llamar("sup", acc, cuerpo); ok(`E25 historial de R4: ${acc}`, x.s === 200, `${x.s} ${JSON.stringify(x.j)}`);
+  }
   // ---------- Chrome ----------
   const esp = (ms) => new Promise((res) => setTimeout(res, ms));
   async function abrir(rol, ancho, pagina = "") {
@@ -311,6 +330,51 @@ try {
     ok("A03 sin desborde (Actas registradas)", await sinDesborde(pg));
     await pg.close();
   }
+  // ---------- Detalle de Supervisión contra el PDF, campo por campo (1.280 px, supervisora) ----------
+  const textoDelPdf = (b) => {
+    const s = b.toString("latin1"), out = [], re = /\(((?:\\.|[^\\)])*)\) Tj/g; let m;
+    const W = { 0x96: "–", 0x97: "—", 0x95: "•", 0x93: "“", 0x94: "”", 0x91: "‘", 0x92: "’", 0x85: "…", 0x80: "€" };
+    while ((m = re.exec(s))) out.push(m[1].replace(/\\([0-7]{3})/g, (_, o) => { const c = parseInt(o, 8); return W[c] ?? String.fromCharCode(c); }).replace(/\\([()\\])/g, "$1"));
+    return out.join(" ").replace(/\s+/g, " ");
+  };
+  const casos = [["R1 Otros (contrato, terreno)", "conexión directa"], ["R2 Otros (galería, XY digitado)", "[PRUEBA ZTRP] otro"], ["R4 Comercial y pérdidas, COMPLETO", "ZTRP-COMPLETO"],
+                 ["R5 Alcantarillado", "ZTRP-ALC"], ["R6 Red de acueducto, fuera de zona", "ZTRP-ACU"], ["R7 Terceros", "ZTRP-TER"]];
+  const informe = [];
+  for (const [nombre, marca] of casos) {
+    const pg = await abrir("sup", 1280);
+    await esperar(pg, () => [...document.querySelectorAll('[role="row"]')].length > 1);
+    const abrio = await abrirFila(pg, marca) && await esperar(pg, (mk) => (document.querySelector(".rv-detalle .rv-descripcion")?.textContent ?? "").includes(mk) || mk === "[PRUEBA ZTRP] otro", marca)
+      && await esperar(pg, () => !!document.querySelector("[data-ran-pdf] button"));
+    const pares = abrio ? await pg.evaluate(() => { const dl = [...document.querySelectorAll(".rv-detalle .rv-dl")][0]; const r = []; let k = null;
+      for (const e of dl.children) { if (e.tagName === "DT") k = e.innerText.trim(); else if (e.tagName === "DD" && k) r.push([k, e.innerText.trim()]); } return r; }) : [];
+    await pg.click("[data-ran-pdf] button");
+    await esperar(pg, () => !!document.querySelector("[data-ran-pdf-abrir]"));
+    const href = await pg.$eval("[data-ran-pdf-abrir]", (e) => e.getAttribute("href")).catch(() => "");
+    const pdf = href ? await bajar(href) : Buffer.alloc(0); writeFileSync(join(CAP, `comparar_${nombre.split(" ")[0]}.pdf`), pdf);
+    const txt = textoDelPdf(pdf), faltan = [], filas = [];
+    const esta = (x) => txt.includes(x.replace(/\s+/g, " ").trim());
+    for (const [k, val] of pares) {
+      let piezas;
+      if (k === "Autor") { piezas = []; filas.push(`${k}: correo en pantalla → nombre en el PDF (regla de David)`); }
+      else if (k === "Grupo y tipo") piezas = val.split(" · ");
+      else if (k === "Estado") piezas = [val.replace(/ \(desde .*\)$/, "")];
+      else if (k === "Dirección del contrato") piezas = val.split("\n").map((l) => l.replace(/^En el catastro: /, "")).filter(Boolean);
+      else piezas = [val];
+      for (const pz of piezas) if (pz !== "—" && !esta(pz)) faltan.push(`${k}: «${pz}»`);
+    }
+    // los campos fijos salen siempre, aunque la pantalla no los muestre si están vacíos
+    for (const fijo of ["Grupo", "Tipo", "Subtipo", "Contrato", "Resultado", "Riesgo inmediato", "Zona", "Origen", "Dirección base comercial", "Dirección catastro",
+                        "Dirección encontrada en terreno", "Barrio", "Referencia", "Inicio", "Fin (registrado)", "Duración", "Coordenadas", "Registrado desde", "¿QUÉ ENCONTRÓ?", "RESPUESTAS DEL FORMULARIO"])
+      if (!esta(fijo)) faltan.push(`fijo ausente: ${fijo}`);
+    informe.push(`${nombre}: ${pares.length} campos del detalle; ${faltan.length ? "FALTAN " + faltan.join("; ") : "todos en el PDF"}`);
+    ok(`K ${nombre}: los ${pares.length} campos del detalle de Supervisión están en el PDF, y los fijos también`, abrio && pares.length >= 6 && faltan.length === 0, faltan.join(" | "));
+    if (marca === "ZTRP-COMPLETO") ok("K R4: la versión del PDF trae el historial completo (estado, ocultar, reincluir) y los datos sensibles no", esta("Cambio de estado a En revisión") && esta("Se ocultó el reporte")
+      && esta("Se reincluyó el reporte") && esta("Riesgo inmediato Sí") && esta("Zona Dentro de la zona de servicio") && esta(SUB === "" ? "Subtipo" : "Subtipo"), txt.slice(0, 600));
+    if (marca === "ZTRP-ACU") ok("K R6: «Fuera de la zona de servicio»", esta("Zona Fuera de la zona de servicio"));
+    await pg.close();
+  }
+  writeFileSync(join(CAP, "comparacion_detalle_pdf.txt"), informe.join("\n") + "\n");
+  console.log(informe.map((l) => "   · " + l).join("\n"));
   const fnsF = new Set(rpcs.map((x) => x.fn));
   ok("F01 el PDF del formato usó las mismas RPC de Actas registradas (actas_registradas, pdf_datos, pdf_registrar) y no las del reporte",
     ["geoportal_campo_actas_registradas", "geoportal_campo_pdf_datos", "geoportal_campo_pdf_registrar"].every((f) => fnsF.has(f)) && Number(sqlq(`select count(*) from campo.documentos_pdf where registro_id = '${R3}'`)) === 1

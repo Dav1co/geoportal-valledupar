@@ -193,13 +193,21 @@ begin
     and d -> 'terreno' ->> 'barrio' = 'CENTRO' and d -> 'terreno' ->> 'referencia' = 'Casa de rejas verdes', left(d::text, 600));
   perform pg_temp.ok('03.05 ubicación con precisión; foto de cámara con su origen; inicio, fin y duración',
     (d -> 'ubicacion' ->> 'precision_m')::numeric = 6 and jsonb_array_length(d -> 'fotos') = 1 and d -> 'fotos' -> 0 ->> 'etiqueta' like '% · tomada con la cámara'
-    and d ->> 'fin' ~ '^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$' and d ? 'inicio' and d ? 'duracion', left(d::text, 600));
+    and d ->> 'fin' ~ '^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$' and d ? 'inicio' and d ? 'duracion_s', left(d::text, 600));
   perform pg_temp.ok('03.06 historial: «Reportado» por el operario', d -> 'historial' -> 0 ->> 'texto' = 'Reportado' and d -> 'historial' -> 0 ->> 'quien' = 'ZTRAN Operario');
   e := pg_temp.datos('ztran.sup@emdupar.gov.co', B);
   perform pg_temp.ok('03.07 galería y XY digitado: la foto dice su origen y la ubicación marca el XY con el punto de registro',
     e -> 'fotos' -> 0 ->> 'etiqueta' like '% · adjuntada desde la galería' and (e -> 'ubicacion' ->> 'xy_digitado')::boolean and (e -> 'ubicacion' ->> 'lat_registro')::numeric = 10.4762, left(e::text, 600));
   perform pg_temp.ok('03.08 sin firmas ni rutas sueltas: las únicas rutas son las de las fotos (para la Edge)',
     not (d ? 'firmas') and (select count(*) from jsonb_array_elements(d -> 'fotos') f where f ? 'ruta') = 1);
+  perform pg_temp.ok('03.09 campos fijos: origen «Campo», resultado vacío, registro «En el sitio (GPS)», respuestas del tipo (ninguna en «Otro»), zona y riesgo',
+    d ->> 'origen' = 'Campo' and d -> 'resultado' = 'null'::jsonb and d -> 'ubicacion' ->> 'registro' = 'En el sitio (GPS)' and d -> 'respuestas' = '[]'::jsonb
+    and d ? 'fuera_de_zona' and d ? 'riesgo_inmediato' and d ? 'orden_trabajo_id', left(d::text, 500));
+  perform pg_temp.ok('03.10 XY digitado: el registro lo dice y trae la distancia al punto (como el detalle)',
+    e -> 'ubicacion' ->> 'registro' = 'XY digitado — registrado desde otro punto' and (e -> 'ubicacion' ->> 'distancia_registro_m')::numeric between 20 and 80, (e -> 'ubicacion')::text);
+  perform pg_temp.ok('03.11 las respuestas propias no traen campos sensibles del catálogo (ninguna definición sensible del tipo en la lista)',
+    not exists (select 1 from jsonb_array_elements(d -> 'respuestas') x, campo.tipo_campos c join campo.tipos_reporte tt on tt.id = c.tipo_id
+                 where tt.codigo = 'otro' and c.sensible and x ->> 0 like c.nombre || '%'));
   perform pg_temp.guardar('sello_A1', d ->> 'sello');
 end $p3$;
 

@@ -280,35 +280,64 @@ end $$;
 -- NUNCA lee campo.reporte_datos_sensibles. Las rutas de las fotos van solo para que la Edge las lea; el PDF no las imprime.
 create function campo.f_ran_contenido(p_id uuid) returns jsonb
 language plpgsql stable security definer set search_path = public, campo, acta, pg_temp as $$
-declare v campo.v_reportes_estado%rowtype; v_rr campo.reporte_registro; v_dc campo.reporte_direccion_contrato; r jsonb;
+declare v campo.v_reportes_estado%rowtype; v_rr campo.reporte_registro; v_dc campo.reporte_direccion_contrato; r jsonb; v_resp jsonb;
         f_hora constant text := 'DD/MM/YYYY HH24:MI';
 begin
   select * into v from campo.v_reportes_estado where id = p_id;
   if not found then perform campo.f_error('El reporte no existe', 'P0002'); end if;
   select * into v_rr from campo.reporte_registro where reporte_id = p_id;
   select * into v_dc from campo.reporte_direccion_contrato where reporte_id = p_id;
+  -- Respuestas propias del tipo (27-nov, David: «todo lo que el operario registró»): las mismas que el detalle de Supervisión y el Excel (campo.tipo_campos, en el orden
+  -- del formulario, con su etiqueta), las activas siempre (con «—» si no hay respuesta) y las inactivas si tienen respuesta; las claves de `datos` sin definición van al final
+  -- con su código. NUNCA las sensibles (ni su definición ni campo.reporte_datos_sensibles). Hoy los tipos de «Reportar anomalía» no tienen preguntas propias: sale vacío.
+  with c as (
+    select c.codigo, c.nombre, c.unidad, c.tipo_dato, c.opciones, c.orden, c.id, c.activo, v.datos -> c.codigo as val
+      from campo.tipo_campos c where c.tipo_id = v.tipo_id and not coalesce(c.sensible, false) and (c.activo or v.datos ? c.codigo)
+  )
+  select coalesce(jsonb_agg(x.par order by x.o1, x.o2, x.o3), '[]'::jsonb) into v_resp from (
+    select 0 as o1, c.orden as o2, c.id::text as o3, jsonb_build_array(c.nombre || coalesce(' (' || c.unidad || ')', ''),
+             case when c.val is null or c.val = 'null'::jsonb or c.val = '""'::jsonb then '—'
+                  when c.tipo_dato = 'si_no' then case when c.val = 'true'::jsonb then 'Sí' when c.val = 'false'::jsonb then 'No' else c.val #>> '{}' end
+                  when c.tipo_dato = 'opcion' then coalesce((select o ->> 'nombre' from jsonb_array_elements(c.opciones) o where o ->> 'codigo' = c.val #>> '{}'), c.val #>> '{}')
+                  when c.tipo_dato = 'opciones' then coalesce((select string_agg(coalesce((select o ->> 'nombre' from jsonb_array_elements(c.opciones) o where o ->> 'codigo' = e), e), '; ')
+                                                               from jsonb_array_elements_text(case when jsonb_typeof(c.val) = 'array' then c.val else '[]'::jsonb end) e), '—')
+                  when c.tipo_dato = 'dia_hora' then replace(c.val #>> '{}', 'T', ' ')
+                  when c.tipo_dato in ('entero', 'decimal') then replace(c.val #>> '{}', '.', ',')
+                  else c.val #>> '{}' end) as par
+      from c
+    union all
+    select 1, 0, k.key, jsonb_build_array(k.key, coalesce(k.value #>> '{}', '—'))
+      from jsonb_each(coalesce(v.datos, '{}'::jsonb)) k
+     where not exists (select 1 from campo.tipo_campos c where c.tipo_id = v.tipo_id and c.codigo = k.key)
+  ) x;
   select jsonb_build_object(
     'identificador', (select 'RAN-' || case when n.numero < 1000000 then lpad(n.numero::text, 6, '0') else n.numero::text end from campo.reporte_ran n where n.reporte_id = p_id),
     'numero_interno', v.seq,
     'grupo', g.nombre, 'tipo', t.nombre, 'subtipo', s.nombre,
     'estado', coalesce((select e.nombre from campo.estados_reporte e where e.codigo = v.estado), v.estado),
     'oculto', v.oculto, 'riesgo_inmediato', v.riesgo_inmediato, 'fuera_de_zona', v.fuera_de_zona,
+    'resultado', case v.resultado when 'efectivo' then 'Efectivo' when 'inefectivo' then 'Inefectivo' else v.resultado end
+                 || coalesce(' · ' || (select ca.nombre from campo.causales ca where ca.id = v.causal_id), ''),
+    'origen', case v.origen when 'campo' then 'Campo' when 'escritorio' then 'Escritorio' else v.origen end,
+    'orden_trabajo_id', v.orden_trabajo_id,
     'contrato', v.contrato, 'contrato_verificado', v.contrato_verificado,
     'direccion_contrato', case when v_dc.reporte_id is not null then jsonb_build_object(
         'comercial', v_dc.direccion_comercial, 'barrio_comercial', v_dc.barrio_comercial, 'catastro', v_dc.direccion_catastro, 'barrio_catastro', v_dc.barrio_catastro) end,
     'terreno', case when v_rr.reporte_id is not null and coalesce(v_rr.direccion, v_rr.barrio, v_rr.referencia) is not null then jsonb_build_object(
         'direccion', v_rr.direccion, 'barrio', v_rr.barrio, 'referencia', v_rr.referencia) end,
     'ubicacion', jsonb_build_object('lat', v.lat, 'lon', v.lon, 'precision_m', v.precision_m,
+        'registro', case when v_rr.reporte_id is null then null when v_rr.xy_manual then 'XY digitado — registrado desde otro punto' else 'En el sitio (GPS)' end
+                    || case when v_rr.reporte_id is not null and v_rr.lat_registro is null then ' · sin ubicación del dispositivo' else '' end,
         'xy_digitado', coalesce(v_rr.xy_manual, false), 'sin_ubicacion_dispositivo', v_rr.reporte_id is not null and v_rr.lat_registro is null,
-        'lat_registro', v_rr.lat_registro, 'lon_registro', v_rr.lon_registro, 'precision_registro_m', v_rr.precision_registro_m),
+        'lat_registro', v_rr.lat_registro, 'lon_registro', v_rr.lon_registro, 'precision_registro_m', v_rr.precision_registro_m,
+        'distancia_registro_m', case when v_rr.lat_registro is not null then round(st_distance(v.geom::geography,
+                                  st_setsrid(st_makepoint(v_rr.lon_registro::double precision, v_rr.lat_registro::double precision), 4326)::geography)::numeric, 1) end),
     'descripcion', v.descripcion,
+    'respuestas', v_resp,
     'reporto', campo.f_ran_persona(v.autor),
-    'inicio', to_char(v.inicio_en at time zone 'America/Bogota', f_hora) || case v.inicio_origen when 'dispositivo' then ' (celular)' when 'servidor' then ' (hora del servidor)' else '' end,
+    'inicio', to_char(v.inicio_en at time zone 'America/Bogota', f_hora) || case v.inicio_origen when 'dispositivo' then ' (celular)' else '' end,   -- como textoInicio del detalle
     'fin', to_char(v.registrado_en at time zone 'America/Bogota', f_hora),
-    'duracion', case when v.inicio_en is null or v.registrado_en < v.inicio_en then null
-                     else (select case when s < 60 then s || ' s' when s < 3600 then (s / 60) || ' min'
-                                       else (s / 3600) || ' h ' || lpad(((s % 3600) / 60)::text, 2, '0') || ' min' end
-                             from (select floor(extract(epoch from v.registrado_en - v.inicio_en))::bigint as s) q) end,
+    'duracion_s', case when v.inicio_en is not null then round(extract(epoch from v.registrado_en - v.inicio_en)::numeric, 1) end,   -- la Edge la escribe como el detalle (fmtDuracion)
     'fotos', coalesce((select jsonb_agg(jsonb_build_object('orden', f.orden, 'ruta', f.ruta_storage, 'bytes', f.tamano_bytes,
                          'etiqueta', coalesce(case when f.etiqueta = 'adicional' then 'Adicional' else (select tf.nombre from campo.tipo_fotos tf where tf.tipo_id = v.tipo_id and tf.codigo = f.etiqueta) end,
                                               'Foto ' || f.orden)
@@ -454,7 +483,7 @@ select campo.f_ran_numerar(null);
 do $p1$
 begin
   perform pg_temp.ok('01.01 la huella de campo es la de este cambio; acta y Técnica no cambiaron',
-    (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text collate "C", p.proname, p.oid::regprocedure::text collate "C")) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) = '68942f699d39f30bacf4f231be57e131' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'acta'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_acta\_%')) = '111506c690249ad3b56ebf572566434c' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.prokind = 'f' and (p.pronamespace = 'tecnica'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_tec\_%'))) = '838b80984e51cc7873a666f85d657195');
+    (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text collate "C", p.proname, p.oid::regprocedure::text collate "C")) from pg_proc p where p.pronamespace = 'campo'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_campo\_%')) = '1d714894930808b61159d8a1f5689f96' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.pronamespace = 'acta'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_acta\_%')) = '111506c690249ad3b56ebf572566434c' and (select md5(string_agg(md5(pg_get_functiondef(p.oid)), '' order by p.pronamespace::regnamespace::text, p.proname, p.oid::regprocedure::text)) from pg_proc p where p.prokind = 'f' and (p.pronamespace = 'tecnica'::regnamespace or (p.pronamespace = 'public'::regnamespace and p.proname like 'geoportal\_tec\_%'))) = '838b80984e51cc7873a666f85d657195');
   perform pg_temp.ok('01.02 campo.reporte_pdf: RLS sin políticas, sin permisos para la API, SELECT para homelab_lectura',
     (select relrowsecurity from pg_class where oid = 'campo.reporte_pdf'::regclass) and not exists (select 1 from pg_policies where schemaname = 'campo')
     and not has_table_privilege('service_role', 'campo.reporte_pdf', 'select') and not has_table_privilege('authenticated', 'campo.reporte_pdf', 'select')
@@ -531,13 +560,21 @@ begin
     and d -> 'terreno' ->> 'barrio' = 'CENTRO' and d -> 'terreno' ->> 'referencia' = 'Casa de rejas verdes', left(d::text, 600));
   perform pg_temp.ok('03.05 ubicación con precisión; foto de cámara con su origen; inicio, fin y duración',
     (d -> 'ubicacion' ->> 'precision_m')::numeric = 6 and jsonb_array_length(d -> 'fotos') = 1 and d -> 'fotos' -> 0 ->> 'etiqueta' like '% · tomada con la cámara'
-    and d ->> 'fin' ~ '^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$' and d ? 'inicio' and d ? 'duracion', left(d::text, 600));
+    and d ->> 'fin' ~ '^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$' and d ? 'inicio' and d ? 'duracion_s', left(d::text, 600));
   perform pg_temp.ok('03.06 historial: «Reportado» por el operario', d -> 'historial' -> 0 ->> 'texto' = 'Reportado' and d -> 'historial' -> 0 ->> 'quien' = 'ZTRAN Operario');
   e := pg_temp.datos('ztran.sup@emdupar.gov.co', B);
   perform pg_temp.ok('03.07 galería y XY digitado: la foto dice su origen y la ubicación marca el XY con el punto de registro',
     e -> 'fotos' -> 0 ->> 'etiqueta' like '% · adjuntada desde la galería' and (e -> 'ubicacion' ->> 'xy_digitado')::boolean and (e -> 'ubicacion' ->> 'lat_registro')::numeric = 10.4762, left(e::text, 600));
   perform pg_temp.ok('03.08 sin firmas ni rutas sueltas: las únicas rutas son las de las fotos (para la Edge)',
     not (d ? 'firmas') and (select count(*) from jsonb_array_elements(d -> 'fotos') f where f ? 'ruta') = 1);
+  perform pg_temp.ok('03.09 campos fijos: origen «Campo», resultado vacío, registro «En el sitio (GPS)», respuestas del tipo (ninguna en «Otro»), zona y riesgo',
+    d ->> 'origen' = 'Campo' and d -> 'resultado' = 'null'::jsonb and d -> 'ubicacion' ->> 'registro' = 'En el sitio (GPS)' and d -> 'respuestas' = '[]'::jsonb
+    and d ? 'fuera_de_zona' and d ? 'riesgo_inmediato' and d ? 'orden_trabajo_id', left(d::text, 500));
+  perform pg_temp.ok('03.10 XY digitado: el registro lo dice y trae la distancia al punto (como el detalle)',
+    e -> 'ubicacion' ->> 'registro' = 'XY digitado — registrado desde otro punto' and (e -> 'ubicacion' ->> 'distancia_registro_m')::numeric between 20 and 80, (e -> 'ubicacion')::text);
+  perform pg_temp.ok('03.11 las respuestas propias no traen campos sensibles del catálogo (ninguna definición sensible del tipo en la lista)',
+    not exists (select 1 from jsonb_array_elements(d -> 'respuestas') x, campo.tipo_campos c join campo.tipos_reporte tt on tt.id = c.tipo_id
+                 where tt.codigo = 'otro' and c.sensible and x ->> 0 like c.nombre || '%'));
   perform pg_temp.guardar('sello_A1', d ->> 'sello');
 end $p3$;
 
@@ -646,7 +683,7 @@ end $p8$;
 do $rev$
 declare r record; v_n bigint;
 begin
-  for r in select * from (values ('campo.f_ran_numerar(uuid)', '0898fb8ef37395807d1840793995f410'), ('campo.f_ran_autorizar(text,uuid)', '2ad5312a05781ae680593c77f3567996'), ('campo.f_ran_persona(text)', '878cb032577259fc99a65a88a895e705'), ('campo.f_ran_contenido(uuid)', '28030cb66dc32ba930bd0221c5e3dfed'), ('campo.f_ran_destino(uuid,text)', '13b97f29ab83affef654dc8dfa662ba3'), ('campo.f_ran_mapa(numeric,numeric,numeric,numeric)', 'bb39c53123e8c511bf06315a3b07db1a'), ('public.geoportal_campo_ran_datos(text,uuid,text)', '9930d5e29c50156477392e6023319068'), ('public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)', 'e74aa08891b6578297c9ce365b1e94ee'), ('public.geoportal_campo_ran_obtener(text,uuid,text)', 'c131b87deffb9c5f32df5a61ba548f95')) x(f, m) loop
+  for r in select * from (values ('campo.f_ran_numerar(uuid)', '0898fb8ef37395807d1840793995f410'), ('campo.f_ran_autorizar(text,uuid)', '2ad5312a05781ae680593c77f3567996'), ('campo.f_ran_persona(text)', '878cb032577259fc99a65a88a895e705'), ('campo.f_ran_contenido(uuid)', 'b579de2d574bd050875d0f80d1129db0'), ('campo.f_ran_destino(uuid,text)', '13b97f29ab83affef654dc8dfa662ba3'), ('campo.f_ran_mapa(numeric,numeric,numeric,numeric)', 'bb39c53123e8c511bf06315a3b07db1a'), ('public.geoportal_campo_ran_datos(text,uuid,text)', '9930d5e29c50156477392e6023319068'), ('public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)', 'e74aa08891b6578297c9ce365b1e94ee'), ('public.geoportal_campo_ran_obtener(text,uuid,text)', 'c131b87deffb9c5f32df5a61ba548f95')) x(f, m) loop
     if to_regprocedure(r.f) is null or md5(pg_get_functiondef(to_regprocedure(r.f))) is distinct from r.m then
       raise exception 'La función % no es la de este paquete (sin aplicar o cambiada después): la reversa no la pisa; deténgase y avise', r.f;
     end if;
