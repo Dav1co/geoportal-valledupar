@@ -30,7 +30,7 @@ DUMP_4A = CASA / "geoportal-consultas/campo/admin_perfiles_22nov/doble_admin_4a/
 ORIGEN_CAPAS = "emdupar_b"       # solo lectura: redes.activo_versiones y catastro_valledupar
 RPC = ["public.geoportal_campo_ran_datos(text,uuid,text)", "public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)",
        "public.geoportal_campo_ran_obtener(text,uuid,text)"]
-INTERNAS = ["campo.f_ran_autorizar(text,uuid)", "campo.f_ran_persona(text)", "campo.f_ran_contenido(uuid)", "campo.f_ran_destino(uuid,text)",
+INTERNAS = ["campo.f_ran_numerar(uuid)", "campo.f_ran_autorizar(text,uuid)", "campo.f_ran_persona(text)", "campo.f_ran_contenido(uuid)", "campo.f_ran_destino(uuid,text)",
             "campo.f_ran_mapa(numeric,numeric,numeric,numeric)"]
 NUEVAS = INTERNAS + RPC
 # Columnas que el paquete lee, con su tipo (las de producción; el doble las tiene iguales)
@@ -125,14 +125,14 @@ def valores(con):
          "HUELLA_CAMPO_Q": HUELLA["campo"], "HUELLA_ACTA_Q": HUELLA["acta"], "HUELLA_TECNICA_Q": HUELLA["tecnica"], "SIN_WHERE_CAMPO": SINWHERE, "EST_EXPR": EST_EXPR,
          "MD5_PERMISOS": ", ".join(f"({lit(f)}, {lit(m)})" for f, m in PERMISOS.items()),
          "COLUMNAS": ", ".join(f"({lit(t)}, {lit(c)}, {lit(ty)})" for t, c, ty in COLUMNAS),
-         "EST_TABLA_NUEVA": "x", "MD5_NUEVAS": "('x', 'x')"}
+         "EST_TABLA_NUEVA": "x", "EST_TABLA_RAN": "x", "MD5_NUEVAS": "('x', 'x')"}
     with con.transaction(force_rollback=True):
         con.execute(a_local(poner(cuerpo(), p)))
         p["HUELLA_CAMPO_NUEVA"] = con.execute(HUELLA["campo"]).fetchone()[0]
         assert con.execute(HUELLA["acta"]).fetchone()[0] == p["HUELLA_ACTA"]
         p["MD5_NUEVAS_D"] = {f: md5f(con, f) for f in NUEVAS}
         p["MD5_NUEVAS"] = ", ".join(f"({lit(f)}, {lit(m)})" for f, m in p["MD5_NUEVAS_D"].items())
-        p["EST_TABLA_NUEVA"] = est(con, "campo.reporte_pdf")
+        p["EST_TABLA_NUEVA"] = est(con, "campo.reporte_pdf"); p["EST_TABLA_RAN"] = est(con, "campo.reporte_ran")
         con.execute(poner(lee("90_reversa.sql"), p))
         assert con.execute(HUELLA["campo"]).fetchone()[0] == p["HUELLA_CAMPO"], "la reversa no devuelve la huella"
     return p
@@ -157,8 +157,8 @@ select o, k, v, estado from (
         fila(1, "1 la huella de campo es la de este cambio", f"({H['campo']}) = '{p['HUELLA_CAMPO_NUEVA']}'"),
         fila(2, "2 la huella del acta no cambió", f"({H['acta']}) = '{p['HUELLA_ACTA']}'"),
         fila(3, "3 la huella de Técnica no cambió", f"({H['tecnica']}) = '{p['HUELLA_TECNICA']}'"),
-        fila(4, "4 las 8 funciones nuevas existen con su md5", " and ".join(f"md5(pg_get_functiondef(to_regprocedure({lit(f)}))) = {lit(m)}" for f, m in p["MD5_NUEVAS_D"].items())),
-        fila(5, "5 las 3 RPC solo para service_role; las 5 internas, para nadie de la API",
+        fila(4, "4 las 9 funciones nuevas existen con su md5", " and ".join(f"md5(pg_get_functiondef(to_regprocedure({lit(f)}))) = {lit(m)}" for f, m in p["MD5_NUEVAS_D"].items())),
+        fila(5, "5 las 3 RPC solo para service_role; las 6 internas, para nadie de la API",
              " and ".join(api(f) for f in RPC) + " and " + " and ".join(f"not has_function_privilege({lit(r)}, {lit(f)}, 'execute')" for f in INTERNAS for r in ("anon", "authenticated", "service_role"))),
         fila(6, f"6 {T}: estructura de este paquete, RLS sin políticas, sin permisos para la API, SELECT (solo) para homelab_lectura, solo inserción",
              f"(select {EST_EXPR} from (select to_regclass('{T}') as rel) z) = '{p['EST_TABLA_NUEVA']}' and (select relrowsecurity from pg_class where oid = '{T}'::regclass) "
@@ -167,6 +167,13 @@ select o, k, v, estado from (
              + f"and has_table_privilege('homelab_lectura', '{T}', 'select') and not has_table_privilege('homelab_lectura', '{T}', 'insert') "
              f"and (select string_agg(tgname || ':' || tgfoid::regproc::text || ':' || tgtype, ',' order by tgname) from pg_trigger where tgrelid = '{T}'::regclass and not tgisinternal) "
              "= (select string_agg(tgname || ':' || tgfoid::regproc::text || ':' || tgtype, ',' order by tgname) from pg_trigger where tgrelid = 'campo.reporte_fotos'::regclass and not tgisinternal)"),
+        fila(10, "10 campo.reporte_ran: estructura de este paquete, RLS, sin permisos para la API, SELECT para homelab_lectura, solo inserción y números seguidos desde 1",
+             f"(select {EST_EXPR} from (select to_regclass('campo.reporte_ran') as rel) z) = '{p['EST_TABLA_RAN']}' and (select relrowsecurity from pg_class where oid = 'campo.reporte_ran'::regclass) "
+             + "".join(f"and not has_table_privilege('{r}', 'campo.reporte_ran', '{x}') " for r in ("anon", "authenticated", "service_role") for x in ("select", "insert", "update", "delete"))
+             + "and has_table_privilege('homelab_lectura', 'campo.reporte_ran', 'select') and not has_table_privilege('homelab_lectura', 'campo.reporte_ran', 'insert') "
+             "and (select string_agg(tgname || ':' || tgfoid::regproc::text || ':' || tgtype, ',' order by tgname) from pg_trigger where tgrelid = 'campo.reporte_ran'::regclass and not tgisinternal) "
+             "= (select string_agg(tgname || ':' || tgfoid::regproc::text || ':' || tgtype, ',' order by tgname) from pg_trigger where tgrelid = 'campo.reporte_fotos'::regclass and not tgisinternal) "
+             "and (select coalesce(max(numero), 0) = count(*) and coalesce(min(numero), 1) = 1 from campo.reporte_ran)"),
         fila(7, "7 las 4 funciones de permisos vivas no cambiaron", " and ".join(f"md5(pg_get_functiondef(to_regprocedure({lit(f)}))) = {lit(m)}" for f, m in PERMISOS.items())),
         fila(8, "8 ninguna función de campo con DELETE o UPDATE sin WHERE", SINWHERE + " = 0"),
         fila(9, "9 redes.f_funciones_sin_where() devuelve cero filas", "(select count(*) from redes.f_funciones_sin_where()) = 0"),
@@ -187,7 +194,7 @@ def main():
         assert "on commit drop" not in t.lower(), nombre
         (PAQ / nombre).write_text(t); print(f"[OK ] {nombre}  md5 {hashlib.md5(t.encode()).hexdigest()}")
     (AQUI / "huellas_locales.json").write_text(json.dumps({"partida": {"HUELLA_CAMPO": p["HUELLA_CAMPO"]},
-        "nuevas": {"HUELLA_CAMPO_NUEVA": p["HUELLA_CAMPO_NUEVA"], "FUNCIONES_NUEVAS": p["MD5_NUEVAS_D"], "TABLA_NUEVA": p["EST_TABLA_NUEVA"]}, "verificacion": n}, indent=1, ensure_ascii=False))
+        "nuevas": {"HUELLA_CAMPO_NUEVA": p["HUELLA_CAMPO_NUEVA"], "FUNCIONES_NUEVAS": p["MD5_NUEVAS_D"], "TABLA_NUEVA": p["EST_TABLA_NUEVA"], "TABLA_RAN": p["EST_TABLA_RAN"]}, "verificacion": n}, indent=1, ensure_ascii=False))
     print(json.dumps({"HUELLA_CAMPO_NUEVA": p["HUELLA_CAMPO_NUEVA"], "verificacion": n}, indent=1))
 
 if __name__ == "__main__":

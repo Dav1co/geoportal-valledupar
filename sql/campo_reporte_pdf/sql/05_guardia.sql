@@ -25,6 +25,10 @@ begin
     select {{EST_EXPR}} into v from (select to_regclass('campo.reporte_pdf') as rel) z;
     if v is distinct from '{{EST_TABLA_NUEVA}}' then raise exception 'La tabla campo.reporte_pdf ya existe y no es la de este paquete: deténgase y avise'; end if;
   end if;
+  if to_regclass('campo.reporte_ran') is not null then
+    select {{EST_EXPR}} into v from (select to_regclass('campo.reporte_ran') as rel) z;
+    if v is distinct from '{{EST_TABLA_RAN}}' then raise exception 'La tabla campo.reporte_ran ya existe y no es la de este paquete: deténgase y avise'; end if;
+  end if;
   -- columnas que se leen (con su tipo)
   for r in select * from (values {{COLUMNAS}}) x(t, c, ty) loop
     if not exists (select 1 from pg_attribute a where a.attrelid = to_regclass(r.t) and a.attname = r.c and not a.attisdropped and format_type(a.atttypid, a.atttypmod) = r.ty) then

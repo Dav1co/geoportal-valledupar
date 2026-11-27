@@ -33,3 +33,24 @@ revoke all on campo.reporte_pdf from public, anon, authenticated, service_role;
 grant select on campo.reporte_pdf to homelab_lectura;
   $ddl$;
 end $estructura$;
+
+-- campo.reporte_ran (27-nov, David): el NÚMERO RAN seguido (RAN-000001, 000002…), propio de «Reportar anomalía». Los reportes existentes se numeran al migrar
+-- en orden de fecha de registro (empate: seq); los nuevos, la primera vez que se pide su PDF, junto con todo reporte anterior que aún no lo tenga (así el orden
+-- sigue siendo el de registro, no el de los pedidos). Solo inserción, RLS sin políticas, sin permisos para la API, SELECT para homelab_lectura.
+do $estructura_ran$
+begin
+  if to_regclass('campo.reporte_ran') is not null then return; end if;
+  execute $ddl$
+create table campo.reporte_ran (
+  numero      bigint primary key check (numero >= 1),
+  reporte_id  uuid not null unique references campo.reportes (id),
+  asignado_en timestamptz not null default clock_timestamp()
+);
+comment on table campo.reporte_ran is 'Número RAN seguido de cada reporte de «Reportar anomalía», en orden de fecha de registro; solo inserción. Code A, 27-nov-2026.';
+create trigger t_solo_agregar before delete or update on campo.reporte_ran for each row execute function campo.f_solo_agregar();
+create trigger t_solo_agregar_trunc before truncate on campo.reporte_ran for each statement execute function campo.f_solo_agregar();
+alter table campo.reporte_ran enable row level security;
+revoke all on campo.reporte_ran from public, anon, authenticated, service_role;
+grant select on campo.reporte_ran to homelab_lectura;
+  $ddl$;
+end $estructura_ran$;

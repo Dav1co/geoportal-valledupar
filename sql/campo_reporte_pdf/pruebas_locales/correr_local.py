@@ -5,7 +5,7 @@ La huella de Técnica del doble no es la de producción: en los _editor se cambi
 Recorre: huellas ANTES → ensayo (ERROR esperado, N de N) → no dejó nada → migración → verificación → huellas DESPUÉS → repetir (rechazo) → ensayo sobre la base
 migrada (rechazo) → reversa → huella de vuelta y la tabla con sus filas → repetir reversa (rechazo) → volver a aplicar sobre la tabla que quedó → verificación.
 Guardias (base nueva cada una): otra función de campo; sin el índice GiST de los predios; una campo.reporte_pdf que no es la del paquete.
-Mutaciones (el ensayo debe fallar): el contenido lee los datos sensibles; la autorización deja pasar al autor (operario).
+Mutaciones (el ensayo debe fallar): el contenido lee los datos sensibles; la autorización deja pasar al autor (operario); el número RAN en orden de pedidos.
 Escribe ../resultados_locales.txt.
 Uso: python3 -I correr_local.py [-h]"""
 import sys, re, time, json, pathlib, importlib.util
@@ -92,6 +92,12 @@ def main():
     mut = mut.replace("raise exception 'La función % no es la de este paquete", "raise notice 'La función % no es la de este paquete", 1)
     e, m, _ = ensayo(con, mut)
     ok("19 la autorización de los documentos (deja pasar al autor): el ensayo falla en 02.02", bool(m) and not m.group(3) and "FALLA 02.02" in (e or ""), (e or "")[-600:])
+    a = "     and (p_hasta is null or (r.registrado_en, r.seq) <= (v_reg, v_seq))"
+    assert base.count(a) == 1
+    mut = base.replace(a, "     and (p_hasta is null or r.id = p_hasta)", 1)   # numera solo el pedido: orden de pedidos, no de registro
+    mut = mut.replace("raise exception 'La función % no es la de este paquete", "raise notice 'La función % no es la de este paquete", 1)
+    e, m, _ = ensayo(con, mut)
+    ok("20 numerar en el orden de los pedidos (no en el de registro): el ensayo falla en 01b.05", bool(m) and not m.group(3) and "FALLA 01b.05" in (e or ""), (e or "")[-600:])
     con.close()
     out(""); out(f"RESULTADO: {TOT[1]} de {TOT[0]}" + (" — SIN FALLAS" if TOT[0] == TOT[1] else " — CON FALLAS"))
     (PAQ / "resultados_locales.txt").write_text("\n".join(LOG) + "\n")

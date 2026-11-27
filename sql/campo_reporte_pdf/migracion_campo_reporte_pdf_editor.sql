@@ -27,6 +27,10 @@ begin
     select md5(concat_ws('#', (select string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ' NOT NULL' else '' end || coalesce(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), '') || case when a.attidentity <> '' then ' IDENTITY ' || a.attidentity::text else '' end, ', ' order by a.attnum) from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum where a.attrelid = z.rel and a.attnum > 0 and not a.attisdropped), (select string_agg(c.conname || ' ' || pg_get_constraintdef(c.oid), ' | ' order by c.conname) from pg_constraint c where c.conrelid = z.rel), (select string_agg(pg_get_indexdef(i.indexrelid), ' | ' order by pg_get_indexdef(i.indexrelid)) from pg_index i where i.indrelid = z.rel), (select string_agg(pg_get_triggerdef(g.oid), ' | ' order by g.tgname) from pg_trigger g where g.tgrelid = z.rel and not g.tgisinternal), (select c.relkind::text || ' ' || c.relrowsecurity::text || ' ' || coalesce(c.relacl::text, '') from pg_class c where c.oid = z.rel))) into v from (select to_regclass('campo.reporte_pdf') as rel) z;
     if v is distinct from '5c28826d6ba13de024a0583384601d36' then raise exception 'La tabla campo.reporte_pdf ya existe y no es la de este paquete: deténgase y avise'; end if;
   end if;
+  if to_regclass('campo.reporte_ran') is not null then
+    select md5(concat_ws('#', (select string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod) || case when a.attnotnull then ' NOT NULL' else '' end || coalesce(' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid), '') || case when a.attidentity <> '' then ' IDENTITY ' || a.attidentity::text else '' end, ', ' order by a.attnum) from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum where a.attrelid = z.rel and a.attnum > 0 and not a.attisdropped), (select string_agg(c.conname || ' ' || pg_get_constraintdef(c.oid), ' | ' order by c.conname) from pg_constraint c where c.conrelid = z.rel), (select string_agg(pg_get_indexdef(i.indexrelid), ' | ' order by pg_get_indexdef(i.indexrelid)) from pg_index i where i.indrelid = z.rel), (select string_agg(pg_get_triggerdef(g.oid), ' | ' order by g.tgname) from pg_trigger g where g.tgrelid = z.rel and not g.tgisinternal), (select c.relkind::text || ' ' || c.relrowsecurity::text || ' ' || coalesce(c.relacl::text, '') from pg_class c where c.oid = z.rel))) into v from (select to_regclass('campo.reporte_ran') as rel) z;
+    if v is distinct from '4e74e40510a7c46d9c5e15824a946ae9' then raise exception 'La tabla campo.reporte_ran ya existe y no es la de este paquete: deténgase y avise'; end if;
+  end if;
   -- columnas que se leen (con su tipo)
   for r in select * from (values ('campo.reportes', 'id', 'uuid'), ('campo.reportes', 'seq', 'bigint'), ('campo.reportes', 'tipo_id', 'bigint'), ('campo.reportes', 'subtipo_id', 'bigint'), ('campo.reportes', 'descripcion', 'text'), ('campo.reportes', 'contrato', 'text'), ('campo.reportes', 'lat', 'numeric(9,6)'), ('campo.reportes', 'lon', 'numeric(9,6)'), ('campo.reportes', 'precision_m', 'numeric(8,1)'), ('campo.reportes', 'autor', 'text'), ('campo.reportes', 'registrado_en', 'timestamp with time zone'), ('campo.reportes', 'inicio_en', 'timestamp with time zone'), ('campo.reportes', 'inicio_origen', 'text'), ('campo.reporte_fotos', 'orden', 'smallint'), ('campo.reporte_fotos', 'ruta_storage', 'text'), ('campo.reporte_fotos', 'etiqueta', 'text'), ('campo.reporte_fotos', 'origen', 'text'), ('campo.reporte_eventos', 'tipo_evento', 'text'), ('campo.reporte_eventos', 'estado_nuevo', 'text'), ('campo.reporte_eventos', 'motivo', 'text'), ('campo.reporte_eventos', 'acta_id', 'uuid'), ('campo.reporte_eventos', 'reporte_original_id', 'uuid'), ('campo.reporte_registro', 'xy_manual', 'boolean'), ('campo.reporte_registro', 'lat_registro', 'numeric(9,6)'), ('campo.reporte_registro', 'direccion', 'text'), ('campo.reporte_direccion_contrato', 'direccion_comercial', 'text'), ('campo.reporte_direccion_contrato', 'direccion_catastro', 'text'), ('campo.estados_reporte', 'nombre', 'text'), ('public.geoportal_lista_blanca', 'nombre', 'text'), ('acta.actas', 'consecutivo', 'text')) x(t, c, ty) loop
     if not exists (select 1 from pg_attribute a where a.attrelid = to_regclass(r.t) and a.attname = r.c and not a.attisdropped and format_type(a.atttypid, a.atttypmod) = r.ty) then
@@ -89,6 +93,27 @@ grant select on campo.reporte_pdf to homelab_lectura;
   $ddl$;
 end $estructura$;
 
+-- campo.reporte_ran (27-nov, David): el NÚMERO RAN seguido (RAN-000001, 000002…), propio de «Reportar anomalía». Los reportes existentes se numeran al migrar
+-- en orden de fecha de registro (empate: seq); los nuevos, la primera vez que se pide su PDF, junto con todo reporte anterior que aún no lo tenga (así el orden
+-- sigue siendo el de registro, no el de los pedidos). Solo inserción, RLS sin políticas, sin permisos para la API, SELECT para homelab_lectura.
+do $estructura_ran$
+begin
+  if to_regclass('campo.reporte_ran') is not null then return; end if;
+  execute $ddl$
+create table campo.reporte_ran (
+  numero      bigint primary key check (numero >= 1),
+  reporte_id  uuid not null unique references campo.reportes (id),
+  asignado_en timestamptz not null default clock_timestamp()
+);
+comment on table campo.reporte_ran is 'Número RAN seguido de cada reporte de «Reportar anomalía», en orden de fecha de registro; solo inserción. Code A, 27-nov-2026.';
+create trigger t_solo_agregar before delete or update on campo.reporte_ran for each row execute function campo.f_solo_agregar();
+create trigger t_solo_agregar_trunc before truncate on campo.reporte_ran for each statement execute function campo.f_solo_agregar();
+alter table campo.reporte_ran enable row level security;
+revoke all on campo.reporte_ran from public, anon, authenticated, service_role;
+grant select on campo.reporte_ran to homelab_lectura;
+  $ddl$;
+end $estructura_ran$;
+
 -- =====================================================================
 -- PDF DE «REPORTAR ANOMALÍA» (Code A, 27-nov) · 20 — FUNCIONES
 -- Internas (nadie de la API): f_ran_autorizar, f_ran_persona, f_ran_contenido, f_ran_destino, f_ran_mapa.
@@ -117,6 +142,28 @@ language sql stable security definer set search_path = public, campo, pg_temp as
   select coalesce((select nullif(btrim(b.nombre), '') from public.geoportal_lista_blanca b where b.email = lower(btrim(p_email)) limit 1), lower(btrim(p_email)))
 $$;
 
+-- Número RAN: numera, en orden de (registrado_en, seq), todos los reportes generales sin número hasta p_hasta (nulo = todos) y devuelve el de p_hasta.
+-- Con candado de transacción: dos pedidos a la vez no reparten el mismo número ni dejan huecos.
+create function campo.f_ran_numerar(p_hasta uuid) returns bigint
+language plpgsql security definer set search_path = public, campo, pg_temp as $$
+declare v_reg timestamptz; v_seq bigint; v_n bigint;
+begin
+  if p_hasta is not null then
+    select numero into v_n from campo.reporte_ran where reporte_id = p_hasta;
+    if v_n is not null then return v_n; end if;
+    select registrado_en, seq into v_reg, v_seq from campo.reportes where id = p_hasta;
+  end if;
+  perform pg_advisory_xact_lock(hashtext('campo.reporte_ran'));
+  insert into campo.reporte_ran (numero, reporte_id)
+  select (select coalesce(max(numero), 0) from campo.reporte_ran) + row_number() over (order by r.registrado_en, r.seq), r.id
+    from campo.reportes r join campo.tipos_reporte t on t.id = r.tipo_id
+   where campo.f_tipo_general(t.codigo)
+     and not exists (select 1 from campo.reporte_ran x where x.reporte_id = r.id)
+     and (p_hasta is null or (r.registrado_en, r.seq) <= (v_reg, v_seq))
+   order by r.registrado_en, r.seq;
+  return (select numero from campo.reporte_ran where reporte_id = p_hasta);
+end $$;
+
 -- Todo lo que va al PDF (menos el mapa y el pie de generación). Solo caracteres de WinAnsi (el escritor del PDF no tiene «→»). Su sha256 es el sello: si cambia (estado, historial, datos), hay versión nueva.
 -- NUNCA lee campo.reporte_datos_sensibles. Las rutas de las fotos van solo para que la Edge las lea; el PDF no las imprime.
 create function campo.f_ran_contenido(p_id uuid) returns jsonb
@@ -129,7 +176,8 @@ begin
   select * into v_rr from campo.reporte_registro where reporte_id = p_id;
   select * into v_dc from campo.reporte_direccion_contrato where reporte_id = p_id;
   select jsonb_build_object(
-    'identificador', 'RAN-' || lpad(v.seq::text, 6, '0'),
+    'identificador', (select 'RAN-' || case when n.numero < 1000000 then lpad(n.numero::text, 6, '0') else n.numero::text end from campo.reporte_ran n where n.reporte_id = p_id),
+    'numero_interno', v.seq,
     'grupo', g.nombre, 'tipo', t.nombre, 'subtipo', s.nombre,
     'estado', coalesce((select e.nombre from campo.estados_reporte e where e.codigo = v.estado), v.estado),
     'oculto', v.oculto, 'riesgo_inmediato', v.riesgo_inmediato, 'fuera_de_zona', v.fuera_de_zona,
@@ -160,7 +208,7 @@ begin
                                 when 'cambio_estado' then 'Cambio de estado a ' || coalesce((select x.nombre from campo.estados_reporte x where x.codigo = e.estado_nuevo), e.estado_nuevo)
                                 when 'ocultar' then 'Se ocultó el reporte'
                                 when 'reincluir' then 'Se reincluyó el reporte'
-                                when 'vincular_duplicado' then 'Se vinculó como duplicado de ' || coalesce((select 'RAN-' || lpad(o.seq::text, 6, '0') from campo.reportes o where o.id = e.reporte_original_id), 'otro reporte')
+                                when 'vincular_duplicado' then 'Se vinculó como duplicado del reporte ' || coalesce((select coalesce((select 'RAN-' || lpad(x.numero::text, 6, '0') from campo.reporte_ran x where x.reporte_id = o.id), 'interno ' || o.seq) from campo.reportes o where o.id = e.reporte_original_id), 'original')
                                 when 'nota' then 'Nota'
                                 when 'vincular_acta' then 'Se vinculó el acta ' || coalesce((select a.consecutivo from acta.actas a where a.id = e.acta_id), '')
                                 else e.tipo_evento end
@@ -182,7 +230,9 @@ begin
   select * into v_doc from campo.reporte_pdf where reporte_id = p_id and sello = p_sello;
   v_ver := coalesce(v_doc.version, (select coalesce(max(version), 0) + 1 from campo.reporte_pdf where reporte_id = p_id));
   if v_ver > 99 then perform campo.f_error('Este reporte ya tiene 99 versiones de PDF', '55000'); end if;
-  v_nombre := campo.f_nombre_pdf(v_r.registrado_en, 'RAN', lpad(v_r.seq::text, 6, '0'), v_ver);
+  v_nombre := campo.f_nombre_pdf(v_r.registrado_en, 'RAN',
+                (select case when n.numero < 1000000 then lpad(n.numero::text, 6, '0') else n.numero::text end from campo.reporte_ran n where n.reporte_id = p_id), v_ver);
+  if v_nombre is null then perform campo.f_error('El reporte no tiene número RAN', '55000'); end if;
   return jsonb_build_object('version', v_ver, 'nombre', v_nombre,
     'carpeta', 'campo/' || to_char(v_r.registrado_en at time zone 'America/Bogota', 'YYYY-MM') || '/' || p_id || '/',
     'documento', case when v_doc.id is not null then jsonb_build_object('nombre', v_doc.nombre, 'ruta', v_doc.ruta, 'sha256', v_doc.sha256, 'bytes', v_doc.bytes,
@@ -227,6 +277,7 @@ language plpgsql security definer set search_path = public, campo, pg_temp as $$
 declare v_email text; v_cont jsonb; v_sello text; v_dest jsonb;
 begin
   v_email := campo.f_ran_autorizar(p_solicitante, p_reporte_id);
+  perform campo.f_ran_numerar(p_reporte_id);
   v_cont := campo.f_ran_contenido(p_reporte_id);
   v_sello := encode(sha256(convert_to(v_cont::text, 'UTF8')), 'hex');
   v_dest := campo.f_ran_destino(p_reporte_id, v_sello);
@@ -244,6 +295,7 @@ language plpgsql security definer set search_path = public, campo, pg_temp as $$
 declare v_email text; v_sello text; v_dest jsonb; v_id bigint; v_doc campo.reporte_pdf;
 begin
   v_email := campo.f_ran_autorizar(p_solicitante, p_reporte_id);
+  perform campo.f_ran_numerar(p_reporte_id);
   v_sello := encode(sha256(convert_to(campo.f_ran_contenido(p_reporte_id)::text, 'UTF8')), 'hex');
   if p_sello is distinct from v_sello then perform campo.f_error('El reporte cambió mientras se armaba el PDF: vuelva a pedirlo', '55000'); end if;
   if p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$' then perform campo.f_error('La huella del PDF no es válida'); end if;
@@ -266,6 +318,7 @@ language plpgsql security definer set search_path = public, campo, pg_temp as $$
 declare v_email text; v_sello text; v_doc campo.reporte_pdf;
 begin
   v_email := campo.f_ran_autorizar(p_solicitante, p_reporte_id);
+  perform campo.f_ran_numerar(p_reporte_id);
   v_sello := encode(sha256(convert_to(campo.f_ran_contenido(p_reporte_id)::text, 'UTF8')), 'hex');
   select * into v_doc from campo.reporte_pdf where reporte_id = p_reporte_id and sello = v_sello;
   if v_doc.id is null then perform campo.f_error('El PDF de la versión vigente de este reporte todavía no existe', 'P0002'); end if;
@@ -274,11 +327,14 @@ begin
 end $$;
 
 -- Permisos: las internas, para nadie de la API; las RPC, solo service_role (la Edge)
-revoke all on function campo.f_ran_autorizar(text, uuid), campo.f_ran_persona(text), campo.f_ran_contenido(uuid), campo.f_ran_destino(uuid, text),
+revoke all on function campo.f_ran_numerar(uuid), campo.f_ran_autorizar(text, uuid), campo.f_ran_persona(text), campo.f_ran_contenido(uuid), campo.f_ran_destino(uuid, text),
                        campo.f_ran_mapa(numeric, numeric, numeric, numeric) from public, anon, authenticated, service_role;
 revoke all on function public.geoportal_campo_ran_datos(text, uuid, text), public.geoportal_campo_ran_registrar(text, uuid, text, text, integer, integer, text),
                        public.geoportal_campo_ran_obtener(text, uuid, text) from public, anon, authenticated, service_role;
 grant execute on function public.geoportal_campo_ran_datos(text, uuid, text), public.geoportal_campo_ran_registrar(text, uuid, text, text, integer, integer, text),
                           public.geoportal_campo_ran_obtener(text, uuid, text) to service_role;
+
+-- Los reportes que ya existen: número RAN en orden de fecha de registro (si la tabla quedó de una reversa, se sigue desde su último número)
+select campo.f_ran_numerar(null);
 
 commit;

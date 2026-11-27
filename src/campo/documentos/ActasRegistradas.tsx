@@ -126,14 +126,26 @@ function ListaActas({ nombres, via }: { nombres: Map<string, string>; via: Esque
   );
 }
 
-function FilaRegistro({ r, nombreTipo }: { r: FilaActa; nombreTipo: string }) {
+/** Estado del PDF de un registro con valor probatorio: la MISMA marca en «Actas registradas» y en el detalle de Supervisión (27-nov). */
+export function MarcaPdf({ r }: { r: FilaActa }) {
+  return <span className={`rv-marca ${pdfListo(r) ? "rv-marca-info" : "rv-marca-amar"}`} data-pdf-estado={pdfListo(r) ? "listo" : "pendiente"}>{pdfListo(r) ? "PDF listo" : "PDF pendiente"}</span>;
+}
+/** El botón del PDF de un registro, el MISMO en «Actas registradas» y en el detalle de Supervisión (27-nov): con PDF, «Descargar el PDF» (pdf_url, auditado);
+ *  sin PDF, «Generar el PDF» (pdf_generar). Mismas llamadas, mismo permiso y misma auditoría: los decide el servidor. */
+export function PdfDeFila({ r }: { r: FilaActa }) {
   const [pedirPdf, setPedirPdf] = useState(false);
+  return pdfListo(r) ? <PdfRegistro esquema={r.esquema as Esquema} registroId={r.registro_id} soloLeer />
+    : pedirPdf ? <PdfRegistro esquema={r.esquema as Esquema} registroId={r.registro_id} />
+    : <div className="rv-botones"><button type="button" className="rv-boton-sec" onClick={() => setPedirPdf(true)}>Generar el PDF</button></div>;
+}
+
+function FilaRegistro({ r, nombreTipo }: { r: FilaActa; nombreTipo: string }) {
   const firmas = [r.firmas.operario ? "operario" : "sin firma del operario", r.firmas.usuario ? ESTADO_USUARIO[r.firmas.usuario] : null, r.firmas.testigo ? "testigo" : null].filter(Boolean).join(" · ");
   return (
     <li className="rv-per-tarjeta" data-registro={r.registro_id} data-esquema={r.esquema}>
       <div className="rv-per-cab">
         <div><strong>{r.consecutivo ?? "Sin consecutivo"}</strong>{r.numero_fisico ? <span className="rv-tenue"> · papel {r.numero_fisico}</span> : null}<div className="rv-tenue">{r.tipo_nombre || nombreTipo}</div></div>
-        <span className={`rv-marca ${pdfListo(r) ? "rv-marca-info" : "rv-marca-amar"}`}>{pdfListo(r) ? "PDF listo" : "PDF pendiente"}</span>
+        <MarcaPdf r={r} />
       </div>
       <dl className="rv-per-dl">
         <dt>Fecha</dt><dd>{fecha(r.registrado_en ?? r.fecha)}</dd>
@@ -143,9 +155,7 @@ function FilaRegistro({ r, nombreTipo }: { r: FilaActa; nombreTipo: string }) {
         <dt>Firmas</dt><dd data-dato="firmas">{firmas}</dd>
         {r.derivadas.total ? <><dt>Derivadas</dt><dd data-dato="derivadas">{r.derivadas.total} {r.derivadas.total === 1 ? "actividad" : "actividades"}{r.derivadas.pendientes ? ` · ${r.derivadas.pendientes} pendiente${r.derivadas.pendientes === 1 ? "" : "s"}` : " · atendidas"}</dd></> : null}
       </dl>
-      {pdfListo(r) ? <PdfRegistro esquema={r.esquema as Esquema} registroId={r.registro_id} soloLeer />
-        : pedirPdf ? <PdfRegistro esquema={r.esquema as Esquema} registroId={r.registro_id} />
-        : <div className="rv-botones"><button type="button" className="rv-boton-sec" onClick={() => setPedirPdf(true)}>Generar el PDF</button></div>}
+      <PdfDeFila r={r} />
     </li>
   );
 }

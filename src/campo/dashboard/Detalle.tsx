@@ -4,6 +4,8 @@ import { apiRev, textoError, type Cercano, type DetalleResp, type EventoRep, typ
 import { columnasBase, paresDeDatos, textoDeDato, textoInicio, textoDuracion, type Contexto } from "./columnas";
 import { fmtInstante, fmtNumero } from "./formatoRevision";
 import { ErrorCampo } from "../apiCampo";
+import { apiDocumentos, type FilaActa } from "../documentos/apiDocumentos";
+import { MarcaPdf, PdfDeFila } from "../documentos/ActasRegistradas";
 
 // Detalle de un reporte: datos completos (la descripción entera), campos propios del tipo, línea de tiempo de eventos (nada se edita), reportes cercanos y fotos BAJO DEMANDA.
 // Cada consulta del detalle queda auditada por el servidor (campo_ver_detalle); cada foto y cada lectura de datos sensibles, también. Las URLs de foto duran 60 s: se piden al pulsar,
@@ -188,6 +190,31 @@ function PdfDelReporte({ id }: { id: string }) {
   );
 }
 
+/** El PDF de un FORMATO (revisiones, instalaciones, SCRR), el mismo de «Formatos de campo → Actas registradas» (David, 27-nov): solo pantalla.
+ *  Los tipos con PDF los dice el servidor (documentos_catalogo); el estado sale de la misma lista de Actas registradas (filtrada por tipo, día y contrato, sin auditoría),
+ *  y el botón es el mismo componente: «Descargar el PDF» (pdf_url) o «Generar el PDF» (pdf_generar), con el mismo permiso y la misma auditoría. */
+function PdfDelFormato({ r }: { r: FilaReporte }) {
+  const [fila, setFila] = useState<FilaActa | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true; setFila(undefined); setError(null);
+    (async () => {
+      try {
+        const cat = await apiDocumentos.catalogo("campo");
+        if (!cat.formularios.some((f) => f.lleva_pdf && f.formulario === `tipo:${r.tipo.codigo}`)) { if (vivo) setFila(null); return; }
+        const dia = new Date(r.registrado_en).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+        const pag = await apiDocumentos.actasRegistradas("campo", { tipo: r.tipo.codigo, desde: dia, hasta: dia, ...(r.contrato ? { contrato: r.contrato } : {}), limite: 200 });
+        const f = pag.filas.find((x) => x.registro_id === r.id) ?? null;
+        if (vivo) { setFila(f); if (!f) setError("Este formato no aparece en «Actas registradas»: su PDF se gestiona desde allá."); }
+      } catch (e) { if (vivo) { setFila(null); setError(textoError(e).texto); } }
+    })();
+    return () => { vivo = false; };
+  }, [r.id, r.tipo.codigo, r.registrado_en, r.contrato]);
+  if (fila === undefined) return <p className="rv-sub rv-pdf" role="status" data-pdf-formato="cargando">Consultando el PDF del formato…</p>;
+  if (!fila) return error ? <p className="rv-sub rv-pdf" role="note" data-pdf-formato="aviso">{error}</p> : null;
+  return <div className="rv-pdf" data-pdf-formato="fila"><MarcaPdf r={fila} /><PdfDeFila r={fila} /></div>;
+}
+
 // ---------- Acciones del supervisor ----------
 type Accion = "estado" | "ocultar" | "reincluir" | "duplicado";
 function Acciones({ d, def, accion, setAccion, onHecho, refrescar }: {
@@ -221,7 +248,7 @@ function Acciones({ d, def, accion, setAccion, onHecho, refrescar }: {
       <button type="button" className="rv-boton-sec" disabled={estados.length === 0} onClick={() => setAccion("estado")}>Cambiar estado</button>
       {r.oculto ? <button type="button" className="rv-boton-sec" onClick={() => setAccion("reincluir")}>Reincluir</button> : <button type="button" className="rv-boton-sec" onClick={() => setAccion("ocultar")}>Ocultar</button>}
       <button type="button" className="rv-boton-sec" disabled={!puedeDuplicar} onClick={() => setAccion("duplicado")}>Vincular como duplicado</button>
-      {esReporteGeneral(d, def) ? <PdfDelReporte id={r.id} /> : null}
+      {esReporteGeneral(d, def) ? <PdfDelReporte id={r.id} /> : <PdfDelFormato r={r} />}
       {accion ? (
         <ModalAccion
           titulo={accion === "estado" ? "Cambiar estado" : accion === "ocultar" ? "Ocultar el reporte" : accion === "reincluir" ? "Reincluir el reporte" : "Vincular como duplicado"}

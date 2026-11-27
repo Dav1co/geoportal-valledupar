@@ -4,9 +4,9 @@
 //   migrado (base_chrome.py). Cada RPC como service_role con 30 s y 8 s. A 390 px (táctil) y 1280 px. El PDF se revisa por dentro y se rasteriza con pdftoppm.
 // Perfiles (5): administrador, supervisora de Comercial, operario de campo, dual (operario de campo y de Técnica, sin supervisión) y sin permisos.
 //   node scripts/prueba_chrome_reporte_pdf.mjs [--revision] <chrome> <puppeteer-core> <deno> <supabase/functions> [capturas]
-//   --revision  no corre las pruebas: deja arriba la revisión local (http://127.0.0.1:55981/?rol=sup) hasta Ctrl-C.
+//   --revision  no corre las pruebas: deja arriba la revisión local (http://127.0.0.1:55985/?rol=sup, base emdupar_a_rf_ranrev) hasta Ctrl-C.
 //   -h | --help  este uso. Cualquier otra opción que empiece con «-» es un error.
-// Puertos 55981 (app, Auth, PostgREST, Storage) y 55982 (Edge).
+// Puertos: pruebas 55983 (app, Auth, PostgREST, Storage) y 55984 (Edge); revisión 55985 y 55986. No chocan con una revisión anterior que siga arriba.
 import { createRequire } from "node:module";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,7 +25,7 @@ const aqui = dirname(fileURLToPath(import.meta.url)), raiz = join(aqui, "..");
 const CAP = resolve(CAP_ARG || join(tmpdir(), "capturas_reporte_pdf")); mkdirSync(CAP, { recursive: true });
 const puppeteer = createRequire(import.meta.url)(PUP);
 const { build } = createRequire(join(raiz, "package.json"))("esbuild");
-const P_BASE = 55981, P_EDGE = 55982, DB = "emdupar_a_rf_ranchrome";
+const P_BASE = REVISION ? 55985 : 55983, P_EDGE = REVISION ? 55986 : 55984, DB = REVISION ? "emdupar_a_rf_ranrev" : "emdupar_a_rf_ranchrome";
 const PSQL = "/opt/homebrew/opt/postgresql@17/bin/psql";
 const PGENV = { ...process.env, LC_ALL: "C", PGHOST: "localhost", PGPORT: "55432", PGUSER: "postgres", PGDATABASE: DB, PGOPTIONS: "-c client_min_messages=warning" };
 const sqlq = (s) => execFileSync(PSQL, ["-AtX", "-v", "ON_ERROR_STOP=1", "-c", s], { env: PGENV, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trim();
@@ -63,17 +63,22 @@ function rpcBase(fn, a) {
 const objetos = new Map();   // "bucket/ruta" → { bytes, tipo }
 const subidas = [];
 // Registra un reporte como lo hace la Edge: reserva, «sube» cada foto (bytes reales en memoria) y crea
-function crearReporte(quien, tipo, fotos, { registro = null, contrato = null, lat = LAT, lon = LON, prec = 6, desc } = {}) {
+function crearReporte(quien, tipo, fotos, { registro = null, contrato = null, lat = LAT, lon = LON, prec = 6, desc, resultado = null, causal = null, firma = null } = {}) {
   const p = rpcBase("geoportal_campo_preparar_subida", { p_solicitante: quien, p_cantidad: fotos.length, p_origen: "campo", p_ip: null, p_tipo: tipo });
   if (p.status !== 200) throw new Error("preparar: " + JSON.stringify(p.cuerpo));
   const id = p.cuerpo.reporte_id, lista = [];
   p.cuerpo.fotos.forEach((f, i) => {
     objetos.set(`campo-fotos/${f.ruta}`, { bytes: fotos[i].bytes, tipo: "image/jpeg" });
     sqlq(`insert into storage.objects (bucket_id, name, metadata) values ('campo-fotos', ${lit(f.ruta)}, ${lit({ size: fotos[i].bytes.length, mimetype: "image/jpeg" })})`);
-    lista.push({ orden: i + 1, ruta: f.ruta, ...(fotos[i].origen ? { origen: fotos[i].origen } : {}) });
+    lista.push({ orden: i + 1, ruta: f.ruta, ...(fotos[i].origen ? { origen: fotos[i].origen } : {}), ...(fotos[i].etiqueta ? { etiqueta: fotos[i].etiqueta } : {}) });
   });
+  if (firma) {   // los formatos con PDF exigen la firma del operario antes de registrar (como la pantalla)
+    const fi = rpcBase("geoportal_campo_firma_guardar", { p_solicitante: quien, p_esquema: "campo", p_registro_id: id, p_rol: "operario", p_estado: "firmo", p_nombre: null,
+      p_imagen: firma.toString("base64"), p_ip: null });
+    if (fi.status !== 200) throw new Error("firma: " + JSON.stringify(fi.cuerpo));
+  }
   const c = rpcBase("geoportal_campo_crear_reporte", { p_solicitante: quien, p_id: id, p_tipo: tipo, p_subtipo: null, p_descripcion: desc ?? `[PRUEBA ZTRP] ${tipo}`, p_contrato: contrato,
-    p_lat: lat, p_lon: lon, p_precision_m: prec, p_riesgo_inmediato: false, p_origen: "campo", p_fotos: lista, p_ip: null, p_registro: registro });
+    p_lat: lat, p_lon: lon, p_precision_m: prec, p_riesgo_inmediato: false, p_origen: "campo", p_fotos: lista, p_ip: null, p_registro: registro, p_resultado: resultado, p_causal: causal });
   if (c.status !== 200) throw new Error("crear: " + JSON.stringify(c.cuerpo));
   return id;
 }
@@ -94,8 +99,11 @@ await build({
     import React from "react"; import { createRoot } from "react-dom/client";
     import "./src/styles/app.css"; import "./src/campo/tokens.css"; import "./src/tecnica/tecnica.css"; import "./src/campo/campo.css"; import "./src/campo/comercial.css";
     import Revision from "./src/campo/dashboard/Revision.tsx";
+    import { ActasRegistradas } from "./src/campo/documentos/ActasRegistradas.tsx";
     const q = new URLSearchParams(location.search), rol = q.get("rol");
-    createRoot(document.getElementById("raiz")).render(<div className="com-modulo"><Revision correo={rol + "@prueba"} onVolver={() => {}} /></div>);
+    createRoot(document.getElementById("raiz")).render(q.get("p") === "actas"
+      ? <div className="com-modulo"><ActasRegistradas correo={rol + "@prueba"} onVolver={() => {}} nombres={new Map()} puedeAperturas={false} puedeCerrarDerivadas={true} /></div>
+      : <div className="com-modulo"><Revision correo={rol + "@prueba"} onVolver={() => {}} /></div>);
     setTimeout(() => { window.__listo = true; }, 300);` },
   bundle: true, platform: "browser", format: "iife", outfile: join(dir, "paquete.js"), jsx: "automatic", logLevel: "error",
   loader: { ".css": "css", ".png": "dataurl", ".svg": "dataurl" }, define: { "import.meta.env.VITE_SUPABASE_URL": '"http://sim.local"', "import.meta.env.VITE_SUPABASE_ANON_KEY": '"x"', "process.env.NODE_ENV": '"production"' },
@@ -165,9 +173,9 @@ const R1 = crearReporte(E.op, "otro", [{ bytes: fotoChica }], { contrato: "99180
   desc: "[PRUEBA ZTRP] Sigue suspendido, tienen agua. Se ve una conexión directa antes del medidor." });
 const R2 = crearReporte(E.sup, "otro", fotosGrandes.map((b) => ({ bytes: b, origen: "galeria" })), { registro: { xy_manual: true, lat_registro: 10.4762, lon_registro: -73.2512, precision_registro_m: 9 }, prec: null });
 sqlq(`insert into campo.reporte_datos_sensibles (reporte_id, datos, registrado_en) values ('${R1}', '{"telefono_contacto": "3009876543", "nombre_contacto": "ZTRP CONTACTO SECRETO"}', now())`);
-// R3: un formato (revisión previa) solo para ver que NO sale el botón; se inserta en esta base local sin disparadores (no pasa por el registro con firma)
-const R3 = sqlq(`set session_replication_role = replica; insert into campo.reportes (id, tipo_id, descripcion, lat, lon, precision_m, origen, autor, consecutivo, consecutivo_num, resultado)
-  select gen_random_uuid(), t.id, '[PRUEBA ZTRP] formato', ${LAT}, ${LON}, 5, 'campo', '${E.op}', 'REV-ZTRP-1', 999001, 'efectivo' from campo.tipos_reporte t where t.codigo = 'revision_previa' returning id`).split("\n").filter((l) => /^[0-9a-f-]{36}$/.test(l))[0];
+// R3: un formato (revisión previa), registrado de verdad (reserva, firma del operario, registro): aparece en «Actas registradas» con su PDF pendiente
+const R3 = crearReporte(E.op, "revision_previa", [{ bytes: fotoChica, etiqueta: "fachada_predio" }], { contrato: "991800000301", resultado: "inefectivo", causal: "nadie_atiende", firma: await jpeg(99, 300, 120, 0.5) });
+const CONS3 = sqlq(`select consecutivo from campo.reportes where id = '${R3}'`);
 
 let total = 0, fallas = 0;
 const ok = (n, c, d = "") => { total++; if (!c) fallas++; console.log(`${c ? "OK   " : "FALLA"} ${n}${c ? "" : " " + String(d).slice(0, 700)}`); };
@@ -181,7 +189,7 @@ const textoPdf = (b) => b.toString("latin1");
 const pdftoppm = (archivo, base) => { execFileSync("/opt/homebrew/bin/pdftoppm", ["-png", "-r", "60", archivo, base]); };
 
 if (REVISION) {
-  console.log(`revisión local: http://127.0.0.1:${P_BASE}/?rol=sup (Supervisión → abra un reporte «Otro» → «Descargar PDF del reporte»)`);
+  console.log(`revisión local: http://127.0.0.1:${P_BASE}/?rol=sup (Supervisión → un reporte «Otro»: «Descargar PDF del reporte»; la revisión previa ${CONS3}: el PDF del formato)`);
   await new Promise(() => {});
 }
 const auditoria = (quien, accion, id) => Number(sqlq(`select count(*) from public.geoportal_auditoria where email = '${quien}' and accion = '${accion}' and referencia = '${id}'`));
@@ -202,6 +210,8 @@ try {
   ok("E08 el PDF es un PDF, del tamaño y sha256 registrados", t1.startsWith("%PDF-1.4") && pdf1.length === r.j.bytes && execFileSync("shasum", ["-a", "256", join(CAP, "R1_v1.pdf")]).toString().startsWith(sha1));
   ok("E09 título, número, versión, tipo, estado, contrato, direcciones y referencia", t1.includes("(Reporte de anomal\\355a)") && t1.includes(`N.\\272 RAN-`) && t1.includes("versi\\363n 1")
     && t1.includes("(Reportado)") && t1.includes("(991800000301 \\(sin verificar\\))") && t1.includes("[PRUEBA ZTRP] CRA 9 # 12-32") && t1.includes("(Casa de rejas verdes)") && t1.includes("Direcci\\363n base comercial"));
+  ok("E09b número RAN seguido (RAN-000001 es el primero) y el número interno aparte, en letra pequeña", /N\.\\272 RAN-000001 /.test(t1)
+    && t1.includes(`(N\\372mero interno del reporte en el Geoportal: ${sqlq(`select seq from campo.reportes where id = '${R1}'`)})`) && t1.includes("/F1 7.5 Tf"));
   ok("E10 el nombre del operario (no su correo); quien generó, por nombre", t1.includes("ZTRP Operario") && !t1.includes("ztrp.op@") && t1.includes("por ZTRP Supervisora"));
   ok("E11 nunca los datos sensibles ni las rutas de almacenamiento", !t1.includes("3009876543") && !t1.includes("SECRETO") && !/reportes\/\d{4}-\d{2}\//.test(t1) && !t1.includes("campo-fotos"));
   ok("E12 sin firmas ni la leyenda del acta física", !t1.includes("(FIRMAS)") && !t1.includes("valor probatorio") && !t1.includes("Firma electr"));
@@ -235,17 +245,25 @@ try {
 
   // ---------- Chrome ----------
   const esp = (ms) => new Promise((res) => setTimeout(res, ms));
-  async function abrir(rol, ancho) {
+  async function abrir(rol, ancho, pagina = "") {
     const pg = await nav.newPage();
     await pg.setViewport({ width: ancho, height: 900, deviceScaleFactor: ancho < 500 ? 2 : 1, isMobile: ancho < 500, hasTouch: ancho < 500 });
     pg.on("pageerror", (e) => { total++; fallas++; console.log("FALLA error de página:", String(e).slice(0, 200)); });
-    await pg.goto(`http://127.0.0.1:${P_BASE}/?rol=${rol}`); await pg.waitForFunction("window.__listo === true", { timeout: 15000 }); await esp(1500);
+    await pg.goto(`http://127.0.0.1:${P_BASE}/?rol=${rol}${pagina}`); await pg.waitForFunction("window.__listo === true", { timeout: 15000 }); await esp(1500);
     return pg;
   }
   const esperar = (pg, f, ...a) => pg.waitForFunction(f, { timeout: 30000 }, ...a).then(() => true).catch(() => false);
   const sinDesborde = (pg) => pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
   const foto = (pg, n) => pg.screenshot({ path: join(CAP, n + ".png"), fullPage: true });
   const abrirFila = (pg, texto) => pg.evaluate((t) => { const f = [...document.querySelectorAll('[role="row"]')].find((e) => e.innerText.includes(t)); if (f) { f.click(); return true; } return false; }, texto);
+  // Regresión de «Actas registradas» (su marca y su botón ahora son componentes compartidos): antes de generar, el formato está «PDF pendiente» con «Generar el PDF»
+  {
+    const pg = await abrir("sup", 1280, "&p=actas");
+    const vio = await esperar(pg, (id) => !!document.querySelector(`[data-registro="${id}"]`), R3);
+    const fila = vio ? await pg.$eval(`[data-registro="${R3}"]`, (e) => e.innerText) : "";
+    ok("A01 Actas registradas (antes): el formato aparece «PDF pendiente» con «Generar el PDF»", /PDF pendiente/.test(fila) && /Generar el PDF/.test(fila), fila.slice(0, 300));
+    await pg.close();
+  }
   for (const ancho of [390, 1280]) {
     console.log(`— Chrome a ${ancho} px —`);
     for (const rol of ["sup", "adm"]) {
@@ -263,17 +281,41 @@ try {
       ok(`C${ancho}.03 ${rol}: el enlace abre un PDF`, !!href && textoPdf(await bajar(href)).startsWith("%PDF-1.4"));
       ok(`C${ancho}.04 ${rol}: sin desborde horizontal`, await sinDesborde(pg));
       await pg.evaluate(() => document.querySelector("[data-ran-pdf]")?.scrollIntoView({ block: "center" })); await foto(pg, `${ancho}_${rol}_detalle_pdf`);
-      // un formato: sin botón
-      const abrioF = await abrirFila(pg, "REV-ZTRP-1") && await esperar(pg, () => /REV-ZTRP-1/.test(document.querySelector(".rv-detalle h2")?.textContent ?? ""));
-      ok(`C${ancho}.05 ${rol}: en un formato no aparece el botón (tiene su propio PDF)`, abrioF && await esperar(pg, () => !!document.querySelector(".rv-detalle .rv-acciones")) && !(await pg.$("[data-ran-pdf]")));
+      // un formato: no sale el PDF del reporte; sale el MISMO de «Actas registradas» (estado y botón)
+      const abrioF = await abrirFila(pg, CONS3) && await esperar(pg, (c) => (document.querySelector(".rv-detalle h2")?.textContent ?? "").includes(c), CONS3);
+      const estadoF = abrioF && await esperar(pg, () => !!document.querySelector('[data-pdf-formato="fila"] [data-pdf-estado]'));
+      const marca = estadoF ? await pg.$eval('[data-pdf-formato="fila"] [data-pdf-estado]', (e) => e.innerText) : "";
+      ok(`C${ancho}.05 ${rol}: en un formato no sale «Descargar PDF del reporte»; sale el estado de Actas registradas (${marca})`, estadoF && !(await pg.$("[data-ran-pdf]"))
+        && (marca === "PDF listo" || marca === "PDF pendiente"), (await pg.$eval("body", (e) => e.innerText)).slice(0, 500));
+      if (marca === "PDF pendiente") {
+        ok(`C${ancho}.06 ${rol}: «PDF pendiente» con «Generar el PDF», como allá`, !!(await pg.$('[data-pdf-formato="fila"] button')) && /Generar el PDF/.test(await pg.$eval('[data-pdf-formato="fila"] button', (e) => e.innerText)));
+        await pg.click('[data-pdf-formato="fila"] button');
+      }
+      const listoF = await esperar(pg, () => /Descargar el PDF/.test(document.querySelector('[data-pdf-formato="fila"]')?.innerText ?? ""));
+      ok(`C${ancho}.07 ${rol}: el PDF del formato queda con «Descargar el PDF» (el mismo componente de Actas registradas)`, listoF, await pg.$eval('[data-pdf-formato="fila"]', (e) => e.innerText).catch(() => ""));
+      ok(`C${ancho}.08 ${rol}: sin desborde (formato)`, await sinDesborde(pg));
+      await pg.evaluate(() => document.querySelector('[data-pdf-formato]')?.scrollIntoView({ block: "center" })); await foto(pg, `${ancho}_${rol}_formato_pdf`);
       await pg.close();
     }
     for (const rol of ["op", "dual", "sin"]) {
       const pg = await abrir(rol, ancho); await esp(1500);
-      ok(`C${ancho}.06 ${rol}: no llega al detalle de Supervisión ni al botón`, !(await pg.$("[data-ran-pdf]")) && !(await pg.$(".rv-detalle")));
+      ok(`C${ancho}.09 ${rol}: no llega al detalle de Supervisión ni a los botones`, !(await pg.$("[data-ran-pdf]")) && !(await pg.$(".rv-detalle")));
       await pg.close();
     }
   }
+  {
+    const pg = await abrir("sup", 390, "&p=actas");
+    await esperar(pg, (id) => !!document.querySelector(`[data-registro="${id}"]`), R3);
+    const fila = await pg.$eval(`[data-registro="${R3}"]`, (e) => e.innerText).catch(() => "");
+    ok("A02 Actas registradas (después, a 390 px): el mismo formato «PDF listo» con «Descargar el PDF»", /PDF listo/.test(fila) && /Descargar el PDF/.test(fila), fila.slice(0, 300));
+    ok("A03 sin desborde (Actas registradas)", await sinDesborde(pg));
+    await pg.close();
+  }
+  const fnsF = new Set(rpcs.map((x) => x.fn));
+  ok("F01 el PDF del formato usó las mismas RPC de Actas registradas (actas_registradas, pdf_datos, pdf_registrar) y no las del reporte",
+    ["geoportal_campo_actas_registradas", "geoportal_campo_pdf_datos", "geoportal_campo_pdf_registrar"].every((f) => fnsF.has(f)) && Number(sqlq(`select count(*) from campo.documentos_pdf where registro_id = '${R3}'`)) === 1
+    && Number(sqlq(`select count(*) from campo.reporte_pdf where reporte_id = '${R3}'`)) === 0, [...fnsF].join(", "));
+  ok("F02 auditado como los PDF de los formatos (campo_pdf_generar)", Number(sqlq(`select count(*) from public.geoportal_auditoria where accion = 'campo_pdf_generar' and referencia = '${R3}'`)) === 1);
 } finally {
   await nav.close(); srv.close(); edge.kill();
 }

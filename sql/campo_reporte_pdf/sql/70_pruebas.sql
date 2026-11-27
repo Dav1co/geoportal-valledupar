@@ -127,8 +127,38 @@ begin
     and has_function_privilege('service_role', 'public.geoportal_campo_ran_obtener(text,uuid,text)', 'execute') and not has_function_privilege('anon', 'public.geoportal_campo_ran_obtener(text,uuid,text)', 'execute')
     and has_function_privilege('service_role', 'public.geoportal_campo_ran_registrar(text,uuid,text,text,integer,integer,text)', 'execute')
     and not has_function_privilege('service_role', 'campo.f_ran_contenido(uuid)', 'execute') and not has_function_privilege('service_role', 'campo.f_ran_mapa(numeric,numeric,numeric,numeric)', 'execute')
-    and not has_function_privilege('service_role', 'campo.f_ran_autorizar(text,uuid)', 'execute'));
+    and not has_function_privilege('service_role', 'campo.f_ran_autorizar(text,uuid)', 'execute') and not has_function_privilege('service_role', 'campo.f_ran_numerar(uuid)', 'execute'));
 end $p1$;
+
+-- ===================== 01b. Número RAN seguido =====================
+do $p1b$
+declare A uuid := pg_temp.val('A')::uuid; B uuid := pg_temp.val('B')::uuid; F uuid := pg_temp.val('F')::uuid; C uuid; D uuid; r jsonb; v_c bigint; v_d bigint; v_max bigint;
+begin
+  perform pg_temp.ok('01b.01 al migrar, todos los reportes de «Reportar anomalía» que existían tienen número, seguidos desde 1 y sin huecos',
+    not exists (select 1 from campo.reportes x join campo.tipos_reporte t on t.id = x.tipo_id where campo.f_tipo_general(t.codigo) and not exists (select 1 from campo.reporte_ran n where n.reporte_id = x.id))
+    and (select min(numero) = 1 and max(numero) = count(*) from campo.reporte_ran));
+  perform pg_temp.ok('01b.02 en orden de fecha de registro: ningún reporte posterior tiene un número menor',
+    not exists (select 1 from campo.reporte_ran n1 join campo.reportes r1 on r1.id = n1.reporte_id, campo.reporte_ran n2 join campo.reportes r2 on r2.id = n2.reporte_id
+                 where (r1.registrado_en, r1.seq) < (r2.registrado_en, r2.seq) and n1.numero > n2.numero));
+  perform pg_temp.ok('01b.03 A (registrado antes) tiene un número menor que B; un formato no tiene número',
+    (select numero from campo.reporte_ran where reporte_id = A) < (select numero from campo.reporte_ran where reporte_id = B)
+    and not exists (select 1 from campo.reporte_ran where reporte_id = F));
+  select coalesce(max(numero), 0) into v_max from campo.reporte_ran;
+  -- dos reportes nuevos, después de migrar; se pide primero el PDF del más reciente (D)
+  r := pg_temp.reg('ztran.op@emdupar.gov.co', 'otro', '[{}]', null, 10.476071, -73.251529, 6); C := (r ->> '_id')::uuid;
+  r := pg_temp.reg('ztran.op@emdupar.gov.co', 'otro', '[{}]', null, 10.476071, -73.251529, 6); D := (r ->> '_id')::uuid;
+  perform pg_temp.guardar('C', C::text); perform pg_temp.guardar('D', D::text);
+  perform pg_temp.ok('01b.04 los reportes nuevos no tienen número hasta que se pide su PDF', not exists (select 1 from campo.reporte_ran where reporte_id in (C, D)));
+  r := pg_temp.datos('ztran.sup@emdupar.gov.co', D);
+  select numero into v_c from campo.reporte_ran where reporte_id = C; select numero into v_d from campo.reporte_ran where reporte_id = D;
+  perform pg_temp.ok('01b.05 se pide primero el PDF del más reciente: igual queda en orden de registro (C = máx + 1, D = máx + 2)',
+    v_c = v_max + 1 and v_d = v_max + 2 and r ->> 'identificador' = 'RAN-' || lpad(v_d::text, 6, '0'), format('max %s, C %s, D %s', v_max, v_c, v_d));
+  r := pg_temp.datos('ztran.sup@emdupar.gov.co', C);
+  perform pg_temp.ok('01b.06 pedirlo otra vez no cambia el número', (select numero from campo.reporte_ran where reporte_id = C) = v_c and r ->> 'identificador' = 'RAN-' || lpad(v_c::text, 6, '0'));
+  perform pg_temp.ok('01b.07 un denegado no numera (el permiso va primero)',
+    pg_temp.err(pg_temp.datos('ztran.op@emdupar.gov.co', (pg_temp.reg('ztran.op@emdupar.gov.co', 'otro', '[{}]') ->> '_id')::uuid)) = '42501'
+    and (select max(numero) from campo.reporte_ran) = v_max + 2);
+end $p1b$;
 
 -- ===================== 02. Quién puede =====================
 do $p2$
@@ -152,9 +182,9 @@ declare A uuid := pg_temp.val('A')::uuid; B uuid := pg_temp.val('B')::uuid; d js
 begin
   d := pg_temp.datos('ztran.sup@emdupar.gov.co', A);
   select seq into v_seq from campo.reportes where id = A;
-  perform pg_temp.ok('03.01 identificador RAN-NNNNNN, grupo, tipo y estado «Reportado»',
-    d ->> 'identificador' = 'RAN-' || lpad(v_seq::text, 6, '0') and d ->> 'tipo' = (select nombre from campo.tipos_reporte where codigo = 'otro') and d ->> 'estado' = 'Reportado'
-    and d ->> 'grupo' is not null, left(d::text, 400));
+  perform pg_temp.ok('03.01 identificador RAN-NNNNNN (su número RAN), número interno aparte, grupo, tipo y estado «Reportado»',
+    d ->> 'identificador' = 'RAN-' || lpad((select numero from campo.reporte_ran where reporte_id = A)::text, 6, '0') and (d ->> 'numero_interno')::bigint = v_seq
+    and d ->> 'tipo' = (select nombre from campo.tipos_reporte where codigo = 'otro') and d ->> 'estado' = 'Reportado' and d ->> 'grupo' is not null, left(d::text, 400));
   perform pg_temp.ok('03.02 reportó: el NOMBRE del operario (no el correo)', d ->> 'reporto' = 'ZTRAN Operario' and position('ztran.op@' in (d - 'fotos')::text) = 0, d ->> 'reporto');
   perform pg_temp.ok('03.03 sin nombre en la lista blanca: el correo', campo.f_ran_persona('ztran.nadie@emdupar.gov.co') = 'ztran.nadie@emdupar.gov.co'
     and campo.f_ran_persona('ZTRAN.SUP@emdupar.gov.co') = 'ZTRAN Supervisora');
@@ -267,8 +297,8 @@ end $p8$;
 do $p9$
 begin
   perform pg_temp.ok('09.01 la huella de campo vuelve a la de partida', ({{HUELLA_CAMPO_Q}}) = '{{HUELLA_CAMPO}}');
-  perform pg_temp.ok('09.02 las RPC ya no están; nada se borró: las 2 versiones siguen', to_regprocedure('public.geoportal_campo_ran_datos(text,uuid,text)') is null
-    and (select count(*) from campo.reporte_pdf where reporte_id = pg_temp.val('A')::uuid) = 2);
+  perform pg_temp.ok('09.02 las RPC ya no están; nada se borró: las 2 versiones y los números RAN siguen', to_regprocedure('public.geoportal_campo_ran_datos(text,uuid,text)') is null
+    and (select count(*) from campo.reporte_pdf where reporte_id = pg_temp.val('A')::uuid) = 2 and exists (select 1 from campo.reporte_ran where reporte_id = pg_temp.val('D')::uuid));
 end $p9$;
 
 do $fin$
