@@ -50,7 +50,8 @@ export type Submedicion = {
   motivo: string | null;
 };
 
-export type Pago = { fecha: string; valor: number | null; fuente: "cupones" | "cartera"; dias: number | null };
+/** `corte` (27-nov): periodo AAAAMM de la fuente del pago (cupones o cartera mensual). Con la base de antes no llega: la pantalla usa el del consumo. */
+export type Pago = { fecha: string; valor: number | null; fuente: "cupones" | "cartera"; dias: number | null; corte?: string | null };
 
 export type EmdFacturado = { codigo: string; concepto: string; periodo: string };
 export type GestionTerreno = { tipo: string; tipo_nombre: string; consecutivo: string | null; fecha: string; estado: string | null };

@@ -1,0 +1,26 @@
+PRUEBAS LOCALES · [Code A] Etiqueta del último pago (27-nov) · clúster 55432
+Huella de Técnica: en los _editor va la de producción 838b80984e51cc7873a666f85d657195; en local se cambia por la del doble.
+
+OK    01 huellas ANTES: campo, acta y Técnica «PUBLICADA»
+OK    02 ensayo: termina en ERROR esperado, 23 de 23 (0.1 s)
+OK    03 el ensayo no dejó nada (huella de campo publicada, sin datos ZTPAG)
+OK    04 migración (0.0 s)
+OK    05 verificación 8 de 8
+OK    06 huellas DESPUÉS: campo «CON ESTE CAMBIO», acta y Técnica sin cambio
+OK    07 huella de campo nueva = 9f8b8ec55fc7e1c56fdf74a5f4e7f3c4
+OK    08 repetir la migración: la guardia la rechaza
+OK    09 el ensayo sobre la base ya migrada se detiene en la guardia
+OK    10 reversa
+OK    11 la huella de campo vuelve a la publicada
+OK    12 repetir la reversa: se rechaza
+OK    13 volver a aplicar sobre lo que dejó la reversa
+OK    14 verificación otra vez 8 de 8
+
+Guardias (una base nueva cada una):
+OK    15 otra función de campo: la migración se detiene sin cambiar nada
+OK    16 la función del análisis cambiada: la guardia (md5) la rechaza sin cambiar nada
+
+Mutaciones (el ensayo debe fallar):
+OK    17 una migración que sigue quitando el corte: el ensayo falla en 02.01
+
+RESULTADO: 17 de 17 — SIN FALLAS

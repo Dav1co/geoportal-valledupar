@@ -120,6 +120,8 @@ function Ficha({ r, destinos, onIrA, puedeCambioMedidor, onCambioMedidor }: { r:
   const punto = primerPredioConPunto(r);
   const cartera = fechaCorte(r.cortes?.cartera ?? c?.corte ?? s?.corte);
   const aConsumo = etiquetaMes(r.cortes?.consumo ?? cons?.periodo_ultimo);
+  // periodo de la fuente del pago (pagos o cartera mensual); si la respuesta no lo trae (base de antes) o no es AAAAMM, el del consumo, como antes
+  const aPago = r.pago?.corte && etiquetaMes(r.pago.corte) !== "—" ? etiquetaMes(r.pago.corte) : aConsumo;
   const ficha = r.cortes?.ficha ? fechaCorta(r.cortes.ficha) : null;
   const instGeoportal = (g?.reportes ?? []).find((x) => x.tipo === FORMATO_CAMBIO_MEDIDOR);
   const atajos = onIrA ? destinos : [];
@@ -157,7 +159,7 @@ function Ficha({ r, destinos, onIrA, puedeCambioMedidor, onCambioMedidor }: { r:
           </li>
           <li>
             {r.pago ? <>Último pago: {fechaCorta(r.pago.fecha)}{r.pago.dias !== null ? ` (${haceDias(r.pago.dias)})` : ""}{r.pago.valor !== null ? ` · ${pesos(r.pago.valor)}` : ""}</> : "Último pago: sin dato"}
-            {r.pago ? <Corte>{r.pago.fuente === "cupones" ? "pagos" : "cartera mensual"} a {aConsumo}</Corte> : null}
+            {r.pago ? <Corte>{r.pago.fuente === "cupones" ? "pagos" : "cartera mensual"} a {aPago}</Corte> : null}
           </li>
         </ul>
         <div className="ac-marcas" aria-label="Marcas" data-testid="marcas">
