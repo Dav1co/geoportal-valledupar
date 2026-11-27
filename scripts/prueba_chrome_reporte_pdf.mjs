@@ -272,12 +272,20 @@ try {
     const conNum = (cer.predios ?? []).filter((q) => !q.sin && q.cod), sinNum = (cer.predios ?? []).filter((q) => q.sin);
     const rotulados = conNum.filter((q) => tx.includes(`(${q.cod}) Tj`));
     ok(`M01 zona densa: el mapa cercano trae ${(cer.predios ?? []).length} predios, ${(cer.terrenos ?? []).length} terrenos y ${(cer.elementos ?? []).length} elementos activos`,
-      (cer.predios ?? []).length >= 20 && (cer.terrenos ?? []).length >= 10 && (cer.elementos ?? []).length === 4, JSON.stringify({ p: (cer.predios ?? []).length, t: (cer.terrenos ?? []).length, e: (cer.elementos ?? []).length }));
+      (cer.predios ?? []).length >= 20 && (cer.terrenos ?? []).length >= 10 && (cer.elementos ?? []).length === 5, JSON.stringify({ p: (cer.predios ?? []).length, t: (cer.terrenos ?? []).length, e: (cer.elementos ?? []).length }));
     ok(`M02 los números de contrato van donde caben (${rotulados.length} de ${conNum.length}) y el resto se cuenta en la nota`, rotulados.length > 0
-      && (rotulados.length === conNum.length || /no caben? sin montarse sobre otros/.test(tx)), `${rotulados.length}/${conNum.length}`);
+      && (rotulados.length === conNum.length || /no caben? sin montarse/.test(tx)), `${rotulados.length}/${conNum.length}`);
     ok(`M03 los ${sinNum.length} predios sin contrato no llevan número y tienen su estilo`, sinNum.every((q) => !q.cod) && (sinNum.length === 0 || tx.includes("0.85 0.45 0.05 RG")));
     ok("M04 terrenos dibujados sin label (su código predial no aparece)", tx.includes("0.96 0.94 0.89 rg") && !/\(ZT-\d+\)/.test(tx));
-    ok("M05 elementos de Técnica: solo los activos, con su tipo; el inactivo no sale", tx.includes("(valvula) Tj") && tx.includes("(hidrante) Tj") && !tx.includes("valvula inactiva"));
+    ok("M05 elementos de Técnica: solo los 5 activos (el pozo inactivo no), con su tipo legible y con tildes en el mapa y en la nota", (cer.elementos ?? []).filter((e) => e.tipo === "pozo").length === 1
+      && tx.includes("(Pozo) Tj") && tx.includes("(Descarga) Tj") && tx.includes("(Punto de medici\\363n) Tj") && tx.includes("(Tramo) Tj") && tx.includes("(Laguna) Tj")
+      && /Elementos de T\\351cnica: [^)]*Punto de medici\\363n/.test(tx) && !/punto_medicion|\(pozo\)/.test(tx));
+    // páginas: los dos mapas en la misma página; los tiempos en la página 1 junto a «Reportó»; sin XY digitado, sin «Registro» ni «Registrado desde»
+    const paginas = []; for (let n = 1; n <= 8; n++) { try { paginas.push(execFileSync("/opt/homebrew/bin/pdftotext", ["-f", String(n), "-l", String(n), "-layout", join(CAP, "R8_denso.pdf"), "-"], { encoding: "utf8" })); } catch { break; } }
+    ok(`M10 los dos mapas en la misma página (el cercano arriba, a todo el ancho; el de contexto abajo) — ${paginas.length} páginas`, paginas.some((pg2) => pg2.includes("Mapa cercano") && pg2.includes("Mapa de contexto")
+      && pg2.indexOf("Mapa cercano") < pg2.indexOf("Mapa de contexto")));
+    ok("M11 los tiempos (inicio, fin y duración) van en la página 1, junto a «Reportó»", /Reportó[\s\S]*Inicio[\s\S]*Fin \(registrado\)[\s\S]*Duración/.test(paginas[0] ?? "") && !paginas.some((pg2) => /TIEMPOS/.test(pg2)));
+    ok("M12 sin XY digitado: arriba del mapa solo las coordenadas (sin «Registro» ni «Registrado desde»)", !paginas.join("").includes("Registrado desde") && !/\n\s*Registro\s/.test(paginas.join("")));
     ok("M06 el mapa de contexto lleva el nombre del barrio del punto y no lleva números", ctx.barrio === "CENTRO (SINTÉTICO)" && tx.includes("(CENTRO \\(SINT\\311TICO\\)) Tj")
       && (ctx.predios ?? []).every((q) => q.cod === null), String(ctx.barrio));
     ok("M07 los dos mapas llevan escala (20 m y 50 m), norte y leyenda", tx.includes("(20 m) Tj") && tx.includes("(50 m) Tj") && (tx.match(/\(N\) Tj/g) ?? []).length === 2
@@ -389,6 +397,7 @@ try {
     for (const [k, val] of pares) {
       let piezas;
       if (k === "Autor") { piezas = []; filas.push(`${k}: correo en pantalla → nombre en el PDF (regla de David)`); }
+      else if (k === "Registrado desde" && !/XY digitado/.test(pares.map((x) => x[0]).join(" "))) { piezas = []; }   // sin XY digitado no va arriba del mapa (David, 27-nov)
       else if (k === "Grupo y tipo") piezas = val.split(" · ");
       else if (k === "Estado") piezas = [val.replace(/ \(desde .*\)$/, "")];
       else if (k === "Dirección del contrato") piezas = val.split("\n").map((l) => l.replace(/^En el catastro: /, "")).filter(Boolean);
@@ -397,13 +406,14 @@ try {
     }
     // los campos fijos salen siempre, aunque la pantalla no los muestre si están vacíos
     for (const fijo of ["Grupo", "Tipo", "Subtipo", "Contrato", "Resultado", "Riesgo inmediato", "Zona", "Origen", "Dirección base comercial", "Dirección catastro",
-                        "Dirección encontrada en terreno", "Barrio", "Referencia", "Inicio", "Fin (registrado)", "Duración", "Coordenadas", "Registrado desde", "¿QUÉ ENCONTRÓ?", "RESPUESTAS DEL FORMULARIO"])
+                        "Dirección encontrada en terreno", "Barrio", "Referencia", "Inicio", "Fin (registrado)", "Duración", "Coordenadas", "¿QUÉ ENCONTRÓ?", "RESPUESTAS DEL FORMULARIO"])
       if (!esta(fijo)) faltan.push(`fijo ausente: ${fijo}`);
     informe.push(`${nombre}: ${pares.length} campos del detalle; ${faltan.length ? "FALTAN " + faltan.join("; ") : "todos en el PDF"}`);
     ok(`K ${nombre}: los ${pares.length} campos del detalle de Supervisión están en el PDF, y los fijos también`, abrio && pares.length >= 6 && faltan.length === 0, faltan.join(" | "));
     if (marca === "ZTRP-COMPLETO") ok("K R4: la versión del PDF trae el historial completo (estado, ocultar, reincluir) y los datos sensibles no", esta("Cambio de estado a En revisión") && esta("Se ocultó el reporte")
       && esta("Se reincluyó el reporte") && esta("Riesgo inmediato Sí") && esta("Zona Dentro de la zona de servicio") && esta(SUB === "" ? "Subtipo" : "Subtipo"), txt.slice(0, 600));
     if (marca === "ZTRP-ACU") ok("K R6: «Fuera de la zona de servicio»", esta("Zona Fuera de la zona de servicio"));
+    if (marca === "ZTRP-COMPLETO") ok("K R4 (con XY digitado): sí van «Registro» y «Registrado desde» arriba del mapa", esta("Registro XY digitado — registrado desde otro punto") && esta("Registrado desde 10,4762, -73,2512"));
     await pg.close();
   }
   writeFileSync(join(CAP, "comparacion_detalle_pdf.txt"), informe.join("\n") + "\n");

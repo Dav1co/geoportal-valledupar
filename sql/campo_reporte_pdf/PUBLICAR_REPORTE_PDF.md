@@ -29,7 +29,8 @@ Sondas: geoportal-campo 50 → 51 (`ran_pdf`); geoportal-acta 16, sin cambio.
   - **dos mapas vectoriales** (27-nov):
     - **cercano** (120 × 60 m): terrenos (solo polígonos, sin label), acueducto y alcantarillado, predios de `predios_comercial` con su número de contrato (`cod_usuario`; los sin contrato con otro estilo y sin número), elementos ACTIVOS de Técnica con su tipo, el punto con su precisión y el XY digitado. Los labels se colocan sin montarse; los que no caben se cuentan en una nota.
     - **de contexto** (400 × 200 m): barrios con su nombre (el del punto, resaltado), redes y predios sin números, el punto y el XY digitado.
-    - Los dos con escala (20 m y 50 m), norte y leyenda. De `predios_comercial` solo la posición, el contrato y `sin_contrato`: nada de deuda, consumo ni cartera.
+    - Los dos en la MISMA página (el cercano arriba, a todo el ancho; el de contexto debajo, al 68 %), con escala (20 m y 50 m), norte y leyenda. Los tipos de Técnica con su nombre legible (Pozo, Descarga, Punto de medición, Tramo, Laguna, Perímetro).
+    - Los tiempos (inicio, fin y duración) van en la página 1, junto a «Reportó». Arriba del mapa, «Registro» y «Registrado desde» solo con XY digitado. De `predios_comercial` solo la posición, el contrato y `sin_contrato`: nada de deuda, consumo ni cartera.
     - Sin diámetro en las tuberías: `redes_acueducto` y `redes_alcantarillado` solo tienen `id` y `geom` en producción.
   - descripción;
   - quién reportó (su **nombre**; el correo solo si no tiene nombre), inicio, fin y duración;
@@ -50,7 +51,7 @@ Huellas de este paquete, fila 1: debe decir «LISTA PARA ESTE CAMBIO». Si dice 
 
 ### 1. SQL (editor de Supabase), cada archivo con su md5
 1. `huellas_solo_lectura_campo_reporte_pdf_editor.sql` (`b560f041f720f249afabd74f013bcc2b`): fila 1 «LISTA PARA ESTE CAMBIO»; filas 2 y 3 «PUBLICADA».
-2. `ensayo_en_transaccion_campo_reporte_pdf_editor.sql` (`ad0fec6ddd38493f7d7dc057e5b2cafe`).
+2. `ensayo_en_transaccion_campo_reporte_pdf_editor.sql` (`587db426b8d77446afb8b0fc021a3aac`).
    - Debe terminar en ERROR con «RESULTADO: 58 de 58 pruebas correctas — SIN FALLAS». No deja nada.
    - Crea y luego deshace 5 correos `ztran.*`, el contrato `991800000201` en cartera, 6 reportes de prueba (con sus objetos en `storage.objects`), los números RAN y un cambio de estado.
    - El mapa se mide con las redes y los predios reales. La prueba 05.04 exige menos de 3 s.
@@ -81,7 +82,7 @@ Reversa, si hiciera falta: `reversa_campo_reporte_pdf_editor.sql` (`a13aaad95969
 ## Pruebas locales (clúster 55432, sin Supabase)
 - **Doble con PostGIS real:** el volcado del doble 4a sin su PostGIS de juguete, más la cadena publicada (Investigación, registro flexible, consultar direcciones, etiqueta del pago), más las capas con el volumen real: 10.578 tramos de acueducto, 9.064 de alcantarillado y 111.651 predios, tomados de `emdupar_b` en solo lectura.
 - `pruebas_locales/correr_local.py`: 20 de 20. Cubre el ensayo (58 de 58), la verificación (10 de 10), la reversa con las tablas y sus filas conservadas, volver a aplicar, 3 guardias y 3 mutaciones (el contenido lee los datos sensibles; la autorización deja pasar al autor; el número RAN en orden de pedidos).
-- `scripts/prueba_chrome_reporte_pdf.mjs`: 87 de 87, con la Edge real en Deno y Chrome real a 390 y 1.280 px, los 5 perfiles, el PDF revisado por dentro y rasterizado con pdftoppm.
+- `scripts/prueba_chrome_reporte_pdf.mjs`: 91 de 91, con la Edge real en Deno y Chrome real a 390 y 1.280 px, los 5 perfiles, el PDF revisado por dentro y rasterizado con pdftoppm.
   - Incluye el PDF del formato en Supervisión (pendiente, «Generar el PDF», «PDF listo», «Descargar el PDF»), con las mismas RPC y la misma auditoría que «Actas registradas».
   - Incluye «Actas registradas» antes y después, porque su marca y su botón ahora son componentes compartidos.
   - En esa base local, `max_fotos` se subió a 6 solo para medir el tamaño con 6 fotos. **Este paquete no toca `max_fotos`**: su cambio a 4 va aparte.

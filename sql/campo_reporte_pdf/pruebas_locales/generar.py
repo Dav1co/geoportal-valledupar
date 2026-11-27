@@ -86,9 +86,26 @@ alter table public.barrios_valledupar add column geom geometry(MultiPolygon, 432
 create index idx_barrios_geom on public.barrios_valledupar using gist (geom);
 create table public.terrenos_valledupar (ogc_fid serial primary key, codigo character varying(30), matricula character varying, geom geometry(MultiPolygon, 4326));
 create index terrenos_valledupar_geom_geom_idx on public.terrenos_valledupar using gist (geom);
-create table tecnica.elementos_planta (id bigint generated always as identity primary key, codigo text not null, instalacion_id bigint, tipo text not null, nombre text, orden smallint,
-  geom geometry(Geometry, 4326), punto_id bigint, desde_id bigint, hasta_id bigint, activo_codigo text, atributos jsonb, origen text, activo boolean not null default true,
-  motivo_inactivo text, inactivado_en timestamp with time zone, reemplaza_id bigint, creado_por text, creado_en timestamp with time zone not null default now());
+-- tecnica.elementos_planta con el DDL EXACTO de producción (sql/tecnica_ptar/sql/10_esquema.sql, publicado el 21-nov): sus CHECK de tipo, forma, nombre, código e inactivo.
+-- Sin las dos llaves foráneas a tecnica.instalaciones y tecnica.puntos (no existen en el doble); las pruebas no escriben en esta tabla, solo los datos sintéticos.
+create table tecnica.elementos_planta (
+  id bigint generated always as identity primary key, codigo text not null check (codigo ~ '^[A-Z0-9][A-Z0-9_-]{1,39}$'), instalacion_id bigint not null,
+  tipo text not null check (tipo in ('perimetro', 'laguna', 'tramo', 'punto_medicion', 'pozo', 'descarga')), nombre text not null check (length(btrim(nombre)) between 2 and 120),
+  orden smallint not null default 0 check (orden between 0 and 999), geom geometry(Geometry, 4326) not null, punto_id bigint,
+  desde_id bigint references tecnica.elementos_planta (id), hasta_id bigint references tecnica.elementos_planta (id),
+  activo_codigo text check (activo_codigo is null or activo_codigo ~ '^[A-Z]{3}-[0-9]{6}$'), atributos jsonb not null default '{}'::jsonb check (jsonb_typeof(atributos) = 'object'),
+  origen text not null check (origen in ('dibujo', 'redes')), activo boolean not null default true,
+  motivo_inactivo text check (motivo_inactivo is null or length(btrim(motivo_inactivo)) between 10 and 1000), inactivado_en timestamptz,
+  reemplaza_id bigint references tecnica.elementos_planta (id), creado_por text not null check (creado_por = lower(creado_por) and position('@' in creado_por) > 1),
+  creado_en timestamptz not null default clock_timestamp(),
+  constraint elementos_planta_forma check ((tipo in ('perimetro', 'laguna') and geometrytype(geom) in ('POLYGON', 'MULTIPOLYGON'))
+    or (tipo = 'tramo' and geometrytype(geom) in ('LINESTRING', 'MULTILINESTRING')) or (tipo in ('punto_medicion', 'pozo', 'descarga') and geometrytype(geom) = 'POINT')),
+  constraint elementos_planta_valida check (st_isvalid(geom) and not st_isempty(geom)),
+  constraint elementos_planta_punto check (punto_id is null or tipo = 'punto_medicion'),
+  constraint elementos_planta_flujo check ((desde_id is null and hasta_id is null) or tipo = 'tramo'),
+  constraint elementos_planta_redes check (origen <> 'redes' or activo_codigo is not null),
+  constraint elementos_planta_inactivo check ((activo and motivo_inactivo is null and inactivado_en is null) or (not activo and motivo_inactivo is not null and inactivado_en is not null)));
+create unique index uq_elementos_planta_codigo_activo on tecnica.elementos_planta (codigo) where activo;
 create index ix_elementos_planta_geom on tecnica.elementos_planta using gist (geom);
 """
 PREDIOS_SQL = """
@@ -118,14 +135,17 @@ select 900000 + row_number() over (order by g.i, g.j), case when st_intersects(g
        st_multi(st_transform(g.e, 4326))
   from g, c
  where st_intersects(st_transform(g.e, 4326), st_makeenvelope(-73.36, 10.35, -73.18, 10.56, 4326));
-insert into tecnica.elementos_planta (codigo, tipo, nombre, geom, activo, origen)
-select 'ZTRP-E' || n || '-' || k, tipo, 'ZTRP elemento ' || n, geom, activo, 'prueba'
+-- elementos con los tipos REALES de producción (pozo, descarga, punto de medición, tramo y laguna) y un pozo inactivo, que no debe salir
+insert into tecnica.elementos_planta (codigo, instalacion_id, tipo, nombre, geom, origen, activo, motivo_inactivo, inactivado_en, creado_por)
+select 'ZTRP-E' || n || '-' || k, 1, tipo, 'ZTRP elemento ' || n, geom, 'dibujo', activo, case when activo then null else '[PRUEBA ZTRP] pozo dado de baja' end,
+       case when activo then null else now() end, 'ztrp.carga@emdupar.gov.co'
   from (select v.lat, v.lon, row_number() over () as k from (values {{PUNTOS}}) v(lat, lon)) z,
-       lateral (values (1, 'valvula', st_setsrid(st_makepoint(z.lon + 0.00012, z.lat + 0.00008), 4326), true),
-                       (2, 'hidrante', st_setsrid(st_makepoint(z.lon - 0.00020, z.lat - 0.00005), 4326), true),
-                       (3, 'macromedidor', st_setsrid(st_makepoint(z.lon + 0.00030, z.lat - 0.00012), 4326), true),
-                       (4, 'tuberia_planta', st_setsrid(st_makeline(st_makepoint(z.lon - 0.0004, z.lat + 0.0001), st_makepoint(z.lon + 0.0004, z.lat + 0.00015)), 4326), true),
-                       (5, 'valvula_inactiva', st_setsrid(st_makepoint(z.lon + 0.00005, z.lat - 0.00003), 4326), false)) e(n, tipo, geom, activo);
+       lateral (values (1, 'pozo', st_setsrid(st_makepoint(z.lon + 0.00012, z.lat + 0.00008), 4326), true),
+                       (2, 'descarga', st_setsrid(st_makepoint(z.lon - 0.00020, z.lat - 0.00005), 4326), true),
+                       (3, 'punto_medicion', st_setsrid(st_makepoint(z.lon + 0.00030, z.lat - 0.00012), 4326), true),
+                       (4, 'tramo', st_setsrid(st_makeline(st_makepoint(z.lon - 0.0004, z.lat + 0.0001), st_makepoint(z.lon + 0.0004, z.lat + 0.00015)), 4326), true),
+                       (5, 'laguna', st_setsrid(st_makeenvelope(z.lon + 0.00035, z.lat + 0.00005, z.lon + 0.00050, z.lat + 0.00020), 4326), true),
+                       (6, 'pozo', st_setsrid(st_makepoint(z.lon + 0.00005, z.lat - 0.00003), 4326), false)) e(n, tipo, geom, activo);
 analyze public.terrenos_valledupar; analyze public.barrios_valledupar; analyze tecnica.elementos_planta; analyze public.predios_comercial;
 """
 def punto_denso(con):

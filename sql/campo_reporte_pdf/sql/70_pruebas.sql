@@ -243,7 +243,7 @@ begin
     not exists (select 1 from jsonb_array_elements(k -> 'predios') q where (select string_agg(x, ',' order by x) from jsonb_object_keys(q) x) <> 'cod,p,sin')
     and not exists (select 1 from jsonb_array_elements(k -> 'predios') q where (q ->> 'sin')::boolean and q -> 'cod' <> 'null'::jsonb)
     and not exists (select 1 from jsonb_array_elements(m -> 'predios') q where q -> 'cod' <> 'null'::jsonb)
-    and position('deuda' in (d -> 'mapa')::text) = 0 and position('tramo' in (d -> 'mapa')::text) = 0);
+    and (d -> 'mapa')::text !~ '"(deuda_total|tramo_mora|estado_predio|facturas_pendientes|consumo_actual|semaforo_cartera)"');   -- nombres de columnas de cartera, no palabras sueltas («tramo» es un tipo de elemento)
   v_b := pg_temp.datos('ztran.sup@emdupar.gov.co', B) -> 'mapa';
   perform pg_temp.ok('05.06 con XY digitado, los dos mapas traen el punto de registro (a unos 40 m)', jsonb_typeof(v_b -> 'cercano' -> 'registro') = 'array' and jsonb_typeof(v_b -> 'contexto' -> 'registro') = 'array'
     and sqrt(power((v_b -> 'contexto' -> 'registro' ->> 0)::numeric, 2) + power((v_b -> 'contexto' -> 'registro' ->> 1)::numeric, 2)) between 20 and 80, (v_b -> 'contexto' -> 'registro')::text);
