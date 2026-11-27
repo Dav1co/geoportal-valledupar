@@ -218,7 +218,16 @@
   display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
 .geo-salir-completa svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* pantalla completa: solo el mapa, la barra flotante del cuaderno y lo esencial (la fila y las franjas vuelven al salir) */
-.geo-completa > .geo-barra, .geo-completa > .geo-velo, .geo-completa > .geo-franja { display: none; }
+.geo-completa > .geo-barra, .geo-completa > .geo-velo { display: none; }
+/* las franjas de eventos y de cortes («sin agua») son avisos operativos: en pantalla completa siguen, en una sola línea (David, 27-nov) */
+.geo-completa > .geo-franja { flex-wrap: nowrap; height: calc(var(--geo-b) + 8px); padding: 4px 8px; gap: 8px; overflow: hidden; }
+.geo-completa > .geo-franja > strong { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.geo-completa > .geo-franja .geo-franja-zonas { display: none; }
+.geo-completa > .geo-franja .geo-franja-textos { flex: 1 1 auto; min-width: 0; flex-direction: row; overflow: hidden; }
+.geo-completa > .geo-franja .geo-franja-textos > p { flex-wrap: nowrap; min-width: 0; white-space: nowrap; }
+.geo-completa > .geo-franja .geo-franja-textos > p:not(:first-child), .geo-completa > .geo-franja .geo-franja-mas { display: none; }
+.geo-completa > .geo-franja .geo-franja-textos strong { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.geo-completa > .geo-franja .geo-franja-zona, .geo-completa > .geo-franja .geo-franja-ver { min-height: var(--geo-b); height: var(--geo-b); padding: 0 10px; font-size: 13.5px; flex: 0 0 auto; white-space: nowrap; }
 .geo:fullscreen { width: 100%; height: 100%; }
 .geo-modo-mapa { position: fixed; inset: 0; z-index: 1000; height: 100%; height: 100dvh; }
 @media (max-width: 600px) {

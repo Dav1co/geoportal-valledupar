@@ -147,6 +147,7 @@ const srv = http.createServer((req, res) => {
       const fn = u.pathname.slice(13), a = JSON.parse(cuerpo.toString() || "{}");
       if (fn === "geoportal_estado_acceso") return json(200, "ok");
       if (fn === "geoportal_log") return json(200, null);
+      if (fn === "geoportal_redes_cortes_vigentes" && simularCorte) return json(200, CORTE_SIMULADO);      // solo la prueba de la franja en pantalla completa
       if (fn.startsWith("geoportal_redes_") || fn.startsWith("geoportal_analisis_") || /^geoportal_tec_punto/.test(fn)) { const r = rpcBase(fn, a); return json(r.status, r.cuerpo); }
       const r = rpcPlanta(fn, a);
       return r && typeof r.status === "number" && r.cuerpo ? json(r.status, r.cuerpo) : json(200, r);
@@ -172,6 +173,11 @@ const srv = http.createServer((req, res) => {
   });
 });
 const archivos = new Map();      // lo que «Storage» tiene guardado
+// Un corte vigente simulado (una zona sin agua), para ver que la franja sigue en pantalla completa. La lógica de cortes no es de este paquete.
+let simularCorte = false;
+const CORTE_SIMULADO = { hay: true, foto: { id: 1, calculada_en: new Date().toISOString(), red_huella: "x" }, resumen: { zonas: 1, valvulas_cerradas: 1, contratos: 120 },
+  zonas: [{ zona: 1, lat: 10.4631, lon: -73.2532, caja: [-73.256, 10.461, -73.25, 10.466], contratos: 120, tramos: 8, desde: new Date().toISOString(), regreso_estimado: null, por: [] }],
+  valvulas: [{ codigo: "VAL-000001", nombre: "Válvula simulada", zona: 1, en_red: true, lat: 10.4631, lon: -73.2532, desde: new Date().toISOString(), quien: "prueba", registro: null, regreso_estimado: null }] };
 await new Promise((r) => srv.listen(P_BASE, "127.0.0.1", r));
 
 // ---------- 3. Edges REALES en Deno ----------
@@ -669,6 +675,21 @@ for (const ancho of (process.env.CUA_ANCHOS ? process.env.CUA_ANCHOS.split(",").
   await clic(p, "[data-testid=cua-salir-cancelar]"); await clic(p, "[data-testid=cua-guardar]");
   await p.waitForFunction(() => window.__cuaderno?.pendientes === 0, { timeout: 30000 }).catch(() => {});
   esperadas += 1;      // el punto de referencia de la prueba de pantalla completa
+  // la franja de cortes («sin agua») sigue en pantalla completa, en una sola línea, sin taparse con la franja del cuaderno
+  simularCorte = true;
+  { const q = await abrir(ancho, "sup"); await alGeovisor(q); await q.waitForSelector("[data-testid=franja-cortes]", { timeout: 20000 }).catch(() => {});
+    await abrirCuaderno(q, ids[ancho]);
+    if (movil) await q.evaluate(() => { for (const k of ["requestFullscreen", "webkitRequestFullscreen"]) { try { Object.defineProperty(Element.prototype, k, { value: undefined, configurable: true }); } catch { /* nada */ } }
+      Object.defineProperty(document, "fullscreenEnabled", { value: false, configurable: true }); });
+    await clic(q, "[data-testid=pantalla-completa]"); await pausa(900);
+    const f = await q.evaluate(() => { const fr = document.querySelector("[data-testid=franja-cortes]"), cb = document.querySelector("[data-testid=cua-barra]"), cu = document.querySelector(".geo-cuerpo");
+      if (!fr || fr.offsetParent === null) return null; const r = fr.getBoundingClientRect(), b = cb.getBoundingClientRect();
+      return { alto: Math.round(r.height), texto: fr.innerText.replace(/\n/g, " · "), ver: !!fr.querySelector(".geo-franja-ver")?.offsetParent, choca: b.top < r.bottom - 1, dentro: r.right <= innerWidth + 1, pct: Math.round(100 * cu.getBoundingClientRect().height / innerHeight) }; });
+    ok(`${tag} P10 en pantalla completa la franja de cortes sigue, en una línea (${f?.alto} px: «${f?.texto}»), con «Ver afectaciones»; la franja del cuaderno queda debajo y el mapa ocupa ${f?.pct} %`,
+      !!f && f.alto <= (movil ? 54 : 46) && /sin agua/.test(f.texto) && f.ver && !f.choca && f.dentro && f.pct >= 88, JSON.stringify(f));
+    await q.screenshot({ path: join(CAP, `p10_completa_corte_${ancho}.png`) });
+    await q.close(); }
+  simularCorte = false;
   await p.close();
 
   // ===== C. Dual (Comercial y supervisor de planta): ve el cuaderno del equipo, solo lectura =====
